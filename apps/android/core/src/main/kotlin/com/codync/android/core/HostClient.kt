@@ -50,6 +50,12 @@ data class Bot(
     val unread: Int = 0,
     val rev: Long = 0,
     val deleted: Boolean = false,
+    /** Uses the memory all the user's bots share ("About you"). Null from an older host. */
+    val sharedMemory: Boolean? = null,
+    /** Keeps the harness's own memory (Claude Code's…) on beside Codync's. Null where it has no switch. */
+    val harnessMemory: Boolean? = null,
+    /** Moves whenever memory changes, so an open memory screen fetches it again. */
+    val memoryRev: Long? = null,
 ) {
     /** An agent bot unless its agent said it has no Fast mode, or one that has it on (so it can be turned off). */
     val fastModeShown: Boolean get() = kind != "group" && (fastMode || fastModeSupport != "unsupported")

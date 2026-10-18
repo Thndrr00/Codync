@@ -12,11 +12,11 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
-/** The caller seeds and deletes a disposable bot on the isolated fake-agent host. */
+/** The caller seeds and deletes a disposable bot with one memory of its own on the isolated fake-agent host. */
 class LiveMemoryTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
-    @Test fun forgettingFactsAndClearingMemoryPreserveTheConversation() {
+    @Test fun forgettingAnEntryAndClearingMemoryPreserveTheConversation() {
         val botId = InstrumentationRegistry.getArguments().getString("memoryBot")
         assumeTrue(botId != null)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -30,31 +30,21 @@ class LiveMemoryTest {
             assertTrue(store.state.value.bots.single { it.id == botId }.name.startsWith("Android memory acceptance"))
             compose.runOnUiThread { store.openBot(botId) }
             compose.chatAction("Edit profile")
-            val profile = "Android memory profile acceptance"
-            compose.waitUntil(30_000) { compose.onAllNodesWithText(profile).fetchSemanticsNodes().size == 1 }
-            compose.onNodeWithText("Android memory history acceptance").performScrollTo().assertIsDisplayed()
-            // Searching leaves one fact, so its menu is the only one.
-            val search = hasSetTextAction() and hasText("Search memories")
-            compose.onNode(search).performScrollTo().performTextInput("profile")
-            compose.waitUntil(30_000) { compose.onAllNodesWithContentDescription("Memory actions").fetchSemanticsNodes().size == 1 }
+            val entry = "Android memory profile acceptance"
+            compose.waitUntil(30_000) { compose.onAllNodesWithText(entry).fetchSemanticsNodes().size == 1 }
             compose.onNodeWithContentDescription("Memory actions").performScrollTo().performClick()
             compose.onNodeWithText("Forget").performClick()
-            compose.waitUntil(30_000) { compose.onAllNodesWithText(profile).fetchSemanticsNodes().isEmpty() }
-            compose.onNode(hasSetTextAction() and hasText("profile")).performTextReplacement("")
-            compose.waitUntil(30_000) { compose.onAllNodesWithText("Android memory history acceptance").fetchSemanticsNodes().size == 1 }
-            val left = MemoryListing.decode(runBlocking { channel.call("memory", body("botId" to botId)) }).facts
-            assertEquals("Android memory history acceptance", left.single().content)
+            compose.waitUntil(30_000) { compose.onAllNodesWithText(entry).fetchSemanticsNodes().isEmpty() }
+            val left = WireJson.decodeFromJsonElement<BotMemory>(runBlocking { channel.call("memory", body("botId" to botId)) })
+            assertTrue(left.bot.entries.none { it.text == entry })
             compose.onNodeWithContentDescription("More").performScrollTo().performClick()
-            compose.onNodeWithText("Forget everything").performClick()
+            compose.onNodeWithText("Forget everything here").performClick()
             compose.onNodeWithText("Forget everything this bot remembers?").assertIsDisplayed()
             compose.onNodeWithText("Forget everything").performClick()
-            compose.waitUntil(30_000) {
-                compose.onAllNodesWithText("Nothing yet. Important details are remembered as you chat.").fetchSemanticsNodes().size == 1
-            }
             val after = runBlocking { channel.call("history", body("botId" to botId)) }
             assertEquals(before.jsonObject.getValue("entries"), after.jsonObject.getValue("entries"))
-            val memory = runBlocking { channel.call("memory", body("botId" to botId)) }
-            assertTrue(MemoryListing.decode(memory).facts.isEmpty())
+            val memory = WireJson.decodeFromJsonElement<BotMemory>(runBlocking { channel.call("memory", body("botId" to botId)) })
+            assertTrue(memory.bot.entries.isEmpty())
         } finally { channel.close() }
     }
 }

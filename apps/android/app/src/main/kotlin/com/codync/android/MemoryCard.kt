@@ -1,8 +1,8 @@
 package com.codync.android
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -24,161 +25,176 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.codync.android.core.MemoryDraft
-import com.codync.android.core.MemoryFact
+import com.codync.android.core.BotMemory
+import com.codync.android.core.DreamRun
+import com.codync.android.core.MemoryEditTarget
+import com.codync.android.core.MemoryEntry
 import com.codync.android.design.*
-import java.text.DateFormat
-import java.util.Date
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
-private val FILTERS = listOf("all" to "All", "profile" to "About you", "pinned" to "Pinned", "review" to "Needs review")
-private enum class Backup { Export, Import }
+private enum class Tab { Yours, Bot, Dreams, Harness }
 
-/** What a bot remembers, in its settings (iOS `MemoryCard`): search, edit, pin, history, backups. */
-@Composable fun MemoryCard(botId: String, store: AppStore) {
+/**
+ * A bot's memory (iOS `MemoryCard`): what all your bots know about you, what this one knows, its dreams, and its
+ * harness's own notes when the user kept them on.
+ */
+@Composable fun MemoryCard(botId: String, state: AppState, store: AppStore) {
     val scope = rememberCoroutineScope()
     val memory = remember(botId) { MemoryModel(botId, store, scope) }
-    var editor by remember { mutableStateOf<MemoryDraft?>(null) }
-    var history by remember { mutableStateOf(false) }
-    var backup by remember { mutableStateOf<Backup?>(null) }
+    val bot = state.bots.firstOrNull { it.id == botId }
+    val harness = bot?.let { backendName(state, it.backend) } ?: "Claude Code"
+    val view = memory.view
+    var tab by remember { mutableStateOf(Tab.Bot) }
+    var editor by remember { mutableStateOf<MemoryEditTarget?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
-    LaunchedEffect(botId) { memory.load() }
+    var aboutHarness by remember { mutableStateOf(false) }
+    // Memory changes anywhere move the bot's `memoryRev`: fetch again.
+    LaunchedEffect(botId, bot?.memoryRev, bot?.sharedMemory, bot?.harnessMemory) { memory.load() }
+    // The harness's section goes when its memory is turned off (on another device too).
+    LaunchedEffect(view != null && view.projectMemory == null) { if (view != null && view.projectMemory == null && tab == Tab.Harness) tab = Tab.Bot }
+    val shared = tab == Tab.Yours
     CardSection("Memory", accessory = {
-        IconButton("Add memory", "plus", enabled = !memory.busy) { editor = MemoryDraft.of(botId, null) }
+        if (tab == Tab.Yours || tab == Tab.Bot) IconButton("Add memory", "plus", enabled = !memory.busy) {
+            editor = MemoryEditTarget(null, shared, "")
+        }
         DropdownMenu({ listOf(
             MenuItem("Refresh", icon = "arrow.clockwise") { memory.refresh() },
-            MenuItem("Export", icon = "square.and.arrow.up") { backup = Backup.Export; memory.export() },
-            MenuItem("Import", icon = "square.and.arrow.down") { backup = Backup.Import },
-            MenuItem("Forget everything", icon = "trash", destructive = true, divider = true) { confirmClear = true },
+            MenuItem("Forget everything here", icon = "trash", destructive = true, divider = true, enabled = tab == Tab.Yours || tab == Tab.Bot) {
+                confirmClear = true
+            },
         ) }, Modifier.size(32.dp), label = "More") { Symbol("ellipsis", size = 20.dp, tint = Palette.secondary) }
     }) {
         row {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SearchField(memory.query, { memory.search(it) }, Modifier.weight(1f), "Search memories")
-                ChoicePicker(memory.filter, FILTERS, { memory.search(memory.query, it) }, fill = Palette.bubbleAgent, label = "Show")
-            }
+            val options = listOf(Tab.Yours to "About you", Tab.Bot to "This bot", Tab.Dreams to "Dreams") +
+                (if (view?.projectMemory != null) listOf(Tab.Harness to harness) else emptyList())
+            SegmentedChoice(tab, options, { tab = it; if (it == Tab.Harness) memory.refresh() })
         }
         memory.error?.let { row { SelectionContainer { Text(it, style = Type.body, color = Palette.danger) } } }
-        if (!memory.loaded && memory.error == null) row { Text("Loading memory…", style = Type.body, color = Palette.secondary) }
-        if (memory.loaded && memory.facts.isEmpty()) row {
-            Column(Modifier.fillMaxWidth().padding(vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Symbol("brain", size = 24.dp, tint = Palette.tertiary)
-                Text(if (memory.query.isEmpty() && memory.filter == "all") "Nothing yet. Important details are remembered as you chat." else "No matching memories.",
-                    style = Type.body, color = Palette.secondary, textAlign = TextAlign.Center)
-            }
-        }
-        for (fact in memory.facts) row {
-            FactRow(fact, memory.busy, { editor = MemoryDraft.of(botId, fact) }) { pick ->
-                when (pick) {
-                    "history" -> { history = true; memory.inspect(fact) }
-                    else -> memory.action(pick, fact)
-                }
-            }
-        }
-        if (memory.nextOffset != null) row {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                LinkButton("Load more (${memory.total})", color = Palette.secondary) { memory.refresh(more = true) }
-            }
+        if (view == null) {
+            if (memory.error == null) row { Text("Loading memory…", style = Type.body, color = Palette.secondary) }
+        } else when (tab) {
+            Tab.Yours, Tab.Bot -> layer(memory, view, bot, state, store, shared, harness, { editor = it }, { aboutHarness = true })
+            Tab.Dreams -> dreams(memory, view.dreams)
+            Tab.Harness -> harnessNotes(view.projectMemory, harness)
         }
     }
     CodyncSheet(editor, { editor = null }) { MemoryEditor(memory, it) }
-    CodyncSheet(history, { history = false }) { MemoryHistory(memory) }
-    CodyncSheet(backup, { backup = null }) { MemoryBackup(memory, it) }
-    CodyncDialog("Forget everything this bot remembers?", confirmClear, { confirmClear = false }) {
-        listOf(DialogAction("Forget everything", destructive = true) { memory.action("clearMemory") })
+    CodyncSheet(aboutHarness, { aboutHarness = false }) { HarnessMemorySheet(harness, bot?.backend == "claude") }
+    CodyncDialog(if (shared) "Forget everything your bots share about you?" else "Forget everything this bot remembers?", confirmClear,
+        { confirmClear = false }) {
+        listOf(DialogAction("Forget everything", destructive = true) { memory.mutate("clearMemory", shared = shared) })
     }
 }
 
-@Composable private fun FactRow(fact: MemoryFact, busy: Boolean, open: () -> Unit, act: (String) -> Unit) {
+private fun CardRows.layer(memory: MemoryModel, view: BotMemory, bot: com.codync.android.core.Bot?, state: AppState, store: AppStore,
+    shared: Boolean, harness: String, edit: (MemoryEditTarget) -> Unit, about: () -> Unit) {
+    val layer = if (shared) view.yours else view.bot
+    if (shared && bot != null) row {
+        SwitchRow("Use what your bots share", null, bot.sharedMemory ?: view.shared, {
+            store.command("updateBot", buildJsonObject { put("id", bot.id); put("sharedMemory", it) }, "memory:" + bot.id)
+        })
+    }
+    val harnessOn = bot?.harnessMemory
+    if (!shared && bot != null && harnessOn != null) row {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("$harness's own memory", Modifier.weight(1f), style = Type.body, color = Palette.text, maxLines = 1)
+            IconButton("About $harness's own memory", "info.circle", action = about)
+            CodyncSwitch(harnessOn, {
+                store.command("updateBot", buildJsonObject { put("id", bot.id); put("harnessMemory", it) }, "memory:" + bot.id)
+            }, Modifier.width(34.dp), !memory.busy) {}
+        }
+    }
+    row {
+        Text((if (shared) "Your name, time zone, people and lasting preferences, shared by your bots." else "What this bot learned about you.") +
+            " ${layer.used} of ${layer.cap} in use.", style = Type.footnote, color = Palette.secondary)
+    }
+    if (layer.entries.isEmpty()) row {
+        MemoryEmpty("brain", if (shared) "Nothing shared yet." else "Nothing yet. What this bot learns about you shows up here, and you can change any of it.")
+    }
+    for (entry in layer.entries) row { EntryRow(memory, entry, shared, state) { edit(MemoryEditTarget(entry.id, shared, entry.text)) } }
+    view.files?.let { files -> row { MemoryNotes(memory, files, shared, state) } }
+}
+
+@Composable private fun EntryRow(memory: MemoryModel, entry: MemoryEntry, shared: Boolean, state: AppState, open: () -> Unit) {
     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f).plainButton(action = open), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (fact.pinned) Symbol("pin.fill", size = 12.dp, tint = Palette.secondary)
-                Text(fact.title.ifEmpty { fact.content.take(40) }, style = Type.body.semibold, color = Palette.text)
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (entry.pinned) Symbol("pin.fill", size = 12.dp, tint = Palette.secondary, modifier = Modifier.padding(top = 4.dp))
+                Text(entry.text, style = Type.body, color = if (entry.archived) Palette.tertiary else Palette.text)
             }
-            Text(fact.content, style = Type.body, color = Palette.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text("${if (fact.kind == "profile") "About you" else fact.memoryType} · ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(fact.createdAt))} · " +
-                "${fact.revisionCount} revisions", style = Type.caption, color = Palette.secondary)
+            Text("${author(entry, state)} · ${ago(entry.updatedAt)}${if (entry.archived) " · archived" else ""}", style = Type.caption, color = Palette.secondary)
         }
-        DropdownMenu({ buildList {
-            add(MenuItem(if (fact.pinned) "Unpin" else "Pin", icon = if (fact.pinned) "pin.slash" else "pin") { act("pinMemory") })
-            add(MenuItem("History", icon = "clock.arrow.circlepath") { act("history") })
-            if (fact.reviewAfter != null) add(MenuItem("Mark reviewed", icon = "checkmark.circle") { act("reviewMemory") })
-            add(MenuItem("Forget", icon = "trash", destructive = true, divider = true) { act("forgetMemory") })
-        } }, Modifier.size(32.dp), enabled = !busy, label = "Memory actions") { Symbol("ellipsis", size = 20.dp, tint = Palette.secondary) }
+        DropdownMenu({ listOf(
+            MenuItem("Edit", icon = "pencil") { open() },
+            MenuItem(if (entry.pinned) "Unpin" else "Pin", icon = if (entry.pinned) "pin.slash" else "pin") {
+                memory.mutate("pinMemory", id = entry.id, pinned = !entry.pinned)
+            },
+            MenuItem(if (entry.archived) "Bring back" else "Archive", icon = if (entry.archived) "arrow.up" else "arrow.down.to.line") {
+                memory.mutate("archiveMemory", id = entry.id, archived = !entry.archived)
+            },
+            MenuItem("Forget", icon = "trash", destructive = true, divider = true) { memory.mutate("forgetMemory", id = entry.id) },
+        ) }, Modifier.size(32.dp), enabled = !memory.busy, label = "Memory actions") { Symbol("ellipsis", size = 20.dp, tint = Palette.secondary) }
     }
 }
 
-/** Add or edit one memory (iOS `MemoryEditorView`). */
-@Composable private fun MemoryEditor(memory: MemoryModel, initial: MemoryDraft) {
-    val dismiss = LocalDismissModal.current
-    var draft by remember(initial) { mutableStateOf(initial) }
-    Column(Modifier.fillMaxSize().background(Palette.background)) {
-        ModalHeader(if (draft.id == null) "Add memory" else "Edit memory")
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            LabeledBox("Title") { FieldBox(draft.title, { draft = draft.copy(title = it) }, "Title", fill = Palette.surface) }
-            LabeledBox("Memory") {
-                Box(Modifier.heightIn(min = 160.dp)) { FieldBox(draft.content, { draft = draft.copy(content = it) }, "", 7, 20, fill = Palette.surface) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                for ((scope, label) in listOf("project" to "Work", "personal" to "About you", "global" to "General")) {
-                    LinkButton(label, style = if (draft.scope == scope) Type.body.semibold else Type.body) { draft = draft.copy(scope = scope) }
+private fun CardRows.dreams(memory: MemoryModel, runs: List<DreamRun>) {
+    row { Text("Between chats the bot tidies its memory from your own words. Each run can be undone.", style = Type.footnote, color = Palette.secondary) }
+    if (runs.isEmpty()) row { MemoryEmpty("moon.zzz.fill", "No dreams yet.") }
+    for (run in runs) row {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(ago(run.at) + if (run.undone) " · undone" else "", style = Type.body.semibold, color = Palette.text)
+                for (added in run.added) Text("+ ${added.text}", style = Type.body, color = Palette.text)
+                for (gone in run.archived) Text("− ${gone.text}", style = Type.body, color = Palette.tertiary)
+                for (note in run.files.orEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Symbol("doc.text", size = 14.dp, tint = Palette.secondary)
+                    Text("Added to ${note.name}", style = Type.body, color = Palette.secondary)
                 }
             }
-            LabeledBox("Category") { FieldBox(draft.memoryType, { draft = draft.copy(memoryType = it) }, "Category", fill = Palette.surface, capitalize = false) }
-            LabeledBox("Topic (optional)") { FieldBox(draft.topicKey, { draft = draft.copy(topicKey = it) }, "Topic (optional)", fill = Palette.surface, capitalize = false) }
-            memory.error?.let { Text(it, style = Type.body, color = Palette.danger) }
-            PrimaryButton(if (memory.busy) "Saving…" else "Save", enabled = !memory.busy && draft.title.isNotBlank() && draft.content.isNotBlank()) {
-                memory.save(draft) { dismiss() }
-            }
+            if (!run.undone) IconButton("Undo this dream", "arrow.counterclockwise", enabled = !memory.busy) { memory.mutate("undoDream", id = run.id) }
         }
     }
 }
 
-@Composable private fun LabeledBox(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = Type.caption, color = Palette.secondary)
-        content()
+private fun CardRows.harnessNotes(project: BotMemory.Project?, name: String) {
+    if (project == null) return
+    row { Text("$name's own notes, read-only here.", style = Type.footnote, color = Palette.secondary) }
+    row { SelectionContainer { Text(project.path, style = Type.caption, color = Palette.tertiary) } }
+    if (project.text.isEmpty()) row { MemoryEmpty("brain", "Nothing yet. $name's notes show up here once it saves some.") }
+    else row { SelectionContainer { Text(project.text, style = Type.body, color = Palette.text, modifier = Modifier.fillMaxWidth()) } }
+}
+
+@Composable private fun MemoryEmpty(icon: String, text: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Symbol(icon, size = 24.dp, tint = Palette.tertiary)
+        Text(text, style = Type.body, color = Palette.secondary, textAlign = TextAlign.Center)
     }
 }
 
-/** A memory's earlier versions and the session it came from (iOS `MemoryHistoryView`). */
-@Composable private fun MemoryHistory(memory: MemoryModel) {
-    Column(Modifier.fillMaxSize().background(Palette.background)) {
-        ModalHeader("Memory history")
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            memory.error?.let { Text(it, style = Type.body, color = Palette.danger) }
-            val detail = memory.detail
-            if (detail == null) Text("Loading history…", style = Type.body, color = Palette.secondary)
-            else {
-                SelectionContainer { Text(detail.history.result, style = Type.body, color = Palette.text) }
-                detail.history.cursor?.let { cursor -> LinkButton("Older versions") { memory.inspect(detail.fact, cursor) } }
-                Text("Session timeline", style = Type.body.semibold, color = Palette.text)
-                SelectionContainer { Text(detail.timeline.result, style = Type.body, color = Palette.text) }
-            }
-        }
-    }
+private fun author(entry: MemoryEntry, state: AppState): String = when (entry.author) {
+    "user" -> "You wrote it"
+    "bot" -> "${state.bots.firstOrNull { it.id == entry.authorBot }?.name ?: "A bot"} remembered it"
+    "dream" -> "Dreaming"
+    else -> "Moved from the old memory"
 }
 
-/** Copy an Engram backup out, or paste one in (iOS `MemoryBackupView`). */
-@Composable private fun MemoryBackup(memory: MemoryModel, mode: Backup) {
+internal fun ago(millis: Long): String =
+    DateUtils.getRelativeTimeSpanString(minOf(millis, System.currentTimeMillis()), System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+
+/** Writes one memory: a new one, or a change to an entry (iOS `MemoryEditorView`). */
+@Composable private fun MemoryEditor(memory: MemoryModel, target: MemoryEditTarget) {
     val dismiss = LocalDismissModal.current
-    var text by remember { mutableStateOf("") }
+    var text by remember(target) { mutableStateOf(target.text) }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
-        ModalHeader(if (mode == Backup.Export) "Export memories" else "Import memories")
+        ModalHeader(if (target.entry != null) "Edit memory" else if (target.shared) "Add to what your bots share" else "Add memory")
         Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(if (mode == Backup.Export) "Copy this Engram backup to keep or import your memories."
-                else "Paste an Engram JSON backup. Import merges memories and preserves newer changes. A backup is saved first.",
-                style = Type.body, color = Palette.text)
-            if (mode == Backup.Export) SelectionContainer {
-                Text(memory.backup.ifEmpty { "Preparing backup…" }, style = Type.caption.monospaced, color = Palette.text)
-            } else {
-                Box(Modifier.heightIn(min = 280.dp)) { FieldBox(text, { text = it }, "", 12, 40, style = Type.caption.monospaced, fill = Palette.surface, capitalize = false) }
-                PrimaryButton("Import", enabled = !memory.busy && text.isNotEmpty()) { memory.importBackup(text) { dismiss() } }
-            }
+            Column(Modifier.heightIn(min = 96.dp)) { FieldBox(text, { text = it }, "One short fact", 2, 6, fill = Palette.surface) }
             memory.error?.let { Text(it, style = Type.body, color = Palette.danger) }
+            PrimaryButton(if (memory.busy) "Saving…" else "Save", Modifier.fillMaxWidth(), enabled = !memory.busy && text.isNotBlank()) {
+                memory.mutate("saveMemory", id = target.entry, shared = target.shared, text = text.trim(), done = { dismiss() })
+            }
         }
     }
 }
