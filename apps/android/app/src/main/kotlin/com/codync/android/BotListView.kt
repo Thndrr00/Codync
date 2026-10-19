@@ -155,20 +155,7 @@ internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {
     Box(Modifier.fillMaxWidth().contextActions(onClick = { store.openBot(bot.id) }, reorder = drag, preview = {
         Box(Modifier.padding(horizontal = 8.dp)) { BotRow(bot, state) }
     }) {
-        listOf(
-            MenuItem(if (bot.pinned) "Unpin" else "Pin", icon = if (bot.pinned) "pin.slash" else "pin") {
-                store.command("updateBot", buildJsonObject { put("id", bot.id); put("pinned", !bot.pinned) }, "roster:" + bot.id)
-            },
-            if (bot.kind == "group") MenuItem("Edit group", icon = "person.2", action = edit)
-            else MenuItem("Edit profile", icon = "pencil", action = edit),
-            MenuItem("Mark as read", icon = "checkmark.message") {
-                store.command("markRead", buildJsonObject { put("botId", bot.id); put("all", true) }, "roster:" + bot.id)
-            },
-            MenuItem("Hide from list", icon = "eye.slash") {
-                store.command("updateBot", buildJsonObject { put("id", bot.id); put("hidden", true) }, "roster:" + bot.id)
-            },
-            MenuItem("Delete", icon = "trash", destructive = true, divider = true, action = delete),
-        )
+        botRosterActions(bot, store, edit, delete)
     }.semantics {
         contentDescription = bot.name
         // TalkBack's way to reorder (the drag needs a touch and hold, then a move).
