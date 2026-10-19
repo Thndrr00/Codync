@@ -75,6 +75,43 @@ unreachable computer is distinguished from an empty online roster. Chat supports
 final replies, Markdown/code, permissions, reactions, threads, history and Full
 conversation.
 
+### Constellation roster (Android)
+
+The roster header switches between **Lista** and **Constelación** and remembers
+the choice on this device. Constellation keeps the roster's pinned/custom order:
+tap a character to open its chat, or hold it for the same profile, pin, read, hide
+and delete actions as the list. Reorder by dragging in Lista. The summary counts
+working bots and bots needing input among the visible roster.
+
+Recent activity (a 24-hour window) and unread messages increase character size
+within 48–76 dp. Unread counts saturate visually at 99+; accessibility announces
+the full count. Amber highlights needs-input bots even with animation disabled.
+The canvas scrolls rather than shrinking large rosters. Its cells reserve space
+for labels and grow vertically with the system font scale. Offscreen characters
+stop moving; Android's Remove animations setting disables continuous motion and
+placement transitions, including when the setting changes while the view is open.
+
+This is an Android-specific alternative presentation in this fork. The host
+protocol and bot actions are unchanged. iOS, desktop and terminal rosters retain
+their existing presentations; no shared feature or host logic moved to Android.
+
+Test-only fixtures provide 1–30 bots without inserting records into an account.
+On a disposable emulator, run the focused interaction/rendering checks:
+
+```powershell
+$env:ANDROID_HOME = 'C:\Android\Sdk'
+.\gradlew.bat :app:assembleDebugAndroidTest
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.codync.android.ConstellationScreenTest,com.codync.android.ConstellationRenderingTest'
+```
+
+The rendering test records five seconds of window frame durations and writes
+`constellation-frames.txt` and `constellation-30.png` to the app's external files
+directory. These are emulator observations, not physical-device performance
+guarantees. A passing rendering check confirms collection, not a frame budget:
+inspect its screenshot and discard timings captured under system dialogs or an
+unresponsive System UI. Semantics assertions check roster traversal order; a manual TalkBack
+walkthrough remains a separate acceptance check.
+
 Text and private attachment drafts survive process death separately for each bot
 and thread. Sends retain their nonce through durable queue commit and retry.
 Uncertain sends require explicit retry with the same ID. Text can wait in the
