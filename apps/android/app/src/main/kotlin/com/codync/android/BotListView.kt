@@ -51,12 +51,14 @@ import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 /** The roster, as iOS `BotListView` draws it: every bot is a person you can message. */
 @Composable internal fun BotListView(state: AppState, store: AppStore, account: () -> Unit, manage: () -> Unit,
     newBot: () -> Unit, newGroup: () -> Unit, edit: (Bot) -> Unit, bottomInset: androidx.compose.ui.unit.Dp) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = remember(context) { RosterPreferences(context.applicationContext) }
+    val reduced = reduceMotion()
     var confirmDelete by remember { mutableStateOf<Bot?>(null) }
     val roster = roster(state.bots)
     val reorder = remember { RosterReorder() }
@@ -74,21 +76,33 @@ import kotlinx.serialization.json.putJsonArray
     }) {
         // Pull to refresh reconnects and asks the account for its computers again (iOS `refreshable`).
         PullToRefresh({ store.reconnect(); store.refreshComputers() }, Modifier.fillMaxSize(), indicatorTop = top + 50.dp) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = top + 56.dp, bottom = bottomInset)) {
-            // A computer waiting for an update has its card instead; its bots may not be readable yet.
-            state.mismatch?.let { mismatch -> item("update") { UpdateNeededCard(state, mismatch, Modifier.padding(vertical = 8.dp)) } }
-            if (roster.isEmpty() && state.mismatch == null) item {
-                EmptyRoster(canCreate = state.computers.isNotEmpty(), hasComputer = state.computers.isNotEmpty(), create = newBot, showComputers = manage)
-            }
-            items(reorder.shown(roster), key = Bot::id) { bot ->
-                val lifted = reorder.dragged == bot.id
-                Box(Modifier.onSizeChanged { reorder.heights[bot.id] = it.height }
-                    .then(if (lifted) Modifier.zIndex(1f).graphicsLayer { translationY = reorder.offset; scaleX = 1.02f; scaleY = 1.02f }
-                        else Modifier.animateItem())) {
-                    BotRowItem(bot, state, store, reorder.handle(bot.id) { store.reorder(it) }, edit = { edit(bot) }, delete = { confirmDelete = bot })
+            Column(Modifier.fillMaxSize().padding(top = top + 56.dp)) {
+                RosterPresentationHeader(roster, preferences.presentation, preferences::select,
+                    Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp))
+                state.mismatch?.let { UpdateNeededCard(state, it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                androidx.compose.animation.Crossfade(preferences.presentation, Modifier.weight(1f),
+                    animationSpec = if (reduced) androidx.compose.animation.core.snap() else Motion.fade(), label = "Roster presentation") { presentation ->
+                    if (presentation == RosterPresentation.Constellation && roster.isNotEmpty()) {
+                        BotConstellation(roster, open = { store.openBot(it.id) }, actions = { bot ->
+                            botRosterActions(bot, store, edit = { edit(bot) }, delete = { confirmDelete = bot })
+                        }, modifier = Modifier.fillMaxSize().padding(bottom = bottomInset))
+                    } else {
+                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = bottomInset)) {
+                            if (roster.isEmpty() && state.mismatch == null) item {
+                                EmptyRoster(canCreate = state.computers.isNotEmpty(), hasComputer = state.computers.isNotEmpty(), create = newBot, showComputers = manage)
+                            }
+                            items(reorder.shown(roster), key = Bot::id) { bot ->
+                                val lifted = reorder.dragged == bot.id
+                                Box(Modifier.onSizeChanged { reorder.heights[bot.id] = it.height }
+                                    .then(if (lifted) Modifier.zIndex(1f).graphicsLayer { translationY = reorder.offset; scaleX = 1.02f; scaleY = 1.02f }
+                                        else Modifier.animateItem())) {
+                                    BotRowItem(bot, state, store, reorder.handle(bot.id) { store.reorder(it) }, edit = { edit(bot) }, delete = { confirmDelete = bot })
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        }
         }
     }
     val deleting = confirmDelete
