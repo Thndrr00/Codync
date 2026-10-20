@@ -1,5 +1,14 @@
 # Plan de Mejora Android + Escritorio (Thndrr00/Codync)
 
+> Revisión de implementación: 2026-10-19. Este archivo contiene **50 ideas**,
+> no cinco. Consultar la [guía detallada de implementación y viabilidad](guia-implementacion-50-mejoras-android-escritorio.md)
+> antes de ejecutar cualquiera. La guía conserva estos números y corrige
+> supuestos del catálogo: hay funciones parcialmente existentes, rutas que
+> requieren verificarse y propuestas sujetas a las reglas de arquitectura,
+> componentes compartidos y paridad de `AGENTS.md`. Las etiquetas históricas
+> “Solo Móvil” no eximen de esas reglas. Ninguna propuesta implica trabajo
+> implementado o validado en dispositivos.
+
 Este documento reúne el catálogo completo de **50 mejoras de UI/UX y utilidades** para el fork de Codync (`origin = Thndrr00/Codync`), enfocado en evolucionar `apps/android` (Kotlin + Jetpack Compose) hacia una experiencia nativa Android moderna y ergonómica, junto con las integraciones que conectan `apps/android`, `apps/desktop` y `host`.
 
 > [!IMPORTANT]
