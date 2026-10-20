@@ -1,4 +1,4 @@
-import type { SSHProfile } from '../shared/ssh.ts'
+import { VNC_REMOTE_PORT, type SSHProfile } from '../shared/ssh.ts'
 
 // Preserve the login shell's PATH, then try the supported installers and the Mac app bundle.
 const REMOTE_PATH = '$PATH:/opt/homebrew/bin:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:$HOME/.local/bin:/Applications/Codync.app/Contents/Resources'
@@ -14,7 +14,7 @@ export const remoteInfoCommand = (port: number, folder = '.codync') => {
 }
 
 /** `dir` is this app's host data folder (`~/.codync`, or a development sandbox's). */
-export const knownHostsFiles = (h: string, dir = `${h}/.codync`) => [`${h}/.ssh/known_hosts`, `${dir}/ssh_known_hosts`]
+export const knownHostsFiles = (h: string, dir = `${h}/.codync`) => [`${h}/.ssh/known_hosts`, `${dir}/ssh_known_hosts`].map((path) => path.replaceAll('\\', '/'))
 
 /** `pkill -f` pattern for the tunnels that use `dir`'s known_hosts file: this copy's own, never another copy's. */
 export const orphanTunnelPattern = (dir: string) => `^/usr/bin/ssh -N .*${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/ssh_known_hosts`
@@ -47,7 +47,7 @@ export const infoArguments = (p: SSHProfile, h: string, folder = '.codync', dir 
   '--', p.host, remoteInfoCommand(p.remotePort, folder),
 ]
 
-export const tunnelArguments = (p: SSHProfile, localPort: number, h: string, dir?: string) => [
+export const tunnelArguments = (p: SSHProfile, localPort: number, h: string, dir?: string, vncPort?: number) => [
   '-N', '-T', '-o', 'ExitOnForwardFailure=yes', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
   // A shared master owns the listener and lets this child exit. The app must own
   // its tunnel process to verify the listener and close the forward on disconnect.
@@ -55,5 +55,7 @@ export const tunnelArguments = (p: SSHProfile, localPort: number, h: string, dir
   '-o', 'ForwardAgent=no', '-o', 'ForwardX11=no', '-o', 'BatchMode=yes',
   ...hostKeyOptions(h, dir),
   '-L', `127.0.0.1:${localPort}:127.0.0.1:${p.remotePort}`,
+  // The screen viewer. Absent in tests that only check the host forward.
+  ...(vncPort == null ? [] : ['-L', `127.0.0.1:${vncPort}:127.0.0.1:${VNC_REMOTE_PORT}`]),
   ...targetOptions(p), '--', p.host,
 ]

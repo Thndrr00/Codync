@@ -121,6 +121,21 @@ Each cloud engine has two **modes**:
   (`Hans-Hant`) for a reader whose first Chinese language, or region, is Traditional. Only a
   model the user picks is saved; the default isn't, so a newer default reaches everyone.
 
+**OpenAI-compatible server.** Set `CODYNC_OPENAI_BASE_URL` in the host's environment (for example
+`http://127.0.0.1:8890` or `http://127.0.0.1:8890/v1`) to send speech requests
+(`/v1/models`, `/v1/audio/transcriptions`, `/v1/audio/speech`) to that server instead
+of `https://api.openai.com`. A trailing `/v1` is normalized; reverse-proxy path prefixes are
+preserved. HTTPS is required except for HTTP on localhost or loopback IP addresses. URLs with
+userinfo, query parameters or fragments are rejected, and OpenAI requests never follow redirects.
+The configured server receives the saved OpenAI bearer key, so configure only a server you trust;
+use its own token or a non-secret placeholder for a server that needs no authentication.
+Saving a key tests the custom server's model-list endpoint, not Realtime credential creation.
+Speech clips use WAV, so the server needs no AAC encoder. **OpenAI Realtime is rejected while a
+custom endpoint is configured**, because clients connect directly to official OpenAI and cannot
+use local speech credentials. Custom model lists expose no Realtime choices. Remove the variable
+and restore an official OpenAI key to use OpenAI Realtime; Gemini is unaffected. Unset, existing
+official-provider behavior is preserved. The host environment applies to every connected client.
+
 **Default models follow the provider.** Nothing pins a model version: once a day (and whenever a
 key is saved or the model list is opened) the host reads each keyed provider's model list and
 keeps its newest model per mode (`voice::newest`, stored as `voice-defaults.<provider>`), and

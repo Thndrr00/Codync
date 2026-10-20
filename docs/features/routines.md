@@ -78,7 +78,7 @@ not on Windows, see [agent processes](../architecture/conversation-runtime.md));
 otherwise only the run's session closes (agents that can close sessions). Either
 way a frequent schedule doesn't keep a set of MCP servers alive per run, and
 opening the run's thread resumes its session (agents that can resume sessions). Final results appear
-in the main conversation and use normal encrypted push delivery. Returning `(pass)`
+in the main conversation and use normal encrypted push delivery. Only the published result counts as unread; the internal execution reply does not count twice. Later user replies and pending permissions still count. Returning `(pass)`
 or no text completes silently. A test run can run a paused routine. Pausing or
 deleting cancels pending runs; work already running can finish. Deleting a bot
 cancels its pending work. Missed intervals coalesce rather than replaying a backlog.

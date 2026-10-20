@@ -5,6 +5,7 @@
 // Key handlers read best with k (key), m / l / f / a (the sheet), n (rows).
 #![allow(clippy::many_single_char_names)]
 
+mod accounts;
 mod agent;
 mod analytics;
 mod bot_chat;
@@ -60,6 +61,10 @@ pub enum Reply {
     FieldsSaved,
     SignIn,
     Models(String),
+    Accounts {
+        scope: String,
+        authenticate: bool,
+    },
     Downloaded,
     /// Something changed: every open sheet loads again.
     Changed,
@@ -276,26 +281,35 @@ impl App {
 
     // ---------- model picker ----------
 
-    /// Loads the models `backend` offers, once per run.
-    pub(super) fn want_models(&mut self, backend: &str) {
-        if !backend.is_empty() && !self.models.contains_key(backend) {
-            self.models.insert(backend.to_owned(), None);
-            self.sheet("agentModels", json!({"backend": backend}), Reply::Models(backend.to_owned()));
+    pub(super) fn want_models_for(&mut self, backend: &str, account: Option<&str>) {
+        let key = model_key(backend, account);
+        if !backend.is_empty() && !self.models.contains_key(&key) {
+            self.models.insert(key.clone(), None);
+            self.sheet("agentModels", json!({"backend": backend, "account": account}), Reply::Models(key));
         }
     }
 
-    /// ←→ on the model field: "default", then each advertised model.
-    pub(super) fn cycle_model(&self, backend: &str, current: &str, d: isize) -> Option<String> {
-        let list = self.models.get(backend)?.as_ref()?;
+    pub(super) fn cycle_model_for(
+        &self,
+        backend: &str,
+        account: Option<&str>,
+        current: &str,
+        d: isize,
+    ) -> Option<String> {
+        let list = self.models.get(&model_key(backend, account))?.as_ref()?;
         let mut ids = vec![String::new()];
         ids.extend(list.iter().map(|m| m.id.clone()));
         let i = ids.iter().position(|x| x == current).unwrap_or(0);
         Some(ids[super::app::cycle(i, d, ids.len())].clone())
     }
 
-    /// The settings (effort, fast…) `backend`'s `model` offers.
-    pub(crate) fn model_settings(&self, backend: &str, model: &str) -> &[super::app::ModelOption] {
-        let list = self.models.get(backend).and_then(Option::as_ref);
+    pub(crate) fn model_settings_for(
+        &self,
+        backend: &str,
+        account: Option<&str>,
+        model: &str,
+    ) -> &[super::app::ModelOption] {
+        let list = self.models.get(&model_key(backend, account)).and_then(Option::as_ref);
         list.and_then(|l| l.iter().find(|m| m.id == model)).map_or(&[], |m| &m.options)
     }
 }
@@ -314,4 +328,9 @@ pub(super) fn open_browser(url: &str, host: &str) -> bool {
         std::process::Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" })
     };
     command.arg(url).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().is_ok()
+}
+
+/// Model catalogs belong to one host-local credential profile.
+pub(crate) fn model_key(backend: &str, account: Option<&str>) -> String {
+    account.map_or_else(|| backend.to_owned(), |id| format!("{backend}\0{id}"))
 }

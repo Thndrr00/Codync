@@ -16,7 +16,7 @@ use super::style::{FACE, avatar, bot_color, face_style, theme};
 
 pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
     let t = theme();
-    let r = centered(area, 88, if f.bot_id.is_some() { 34 } else { 32 });
+    let r = centered(area, 88, if f.bot_id.is_some() { 36 } else { 34 });
     let title = match &f.bot_id {
         Some(id) => app.bots.get(id).map_or_else(|| f.name.text.clone(), |b| b.name.clone()),
         None => "New bot · 2/2 name and looks".into(),
@@ -43,13 +43,16 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         .and_then(|b| b["name"].as_str())
         .unwrap_or(&f.backend)
         .to_owned();
-    for (i, field) in FIELDS.iter().enumerate() {
+    let visible_fields = usize::from(inner.height.saturating_sub(7) / 2).max(1);
+    let first = f.field.saturating_sub(visible_fields - 1);
+    for (i, field) in FIELDS.iter().enumerate().skip(first) {
         let active = i == f.field;
         let base = if active { t.sel } else { t.panel };
         let lab = match field {
             Field::Name => "Name",
             Field::Instructions => "Instructions",
             Field::Agent => "Agent",
+            Field::Account => "Account",
             Field::Model => "Model",
             Field::ModelOptions => "Options",
             Field::Fast => "Fast mode",
@@ -93,9 +96,24 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Instructions => {
                 text_field(buf, &f.instructions, "e.g. Reviews PRs. Never pushes without asking.", y);
             }
+            Field::Account => {
+                let label = if f.backend != "antigravity" {
+                    "Default account (this agent)"
+                } else if f.account_busy {
+                    "Loading / signing in..."
+                } else if let Some(id) = f.account.as_ref() {
+                    f.accounts
+                        .as_ref()
+                        .and_then(|list| list.iter().find(|(key, _)| key == id))
+                        .map_or(id.as_str(), |(_, name)| name.as_str())
+                } else {
+                    "Default account"
+                };
+                put(buf, vx, y, vw, label, t.text.patch(base));
+            }
             Field::Model => {
                 text_field(buf, &f.model, "default", y);
-                let hint = match app.models.get(&f.backend) {
+                let hint = match app.models.get(&super::super::manage::model_key(&f.backend, f.account.as_deref())) {
                     Some(None) => "loading models…".to_owned(),
                     Some(Some(list)) if !list.is_empty() => {
                         let id = f.model.text.trim();
@@ -112,16 +130,26 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Fast => {
                 let s = if f.fast { "◉ On   ○ Off" } else { "○ On   ◉ Off" };
                 // Known once the agent's model list loads, or once the bot's own sessions say.
-                let saved = f.bot_id.as_ref().and_then(|id| app.bots.get(id)).filter(|b| b.backend == f.backend);
-                let offered = match app.models.get(&f.backend) {
+                let saved = f
+                    .bot_id
+                    .as_ref()
+                    .and_then(|id| app.bots.get(id))
+                    .filter(|b| b.backend == f.backend && b.account == f.account);
+                let offered = match app.models.get(&super::super::manage::model_key(&f.backend, f.account.as_deref())) {
                     _ if saved.is_some_and(super::super::app::Bot::fast_shown) => "",
-                    Some(Some(_)) if !app.fast_mode.contains(&f.backend) => "  · not offered by this agent",
+                    Some(Some(_))
+                        if !app
+                            .fast_mode
+                            .contains(&super::super::manage::model_key(&f.backend, f.account.as_deref())) =>
+                    {
+                        "  · not offered by this agent"
+                    }
                     _ => "",
                 };
                 put(buf, vx, y, vw, &format!("{s}{offered}"), t.text.patch(base));
             }
             Field::ModelOptions => {
-                let offered = app.model_settings(&f.backend, f.model.text.trim());
+                let offered = app.model_settings_for(&f.backend, f.account.as_deref(), f.model.text.trim());
                 if offered.is_empty() {
                     put(buf, vx, y, vw, "none for this model", t.dim.patch(base));
                 }
@@ -241,6 +269,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         Field::ModelOptions => "←→ move · space change · tab next",
         Field::Skills => "←→ move · space toggle · i details · tab next",
         Field::Agent => "←→ change · ↵ install / sign in · tab next",
+        Field::Account => "left/right pick account; i sign in; r refresh",
         Field::Model => "←→ pick a model · or type its id",
         Field::Fast | Field::Color | Field::Shape | Field::Approvals | Field::Notify | Field::Computer => {
             "←→ change · tab next field"

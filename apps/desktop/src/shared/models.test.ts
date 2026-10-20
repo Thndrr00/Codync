@@ -2,6 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { draftOf, isChat, normalizeBot, type Entry } from './models.ts'
 
+test('editing a bot preserves its isolated agent account and older hosts use the default', () => {
+  const bot = normalizeBot({ id: 'b', backend: 'antigravity', account: 'work-account' })
+  assert.equal(draftOf(bot).account, 'work-account')
+  assert.equal(draftOf(normalizeBot({ id: 'legacy' })).account, null)
+})
+
 test('a bot keeps its Fast mode through the settings draft', () => {
   const bot = normalizeBot({ id: 'b', backend: 'codex', fastMode: true })
   assert.equal(bot.fastMode, true)

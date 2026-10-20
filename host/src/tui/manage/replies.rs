@@ -175,6 +175,7 @@ impl App {
                     self.flash("Sign-in link copied: open it on this computer, then ^r refreshes");
                 }
             }
+            Reply::Accounts { scope, authenticate } => self.accounts_reply(&scope, authenticate, &v),
             Reply::Models(backend) => {
                 let list = v["models"].as_array().into_iter().flatten().filter_map(AgentModel::parse).collect();
                 if v["fastMode"] == true {
@@ -198,6 +199,14 @@ impl App {
 
     fn sheet_error(&mut self, r: &Reply, e: String) {
         match r {
+            Reply::Accounts { scope, .. } => {
+                if let Some(Overlay::Form(f)) = self.overlays.last_mut()
+                    && f.account_scope == *scope
+                {
+                    f.account_busy = false;
+                    f.error = Some(e);
+                }
+            }
             Reply::Models(backend) => {
                 self.models.insert(backend.clone(), Some(vec![]));
             }

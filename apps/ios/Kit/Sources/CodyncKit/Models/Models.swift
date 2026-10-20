@@ -29,6 +29,7 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     /// or `refused` (it turned it off; `fastModeIssue` says why).
     public var fastModeSupport: String = "unknown"
     public var fastModeIssue: String?
+    public var account: String?
     public var pinned: Bool
     /// Where the user dragged it, lowest first (after pinned bots); ties sort by recent activity.
     public var position: Int = 0
@@ -357,6 +358,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var model: String?
     public var modelOptions: [String: String] = [:]
     public var fastMode: Bool?
+    public var account: String?
     public var pinned: Bool?
     public var hidden: Bool?
     public var notify: Bool?
@@ -393,6 +395,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         model = bot.model
         modelOptions = bot.modelOptions
         fastMode = bot.fastMode
+        account = bot.account
         pinned = bot.pinned
         hidden = bot.hidden
         notify = bot.notify
@@ -427,6 +430,7 @@ extension Bot {
         fastMode = try c.decodeIfPresent(Bool.self, forKey: .fastMode) ?? false
         fastModeSupport = try c.decodeIfPresent(String.self, forKey: .fastModeSupport) ?? "unknown"
         fastModeIssue = try c.decodeIfPresent(String.self, forKey: .fastModeIssue)
+        account = try c.decodeIfPresent(String.self, forKey: .account)
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
         position = try c.decodeIfPresent(Int.self, forKey: .position) ?? 0
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false

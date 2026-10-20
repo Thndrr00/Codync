@@ -109,8 +109,9 @@ pub async fn check(store: &Store, backend: &str) -> Result<Value> {
 
 /// Discover the agent's advertised models in an isolated, prompt-free session.
 /// This uses the same credentials as actual bot sessions and never reads project files.
-pub async fn models(store: &Store, backend: &str) -> Result<Value> {
-    let (acp, mut inbox, _, _) = start(store, backend).await?;
+pub async fn models(store: &Store, backend: &str, account: Option<&str>) -> Result<Value> {
+    let extra_env = account.map(|id| super::account::env(id, backend)).transpose()?.unwrap_or_default();
+    let (acp, mut inbox, _, _) = start_with_env(store, backend, &extra_env).await?;
     let result = tokio::time::timeout(Duration::from_secs(60), async {
         let request = acp.request("session/new", json!({"cwd": probe_dir(), "mcpServers": []}));
         tokio::pin!(request);
@@ -268,16 +269,23 @@ async fn reported_login(inbox: &mut mpsc::UnboundedReceiver<Incoming>) -> Option
 }
 
 /// Starts `backend` and completes `initialize`, trying each way to launch it.
-/// The agent's inbox must stay open: the reader stops when nobody listens.
-type Started = (Arc<Acp>, mpsc::UnboundedReceiver<Incoming>, Value, Cmd);
+pub(crate) type Started = (Arc<Acp>, mpsc::UnboundedReceiver<Incoming>, Value, Cmd);
 
-async fn start(store: &Store, backend: &str) -> Result<Started> {
+pub(crate) async fn start(store: &Store, backend: &str) -> Result<Started> {
+    start_with_env(store, backend, &[]).await
+}
+
+pub(crate) async fn start_with_env(store: &Store, backend: &str, extra_env: &[(String, String)]) -> Result<Started> {
     // The installed CLI alone when there is one: resolving the registry build can mean a long download.
     let candidates = match backends::local_candidate(backend) {
         Some(local) => vec![local],
         None => backends::launch_candidates(backend, |_| {}).await?,
     };
-    let env = env(store, backend)?;
+    let mut env = env(store, backend)?;
+    for (k, v) in extra_env {
+        env.retain(|(ek, _)| ek != k);
+        env.push((k.clone(), v.clone()));
+    }
     let dir = probe_dir();
     tokio::fs::create_dir_all(&dir).await?;
     let mut last = None;

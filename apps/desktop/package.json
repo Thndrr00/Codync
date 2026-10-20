@@ -16,7 +16,7 @@
     "build": "electron-vite build",
     "build:demo": "vite build --config vite.demo.config.ts && mv ../../web/public/demo/desktop/index.html ../../web/public/demo/desktop.html",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --experimental-strip-types src/shared/*.test.ts src/renderer/lib/*.test.ts src/renderer/views/thread/*.test.ts",
+    "test": "node --test --experimental-strip-types src/shared/*.test.ts src/main/vnc-bridge.test.ts src/renderer/lib/*.test.ts src/renderer/views/thread/*.test.ts",
     "icons": "swift tools/export-symbols.swift",
     "dist:mac:dev": "node tools/account-config.mjs dev && node tools/native-host.mjs dev && node tools/native-screen.mjs dev && electron-vite build && CSC_NAME=\"Pokai Lee (6KFK5J2LB4)\" electron-builder --mac --config tools/dev-builder.cjs",
     "dist:mac:main": "node tools/account-config.mjs main && node tools/native-host.mjs main && node tools/native-screen.mjs main && electron-vite build && electron-builder --mac",
@@ -30,6 +30,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^5.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
@@ -46,6 +47,8 @@
     "yaml": "^2.9.1"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "@novnc/novnc": "^1.7.0",
+    "electron-updater": "^6.8.9",
+    "ws": "^8.22.0"
   }
 }

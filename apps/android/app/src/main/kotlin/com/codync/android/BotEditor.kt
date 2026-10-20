@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,7 +36,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Create or edit a bot in a sheet, as iOS `BotEditorView`: the settings form plus Close and Save. */
 @Composable fun BotEditor(state: AppState, initial: BotDraft, store: AppStore) {
-    var draft by remember(initial.id) { mutableStateOf(initial) }
+    var draft by remember(state.generation, initial.id) { mutableStateOf(initial) }
     var folders by remember { mutableStateOf(false) }
     var viewingSkill by remember { mutableStateOf<SkillRef?>(null) }
     val online = state.actualConnection is LinkState.Ready
@@ -67,7 +68,7 @@ private fun fillDefaults(draft: BotDraft, state: AppState): BotDraft {
     val backends = backends(state)
     var next = draft
     if (backends.none { it.text("id") == draft.backend && it.available }) backends.firstOrNull { it.available && it.curated }?.text("id")
-        ?.let { next = next.copy(backend = it) }
+        ?.let { if (it != next.backend) next = next.copy(backend = it, account = null, model = null, modelOptions = emptyMap()) }
     val plugins = state.plugins
     if (plugins != null && next.connectors == null && plugins.connectors.isNotEmpty()) next = next.copy(connectors = plugins.connectors.map { it.id })
     if (plugins != null && next.skills.isEmpty() && plugins.skills.isNotEmpty() && draft.skills.isEmpty()) next = next.copy(skills = plugins.skills.map { it.id })
@@ -114,7 +115,7 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
                         id to ((info.text("name") ?: id) + if (!info.available) " (not installed)" else "")
                     } + ("custom" to "Custom command")
                     ValueRow("Agent") {
-                        ChoicePicker(draft.backend, agents, { if (it != draft.backend) change(draft.copy(backend = it, model = null, modelOptions = emptyMap())) },
+                        ChoicePicker(draft.backend, agents, { if (it != draft.backend) change(draft.copy(backend = it, account = null, model = null, modelOptions = emptyMap())) },
                             label = "Agent")
                     }
                     backends(state).firstOrNull { it.text("id") == draft.backend && !it.available }?.text("installHint")?.takeIf(String::isNotBlank)?.let {
@@ -124,10 +125,19 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
                         "ACP command, e.g. my-agent --acp", style = Type.callout.monospaced, capitalize = false)
                 }
             }
+            if (draft.backend == "antigravity") row {
+                AgentAccountPicker(draft.backend, draft.account, online,
+                    "${state.generation}/${state.computers.firstOrNull()?.id}/${draft.id}",
+                    { store.agentAccounts(draft.backend) }, { store.authenticateAgentAccount(draft.backend) }) {
+                    change(draft.copy(account = it, model = null, modelOptions = emptyMap()))
+                }
+            }
             row {
                 val bot = state.bots.firstOrNull { it.id == draft.id }
-                AgentModelPicker(state, store::agentModels, draft.backend, draft.model, draft.modelOptions, draft.fastMode ?: false, bot,
-                    { model, options -> change(draft.copy(model = model, modelOptions = options)) }, { change(draft.copy(fastMode = it)) })
+                key(state.generation, state.computers.firstOrNull()?.id, draft.backend, draft.account) {
+                    AgentModelPicker(state, { backend -> store.agentModels(backend, draft.account) }, draft.backend, draft.model, draft.modelOptions, draft.fastMode ?: false, bot,
+                        { model, options -> change(draft.copy(model = model, modelOptions = options)) }, { change(draft.copy(fastMode = it)) })
+                }
             }
             row {
                 ValueRow("Workspace", detail = if (draft.cwd.isEmpty()) "This bot has its own space for files. It can work in other folders when you ask."

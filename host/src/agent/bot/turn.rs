@@ -25,9 +25,11 @@ impl Actor {
 
     /// The prompt for `text` in session `sid`: what the agent should hear first (its profile, a handoff, a thread's
     /// start, a memory change) and after (a profile update, how to share files).
-    async fn compose(&mut self, sid: &str, text: &str) -> Result<String> {
+    fn compose(&mut self, initial: &Snapshot, text: &str) -> Result<String> {
+        let sid = &initial.session;
         let instructions = self.conn.as_ref().map_or(Instructions::FirstMessage, Conn::instructions);
-        let mut snapshot = self.snapshot(sid).await?;
+        let mut snapshot = initial.clone();
+        let fresh = matches!(snapshot.prelude, Some(context::Prelude::New | context::Prelude::UnpromptedFork));
         let remind_files = !snapshot.system.contains("send_file");
         let mut prompt = text.to_owned();
         if let Some(handoff) = self.handoff.take() {
@@ -35,7 +37,7 @@ impl Actor {
         }
         // A compaction may have dropped the profile the session's first message carried.
         let resend = instructions == Instructions::FirstMessage && self.profile_resend.remove(sid);
-        if self.session_fresh || resend {
+        if fresh || resend {
             // The instructions reaching the agent now hold memory as it was when they were rendered.
             memory::opened(&self.hub.store, &self.cfg.id, sid, &snapshot.memory)?;
         }
@@ -43,10 +45,21 @@ impl Actor {
             prompt = format!("{notice}\n\n{prompt}");
             self.turn_memory_revision = revision;
         }
-        if let Some(intro) = self.thread_intro.take() {
+        let intro = if let (Some(root), Some(prelude)) = (self.slot(&self.lane), snapshot.prelude) {
+            // The persisted opening belongs to this session, even if another lane ran first.
+            if self.thread_intro.as_ref().is_some_and(|(session, _)| session == sid) {
+                self.thread_intro = None;
+            }
+            Some(self.thread_intro(&root, prelude != context::Prelude::New))
+        } else if self.thread_intro.as_ref().is_some_and(|(session, _)| session == sid) {
+            self.thread_intro.take().map(|(_, intro)| intro)
+        } else {
+            None
+        };
+        if let Some(intro) = intro {
             prompt = format!("{intro}\n\n{prompt}");
         }
-        if std::mem::take(&mut self.session_fresh) && instructions == Instructions::FirstMessage {
+        if fresh && instructions == Instructions::FirstMessage {
             prompt = format!("<bot-profile>\n{}\n</bot-profile>\n\n{prompt}", snapshot.system);
         } else if resend {
             context::mark_announced(&self.hub.store, &self.cfg.id, &snapshot, snapshot.system_identity.clone())?;
@@ -141,7 +154,10 @@ impl Actor {
         if let Some(sid) = session {
             self.sync_fast_mode(&sid).await;
         }
-        if hidden && self.session_fresh {
+        let sid = self.turn_session.clone().ok_or_else(|| anyhow!("no session"))?;
+        let snapshot = self.snapshot(&sid).await?;
+        let fresh = matches!(snapshot.prelude, Some(context::Prelude::New | context::Prelude::UnpromptedFork));
+        if hidden && fresh {
             // A new session must never silently repeat an interrupted routine, and has nothing to compact.
             self.compacting = None;
             self.raw_prompt = false;
@@ -167,7 +183,7 @@ impl Actor {
         }
         // Session-start chatter (banners, command lists) isn't part of the reply.
         // Some adapters (pi-acp) send it on a timer right after session/new.
-        if self.session_fresh {
+        if fresh {
             tokio::time::sleep(Duration::from_millis(400)).await;
         }
         if let Some(conn) = self.conn.as_mut() {
@@ -177,9 +193,8 @@ impl Actor {
                 }
             }
         }
-        let sid = self.turn_session.clone().ok_or_else(|| anyhow!("no session"))?;
-        let prompt =
-            if std::mem::take(&mut self.raw_prompt) { text.to_owned() } else { self.compose(&sid, text).await? };
+        let raw = std::mem::take(&mut self.raw_prompt);
+        let prompt = if raw { text.to_owned() } else { self.compose(&snapshot, text)? };
         self.hub.set_runtime(&self.id(), |r| r.activity = "Thinking…".into());
         let acp = self.conn.as_ref().ok_or_else(|| anyhow!("agent not running"))?.acp.clone();
         let params = json!({
@@ -192,6 +207,12 @@ impl Actor {
         }
         // Written before this returns, so a Stop right after is sent after the prompt.
         let answer = acp.send("session/prompt", params).await?;
+        if !raw
+            && snapshot.prelude.is_some()
+            && let Err(error) = context::mark_prompted(&self.hub.store, &self.cfg.id, &snapshot)
+        {
+            tracing::warn!(bot = %self.cfg.id, %error, "couldn't acknowledge initial session instructions");
+        }
         if !self.turn_memory_revision.is_empty()
             && let Err(error) = memory::mark_announced(&self.hub.store, &self.cfg.id, &sid, &self.turn_memory_revision)
         {
@@ -257,6 +278,11 @@ impl Actor {
                 // Independent messages still report to the user in this chat.
                 if !delegated {
                     e.data["final"] = true.into();
+                    if self.lane.thread.is_some() {
+                        // Null distinguishes ordinary replies (including recovery) from
+                        // legacy records without an origin. Streaming flushes replace data.
+                        e.data["routineRunId"] = json!(self.active_routine);
+                    }
                     self.hub.set_entry(&id, &e.data);
                 }
                 final_text = text;
