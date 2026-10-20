@@ -1,3 +1,5 @@
+import { openComputerScreen } from '../screen/open'
+import { useSSH } from '../settings/ssh-model'
 import { isGroup, isWorking, type Bot } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
@@ -94,6 +96,7 @@ function Identity({ bot }: { bot: Bot }) {
 /** Whether this bot may use the computer, switched right here (also in Settings). */
 function ComputerUse({ bot }: { bot: Bot }) {
   const store = useStore()
+  const tunnel = useSSH().state.attachments.find((item) => item.computer.id === store.computer.id)
   const screen = store.screen
   if (!screen) return null
   const ready = screen.platform === 'windows' || (screen.enabled && screen.connected && screen.capture && screen.input)
@@ -103,6 +106,7 @@ function ComputerUse({ bot }: { bot: Bot }) {
       <div className="outlined-card details-switch">
         <RowLabel grow label="Use the computer" detail={ready ? null : 'On that computer, open Codync → Settings → Computer access to set it up first.'} />
         <HStack as="span" align="stretch" className="details-switch-control">
+          {tunnel ? <IconButton title="View screen" icon="display" onClick={() => openComputerScreen(store, tunnel)} /> : null}
           <Switch label="Use the computer" on={bot.computer} disabled={store.isOffline} onChange={(on) => store.setComputer(bot, on)} />
         </HStack>
       </div>

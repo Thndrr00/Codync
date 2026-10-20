@@ -125,7 +125,10 @@ impl Store {
     /// Final agent messages + pending permission cards newer than what the user has read in
     /// `scope`. A thread counts from when it was last read (never read: the main chat's
     /// `read_rev`). A thread root or a reacted-to message doesn't count again when it
-    /// changes: the user replied or reacted, so they have seen it.
+    /// changes: the user replied or reacted, so they have seen it. Routine execution
+    /// replies are private copies; only their published main-chat result counts.
+    /// Legacy replies have no origin marker; only those before the thread's first
+    /// user message are treated as internal, so later conversations stay unread.
     pub fn unread(&self, id: &str, read_rev: i64, scope: ReadScope) -> i64 {
         let mut args: Vec<&dyn rusqlite::ToSql> = vec![&id, &read_rev];
         let filter = match &scope {
@@ -140,7 +143,15 @@ impl Store {
         let n = c.query_row(
             &format!(
                 "SELECT COUNT(*) FROM entries WHERE bot_id = ?1 {filter} AND
-                   ((kind = 'agent' AND json_extract(data, '$.final') = 1) OR
+                   ((kind = 'agent' AND json_extract(data, '$.final') = 1 AND NOT EXISTS (
+                       SELECT 1 FROM entries root WHERE root.id = entries.thread_id AND
+                         root.bot_id = entries.bot_id AND root.thread_id IS NULL AND root.kind = 'notice' AND
+                         json_extract(root.data, '$.routineId') IS NOT NULL AND
+                         json_extract(root.data, '$.runId') IS NOT NULL AND (
+                           json_extract(entries.data, '$.routineRunId') = json_extract(root.data, '$.runId') OR
+                           (json_type(entries.data, '$.routineRunId') IS NULL AND NOT EXISTS (
+                             SELECT 1 FROM entries user WHERE user.bot_id = entries.bot_id AND
+                               user.thread_id = entries.thread_id AND user.kind = 'user' AND user.seq < entries.seq))))) OR
                     (kind = 'permission' AND json_extract(data, '$.status') = 'pending')) AND
                    json_extract(data, '$.reactions') IS NULL AND
                    CASE WHEN thread_id IS NULL THEN rev > ?2 AND json_extract(data, '$.thread') IS NULL
@@ -219,6 +230,7 @@ mod tests {
             model: None,
             model_options: std::collections::BTreeMap::new(),
             fast_mode: false,
+            account: None,
             pinned: false,
             position: 0,
             hidden: false,
@@ -256,10 +268,71 @@ mod tests {
         assert_eq!(s.unread("b1", r, ReadScope::Thread(&u.id)), 1);
         assert_eq!(s.unread("b1", r, ReadScope::All), 1);
 
+        s.mark_thread_read("b1", &u.id).unwrap();
+        routine_results_are_counted_once(&s);
+
         // A deleted bot stays deleted, and its winding-down actor leaves no lines behind.
         s.delete_bot("b1").unwrap();
         assert!(s.insert_entry(&Lane::main("b1"), EntryKind::Notice, 3, &reply).is_err());
         s.save_bot(&cfg).unwrap();
         assert!(s.bot("b1").unwrap().unwrap().deleted);
+    }
+
+    fn routine_results_are_counted_once(s: &Store) {
+        let root = "routine-run";
+        s.insert_entry_once(
+            root,
+            &Lane::main("b1"),
+            EntryKind::Notice,
+            &serde_json::json!({"routineId": "routine", "runId": "run"}),
+        )
+        .unwrap();
+        let lane = Lane::in_thread("b1", root);
+        let reply = serde_json::json!({"text": "done", "final": true});
+        s.insert_entry(&lane, EntryKind::Agent, 3, &reply).unwrap();
+        let r = s.bot("b1").unwrap().unwrap().read_rev;
+        assert_eq!(s.unread("b1", r, ReadScope::All), 0, "internal routine reply is not a second unread");
+        s.insert_entry(
+            &lane,
+            EntryKind::Agent,
+            3,
+            &serde_json::json!({"text": "ordinary reply", "final": true, "routineRunId": null}),
+        )
+        .unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "explicit null is not a missing legacy origin");
+        s.mark_thread_read("b1", root).unwrap();
+        s.insert_entry(&Lane::main("b1"), EntryKind::Agent, 0, &reply).unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "the published result is unread once");
+        let r = s.mark_read("b1").unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 0, "reading the main chat clears the result");
+
+        // Silent runs publish nothing, but a request for approval must still surface.
+        s.insert_entry(&lane, EntryKind::Agent, 4, &serde_json::json!({"text": "(pass)", "final": true})).unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 0);
+        s.insert_entry(&lane, EntryKind::Permission, 4, &serde_json::json!({"status": "pending"})).unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 1);
+
+        let r = s.mark_thread_read("b1", root).unwrap();
+        s.insert_entry(&lane, EntryKind::User, 5, &serde_json::json!({"text": "follow up"})).unwrap();
+        s.insert_entry(&lane, EntryKind::Agent, 5, &reply).unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "legacy follow-ups remain unread");
+        // The explicit origin wins even if a user message was queued during the run.
+        s.insert_entry(
+            &lane,
+            EntryKind::Agent,
+            5,
+            &serde_json::json!({"text": "internal", "final": true, "routineRunId": "run"}),
+        )
+        .unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 1);
+        let r = s.mark_thread_read("b1", root).unwrap();
+        s.insert_entry(
+            &lane,
+            EntryKind::Agent,
+            6,
+            &serde_json::json!({"text": "resumed follow-up", "final": true, "routineRunId": null}),
+        )
+        .unwrap();
+        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "ordinary resumed replies retain their origin");
     }
 }

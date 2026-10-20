@@ -142,7 +142,6 @@ pub fn spawn(hub: Arc<Hub>, cfg: BotConfig) -> BotHandle {
         routine_deadline: None,
         routine_timed_out: false,
         routine_completion: None,
-        session_fresh: false,
         profile_resend: HashSet::new(),
         compacting: None,
         raw_prompt: false,
@@ -232,6 +231,8 @@ pub(crate) struct Conn {
     pub(crate) adapter: Adapter,
     /// Sessions already created or loaded in this process, and when each was last used.
     loaded: HashMap<String, Instant>,
+    allocation_uncertain: bool,
+    pending_models: HashMap<String, Value>,
     started: Instant,
     /// Each live session's Fast mode option, as the agent last listed it.
     fast_options: HashMap<String, Value>,
@@ -280,14 +281,12 @@ struct Actor {
     /// The session the current turn prompts.
     turn_session: Option<String>,
     /// Told on the first message of a new thread session: what the thread is about.
-    thread_intro: Option<String>,
+    thread_intro: Option<(String, String)>,
     active_group: Option<GroupTurn>,
     active_routine: Option<String>,
     routine_deadline: Option<Instant>,
     routine_timed_out: bool,
     routine_completion: Option<RoutineCompletion>,
-    /// True until the first prompt of a new ACP session has been sent.
-    session_fresh: bool,
     /// Sessions that compacted away the `<bot-profile>` their first message carried; their next prompt carries
     /// a fresh one.
     profile_resend: HashSet<String>,
@@ -440,6 +439,10 @@ impl Actor {
     /// Adds an entry to the current lane, signed by this bot (a group shows who said it).
     fn add(&self, kind: EntryKind, turn: i64, mut data: Value) -> Option<Entry> {
         data["author"] = self.cfg.id.clone().into();
+        if matches!(kind, EntryKind::Agent) && data["final"] == true && self.lane.thread.is_some() {
+            // Direct messages have no later finalization step to record their origin.
+            data["routineRunId"] = json!(self.active_routine);
+        }
         self.hub.add_entry(&self.lane, kind, turn, &data)
     }
 

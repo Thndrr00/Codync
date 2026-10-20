@@ -44,6 +44,17 @@ pub struct Snapshot {
     /// The memory revision `system` holds (`memory::current_revision` before it was rendered).
     #[serde(default)]
     pub memory: String,
+    /// Initial instructions still owed to the first prompt, including after restart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prelude: Option<Prelude>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Prelude {
+    New,
+    Fork,
+    UnpromptedFork,
 }
 
 // A bot talks in several lanes (its chat, threads, groups), each its own session: snapshots
@@ -108,6 +119,7 @@ pub fn resolve(store: &Store, cfg: &BotConfig, session: &str) -> Result<Snapshot
         epoch,
         system: render(store, cfg),
         system_identity: identity.clone(),
+        prelude: stored.as_ref().and_then(|old| old.prelude),
         // A re-render reaches the agent only as Claude's system prompt or a re-sent profile (see `mark_announced`):
         // until then it knows the identity it last heard, so an update it missed is still announced.
         announced: stored.map_or(identity, |old| old.announced),
@@ -145,7 +157,24 @@ pub fn invalidate(store: &Store, bot_id: &str) -> Result<()> {
 
 /// Records `system` (already handed to a new session), rendered at memory revision `memory`, as that session's
 /// snapshot.
+#[cfg(test)]
 pub fn adopt(store: &Store, cfg: &BotConfig, session: &str, system: String, memory: String) -> Result<Snapshot> {
+    adopt_with_prelude(store, cfg, session, system, memory, None)
+}
+
+/// A newly allocated session keeps its opening instructions until its first prompt is sent.
+pub fn adopt_new(store: &Store, cfg: &BotConfig, session: &str, system: String, memory: String) -> Result<Snapshot> {
+    adopt_with_prelude(store, cfg, session, system, memory, Some(Prelude::New))
+}
+
+fn adopt_with_prelude(
+    store: &Store,
+    cfg: &BotConfig,
+    session: &str,
+    system: String,
+    memory: String,
+    prelude: Option<Prelude>,
+) -> Result<Snapshot> {
     let identity = Identity::of(cfg);
     let s = Snapshot {
         session: session.to_owned(),
@@ -154,9 +183,33 @@ pub fn adopt(store: &Store, cfg: &BotConfig, session: &str, system: String, memo
         system_identity: identity.clone(),
         announced: identity,
         memory,
+        prelude,
     };
     save(store, &cfg.id, &s)?;
     Ok(s)
+}
+
+/// A fork inherits what its parent actually heard, with its own pending thread introduction.
+pub fn fork(store: &Store, cfg: &BotConfig, parent: &Snapshot, session: &str) -> Result<()> {
+    let mut snapshot = parent.clone();
+    session.clone_into(&mut snapshot.session);
+    snapshot.epoch = epoch(store, &cfg.id, session);
+    snapshot.prelude = Some(if matches!(parent.prelude, Some(Prelude::New | Prelude::UnpromptedFork)) {
+        Prelude::UnpromptedFork
+    } else {
+        Prelude::Fork
+    });
+    save(store, &cfg.id, &snapshot)
+}
+
+/// Acknowledges only the opening that was actually written, never a newer snapshot.
+pub fn mark_prompted(store: &Store, bot_id: &str, sent: &Snapshot) -> Result<()> {
+    let Some(mut current) = load(store, bot_id, &sent.session) else { return Ok(()) };
+    if current.epoch != sent.epoch || current.system != sent.system || current.prelude != sent.prelude {
+        return Ok(());
+    }
+    current.prelude = None;
+    save(store, bot_id, &current)
 }
 
 /// The bot's instructions, rendered live.
@@ -253,6 +306,50 @@ mod tests {
     fn store() -> Store {
         let path = std::env::temp_dir().join(format!("codync-context-{}.db", uuid::Uuid::new_v4()));
         Store::open(&path).expect("temp store")
+    }
+
+    #[test]
+    fn initial_instructions_survive_reload_and_other_sessions() {
+        let store = store();
+        let cfg = cfg("Worker", "Keep context");
+        let parent = adopt_new(&store, &cfg, "main", "SYSTEM".into(), "memory-v1".into()).expect("new");
+        fork(&store, &cfg, &parent, "thread").expect("fork");
+        mark_prompted(&store, &cfg.id, &parent).expect("main prompted");
+        assert_eq!(resolve(&store, &cfg, "main").expect("main").prelude, None);
+        let thread = resolve(&store, &cfg, "thread").expect("persisted thread");
+        assert_eq!(thread.prelude, Some(Prelude::UnpromptedFork));
+        assert_eq!(thread.memory, "memory-v1");
+        mark_prompted(&store, &cfg.id, &thread).expect("thread prompted");
+        let thread = resolve(&store, &cfg, "thread").expect("thread");
+        assert_eq!(thread.prelude, None);
+        fork(&store, &cfg, &thread, "next-thread").expect("prompted fork");
+        assert_eq!(resolve(&store, &cfg, "next-thread").expect("next").prelude, Some(Prelude::Fork));
+    }
+
+    #[test]
+    fn a_late_prompt_acknowledgement_does_not_clear_a_newer_opening() {
+        let store = store();
+        let cfg = cfg("Worker", "Keep context");
+        let old = adopt_new(&store, &cfg, "main", "SYSTEM v1".into(), String::new()).expect("new");
+        adopt_new(&store, &cfg, "main", "SYSTEM v2".into(), "memory-v2".into()).expect("replacement");
+        mark_prompted(&store, &cfg.id, &old).expect("late acknowledgement");
+        let current = resolve(&store, &cfg, "main").expect("current");
+        assert_eq!(current.prelude, Some(Prelude::New));
+        assert_eq!(current.memory, "memory-v2");
+        refresh(&store, &cfg.id, "main").expect("refresh");
+        assert_eq!(resolve(&store, &cfg, "main").expect("refreshed").prelude, Some(Prelude::New));
+    }
+
+    #[test]
+    fn snapshots_without_an_opening_marker_remain_compatible() {
+        let snapshot: Snapshot = serde_json::from_value(serde_json::json!({
+            "session":"legacy", "epoch":0, "system":"SYSTEM",
+            "systemIdentity":{"name":"Worker","description":"","skills":[]},
+            "announced":{"name":"Worker","description":"","skills":[]}
+        }))
+        .expect("legacy snapshot");
+        assert_eq!(snapshot.prelude, None);
+        assert_eq!(snapshot.memory, "");
     }
 
     #[test]

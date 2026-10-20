@@ -25,13 +25,17 @@ public struct Empty: Codable, Sendable {
 /// A full editor update must explicitly clear a previous model override.
 struct BotUpdate: Encodable {
     let draft: BotDraft
-    private enum CodingKeys: String, CodingKey { case model }
+    private enum CodingKeys: String, CodingKey { case model, account }
 
     func encode(to encoder: Encoder) throws {
         try draft.encode(to: encoder)
         if draft.model == nil {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encodeNil(forKey: .model)
+        }
+        if draft.account == nil {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeNil(forKey: .account)
         }
     }
 }
@@ -287,11 +291,11 @@ public extension HostClient {
 
     func screenPrepare() async throws -> ScreenConnection {
         let relay = if let channel = transport as? ChannelTransport { try await channel.screenRelayRequired() } else { false }
-        return try await call("screenPrepare", ["relay": relay])
+        return try await call("screenPrepare", ["relay": relay, "trickle": true])
     }
 
-    /// Sends a WebRTC offer (with all its ICE candidates); returns the session id and the answer.
-    /// Passing `session` restarts ICE on an existing session.
+    /// Sends the offer using the prepared session’s negotiated ICE mode.
+    /// Trickle negotiations use a fresh session for every connection attempt.
     func screenOffer(sdp: String, session: String?, display: UInt32?) async throws -> ScreenAnswer {
         struct Body: Encodable { var sdp: String; var session: String?; var display: UInt32? }
         return try await call("screenOffer", Body(sdp: sdp, session: session, display: display), timeout: 30)
@@ -328,8 +332,9 @@ public extension HostClient {
     }
 
     /// Starts the agent to see whether it's signed in and how it can be (first run may download it).
-    func agentModels(_ backend: String) async throws -> AgentModels {
-        try await call("agentModels", ["backend": backend], timeout: 300)
+    func agentModels(_ backend: String, account: String? = nil) async throws -> AgentModels {
+        struct Body: Encodable { let backend: String; let account: String? }
+        return try await call("agentModels", Body(backend: backend, account: account), timeout: 300)
     }
 
     func agentAuth(_ backend: String) async throws -> AgentAuth {

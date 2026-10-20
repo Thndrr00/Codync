@@ -81,7 +81,9 @@ impl Actor {
                 // restarts into it, one that can't starts afresh.
                 let memory_changed = own_memory::kept(&cfg) != own_memory::kept(&self.cfg);
                 let resumes = self.conn.as_ref().is_none_or(|c| c.sessions.load);
-                let restart = cfg.backend != self.cfg.backend
+                let account_changed = cfg.account != self.cfg.account;
+                let restart = account_changed
+                    || cfg.backend != self.cfg.backend
                     || cfg.command != self.cfg.command
                     || cfg.cwd != self.cfg.cwd
                     || cfg.model != self.cfg.model
@@ -112,7 +114,7 @@ impl Actor {
                     if self.session_id.is_some() {
                         self.forget_session();
                         self.notice(
-                            "The agent, model, command, folder or memory changed — the agent starts with a fresh context.",
+                            "The agent, account, model, command, folder or memory changed — the agent starts with a fresh context.",
                             NoticeStyle::Divider,
                         );
                     }

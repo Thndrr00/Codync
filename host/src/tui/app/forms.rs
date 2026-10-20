@@ -128,6 +128,10 @@ impl App {
             name: Editor::with(&b.name),
             instructions: Editor::with(&b.description),
             backend: b.backend.clone(),
+            account: b.account.clone(),
+            account_scope: uuid::Uuid::new_v4().to_string(),
+            accounts: None,
+            account_busy: false,
             model: Editor::with(b.model.as_deref().unwrap_or_default()),
             model_options: (b.model.clone().unwrap_or_default(), b.model_options.clone()),
             fast: b.fast_mode,
@@ -148,7 +152,8 @@ impl App {
         merge_toggles(&mut f.connectors, &self.market.0, false);
         merge_toggles(&mut f.skills, &self.market.1, false);
         f.opened = f.body();
-        self.want_models(&b.backend);
+        self.want_models_for(&b.backend, b.account.as_deref());
+        self.load_accounts(&mut f, false);
         self.overlays.push(Overlay::Form(Box::new(f)));
         self.call("connectors", json!({}), After::Connectors);
         self.call("skills", json!({}), After::Skills);
@@ -161,11 +166,15 @@ impl App {
         }
         let n = self.bots.len() + usize::try_from(crate::store::now_ms() % 97).unwrap_or(0);
         let name = NAMES[n % NAMES.len()].to_owned();
-        let f = Form {
+        let mut f = Form {
             bot_id: None,
             name: Editor::with(&name),
             instructions: Editor::default(),
             backend,
+            account: None,
+            account_scope: uuid::Uuid::new_v4().to_string(),
+            accounts: None,
+            account_busy: false,
             model: Editor::default(),
             model_options: (String::new(), BTreeMap::new()),
             fast: false,
@@ -188,7 +197,8 @@ impl App {
             saving: false,
             opened: Value::Null,
         };
-        self.want_models(&f.backend);
+        self.want_models_for(&f.backend, f.account.as_deref());
+        self.load_accounts(&mut f, false);
         self.overlays.push(Overlay::Form(Box::new(f)));
         self.call("connectors", json!({}), After::Connectors);
         self.call("skills", json!({}), After::Skills);
@@ -248,10 +258,16 @@ impl App {
                 }
                 return None;
             }
+            KeyCode::Char('i') if field == Field::Account => self.load_accounts(&mut f, true),
+            KeyCode::Char('r') if field == Field::Account => self.load_accounts(&mut f, false),
+            KeyCode::Left | KeyCode::Right if field == Field::Account => {
+                let d = if k.code == KeyCode::Left { -1 } else { 1 };
+                self.cycle_account(&mut f, d);
+            }
             KeyCode::Left | KeyCode::Right if field == Field::Model => {
                 let d: isize = if k.code == KeyCode::Left { -1 } else { 1 };
-                self.want_models(&f.backend);
-                if let Some(m) = self.cycle_model(&f.backend, f.model.text.trim(), d) {
+                self.want_models_for(&f.backend, f.account.as_deref());
+                if let Some(m) = self.cycle_model_for(&f.backend, f.account.as_deref(), f.model.text.trim(), d) {
                     f.model = Editor::with(&m);
                 }
             }
@@ -282,7 +298,12 @@ impl App {
                             f.backend.clone_from(&ids[cycle(i, d, ids.len())]);
                             // Another agent's model ids mean nothing here.
                             f.model.clear();
-                            self.want_models(&f.backend);
+                            f.account = None;
+                            f.accounts = None;
+                            f.account_busy = false;
+                            f.account_scope = uuid::Uuid::new_v4().to_string();
+                            self.load_accounts(&mut f, false);
+                            self.want_models_for(&f.backend, f.account.as_deref());
                         }
                     }
                     Field::Fast => f.fast = !f.fast,
@@ -293,7 +314,7 @@ impl App {
                     Field::Shape if !space => f.shape = cycle(f.shape, d, SHAPES.len()),
                     Field::ModelOptions => {
                         let model = f.model.text.trim().to_owned();
-                        let offered = self.model_settings(&f.backend, &model);
+                        let offered = self.model_settings_for(&f.backend, f.account.as_deref(), &model);
                         if !space {
                             f.sub = cycle(f.sub, d, offered.len().max(1));
                         } else if let Some(o) = offered.get(f.sub) {
@@ -369,6 +390,7 @@ impl Form {
             "name": self.name.text.trim(),
             "description": self.instructions.text.trim(),
             "backend": self.backend,
+            "account": self.account,
             "cwd": self.cwd,
             "permission": if self.auto { "auto" } else { "ask" },
             "model": if model.is_empty() { Value::Null } else { model.into() },
@@ -398,6 +420,34 @@ const NAMES: [&str; 24] = [
 mod tests {
     use super::super::{AgentModel, test_app};
     use super::*;
+
+    #[tokio::test]
+    async fn account_selection_survives_editing_and_ignores_an_old_form_reply() {
+        use crate::tui::manage::Reply;
+        let mut app = test_app();
+        let bot = json!({"id":"b","backend":"antigravity","account":"acc_12345678"});
+        app.bots.insert("b".into(), Bot::parse(&bot).expect("a bot"));
+        app.selected = Some("b".into());
+        app.edit_bot();
+        let Some(Overlay::Form(f)) = app.overlays.last() else { panic!("the editor opens") };
+        assert_eq!(f.body()["account"], "acc_12345678");
+        let scope = f.account_scope.clone();
+        app.on_sheet_reply(
+            Reply::Accounts { scope: "retired".into(), authenticate: true },
+            Ok(json!({"account":{"id":"acc_87654321"}})),
+        );
+        let Some(Overlay::Form(f)) = app.overlays.last() else { panic!("the editor stays") };
+        assert_eq!(f.account.as_deref(), Some("acc_12345678"));
+        app.on_sheet_reply(
+            Reply::Accounts { scope, authenticate: false },
+            Ok(json!({"accounts":[{"id":"acc_87654321","name":"Work"}]})),
+        );
+        let Some(Overlay::Form(mut f)) = app.overlays.pop() else { panic!("the editor stays") };
+        app.cycle_account(&mut f, 1);
+        assert_eq!(f.body()["account"], "acc_87654321");
+        app.cycle_account(&mut f, 1);
+        assert!(f.body()["account"].is_null(), "default credentials are explicit");
+    }
 
     #[tokio::test]
     async fn model_options_cycle_and_belong_to_their_model() {

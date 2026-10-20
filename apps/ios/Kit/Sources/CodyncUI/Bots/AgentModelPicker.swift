@@ -6,6 +6,7 @@ import SwiftUI
 /// (so it can be turned off).
 struct AgentModelPicker: View {
     let backend: String
+    var account: String? = nil
     @Binding var selection: String?
     /// The selected model's settings (effort, fast…); they belong to one model.
     @Binding var options: [String: String]
@@ -19,9 +20,10 @@ struct AgentModelPicker: View {
     @State private var loading = false
     @State private var failure: String?
     @State private var retry = 0
+    @State private var searchText: String = ""
 
     private var requestKey: String {
-        "\(store.computer.id)/\(backend)/\(store.connection == .online)/\(retry)"
+        "\(ObjectIdentifier(store))/\(store.storage.id)/\(store.computer.id)/\(backend)/\(account ?? "default")/\(store.connection == .online)/\(retry)"
     }
 
     /// The agent's own "Default (recommended)" entry is the same choice as leaving the model unset,
@@ -32,12 +34,19 @@ struct AgentModelPicker: View {
 
     private var modelChoices: [(String, String)] {
         let available = (catalog?.models ?? []).filter { $0.id != agentDefault?.id }
+        let filtered = available.filter {
+            searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.id.localizedCaseInsensitiveContains(searchText)
+                || ($0.description?.localizedCaseInsensitiveContains(searchText) ?? false)
+        }
         let current = available.first { $0.id == catalog?.currentModelId }?.name
         var result = [("", agentDefault?.name ?? current.map { "Default · \($0)" } ?? "Default")]
-        result += available.map { ($0.id, $0.name) }
+        result += filtered.map { ($0.id, $0.name) }
+        // The selected model stays listed while the query hides it, under its name from the full
+        // list — the pill reads this label, so a raw id would show there.
         if let selection, !selection.isEmpty, selection != agentDefault?.id,
-           !available.contains(where: { $0.id == selection }) {
-            result.append((selection, selection))
+           !filtered.contains(where: { $0.id == selection }) {
+            result.append((selection, available.first { $0.id == selection }?.name ?? selection))
         }
         return result
     }
@@ -79,6 +88,10 @@ struct AgentModelPicker: View {
                 selection = nil
                 options = [:]
             }
+            .onChange(of: account) { _, _ in
+                selection = nil
+                options = [:]
+            }
             .task(id: requestKey) { await load() }
         if showsFastMode {
             SwitchRow("Fast mode", detail: bot?.fastModeRefusal ?? "Faster replies for more usage, on models that offer it.",
@@ -89,7 +102,7 @@ struct AgentModelPicker: View {
 
     private var modelRow: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Model")
                     .foregroundStyle(Palette.text)
                     .fixedSize()
@@ -104,7 +117,8 @@ struct AgentModelPicker: View {
                             .frame(minWidth: 0, maxWidth: 180)
                             .outlinedPill()
                     } else {
-                        ChoicePicker(selection: value, options: modelChoices, fitsAvailableWidth: true)
+                        SearchableChoicePicker(selection: value, options: modelChoices, title: "Model",
+                                               query: $searchText, fitsAvailableWidth: true)
                     }
                 }
             }
@@ -156,7 +170,7 @@ struct AgentModelPicker: View {
     }
 
     @MainActor private func load() async {
-        let scope = "\(store.computer.id)/\(backend)"
+        let scope = "\(store.storage.id)/\(store.computer.id)/\(backend)/\(account ?? "default")"
         if catalogScope != scope {
             catalog = nil
             catalogScope = scope
@@ -164,13 +178,13 @@ struct AgentModelPicker: View {
         failure = nil
         loading = false
         guard backend != "custom" else { return }
-        guard store.connection == .online, let client = store.client else {
+        guard store.connection == .online else {
             failure = "Connect to this computer to load its models. You can still enter a model ID."
             return
         }
         loading = true
         do {
-            let response = try await client.agentModels(backend)
+            let response = try await store.loadAgentModels(backend: backend, account: account)
             try Task.checkCancellation()
             withAnimation(Motion.reduced(Motion.fade, reduceMotion)) { catalog = response }
         } catch {

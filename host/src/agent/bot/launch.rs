@@ -140,6 +140,8 @@ pub(crate) async fn start_agent(command: &str, cwd: &str, env: &[(String, String
         adapter: adapter(&init),
         loaded: HashMap::new(),
         started: Instant::now(),
+        allocation_uncertain: false,
+        pending_models: HashMap::new(),
         fast_options: HashMap::new(),
         reports_compaction: false,
         usage: HashMap::new(),

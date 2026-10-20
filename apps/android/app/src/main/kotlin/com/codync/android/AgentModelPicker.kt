@@ -4,8 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,11 +24,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.AgentModels
 import com.codync.android.core.Bot
 import com.codync.android.core.LinkState
+import com.codync.android.core.ModelChoice
 import com.codync.android.design.*
 import kotlinx.coroutines.CancellationException
 
@@ -62,8 +75,8 @@ import kotlinx.coroutines.CancellationException
                         style = Type.body.copy(textAlign = TextAlign.End))
                 }
             } else {
-                val choices = catalog?.options(selection)?.map { it.id.orEmpty() to it.name } ?: listOf("" to "Default")
-                ChoicePicker(value, choices, { if (it != value) choose(it.ifEmpty { null }, emptyMap()) }, label = "Model")
+                val choices = catalog?.options(selection) ?: listOf(ModelChoice(null, "Default"))
+                SearchableModelPicker(value, choices) { if (it != value) choose(it.ifEmpty { null }, emptyMap()) }
             }
         }
         for (option in modelOptions) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -79,5 +92,50 @@ import kotlinx.coroutines.CancellationException
         Text("Changing the model starts a new agent session. Chat history is kept.", style = Type.caption, color = Palette.secondary)
         val showsFast = (backend != "custom" && catalog?.fastMode == true) || fastMode || (bot?.backend == backend && bot.fastModeShown)
         if (showsFast) SwitchRow("Fast mode", bot?.fastModeRefusal ?: "Faster replies for more usage, on models that offer it.", fastMode, setFast)
+    }
+}
+
+/** Search stays in place while a large provider catalog scrolls underneath it. */
+@Composable private fun SearchableModelPicker(selection: String, choices: List<ModelChoice>, select: (String) -> Unit) {
+    var presented by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    val current = choices.firstOrNull { it.id.orEmpty() == selection }?.name ?: selection.ifEmpty { "Default" }
+    SecondaryButton(action = { query = ""; presented = true }, modifier = Modifier.widthIn(max = 220.dp)
+        .semantics { contentDescription = "Model: $current" }) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(current, Modifier.weight(1f, fill = false), style = Type.body, color = Palette.text,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Symbol("chevron.down", size = 13.dp, tint = Palette.secondary)
+        }
+    }
+    CodyncSheet(presented, { presented = false }) {
+        val search = query.trim()
+        val matches = choices.filter { search.isEmpty() || it.name.contains(search, ignoreCase = true) ||
+            it.id.orEmpty().contains(search, ignoreCase = true) || it.description.orEmpty().contains(search, ignoreCase = true) }
+        Column(Modifier.fillMaxSize()) {
+            ModalHeader("Model")
+            SearchField(query, { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), prompt = "Search models")
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
+                if (matches.isEmpty()) item {
+                    Text("No matching models. Try another name or model ID.", Modifier.padding(vertical = 20.dp),
+                        style = Type.body, color = Palette.secondary)
+                }
+                items(matches, key = { it.id.orEmpty() }) { model ->
+                    val selected = model.id.orEmpty() == selection
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .selectable(selected, role = Role.RadioButton) { select(model.id.orEmpty()); presented = false }
+                        .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(model.name, style = Type.body, color = Palette.text)
+                            model.description?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, style = Type.caption, color = Palette.secondary)
+                            }
+                        }
+                        if (selected) Symbol("checkmark", size = 15.dp, tint = Palette.text)
+                    }
+                }
+            }
+        }
     }
 }

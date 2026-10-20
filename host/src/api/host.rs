@@ -101,7 +101,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let backend = if step == crate::agent::term::Step::Node { "" } else { str_arg(&b, "backend")? };
             json!({"term": hub.terms.start(backend, step, b["method"].as_str(), cols, rows).await?})
         }
-        "agentModels" => crate::agent::auth::models(&hub.store, str_arg(&b, "backend")?).await?,
+        "agentModels" => crate::agent::auth::models(&hub.store, str_arg(&b, "backend")?, b["account"].as_str()).await?,
         "agentAuth" | "agentAuthenticate" | "setAgentEnv" => {
             let backend = str_arg(&b, "backend")?;
             let status = match method {
@@ -119,6 +119,20 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::market::requests::agent_signed_in(hub, backend)?;
             }
             status
+        }
+        "listAccounts" => {
+            let backend = b["backend"].as_str();
+            json!({"accounts": crate::agent::account::list(backend)?})
+        }
+        "accountAuthenticate" => {
+            let backend = str_arg(&b, "backend")?;
+            let name = b["name"].as_str().map(str::to_owned);
+            json!({"account": crate::agent::account::authenticate(&hub.store, backend, name).await?})
+        }
+        "deleteAccount" => {
+            let account_id = str_arg(&b, "accountId")?;
+            crate::agent::account::delete(&hub.store, account_id)?;
+            json!({})
         }
         "termInput" => {
             hub.terms.write(str_arg(&b, "term")?, str_arg(&b, "data")?)?;
@@ -144,7 +158,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             } else {
                 crate::screen::IceConfig::default()
             };
-            let result = hub.screen.prepare(caller.device_key(), ice)?;
+            let result = hub.screen.prepare(caller.device_key(), ice, b["trickle"].as_bool().unwrap_or(false))?;
             let session = result["session"].as_str().context("missing screen session")?.to_owned();
             tokio::spawn(crate::screen::watch_viewer(hub.clone(), session, caller.device_key().to_owned()));
             result
@@ -152,6 +166,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "screenOffer" => {
             let display = b["display"].as_u64().and_then(|d| u32::try_from(d).ok());
             hub.screen.offer(caller.device_key(), str_arg(&b, "sdp")?, str_arg(&b, "session")?, display).await?
+        }
+        "screenCandidate" => {
+            let candidate = serde_json::from_value(b["candidate"].clone())?;
+            hub.screen.candidate(str_arg(&b, "session")?, caller.device_key(), candidate).await?;
+            json!({})
         }
         "screenClose" => {
             let session = str_arg(&b, "session")?;

@@ -2,6 +2,7 @@ import {
   isWorking,
   needsInput,
   type AnalyticsEvent,
+  type AgentAccount,
   type Bot,
   type BotDraft,
   type DirListing,
@@ -333,7 +334,7 @@ export class BotStore extends BotSync {
   async save(draft: BotDraft) {
     const client = await this.ready()
     const res = draft.id
-      ? await client.call<{ bot: Bot }>('updateBot', { ...draft, model: draft.model ?? null })
+      ? await client.call<{ bot: Bot }>('updateBot', { ...draft, model: draft.model ?? null, account: draft.account ?? null })
       : await client.call<{ bot: Bot }>('createBot', draft)
     this.bots.set(res.bot.id, res.bot)
     this.onRosterChanged?.()
@@ -352,6 +353,16 @@ export class BotStore extends BotSync {
 
   async listDirs(path: string | null) {
     return (await this.ready()).call<DirListing>('listDirs', { path })
+  }
+
+  async agentAccounts(backend: string): Promise<AgentAccount[]> {
+    const result = await (await this.ready()).call<{ accounts: AgentAccount[] }>('listAccounts', { backend })
+    return result.accounts
+  }
+
+  async authenticateAgentAccount(backend: string): Promise<AgentAccount> {
+    const result = await (await this.ready()).call<{ account: AgentAccount }>('accountAuthenticate', { backend }, 660_000)
+    return result.account
   }
 
   async refreshUsage() {

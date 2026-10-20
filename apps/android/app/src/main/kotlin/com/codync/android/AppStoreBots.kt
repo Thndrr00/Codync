@@ -84,11 +84,23 @@ internal suspend fun AppStore.hostQuery(method: String, payload: JsonObject, tim
         check(state.value.generation == expectedGeneration) { "The active account changed." }
         active.call(method, payload, timeoutMillis = timeoutMillis)
     }
-    try { return request.await() } finally { request.cancel() }
+    try {
+        val response = request.await()
+        check(state.value.generation == expectedGeneration) { "The active account changed." }
+        return response
+    } finally { request.cancel() }
 }
-suspend fun AppStore.agentModels(backend: String): AgentModels {
-    val response = hostQuery("agentModels", body("backend" to backend), timeoutMillis = 300_000)
+suspend fun AppStore.agentModels(backend: String, account: String? = null): AgentModels {
+    val response = hostQuery("agentModels", body("backend" to backend, "account" to account), timeoutMillis = 300_000)
     return WireJson.decodeFromJsonElement(response)
+}
+suspend fun AppStore.agentAccounts(backend: String): List<AgentAccount> {
+    val response = hostQuery("listAccounts", body("backend" to backend))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("accounts"))
+}
+suspend fun AppStore.authenticateAgentAccount(backend: String): AgentAccount {
+    val response = hostQuery("accountAuthenticate", body("backend" to backend), timeoutMillis = 660_000)
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("account"))
 }
 /** A forced usage read that returns when it's done, for pull to refresh. */
 suspend fun AppStore.reloadUsage() { refreshUsage(true); actions["usage"]?.join() }

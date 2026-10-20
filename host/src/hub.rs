@@ -543,6 +543,12 @@ impl Hub {
 }
 
 fn validate(cfg: &BotConfig) -> Result<()> {
+    if let Some(id) = &cfg.account {
+        if cfg.is_group() {
+            bail!("Groups cannot select an agent account");
+        }
+        crate::agent::account::validate(id, &cfg.backend)?;
+    }
     if cfg.name.trim().is_empty() {
         bail!("name is required");
     }

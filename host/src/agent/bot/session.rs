@@ -148,6 +148,13 @@ impl Actor {
     /// Makes sure the agent runs and `slot`'s session (main, or a thread's) is live;
     /// sets `turn_session`. A thread without one forks the main session when it can.
     pub(super) async fn ensure_session(&mut self, slot: Option<&str>) -> Result<()> {
+        // A cancelled allocation may have started tools without returning a session ID.
+        // Resumable agents can be replaced without losing their confirmed conversations.
+        if self.conn.as_ref().is_some_and(|conn| conn.allocation_uncertain && conn.sessions.load)
+            && let Some(conn) = self.conn.take()
+        {
+            conn.acp.kill().await;
+        }
         if !self.cfg.connectors.is_empty()
             || self.hub.store.kv_read(&format!("agent-env:{}", self.cfg.backend))?.is_some()
         {
@@ -170,6 +177,13 @@ impl Actor {
             self.hub.set_runtime(&self.id(), |r| r.activity = "Starting agent…".into());
             // Keys saved from an "environment variable" sign-in.
             let mut env = crate::agent::auth::env(&self.hub.store, &self.cfg.backend)?;
+            if let Some(ref account_id) = self.cfg.account {
+                let acc_env = crate::agent::account::env(account_id, &self.cfg.backend)?;
+                for (k, v) in acc_env {
+                    env.retain(|(ek, _)| ek != &k);
+                    env.push((k, v));
+                }
+            }
             own_memory::apply(&self.cfg, &mut env, &mut candidates).await;
             if self.cfg.backend == "codex" && !env.iter().any(|(k, _)| k == "CODEX_CONFIG") {
                 // Codex's `/compact` takes no instructions: the keep-list is its config's `compact_prompt`.
@@ -198,8 +212,7 @@ impl Actor {
         }
         let servers = self.mcp_servers()?;
         let instructions = self.conn.as_ref().map_or(Instructions::FirstMessage, Conn::instructions);
-        let mut forked = false;
-        if let Some(root) = slot
+        if slot.is_some()
             && self.session_for(slot).is_none()
             && let Some(main) = self.session_id.clone()
             && self.conn.as_ref().is_some_and(|c| c.sessions.fork)
@@ -215,23 +228,22 @@ impl Actor {
             }
             let res = self.session_request("session/fork", params).await.ok();
             if let Some(res) = res
-                && let Some(sid) = res["sessionId"].as_str().map(str::to_owned)
+                && let Some(sid) =
+                    res["sessionId"].as_str().filter(|sid| !sid.is_empty() && **sid != main).map(str::to_owned)
                 && let Some(conn) = self.conn.as_mut()
             {
                 conn.loaded.insert(sid.clone(), Instant::now());
+                conn.allocation_uncertain = false;
+                conn.pending_models.insert(sid.clone(), res.clone());
                 self.set_session(slot, Some(&sid));
                 self.note_options(&sid, &res, Listing::Session);
-                context::adopt(&self.hub.store, &self.cfg, &sid, parent.system.clone(), parent.memory.clone())?;
+                context::fork(&self.hub.store, &self.cfg, &parent, &sid)?;
                 memory::opened(&self.hub.store, &self.cfg.id, &sid, &parent.memory)?;
                 if instructions == Instructions::ClaudeMeta {
                     self.applied_system.insert(sid, parent.system);
                 }
-                forked = true;
             } else {
                 tracing::warn!(bot = %self.cfg.id, "session/fork failed; the thread starts fresh");
-            }
-            if forked {
-                self.thread_intro = Some(self.thread_intro(root, true));
             }
         }
         // Claude gets the frozen instructions as its system prompt. When a compaction
@@ -247,6 +259,7 @@ impl Actor {
             let prompt_current =
                 snapshot.as_ref().is_none_or(|s| self.applied_system.get(&sid).is_some_and(|t| *t == s.system));
             if conn.loaded.contains_key(&sid) && prompt_current {
+                self.finish_session_model(&sid).await?;
                 self.turn_session = Some(sid);
                 return Ok(());
             }
@@ -278,12 +291,11 @@ impl Actor {
                 Ok(res) => {
                     // A resumed session can come back on the agent's last-used model (Cursor
                     // keeps one for all its sessions), so the bot's own is set again.
-                    let res = if res.get("configOptions").is_some() || res.get("models").is_some() {
-                        select_model(&conn.acp, &res, &sid, &self.cfg).await?
-                    } else {
-                        res
-                    };
                     conn.loaded.insert(sid.clone(), Instant::now());
+                    conn.allocation_uncertain = false;
+                    if res.get("configOptions").is_some() || res.get("models").is_some() {
+                        conn.pending_models.insert(sid.clone(), res.clone());
+                    }
                     self.note_options(&sid, &res, Listing::Session);
                     if let Some(s) = snapshot {
                         // Its system prompt now names the bot and holds memory as rendered.
@@ -291,6 +303,7 @@ impl Actor {
                         memory::opened(&self.hub.store, &self.cfg.id, &sid, &s.memory)?;
                         self.applied_system.insert(sid.clone(), s.system);
                     }
+                    self.finish_session_model(&sid).await?;
                     self.turn_session = Some(sid);
                     return Ok(());
                 }
@@ -316,26 +329,44 @@ impl Actor {
         }
         let res = self.session_request("session/new", params).await?;
         let Some(conn) = self.conn.as_mut() else { bail!("agent not running") };
-        let sid = res["sessionId"].as_str().ok_or_else(|| anyhow!("agent returned no sessionId"))?.to_owned();
+        let sid = res["sessionId"]
+            .as_str()
+            .filter(|sid| !sid.is_empty())
+            .ok_or_else(|| anyhow!("agent returned no sessionId"))?
+            .to_owned();
         conn.loaded.insert(sid.clone(), Instant::now());
-        let options = select_model(&conn.acp, &res, &sid, &self.cfg).await?;
-        self.note_options(&sid, &options, Listing::Session);
+        conn.allocation_uncertain = false;
+        conn.pending_models.insert(sid.clone(), res);
         self.set_session(slot, Some(&sid));
-        self.session_fresh = true;
-        self.turn_session = Some(sid.clone());
-        if let Some(root) = slot {
-            self.thread_intro = Some(self.thread_intro(root, false));
-        }
-        context::adopt(&self.hub.store, &self.cfg, &sid, system.clone(), revision)?;
+        context::adopt_new(&self.hub.store, &self.cfg, &sid, system.clone(), revision)?;
         if instructions == Instructions::ClaudeMeta {
-            self.applied_system.insert(sid, system);
+            self.applied_system.insert(sid.clone(), system);
         }
+        self.finish_session_model(&sid).await?;
+        self.turn_session = Some(sid);
         Ok(())
     }
 
-    /// A session request the agent doesn't answer in time stops the agent: a hung one
-    /// would otherwise hold the bot, and its Stop, forever.
+    /// Only allocation requests can leave tools behind without a confirmed session identity.
     pub(super) async fn session_request(&mut self, method: &str, params: Value) -> Result<Value> {
+        let conn = self.conn.as_mut().ok_or_else(|| anyhow!("agent not running"))?;
+        if conn.allocation_uncertain {
+            bail!(
+                "The agent did not confirm its previous allocation. Existing conversations are preserved; reset the affected session before opening another."
+            );
+        }
+        conn.allocation_uncertain = true;
+        let result = self.request_with_timeout(method, params).await;
+        if result.is_err()
+            && let Some(conn) = self.conn.as_mut()
+        {
+            conn.allocation_uncertain = false;
+        }
+        result
+    }
+
+    /// A hung request stops the agent so it cannot hold the bot indefinitely.
+    pub(super) async fn request_with_timeout(&mut self, method: &str, params: Value) -> Result<Value> {
         let acp = self.conn.as_ref().ok_or_else(|| anyhow!("agent not running"))?.acp.clone();
         if let Ok(result) = tokio::time::timeout(SESSION_TIMEOUT, acp.request(method, params)).await {
             return result;
@@ -347,8 +378,23 @@ impl Actor {
         Err(acp::Failure::error(acp::FailureKind::Timeout, message))
     }
 
+    /// Retry model setup without allocating a second session after a partial setup failure.
+    async fn finish_session_model(&mut self, sid: &str) -> Result<()> {
+        let Some(conn) = self.conn.as_ref() else { bail!("agent not running") };
+        let Some(response) = conn.pending_models.get(sid) else { return Ok(()) };
+        let options = select_model(&conn.acp, response, sid, &self.cfg).await?;
+        self.note_options(sid, &options, Listing::Session);
+        if let Some(conn) = self.conn.as_mut() {
+            conn.pending_models.remove(sid);
+        }
+        Ok(())
+    }
+
     /// Drops the main ACP session so the next turn starts a fresh one.
     pub(super) fn forget_session(&mut self) {
+        if self.conn.as_ref().is_some_and(|conn| conn.allocation_uncertain) {
+            self.conn = None;
+        }
         self.set_session(None, None);
     }
 }

@@ -12,6 +12,7 @@ import { AVATAR_COLORS, AVATAR_SHAPES } from '../../lib/theme'
 import { useStore } from '../../store/context'
 import { useAgentModels } from './agent-models'
 import { AgentModelPicker } from './AgentModelPicker'
+import { AgentAccountPicker } from './AgentAccountPicker'
 import { errorText, fillDefaults, isValid, lastPathComponent, normalized, usePlugins, type Plugins } from './drafts'
 import { FormSheet } from '../marketplace/pieces'
 import { SkillSheet, type SkillRef } from '../marketplace/SkillSheet'
@@ -114,7 +115,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   // Options belong to one model.
   const setModel = useCallback((model: string | null) => onChange((d) => (d.model === model ? d : { ...d, model, modelOptions: {} })), [onChange])
   const setModelOptions = useCallback((modelOptions: Record<string, string>) => onChange((d) => ({ ...d, modelOptions })), [onChange])
-  const models = useAgentModels(draft.backend)
+  const models = useAgentModels(draft.backend, draft.account ?? null)
   const saved = draft.id ? (store.bots.get(draft.id) ?? null) : null
 
   const backends = store.hello?.backends ?? []
@@ -128,6 +129,9 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
     </Field>
   )
   const model = [
+    <AgentAccountPicker key="account" backend={draft.backend} selection={draft.account} online={store.connection.kind === 'online'}
+      contextKey={JSON.stringify([store.contextId, store.computer.id, draft.id ?? 'new'])} load={() => store.agentAccounts(draft.backend)}
+      authenticate={() => store.authenticateAgentAccount(draft.backend)} onChange={(account) => onChange((d) => ({ ...d, account, model: null, modelOptions: {} }))} />,
     <AgentModelPicker key="model" backend={draft.backend} models={models} selection={draft.model} onChange={setModel} options={draft.modelOptions ?? {}} onOptionsChange={setModelOptions} />,
     (draft.backend !== 'custom' && models.catalog?.fastMode) || draft.fastMode || (saved?.backend === draft.backend && fastModeShown(saved)) ? (
       // Shown while the agent offers it (its model list, or the bot's own sessions), or while it's on.
@@ -151,7 +155,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             ...backends.map((b) => ({ id: b.id, label: b.available ? b.name : `${b.name} (not installed)`, leading: <AgentIcon registry={b.registry ?? b.id} size={14} /> })),
             { id: 'custom', label: 'Custom command', leading: <AgentIcon registry="custom" size={14} /> },
           ]}
-          onChange={(id) => set('backend', id)}
+          onChange={(id) => onChange((d) => d.backend === id ? d : { ...d, backend: id, account: null, model: null, modelOptions: {} })}
         />
       </ValueRow>
       {backend && !backend.available ? <Text size="caption" tone="attention">{backend.installHint}</Text> : null}

@@ -15,6 +15,7 @@ import { Updates } from './updates'
 import { handleURL, registerAuthIPC, registerSchemes, urlFromArgv } from './auth'
 import { registerSpeech } from './speech'
 import { registerScreenIPC } from './screen'
+import { registerScreenViewer } from './screen-viewer'
 import { registerCloud } from './cloud'
 import { registerSSH } from './ssh'
 import { QuitLifecycle } from './quit-lifecycle'
@@ -229,7 +230,8 @@ if (!app.requestSingleInstanceLock()) {
     registerSpeech()
     registerScreenIPC()
     registerCloud(account)
-    registerSSH(() => BrowserWindow.getAllWindows())
+    const screenTarget = registerSSH(() => BrowserWindow.getAllWindows())
+    registerScreenViewer(rendererURL, () => chat, screenTarget)
     // Calls use the microphone (realtime voice); nothing else asks for permissions.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, done) => done(permission === 'media' || permission === 'clipboard-sanitized-write'))
     account.register(() => BrowserWindow.getAllWindows())

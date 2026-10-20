@@ -36,7 +36,7 @@ export function newDraft(): BotDraft {
 export const isValid = (d: BotDraft) => !d.id ||d.name.trim() !== ''
 
 /** What the host should get: no stale command unless the agent is custom. */
-export const normalized = (d: BotDraft): BotDraft => (d.backend === 'custom' ? d : { ...d, command: null })
+export const normalized = (d: BotDraft): BotDraft => ({ ...d, command: d.backend === 'custom' ? d.command : null, account: d.backend === 'antigravity' ? d.account ?? null : null })
 
 /**
  * Picks an installed agent we know (a registry agent nobody chose is never the default);
@@ -46,7 +46,12 @@ export function fillDefaults(store: BotStore, draft: BotDraft, plugins: Plugins)
   const next = { ...draft }
   const backends = store.hello?.backends ?? []
   const first = backends.find((b) => b.available && b.curated === true)
-  if (backends.find((b) => b.id === next.backend)?.available !== true && first) next.backend = first.id
+  if (backends.find((b) => b.id === next.backend)?.available !== true && first && next.backend !== first.id) {
+    next.backend = first.id
+    next.account = null
+    next.model = null
+    next.modelOptions = {}
+  }
   // Connectors and skills start on; left unset, the host turns on every one.
   if (next.connectors === undefined && plugins.connectors.length) next.connectors = plugins.connectors.map((c) => c.id)
   if (next.skills === undefined && plugins.skills.length) next.skills = plugins.skills.map((s) => s.id)

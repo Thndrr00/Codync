@@ -26,16 +26,17 @@ data class BotDraft(
     val connectors: List<String>? = null,
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
+    val account: String? = null,
 ) {
     val isValid: Boolean get() = id == null || name.isNotBlank()
     fun toggleNotifications(): BotDraft = copy(notify = !(notify ?: true))
     fun body(): JsonObject {
-        val normalized = if (backend == "custom") this else copy(command = null)
+        val normalized = copy(command = command.takeIf { backend == "custom" }, account = account.takeIf { backend == "antigravity" })
         // updateBot merges a patch: null clears model, command or the connector choice, but an unset
         // switch must stay out (the host's booleans don't take null).
         return JsonObject(WireJson.encodeToJsonElement(normalized).jsonObject.filterNot { (key, value) -> value == JsonNull && key in SWITCHES })
     }
-    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden") }).toString()
+    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account") }).toString()
 
     companion object {
         /** A new bot starts with a random face, like iOS. */
@@ -45,6 +46,6 @@ data class BotDraft(
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
-            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer)
+            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account)
     }
 }

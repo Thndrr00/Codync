@@ -1,6 +1,6 @@
 [package]
 name = "codync-host"
-version = "2.19.1"
+version = "2.20.0"
 edition = "2024"
 # let-chains (`if let … && let …`) need 1.88.
 rust-version = "1.88"
@@ -63,6 +63,7 @@ keyring = { version = "3.6.3", features = ["apple-native"] }
 keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust", "vendored"] }
 
 [target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_Security"] }
 keyring = { version = "3.6.3", features = ["windows-native"] }
 
 # rust-skills lint-* rules: all default groups plus pedantic, with the

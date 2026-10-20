@@ -13,6 +13,7 @@ struct BotTemplateView: View {
         template.id = nil
         template.pinned = nil
         template.hidden = nil
+        template.account = nil
         self.template = template
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -24,7 +25,7 @@ struct BotTemplateView: View {
         ModalHeader("Create template")
         VStack(alignment: .leading, spacing: 20) {
             Text(template.name).font(.subheadline).foregroundStyle(Palette.secondary)
-            Text("Copy this bot’s settings to reuse as a template. Conversation history and conversation ID are excluded.")
+            Text("Copy this bot’s settings to reuse as a template. Conversation history, conversation ID and this computer's Google account selection are excluded.")
                 .font(.callout)
                 .foregroundStyle(Palette.secondary)
             ScrollView {

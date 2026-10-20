@@ -93,6 +93,7 @@ pub struct Bot {
     pub cwd: String,
     pub managed_workspace: bool,
     pub auto: bool,
+    pub account: Option<String>,
     pub model: Option<String>,
     /// The model's own settings (effort, fast…): option id → value.
     pub model_options: BTreeMap<String, String>,
@@ -199,6 +200,7 @@ impl Bot {
             color: v["avatarColor"].as_str().unwrap_or("blue").to_owned(),
             shape: v["avatarShape"].as_str().unwrap_or("blob").to_owned(),
             backend: s("backend"),
+            account: v["account"].as_str().map(str::to_owned),
             cwd: s("cwd"),
             managed_workspace: v["managedWorkspace"] == true,
             auto: v["permission"] == "auto",

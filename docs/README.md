@@ -1,6 +1,6 @@
 # Codync documentation
 
-Current documentation describes the checked-out implementation. Index last checked against the tree: **2026-10-19**.
+Current documentation describes the checked-out implementation. Index last checked against the tree: **2026-10-20**.
 Source review, a passing build, local integration tests and production acceptance are different checks; a feature documented here is not a claim that its deployed service has been verified.
 
 ## Start here
@@ -54,6 +54,8 @@ Source review, a passing build, local integration tests and production acceptanc
 - [Error tracking detail](plans/error-tracking-detail.md) (proposal: symbolicated iPhone crashes, sessions, consented problem reports)
 
 ## Investigations
+
+- [Upstream PR integration batch, October 2026](integrations/upstream-pr-batch-2026-10.md): provenance, adaptations and validation of PRs 113, 133, 157, 156, 160, 105, 135, 90, 40 and 132.
 
 Production signals (PostHog errors, failed turns) traced to a root cause, newest first. Dated
 records: the fixes they name have shipped or are listed as open.
