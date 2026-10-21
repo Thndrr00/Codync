@@ -14,7 +14,7 @@ import { ComputerRosterSection } from './ComputerRosterSection'
 import { UpdateNeededCard } from './UpdateNeededCard'
 import { RosterControls, RosterPreview } from './RosterControls'
 import { RosterStops } from '../store/roster-query'
-import { rosterProject } from '../lib/roster-query'
+import { rosterProject, rosterProjectLabel } from '../lib/roster-query'
 import { prefs, usePref } from '../lib/prefs'
 import { useModel } from '../lib/observable'
 
@@ -194,7 +194,7 @@ export function BotRoster({ roster, compact, onContext }: {
       const key = JSON.stringify([store.contextId, computer.id, project])
       const folded = collapsedProjects.includes(key)
       return <div key={key}>
-        {project ? <button className="roster-project" aria-expanded={!folded} onClick={() => setCollapsedProjects(folded ? collapsedProjects.filter((id) => id !== key) : [...collapsedProjects, key])}>{project}</button> : null}
+        {project ? <button className="roster-project" aria-expanded={!folded} title={project} onClick={() => setCollapsedProjects(folded ? collapsedProjects.filter((id) => id !== key) : [...collapsedProjects, key])}>{rosterProjectLabel(children[0].bot)}</button> : null}
         {!folded || !project ? children.map((item) => row(item, items)) : null}
       </div>
     })

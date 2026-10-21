@@ -110,7 +110,7 @@ export const needsInput = (b: Bot) => b.status === 'needsInput'
 export const isWorkingIn = (b: Bot, chat: string, thread: string | null | undefined) =>
   isWorking(b) && (b.workingChat ?? b.id) === chat && (b.workingThread ?? null) === (thread ?? null)
 export const folderName = (b: Bot) =>
-  b.managedWorkspace ? 'Personal workspace' : (b.cwd.split('/').filter(Boolean).pop() ?? b.cwd)
+  b.managedWorkspace ? 'Personal workspace' : (b.cwd.split(/[\\/]/).filter(Boolean).pop() ?? b.cwd)
 
 export interface FileDiff {
   path: string

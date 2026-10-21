@@ -7,7 +7,7 @@ import { Text } from '../components/Text'
 import { ThinkingOrb } from '../components/ThinkingOrb'
 import { messagePreview } from '../lib/message-preview'
 import type { BotStore } from '../store/bot-store'
-import { fastLabel, rosterProject } from '../lib/roster-query'
+import { fastLabel, rosterProjectLabel } from '../lib/roster-query'
 import { RosterElapsed } from './RosterElapsed'
 
 /** A roster row: avatar with status, name, and the live activity or last message (Grok Bot's desktop sidebar). */
@@ -27,12 +27,19 @@ export const BotRow = memo(function BotRow({ bot, store, compact, usingComputer,
           </HStack>
           {bot.unread > 0 ? <span className="unread-badge">{bot.unread}</span> : null}
         </HStack>
-        {!isGroup(bot) ? <Text size="caption" tone="tertiary" truncate>{[store.backendName(bot.backend), rosterProject(bot), fastLabel(bot)].filter(Boolean).join(' · ')}</Text> : null}
+        {showsMetadata(bot) ? <Text size="caption" tone="tertiary" truncate>{[store.backendName(bot.backend), rosterProjectLabel(bot), fastLabel(bot)].filter(Boolean).join(' · ')}</Text> : null}
         {isWorking(bot) ? <RosterElapsed bot={bot} online={store.connection.kind === 'online'} /> : null}
       </VStack>
     </HStack>
   )
 })
+
+/** The agent/project line, unless the preview already shows them (an idle bot with no messages yet and no Fast state). */
+function showsMetadata(bot: Bot): boolean {
+  if (isGroup(bot)) return false
+  const previewIsMetadata = bot.lastMessage == null && !needsInput(bot) && !isWorking(bot) && bot.status !== 'error'
+  return !previewIsMetadata || fastLabel(bot) != null
+}
 
 /** Live activity while working, otherwise the last message (Grok Bot row behavior). */
 function Preview({ bot, store }: { bot: Bot; store: BotStore }) {

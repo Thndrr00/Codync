@@ -363,7 +363,7 @@ function ChatSplitView() {
         ) : null}
         <div className="roster" ref={listRef} tabIndex={0} onKeyDown={onListKey}>
           <BotRoster roster={roster} compact={compact} onContext={(bot, store, x, y) => setContextBot({ target: { bot, store }, x, y })} />
-          {visibleRoster.length === 0 && !roster.grouped && !compact && mismatchStores.length === 0 ? (
+          {roster.allItems.length === 0 && !roster.grouped && !compact && mismatchStores.length === 0 ? (
             <div className="roster-empty">
               <Text as="div" size="body" weight="medium">{onlineStores.length ? 'No bots yet' : 'Waiting for a computer'}</Text>
               {onlineStores.length ? <Text as="div" size="callout" tone="secondary">Use + to start a new chat.</Text> : null}

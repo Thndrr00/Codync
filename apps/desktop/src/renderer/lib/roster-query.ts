@@ -1,4 +1,4 @@
-import type { Bot } from '../../shared/models.ts'
+import { folderName, type Bot } from '../../shared/models.ts'
 
 export type RosterFilter = 'all' | 'unread' | 'attention' | 'working' | 'pinned'
 export type RosterGrouping = 'manual' | 'project'
@@ -18,6 +18,11 @@ export function matchesRoster(bot: Bot, query: string, filter: RosterFilter): bo
 export function rosterProject(bot: Bot): string {
   if (bot.kind === 'group') return 'Group chats'
   return bot.cwd || 'No project'
+}
+
+/** What a row or section shows for `rosterProject`: the folder's name, not its whole path. */
+export function rosterProjectLabel(bot: Bot): string {
+  return bot.kind === 'group' || !bot.cwd ? rosterProject(bot) : folderName(bot)
 }
 
 export function fastLabel(bot: Bot): string | null {
