@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -332,7 +333,7 @@ class BlockBUiTest {
 
     private fun saveSnapshot(fileName: String) {
         val bitmap = compose.onRoot().captureToImage()
-        val androidBitmap = androidx.compose.ui.graphics.asAndroidBitmap(bitmap)
+        val androidBitmap = bitmap.asAndroidBitmap()
         java.io.File(compose.activity.cacheDir, fileName).outputStream().use {
             androidBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }

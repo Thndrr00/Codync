@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -184,49 +185,29 @@ private const val REMOVED = "computer/removed"
                         select = ::selectTab,
                     ),
                 chrome = {
-                    val ticket = state.access
-                    val bannerBottom = (if (showChromeBar) bottom + barHeight else maxOf(bottom, 16.dp)) + if (hasMiniBar) 56.dp else 0.dp
-                    AnimatedVisibility(
-                        ticket != null && (expanded || pushed == null),
-                        Modifier.align(Alignment.BottomCenter).padding(bottom = (bannerBottom - 8.dp).coerceAtLeast(12.dp)),
-                        enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { it },
-                        exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { it },
-                    ) {
-                        if (ticket != null) {
-                            AccessBanner(
-                                ticket,
-                                state.cloudComputers.firstOrNull { it.computerId == ticket.computerId }?.name ?: "Your computer",
-                                store::cancelAccess,
-                            )
-                        }
-                    }
-
-                    val miniBarBottom = if (showChromeBar) bottom + barHeight - 8.dp else maxOf(bottom, 12.dp)
-                    SessionMiniBar(
+                    TabChrome(
                         state = state,
                         store = store,
-                        showVoice = showVoiceMini,
-                        onOpenVoiceBot = { selectTab(AppTab.Bots) },
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = miniBarBottom.coerceAtLeast(12.dp)),
+                        bannerVisible = state.access != null && (expanded || pushed == null),
+                        bannerBottom = (if (showChromeBar) bottom + barHeight else maxOf(bottom, 16.dp)) + if (hasMiniBar) 56.dp else 0.dp,
+                        miniBarBottom = if (showChromeBar) bottom + barHeight - 8.dp else maxOf(bottom, 12.dp),
+                        showVoiceMini = showVoiceMini,
+                        showBar = showChromeBar,
+                        barVisibility = barVisibility,
+                        bar = {
+                            Box(contentAlignment = Alignment.BottomCenter) {
+                                ScrollEdge(Edge.Bottom, bottom + barHeight)
+                                CodyncBottomBar(
+                                    selection = tab,
+                                    tabs = tabItems,
+                                    select = ::selectTab,
+                                    style = barStyle,
+                                    bottomInset = bottom,
+                                )
+                            }
+                        },
+                        openVoiceBot = { selectTab(AppTab.Bots) },
                     )
-
-                    AnimatedVisibility(
-                        showChromeBar,
-                        Modifier.align(Alignment.BottomCenter).onFocusChanged { barVisibility.barFocused = it.hasFocus },
-                        enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { it / 2 },
-                        exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { it / 2 },
-                    ) {
-                        Box(contentAlignment = Alignment.BottomCenter) {
-                            ScrollEdge(Edge.Bottom, bottom + barHeight)
-                            CodyncBottomBar(
-                                selection = tab,
-                                tabs = tabItems,
-                                select = ::selectTab,
-                                style = barStyle,
-                                bottomInset = bottom,
-                            )
-                        }
-                    }
                 },
             ) {
                 DestinationLayers(
@@ -254,6 +235,52 @@ private const val REMOVED = "computer/removed"
             }
         }
     }
+}
+
+/**
+ * What floats over the destinations: the access banner, the call/screen mini bar and the tab bar.
+ * Its own `BoxScope` function, so `AnimatedVisibility` isn't taken for `MainTabs`' `RowScope` one.
+ */
+@Composable private fun BoxScope.TabChrome(
+    state: AppState,
+    store: AppStore,
+    bannerVisible: Boolean,
+    bannerBottom: Dp,
+    miniBarBottom: Dp,
+    showVoiceMini: Boolean,
+    showBar: Boolean,
+    barVisibility: BarScrollVisibility,
+    bar: @Composable () -> Unit,
+    openVoiceBot: () -> Unit,
+) {
+    val ticket = state.access
+    AnimatedVisibility(
+        bannerVisible,
+        Modifier.align(Alignment.BottomCenter).padding(bottom = (bannerBottom - 8.dp).coerceAtLeast(12.dp)),
+        enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { it },
+        exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { it },
+    ) {
+        if (ticket != null) {
+            AccessBanner(
+                ticket,
+                state.cloudComputers.firstOrNull { it.computerId == ticket.computerId }?.name ?: "Your computer",
+                store::cancelAccess,
+            )
+        }
+    }
+    SessionMiniBar(
+        state = state,
+        store = store,
+        showVoice = showVoiceMini,
+        onOpenVoiceBot = openVoiceBot,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = miniBarBottom.coerceAtLeast(12.dp)),
+    )
+    AnimatedVisibility(
+        showBar,
+        Modifier.align(Alignment.BottomCenter).onFocusChanged { barVisibility.barFocused = it.hasFocus },
+        enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { it / 2 },
+        exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { it / 2 },
+    ) { bar() }
 }
 
 @Composable private fun DestinationLayers(

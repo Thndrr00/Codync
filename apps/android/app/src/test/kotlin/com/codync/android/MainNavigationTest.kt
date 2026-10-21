@@ -65,8 +65,8 @@ class MainNavigationTest {
     @Test fun offlineConnectionSuppressesCachedWorkBadgesAndMarksComputerOffline() {
         val state = AppState(
             computers = listOf(pairedComputer),
-            connection = LinkState.ComputerOffline,
-            actualConnection = LinkState.ComputerOffline,
+            connection = LinkState.ComputerOffline(lastSeenAt = null),
+            actualConnection = LinkState.ComputerOffline(lastSeenAt = null),
             bots = listOf(
                 Bot("m1", "Coder", status = "needsInput", unread = 3),
                 Bot("m2", "Runner", status = "working"),

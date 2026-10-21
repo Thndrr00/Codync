@@ -106,7 +106,7 @@ class AccountScreenTest {
         val state = fixture().copy(computers = listOf(computer), connection = LinkState.Ready(HostRoute.Direct),
             bots = listOf(Bot("hidden", "Hidden scout", hidden = true)))
         var paired = 0; var popped = 0; var extensions = 0
-        compose.setContent { Hosted { SettingsView(state, viewModel(), { popped++ }, { paired++ }, {}) { extensions++ } } }
+        compose.setContent { Hosted { SettingsView(state, viewModel(), { popped++ }, { paired++ }, {}, extensions = { extensions++ }) } }
         compose.onNodeWithText("Computers & settings").assertIsDisplayed()
         compose.onAllNodesWithText(computer.name).assertCountEquals(1)
         compose.onNodeWithText("1 bot · Wi-Fi/Tailscale").assertIsDisplayed()

@@ -323,9 +323,10 @@ internal object NavigationPreferences {
     val bot = state.bots.firstOrNull { it.id == call.botId }
     val color = bot?.let { AvatarPalette.tint(it.avatarColor) } ?: Palette.accent
     val speaking = voice.phase == VoicePhase.Speaking
+    val error = voice.error
     val statusLine = when {
         !online -> "Offline · reconnecting…"
-        voice.error != null -> voice.error
+        error != null -> error
         voice.phase == VoicePhase.Interrupted -> "Paused · tap to return"
         else -> callStatusText(voice, bot?.status == "working")
     }
