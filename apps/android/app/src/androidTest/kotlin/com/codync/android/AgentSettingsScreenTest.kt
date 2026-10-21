@@ -57,6 +57,24 @@ class AgentSettingsScreenTest {
         compose.onNodeWithText("old advertised model").assertDoesNotExist()
     }
 
+    @Test fun searchKeepsDefaultAndSelectedModelReachableAndCanResetToDefault() {
+        var selected by mutableStateOf<String?>("host-model")
+        compose.setContent { Hosted { Picker(online, "agent", selected, { selected = it }) {
+            AgentModels(listOf(AgentModel("auto", "Default (recommended)"),
+                AgentModel("host-model", "Host model"), AgentModel("other", "Other model")))
+        } } }
+        compose.waitUntil { compose.onAllNodes(model).fetchSemanticsNodes().size == 1 }
+        compose.onNodeWithContentDescription("Model: Host model").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("no-match")
+        compose.onNodeWithText("Default (recommended)").assertIsDisplayed()
+        compose.onNode(hasText("Host model") and isSelected()).assertIsDisplayed()
+        compose.onNodeWithText("Other model").assertDoesNotExist()
+        compose.onNodeWithText("Default (recommended)").performClick()
+        compose.runOnIdle { assertNull(selected) }
+        compose.onNodeWithContentDescription("Model: Default (recommended)").performClick()
+        compose.onNodeWithText("Other model").assertIsDisplayed()
+    }
+
     @Test fun anOfflineModelOverrideRemainsEditableWithoutInventingAProviderList() {
         var selected by mutableStateOf<String?>("my-model")
         compose.setContent { Hosted { Picker(online.copy(actualConnection = LinkState.Connecting), "agent", selected, { selected = it }) {

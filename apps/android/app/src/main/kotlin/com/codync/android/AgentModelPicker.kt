@@ -34,6 +34,7 @@ import com.codync.android.core.AgentModels
 import com.codync.android.core.Bot
 import com.codync.android.core.LinkState
 import com.codync.android.core.ModelChoice
+import com.codync.android.core.modelSearchChoices
 import com.codync.android.design.*
 import kotlinx.coroutines.CancellationException
 
@@ -109,9 +110,7 @@ import kotlinx.coroutines.CancellationException
         }
     }
     CodyncSheet(presented, { presented = false }) {
-        val search = query.trim()
-        val matches = choices.filter { search.isEmpty() || it.name.contains(search, ignoreCase = true) ||
-            it.id.orEmpty().contains(search, ignoreCase = true) || it.description.orEmpty().contains(search, ignoreCase = true) }
+        val matches = modelSearchChoices(choices, selection, query)
         Column(Modifier.fillMaxSize()) {
             ModalHeader("Model")
             SearchField(query, { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), prompt = "Search models")

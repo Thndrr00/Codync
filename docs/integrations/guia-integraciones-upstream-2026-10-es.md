@@ -1,5 +1,10 @@
 # Guía y revisión de las diez mejoras integradas en octubre de 2026
 
+> **Seguimiento de implementación (Android y Windows):** las secciones 1–17
+> conservan la revisión original de `774da120`. Para las correcciones aplicadas
+> después y su validación, consultar el [seguimiento del fork](<../nuevo thndr/seguimiento-android-windows-2026-10-es.md>).
+> macOS e iOS quedan fuera de esta intervención por indicación del propietario.
+
 Fecha de revisión: **20 de octubre de 2026**. Repositorio revisado: `C:\Users\Edwin Villeda\Documents\Codync`. Rama local: `main`. Commit examinado: `774da12025d0cfcd0074715f0b9c2dc83232dd5e`.
 
 Esta guía explica qué se incorporó, dónde encontrarlo, cómo utilizarlo, cómo funciona internamente y qué falta para considerar cada mejora aceptada. Incluye problemas comprobados y procedimientos de solución **propuestos, no aplicados**. En esta revisión no se modificó código, configuración, versiones ni el documento original del lote.
