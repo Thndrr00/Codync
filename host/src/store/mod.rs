@@ -10,6 +10,7 @@ mod devices;
 mod entries;
 mod memory;
 mod model;
+mod roster;
 mod schema;
 
 pub use devices::{Device, DeviceSource, Scope};

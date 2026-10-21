@@ -10,6 +10,7 @@ mod host;
 mod http;
 mod marketplace;
 mod remote;
+mod roster;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
@@ -67,6 +68,12 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 }
 
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+    if method == "searchMessages" {
+        return roster::search(hub, &b).await;
+    }
+    if matches!(method, "rosterPreview" | "messageContext") {
+        return roster::read(hub, method, &b).await;
+    }
     if method.contains("onnector")
         || method.starts_with("composio")
         || method == "setComposioKey"

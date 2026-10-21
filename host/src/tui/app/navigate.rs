@@ -253,6 +253,13 @@ impl App {
     /// Moves the selected bot one place up (-1) or down (+1), staying among bots with its pin
     /// state, and saves the order. Shown at once; the host's bot events confirm it.
     pub(super) fn reorder_bot(&mut self, d: isize) {
+        if self.roster_tools.by_project
+            || self.roster_tools.filter != super::roster_tools::Filter::All
+            || !self.roster_tools.query.text.trim().is_empty()
+        {
+            self.flash("Clear filters and use manual order before reordering");
+            return;
+        }
         let roster: Vec<(String, bool)> = self.roster().iter().map(|b| (b.id.clone(), b.pinned)).collect();
         let Some(i) = self.selected.as_ref().and_then(|s| roster.iter().position(|(id, _)| id == s)) else { return };
         let Some(j) = i.checked_add_signed(d).filter(|&j| j < roster.len() && roster[j].1 == roster[i].1) else {

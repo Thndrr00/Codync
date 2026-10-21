@@ -28,6 +28,8 @@ pub enum Msg {
 /// What to do with a command's reply.
 #[derive(Clone)]
 pub enum After {
+    Roster(u64, super::roster_tools::RosterRead),
+    RosterStopped(String),
     Nothing,
     /// A permission card's answer arrived (or couldn't).
     Answered(String),

@@ -34,6 +34,7 @@ pub(super) fn overlays(f: &mut Frame<'_>, app: &mut App) {
 
 pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay) {
     match top {
+        Overlay::RosterTools => super::roster_tools::roster_tools(buf, area, app),
         Overlay::Goto(g) => {
             let items = app.goto_items(g);
             goto(buf, area, app, g, &items);

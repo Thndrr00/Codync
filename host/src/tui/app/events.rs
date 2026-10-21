@@ -142,6 +142,17 @@ impl App {
     }
 
     fn on_reply(&mut self, after: After, r: Result<Value, String>) {
+        if let After::RosterStopped(id) = after {
+            if let Err(error) = r {
+                self.roster_tools.stopping.remove(&id);
+                self.flash(&error);
+            }
+            return;
+        }
+        if let After::Roster(sequence, kind) = after {
+            self.roster_reply(sequence, kind, r);
+            return;
+        }
         if let After::Connection(id, step) = after {
             self.connection_reply(&id, step, r);
             return;
@@ -192,13 +203,14 @@ impl App {
             }
         };
         match after {
-            After::Nothing | After::Tracked | After::Answered(_) | After::Sheet(_) | After::Sent(_) | After::Connection(_, _) => {}
+            After::Nothing | After::Tracked | After::Answered(_) | After::Sheet(_) | After::Sent(_) | After::Connection(_, _) | After::Roster(_, _) | After::RosterStopped(_) => {}
             After::Installed => {
                 self.error = None;
                 self.flash("Host installed; connecting…");
                 self.call("hello", json!({}), After::Hello);
             }
             After::Hello => {
+                if let Some(computer) = v["computerId"].as_str() { self.load_roster_preferences(computer); }
                 self.mismatch = crate::compat::check(env!("CARGO_PKG_VERSION"), crate::compat::MIN_HOST, &v);
                 v["name"].as_str().unwrap_or("computer").clone_into(&mut self.host);
                 v["home"].as_str().unwrap_or_default().clone_into(&mut self.home);

@@ -7,6 +7,9 @@ import { VStack } from '../components/Stack'
 import { Text } from '../components/Text'
 import { refKey, type BotRef, type RosterItem } from '../store/app-model'
 import './search-palette.css'
+import { matchesRoster } from '../lib/roster-query'
+import { RosterHistory } from './RosterControls'
+import { ChoicePicker } from '../components/Controls'
 
 const isMac = window.codync.platform === 'darwin'
 const modifier = isMac ? '⌘' : 'Ctrl+'
@@ -15,7 +18,7 @@ const modifier = isMac ? '⌘' : 'Ctrl+'
 export function matchBots(items: RosterItem[], query: string): RosterItem[] {
   const q = query.trim().toLowerCase()
   if (!q) return items
-  return items.filter(({ bot }) => [bot.name, bot.description, bot.lastMessage ?? ''].some((s) => s.toLowerCase().includes(q)))
+  return items.filter(({ bot }) => matchesRoster(bot, q, 'all'))
 }
 
 /** Grok Bot's bot search: a floating list over the window, arrows/Enter or ⌘1-9 to open a bot. */
@@ -29,6 +32,7 @@ export function SearchPalette({ open, items, onPick, onClose }: { open: boolean;
 
 function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void }) {
   const [query, setQuery] = useState('')
+  const [mode, setMode] = useState<'bots' | 'history'>('bots')
   const [active, setActive] = useState(0)
   const list = useRef<HTMLDivElement>(null)
   const results = matchBots(items, query)
@@ -60,7 +64,9 @@ function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: 
   }
 
   return (
-    <div className="palette" onKeyDown={onKey}>
+    <div className="palette" onKeyDown={mode === 'bots' ? onKey : undefined}>
+      <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, { id: 'history', label: 'History' }]} onChange={setMode} />
+      {mode === 'history' ? <RosterHistory items={items} onPick={(item) => onPick(item.ref)} onClose={onClose} /> : <>
       <div className="palette-field">
         <Icon name="magnifyingglass" size={15} color="var(--secondary)" />
         <input autoFocus value={query} placeholder="Search" aria-label="Search bots" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
@@ -85,6 +91,7 @@ function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: 
         ))}
         {results.length === 0 ? <div className="palette-empty">No matching bots</div> : null}
       </div>
+      </>}
     </div>
   )
 }

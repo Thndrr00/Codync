@@ -25,6 +25,7 @@ import { MacChatButton } from './MacChatButton'
 import './thread.css'
 import './composer.css'
 import './chat-controls.css'
+import { MessageContext } from '../MessageContext'
 
 const WIDE = 680
 
@@ -142,6 +143,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
 
   return (
     <div className="thread-view" ref={root}>
+      <MessageContext botId={botId} openThread={setOpenThread} />
       <div className="conversation">
         <div className="top-chrome">
           <TopFade />

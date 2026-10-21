@@ -46,6 +46,16 @@ public struct BotRow: View {
                             .background(Palette.accentFill, in: Capsule())
                     }
                 }
+                if !bot.isGroup {
+                    Text([model.backendName(bot.backend), bot.rosterProject, bot.rosterFast].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(Palette.tertiary).lineLimit(1)
+                }
+                if bot.isWorking {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(model.isOffline ? "Offline · last known activity" : bot.rosterElapsed(at: context.date))
+                            .font(.caption).foregroundStyle(Palette.secondary)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -58,7 +68,7 @@ public struct BotRow: View {
     @ViewBuilder private var preview: some View {
         if bot.needsInput {
             Label {
-                Text(bot.activity.isEmpty ? "Needs your approval" : bot.activity)
+                Text(bot.activity.isEmpty ? "Needs your attention" : bot.activity)
             } icon: {
                 ThinkingOrb(state: .listening, size: 16, color: Palette.warning)
             }

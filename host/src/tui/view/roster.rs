@@ -37,6 +37,11 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
             m
         } else if !app.online {
             vec![("Connecting…".into(), t.secondary)]
+        } else if !app.bots.is_empty() {
+            vec![
+                ("No bots match these filters.".into(), t.text),
+                ("Ctrl+f changes filters; Ctrl+l clears them.".into(), t.dim),
+            ]
         } else {
             vec![("No bots yet.".into(), t.text), ("n creates one.".into(), t.dim)]
         };
@@ -50,12 +55,22 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         }
     }
     // Rows: an optional section label, then 2 lines per bot and a gap.
-    let any_pinned = bots.iter().any(|b| b.pinned);
-    let mut rows: Vec<(u16, Option<&'static str>, Option<usize>)> = vec![];
+    let any_pinned = !app.roster_tools.by_project && bots.iter().any(|b| b.pinned);
+    let mut rows: Vec<(u16, Option<String>, Option<usize>)> = vec![];
     let mut y = 0u16;
     for (i, b) in bots.iter().enumerate() {
+        if app.roster_tools.by_project {
+            let project = super::super::app::roster_tools::project(b);
+            if i == 0 || super::super::app::roster_tools::project(&bots[i - 1]) != project {
+                rows.push((y, Some(project.to_owned()), None));
+                y += 1;
+            }
+            if app.roster_tools.collapsed.contains(project) {
+                continue;
+            }
+        }
         if any_pinned && (i == 0 || (bots[i - 1].pinned && !b.pinned)) {
-            rows.push((y, Some(if b.pinned { "PINNED" } else { "BOTS" }), None));
+            rows.push((y, Some(if b.pinned { "PINNED" } else { "BOTS" }.to_owned()), None));
             y += 1;
         }
         rows.push((y, None, Some(i)));
@@ -71,7 +86,7 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
             continue;
         }
         if let Some(l) = label {
-            put(buf, x0 + 1, yy, wd, l, t.dim.add_modifier(Modifier::BOLD));
+            put(buf, x0 + 1, yy, wd, &l, t.dim.add_modifier(Modifier::BOLD));
             continue;
         }
         let Some(i) = idx else { continue };
@@ -87,17 +102,57 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         }
         put_line(buf, x0 + 2, yy, 2, &avatar(app, b));
         let (g, gs) = glyph(app, b.mark());
-        let time = if b.status == Status::Working { elapsed(b.started_at) } else { when(b.last_at) };
+        let time = if matches!(b.status, Status::Working | Status::NeedsInput) {
+            if app.online { elapsed(b.started_at) } else { "offline".to_owned() }
+        } else {
+            when(b.last_at)
+        };
         let tx = rput(buf, r.right() - 1, yy, &time, if b.unread > 0 { t.bold } else { t.dim });
         let gx = tx.saturating_sub(2);
         put(buf, gx, yy, 1, g, gs);
         put(buf, x0 + 5, yy, gx.saturating_sub(x0 + 6), &b.name, t.bold);
-        let (pv, ps) = preview(b);
+        let (pv, ps) = if let Some((_, at)) = app
+            .roster_tools
+            .stopping
+            .get(&b.id)
+            .filter(|(start, _)| *start == b.started_at && matches!(b.status, Status::Working | Status::NeedsInput))
+        {
+            (
+                if at.elapsed().as_secs() < 20 {
+                    "Stopping…".to_owned()
+                } else {
+                    "Stop confirmation unavailable · s retries".to_owned()
+                },
+                t.amber,
+            )
+        } else {
+            preview(b)
+        };
         let badge = if b.unread > 0 { format!(" {} ", b.unread) } else { String::new() };
         let room = usize::from(wd.saturating_sub(7)).saturating_sub(w(&badge) + usize::from(!badge.is_empty()));
         put(buf, x0 + 5, yy + 1, u(room), &truncate(&pv, room), ps);
         if !badge.is_empty() {
             rput(buf, r.right() - 1, yy + 1, &badge, t.btn_primary);
+        }
+        if !b.group && yy + 2 < bottom {
+            let fast = if b.fast_mode {
+                match b.fast_support.as_str() {
+                    "offered" => " · Fast",
+                    "refused" => " · Fast refused",
+                    "unsupported" => " · Fast unavailable",
+                    _ => " · Fast requested",
+                }
+            } else {
+                ""
+            };
+            put(
+                buf,
+                x0 + 5,
+                yy + 2,
+                wd.saturating_sub(7),
+                &format!("{} · {}{fast}", b.backend, super::super::app::roster_tools::project(b)),
+                t.dim,
+            );
         }
     }
     if !narrow {
@@ -107,7 +162,8 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         x = put(buf, x, hy, 2, "m", t.secondary.add_modifier(Modifier::BOLD)) + 1;
         x = put(buf, x, hy, 10, "group", t.dim) + 2;
         x = put(buf, x, hy, 3, "^k", t.secondary.add_modifier(Modifier::BOLD)) + 1;
-        put(buf, x, hy, 8, "go to", t.dim);
+        x = put(buf, x, hy, 8, "go to", t.dim) + 1;
+        put(buf, x, hy, 16, "^f filter/history", t.dim);
     }
 }
 
@@ -125,7 +181,7 @@ pub(super) fn preview(b: &Bot) -> (String, Style) {
 fn preview_raw(b: &Bot) -> (String, Style) {
     let t = theme();
     match b.mark() {
-        Mark::Need => (if b.activity.is_empty() { "Needs your approval".into() } else { b.activity.clone() }, t.amber),
+        Mark::Need => (if b.activity.is_empty() { "Needs your attention".into() } else { b.activity.clone() }, t.amber),
         Mark::Work => (if b.activity.is_empty() { "Working…".into() } else { b.activity.clone() }, t.secondary),
         Mark::Error => {
             (if b.last_message.is_empty() { "Something went wrong".into() } else { b.last_message.clone() }, t.red)
@@ -139,7 +195,7 @@ fn preview_raw(b: &Bot) -> (String, Style) {
 pub(super) fn compact_roster(buf: &mut Buffer, r: Rect, app: &mut App) {
     let t = theme();
     app.hits.roster = r;
-    let bots: Vec<Bot> = app.roster().into_iter().cloned().collect();
+    let bots: Vec<Bot> = app.navigable_roster().into_iter().cloned().collect();
     let sel = app.selected.clone();
     let sel_idx = sel.as_ref().and_then(|s| bots.iter().position(|b| &b.id == s)).unwrap_or(0);
     let per = 2u16;

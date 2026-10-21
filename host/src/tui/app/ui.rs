@@ -263,6 +263,7 @@ pub struct GroupForm {
 }
 
 pub enum Overlay {
+    RosterTools,
     Goto(Goto),
     Help(Editor),
     Confirm(Confirm),

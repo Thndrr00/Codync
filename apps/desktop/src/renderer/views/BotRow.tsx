@@ -7,6 +7,8 @@ import { Text } from '../components/Text'
 import { ThinkingOrb } from '../components/ThinkingOrb'
 import { messagePreview } from '../lib/message-preview'
 import type { BotStore } from '../store/bot-store'
+import { fastLabel, rosterProject } from '../lib/roster-query'
+import { RosterElapsed } from './RosterElapsed'
 
 /** A roster row: avatar with status, name, and the live activity or last message (Grok Bot's desktop sidebar). */
 export const BotRow = memo(function BotRow({ bot, store, compact, usingComputer, members }: { bot: Bot; store: BotStore; compact: boolean; usingComputer: boolean; members: Bot[] }) {
@@ -25,6 +27,8 @@ export const BotRow = memo(function BotRow({ bot, store, compact, usingComputer,
           </HStack>
           {bot.unread > 0 ? <span className="unread-badge">{bot.unread}</span> : null}
         </HStack>
+        {!isGroup(bot) ? <Text size="caption" tone="tertiary" truncate>{[store.backendName(bot.backend), rosterProject(bot), fastLabel(bot)].filter(Boolean).join(' · ')}</Text> : null}
+        {isWorking(bot) ? <RosterElapsed bot={bot} online={store.connection.kind === 'online'} /> : null}
       </VStack>
     </HStack>
   )
@@ -36,7 +40,7 @@ function Preview({ bot, store }: { bot: Bot; store: BotStore }) {
     return (
       <HStack as="span" gap={6} shrink>
         <ThinkingOrb state="listening" size={16} color="var(--warning)" />
-        <Text size="callout" tone="attention" truncate>{bot.activity || 'Needs your approval'}</Text>
+        <Text size="callout" tone="attention" truncate>{bot.activity || 'Needs your attention'}</Text>
       </HStack>
     )
   }

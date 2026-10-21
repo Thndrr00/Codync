@@ -8,7 +8,7 @@ use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
 use std::fmt::Write as _;
 
-fn row_entry(r: &rusqlite::Row) -> rusqlite::Result<Entry> {
+pub(super) fn row_entry(r: &rusqlite::Row) -> rusqlite::Result<Entry> {
     let data: String = r.get(6)?;
     Ok(Entry {
         seq: r.get(0)?,
@@ -153,7 +153,7 @@ impl Store {
     }
 
     /// Chat-visible messages (the user's, final replies) in any of `bot_id`'s lanes that
-    /// contain every term (case-insensitive for ASCII), newest first, from `from` (a `seq`) back.
+    /// contain every term (Unicode lowercase), newest first, from `from` (a `seq`) back.
     // ponytail: substring scan, no index (CJK needs no tokenizer this way): 0.6 s over 180k messages of one bot.
     // An FTS5 trigram table once a bot's search passes a second.
     pub fn search_messages(&self, bot_id: &str, terms: &[String], from: Option<i64>, limit: i64) -> Result<Vec<Entry>> {
@@ -162,7 +162,11 @@ impl Store {
                (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1))"
         );
         for i in 0..terms.len() {
-            let _ = write!(sql, " AND instr(lower(json_extract(data, '$.text')), ?{}) > 0", i + 4);
+            let _ = write!(
+                sql,
+                " AND instr(codync_lower(CAST(COALESCE(json_extract(data, '$.text'), '') AS TEXT)), ?{}) > 0",
+                i + 4
+            );
         }
         sql.push_str(" ORDER BY seq DESC LIMIT ?2");
         let mut args: Vec<rusqlite::types::Value> =

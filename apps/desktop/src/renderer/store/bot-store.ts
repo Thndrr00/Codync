@@ -125,6 +125,16 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('stop', { botId }), true)
   }
 
+  openMessageContext(entries: Entry[], hit: { botId: string; id: string; threadId: string | null }) {
+    this.messageContext = { ...hit, entries }
+    this.changed()
+  }
+
+  closeMessageContext() {
+    this.messageContext = null
+    this.changed()
+  }
+
   newSession(botId: string) {
     this.perform((c) => c.call('newSession', { botId }))
   }

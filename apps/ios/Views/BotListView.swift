@@ -11,6 +11,11 @@ struct BotListView: View {
     @State private var editing: EditTarget?
     @State private var editingGroup: GroupTarget?
     @State private var confirmDelete: RosterItem?
+    @State private var query = ""
+    @State private var filter = RosterFilter.all
+    @State private var showHistory = false
+    @AppStorage("rosterByProject") private var byProject = false
+    @AppStorage("collapsedRosterProjects") private var collapsedProjects = "[]"
     /// The bot whose row is lifted, to drag or for its menu.
     @State private var lifted: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -57,11 +62,23 @@ struct BotListView: View {
     /// The rows the user can drag: each shown computer's heading (with several computers), in the
     /// order they were dragged into, followed by its bots unless it's folded away.
     private var lines: [RosterLine] {
-        shownStores.flatMap { store -> [RosterLine] in
+        let folded = foldedProjects
+        return shownStores.flatMap { store -> [RosterLine] in
             let id = store.computer.id
-            let bots = grouped && collapsedIDs.contains(id)
-                ? [] : accounts.roster.filter { $0.ref.computerId == id }.map { RosterLine.bot($0, store) }
-            return grouped ? [.computer(id, store)] + bots : bots
+            let heading: [RosterLine] = grouped ? [.computer(id, store)] : []
+            guard !(grouped && collapsedIDs.contains(id)) else { return heading }
+            let items = accounts.roster.filter {
+                $0.ref.computerId == id && filter.matches($0.bot, query: query)
+            }
+            guard byProject else { return heading + items.map { .bot($0, store) } }
+            let projects = Dictionary(grouping: items, by: { $0.bot.rosterProject })
+            var seen: Set<String> = []
+            let projectOrder = items.map { $0.bot.rosterProject }.filter { seen.insert($0).inserted }
+            return heading + projectOrder.flatMap { project -> [RosterLine] in
+                let key = projectKey(id, project)
+                let bots = folded.contains(key) ? [] : (projects[project] ?? []).map { RosterLine.bot($0, store) }
+                return [.project(key, project)] + bots
+            }
         }
     }
 
@@ -72,6 +89,19 @@ struct BotListView: View {
                 // A newer app release (dismissible; everything still works). Computers update
                 // themselves, so a newer host gets no reminder here.
                 AppUpdateReminder()
+                RosterFilterControls(query: $query, filter: $filter, byProject: $byProject, showHistory: $showHistory)
+                if !roster.isEmpty && !roster.contains(where: { filter.matches($0.bot, query: query) }) {
+                    VStack {
+                        Text("No bots match these filters").foregroundStyle(Palette.secondary)
+                        Button("Clear filters") {
+                            withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
+                                query = ""
+                                filter = .all
+                            }
+                        }
+                        .buttonStyle(.secondary)
+                    }
+                }
                 if !grouped {
                     // One computer: its update notice leads the list.
                     ForEach(shownStores, id: \.computer.id) { updateCard($0) }
@@ -84,6 +114,11 @@ struct BotListView: View {
                 ForEach(lines) { line in
                     switch line {
                     case let .computer(_, store): computerHeading(store, roster: roster)
+                    case let .project(key, title):
+                        Button { toggleProject(key) } label: {
+                            Label(title, systemImage: foldedProjects.contains(key) ? "chevron.right" : "chevron.down")
+                                .font(.caption).foregroundStyle(Palette.secondary).lineLimit(2)
+                        }.buttonStyle(.plain).padding(.vertical, 12)
                     case let .bot(item, store): row(item, store: store)
                     }
                 }
@@ -93,6 +128,7 @@ struct BotListView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
+        .id(accounts.accountId)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 0)
@@ -122,6 +158,11 @@ struct BotListView: View {
         .refreshable {
             for computer in accounts.computers { accounts.store(for: computer.id)?.restartStream() }
             await accounts.refreshCloud()
+        }
+        .codyncSheet(isPresented: $showHistory) {
+            RosterHistoryView(stores: shownStores) { store, hit in
+                accounts.selection = BotReference(accountId: accounts.accountId, computerId: store.computer.id, botId: hit.botId)
+            }.id(accounts.accountId)
         }
         .codyncSheet(item: $editing) { target in
             // A new bot can move to another computer until it's created.
@@ -168,11 +209,13 @@ struct BotListView: View {
     /// device); a bot moves among its computer's bots, an order the host syncs to every device.
     /// A bot dropped among another computer's bots goes back.
     private func moveLines(from source: IndexSet, to destination: Int) {
+        guard query.isEmpty && filter == .all && !byProject else { return }
         let before = lines
         guard let from = source.first, before.indices.contains(from) else { return }
         var after = before
         after.move(fromOffsets: source, toOffset: destination)
         switch before[from] {
+        case .project: return
         case let .computer(id, _):
             let old = before.compactMap(\.computerId), new = after.compactMap(\.computerId)
             guard let to = new.firstIndex(of: id), old[to] != id else { return }
@@ -224,11 +267,14 @@ struct BotListView: View {
         .itemProvider { lift(bot.id) }
         .accessibilityLabel(accounts.computers.count > 1 ? "\(bot.name), on \(store.hostName)" : bot.name)
         .accessibilityActions {
-            Button("Move up") { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { store.move(bot.id, by: -1) } }
-            Button("Move down") { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { store.move(bot.id, by: 1) } }
+            if query.isEmpty && filter == .all && !byProject {
+                Button("Move up") { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { store.move(bot.id, by: -1) } }
+                Button("Move down") { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { store.move(bot.id, by: 1) } }
+            }
         }
-        .contextActions {
-            [
+        .contextActions(preview: { RosterPreviewView(bot: bot, store: store) }) {
+            [MenuItem("Open chat", icon: "bubble.left") { accounts.selection = item.ref }] +
+            (bot.isWorking ? [MenuItem(store.rosterStopping.contains(bot.id) ? "Stopping\u{2026}" : "Stop", icon: "stop.fill", destructive: true) { store.stopFromRoster(bot) }] : []) + [
                 MenuItem(bot.pinned ? "Unpin" : "Pin", icon: bot.pinned ? "pin.slash" : "pin") { store.setPinned(bot, !bot.pinned) },
                 bot.isGroup
                     ? MenuItem("Edit group", icon: "person.2") { editingGroup = GroupTarget(computerId: item.ref.computerId, group: bot) }
@@ -261,6 +307,22 @@ struct BotListView: View {
         guard let store = onlineStores.first ?? allStores.first(where: { $0.mismatch == nil }) else { return }
         editing = EditTarget(computerId: store.computer.id, draft: BotDraft())
     }
+
+    private var foldedProjects: Set<String> {
+        Set((try? JSONDecoder().decode([String].self, from: Data(collapsedProjects.utf8))) ?? [])
+    }
+
+    private func projectKey(_ computer: String, _ path: String) -> String {
+        String(data: (try? JSONEncoder().encode([accounts.accountId, computer, path])) ?? Data(), encoding: .utf8) ?? path
+    }
+
+    private func toggleProject(_ key: String) {
+        var folded = foldedProjects
+        if folded.remove(key) == nil { folded.insert(key) }
+        withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
+            collapsedProjects = String(data: (try? JSONEncoder().encode(folded.sorted())) ?? Data(), encoding: .utf8) ?? "[]"
+        }
+    }
 }
 
 /// One row the user can drag in the roster: a computer's heading or a bot.
@@ -280,9 +342,11 @@ private final class LiftItem: NSItemProvider {
 private enum RosterLine: Identifiable {
     case computer(ComputerID, BotStore)
     case bot(RosterItem, BotStore)
+    case project(String, String)
 
     var id: String {
         switch self {
+        case let .project(key, _): "project:\(key)"
         case let .computer(id, _): "computer:\(id)"
         case let .bot(item, _): "bot:\(item.ref.computerId):\(item.bot.id)"
         }

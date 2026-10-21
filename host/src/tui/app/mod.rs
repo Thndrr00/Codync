@@ -9,6 +9,8 @@ mod input;
 mod model;
 mod navigate;
 mod overlay_keys;
+mod roster_preferences;
+pub mod roster_tools;
 mod slash;
 mod ui;
 
@@ -40,6 +42,7 @@ struct PendingSend {
 
 #[allow(clippy::struct_excessive_bools, reason = "independent UI flags, not a state machine")]
 pub struct App {
+    pub roster_tools: roster_tools::RosterTools,
     pub client: Client,
     pub(super) tx: UnboundedSender<Msg>,
     pub url: String,
@@ -121,6 +124,7 @@ pub struct App {
 impl App {
     pub fn new(client: Client, tx: UnboundedSender<Msg>, url: String) -> Self {
         Self {
+            roster_tools: roster_tools::RosterTools::default(),
             download: None,
             client,
             tx,
@@ -186,7 +190,7 @@ impl App {
 
     /// Roster order: pinned first, then where the user put them, then most recent (same as the phone).
     pub fn roster(&self) -> Vec<&Bot> {
-        let mut v: Vec<&Bot> = self.bots.values().filter(|b| !b.hidden).collect();
+        let mut v: Vec<&Bot> = self.bots.values().filter(|b| !b.hidden && self.roster_matches(b)).collect();
         v.sort_by(|a, b| {
             b.pinned
                 .cmp(&a.pinned)
@@ -194,6 +198,16 @@ impl App {
                 .then(b.last_at.cmp(&a.last_at))
                 .then(a.name.cmp(&b.name))
         });
+        if self.roster_tools.by_project {
+            let mut projects: Vec<String> = vec![];
+            for bot in &v {
+                let project = roster_tools::project(bot);
+                if !projects.iter().any(|p| p == project) {
+                    projects.push(project.to_owned());
+                }
+            }
+            v.sort_by_key(|b| projects.iter().position(|p| p == roster_tools::project(b)).unwrap_or_default());
+        }
         v
     }
 
@@ -297,7 +311,7 @@ impl App {
     }
 
     fn move_bot(&mut self, delta: isize) {
-        let ids: Vec<String> = self.roster().iter().map(|b| b.id.clone()).collect();
+        let ids: Vec<String> = self.navigable_roster().iter().map(|b| b.id.clone()).collect();
         if ids.is_empty() {
             return;
         }

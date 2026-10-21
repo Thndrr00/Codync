@@ -64,6 +64,7 @@ impl App {
         let Some(top) = self.overlays.pop() else { return };
         let depth = self.overlays.len();
         let keep = match top {
+            Overlay::RosterTools => self.roster_tools_key(k),
             Overlay::Goto(g) => self.goto_key(g, k),
             Overlay::Help(mut e) => {
                 if k.code == KeyCode::Esc || k.code == KeyCode::Char('?') && e.text.is_empty() {

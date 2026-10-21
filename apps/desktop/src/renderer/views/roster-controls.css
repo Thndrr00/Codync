@@ -1,0 +1,13 @@
+.roster-controls { padding: 8px 12px 12px; }
+.roster-search { width: 100%; min-width: 0; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; }
+.roster-search::placeholder { color: var(--secondary); }
+.roster-search:focus-visible, .roster-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.roster-project { width: 100%; padding: 12px; text-align: start; color: var(--secondary); font: inherit; overflow-wrap: anywhere; }
+.roster-project[aria-expanded="false"] { color: var(--tertiary); }
+.roster-history { padding: 16px; overflow-y: auto; }
+.roster-hit { text-align: start; padding: 12px; border-radius: 12px; background: var(--surface); color: var(--text); overflow-wrap: anywhere; }
+.roster-preview-message { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.roster-row-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.roster-row-actions button { padding: 6px 10px; color: var(--secondary); border-radius: 8px; background: var(--surface); min-height: 32px; }
+.roster-row-actions button:disabled { opacity: .5; }
+.roster-row-actions button:focus-visible { outline: 2px solid var(--accent); }

@@ -58,6 +58,8 @@ public final class BotStore {
     /// The host's version and `minApp`, kept even when the rest of its `hello` can't be read.
     public internal(set) var hostVersion: HostVersion?
     public internal(set) var bots: [String: Bot] = [:]
+    public internal(set) var rosterStopping: Set<String> = []
+    public internal(set) var rosterThreadRequest: RosterSearchHit?
     public internal(set) var entries: [String: [Entry]] = [:]
     public internal(set) var usage: Usage
     /// The computer's remote screen (`nil`: the host predates it).

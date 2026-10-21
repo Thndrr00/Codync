@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { isGroup, type Bot } from '@shared/models'
 import { moveInOrder } from '../lib/computer-roster'
@@ -12,6 +12,11 @@ import { StoreContext, useApp } from '../store/context'
 import { BotRow } from './BotRow'
 import { ComputerRosterSection } from './ComputerRosterSection'
 import { UpdateNeededCard } from './UpdateNeededCard'
+import { RosterControls, RosterPreview } from './RosterControls'
+import { RosterStops } from '../store/roster-query'
+import { rosterProject } from '../lib/roster-query'
+import { prefs, usePref } from '../lib/prefs'
+import { useModel } from '../lib/observable'
 
 /** A bot being dragged among its computer's bots, and the order it has made so far. */
 interface BotDrag {
@@ -34,6 +39,13 @@ export function BotRoster({ roster, compact, onContext }: {
   onContext: (bot: Bot, store: BotStore, x: number, y: number) => void
 }) {
   const app = useApp()
+  const [preview, setPreview] = useState<RosterItem | null>(null)
+  const validPreview = preview && roster.allItems.some((item) => item.store === preview.store && sameRef(item.ref, preview.ref)) ? preview : null
+  useEffect(() => { if (preview && !validPreview) setPreview(null) }, [preview, validPreview])
+  const [revealed, setRevealed] = useState<string | null>(null)
+  const [collapsedProjects, setCollapsedProjects] = usePref(prefs.collapsedProjects)
+  const [stops] = useState(() => new RosterStops())
+  useModel(stops)
   const selected = app.selection
   const [hovered, setHovered] = useState<string | null>(null)
   const [dragged, setDragged] = useState<string | null>(null)
@@ -63,6 +75,7 @@ export function BotRoster({ roster, compact, onContext }: {
 
   // The row lifts: a copy follows the pointer from where it was grabbed; the row's slot stays open.
   const liftRow = (item: RosterItem, siblings: RosterItem[], from: Point) => {
+    if (!roster.canReorder) return
     // A lift during the last one's settle takes over from it.
     if (settle.current) clearTimeout(settle.current)
     settle.current = null
@@ -137,6 +150,7 @@ export function BotRoster({ roster, compact, onContext }: {
     const held = botDrag?.item.bot.id === item.bot.id && botDrag.item.ref.computerId === item.ref.computerId
     const many = roster.sections.length > 1
     return (
+      <div key={key}>
       <RosterRow
         key={key}
         hovered={hovered === key || held}
@@ -149,16 +163,41 @@ export function BotRoster({ roster, compact, onContext }: {
         onClick={() => app.select(item.ref)}
         onContext={(x, y) => onContext(item.bot, item.store, x, y)}
         lifted={held && lift !== null}
+        onPreview={() => setPreview(item)}
+        onReveal={() => setRevealed((value) => value === key ? null : key)}
         drag={pointerDrag({ start: (from) => liftRow(item, siblings, from), over: dragOver, drop, cancel: endDrag })}
       >
         <RosterBotRow item={item} compact={compact} />
       </RosterRow>
+      {!compact && revealed === key ? <div className="roster-row-actions">
+        <button onClick={() => setPreview(item)}>Preview</button>
+        <button disabled={item.store.connection.kind !== 'online'} onClick={() => item.store.setPinned(item.bot, !item.bot.pinned)}>{item.bot.pinned ? 'Unpin' : 'Pin'}</button>
+        {['working', 'needsInput'].includes(item.bot.status) ? <button disabled={item.store.connection.kind !== 'online' || stops.pending.has(JSON.stringify([item.ref.computerId, item.bot.id]))}
+          onClick={() => void stops.stop(item.store, item.bot).catch((e: unknown) => item.store.setError(e instanceof Error ? e.message : String(e)))}>
+          {stops.pending.has(JSON.stringify([item.ref.computerId, item.bot.id])) ? 'Stopping…' : 'Stop'}</button> : null}
+        <button disabled={item.store.connection.kind !== 'online'} onClick={() => item.store.setHidden(item.bot, true)}>Hide</button>
+      </div> : null}
+      </div>
     )
   }
 
   const sections = roster.sections.map(({ computer, store, items }, index) => {
     const notice = store.mismatch && !compact ? <StoreContext.Provider value={store}><UpdateNeededCard /></StoreContext.Provider> : null
-    const rows = ordered(computer.id, items).map((item) => row(item, items))
+    const projects = new Map<string, RosterItem[]>()
+    for (const item of ordered(computer.id, items)) {
+      const project = roster.grouping === 'project' ? rosterProject(item.bot) : ''
+      const children = projects.get(project) ?? []
+      children.push(item)
+      projects.set(project, children)
+    }
+    const rows = [...projects].map(([project, children]) => {
+      const key = JSON.stringify([store.contextId, computer.id, project])
+      const folded = collapsedProjects.includes(key)
+      return <div key={key}>
+        {project ? <button className="roster-project" aria-expanded={!folded} onClick={() => setCollapsedProjects(folded ? collapsedProjects.filter((id) => id !== key) : [...collapsedProjects, key])}>{project}</button> : null}
+        {!folded || !project ? children.map((item) => row(item, items)) : null}
+      </div>
+    })
     if (!roster.grouped) return <div key={computer.id}>{notice}{rows}</div>
     return (
       <ComputerRosterSection key={computer.id} store={store} compact={compact}
@@ -172,7 +211,10 @@ export function BotRoster({ roster, compact, onContext }: {
   })
   return (
     <>
+      {!compact ? <RosterControls {...roster} attention={roster.allItems.filter((i) => ['needsInput', 'error'].includes(i.bot.status)).length} /> : null}
+      {!roster.items.length && roster.allItems.length ? <div className="roster-empty">No bots match these filters <button onClick={() => { roster.setQuery(''); roster.setFilter('all') }}>Clear filters</button></div> : null}
       {sections}
+      {validPreview ? <RosterPreview item={validPreview} close={() => setPreview(null)} open={() => { app.select(validPreview.ref); setPreview(null) }} /> : null}
       {lift ? <RosterGhost key={lift.seq} lift={lift} ghost={ghost} compact={compact} /> : null}
     </>
   )
@@ -195,7 +237,7 @@ function RosterBotRow({ item, compact }: { item: RosterItem; compact: boolean })
 }
 
 /** One roster button: drags to reorder, and slides when the others move. */
-function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, onHover, onClick, onContext, drag, children }: {
+function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, onHover, onClick, onContext, onPreview, onReveal, drag, children }: {
   hovered: boolean
   /** Its copy is under the pointer: the row keeps its slot empty. */
   lifted: boolean
@@ -207,10 +249,17 @@ function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, 
   onHover: (on: boolean) => void
   onClick: () => void
   onContext: (x: number, y: number) => void
+  onPreview: () => void
+  onReveal: () => void
   drag: ReturnType<typeof pointerDrag>
   children: ReactNode
 }) {
   const ref = useRef<HTMLButtonElement>(null)
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const didPreview = useRef(false)
+  const start = useRef<Point | null>(null)
+  const cancelHold = () => { if (hold.current) clearTimeout(hold.current); hold.current = null }
+  useEffect(() => cancelHold, [])
   useSlide(ref)
   return (
     <button
@@ -222,7 +271,20 @@ function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, 
       data-roster-row={dragKey}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
-      onClick={onClick}
+      onClick={(event) => { if (didPreview.current) { event.preventDefault(); didPreview.current = false } else onClick() }}
+      onKeyDown={(event) => { if (event.key === 'ArrowRight') { event.preventDefault(); onReveal() } if (event.key === ' ') { event.preventDefault(); onPreview() } }}
+      onPointerDownCapture={(event) => {
+        if (event.button !== 0) return
+        didPreview.current = false
+        start.current = { x: event.clientX, y: event.clientY }
+        cancelHold()
+        hold.current = setTimeout(() => { didPreview.current = true; onPreview() }, 600)
+      }}
+      onPointerMoveCapture={(event) => { if (start.current && Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 8) cancelHold() }}
+      onPointerUpCapture={(event) => { cancelHold(); if (start.current && event.clientX - start.current.x < -64) onReveal(); start.current = null }}
+      onPointerCancelCapture={cancelHold}
+      onPointerLeave={cancelHold}
+      aria-keyshortcuts="ArrowRight Space"
       onContextMenu={(e) => {
         e.preventDefault()
         onContext(e.clientX, e.clientY)
