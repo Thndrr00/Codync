@@ -64,10 +64,10 @@ development host). Setup shows the Mac and Linux install paths, as on iOS. Pairi
 and one-time codes remain in memory. Account login discovers computers; each
 host must still approve access.
 
-This increment supports **one paired computer per account context**. Remove the
-current pairing in Computers & settings before pairing another. Multiple-computer
-support is tracked in the checklist. Accounts have separate device keys, mirrors,
-files, image caches and composer drafts.
+A phone can pair with **several computers** (by code, or approved through the account). Each keeps
+its own mirror and composer drafts; the roster shows and connects to one at a time, and its header
+switches between them. Every paired computer still notifies this phone. Remove one in Computers &
+settings. Accounts have separate device keys, mirrors, files, image caches and composer drafts.
 
 The roster shows activity, previews, unread counts, groups and pin/hide actions;
 touch and hold a bot, then move it, to reorder (the order syncs through the host). Cached bots remain readable offline and are labeled as saved. An

@@ -11,7 +11,7 @@ import kotlinx.serialization.json.*
 
 fun AppStore.syncPush() = action("push") {
     val active = channel?.takeIf { it.state.value is LinkState.Ready } ?: return@action
-    val computer = state.value.computers.firstOrNull() ?: return@action
+    val computer = state.value.computer ?: return@action
     try { PushDelivery.sync(getApplication(), local, computer, active) }
     catch (error: CancellationException) { throw error }
     catch (_: Exception) { PushDelivery.schedule(getApplication()) }
@@ -44,12 +44,18 @@ fun AppStore.openLink(uri: Uri) {
                 else BotDestination.parse(uri.toString(), BuildConfig.URL_SCHEME)
             }
             catch (_: Exception) { mutableState.update { it.copy(error = "This notification has an invalid destination.") }; return@withTimeoutOrNull true }
+            // A new link replaces an earlier removed computer's page, whatever it leads to.
+            mutableState.update { it.copy(removedComputer = false) }
             if (destination.scope != activated.contextId) {
                 mutableState.update { it.copy(error = "Switch to the account used by this notification to open its bot.") }
                 return@withTimeoutOrNull true
             }
-            if (destination.computerId != activated.computers.firstOrNull()?.id) {
-                mutableState.update { it.copy(error = "This notification's computer is no longer paired here.") }
+            if (destination.computerId != activated.computer?.id) {
+                // Another paired computer: show it, then follow the link there. One no longer here: say so where its chat would be.
+                if (activated.computers.any { it.id == destination.computerId })
+                    showComputer(after = { openLink(uri) }) { saved -> saved.firstOrNull { it.id == destination.computerId } }
+                else mutableState.update { it.copy(error = null, selectedBot = null, thread = null, removedComputer = true,
+                    navigationRequest = it.navigationRequest + 1, navigationPage = LinkPage.Bots) }
                 return@withTimeoutOrNull true
             }
             val generation = activated.generation

@@ -72,18 +72,19 @@ object PushDelivery {
         syncLocked(context, local, computer, active)
     }
 
-    private suspend fun syncLocked(context: Context, local: LocalStore, computer: Computer, active: EncryptedChannel) {
+    /** `shown`: the computer the app shows, whose delegated tasks this phone follows; the others only alert. */
+    private suspend fun syncLocked(context: Context, local: LocalStore, computer: Computer, active: EncryptedChannel, shown: Boolean = true) {
         if (!BuildConfig.PUSH_CONFIGURED) return
         if (PushPreferences.retired(context) || local.contextId != (PushPreferences.activeUser(context) ?: "local")) return
         val permitted = context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
         val feed = TaskFeed(local.directory)
-        if (!PushPreferences.tasks(context) || !permitted) {
+        if (shown && (!PushPreferences.tasks(context) || !permitted)) {
             feed.all().forEach { active.call("unregisterActivity", body("botId" to it.botId)) }
             feed.clear()
         }
         if (!PushPreferences.enabled(context) || !permitted) {
             active.call("unregisterDevice")
-            if (!permitted || !PushPreferences.tasks(context) || feed.all().none { !it.finished }) return
+            if (!shown || !permitted || !PushPreferences.tasks(context) || feed.all().none { !it.finished }) return
         }
         val token = PushPreferences.fid(context) ?: suspendCancellableCoroutine<String> { continuation ->
             FirebaseMessaging.getInstance().register().addOnSuccessListener {
@@ -102,7 +103,7 @@ object PushDelivery {
                 put("pushKey", identity.pushKey); put("ctx", local.referenceId)
             })
         }
-        if (PushPreferences.tasks(context)) for (watch in feed.all().filter { !it.finished }) {
+        if (shown && PushPreferences.tasks(context)) for (watch in feed.all().filter { !it.finished }) {
             val activity = PushRelay.ticket(BuildConfig.PUSH_RELAY_URL, token, local.referenceId, computer.id, watch.botId, watch.taskId)
             currentCoroutineContext().ensureActive()
             active.call("registerActivity", body("botId" to watch.botId, "ticket" to activity))
@@ -114,18 +115,26 @@ object PushDelivery {
         if (PushPreferences.retired(context)) return@withLock
         val local = LocalStore(context, PushPreferences.activeUser(context) ?: "local")
         val computers = withContext(Dispatchers.IO) { local.computers() }
-        val computer = computers.firstOrNull() ?: return@withLock
-        if (!local.hasIdentity()) return@withLock
-        var active: EncryptedChannel? = null
-        try {
-            withTimeout(45_000) {
-                val identity = withContext(Dispatchers.IO) { local.identity() }
-                val connected = HostConnector.connect(computer, identity)
-                active = connected
-                connected.state.firstReady()
-                syncLocked(context, local, computer, connected)
-            }
-        } finally { active?.close() }
+        if (computers.isEmpty() || !local.hasIdentity()) return@withLock
+        // Every paired computer alerts this phone, not only the one shown. Any worth retrying retries the run
+        // (registering again is harmless); one that turned this phone away doesn't.
+        var retry: Exception? = null
+        var refused: Exception? = null
+        for ((index, computer) in computers.withIndex()) {
+            var active: EncryptedChannel? = null
+            try {
+                withTimeout(45_000) {
+                    val identity = withContext(Dispatchers.IO) { local.identity() }
+                    val connected = HostConnector.connect(computer, identity)
+                    active = connected
+                    connected.state.firstReady()
+                    syncLocked(context, local, computer, connected, shown = index == 0)
+                }
+            } catch (cancelled: CancellationException) { if (cancelled !is TimeoutCancellationException) throw cancelled; retry = retry ?: cancelled }
+            catch (error: Exception) { if (error is HostError && error.status in listOf(403, 426)) refused = refused ?: error else retry = retry ?: error }
+            finally { active?.close() }
+        }
+        (retry ?: refused)?.let { throw it }
     }
 
     const val WORK_NAME = "codync-push-registration"
@@ -222,8 +231,8 @@ internal object NotificationDisplay {
             .setSubText(alert.subtitle).setStyle(NotificationCompat.BigTextStyle().bigText(alert.body))
             .setAutoCancel(true).setCategory(NotificationCompat.CATEGORY_MESSAGE)
         alert.conversation(bot)?.let { conversation ->
-            // A system that refuses the conversation still shows the plain alert.
-            try { AlertConversations.style(context, builder, tag, computer, open(context, scope, computer, bot), alert.body, conversation) }
+            // A system that refuses the conversation still shows the plain alert; the message carries what happened instead of the sub text.
+            try { AlertConversations.style(context, builder, tag, computer, open(context, scope, computer, bot), alert.body, alert.subtitle, conversation); builder.setSubText(null) }
             catch (error: Exception) { android.util.Log.w("Codync", "Alert shown without its conversation", error) }
         }
         try { context.getSystemService(NotificationManager::class.java).notify(tag, 1, builder.build()) } catch (_: SecurityException) { }
@@ -279,5 +288,14 @@ internal object NotificationDisplay {
     fun cancel(context: Context, id: Int) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.activeNotifications.filter { it.id == id }.forEach { manager.cancel(it.tag, it.id) }
+    }
+
+    /** One computer's notifications (tagged `scope/computer/bot`): its task updates, or with `tasksOnly` false its alerts and conversations too. */
+    fun cancelComputer(context: Context, scope: String, computer: String, tasksOnly: Boolean) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val prefix = "$scope/$computer/"
+        manager.activeNotifications.filter { it.tag?.startsWith(prefix) == true && (it.id == 2 || !tasksOnly) }
+            .forEach { manager.cancel(it.tag, it.id) }
+        if (!tasksOnly) AlertConversations.forget(context, prefix)
     }
 }

@@ -420,6 +420,7 @@ internal object CodyncWidgets {
         TeamWidgetReceiver::class.java)
     fun installed(context: Context): Int = receivers.sumOf { AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, it)).size }
     suspend fun update(context: Context) {
+        LeadBotTile.refresh(context)
         if (installed(context) == 0) return
         ProviderWidget().updateAll(context); UsageWidget().updateAll(context); BotsWidget().updateAll(context); TeamWidget().updateAll(context)
     }

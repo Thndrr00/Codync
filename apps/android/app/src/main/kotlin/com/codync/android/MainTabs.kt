@@ -55,6 +55,9 @@ import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 import kotlin.math.abs
 
+/** The roster's pushed page for a removed computer; bot IDs never take this form. */
+private const val REMOVED = "computer/removed"
+
 /**
  * The system tab bar over Bots, State, Extensions and PC (`SettingsView`), expanding to a side
  * navigation rail and Master-Detail split view on tablets, foldables and desktop windows.
@@ -75,10 +78,12 @@ import kotlin.math.abs
     chat: @Composable () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(AppTab.Bots) }
-    var handledSelectedBot by rememberSaveable { mutableStateOf(state.selectedBot) }
-    if (state.selectedBot != handledSelectedBot) {
-        handledSelectedBot = state.selectedBot
-        if (state.selectedBot != null && tab != AppTab.Bots) tab = AppTab.Bots
+    // A chat, or the empty state of a removed computer's chat, covers the roster and hides the tab bar.
+    val pushed = state.selectedBot ?: REMOVED.takeIf { state.removedComputer }
+    var handledPushed by rememberSaveable { mutableStateOf(pushed) }
+    if (pushed != handledPushed) {
+        handledPushed = pushed
+        if (pushed != null && tab != AppTab.Bots) tab = AppTab.Bots
     }
     var handledTabToken by rememberSaveable { mutableIntStateOf(requestedTabToken) }
     if (requestedTabToken != handledTabToken) {
@@ -102,7 +107,7 @@ import kotlin.math.abs
     val barVisibility = remember { BarScrollVisibility() }
     barVisibility.canAutoHide = autoHidePref && !touchExploration && !hasCriticalState
 
-    LaunchedEffect(tab, state.selectedBot) {
+    LaunchedEffect(tab, pushed) {
         barVisibility.show()
     }
 
@@ -137,24 +142,24 @@ import kotlin.math.abs
         val hasMiniBar = showVoiceMini || showScreenMini
         val barSpace = if (expanded) maxOf(bottom, 20.dp) + if (hasMiniBar) 56.dp else 0.dp
         else bottom + barHeight + if (hasMiniBar) 56.dp else 0.dp
-        val showChromeBar = !expanded && state.selectedBot == null && barVisibility.visible
+        val showChromeBar = !expanded && pushed == null && barVisibility.visible
 
         fun selectTab(next: AppTab) {
             barVisibility.show()
             if (next == tab) {
                 when (next) {
-                    AppTab.Bots -> if (state.selectedBot != null && !expanded) store.openBot(null) else reselectBots++
+                    AppTab.Bots -> if (pushed != null && !expanded) store.openBot(null) else reselectBots++
                     AppTab.State -> reselectState++
                     AppTab.Extensions -> reselectExtensions++
                     AppTab.Computers -> reselectComputers++
                 }
             } else {
-                if (!expanded && state.selectedBot != null) store.openBot(null)
+                if (!expanded && pushed != null) store.openBot(null)
                 tab = next
             }
         }
 
-        BackHandler(enabled = tab != AppTab.Bots && (expanded || state.selectedBot == null)) {
+        BackHandler(enabled = tab != AppTab.Bots && (expanded || pushed == null)) {
             barVisibility.show()
             tab = AppTab.Bots
         }
@@ -174,7 +179,7 @@ import kotlin.math.abs
                     .nestedScroll(barVisibility.nestedScroll)
                     .trackVerticalTouch(barVisibility)
                     .rootTabSwipe(
-                        enabled = !expanded && state.selectedBot == null && !rosterDragging && !touchExploration,
+                        enabled = !expanded && pushed == null && !rosterDragging && !touchExploration,
                         current = tab,
                         select = ::selectTab,
                     ),
@@ -182,7 +187,7 @@ import kotlin.math.abs
                     val ticket = state.access
                     val bannerBottom = (if (showChromeBar) bottom + barHeight else maxOf(bottom, 16.dp)) + if (hasMiniBar) 56.dp else 0.dp
                     AnimatedVisibility(
-                        ticket != null && (expanded || state.selectedBot == null),
+                        ticket != null && (expanded || pushed == null),
                         Modifier.align(Alignment.BottomCenter).padding(bottom = (bannerBottom - 8.dp).coerceAtLeast(12.dp)),
                         enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { it },
                         exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { it },
@@ -275,7 +280,7 @@ import kotlin.math.abs
 ) {
     Box(Modifier.fillMaxSize().tabLayer(tab == AppTab.Bots)) {
         if (expanded) {
-            BackHandler(enabled = tab == AppTab.Bots && state.selectedBot != null) {
+            BackHandler(enabled = tab == AppTab.Bots && (state.selectedBot != null || state.removedComputer)) {
                 store.openBot(null)
             }
             Row(Modifier.fillMaxSize()) {
@@ -299,13 +304,15 @@ import kotlin.math.abs
                     val selected = state.selectedBot
                     if (selected != null) {
                         key(selected) { chat() }
+                    } else if (state.removedComputer) {
+                        RemovedComputerView({ store.openBot(null) }, manage)
                     } else {
                         EmptyChatDetail(state, newBot)
                     }
                 }
             }
         } else {
-            NavStack(listOfNotNull("roster", state.selectedBot), key = { it }, pop = { store.openBot(null) }) { entry ->
+            NavStack(listOfNotNull("roster", state.selectedBot ?: REMOVED.takeIf { state.removedComputer }), key = { it }, pop = { store.openBot(null) }) { entry ->
                 if (entry == "roster") {
                     BotListView(
                         state = state,
@@ -319,6 +326,8 @@ import kotlin.math.abs
                         reselectToken = reselectBots,
                         onDragActive = onDragActive,
                     )
+                } else if (entry == REMOVED) {
+                    RemovedComputerView({ store.openBot(null) }, manage)
                 } else {
                     chat()
                 }

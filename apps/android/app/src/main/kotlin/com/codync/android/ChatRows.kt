@@ -132,7 +132,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
         }
         "permission" -> Column(Modifier.padding(top = topGroupGap), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (group) AuthorLabel(entry.data.text("author"), state)
-            PermissionCard(entry, state.computers.firstOrNull()?.name.orEmpty(), answering = "permission:" + entry.id in state.busy) {
+            PermissionCard(entry, state.computer?.name.orEmpty(), answering = "permission:" + entry.id in state.busy) {
                 haptics.perform(CodyncHaptic.PermissionAction)
                 store.respond(entry, it)
             }

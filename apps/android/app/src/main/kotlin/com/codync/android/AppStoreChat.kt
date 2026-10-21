@@ -11,7 +11,7 @@ import kotlinx.serialization.json.*
 // Conversations: opening a bot or thread, history, sending and its retries.
 
 fun AppStore.openBot(id: String?, thread: String? = null) {
-    mutableState.update { it.copy(selectedBot = id, thread = thread, trace = false) }
+    mutableState.update { it.copy(selectedBot = id, thread = thread, trace = false, removedComputer = false) }
     if (id != null) {
         acknowledgeVisible()
         if (thread != null) action("thread:" + thread) {
@@ -136,7 +136,7 @@ internal suspend fun AppStore.deliver(send: PendingSend) {
         val bot = state.value.bots.firstOrNull { it.id == send.botId }
         if (bot != null && PushPreferences.tasks(getApplication()) && getApplication<Application>().getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled()) {
             val watch = withContext(Dispatchers.IO) { TaskFeed(local.directory).start(bot) }
-            NotificationDisplay.task(getApplication(), local.referenceId, state.value.computers.first().id, watch)
+            NotificationDisplay.task(getApplication(), local.referenceId, requireNotNull(state.value.computer).id, watch)
             syncPush(); PushDelivery.schedule(getApplication())
         }
     } catch (error: CancellationException) {

@@ -114,7 +114,7 @@ fun AppStore.refreshUsage(force: Boolean = true) = action("usage") {
     refresh()
     widgetOwner?.let { owner ->
         val current = state.value
-        withContext(Dispatchers.IO) { WidgetStore.publish(getApplication(), owner, current.computers.firstOrNull(),
+        withContext(Dispatchers.IO) { WidgetStore.publish(getApplication(), owner, current.computer,
             current.bots, UsageReport.decode(current.usage), false, true) }
         CodyncWidgets.update(getApplication())
     }

@@ -30,11 +30,15 @@ data class AppState(
     val uploadProgress: Map<String, Int> = emptyMap(),
     /** Files bots shared that this phone is downloading, has downloaded or couldn't, by file ID. */
     val fileDownloads: Map<String, FileDownloadState> = emptyMap(),
+    /** A downloaded file whose share sheet waits for its conversation to be on screen again. */
+    val export: FileExport? = null,
     val usage: JsonObject = JsonObject(emptyMap()),
     val hello: JsonObject? = null,
     val connection: LinkState = LinkState.Connecting,
     val actualConnection: LinkState = LinkState.Connecting,
     val selectedBot: String? = null,
+    /** A notification or widget led to a computer no longer on this phone: its empty state is open in place of a chat. */
+    val removedComputer: Boolean = false,
     val navigationRequest: Int = 0,
     val navigationPage: LinkPage = LinkPage.Bots,
     val thread: String? = null,

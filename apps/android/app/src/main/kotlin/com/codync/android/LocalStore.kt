@@ -73,6 +73,11 @@ class LocalStore(context: Context, val contextId: String = "local") {
         write(AtomicFile(File(directory, "computers.json")), json.encodeToString(computers).toByteArray())
     }
 
+    /** A removed computer's mirror (with its journal files) and composer drafts. */
+    fun forgetComputerFiles(id: String) {
+        directory.listFiles()?.filter { it.name.startsWith("mirror-$id.") || it.name == "drafts-$id.json" }?.forEach { it.delete() }
+    }
+
     fun setupComplete(): Boolean = File(directory, "setup-complete").exists()
     fun hasIdentity(): Boolean = File(directory, "identity").exists()
     fun completeSetup() = write(AtomicFile(File(directory, "setup-complete")), byteArrayOf(1))

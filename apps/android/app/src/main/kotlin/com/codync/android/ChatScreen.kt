@@ -91,6 +91,7 @@ import com.kyant.shapes.RoundedRectangle
     val startCall = rememberStartVoice(bot.id, state, store) { micDenied = true }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var composerHeight by remember { mutableIntStateOf(0) }
+    val scroll = rememberConversationScroll()
     val density = LocalDensity.current
     // The main chat ignores an open thread: it stays put underneath.
     val chatState = state.copy(thread = null, trace = false)
@@ -98,6 +99,8 @@ import com.kyant.shapes.RoundedRectangle
         // Down to just above the header's bottom; the bottom one stops under Jump to latest.
         ScrollEdge(Edge.Top, top + 84.dp)
         ScrollEdge(Edge.Bottom, with(density) { composerHeight.toDp() } + 4.dp, Modifier.align(Alignment.BottomCenter))
+        // 10 above the composer, as on iOS: the list already keeps 8 under its last row.
+        JumpToLatest(scroll, Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { composerHeight.toDp() } + 10.dp))
         ThreadHeader(bot, state, store, edit, { store.showTrace(true) }, { openRoutine(null) }, { confirmNewSession = true }, { confirmDelete = true })
         // The call floats over the chat under the header, as on iOS; the chat stays readable and usable.
         AnimatedVisibility(state.voice != null, Modifier.padding(top = top + 54.dp),
@@ -114,7 +117,7 @@ import com.kyant.shapes.RoundedRectangle
                 onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null)
         }
     }) {
-        Transcript(bot, chatState, store, connect, PaddingValues(start = 16.dp, end = 16.dp, top = top + 60.dp,
+        Transcript(bot, chatState, store, connect, scroll, PaddingValues(start = 16.dp, end = 16.dp, top = top + 60.dp,
             bottom = with(density) { composerHeight.toDp() } + 8.dp), indicatorTop = top + 50.dp, openRoutine = openRoutine) { peer = it }
     }
     CodyncDialog("Start a new session?", confirmNewSession, { confirmNewSession = false },
@@ -153,7 +156,7 @@ import com.kyant.shapes.RoundedRectangle
 @Composable internal fun ThreadHeader(bot: Bot, state: AppState, store: AppStore, edit: (Bot) -> Unit, trace: () -> Unit,
     routines: () -> Unit, newSession: () -> Unit, delete: () -> Unit) {
     val density = LocalDensity.current
-    val host = state.computers.firstOrNull()?.name.orEmpty()
+    val host = state.computer?.name.orEmpty()
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 12.dp).height(48.dp)) {
         val showInlineRoutines = bot.kind != "group" && maxWidth >= 380.dp && density.fontScale <= 1.15f
         Row(
@@ -243,7 +246,7 @@ import com.kyant.shapes.RoundedRectangle
 
 /** The link to the computer: route icon (or a spinner), computer name when known, and connection state. */
 @Composable private fun ConnectionSubtitle(state: AppState) {
-    val host = state.computers.firstOrNull()?.name.orEmpty()
+    val host = state.computer?.name.orEmpty()
     val statusText = if (host.isNotEmpty()) "$host · ${connectionLabel(state)}" else connectionLabel(state)
     Row(
         Modifier.clearAndSetSemantics { contentDescription = "${state.hostName}, ${connectionDescription(state)}" },
@@ -262,7 +265,7 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** The messages: all this phone has, earlier ones from the computer near the top, following the newest. */
-@Composable private fun Transcript(bot: Bot, state: AppState, store: AppStore, connect: ConnectionRequestActions, padding: PaddingValues,
+@Composable private fun Transcript(bot: Bot, state: AppState, store: AppStore, connect: ConnectionRequestActions, scroll: ConversationScroll, padding: PaddingValues,
     indicatorTop: Dp, openRoutine: (String) -> Unit, openPeer: (String) -> Unit) {
     val entries = state.entries.filter { it.botId == bot.id && it.threadId == null && it.isChat }
     val pending = state.pending.filter { it.botId == bot.id && it.threadId == null }
@@ -270,7 +273,7 @@ import com.kyant.shapes.RoundedRectangle
     val working = bot.isWorking(bot.id, null) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
-    ConversationList(items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
+    ConversationList(scroll, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
         if (more) item("earlier") {
             Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
                 contentAlignment = Alignment.Center) { Spinner(14.dp) }
@@ -302,9 +305,13 @@ import com.kyant.shapes.RoundedRectangle
     val pending = state.pending.filter { it.botId == bot.id && it.threadId == rootId }
     val working = bot.isWorking(bot.id, rootId) && state.connection is LinkState.Ready
     var composerHeight by remember { mutableIntStateOf(0) }
+    val scroll = rememberConversationScroll()
     val density = LocalDensity.current
     val dismiss = LocalDismissModal.current
-    Box(Modifier.fillMaxSize()) {
+    // Jump to latest floats as chrome, frosting the replies scrolling under it.
+    GlassStage(Modifier.fillMaxSize(), chrome = {
+        JumpToLatest(scroll, Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { composerHeight.toDp() } + 10.dp))
+    }) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -315,7 +322,7 @@ import com.kyant.shapes.RoundedRectangle
             }
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
             val items = chatItems(replies, pending)
-            Box(Modifier.weight(1f)) { ConversationList(items.lastOrNull()?.id, replies.lastOrNull()?.rev, working,
+            Box(Modifier.weight(1f)) { ConversationList(scroll, items.lastOrNull()?.id, replies.lastOrNull()?.rev, working,
                 PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = with(density) { composerHeight.toDp() } + 8.dp)) {
                 if (root != null) {
                     item("root") { ChatRow(root, true, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect) }

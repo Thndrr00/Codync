@@ -16,7 +16,7 @@ fun AppStore.connectorSignIn(id: String, requestId: String? = null) = action("oa
     oauthRequestId = requestId
     val response = hostQuery("connectorSignIn", body("id" to id), 60_000)
     val plan = WireJson.decodeFromJsonElement<ConnectorSignIn>(response)
-    val computer = requireNotNull(state.value.computers.firstOrNull())
+    val computer = requireNotNull(state.value.computer)
     externalHttps(plan.url)
     if (plan.callback == "app") {
         val pending = PendingConnectorOAuth.create(plan, id, computer.id, System.currentTimeMillis()).copy(requestId = requestId)
@@ -70,7 +70,7 @@ fun AppStore.finishConnectorSignIn(uri: Uri) {
             val directory = local.directory
             val pending = withContext(Dispatchers.IO) { ConnectorOAuthBook(directory).read() }
                 ?: throw IOException("No connector sign-in is pending for this account. Start sign-in again.")
-            pending.validate(back, activated.computers.firstOrNull()?.id.orEmpty(), System.currentTimeMillis())
+            pending.validate(back, activated.computer?.id.orEmpty(), System.currentTimeMillis())
             val response = hostQuery("connectorSignInFinish", body("state" to back.state, "code" to back.code, "error" to back.error), 60_000, generation)
             val connector = WireJson.decodeFromJsonElement<InstalledConnector>(response.jsonObject.getValue("connector"))
             pending.requestId?.let { finishConnectionRequest(it, connectorId = connector.id, expectedGeneration = generation) }

@@ -208,7 +208,6 @@ private enum class ComputerOS { Mac, Linux }
         started = false
         val failure = state.error
         if (failure == null) {
-            state.computers.firstOrNull()?.let { Analytics.capture(AnalyticsEvent.ComputerPaired, mapOf("via" to "qr", "computer" to Analytics.computerTag(it.id))) }
             pasted = ""; paired()
         }
         else { error = failure; attempt++; store.clearError() }

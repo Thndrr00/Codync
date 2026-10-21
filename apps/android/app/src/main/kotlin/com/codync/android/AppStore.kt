@@ -25,6 +25,8 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     internal var contextScope = CoroutineScope(contextJob + Dispatchers.Main.immediate)
     internal val transitions = Mutex()
     internal val screenTakeovers = Mutex()
+    /** Every change to the saved computers goes through `changeComputers`, one at a time. */
+    internal val computerWrites = Mutex()
     internal var cloud: CloudClient? = null
     private var sessionJob: Job? = null
     internal var linkJob: Job? = null
@@ -93,6 +95,7 @@ class AppStore(application: Application) : AndroidViewModel(application) {
             if (userId != null) configureCloud(userId)
             mutableState.update { it.copy(loading = false) }
             observeWidgets(requireNotNull(widgetOwner))
+            observeExports()
             if (foreground) connect()
             refreshCloud()
         } catch (error: CancellationException) { throw error }
@@ -104,8 +107,12 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         cloud = CloudClient(BuildConfig.CLOUD_URL, identity) { NativeAccounts.token(userId) }
     }
 
-    /** Join every writer before closing a context's database or replacing its identity. */
-    internal suspend fun retireContext() = withContext(NonCancellable) {
+    /**
+     * Join every writer before closing a context's database or replacing its identity. `mode` says what
+     * leaves: the account (push off the shown computer, every notification gone), the shown computer
+     * (its push and notifications only), or nothing but the view (a switch: its tasks stop, alerts stay).
+     */
+    internal suspend fun retireContext(mode: Retirement = Retirement.Account) = withContext(NonCancellable) {
         mutableState.update { it.copy(loading = true) }
         withContext(Dispatchers.IO) { WidgetStore.retire(getApplication(), widgetOwner) }
         widgetOwner = null
@@ -114,12 +121,16 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         retireVoice()
         val writers = actions.values.toList()
         writers.forEach { it.cancel() }; writers.forEach { it.join() }
-        PushDelivery.retire(getApplication())
+        val leaving = state.value.computer
+        if (mode == Retirement.Account) PushDelivery.retire(getApplication())
+        else leaving?.let { NotificationDisplay.cancelComputer(getApplication(), local.referenceId, it.id, tasksOnly = mode == Retirement.Switch) }
+        dropExport()
         val retiringChannel = channel?.takeIf { it.state.value is LinkState.Ready }
         val feed = TaskFeed(local.directory)
         if (retiringChannel != null) withTimeoutOrNull(2_000) {
             try {
-                retiringChannel.call("unregisterDevice")
+                // A switch keeps the computer's alerts coming; its task watches go with the cleared feed.
+                if (mode != Retirement.Switch) retiringChannel.call("unregisterDevice")
                 for (watch in withContext(Dispatchers.IO) { feed.all() }) retiringChannel.call("unregisterActivity", body("botId" to watch.botId))
             } catch (_: Exception) { }
         }
@@ -142,9 +153,12 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         contextScope = CoroutineScope(contextJob + Dispatchers.Main.immediate)
     }
 
-    internal fun sessionAction(operation: suspend () -> Unit) {
-        if (sessionJob?.isActive == true) return
+    /** One session change at a time; `queue` runs after the current one instead of being dropped (a switch asked for mid-change). */
+    internal fun sessionAction(queue: Boolean = false, operation: suspend () -> Unit) {
+        val previous = sessionJob?.takeIf { it.isActive }
+        if (previous != null && !queue) return
         sessionJob = viewModelScope.launch {
+            previous?.join()
             mutableState.update { it.copy(busy = it.busy + "session", error = null) }
             try { operation() }
             catch (error: CancellationException) { throw error }
@@ -154,7 +168,7 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     }
 
     internal suspend fun openMirror() {
-        val computer = state.value.computers.firstOrNull() ?: return
+        val computer = state.value.computer ?: return
         val book = DraftBook(local.directory, computer.id)
         withContext(Dispatchers.IO) {
             database?.close()
@@ -187,7 +201,7 @@ class AppStore(application: Application) : AndroidViewModel(application) {
             val watched = withContext(Dispatchers.IO) { feed.all().filter { !it.finished }.map { it.botId }.toSet() }
             for (bot in snapshot.bots.filter { it.id in watched }) {
                 val watch = withContext(Dispatchers.IO) { feed.local(bot) }
-                if (watch != null) NotificationDisplay.task(getApplication(), local.referenceId, state.value.computers.first().id, watch)
+                if (watch != null) NotificationDisplay.task(getApplication(), local.referenceId, requireNotNull(state.value.computer).id, watch)
             }
         }
     }
@@ -225,7 +239,7 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     private fun observeWidgets(owner: WidgetOwner) {
         contextScope.launch {
             state.filter { !it.loading && it.contextId == owner.scope }
-                .map { WidgetSource(it.computers.firstOrNull(), it.bots, it.usage, it.widgetBotsCurrent) }
+                .map { WidgetSource(it.computer, it.bots, it.usage, it.widgetBotsCurrent) }
                 .distinctUntilChanged().debounce(350).collect { source ->
                     try {
                         val usage = UsageReport.decode(source.usage)
@@ -259,4 +273,14 @@ class AppStore(application: Application) : AndroidViewModel(application) {
 
 fun body(vararg values: Pair<String, String?>): JsonObject = buildJsonObject {
     for ((key, value) in values) if (value != null) put(key, value)
+}
+
+/** What `retireContext` takes away with the view. */
+internal enum class Retirement {
+    /** The account leaves this phone (sign-out, switch, start over): its push and every notification. */
+    Account,
+    /** The shown computer is removed: its push registration and its notifications. */
+    Computer,
+    /** Another computer is shown instead: only this one's task updates stop; its alerts keep coming. */
+    Switch,
 }

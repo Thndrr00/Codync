@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.Bot
 import com.codync.android.core.CloudComputer
+import com.codync.android.core.Computer
 import com.codync.android.core.ConnectionRoute
 import com.codync.android.core.HostRoute
 import com.codync.android.core.LinkState
@@ -83,8 +84,8 @@ import kotlinx.serialization.json.put
     val navStyle by NavigationPreferences.style.collectAsState()
     val navAutoHide by NavigationPreferences.autoHide.collectAsState()
     val signedIn = state.account.userId != null
-    val paired = state.computers.firstOrNull()
-    var confirmForget by remember { mutableStateOf(false) }
+    val paired = state.computer
+    var confirmForget by remember { mutableStateOf<Computer?>(null) }
     var confirmRevoke by remember { mutableStateOf<CloudComputer?>(null) }
     var confirmRemoveCopy by remember { mutableStateOf<CloudComputer?>(null) }
     var coloring by remember { mutableStateOf(false) }
@@ -121,11 +122,15 @@ import kotlinx.serialization.json.put
                     if (paired != null) row {
                         val inAccount = state.cloudComputers.firstOrNull { it.computerId == paired.id }
                         ComputerRow(state, store, inAccount != null, ComputerActions(extensions, store::openScreen, voice = { voice = true }, color = { coloring = true },
-                            revoke = inAccount?.takeIf { it.access == "granted" }?.let { c -> { confirmRevoke = c } }) { confirmForget = true })
+                            revoke = inAccount?.takeIf { it.access == "granted" }?.let { c -> { confirmRevoke = c } }) { confirmForget = paired })
                     }
-                    for (computer in state.cloudComputers.filter { it.computerId != paired?.id }) row {
+                    // The other computers paired here: a tap shows one in place of this one.
+                    for (computer in state.computers.drop(1)) row {
+                        SavedComputerRow(computer, state.cloudComputers.any { it.computerId == computer.id }, { store.switchComputer(computer.id) }) { confirmForget = computer }
+                    }
+                    for (computer in state.cloudComputers.filter { remote -> state.computers.none { it.id == remote.computerId } }) row {
                         if (state.isOlderCopy(computer)) OlderCopyRow(computer) { confirmRemoveCopy = computer }
-                        else AccountComputerRow(computer, state.access?.takeIf { it.computerId == computer.computerId }?.code, canAsk = paired == null,
+                        else AccountComputerRow(computer, state.access?.takeIf { it.computerId == computer.computerId }?.code,
                             ask = { ask(computer) }, revoke = { confirmRevoke = computer })
                     }
                     row {
@@ -195,7 +200,7 @@ import kotlinx.serialization.json.put
         }
     }
     CodyncSheet(voice, { voice = false }) { VoiceChatSettings(state, store) }
-    SwatchPanel(coloring, paired?.color, { coloring = false }, store::setColor)
+    SwatchPanel(coloring, paired?.color, { coloring = false }) { color -> paired?.let { store.setColor(it.id, color) } }
     CodyncDialog("Remove the older ${confirmRemoveCopy?.name ?: "computer"}?", confirmRemoveCopy != null, { confirmRemoveCopy = null },
         "It's this computer under an earlier identity and can't be reached anymore. Removing it only cleans up your account.") {
         listOfNotNull(confirmRemoveCopy?.let { copy -> DialogAction("Remove", destructive = true) { store.removeFromAccount(copy.computerId) } })
@@ -205,9 +210,9 @@ import kotlinx.serialization.json.put
         "Signs out of every account and forgets every computer on this phone, then shows the welcome again. Your computers keep their bots and chats; pair again to use them.") {
         listOf(DialogAction("Start over", destructive = true, action = store::startOver))
     }
-    CodyncDialog("Remove ${paired?.name ?: "computer"}?", confirmForget, { confirmForget = false },
+    CodyncDialog("Remove ${confirmForget?.name ?: "computer"}?", confirmForget != null, { confirmForget = null },
         "Its bots and conversations stay on that computer. You can pair again any time.") {
-        listOf(DialogAction("Remove", destructive = true, action = store::forgetComputer))
+        listOfNotNull(confirmForget?.let { target -> DialogAction("Remove", destructive = true) { store.forgetComputer(target.id) } })
     }
     CodyncDialog("Revoke this phone's access to ${confirmRevoke?.name ?: "the computer"}?", confirmRevoke != null, { confirmRevoke = null },
         "You can ask for access again; the computer will show a new code to confirm.") {
@@ -239,7 +244,7 @@ private class ComputerActions(val extensions: () -> Unit, val screen: () -> Unit
 
 /** The paired computer: its connection, how it's reached, and whether it's in the account. */
 @Composable private fun ComputerRow(state: AppState, store: AppStore, inAccount: Boolean, actions: ComputerActions) {
-    val computer = state.computers.first()
+    val computer = requireNotNull(state.computer) { "The paired computer row needs a computer." }
     val link = state.connection
     val online = link is LinkState.Ready
     val viewable = online && state.screen != null
@@ -282,15 +287,13 @@ private class ComputerActions(val extensions: () -> Unit, val screen: () -> Unit
 }
 
 /** A computer in the account that this phone can't use yet. */
-@Composable private fun AccountComputerRow(computer: CloudComputer, code: String?, canAsk: Boolean, ask: () -> Unit, revoke: () -> Unit) {
+@Composable private fun AccountComputerRow(computer: CloudComputer, code: String?, ask: () -> Unit, revoke: () -> Unit) {
     val online = if (computer.online == true) "Online" else "Offline"
     val detail = when {
         code != null -> "Waiting for your OK on the computer · $code"
         computer.access == "granted" -> "Approved for an earlier install of Codync. Revoke it, then ask again."
         computer.access == "pending" -> "$online · A request is waiting"
-        canAsk -> "$online · In your account"
-        // One computer per phone for now: the paired one goes first.
-        else -> "$online · Remove this phone's computer to use this one"
+        else -> "$online · In your account"
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.graphicsLayer { alpha = 0.5f }) { ComputerBadge(computer.device, 40.dp) }
@@ -301,8 +304,25 @@ private class ComputerActions(val extensions: () -> Unit, val screen: () -> Unit
         when {
             code != null -> SecondaryButton("Code", action = ask)
             computer.access == "granted" -> SecondaryButton("Revoke", action = revoke)
-            else -> SecondaryButton("Ask for access", enabled = canAsk, action = ask)
+            else -> SecondaryButton("Ask for access", action = ask)
         }
+    }
+}
+
+/** Another computer paired with this phone: not connected while it isn't the one shown; a tap shows it. */
+@Composable private fun SavedComputerRow(computer: Computer, inAccount: Boolean, show: () -> Unit, remove: () -> Unit) {
+    // A tap shows it, a hold offers the same and Remove; TalkBack reads the name and the line under it.
+    Row(Modifier.fillMaxWidth().contextActions(onClick = show, onClickLabel = "Show its bots", items = {
+        listOf(MenuItem("Show", icon = "arrow.left.arrow.right", action = show),
+            MenuItem("Remove", icon = "trash", destructive = true, divider = true, action = remove))
+    }), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        ComputerBadge(null, 40.dp, computer.color)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(computer.name, style = Type.body.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Paired · Tap to show its bots", style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (inAccount) Symbol("person.crop.circle.badge.checkmark", size = 20.dp, tint = Palette.tertiary, contentDescription = "In your account")
+        IconButton("Remove", "trash", action = remove)
     }
 }
 
@@ -324,7 +344,7 @@ private class ComputerActions(val extensions: () -> Unit, val screen: () -> Unit
         BotAvatar(bot, state.bots, 28.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(bot.name, style = Type.body, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(state.hello?.text("name") ?: state.computers.firstOrNull()?.name.orEmpty(), style = Type.caption, color = Palette.tertiary)
+            Text(state.hello?.text("name") ?: state.computer?.name.orEmpty(), style = Type.caption, color = Palette.tertiary)
         }
         IconButton("Unhide", "eye") {
             store.command("updateBot", buildJsonObject { put("id", bot.id); put("hidden", false) }, "roster:" + bot.id)

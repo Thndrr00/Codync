@@ -51,7 +51,6 @@ suspend fun AppStore.refreshComputers() { refreshCloud(); actions["cloud"]?.join
 
 fun AppStore.requestAccess(target: CloudComputer) = action("access") {
     val client = requireNotNull(cloud) { "Sign in to reach your account." }
-    require(state.value.computers.isEmpty() || state.value.computers.first().id == target.computerId) { "Forget the current computer before connecting a different one." }
     asked.add(target.computerId)
     val ticket = client.requestAccess(target.computerId, target.signKey)
     mutableState.update { it.copy(access = ticket) }
@@ -68,9 +67,9 @@ fun AppStore.requestAccess(target: CloudComputer) = action("access") {
                     // Pin only the key used in the SAS. The first authenticated hello supplies addresses and box key.
                     val computer = Computer(ticket.computerId, target.name, ticket.signKey, cloud = BuildConfig.CLOUD_URL)
                     computer.validate()
-                    withContext(Dispatchers.IO) { local.saveComputers(listOf(computer)); local.completeSetup() }
-                    mutableState.update { it.copy(computers = listOf(computer), setupComplete = true) }
-                    openMirror(); connect(); return@action
+                    withContext(Dispatchers.IO) { local.completeSetup() }
+                    mutableState.update { it.copy(setupComplete = true) }
+                    addComputer(computer); return@action
                 }
                 "denied" -> throw IOException("${target.name} declined the request.")
                 else -> throw CloudError(410, "requestExpired")
@@ -95,7 +94,7 @@ fun AppStore.cancelAccess() {
  */
 fun AppStore.revokeAccess(computerId: String) = action("revoke") {
     requireNotNull(cloud) { "Sign in to reach your account." }.revokeAccess(computerId)
-    if (state.value.computers.firstOrNull()?.id == computerId) forgetComputer() else refreshCloud()
+    if (state.value.computers.any { it.id == computerId }) forgetComputer(computerId) else refreshCloud()
 }
 
 /** Takes an older copy of a computer out of the account (its grants and pending requests go with it). */
@@ -104,26 +103,10 @@ fun AppStore.removeFromAccount(computerId: String) = action("removeFromAccount")
     refreshCloud()
 }
 
-/** The computer's badge color, picked on this phone (an `AvatarPalette` id). */
-fun AppStore.setColor(color: String) = action("color") {
-    val computer = state.value.computers.firstOrNull() ?: return@action
-    val changed = computer.copy(color = color)
-    withContext(Dispatchers.IO) { local.saveComputers(listOf(changed)) }
-    mutableState.update { it.copy(computers = listOf(changed)) }
-}
-
-fun AppStore.forgetComputer() = sessionAction {
-    transitions.withLock {
-        val userId = state.value.account.userId
-        val id = state.value.computers.firstOrNull()?.id
-        retireContext()
-        if (id != null) asked.add(id)
-        withContext(Dispatchers.IO) {
-            local.saveComputers(emptyList())
-            local.directory.listFiles()?.filter { it.name.startsWith("mirror-") || it.name.startsWith("drafts-") }?.forEach { it.delete() }
-        }
-        loadContext(userId)
-    }
+/** A computer's badge color, picked on this phone (an `AvatarPalette` id). */
+fun AppStore.setColor(computerId: String, color: String) = action("color") {
+    val computer = state.value.computers.firstOrNull { it.id == computerId } ?: return@action
+    saveComputer(computer.copy(color = color))
 }
 
 fun AppStore.skipSetup() = action("setup") {

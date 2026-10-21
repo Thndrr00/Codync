@@ -272,8 +272,8 @@ import kotlinx.serialization.json.putJsonArray
     onClearFilters: () -> Unit,
 ) {
     val haptics = LocalCodyncHaptics.current
-    val computerId = state.computers.firstOrNull()?.id ?: "unpaired"
-    val computerName = state.hello?.text("name") ?: state.computers.firstOrNull()?.name
+    val computerId = state.computer?.id ?: "unpaired"
+    val computerName = state.hello?.text("name") ?: state.computer?.name
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -461,17 +461,24 @@ internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {
     }
 }
 
-/** The quiet connection summary, with reconnect and the computers on demand. */
+/**
+ * The quiet connection summary, with reconnect and the computers on demand. With several computers
+ * paired, it names the one shown and switches to another (each keeps its own bots and chats).
+ */
 @Composable private fun ComputerFilterHeader(state: AppState, store: AppStore, manage: () -> Unit) {
     val summary = connectionSummary(state)
+    val shown = state.computer?.id
     DropdownMenu({
-        listOf(
-            MenuItem("All computers", icon = "checkmark"),
-            *state.computers.map { MenuItem("${it.name} · ${connectionLabel(state)}", icon = "checkmark") }.toTypedArray(),
+        listOfNotNull(
+            MenuItem("All computers", icon = "checkmark").takeIf { state.computers.size <= 1 },
+            *state.computers.map { computer ->
+                if (computer.id == shown) MenuItem("${state.hostName} · ${connectionLabel(state)}", icon = "checkmark")
+                else MenuItem(computer.name, icon = "desktopcomputer") { store.switchComputer(computer.id) }
+            }.toTypedArray(),
             MenuItem("Reconnect", icon = "arrow.clockwise", divider = true, enabled = state.computers.isNotEmpty()) { store.reconnect() },
             MenuItem("Manage computers", icon = "desktopcomputer", action = manage),
         )
-    }, label = "Computers, $summary. Filter conversations") {
+    }, label = "Computers, $summary. " + if (state.computers.size > 1) "Switch computer" else "Filter conversations") {
         Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(summary, style = Type.system(12f).medium, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Symbol("chevron.down", size = 15.dp, tint = Palette.secondary)

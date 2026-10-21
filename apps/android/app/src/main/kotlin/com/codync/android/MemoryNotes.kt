@@ -74,7 +74,8 @@ private val NOTE_NAME = Regex("^[a-z0-9-]+\\.md$")
     var name by remember(target) { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     val validName = NOTE_NAME.matches(name)
-    LaunchedEffect(target) { target.name?.let { detail = memory.file(it, target.shared) } }
+    // An error from an earlier action belongs to that action, not to this note.
+    LaunchedEffect(target) { memory.error = null; target.name?.let { detail = memory.file(it, target.shared) } }
 
     /** Saves (`content`), deletes (null) or restores `version`, over what was loaded. */
     fun change(content: String? = null, version: Long? = null) {

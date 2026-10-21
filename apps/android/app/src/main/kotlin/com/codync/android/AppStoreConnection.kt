@@ -10,10 +10,9 @@ import kotlinx.serialization.json.*
 // Pairing, the encrypted link to the computer and the mirror's event stream.
 
 fun AppStore.setRoute(route: ConnectionRoute) = action("route") {
-    val computer = state.value.computers.firstOrNull() ?: return@action
+    val computer = state.value.computer ?: return@action
     val changed = computer.copy(route = route)
-    withContext(Dispatchers.IO) { local.saveComputers(listOf(changed)) }
-    mutableState.update { it.copy(computers = listOf(changed)) }
+    saveComputer(changed)
     reconnect().join()
 }
 
@@ -55,13 +54,17 @@ fun AppStore.pair(text: String) {
         mutableState.update { it.copy(pairing = true, error = null) }
         try {
             val pairing = Pairing.parse(text, BuildConfig.URL_SCHEME)
-            val old = state.value.computers.firstOrNull()
-            require(old == null || old.id == pairing.computer.id) { "Use Start over to pair a different computer." }
-            require(old == null || old.signKey == pairing.computer.signKey) { "This computer's identity changed. Start over before pairing again." }
+            // A computer paired before keeps its color; a new one joins the others and is shown.
+            val old = state.value.computers.firstOrNull { it.id == pairing.computer.id }
+            require(old == null || old.signKey == pairing.computer.signKey) { "This computer's identity changed. Remove it in Computers & settings, then pair it again." }
             val identity = withContext(Dispatchers.IO) { local.identity() }
             val computer = HostConnector.pair(pairing, identity, Build.MODEL.take(100)).copy(color = old?.color)
-            withContext(Dispatchers.IO) { local.saveComputers(listOf(computer)); local.completeSetup() }
-            mutableState.update { it.copy(computers = listOf(computer), setupComplete = true) }
+            // Tagged here: the page that asked only learns that pairing ended, maybe before the switch to this computer.
+            Analytics.capture(AnalyticsEvent.ComputerPaired, mapOf("via" to "qr", "computer" to Analytics.computerTag(computer.id)))
+            withContext(Dispatchers.IO) { local.completeSetup() }
+            if (state.value.computer?.id != computer.id) { addComputer(computer); return@launch }
+            saveComputer(computer)
+            mutableState.update { it.copy(setupComplete = true) }
             if (database == null) openMirror()
             connect()
         } catch (error: CancellationException) { throw error }
@@ -72,7 +75,7 @@ fun AppStore.pair(text: String) {
 
 fun AppStore.connect() {
     if (connectionJob?.isActive == true || !transportRequired) return
-    val computer = state.value.computers.firstOrNull() ?: return
+    val computer = state.value.computer ?: return
     val previous = connectionJob
     connectionJob = contextScope.launch {
         previous?.cancelAndJoin()
@@ -106,11 +109,10 @@ fun AppStore.connect() {
                                 val updated = HostClient.hello(active, state.value.computers.firstOrNull { it.id == target.id } ?: target)
                                 val hello = active.call("hello").jsonObject
                                 withContext(Dispatchers.IO) {
-                                    local.saveComputers(listOf(updated))
                                     requireNotNull(database).setStamp(requireNotNull(hello["hostId"]?.jsonPrimitive?.content),
                                         BuildConfig.VERSION_NAME + "/" + hello["version"]?.jsonPrimitive?.content)
                                 }
-                                mutableState.update { it.copy(computers = listOf(updated)) }
+                                saveComputer(updated)
                                 noteHello(hello)
                                 // The event catch-up is ordered by revision; bot revisions can
                                 // follow hundreds of historical entries. Load the current roster

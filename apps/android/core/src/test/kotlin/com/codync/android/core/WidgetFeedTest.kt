@@ -34,4 +34,11 @@ class WidgetFeedTest {
         assertEquals("b", leadBot(bots.drop(1))?.id)
         assertNull(leadBot(bots.drop(2)))
     }
+
+    @Test fun `between bots that need you equally the lead is the most recent, as on the iPhone`() {
+        val bots = listOf(WidgetBot("pinned", "P", "needsInput", lastAt = 10), WidgetBot("recent", "R", "needsInput", lastAt = 20),
+            WidgetBot("busy", "B", "working", lastAt = 30))
+        assertEquals("recent", leadBot(bots)?.id)
+        assertEquals("busy", leadBot(bots.map { it.copy(status = "working") })?.id)
+    }
 }

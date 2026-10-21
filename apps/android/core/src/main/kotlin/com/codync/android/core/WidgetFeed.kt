@@ -4,7 +4,9 @@ import kotlinx.serialization.Serializable
 
 /** Private summaries only: widget storage never contains chat text or credentials. */
 @Serializable data class WidgetBot(val id: String, val name: String, val status: String,
-    val unread: Int = 0, val avatarColor: String = "blue", val avatarShape: String = "blob")
+    val unread: Int = 0, val avatarColor: String = "blue", val avatarShape: String = "blob",
+    /** When the bot last did something, to break ties for the Bots tile. */
+    val lastAt: Long = 0)
 
 @Serializable data class WidgetFeed(val scope: String = "local", val computerId: String? = null,
     val computerName: String = "", val bots: List<WidgetBot> = emptyList(), val botsAt: Long = 0,
@@ -22,8 +24,9 @@ fun usageLimits(report: UsageReport): List<ProviderLimit> {
     return listOf(top.value) + all.filterIndexed { index, _ -> index != top.index }
 }
 
-/** The Bots tile's bot: the one that needs you most, in the feed's order, if any bot is at work. */
-fun leadBot(bots: List<WidgetBot>): WidgetBot? = bots.firstOrNull { it.status == "needsInput" || it.status == "working" }
+/** The Bots tile's bot, as the iPhone's control picks it: one that needs you, else one working; the most recent of those. */
+fun leadBot(bots: List<WidgetBot>): WidgetBot? = bots.filter { it.status == "needsInput" || it.status == "working" }
+    .minWithOrNull(compareBy<WidgetBot> { if (it.status == "needsInput") 0 else 1 }.thenByDescending { it.lastAt })
 
 /** The Team widget's four spots: the picked bots first (a deleted pick falls back), then the feed's order (who needs you). */
 fun teamSlots(bots: List<WidgetBot>, picks: List<String?>): List<WidgetBot?> {
@@ -35,4 +38,4 @@ fun teamSlots(bots: List<WidgetBot>, picks: List<String?>): List<WidgetBot?> {
 fun widgetBots(bots: List<Bot>): List<WidgetBot> = bots.filter { !it.hidden && !it.deleted }
     .sortedWith(compareBy<Bot> { when (it.status) { "needsInput" -> 0; "working" -> 1; "error" -> 2; else -> 3 } }
         .thenByDescending { it.pinned }.thenByDescending { it.lastAt }.thenBy { it.name })
-    .take(256).map { WidgetBot(it.id, it.name.take(256), it.status, it.unread, it.avatarColor, it.avatarShape) }
+    .take(256).map { WidgetBot(it.id, it.name.take(256), it.status, it.unread, it.avatarColor, it.avatarShape, it.lastAt) }

@@ -103,7 +103,7 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
         CardSection("Agent") {
             row {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ValueRow("Computer", state.computers.firstOrNull()?.name ?: "Your computer")
+                    ValueRow("Computer", state.computer?.name ?: "Your computer")
                     if (!online) Text(if (draft.id == null) "Connect this computer to create the bot." else "Reconnect to this computer to save settings.",
                         style = Type.caption, color = Palette.warning)
                 }
@@ -127,14 +127,14 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
             }
             if (draft.backend == "antigravity") row {
                 AgentAccountPicker(draft.backend, draft.account, online,
-                    "${state.generation}/${state.computers.firstOrNull()?.id}/${draft.id}",
+                    "${state.generation}/${state.computer?.id}/${draft.id}",
                     { store.agentAccounts(draft.backend) }, { store.authenticateAgentAccount(draft.backend) }) {
                     change(draft.copy(account = it, model = null, modelOptions = emptyMap()))
                 }
             }
             row {
                 val bot = state.bots.firstOrNull { it.id == draft.id }
-                key(state.generation, state.computers.firstOrNull()?.id, draft.backend, draft.account) {
+                key(state.generation, state.computer?.id, draft.backend, draft.account) {
                     AgentModelPicker(state, { backend -> store.agentModels(backend, draft.account) }, draft.backend, draft.model, draft.modelOptions, draft.fastMode ?: false, bot,
                         { model, options -> change(draft.copy(model = model, modelOptions = options)) }, { change(draft.copy(fastMode = it)) })
                 }

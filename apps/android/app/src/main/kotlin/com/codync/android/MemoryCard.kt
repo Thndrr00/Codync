@@ -187,6 +187,7 @@ internal fun ago(millis: Long): String =
 @Composable private fun MemoryEditor(memory: MemoryModel, target: MemoryEditTarget) {
     val dismiss = LocalDismissModal.current
     var text by remember(target) { mutableStateOf(target.text) }
+    LaunchedEffect(target) { memory.error = null }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         ModalHeader(if (target.entry != null) "Edit memory" else if (target.shared) "Add to what your bots share" else "Add memory")
         Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

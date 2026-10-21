@@ -43,9 +43,10 @@ internal fun connectionDescription(state: AppState): String {
     }
 }
 
-/** "1 connected", "Connecting…", "No access": the roster header's summary of its computers. */
+/** "1 connected", "Connecting…", "No access": the roster header's summary; with several computers, the one shown and its link. */
 internal fun connectionSummary(state: AppState): String = when {
     state.computers.isEmpty() -> "Computers"
+    state.computers.size > 1 -> "${state.hostName} · ${connectionLabel(state)}"
     state.connection is LinkState.Ready -> "${state.computers.size} connected"
     state.connection is LinkState.Connecting -> "Connecting…"
     state.connection.unauthorized -> "No access"
@@ -58,7 +59,7 @@ internal fun connectionSummary(state: AppState): String = when {
  * (iOS `AccountStore.isStale`). Removing it is the fix.
  */
 internal val AppState.isStale: Boolean get() {
-    val computer = computers.firstOrNull() ?: return false
+    val computer = this.computer ?: return false
     return when (val link = connection) {
         is LinkState.Failed -> link.unauthorized || renamedCopyOnline(computer.id, computer.name)
         is LinkState.ComputerOffline -> renamedCopyOnline(computer.id, computer.name)
