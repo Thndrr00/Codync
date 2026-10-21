@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.codync.android.core.BotDraft
 import com.codync.android.core.CloudComputer
 import com.codync.android.core.GroupDraft
@@ -32,6 +33,8 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
 
 /** The app's root, as iOS `RootView`: the welcome and pairing until set up, then the tabs, with every sheet on top. */
 @Composable fun CodyncApp(state: AppState, store: AppStore) {
+    val context = LocalContext.current
+    LaunchedEffect(context) { NavigationPreferences.ensureLoaded(context) }
     var welcomed by rememberSaveable { mutableStateOf(false) }
     var showAccount by rememberSaveable { mutableStateOf(false) }
     var accountSettings by rememberSaveable { mutableStateOf(false) }
@@ -39,6 +42,8 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
     var showPairing by rememberSaveable { mutableStateOf(false) }
     var showUsage by rememberSaveable { mutableStateOf(false) }
     var showMarketplace by rememberSaveable { mutableStateOf(false) }
+    var requestedTab by rememberSaveable { mutableStateOf<AppTab?>(null) }
+    var requestedTabToken by rememberSaveable { mutableIntStateOf(0) }
     var access by remember { mutableStateOf<CloudComputer?>(null) }
     var editor by remember { mutableStateOf<BotDraft?>(null) }
     var groupEditor by remember { mutableStateOf<GroupDraft?>(null) }
@@ -55,8 +60,17 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
         if (handledNavigation != state.navigationRequest) {
             closeAll()
             showUsage = state.navigationPage == LinkPage.Usage
-            showComputers = state.navigationPage == LinkPage.Computers
-            showMarketplace = state.navigationPage == LinkPage.Extensions
+            when (state.navigationPage) {
+                LinkPage.Computers -> {
+                    requestedTab = AppTab.Computers
+                    requestedTabToken++
+                }
+                LinkPage.Extensions -> {
+                    requestedTab = AppTab.Extensions
+                    requestedTabToken++
+                }
+                else -> {}
+            }
             handledNavigation = state.navigationRequest
         }
     }
@@ -91,9 +105,20 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
                         if (signedIn) AccountSwitcherButton(state) { showAccount = true } else BackButton { welcomed = false }
                     }
                 }
-                Root.Tabs -> MainTabs(state, store, account = { showAccount = true }, manage = { showComputers = true }, usage = { showUsage = true },
-                    newBot = { editor = BotDraft() }, newGroup = { groupEditor = GroupDraft() },
-                    edit = { bot -> if (bot.kind == "group") groupEditor = GroupDraft.from(bot) else editor = BotDraft.from(bot) }) {
+                Root.Tabs -> MainTabs(
+                    state = state,
+                    store = store,
+                    account = { showAccount = true },
+                    manage = { showComputers = true },
+                    usage = { showUsage = true },
+                    newBot = { editor = BotDraft() },
+                    newGroup = { groupEditor = GroupDraft() },
+                    edit = { bot -> if (bot.kind == "group") groupEditor = GroupDraft.from(bot) else editor = BotDraft.from(bot) },
+                    pair = { showPairing = true },
+                    ask = { access = it },
+                    requestedTab = requestedTab,
+                    requestedTabToken = requestedTabToken,
+                ) {
                     ChatScreen(state, store) { bot -> if (bot.kind == "group") groupEditor = GroupDraft.from(bot) else editor = BotDraft.from(bot) }
                 }
             }

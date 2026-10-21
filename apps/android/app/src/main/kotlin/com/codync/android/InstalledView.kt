@@ -5,10 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.codync.android.design.*
 import java.io.IOException
@@ -28,7 +31,13 @@ import kotlinx.coroutines.launch
 private data class Removal(val id: String, val name: String, val skill: Boolean)
 
 /** What's installed on the computer: connectors (sign in, remove) and skills (details, remove) (iOS `InstalledView`). */
-@Composable internal fun InstalledView(state: AppState, store: AppStore, back: () -> Unit) {
+@Composable internal fun InstalledView(
+    state: AppState,
+    store: AppStore,
+    inModal: Boolean = true,
+    bottomInset: Dp = 0.dp,
+    back: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     var removing by remember { mutableStateOf<Removal?>(null) }
     var signingIn by remember { mutableStateOf<String?>(null) }
@@ -43,9 +52,12 @@ private data class Removal(val id: String, val name: String, val skill: Boolean)
         catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) { error = failure.message ?: "That didn't go through." }
     }
-    Column(Modifier.fillMaxSize().background(Palette.background)) {
+    Column(Modifier.fillMaxSize().background(Palette.background).then(if (inModal) Modifier else Modifier.statusBarsPadding())) {
         ScreenHeader({ BackButton(back) }, { Text("Connectors & skills", style = Type.body.semibold, color = Palette.text) })
-        CardForm(Modifier.weight(1f)) {
+        CardForm(
+            Modifier.weight(1f),
+            padding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
+        ) {
             if (connectors.isEmpty() && skills.isEmpty()) MarketEmpty("shippingbox", "Nothing installed", "Connectors and skills you add show up here.")
             if (connectors.isNotEmpty()) CardSection("Connectors") {
                 for (c in connectors) row {

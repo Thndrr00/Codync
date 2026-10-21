@@ -20,9 +20,16 @@ import com.codync.android.design.*
 import kotlin.math.roundToInt
 
 @Composable internal fun BotConstellation(bots: List<Bot>, open: (Bot) -> Unit,
-    actions: (Bot) -> List<MenuItem>, modifier: Modifier = Modifier) {
+    actions: (Bot) -> List<MenuItem>, modifier: Modifier = Modifier, reselectToken: Int = 0) {
     val reduced = reduceMotion()
     val scroll = rememberScrollState()
+    var handledReselect by remember { mutableIntStateOf(reselectToken) }
+    LaunchedEffect(reselectToken) {
+        if (reselectToken != handledReselect) {
+            handledReselect = reselectToken
+            scroll.animateScrollTo(0)
+        }
+    }
     val phase = rememberConstellationPhase(!reduced && bots.any { it.status == "working" })
     // A stable clock snapshot keeps sizes from drifting whenever unrelated app state changes.
     val now = remember(bots) { System.currentTimeMillis() }

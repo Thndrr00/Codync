@@ -80,7 +80,7 @@ internal fun openAppSettings(context: android.content.Context) =
                 if (bot != null) BotAvatar(bot, state.bots, 34.dp)
             }
             CallLevelDots(voice.level, speaking, bot?.status == "working", color,
-                Modifier.weight(1f).height(20.dp).semantics { contentDescription = statusText(voice, bot?.status == "working") })
+                Modifier.weight(1f).height(20.dp).semantics { contentDescription = callStatusText(voice, bot?.status == "working") })
             // Audio leaves the phone: say where.
             voice.provider?.let { provider ->
                 Text(provider.title, Modifier.semantics { contentDescription = "Voice by ${provider.title}" },
@@ -115,7 +115,7 @@ internal fun openAppSettings(context: android.content.Context) =
     }
 }
 
-private fun statusText(voice: VoiceState, working: Boolean) = when (voice.phase) {
+internal fun callStatusText(voice: VoiceState, working: Boolean) = when (voice.phase) {
     VoicePhase.Starting -> "Connecting"
     VoicePhase.Speaking -> "Speaking"
     VoicePhase.Failed -> "Can't listen"
@@ -128,7 +128,7 @@ private fun statusText(voice: VoiceState, working: Boolean) = when (voice.phase)
  * The dotted line in the call bar: it follows your voice while listening, ripples while the bot
  * talks, breathes while it works, and rests as faint dots otherwise.
  */
-@Composable private fun CallLevelDots(level: Float, speaking: Boolean, working: Boolean, color: Color, modifier: Modifier) {
+@Composable internal fun CallLevelDots(level: Float, speaking: Boolean, working: Boolean, color: Color, modifier: Modifier) {
     val still = reduceMotion()
     var time by remember { mutableFloatStateOf(0f) }
     if (!still) LaunchedEffect(Unit) { while (true) withFrameNanos { time = it / 1e9f } }

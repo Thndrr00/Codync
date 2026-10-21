@@ -1,25 +1,27 @@
 package com.codync.android
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.DisposableEffect
+import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.key
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.codync.android.design.CodyncTheme
-import com.codync.android.design.OverlayRoot
 import coil3.ImageLoader
 import coil3.disk.DiskCache
+import com.codync.android.design.CodyncTheme
+import com.codync.android.design.OverlayRoot
 import java.io.File
 import kotlinx.coroutines.launch
 import okio.Path.Companion.toOkioPath
@@ -28,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private val store: AppStore by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyWindowOrientation(resources.configuration)
         NativeAccounts.initialize(this)
         Analytics.start(applicationContext)
         Analytics.userId = { store.state.value.account.userId }
@@ -53,6 +56,18 @@ class MainActivity : ComponentActivity() {
         }
         // Rotation keeps its ViewModel/navigation; process restoration gets a fresh owner.
         if (savedInstanceState?.getString("codync:activityOwner") != store.activityOwnerId) handle(intent)
+    }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (store.state.value.screenRequest == null) applyWindowOrientation(newConfig)
+    }
+    private fun applyWindowOrientation(config: Configuration) {
+        val target = if (config.smallestScreenWidthDp >= 600) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        if (requestedOrientation != target) requestedOrientation = target
     }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("codync:activityOwner", store.activityOwnerId)

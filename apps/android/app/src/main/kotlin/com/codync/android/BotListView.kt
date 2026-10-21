@@ -21,41 +21,56 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import androidx.compose.ui.zIndex
 import com.codync.android.core.Bot
 import com.codync.android.core.LinkState
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonArray
 
 /** The roster, as iOS `BotListView` draws it: every bot is a person you can message. */
-@Composable internal fun BotListView(state: AppState, store: AppStore, account: () -> Unit, manage: () -> Unit,
-    newBot: () -> Unit, newGroup: () -> Unit, edit: (Bot) -> Unit, bottomInset: androidx.compose.ui.unit.Dp) {
+@Composable internal fun BotListView(
+    state: AppState,
+    store: AppStore,
+    account: () -> Unit,
+    manage: () -> Unit,
+    newBot: () -> Unit,
+    newGroup: () -> Unit,
+    edit: (Bot) -> Unit,
+    bottomInset: Dp,
+    reselectToken: Int = 0,
+    highlightSelection: Boolean = false,
+    onDragActive: (Boolean) -> Unit = {},
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember(context) { RosterPreferences(context.applicationContext) }
     val reduced = reduceMotion()
@@ -63,16 +78,33 @@ import kotlinx.serialization.json.putJsonArray
     val roster = roster(state.bots)
     val reorder = remember { RosterReorder() }
     reorder.roster = roster.map(Bot::id)
+    LaunchedEffect(reorder.dragged != null) { onDragActive(reorder.dragged != null) }
+    val listState = rememberLazyListState()
+    var handledReselect by remember { mutableIntStateOf(reselectToken) }
+    LaunchedEffect(reselectToken) {
+        if (reselectToken != handledReselect) {
+            handledReselect = reselectToken
+            if (roster.isNotEmpty()) listState.animateScrollToItem(0)
+        }
+    }
     val online = state.actualConnection is LinkState.Ready
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val contentBottom = bottomInset + 64.dp
     GlassStage(Modifier.fillMaxSize().background(Palette.background), chrome = {
         ScrollEdge(Edge.Top, top + 64.dp)
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 16.dp).height(44.dp),
             verticalAlignment = Alignment.CenterVertically) {
             AccountSwitcherButton(state, account)
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { ComputerFilterHeader(state, store, manage) }
-            NewMenuButton(enabled = state.computers.isNotEmpty(), groupEnabled = online, newBot, newGroup)
+            Spacer(Modifier.size(48.dp))
         }
+        NewMenuButton(
+            enabled = state.computers.isNotEmpty(),
+            groupEnabled = online,
+            newBot = newBot,
+            newGroup = newGroup,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottomInset + 8.dp),
+        )
     }) {
         // Pull to refresh reconnects and asks the account for its computers again (iOS `refreshable`).
         PullToRefresh({ store.reconnect(); store.refreshComputers() }, Modifier.fillMaxSize(), indicatorTop = top + 50.dp) {
@@ -83,20 +115,30 @@ import kotlinx.serialization.json.putJsonArray
                 androidx.compose.animation.Crossfade(preferences.presentation, Modifier.weight(1f),
                     animationSpec = if (reduced) androidx.compose.animation.core.snap() else Motion.fade(), label = "Roster presentation") { presentation ->
                     if (presentation == RosterPresentation.Constellation && roster.isNotEmpty()) {
-                        BotConstellation(roster, open = { store.openBot(it.id) }, actions = { bot ->
-                            botRosterActions(bot, store, edit = { edit(bot) }, delete = { confirmDelete = bot })
-                        }, modifier = Modifier.fillMaxSize().padding(bottom = bottomInset))
+                        BotConstellation(
+                            roster,
+                            open = { store.openBot(it.id) },
+                            actions = { bot -> botRosterActions(bot, store, edit = { edit(bot) }, delete = { confirmDelete = bot }) },
+                            modifier = Modifier.fillMaxSize().padding(bottom = contentBottom),
+                            reselectToken = reselectToken,
+                        )
                     } else {
-                        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = bottomInset)) {
+                        LazyColumn(
+                            Modifier.fillMaxSize(),
+                            state = listState,
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = contentBottom),
+                        ) {
                             if (roster.isEmpty() && state.mismatch == null) item {
                                 EmptyRoster(canCreate = state.computers.isNotEmpty(), hasComputer = state.computers.isNotEmpty(), create = newBot, showComputers = manage)
                             }
                             items(reorder.shown(roster), key = Bot::id) { bot ->
                                 val lifted = reorder.dragged == bot.id
+                                val isSelected = highlightSelection && state.selectedBot == bot.id
                                 Box(Modifier.onSizeChanged { reorder.heights[bot.id] = it.height }
                                     .then(if (lifted) Modifier.zIndex(1f).graphicsLayer { translationY = reorder.offset; scaleX = 1.02f; scaleY = 1.02f }
                                         else Modifier.animateItem())) {
-                                    BotRowItem(bot, state, store, reorder.handle(bot.id) { store.reorder(it) }, edit = { edit(bot) }, delete = { confirmDelete = bot })
+                                    BotRowItem(bot, state, store, reorder.handle(bot.id) { store.reorder(it) },
+                                        selected = isSelected, edit = { edit(bot) }, delete = { confirmDelete = bot })
                                 }
                             }
                         }
@@ -165,18 +207,22 @@ internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {
     return roster.map(Bot::id).toMutableList().apply { this[at] = neighbor.id; this[at + offset] = id }
 }
 
-@Composable private fun BotRowItem(bot: Bot, state: AppState, store: AppStore, drag: ContextDrag, edit: () -> Unit, delete: () -> Unit) {
-    Box(Modifier.fillMaxWidth().contextActions(onClick = { store.openBot(bot.id) }, reorder = drag, preview = {
-        Box(Modifier.padding(horizontal = 8.dp)) { BotRow(bot, state) }
-    }) {
-        botRosterActions(bot, store, edit, delete)
-    }.semantics {
-        contentDescription = bot.name
-        // TalkBack's way to reorder (the drag needs a touch and hold, then a move).
-        customActions = listOf(-1 to "Move up", 1 to "Move down").map { (offset, title) ->
-            CustomAccessibilityAction(title) { moved(roster(state.bots), bot.id, offset)?.let(store::reorder) != null }
-        }
-    }) {
+@Composable private fun BotRowItem(bot: Bot, state: AppState, store: AppStore, drag: ContextDrag, selected: Boolean = false,
+    edit: () -> Unit, delete: () -> Unit) {
+    Box(Modifier.fillMaxWidth()
+        .then(if (selected) Modifier.clip(RoundedRectangle(16.dp)).background(Palette.surface).padding(horizontal = 8.dp) else Modifier)
+        .contextActions(onClick = { store.openBot(bot.id) }, reorder = drag, preview = {
+            Box(Modifier.padding(horizontal = 8.dp)) { BotRow(bot, state) }
+        }) {
+            botRosterActions(bot, store, edit, delete)
+        }.semantics {
+            contentDescription = bot.name
+            if (selected) this.selected = true
+            // TalkBack's way to reorder (the drag needs a touch and hold, then a move).
+            customActions = listOf(-1 to "Move up", 1 to "Move down").map { (offset, title) ->
+                CustomAccessibilityAction(title) { moved(roster(state.bots), bot.id, offset)?.let(store::reorder) != null }
+            }
+        }) {
         BotRow(bot, state)
     }
 }
@@ -277,12 +323,27 @@ internal fun messagePreview(text: String): String {
     }
 }
 
-@Composable private fun NewMenuButton(enabled: Boolean, groupEnabled: Boolean, newBot: () -> Unit, newGroup: () -> Unit) {
-    DropdownMenu({
-        listOf(MenuItem("New bot", icon = "plus", action = newBot),
-            MenuItem("New group chat", icon = "person.2", enabled = groupEnabled, action = newGroup))
-    }, Modifier.size(44.dp).glass(Capsule()), enabled = enabled, label = "New") {
-        Symbol("plus", size = 30.dp, tint = Palette.text.copy(alpha = if (enabled) 1f else 0.35f))
+/** Contextual creation actions (`New bot` and `New group chat`), shared by the floating action button. */
+internal fun newBotMenuItems(groupEnabled: Boolean, newBot: () -> Unit, newGroup: () -> Unit): List<MenuItem> =
+    listOf(
+        MenuItem("New bot", icon = "plus", action = newBot),
+        MenuItem("New group chat", icon = "person.2", enabled = groupEnabled, action = newGroup),
+    )
+
+@Composable internal fun NewMenuButton(
+    enabled: Boolean,
+    groupEnabled: Boolean,
+    newBot: () -> Unit,
+    newGroup: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    DropdownMenu(
+        items = { newBotMenuItems(groupEnabled, newBot, newGroup) },
+        modifier = modifier.size(48.dp).glass(Capsule()),
+        enabled = enabled,
+        label = "New",
+    ) {
+        Symbol("plus", size = 28.dp, tint = Palette.text.copy(alpha = if (enabled) 1f else 0.35f))
     }
 }
 

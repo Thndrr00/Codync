@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -209,8 +210,8 @@ import com.kyant.shapes.RoundedRectangle
 
 /** A scrolling page of cards: the replacement for `Form` / grouped `List`. */
 @Composable fun CardForm(modifier: Modifier = Modifier, padding: PaddingValues = PaddingValues(20.dp),
-    content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxSize().background(Palette.background).verticalScroll(rememberScrollState()).padding(padding),
+    scroll: ScrollState = rememberScrollState(), content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxSize().background(Palette.background).verticalScroll(scroll).padding(padding),
         verticalArrangement = Arrangement.spacedBy(32.dp)) {
         CompositionLocalProvider(LocalTextStyle provides Type.body, LocalContentColor provides Palette.text) { content() }
     }

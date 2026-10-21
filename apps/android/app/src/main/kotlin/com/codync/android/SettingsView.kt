@@ -15,15 +15,20 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,9 +63,25 @@ import kotlinx.serialization.json.put
  * Every computer this phone can use or ask for, plus settings for the selected account
  * (iOS `SettingsView`). `pop` is set when it's pushed inside Accounts.
  */
-@Composable internal fun SettingsView(state: AppState, store: AppStore, pop: (() -> Unit)?, pair: () -> Unit, ask: (CloudComputer) -> Unit,
-    extensions: () -> Unit) {
+@Composable internal fun SettingsView(
+    state: AppState,
+    store: AppStore,
+    pop: (() -> Unit)?,
+    pair: () -> Unit,
+    ask: (CloudComputer) -> Unit,
+    extensions: () -> Unit,
+    inModal: Boolean = true,
+    bottomInset: Dp = 0.dp,
+    active: Boolean = true,
+    reselectToken: Int = 0,
+    account: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
     val uri = LocalUriHandler.current
+    val scroll = rememberScrollState()
+    LaunchedEffect(context) { NavigationPreferences.ensureLoaded(context) }
+    val navStyle by NavigationPreferences.style.collectAsState()
+    val navAutoHide by NavigationPreferences.autoHide.collectAsState()
     val signedIn = state.account.userId != null
     val paired = state.computers.firstOrNull()
     var confirmForget by remember { mutableStateOf(false) }
@@ -70,70 +91,107 @@ import kotlinx.serialization.json.put
     var confirmStartOver by remember { mutableStateOf(false) }
     var voice by remember { mutableStateOf(false) }
     var aboutAnalytics by remember { mutableStateOf(false) }
-    LaunchedEffect(state.contextId) { store.refreshCloud() }
-    Column(Modifier.fillMaxSize().background(Palette.background)) {
-        PageHeader("Computers & settings", pop)
-        PullToRefresh(store::refreshComputers, Modifier.weight(1f)) { CardForm {
-            CardSection("Computers", if (signedIn) "Computers in your account need your OK on the computer before this phone can use them."
-                else "Each bot runs on its own computer. Sign in to see the computers in your account.") {
-                if (paired != null) row {
-                    val inAccount = state.cloudComputers.firstOrNull { it.computerId == paired.id }
-                    ComputerRow(state, store, inAccount != null, ComputerActions(extensions, store::openScreen, voice = { voice = true }, color = { coloring = true },
-                        revoke = inAccount?.takeIf { it.access == "granted" }?.let { c -> { confirmRevoke = c } }) { confirmForget = true })
+    LaunchedEffect(reselectToken) {
+        if (reselectToken > 0) scroll.animateScrollTo(0)
+    }
+    LaunchedEffect(active || inModal, state.contextId) {
+        if (active || inModal) store.refreshCloud()
+    }
+    Column(Modifier.fillMaxSize().background(Palette.background).then(if (inModal) Modifier else Modifier.statusBarsPadding())) {
+        if (inModal) {
+            PageHeader("Computers & settings", pop)
+        } else {
+            ScreenHeader(
+                leading = {
+                    if (account != null) AccountSwitcherButton(state, account)
+                    else Spacer(Modifier.size(36.dp))
+                },
+                title = {
+                    Text("Computers & settings", style = Type.body.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+            )
+        }
+        PullToRefresh(store::refreshComputers, Modifier.weight(1f)) {
+            CardForm(
+                padding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
+                scroll = scroll,
+            ) {
+                CardSection("Computers", if (signedIn) "Computers in your account need your OK on the computer before this phone can use them."
+                    else "Each bot runs on its own computer. Sign in to see the computers in your account.") {
+                    if (paired != null) row {
+                        val inAccount = state.cloudComputers.firstOrNull { it.computerId == paired.id }
+                        ComputerRow(state, store, inAccount != null, ComputerActions(extensions, store::openScreen, voice = { voice = true }, color = { coloring = true },
+                            revoke = inAccount?.takeIf { it.access == "granted" }?.let { c -> { confirmRevoke = c } }) { confirmForget = true })
+                    }
+                    for (computer in state.cloudComputers.filter { it.computerId != paired?.id }) row {
+                        if (state.isOlderCopy(computer)) OlderCopyRow(computer) { confirmRemoveCopy = computer }
+                        else AccountComputerRow(computer, state.access?.takeIf { it.computerId == computer.computerId }?.code, canAsk = paired == null,
+                            ask = { ask(computer) }, revoke = { confirmRevoke = computer })
+                    }
+                    row {
+                        Row(Modifier.fillMaxWidth().plainButton(action = pair), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Symbol("qrcode.viewfinder", size = 20.dp, tint = Palette.text)
+                            Text("Pair a computer", style = Type.body, color = Palette.text)
+                        }
+                    }
                 }
-                for (computer in state.cloudComputers.filter { it.computerId != paired?.id }) row {
-                    if (state.isOlderCopy(computer)) OlderCopyRow(computer) { confirmRemoveCopy = computer }
-                    else AccountComputerRow(computer, state.access?.takeIf { it.computerId == computer.computerId }?.code, canAsk = paired == null,
-                        ask = { ask(computer) }, revoke = { confirmRevoke = computer })
+                if (state.actualConnection is LinkState.Ready) CardSection("Voice chat", "Android speech on this phone, or OpenAI and Gemini on your own API key, kept on the computer.") {
+                    row {
+                        Row(Modifier.fillMaxWidth().plainButton { voice = true }, verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Symbol("waveform", size = 20.dp, tint = Palette.text)
+                            Text("Voice and API keys", Modifier.weight(1f), style = Type.body, color = Palette.text)
+                            Symbol("chevron.right", size = 13.dp, tint = Palette.tertiary)
+                        }
+                    }
                 }
-                row {
-                    Row(Modifier.fillMaxWidth().plainButton(action = pair), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Symbol("qrcode.viewfinder", size = 20.dp, tint = Palette.text)
-                        Text("Pair a computer", style = Type.body, color = Palette.text)
+                NotificationsSection(state, store)
+                CardSection("Navigation", "Pick how the tab bar sits at the bottom of the screen on phones.") {
+                    row {
+                        ValueRow("Bar style") {
+                            ChoicePicker(
+                                navStyle,
+                                NavBarStyle.entries.map { it to it.title },
+                                { NavigationPreferences.setStyle(context, it) },
+                                label = "Bar style",
+                            )
+                        }
+                    }
+                    row {
+                        SwitchRow("Hide bar on scroll", isOn = navAutoHide, onChange = { NavigationPreferences.setAutoHide(context, it) })
+                    }
+                }
+                CardSection(footer = "Which features you use, never your messages, code or files. Helps us spot bugs sooner and make Codync better for you.") {
+                    row {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Share usage analytics", style = Type.body, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            IconButton("About usage analytics", "info.circle") { aboutAnalytics = true }
+                            Box(Modifier.weight(1f))
+                            CodyncSwitch(Analytics.enabled, Analytics::setEnabled, Modifier.width(34.dp)
+                                .semantics { contentDescription = "Share usage analytics" }) {}
+                        }
+                    }
+                }
+                val hidden = state.bots.filter { it.hidden && !it.deleted }
+                if (hidden.isNotEmpty()) CardSection("Hidden bots") {
+                    for (bot in hidden) row { HiddenBotRow(state, store, bot) }
+                }
+                CardSection {
+                    row { ValueRow("App version", BuildConfig.VERSION_NAME) }
+                    row { LinkButton("Source code") { uri.openUri("https://github.com/leepokai/Codync") } }
+                }
+                CardSection {
+                    row {
+                        Row(Modifier.fillMaxWidth().plainButton(enabled = "session" !in state.busy) { confirmStartOver = true },
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Symbol("arrow.counterclockwise", size = 20.dp, tint = Palette.danger)
+                            Text("Start over", style = Type.body, color = Palette.danger)
+                        }
                     }
                 }
             }
-            if (state.actualConnection is LinkState.Ready) CardSection("Voice chat", "Android speech on this phone, or OpenAI and Gemini on your own API key, kept on the computer.") {
-                row {
-                    Row(Modifier.fillMaxWidth().plainButton { voice = true }, verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Symbol("waveform", size = 20.dp, tint = Palette.text)
-                        Text("Voice and API keys", Modifier.weight(1f), style = Type.body, color = Palette.text)
-                        Symbol("chevron.right", size = 13.dp, tint = Palette.tertiary)
-                    }
-                }
-            }
-            NotificationsSection(state, store)
-            CardSection(footer = "Which features you use, never your messages, code or files. Helps us spot bugs sooner and make Codync better for you.") {
-                row {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Share usage analytics", style = Type.body, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        IconButton("About usage analytics", "info.circle") { aboutAnalytics = true }
-                        Box(Modifier.weight(1f))
-                        CodyncSwitch(Analytics.enabled, Analytics::setEnabled, Modifier.width(34.dp)
-                            .semantics { contentDescription = "Share usage analytics" }) {}
-                    }
-                }
-            }
-            val hidden = state.bots.filter { it.hidden && !it.deleted }
-            if (hidden.isNotEmpty()) CardSection("Hidden bots") {
-                for (bot in hidden) row { HiddenBotRow(state, store, bot) }
-            }
-            CardSection {
-                row { ValueRow("App version", BuildConfig.VERSION_NAME) }
-                row { LinkButton("Source code") { uri.openUri("https://github.com/leepokai/Codync") } }
-            }
-            CardSection {
-                row {
-                    Row(Modifier.fillMaxWidth().plainButton(enabled = "session" !in state.busy) { confirmStartOver = true },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Symbol("arrow.counterclockwise", size = 20.dp, tint = Palette.danger)
-                        Text("Start over", style = Type.body, color = Palette.danger)
-                    }
-                }
-            }
-        } }
+        }
     }
     CodyncSheet(voice, { voice = false }) { VoiceChatSettings(state, store) }
     SwatchPanel(coloring, paired?.color, { coloring = false }, store::setColor)
