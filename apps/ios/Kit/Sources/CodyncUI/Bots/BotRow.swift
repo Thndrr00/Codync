@@ -89,7 +89,7 @@ public struct BotRow: View {
                 .foregroundStyle(Palette.danger)
                 .lineLimit(1)
         } else {
-            Text(MessagePreview.text(bot.lastMessage ?? (bot.isGroup ? "\(bot.members.count) bots" : "\(model.backendName(bot.backend)) · \(bot.folderName)")))
+            Text(MessagePreview.text(bot.lastMessage ?? (bot.isGroup ? "\(bot.members.count) bots" : "No messages yet")))
                 .font(.subheadline)
                 .foregroundStyle(Palette.secondary)
                 .lineLimit(1)

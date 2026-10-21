@@ -227,8 +227,8 @@ import kotlinx.coroutines.launch
         )
         else -> Text(
             messagePreview(
-                bot.lastMessage ?: if (bot.kind == "group") "${bot.members.size} bots"
-                else "${backendName(state, bot.backend)} · ${if (bot.managedWorkspace) "Personal workspace" else bot.cwd.trimEnd('/').substringAfterLast('/')}",
+                // The agent and folder already show in the badges above.
+                bot.lastMessage ?: if (bot.kind == "group") "${bot.members.size} bots" else "No messages yet",
             ),
             style = Type.subheadline,
             color = Palette.secondary,

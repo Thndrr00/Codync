@@ -18,7 +18,8 @@ internal suspend fun botSnapshot(events: Flow<JsonObject>): List<Bot> {
         when (event.text("type")) {
             "hello" -> {
                 check(head == null) { "The computer restarted its roster snapshot." }
-                head = requireNotNull(event["rev"]?.jsonPrimitive?.longOrNull).also { require(it >= 0) }
+                // The last rev the catch-up sends; `rev` counts mutations it never replays (older hosts lack it).
+                head = requireNotNull((event["catchUpRev"] ?: event["rev"])?.jsonPrimitive?.longOrNull).also { require(it >= 0) }
                 complete = head == 0L
             }
             "bot", "entry" -> {

@@ -145,7 +145,7 @@ fun AppStore.connect() {
                 }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
-                if (BuildConfig.DEBUG) android.util.Log.d("CodyncSync", "Sync failed: ${error.javaClass.simpleName}")
+                if (BuildConfig.DEBUG) android.util.Log.d("CodyncSync", "Sync failed: ${error.javaClass.simpleName}: ${error.message}")
                 showConnection(LinkState.Failed(error.message ?: "Can't reach the computer.", (error as? HostError)?.status))
                 if (error is SecurityException || error is HostError && error.status in listOf(403, 426)) return@launch
             } finally {

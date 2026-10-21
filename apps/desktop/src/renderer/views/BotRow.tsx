@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { folderName, isGroup, isWorking, needsInput, type Bot } from '@shared/models'
+import { isGroup, isWorking, needsInput, type Bot } from '@shared/models'
 import { AvatarWithStatus } from '../components/Avatar'
 import { Icon } from '../components/Icon'
 import { HStack, VStack } from '../components/Stack'
@@ -23,26 +23,19 @@ export const BotRow = memo(function BotRow({ bot, store, compact, usingComputer,
         </HStack>
         <HStack gap={6} shrink>
           <HStack align="stretch" grow>
-            <Preview bot={bot} store={store} />
+            <Preview bot={bot} />
           </HStack>
           {bot.unread > 0 ? <span className="unread-badge">{bot.unread}</span> : null}
         </HStack>
-        {showsMetadata(bot) ? <Text size="caption" tone="tertiary" truncate>{[store.backendName(bot.backend), rosterProjectLabel(bot), fastLabel(bot)].filter(Boolean).join(' · ')}</Text> : null}
+        {!isGroup(bot) ? <Text size="caption" tone="tertiary" truncate>{[store.backendName(bot.backend), rosterProjectLabel(bot), fastLabel(bot)].filter(Boolean).join(' · ')}</Text> : null}
         {isWorking(bot) ? <RosterElapsed bot={bot} online={store.connection.kind === 'online'} /> : null}
       </VStack>
     </HStack>
   )
 })
 
-/** The agent/project line, unless the preview already shows them (an idle bot with no messages yet and no Fast state). */
-function showsMetadata(bot: Bot): boolean {
-  if (isGroup(bot)) return false
-  const previewIsMetadata = bot.lastMessage == null && !needsInput(bot) && !isWorking(bot) && bot.status !== 'error'
-  return !previewIsMetadata || fastLabel(bot) != null
-}
-
 /** Live activity while working, otherwise the last message (Grok Bot row behavior). */
-function Preview({ bot, store }: { bot: Bot; store: BotStore }) {
+function Preview({ bot }: { bot: Bot }) {
   if (needsInput(bot)) {
     return (
       <HStack as="span" gap={6} shrink>
@@ -60,5 +53,5 @@ function Preview({ bot, store }: { bot: Bot; store: BotStore }) {
     )
   }
   if (bot.status === 'error') return <Text size="callout" tone="danger" truncate>{messagePreview(bot.lastMessage ?? 'Something went wrong')}</Text>
-  return <Text size="callout" tone="secondary" truncate>{messagePreview(bot.lastMessage ?? (isGroup(bot) ? `${bot.members.length} bots` : `${store.backendName(bot.backend)} · ${folderName(bot)}`))}</Text>
+  return <Text size="callout" tone="secondary" truncate>{messagePreview(bot.lastMessage ?? (isGroup(bot) ? `${bot.members.length} bots` : 'No messages yet'))}</Text>
 }

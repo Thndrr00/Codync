@@ -79,3 +79,16 @@ async fn incremental_sync_replays_deletions_only_after_the_saved_cursor() {
     assert_eq!(events[1]["rev"], deleted_rev);
     assert_eq!(f.catch_up(deleted_rev).await.len(), 1);
 }
+
+#[tokio::test]
+async fn hello_names_the_last_rev_the_catch_up_sends() {
+    let f = Fixture::new();
+    let bot_rev = f.add_bot("kept");
+    // A later mutation the catch-up doesn't replay (memory, devices, settings).
+    f.hub.store.kv_set("rev", &(bot_rev + 3).to_string()).unwrap();
+
+    let events = f.catch_up(0).await;
+    assert_eq!(events[0]["rev"], bot_rev + 3);
+    assert_eq!(events[0]["catchUpRev"], bot_rev, "a client waiting for `rev` would never finish loading");
+    assert_eq!(f.catch_up(bot_rev).await[0]["catchUpRev"], bot_rev, "nothing new: the catch-up ends where it starts");
+}

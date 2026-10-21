@@ -60,8 +60,13 @@ internal fun AppStore.showComputer(after: suspend () -> Unit = {}, pick: (List<C
 
 /** Saves a computer that was just paired or approved (kept even if the switch has to wait), and shows it. */
 internal suspend fun AppStore.addComputer(computer: Computer) {
+    val first = state.value.computer == null
     changeComputers { saved -> if (saved.any { it.id == computer.id }) saved.map { if (it.id == computer.id) computer else it } else saved + computer }
-    showComputer { saved -> saved.firstOrNull { it.id == computer.id } }
+    // The phone's first computer is already the one shown: there's nothing to switch from, just connect.
+    if (first) {
+        if (database == null) openMirror()
+        connect()
+    } else showComputer { saved -> saved.firstOrNull { it.id == computer.id } }
 }
 
 /** Removes a computer from this phone with its mirror, drafts and notifications; the next one is shown if it was the one open. */
