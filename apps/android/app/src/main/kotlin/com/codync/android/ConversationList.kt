@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -76,6 +77,8 @@ import kotlinx.coroutines.launch
     }
     LaunchedEffect(Unit) {
         snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
+        // The count can arrive mid-layout (the list is measured inside another layout): scroll on the next frame.
+        withFrameNanos {}
         list.scrollToEnd(animated = false)
     }
     // A new message, or the box growing (keyboard, more lines): stay on the newest.
