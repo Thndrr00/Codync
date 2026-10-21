@@ -7,18 +7,15 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -32,13 +29,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,13 +53,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.codync.android.core.*
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** What the composer's one trailing button does now; it morphs between them. */
 private enum class Trailing { Interrupt, Stop, Call, Send }
@@ -81,6 +80,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     val files = draft?.files.orEmpty()
     val queuing = "draft-send:" + lane in state.busy
     val importing = "attachments" in state.busy
+    val haptics = LocalCodyncHaptics.current
     // What this box sent to the store, so a draft set elsewhere (a routine request) can be told from our own echo.
     val echoes = remember(lane) { ArrayDeque<String>() }
     LaunchedEffect(text, bot.id, thread) {
@@ -174,9 +174,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             Row(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BasicTextField(state = text, enabled = !queuing, modifier = Modifier.weight(1f).contentReceiver(receiver).padding(vertical = 10.dp),
-                    textStyle = Type.body.copy(color = Palette.text), cursorBrush = SolidColor(Palette.accent),
+                    textStyle = Type.chatBody.copy(color = Palette.text), cursorBrush = SolidColor(Palette.accent),
                     lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
-                    decorator = { input -> Box { if (text.text.isEmpty()) Text(placeholder, style = Type.body, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis); input() } })
+                    decorator = { input -> Box { if (text.text.isEmpty()) Text(placeholder, style = Type.chatBody, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis); input() } })
                 TrailingButton(trailing, canSend, Modifier.padding(bottom = 4.dp)) {
                     when (trailing) {
                         Trailing.Interrupt -> onInterrupt?.invoke()
@@ -184,7 +184,10 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
                         Trailing.Call -> onCall?.invoke()
                         Trailing.Send -> {
                             val command = if (files.isEmpty()) SlashCommands.builtIn(bot, typed) else null
-                            if (command != null) run(command) else store.sendDraft(bot.id, thread, typed) { clear() }
+                            if (command != null) run(command) else store.sendDraft(bot.id, thread, typed) {
+                                haptics.perform(CodyncHaptic.MessageSent)
+                                clear()
+                            }
                         }
                     }
                 }

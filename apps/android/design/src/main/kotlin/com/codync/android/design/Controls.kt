@@ -19,8 +19,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -38,7 +36,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -56,13 +53,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -70,9 +67,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.Capsule
@@ -135,10 +133,14 @@ import com.kyant.shapes.RoundedRectangle
 /** On/off switch: label on the left, a flat capsule track on the right. */
 @Composable fun CodyncSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     label: @Composable RowScope.() -> Unit) {
+    val haptics = LocalCodyncHaptics.current
     val track by animateColorAsState(if (checked) Palette.accentFill else Palette.bubbleUser, Motion.hover(), label = "Track")
     val knob by animateDpAsState(if (checked) 14.dp else 0.dp, Motion.hover(), label = "Knob")
     val knobInk = if (checked) Palette.onAccent else Color.White
-    Row(modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+    Row(modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = { next ->
+        haptics.perform(CodyncHaptic.Toggle)
+        onChange(next)
+    })
         .graphicsLayer { alpha = if (enabled) 1f else 0.4f },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         label()
@@ -161,6 +163,7 @@ import com.kyant.shapes.RoundedRectangle
 
 /** Picks one of a few values side by side: the replacement for `.segmented`. */
 @Composable fun <T> SegmentedChoice(selection: T, options: List<Pair<T, String>>, select: (T) -> Unit, modifier: Modifier = Modifier) {
+    val haptics = LocalCodyncHaptics.current
     BoxWithConstraints(modifier.fillMaxWidth().clip(Capsule()).background(Palette.bubbleUser).padding(3.dp)) {
         val index = options.indexOfFirst { it.first == selection }.coerceAtLeast(0)
         val segment = (maxWidth - 2.dp * (options.size - 1)) / options.size
@@ -170,7 +173,10 @@ import com.kyant.shapes.RoundedRectangle
             for ((id, label) in options) {
                 val on = id == selection
                 Box(Modifier.width(segment).height(36.dp).clip(Capsule())
-                    .selectable(on, role = Role.Tab) { select(id) }, contentAlignment = Alignment.Center) {
+                    .selectable(on, role = Role.Tab) {
+                        if (!on) haptics.perform(CodyncHaptic.TabSwitch)
+                        select(id)
+                    }, contentAlignment = Alignment.Center) {
                     Text(label, style = Type.subheadline.medium, color = if (on) Palette.text else Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -211,8 +217,10 @@ import com.kyant.shapes.RoundedRectangle
 /** A scrolling page of cards: the replacement for `Form` / grouped `List`. */
 @Composable fun CardForm(modifier: Modifier = Modifier, padding: PaddingValues = PaddingValues(20.dp),
     scroll: ScrollState = rememberScrollState(), content: @Composable ColumnScope.() -> Unit) {
+    val compact = LocalUiDensity.current == UiDensity.Compact
+    val spacing = if (compact) 24.dp else 32.dp
     Column(modifier.fillMaxSize().background(Palette.background).verticalScroll(scroll).padding(padding),
-        verticalArrangement = Arrangement.spacedBy(32.dp)) {
+        verticalArrangement = Arrangement.spacedBy(spacing)) {
         CompositionLocalProvider(LocalTextStyle provides Type.body, LocalContentColor provides Palette.text) { content() }
     }
 }
@@ -230,6 +238,8 @@ class CardRows internal constructor() {
 @Composable fun CardSection(title: String? = null, footer: String? = null, modifier: Modifier = Modifier,
     accessory: @Composable RowScope.() -> Unit = {}, rows: CardRows.() -> Unit) {
     val list = CardRows().apply(rows).rows
+    val compact = LocalUiDensity.current == UiDensity.Compact
+    val verticalPadding = if (compact) 11.dp else 14.dp
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (title != null) Row(Modifier.padding(start = 2.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,7 +248,7 @@ class CardRows internal constructor() {
         }
         if (list.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(RoundedRectangle(16.dp)).background(Palette.surface)) {
             for ((index, row) in list.withIndex()) {
-                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp).heightIn(min = 32.dp),
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = verticalPadding).heightIn(min = 32.dp),
                     contentAlignment = Alignment.CenterStart) {
                     CompositionLocalProvider(LocalTextStyle provides Type.body, LocalContentColor provides Palette.text) { row() }
                 }

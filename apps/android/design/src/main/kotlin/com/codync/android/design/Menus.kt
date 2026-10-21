@@ -13,8 +13,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +20,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,43 +28,44 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.onLongClick
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.input.pointer.changedToUp
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.kyant.shapes.RoundedRectangle
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -110,11 +108,13 @@ class ContextDrag(val start: () -> Unit, val move: (Float) -> Unit, val end: () 
     var anchor by remember { mutableStateOf(Rect.Zero) }
     var open by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
+    val codyncHaptics = LocalCodyncHaptics.current
+    val allowHaptics = LocalAppearance.current.hapticsEnabled
     if (preview != null) ContextOverlay(open, { open = false }, anchor, reactions, items, preview)
     else MenuOverlay(open, { open = false }, anchor, items, cover = false, reactions = reactions)
     val tap by rememberUpdatedState(onClick)
     val hold = {
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (allowHaptics) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         open = true
     }
     val gestures = if (reorder == null) Modifier.combinedClickable(enabled = enabled, onClick = { tap?.invoke() },
@@ -138,10 +138,18 @@ class ContextDrag(val start: () -> Unit, val move: (Float) -> Unit, val end: () 
             drag(held.id) { change ->
                 val step = change.positionChange().y
                 moved += step
-                if (!started && abs(moved) > viewConfiguration.touchSlop) { started = true; open = false; reorder.start() }
+                if (!started && abs(moved) > viewConfiguration.touchSlop) {
+                    started = true
+                    open = false
+                    codyncHaptics.perform(CodyncHaptic.DragStart)
+                    reorder.start()
+                }
                 if (started) { reorder.move(step); change.consume() }
             }
-            if (started) reorder.end()
+            if (started) {
+                codyncHaptics.perform(CodyncHaptic.DragDrop)
+                reorder.end()
+            }
         }
     }
     return onGloballyPositioned { anchor = it.boundsInRoot() }.then(gestures)
@@ -258,12 +266,17 @@ private val MenuShape = RoundedRectangle(26.dp)
 }
 
 @Composable private fun ReactionRow(reactions: ReactionPick, close: () -> Unit) {
+    val haptics = LocalCodyncHaptics.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         for (emoji in reactions.emoji) {
             val chosen = emoji in reactions.chosen
             Box(Modifier.size(38.dp).clip(RoundedRectangle(19.dp))
                 .background(if (chosen) Palette.text.copy(alpha = 0.12f) else Color.Transparent)
-                .clickable(role = Role.Button) { close(); reactions.toggle(emoji) }
+                .clickable(role = Role.Button) {
+                    haptics.perform(CodyncHaptic.Reaction)
+                    close()
+                    reactions.toggle(emoji)
+                }
                 .semantics { contentDescription = emoji; selected = chosen }, contentAlignment = Alignment.Center) {
                 Text(emoji, style = Type.title3)
             }
@@ -287,15 +300,21 @@ private val MenuShape = RoundedRectangle(26.dp)
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val height = with(density) { maxHeight.toPx() }
             val width = with(density) { maxWidth.toPx() }
+            var previewHeight by remember { mutableIntStateOf(anchor.height.roundToInt()) }
+            val margin = with(density) { 12.dp.toPx() }
+            val previewTop = anchor.top.coerceIn(margin, (height - margin - previewHeight).coerceAtLeast(margin))
+            val effectiveAnchor = Rect(anchor.left, previewTop, anchor.right, previewTop + maxOf(anchor.height, previewHeight.toFloat()))
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = shown.value }
                 .frost(14.dp, Color.Black.copy(alpha = if (LocalDark.current) 0.3f else 0.14f))
                 .clickable(remember { MutableInteractionSource() }, null, onClick = close))
-            // The lifted row: a rounded card in place, swelling slightly.
-            Box(Modifier.offset { IntOffset(anchor.left.roundToInt(), anchor.top.roundToInt()) }
-                .size(with(density) { anchor.width.toDp() }, with(density) { anchor.height.toDp() })
+            // The lifted row or peek preview: a rounded card in place, swelling slightly.
+            Box(Modifier.offset { IntOffset(anchor.left.roundToInt(), previewTop.roundToInt()) }
+                .width(with(density) { anchor.width.toDp() })
+                .heightIn(min = with(density) { anchor.height.toDp() })
+                .onSizeChanged { previewHeight = it.height }
                 .graphicsLayer { val s = 1f + 0.02f * shown.value; scaleX = s; scaleY = s }
                 .clip(RoundedRectangle(16.dp)).background(Palette.background)) { preview() }
-            MenuPlacement(anchor, width, height, cover = false, shown = shown.value, leading = true) { MenuPanel(items(), close, reactions) }
+            MenuPlacement(effectiveAnchor, width, height, cover = false, shown = shown.value, leading = true) { MenuPanel(items(), close, reactions) }
         }
     }
 }

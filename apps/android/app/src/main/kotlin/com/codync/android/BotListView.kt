@@ -1,5 +1,7 @@
 package com.codync.android
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,9 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
@@ -28,19 +29,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -52,7 +52,10 @@ import com.codync.android.core.Bot
 import com.codync.android.core.LinkState
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
-import com.kyant.shapes.RoundedRectangle
+import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonArray
@@ -71,29 +74,75 @@ import kotlinx.serialization.json.putJsonArray
     highlightSelection: Boolean = false,
     onDragActive: (Boolean) -> Unit = {},
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val preferences = remember(context) { RosterPreferences(context.applicationContext) }
     val reduced = reduceMotion()
     var confirmDelete by remember { mutableStateOf<Bot?>(null) }
-    val roster = roster(state.bots)
+    var searchQuery by rememberSaveable(state.contextId) { mutableStateOf("") }
+    var activeFilter by rememberSaveable(state.contextId) { mutableStateOf(RosterFilter.All) }
+    var searchReqSeq by remember { mutableLongStateOf(0L) }
+    val allRoster = roster(state.bots)
+    val online = state.actualConnection is LinkState.Ready
+    var searchState by remember(state.contextId) { mutableStateOf(RosterSearchState(botMatches = allRoster)) }
+
+    LaunchedEffect(searchQuery, allRoster, state.entries, state.historyComplete, online) {
+        val nextId = searchReqSeq + 1L
+        searchReqSeq = nextId
+        val computed = if (searchQuery.isNotBlank()) {
+            delay(140L)
+            withContext(Dispatchers.Default) {
+                searchCachedMessages(
+                    bots = allRoster,
+                    entries = state.entries,
+                    historyComplete = state.historyComplete,
+                    online = online,
+                    query = searchQuery,
+                    requestId = nextId,
+                    state = state,
+                )
+            }
+        } else {
+            RosterSearchState(query = "", requestId = nextId, botMatches = allRoster)
+        }
+        if (computed.requestId == searchReqSeq) {
+            searchState = computed
+        }
+    }
+
+    val filteredRoster = remember(allRoster, activeFilter, searchQuery, state.hello) {
+        filterRosterBots(allRoster, activeFilter, searchQuery, state)
+    }
+    val attentionItems = remember(allRoster, state.entries, state.busy) {
+        resolveAttentionItems(allRoster, state.entries, state.busy)
+    }
+    val anyWorking = remember(filteredRoster) { filteredRoster.any { it.status == "working" && it.startedAt != null } }
+    val nowMillis = rememberRosterClock(active = anyWorking)
+
     val reorder = remember { RosterReorder() }
-    reorder.roster = roster.map(Bot::id)
+    reorder.roster = allRoster.map(Bot::id)
     LaunchedEffect(reorder.dragged != null) { onDragActive(reorder.dragged != null) }
     val listState = rememberLazyListState()
     var handledReselect by remember { mutableIntStateOf(reselectToken) }
     LaunchedEffect(reselectToken) {
         if (reselectToken != handledReselect) {
             handledReselect = reselectToken
-            if (roster.isNotEmpty()) listState.animateScrollToItem(0)
+            if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0)
         }
     }
-    val online = state.actualConnection is LinkState.Ready
+    val canReorder = activeFilter == RosterFilter.All && searchQuery.isBlank() && !preferences.groupByProject
+    val clearFilters = {
+        searchQuery = ""
+        activeFilter = RosterFilter.All
+    }
+
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val contentBottom = bottomInset + 64.dp
     GlassStage(Modifier.fillMaxSize().background(Palette.background), chrome = {
         ScrollEdge(Edge.Top, top + 64.dp)
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 16.dp).height(44.dp),
-            verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 16.dp).height(44.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             AccountSwitcherButton(state, account)
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { ComputerFilterHeader(state, store, manage) }
             Spacer(Modifier.size(48.dp))
@@ -109,50 +158,228 @@ import kotlinx.serialization.json.putJsonArray
         // Pull to refresh reconnects and asks the account for its computers again (iOS `refreshable`).
         PullToRefresh({ store.reconnect(); store.refreshComputers() }, Modifier.fillMaxSize(), indicatorTop = top + 50.dp) {
             Column(Modifier.fillMaxSize().padding(top = top + 56.dp)) {
-                RosterPresentationHeader(roster, preferences.presentation, preferences::select,
-                    Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp))
+                RosterPresentationHeader(
+                    allRoster,
+                    preferences.presentation,
+                    preferences::select,
+                    Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                )
+                if (allRoster.isNotEmpty() || searchQuery.isNotBlank() || activeFilter != RosterFilter.All) {
+                    RosterControlsHeader(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        filter = activeFilter,
+                        onFilterSelect = { activeFilter = it },
+                        groupByProject = preferences.groupByProject,
+                        onGroupByProjectChange = preferences::updateGroupByProject,
+                        showGroupByProject = preferences.presentation == RosterPresentation.List,
+                        bots = allRoster,
+                        Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                    )
+                }
                 state.mismatch?.let { UpdateNeededCard(state, it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                androidx.compose.animation.Crossfade(preferences.presentation, Modifier.weight(1f),
-                    animationSpec = if (reduced) androidx.compose.animation.core.snap() else Motion.fade(), label = "Roster presentation") { presentation ->
-                    if (presentation == RosterPresentation.Constellation && roster.isNotEmpty()) {
-                        BotConstellation(
-                            roster,
-                            open = { store.openBot(it.id) },
-                            actions = { bot -> botRosterActions(bot, store, edit = { edit(bot) }, delete = { confirmDelete = bot }) },
-                            modifier = Modifier.fillMaxSize().padding(bottom = contentBottom),
-                            reselectToken = reselectToken,
-                        )
-                    } else {
-                        LazyColumn(
-                            Modifier.fillMaxSize(),
-                            state = listState,
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = contentBottom),
-                        ) {
-                            if (roster.isEmpty() && state.mismatch == null) item {
-                                EmptyRoster(canCreate = state.computers.isNotEmpty(), hasComputer = state.computers.isNotEmpty(), create = newBot, showComputers = manage)
+                Crossfade(
+                    preferences.presentation,
+                    Modifier.weight(1f),
+                    animationSpec = if (reduced) snap() else Motion.fade(),
+                    label = "Roster presentation",
+                ) { presentation ->
+                    if (presentation == RosterPresentation.Constellation && allRoster.isNotEmpty()) {
+                        if (filteredRoster.isEmpty()) {
+                            Box(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                                EmptyFilteredRoster(
+                                    query = searchQuery,
+                                    filter = activeFilter,
+                                    isPartialCache = searchState.isPartialCache,
+                                    error = searchState.error,
+                                    onClear = clearFilters,
+                                )
                             }
-                            items(reorder.shown(roster), key = Bot::id) { bot ->
-                                val lifted = reorder.dragged == bot.id
-                                val isSelected = highlightSelection && state.selectedBot == bot.id
-                                Box(Modifier.onSizeChanged { reorder.heights[bot.id] = it.height }
-                                    .then(if (lifted) Modifier.zIndex(1f).graphicsLayer { translationY = reorder.offset; scaleX = 1.02f; scaleY = 1.02f }
-                                        else Modifier.animateItem())) {
-                                    BotRowItem(bot, state, store, reorder.handle(bot.id) { store.reorder(it) },
-                                        selected = isSelected, edit = { edit(bot) }, delete = { confirmDelete = bot })
-                                }
-                            }
+                        } else {
+                            BotConstellation(
+                                bots = filteredRoster,
+                                open = { store.openBot(it.id) },
+                                actions = { bot -> botRosterActions(bot, store, edit = { edit(bot) }, delete = { confirmDelete = bot }) },
+                                modifier = Modifier.fillMaxSize().padding(bottom = contentBottom),
+                                totalCount = allRoster.size,
+                                onClearFilters = if (filteredRoster.size < allRoster.size) clearFilters else null,
+                                reselectToken = reselectToken,
+                            )
                         }
+                    } else {
+                        RosterListContent(
+                            state = state,
+                            store = store,
+                            preferences = preferences,
+                            allRoster = allRoster,
+                            filteredRoster = filteredRoster,
+                            attentionItems = attentionItems,
+                            searchQuery = searchQuery,
+                            activeFilter = activeFilter,
+                            searchState = searchState,
+                            reorder = reorder,
+                            canReorder = canReorder,
+                            nowMillis = nowMillis,
+                            bottomInset = contentBottom,
+                            listState = listState,
+                            highlightSelection = highlightSelection,
+                            newBot = newBot,
+                            manage = manage,
+                            edit = edit,
+                            onDelete = { confirmDelete = it },
+                            onClearFilters = clearFilters,
+                        )
                     }
                 }
             }
         }
     }
     val deleting = confirmDelete
-    CodyncDialog("Delete ${deleting?.name ?: "bot"}?", deleting != null, { confirmDelete = null },
-        message = if (deleting?.kind == "group") "Its bots and their own chats stay." else "Files it changed on your computer stay as they are.") {
-        listOf(DialogAction(if (deleting?.kind == "group") "Delete group chat" else "Delete bot and its conversation", destructive = true) {
-            deleting?.let { store.deleteBot(it) {} }
-        })
+    CodyncDialog(
+        "Delete ${deleting?.name ?: "bot"}?",
+        deleting != null,
+        { confirmDelete = null },
+        message = if (deleting?.kind == "group") "Its bots and their own chats stay." else "Files it changed on your computer stay as they are.",
+    ) {
+        listOf(
+            DialogAction(if (deleting?.kind == "group") "Delete group chat" else "Delete bot and its conversation", destructive = true) {
+                deleting?.let { store.deleteBot(it) {} }
+            },
+        )
+    }
+}
+
+@Composable private fun RosterListContent(
+    state: AppState,
+    store: AppStore,
+    preferences: RosterPreferences,
+    allRoster: List<Bot>,
+    filteredRoster: List<Bot>,
+    attentionItems: List<BotAttentionItem>,
+    searchQuery: String,
+    activeFilter: RosterFilter,
+    searchState: RosterSearchState,
+    reorder: RosterReorder,
+    canReorder: Boolean,
+    nowMillis: Long,
+    bottomInset: Dp,
+    listState: LazyListState,
+    highlightSelection: Boolean,
+    newBot: () -> Unit,
+    manage: () -> Unit,
+    edit: (Bot) -> Unit,
+    onDelete: (Bot) -> Unit,
+    onClearFilters: () -> Unit,
+) {
+    val haptics = LocalCodyncHaptics.current
+    val computerId = state.computers.firstOrNull()?.id ?: "unpaired"
+    val computerName = state.hello?.text("name") ?: state.computers.firstOrNull()?.name
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = bottomInset),
+    ) {
+        if (attentionItems.isNotEmpty() && searchQuery.isBlank()) {
+            item(key = "attention-banner") {
+                AttentionBannerSection(
+                    items = attentionItems,
+                    bots = state.bots,
+                    store = store,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+        }
+        if (allRoster.isEmpty() && state.mismatch == null) {
+            item(key = "empty-roster") {
+                EmptyRoster(
+                    canCreate = state.computers.isNotEmpty(),
+                    hasComputer = state.computers.isNotEmpty(),
+                    create = newBot,
+                    showComputers = manage,
+                )
+            }
+        } else if (filteredRoster.isEmpty() && searchState.messageHits.isEmpty()) {
+            item(key = "empty-filtered") {
+                EmptyFilteredRoster(
+                    query = searchQuery,
+                    filter = activeFilter,
+                    isPartialCache = searchState.isPartialCache,
+                    error = searchState.error,
+                    onClear = onClearFilters,
+                )
+            }
+        } else if (preferences.groupByProject) {
+            val sections = groupBotsByWorkspace(filteredRoster, computerId, computerName)
+            for (section in sections) {
+                val collapsed = preferences.isSectionCollapsed(state.contextId, section.key)
+                item(key = "section:${section.key.storageKey}") {
+                    WorkspaceSectionHeader(
+                        section = section,
+                        collapsed = collapsed,
+                        onToggle = {
+                            haptics.perform(CodyncHaptic.Toggle)
+                            preferences.toggleSectionCollapsed(state.contextId, section.key)
+                        },
+                    )
+                }
+                if (!collapsed) {
+                    items(section.bots, key = { "grouped:${section.key.storageKey}:${it.id}" }) { bot ->
+                        RosterBotListEntry(
+                            bot = bot,
+                            state = state,
+                            store = store,
+                            reorderActive = false,
+                            drag = null,
+                            nowMillis = nowMillis,
+                            edit = { edit(bot) },
+                            delete = { onDelete(bot) },
+                            selected = highlightSelection && state.selectedBot == bot.id,
+                        )
+                    }
+                }
+            }
+        } else {
+            val shownBots = if (canReorder) reorder.shown(filteredRoster) else filteredRoster
+            items(shownBots, key = Bot::id) { bot ->
+                val lifted = reorder.dragged == bot.id
+                Box(
+                    Modifier.onSizeChanged { reorder.heights[bot.id] = it.height }
+                        .then(
+                            if (lifted) {
+                                Modifier.zIndex(1f).graphicsLayer {
+                                    translationY = reorder.offset
+                                    scaleX = 1.02f
+                                    scaleY = 1.02f
+                                }
+                            } else {
+                                Modifier.animateItem()
+                            },
+                        ),
+                ) {
+                    RosterBotListEntry(
+                        bot = bot,
+                        state = state,
+                        store = store,
+                        reorderActive = reorder.dragged != null,
+                        drag = if (canReorder) reorder.handle(bot.id, haptics) { store.reorder(it) } else null,
+                        nowMillis = nowMillis,
+                        edit = { edit(bot) },
+                        delete = { onDelete(bot) },
+                        selected = highlightSelection && state.selectedBot == bot.id,
+                    )
+                }
+            }
+        }
+        if (searchQuery.isNotBlank() && searchState.messageHits.isNotEmpty()) {
+            item(key = "message-hits") {
+                MessageSearchHitsSection(
+                    searchState = searchState,
+                    bots = state.bots,
+                    onOpenHit = { hit -> store.openBot(hit.botId, hit.threadId) },
+                )
+            }
+        }
     }
 }
 
@@ -160,7 +387,7 @@ import kotlinx.serialization.json.putJsonArray
  * Drag-to-reorder for the roster (iOS `List.onMove`): long-press a row, then move it. The order
  * shown follows the finger until the host's synced order catches up.
  */
-private class RosterReorder {
+internal class RosterReorder {
     var roster: List<String> = emptyList()
     var order by mutableStateOf<List<String>?>(null)
     var dragged by mutableStateOf<String?>(null)
@@ -175,8 +402,8 @@ private class RosterReorder {
         return ids.mapNotNull { id -> bots.firstOrNull { it.id == id } } + bots.filter { it.id !in ids }
     }
 
-    fun handle(id: String, save: (List<String>) -> Unit): ContextDrag = handles.getOrPut(id) {
-        ContextDrag(start = { order = order ?: roster; dragged = id; offset = 0f }, move = { step -> offset += step; swap(id) }, end = {
+    fun handle(id: String, haptics: CodyncHaptics, save: (List<String>) -> Unit): ContextDrag = handles.getOrPut(id) {
+        ContextDrag(start = { order = order ?: roster; dragged = id; offset = 0f }, move = { step -> offset += step; swap(id, haptics) }, end = {
             val dropped = order
             dragged = null; offset = 0f
             if (dropped != null && dropped != roster) save(dropped) else order = null
@@ -184,14 +411,15 @@ private class RosterReorder {
     }
 
     /** Past half the neighbor's height, the row takes the neighbor's place. */
-    private fun swap(id: String) {
+    internal fun swap(id: String, haptics: CodyncHaptics? = null) {
         val list = order ?: return
         val at = list.indexOf(id)
         val next = if (offset > 0) at + 1 else at - 1
         val height = list.getOrNull(next)?.let(heights::get) ?: return
-        if (kotlin.math.abs(offset) < height / 2f) return
+        if (abs(offset) < height / 2f) return
         order = list.toMutableList().apply { add(next, removeAt(at)) }
         offset -= if (offset > 0) height else -height
+        haptics?.perform(CodyncHaptic.DragStep)
     }
 }
 
@@ -205,78 +433,6 @@ internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {
     val neighbor = roster.getOrNull(at + offset)
     if (at < 0 || neighbor == null || neighbor.pinned != roster[at].pinned) return null
     return roster.map(Bot::id).toMutableList().apply { this[at] = neighbor.id; this[at + offset] = id }
-}
-
-@Composable private fun BotRowItem(bot: Bot, state: AppState, store: AppStore, drag: ContextDrag, selected: Boolean = false,
-    edit: () -> Unit, delete: () -> Unit) {
-    Box(Modifier.fillMaxWidth()
-        .then(if (selected) Modifier.clip(RoundedRectangle(16.dp)).background(Palette.surface).padding(horizontal = 8.dp) else Modifier)
-        .contextActions(onClick = { store.openBot(bot.id) }, reorder = drag, preview = {
-            Box(Modifier.padding(horizontal = 8.dp)) { BotRow(bot, state) }
-        }) {
-            botRosterActions(bot, store, edit, delete)
-        }.semantics {
-            contentDescription = bot.name
-            if (selected) this.selected = true
-            // TalkBack's way to reorder (the drag needs a touch and hold, then a move).
-            customActions = listOf(-1 to "Move up", 1 to "Move down").map { (offset, title) ->
-                CustomAccessibilityAction(title) { moved(roster(state.bots), bot.id, offset)?.let(store::reorder) != null }
-            }
-        }) {
-        BotRow(bot, state)
-    }
-}
-
-/** One bot: avatar with its status dot, name and day, then the live activity or last message. */
-@Composable internal fun BotRow(bot: Bot, state: AppState) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        AvatarWithStatus(bot, state.bots, 46.dp)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (bot.pinned) Symbol("pin.fill", size = 13.dp, tint = Palette.tertiary)
-                    Text(bot.name, Modifier.weight(1f, fill = false), style = Type.body.semibold, color = Palette.text, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                }
-                Spacer(Modifier.width(8.dp))
-                if (bot.lastAt > 0) Text(RelativeTime.day(bot.lastAt), style = Type.subheadline,
-                    color = if (bot.unread > 0) Palette.text else Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.weight(1f)) { Preview(bot, state) }
-                if (bot.unread > 0) Box(Modifier.height(18.dp).widthIn(min = 18.dp).clip(Capsule()).background(Palette.accentFill)
-                    .padding(horizontal = 6.dp).semantics { contentDescription = "${bot.unread} unread" }, contentAlignment = Alignment.Center) {
-                    Text("${bot.unread}", style = Type.caption2.bold, color = Palette.onAccent)
-                }
-            }
-        }
-    }
-}
-
-/** Live activity while working, otherwise the last message (Grok Bot row behavior). */
-@Composable private fun Preview(bot: Bot, state: AppState) {
-    when {
-        bot.status == "needsInput" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ThinkingOrb(ThinkingOrbState.Listening, 16.dp, Palette.warning)
-            Text(bot.activity.ifEmpty { "Needs your approval" }, style = Type.subheadline, color = Palette.warning, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        bot.status == "working" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ThinkingOrb(size = 13.dp, color = Palette.secondary)
-            Text(bot.activity.ifEmpty { "Working…" }, style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        bot.status == "error" -> Text(messagePreview(bot.lastMessage ?: "Something went wrong"), style = Type.subheadline, color = Palette.danger,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-        else -> Text(messagePreview(bot.lastMessage ?: if (bot.kind == "group") "${bot.members.size} bots"
-            else "${backendName(state, bot.backend)} · ${if (bot.managedWorkspace) "Personal workspace" else bot.cwd.trimEnd('/').substringAfterLast('/')}"),
-            style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** The first non-empty line, without Markdown markers (CodyncKit `MessagePreview`). */
-internal fun messagePreview(text: String): String {
-    val first = text.lines().map(String::trim).firstOrNull(String::isNotEmpty).orEmpty()
-    return first.dropWhile { it in "#>-* " }.replace("**", "").replace("`", "")
 }
 
 @Composable private fun EmptyRoster(canCreate: Boolean, hasComputer: Boolean, create: () -> Unit, showComputers: () -> Unit) {
@@ -347,8 +503,8 @@ internal fun newBotMenuItems(groupEnabled: Boolean, newBot: () -> Unit, newGroup
     }
 }
 
-internal fun backendName(state: AppState, id: String): String =
-    state.hello?.get("backends")?.let { it as? kotlinx.serialization.json.JsonArray }
+internal fun backendName(state: AppState? = null, id: String): String =
+    state?.hello?.get("backends")?.let { it as? kotlinx.serialization.json.JsonArray }
         ?.firstOrNull { (it as? kotlinx.serialization.json.JsonObject)?.get("id") == JsonPrimitive(id) }
         ?.let { ((it as kotlinx.serialization.json.JsonObject)["name"] as? JsonPrimitive)?.content }
         ?: when (id) { "claude" -> "Claude Code"; "codex" -> "Codex"; "opencode" -> "OpenCode"; "grok" -> "Grok Build"; "gemini" -> "Gemini CLI"; else -> "Custom agent" }

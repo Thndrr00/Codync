@@ -88,7 +88,7 @@ private enum class ComputerOS { Mac, Linux }
                 Box(Modifier.size(18.dp, 4.dp).clip(Capsule()).background(Palette.text))
                 Box(Modifier.size(18.dp, 4.dp).clip(Capsule()).background(if (step == Step.Scan) Palette.text else Palette.accentDim))
             }
-        }) { if (inModal) IconButton("Close", "xmark", action = dismiss) }
+        }, centerTitle = true) { if (inModal) IconButton("Close", "xmark", action = dismiss) }
         AnimatedContent(step, Modifier.weight(1f), transitionSpec = {
             val forward = targetState == Step.Scan
             (slideInHorizontally(Motion.spring(0.45f)) { if (forward) it else -it } + fadeIn(Motion.spring(0.45f))) togetherWith

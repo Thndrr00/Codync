@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,9 +23,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.codync.android.core.*
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 
 /**
  * One endless conversation with a bot or a group, as iOS `ThreadView`: only deliberate messages
@@ -65,7 +66,11 @@ import com.kyant.shapes.Capsule
  */
 @Composable fun ChatScreen(state: AppState, store: AppStore, edit: (Bot) -> Unit) {
     val bot = state.bots.firstOrNull { it.id == state.selectedBot } ?: return
-    key(state.contextId, state.generation, bot.id) { ThreadView(bot, state, store, edit) }
+    key(state.contextId, state.generation, bot.id) {
+        BotAccentTheme(bot.avatarColor.takeIf { bot.kind != "group" }) {
+            ThreadView(bot, state, store, edit)
+        }
+    }
 }
 
 @Composable private fun ThreadView(bot: Bot, state: AppState, store: AppStore, edit: (Bot) -> Unit) {
@@ -129,55 +134,98 @@ import com.kyant.shapes.Capsule
     // A thread over the chat, and "Full conversation" over either.
     CodyncSheet(state.thread, { store.openBot(bot.id) }) { root -> RepliesView(bot, root, state, store, connect) }
     CodyncSheet(state.trace, { store.showTrace(false) }) { TraceView(bot, state.thread, state) }
-    CodyncSheet(routines, { routines = false }) { RoutinesScreen(bot, state, store, routineId) }
+    CodyncSheet(routines, { routines = false }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded), initialDetent = SheetDetent.Expanded) {
+        RoutinesScreen(bot, state, store, routineId)
+    }
     CodyncSheet(peer, { peer = null }) { BotConversationView(bot, it, state, store) }
     CodyncSheet(app, { app = null; setupEntry = null }) { ComposioConnectSheet(it, state, store, setupEntry) { store.refreshPlugins() } }
     CodyncSheet(connector, { connector = null; setupEntry = null }) { InstallConnectorSheet(it, state, store, setupEntry) }
 }
 
-/** The glass back button, the title (its menu holds the bot's actions) and the connection under it. */
-@Composable private fun ThreadHeader(bot: Bot, state: AppState, store: AppStore, edit: (Bot) -> Unit, trace: () -> Unit,
+/**
+ * Android-style conversation header:
+ * - Left: Back button delegating to the existing roster navigation stack (`store.openBot(null)`).
+ * - Middle (`weight(1f)`): Bot/group avatar + left-aligned name + computer/route subtitle; tapping
+ *   opens the bot/group inspector (`edit(bot)`). Long names truncate without displacing actions.
+ * - Right: Remote screen button, adaptive secondary action (Routines when width and font scale allow),
+ *   and overflow menu (`${bot.name} actions`).
+ */
+@Composable internal fun ThreadHeader(bot: Bot, state: AppState, store: AppStore, edit: (Bot) -> Unit, trace: () -> Unit,
     routines: () -> Unit, newSession: () -> Unit, delete: () -> Unit) {
-    Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 16.dp).height(44.dp)) {
-        val (source, pressed) = rememberPress()
-        Box(Modifier.align(Alignment.CenterStart).size(44.dp).glass(Capsule(), pressed = pressed)
-            .then(Modifier.plainButton { store.openBot(null) }).semantics { contentDescription = "Back" }, contentAlignment = Alignment.Center) {
-            Symbol("chevron.left", size = 32.dp, tint = Palette.text)
-        }
-        val host = state.computers.firstOrNull()?.name.orEmpty()
-        DropdownMenu({ buildList {
-            add(MenuItem("$host · ${connectionLabel(state)}", enabled = false))
-            add(MenuItem("Reconnect", icon = "arrow.clockwise") { store.reconnect() })
-            add(MenuItem("Details", icon = "info.circle", divider = true) { edit(bot) })
-            add(MenuItem("Full conversation", icon = "list.bullet.rectangle", action = trace))
-            val pin = MenuItem(if (bot.pinned) "Unpin" else "Pin", icon = "pin") {
-                store.command("updateBot", kotlinx.serialization.json.buildJsonObject {
-                    put("id", kotlinx.serialization.json.JsonPrimitive(bot.id)); put("pinned", kotlinx.serialization.json.JsonPrimitive(!bot.pinned))
-                }, "roster:" + bot.id)
+    val density = LocalDensity.current
+    val host = state.computers.firstOrNull()?.name.orEmpty()
+    BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 12.dp).height(48.dp)) {
+        val showInlineRoutines = bot.kind != "group" && maxWidth >= 380.dp && density.fontScale <= 1.15f
+        Row(
+            Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val (backSource, backPressed) = rememberPress()
+            Box(
+                Modifier.size(44.dp).glass(Capsule(), pressed = backPressed)
+                    .clickable(backSource, null, role = Role.Button) { store.openBot(null) }
+                    .semantics { contentDescription = "Back" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Symbol("chevron.left", size = 22.dp, tint = Palette.text)
             }
-            if (bot.kind == "group") {
-                add(MenuItem("Edit group", icon = "person.2") { edit(bot) }); add(pin)
-                add(MenuItem("Delete group", icon = "trash", destructive = true, divider = true, action = delete))
-            } else {
-                add(MenuItem("Edit profile", icon = "pencil") { edit(bot) }); add(pin)
-                add(MenuItem("Routines", icon = "clock.arrow.circlepath", action = routines))
-                add(MenuItem("New session", icon = "arrow.counterclockwise", action = newSession))
-                add(MenuItem("Delete bot", icon = "trash", destructive = true, divider = true, action = delete))
-            }
-        } }, Modifier.align(Alignment.Center), label = "${bot.name} actions") {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    BotAvatar(bot, state.bots, 22.dp)
-                    Text(bot.name, style = Type.system(13f).semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val (identitySource, identityPressed) = rememberPress()
+            Row(
+                Modifier.weight(1f)
+                    .height(44.dp)
+                    .pressScale(identityPressed)
+                    .clip(RoundedRectangle(14.dp))
+                    .clickable(identitySource, null, role = Role.Button) { edit(bot) }
+                    .semantics { contentDescription = "${bot.name} details" }
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                BotAvatar(bot, state.bots, 32.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(bot.name, style = Type.subheadline.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    ConnectionSubtitle(state)
                 }
-                ConnectionSubtitle(state)
             }
-        }
-        // The corner is the computer: it pulses while this bot is operating it (watch, then take over).
-        val screen = state.screen
-        if (screen != null) {
-            val operating = screen.agentBot == bot.id
-            ComputerButton(operating, Modifier.align(Alignment.CenterEnd)) { store.openScreen(bot.id.takeIf { operating }) }
+            val screen = state.screen
+            if (screen != null) {
+                val operating = screen.agentBot == bot.id
+                ComputerButton(operating, Modifier) { store.openScreen(bot.id.takeIf { operating }) }
+            }
+            if (showInlineRoutines) {
+                val (routineSource, routinePressed) = rememberPress()
+                Box(
+                    Modifier.size(44.dp).glass(Capsule(), pressed = routinePressed)
+                        .clickable(routineSource, null, role = Role.Button, onClick = routines)
+                        .semantics { contentDescription = "Open routines" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Symbol("clock.arrow.circlepath", size = 20.dp, tint = Palette.text)
+                }
+            }
+            DropdownMenu({ buildList {
+                add(MenuItem("$host · ${connectionLabel(state)}", enabled = false))
+                add(MenuItem("Reconnect", icon = "arrow.clockwise") { store.reconnect() })
+                add(MenuItem("Details", icon = "info.circle", divider = true) { edit(bot) })
+                add(MenuItem("Full conversation", icon = "list.bullet.rectangle", action = trace))
+                val pin = MenuItem(if (bot.pinned) "Unpin" else "Pin", icon = "pin") {
+                    store.command("updateBot", kotlinx.serialization.json.buildJsonObject {
+                        put("id", kotlinx.serialization.json.JsonPrimitive(bot.id)); put("pinned", kotlinx.serialization.json.JsonPrimitive(!bot.pinned))
+                    }, "roster:" + bot.id)
+                }
+                if (bot.kind == "group") {
+                    add(MenuItem("Edit group", icon = "person.2") { edit(bot) }); add(pin)
+                    add(MenuItem("Delete group", icon = "trash", destructive = true, divider = true, action = delete))
+                } else {
+                    add(MenuItem("Edit profile", icon = "pencil") { edit(bot) }); add(pin)
+                    add(MenuItem("Routines", icon = "clock.arrow.circlepath", action = routines))
+                    add(MenuItem("New session", icon = "arrow.counterclockwise", action = newSession))
+                    add(MenuItem("Delete bot", icon = "trash", destructive = true, divider = true, action = delete))
+                }
+            } }, Modifier.size(44.dp).glass(Capsule()), label = "${bot.name} actions") {
+                Symbol("ellipsis", size = 21.dp, tint = Palette.text)
+            }
         }
     }
 }
@@ -193,9 +241,15 @@ import com.kyant.shapes.Capsule
     }
 }
 
-/** The link to the computer: route icon (or a spinner) and a word. */
+/** The link to the computer: route icon (or a spinner), computer name when known, and connection state. */
 @Composable private fun ConnectionSubtitle(state: AppState) {
-    Row(Modifier.clearAndSetSemantics { contentDescription = "${state.hostName}, ${connectionDescription(state)}" }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val host = state.computers.firstOrNull()?.name.orEmpty()
+    val statusText = if (host.isNotEmpty()) "$host · ${connectionLabel(state)}" else connectionLabel(state)
+    Row(
+        Modifier.clearAndSetSemantics { contentDescription = "${state.hostName}, ${connectionDescription(state)}" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
         Box(Modifier.width(12.dp), contentAlignment = Alignment.Center) {
             when (val link = state.connection) {
                 LinkState.Connecting -> Spinner(8.dp)
@@ -203,7 +257,7 @@ import com.kyant.shapes.Capsule
                 else -> Symbol("wifi.slash", size = 11.dp, tint = Palette.secondary)
             }
         }
-        Text(connectionLabel(state), style = Type.system(10f).medium, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(statusText, style = Type.system(11f).medium, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

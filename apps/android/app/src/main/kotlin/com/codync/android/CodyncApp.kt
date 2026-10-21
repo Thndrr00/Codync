@@ -125,7 +125,12 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
         }
     }
     // The account sheet holds its own push (Computers & settings), as the iOS sheet's NavigationStack.
-    CodyncSheet(showAccount && (state.setupComplete || signedIn) && !state.loading, { showAccount = false; accountSettings = false }) {
+    CodyncSheet(
+        isPresented = showAccount && (state.setupComplete || signedIn) && !state.loading,
+        onDismiss = { showAccount = false; accountSettings = false },
+        detents = if (accountSettings) setOf(SheetDetent.Expanded) else setOf(SheetDetent.Medium, SheetDetent.Expanded),
+        initialDetent = SheetDetent.Expanded,
+    ) {
         NavStack(listOfNotNull("account", "settings".takeIf { accountSettings }), key = { it }, pop = { accountSettings = false }) { page ->
             if (page == "account") AccountSwitcherView(state, store, { accountSettings = true }) { showPairing = true }
             else SettingsView(state, store, { accountSettings = false }, { showPairing = true }, { access = it }, openMarketplace)
@@ -134,7 +139,7 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
     CodyncSheet(showComputers && !state.loading, { showComputers = false }) {
         SettingsView(state, store, null, { showPairing = true }, { access = it }, openMarketplace)
     }
-    CodyncSheet(access, { access = null }) { AccessRequestView(state, store, it) }
+    CodyncSheet(access, { access = null }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded)) { AccessRequestView(state, store, it) }
     CodyncSheet(showPairing && !state.loading, { showPairing = false }) { PairingView(state, store, inModal = true) }
     CodyncSheet(showUsage && !state.loading, { showUsage = false }) { UsageScreen(state, store::refreshUsage, store::reloadUsage) }
     CodyncSheet(showMarketplace && root == Root.Tabs, { showMarketplace = false }) { MarketplaceView(state, store) }

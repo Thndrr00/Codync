@@ -77,16 +77,24 @@ import kotlin.math.roundToInt
     }
 }
 
-/** A full screen's top bar: leading, centered title, trailing. */
-@Composable fun ScreenHeader(leading: @Composable RowScope.() -> Unit = {}, title: @Composable () -> Unit = {},
-    trailing: @Composable RowScope.() -> Unit = {}) {
-    Box(Modifier.fillMaxWidth().height(52.dp).background(Palette.background).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.semantics(mergeDescendants = true) { heading() }) { title() }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            leading()
-            Spacer(Modifier.weight(1f))
-            trailing()
-        }
+/** A full screen's top bar: leading, non-overlapping title slot, trailing. */
+@Composable fun ScreenHeader(
+    leading: @Composable RowScope.() -> Unit = {},
+    title: @Composable () -> Unit = {},
+    centerTitle: Boolean = false,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        Modifier.fillMaxWidth().height(52.dp).background(Palette.background).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), content = leading)
+        Box(
+            Modifier.weight(1f).semantics(mergeDescendants = true) { heading() },
+            contentAlignment = if (centerTitle) Alignment.Center else Alignment.CenterStart,
+        ) { title() }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), content = trailing)
     }
 }
 
@@ -96,7 +104,7 @@ import kotlin.math.roundToInt
 /** A page's title row: the close button on a modal's first page, a back button once pushed in it. */
 @Composable fun PageHeader(title: String, pop: (() -> Unit)? = null, trailing: @Composable RowScope.() -> Unit = {}) {
     if (pop != null) ScreenHeader({ BackButton(pop) },
-        { Text(title, style = Type.body.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis) }, trailing)
+        { Text(title, style = Type.body.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis) }, trailing = trailing)
     else ModalHeader(title, trailing)
 }
 
@@ -149,10 +157,20 @@ class TabItem<T>(
     bottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
+    val tap = tabSwitchHaptics(selection, select)
     when (style) {
-        NavBarStyle.FloatingCapsule -> GlassTabBar(selection, tabs, select, modifier.padding(bottom = maxOf(bottomInset - 4.dp, 12.dp)))
-        NavBarStyle.CompactDock -> CompactDockBar(selection, tabs, select, modifier.padding(bottom = maxOf(bottomInset - 4.dp, 12.dp)))
-        NavBarStyle.DockedSurface -> DockedSurfaceBar(selection, tabs, select, bottomInset, modifier)
+        NavBarStyle.FloatingCapsule -> GlassTabBar(selection, tabs, tap, modifier.padding(bottom = maxOf(bottomInset - 4.dp, 12.dp)))
+        NavBarStyle.CompactDock -> CompactDockBar(selection, tabs, tap, modifier.padding(bottom = maxOf(bottomInset - 4.dp, 12.dp)))
+        NavBarStyle.DockedSurface -> DockedSurfaceBar(selection, tabs, tap, bottomInset, modifier)
+    }
+}
+
+/** `select` that ticks once when it moves to another tab (reselecting the current one stays silent). */
+@Composable private fun <T> tabSwitchHaptics(selection: T, select: (T) -> Unit): (T) -> Unit {
+    val haptics = LocalCodyncHaptics.current
+    return { value ->
+        if (value != selection) haptics.perform(CodyncHaptic.TabSwitch)
+        select(value)
     }
 }
 
@@ -234,6 +252,7 @@ class TabItem<T>(
     select: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val tap = tabSwitchHaptics(selection, select)
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Row(modifier.fillMaxHeight().background(Palette.surface)) {
@@ -247,7 +266,7 @@ class TabItem<T>(
                 val pillFill by animateColorAsState(if (on) Palette.bubbleUser else Color.Transparent, Motion.hover(), label = "Rail pill")
                 Column(
                     Modifier.fillMaxWidth().height(58.dp).clip(RoundedRectangle(16.dp))
-                        .tabSemantics(on, tab.badge) { select(tab.value) },
+                        .tabSemantics(on, tab.badge) { tap(tab.value) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {

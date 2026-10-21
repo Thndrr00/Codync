@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -54,7 +51,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
@@ -106,7 +102,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
 
 /** A chat's time separator: Today 3:27 AM. */
 @Composable internal fun TimeSeparator(at: Long) {
-    Text(RelativeTime.separator(at), Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp), style = Type.footnote,
+    Text(RelativeTime.separator(at), Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp), style = Type.chatFootnote,
         color = Palette.tertiary, textAlign = TextAlign.Center)
 }
 
@@ -114,14 +110,18 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
 @Composable internal fun ChatRow(entry: Entry, groupStart: Boolean, chat: Bot?, state: AppState, store: AppStore,
     openTrace: () -> Unit, reply: (() -> Unit)?, connect: ConnectionRequestActions) {
     val group = chat?.kind == "group"
+    val compact = LocalUiDensity.current == UiDensity.Compact
+    val topGroupGap = if (compact) 8.dp else 12.dp
+    val topSameGap = if (compact) 2.dp else 4.dp
+    val haptics = LocalCodyncHaptics.current
     when (entry.kind) {
-        "user" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) 12.dp else 4.dp).animateContentSize(Motion.layoutSize),
+        "user" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             UserBubble(entry, state, store, reply)
             ReactionsRow(entry, store)
             ThreadChip(entry, state, reply)
         }
-        "agent" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) 12.dp else 4.dp).animateContentSize(Motion.layoutSize),
+        "agent" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (group && groupStart) AuthorLabel(entry.data.text("author"), state)
             AgentBubble(entry, state, store, openTrace, reply)
@@ -130,15 +130,16 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
                 ThreadChip(entry, state, reply)
             }
         }
-        "permission" -> Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        "permission" -> Column(Modifier.padding(top = topGroupGap), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (group) AuthorLabel(entry.data.text("author"), state)
             PermissionCard(entry, state.computers.firstOrNull()?.name.orEmpty(), answering = "permission:" + entry.id in state.busy) {
+                haptics.perform(CodyncHaptic.PermissionAction)
                 store.respond(entry, it)
             }
         }
-        else -> if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = 12.dp)) {
+        else -> if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ConnectionRequestCard(entry, state, store, connect.openApp, connect.install)
-        } else Box(Modifier.padding(top = 10.dp)) { NoticeRow(entry) }
+        } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry) }
     }
 }
 
@@ -150,7 +151,7 @@ internal class ConnectionRequestActions(val openApp: (String, ComposioApp) -> Un
     val bot = state.bots.firstOrNull { it.id == botId }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (bot != null) CharacterAvatar(bot.avatarShape, bot.avatarColor, 26.dp)
-        Text(bot?.name ?: "A deleted bot", style = Type.subheadline.medium, color = bot?.let { AvatarPalette.tint(it.avatarColor) } ?: Palette.secondary)
+        Text(bot?.name ?: "A deleted bot", style = Type.chatSubheadline.medium, color = bot?.let { AvatarPalette.tint(it.avatarColor) } ?: Palette.secondary)
     }
 }
 
@@ -185,7 +186,13 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 }
 
 @Composable private fun UserText(text: String) {
-    Text(text, Modifier.background(Palette.bubbleUser).padding(horizontal = 16.dp, vertical = 10.dp), style = Type.body, color = Palette.text)
+    val compact = LocalUiDensity.current == UiDensity.Compact
+    Text(
+        text,
+        Modifier.background(Palette.bubbleUser).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp),
+        style = Type.chatBody,
+        color = Palette.text,
+    )
 }
 
 @Composable private fun SendStatusLine(status: String?, botWorking: Boolean) {
@@ -201,10 +208,11 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 
 /** A message this phone is still delivering: the same bubble, with how far it got. */
 @Composable internal fun PendingBubble(send: PendingSend, groupStart: Boolean, state: AppState, store: AppStore) {
-    Column(Modifier.fillMaxWidth().padding(top = if (groupStart) 12.dp else 4.dp).padding(start = 56.dp),
+    val compact = LocalUiDensity.current == UiDensity.Compact
+    Column(Modifier.fillMaxWidth().padding(top = if (groupStart) (if (compact) 8.dp else 12.dp) else (if (compact) 2.dp else 4.dp)).padding(start = 56.dp),
         horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (file in send.files) Text(file.name + " · " + formatBytes(file.size), Modifier.clip(RoundedRectangle(14.dp))
-            .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.footnote, color = Palette.text)
+            .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.chatFootnote, color = Palette.text)
         if (send.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text) }
         when (send.status) {
             SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files · $it%" } ?: "Sending…",
@@ -249,7 +257,10 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
  * text selection takes the same long press.
  */
 @Composable private fun AgentText(text: String, selectable: Boolean) {
-    Box(Modifier.background(Palette.bubbleAgent).padding(horizontal = 16.dp, vertical = 10.dp)) { MarkdownText(text, selectable) }
+    val compact = LocalUiDensity.current == UiDensity.Compact
+    Box(Modifier.background(Palette.bubbleAgent).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp)) {
+        MarkdownText(text, selectable)
+    }
 }
 
 /** Under a message with a thread (Slack's): how many replied, how recently. */
@@ -268,9 +279,9 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
             for (bot in authors.take(3)) CharacterAvatar(bot.avatarShape, bot.avatarColor, 18.dp)
         }
-        Text(if (count == 1) "1 reply" else "$count replies", style = Type.footnote.semibold, color = Palette.accent)
-        if (unread > 0) Text("$unread new", style = Type.footnote.semibold, color = Palette.text)
-        else if (lastAt > 0) Text(RelativeTime.day(lastAt), style = Type.footnote, color = Palette.tertiary)
+        Text(if (count == 1) "1 reply" else "$count replies", style = Type.chatFootnote.semibold, color = Palette.accent)
+        if (unread > 0) Text("$unread new", style = Type.chatFootnote.semibold, color = Palette.text)
+        else if (lastAt > 0) Text(RelativeTime.day(lastAt), style = Type.chatFootnote, color = Palette.tertiary)
         Symbol("chevron.right", size = 12.dp, tint = Palette.tertiary)
     }
 }
@@ -279,11 +290,15 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 @Composable private fun ReactionsRow(entry: Entry, store: AppStore) {
     val reactions = entry.reactions
     if (reactions.isEmpty()) return
+    val haptics = LocalCodyncHaptics.current
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         for (emoji in reactions) {
             val (source, pressed) = rememberPress()
             Text(emoji, Modifier.pressScale(pressed).clip(Capsule()).background(Palette.surface)
-                .clickable(source, null, role = Role.Button) { store.command("react", body("entryId" to entry.id, "emoji" to emoji), "react:" + entry.id) }
+                .clickable(source, null, role = Role.Button) {
+                    haptics.perform(CodyncHaptic.Reaction)
+                    store.command("react", body("entryId" to entry.id, "emoji" to emoji), "react:" + entry.id)
+                }
                 .semantics { contentDescription = "Remove reaction $emoji" }
                 .padding(horizontal = 8.dp, vertical = 3.dp), style = Type.system(15f))
         }
@@ -295,7 +310,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     Row(Modifier.plainButton(action = open).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Symbol("clock.arrow.circlepath", size = 15.dp, tint = Palette.secondary)
-        Text(entry.text.ifEmpty { "Routine" }, style = Type.footnote, color = Palette.secondary)
+        Text(entry.text.ifEmpty { "Routine" }, style = Type.chatFootnote, color = Palette.secondary)
     }
 }
 
@@ -306,7 +321,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         seconds != null -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Symbol("waveform", size = 15.dp, tint = Palette.secondary)
             Spacer(Modifier.width(6.dp))
-            Text("$text · %02d:%02d".format(seconds / 60, seconds % 60), style = Type.footnote.monospacedDigit, color = Palette.secondary)
+            Text("$text · %02d:%02d".format(seconds / 60, seconds % 60), style = Type.chatFootnote.monospacedDigit, color = Palette.secondary)
         }
         entry.data.text("style") == "divider" -> Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -317,15 +332,15 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         entry.data.text("style") == "error" -> Row(Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp))
             .background(Palette.danger.copy(alpha = 0.12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Symbol("exclamationmark.triangle.fill", size = 16.dp, tint = Palette.danger)
-            SelectionContainer { Text(text, style = Type.footnote, color = Palette.text) }
+            SelectionContainer { Text(text, style = Type.chatFootnote, color = Palette.text) }
         }
         // A fresh conversation starts at the left, as on the iPhone.
         "handoff" in entry.data -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Symbol("arrow.triangle.branch", size = 13.dp, tint = Palette.secondary)
-            Text(text, style = Type.footnote, color = Palette.secondary)
+            Text(text, style = Type.chatFootnote, color = Palette.secondary)
         }
-        else -> Text(text, Modifier.fillMaxWidth(), style = Type.footnote, color = Palette.secondary, textAlign = TextAlign.Center)
+        else -> Text(text, Modifier.fillMaxWidth(), style = Type.chatFootnote, color = Palette.secondary, textAlign = TextAlign.Center)
     }
 }
 
@@ -343,13 +358,13 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             .animateContentSize(Motion.layoutSize).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ThinkingOrb(if (needs) ThinkingOrbState.Listening else ThinkingOrbState.Working, 16.dp, if (needs) Palette.warning else Palette.secondary)
-                Text(bot.activity.ifEmpty { "Working…" }, Modifier.weight(1f, fill = false), style = Type.subheadline,
+                Text(bot.activity.ifEmpty { "Working…" }, Modifier.weight(1f, fill = false), style = Type.chatSubheadline,
                     color = if (needs) Palette.warning else Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 bot.startedAt?.let { Elapsed(it) }
                 if (thinking != null) Symbol("chevron.down", Modifier.rotate(turn), size = 12.dp, tint = Palette.tertiary)
             }
             if (expanded && thinking != null) Box(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState(Int.MAX_VALUE))) {
-                SelectionContainer { Text(thinking, style = Type.footnote, color = Palette.secondary) }
+                SelectionContainer { Text(thinking, style = Type.chatFootnote, color = Palette.secondary) }
             }
         }
     }
@@ -361,7 +376,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     LaunchedEffect(startedAt) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
     val seconds = maxOf(0, (now - startedAt) / 1000)
     Text(if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60) else "%d:%02d".format(seconds / 60, seconds % 60),
-        style = Type.footnote.monospacedDigit, color = Palette.tertiary)
+        style = Type.chatFootnote.monospacedDigit, color = Palette.tertiary)
 }
 
 /** The latest thinking of the turn running in a chat (`thread` null) or thread. */
@@ -386,10 +401,10 @@ internal fun currentThinking(entries: List<Entry>, botId: String, thread: String
             bot.description.ifEmpty { null }) else listOfNotNull(
             if (bot.managedWorkspace) "${backendName(state, bot.backend)} · Personal workspace" else "${backendName(state, bot.backend)} in ${bot.cwd}",
             bot.description.ifEmpty { null })
-        for (line in lines) Text(line, style = Type.subheadline, color = Palette.secondary, textAlign = TextAlign.Center)
+        for (line in lines) Text(line, style = Type.chatSubheadline, color = Palette.secondary, textAlign = TextAlign.Center)
         Text(if (bot.kind == "group") "Everyone answers in turn. @mention a bot to ask just that one."
             else "Tell it what you need. You'll get a notification when it's done or needs you.",
-            Modifier.padding(top = 4.dp), style = Type.subheadline, color = Palette.secondary, textAlign = TextAlign.Center)
+            Modifier.padding(top = 4.dp), style = Type.chatSubheadline, color = Palette.secondary, textAlign = TextAlign.Center)
     }
 }
 
