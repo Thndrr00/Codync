@@ -274,6 +274,14 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
               onChange={(on) => set('computer', on)}
             />
           ) : null}
+          {draft.fleetManagement !== undefined && part === 'all' ? (
+            <SwitchRow
+              title="Organize bots"
+              detail="Let this bot create bots and groups when you ask, and tune the ones it created. It can't delete bots or change others."
+              on={draft.fleetManagement}
+              onChange={(on) => set('fleetManagement', on)}
+            />
+          ) : null}
         </CardSection>
 
         <PluginToggles

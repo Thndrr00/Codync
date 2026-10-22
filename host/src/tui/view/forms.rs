@@ -60,6 +60,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Approvals => "Approvals",
             Field::Notify => "Notify",
             Field::Computer => "Use computer",
+            Field::Fleet => "Organize bots",
             Field::Color => "Color",
             Field::Shape => "Shape",
             Field::Connectors => "Connectors",
@@ -196,6 +197,17 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
                 let status = super::computer_access::status(&app.screen, app.online);
                 put(buf, vx, y, vw, &format!("{s}  · {status}"), t.text.patch(base));
             }
+            Field::Fleet => {
+                let s = if f.fleet { "◉ On   ○ Off" } else { "○ On   ◉ Off" };
+                put(
+                    buf,
+                    vx,
+                    y,
+                    vw,
+                    &format!("{s}  · create bots and groups, tune the ones it made"),
+                    t.text.patch(base),
+                );
+            }
             Field::Notify => {
                 let s = if f.notify { "◉ Done and needs-you   ○ Off" } else { "○ Done and needs-you   ◉ Off" };
                 put(buf, vx, y, vw, s, t.text.patch(base));
@@ -271,9 +283,13 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         Field::Agent => "←→ change · ↵ install / sign in · tab next",
         Field::Account => "left/right pick account; i sign in; r refresh",
         Field::Model => "←→ pick a model · or type its id",
-        Field::Fast | Field::Color | Field::Shape | Field::Approvals | Field::Notify | Field::Computer => {
-            "←→ change · tab next field"
-        }
+        Field::Fast
+        | Field::Color
+        | Field::Shape
+        | Field::Approvals
+        | Field::Notify
+        | Field::Computer
+        | Field::Fleet => "←→ change · tab next field",
         Field::Instructions => "⇧↵ new line · tab next field",
         Field::Name => "tab next field · ^s save",
     };

@@ -571,6 +571,7 @@ fn validate(cfg: &BotConfig) -> Result<()> {
     if cfg.is_group() {
         return Ok(());
     }
+    crate::agent::approval_rules::validate(&cfg.approval_rules)?;
     if !cfg.cwd.is_empty() && !std::path::Path::new(&cfg.cwd).is_dir() {
         bail!("workspace folder does not exist: {}", cfg.cwd);
     }

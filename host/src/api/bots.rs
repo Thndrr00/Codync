@@ -47,6 +47,8 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
                 crate::chat::profile::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::scratchpad::TOOLS.contains(&name) {
                 crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::teach::TOOLS.contains(&name) {
+                crate::chat::teach::call(hub, bot, name, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }
@@ -273,7 +275,20 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.kind != EntryKind::Permission.as_str() {
+                bail!("That isn't an approval card");
+            }
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            // The card is the effect's key: the first decision is the one that happens. The same
+            // answer again (another device, a retry) gets the card back; a different one is refused.
+            match e.data["status"].as_str() {
+                Some("pending") => {}
+                Some("answered") if e.data["selected"].as_str() == option_id.as_deref() => {
+                    return Ok(ControlFlow::Break(json!({"entry": e})));
+                }
+                Some("answered") => bail!("This approval was already answered with another choice"),
+                _ => bail!("This approval is closed: its turn ended or was stopped"),
+            }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;

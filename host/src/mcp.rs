@@ -58,6 +58,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
             if let Some(list) = tools.as_array_mut() {
                 list.extend(crate::chat::profile::tools());
                 list.extend(crate::chat::scratchpad::tools());
+                list.extend(crate::chat::teach::tools());
             }
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }

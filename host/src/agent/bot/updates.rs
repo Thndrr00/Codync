@@ -148,21 +148,9 @@ impl Actor {
     }
 
     pub(super) async fn on_permission(&mut self, rpc_id: Value, params: Value) {
+        use crate::agent::approval_rules::{self, Decision};
         let options = params["options"].as_array().cloned().unwrap_or_default();
         let tool = &params["toolCall"];
-        if self.cfg.permission == Permission::Auto {
-            let pick = ["allow_once", "allow_always"]
-                .iter()
-                .find_map(|k| options.iter().find(|o| o["kind"] == *k))
-                .or_else(|| options.first());
-            if let (Some(o), Some(conn)) = (pick, &self.conn) {
-                let _ = conn
-                    .acp
-                    .respond(rpc_id, json!({"outcome": {"outcome": "selected", "optionId": o["optionId"]}}))
-                    .await;
-                return;
-            }
-        }
         let title = tool["title"]
             .as_str()
             .filter(|t| !t.is_empty())
@@ -172,15 +160,37 @@ impl Actor {
                 self.hub.store.entry(eid)?.data["title"].as_str().map(str::to_owned)
             })
             .unwrap_or_else(|| "Use a tool".into());
-        let mut detail = json!({"output": "", "diffs": []});
-        merge_tool_content(&mut detail, &tool["content"]);
         let raw = &tool["rawInput"];
         let command = raw["command"].as_str().map(str::to_owned).or_else(|| {
             raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
         });
+        let kind = tool["kind"].as_str().unwrap_or("other");
+        // The user's rules first, then the bot's general setting.
+        let rule =
+            approval_rules::decide(&self.cfg.approval_rules, kind, command.as_deref().unwrap_or(&title)).cloned();
+        let decision = rule.as_ref().map(|r| r.decision);
+        if decision == Some(Decision::Deny) {
+            let pattern = rule.as_ref().map(|r| r.pattern.as_str()).unwrap_or_default();
+            let notice = json!({"text": format!("Denied by your rule \"{pattern}\": {title}"), "style": "info"});
+            self.hub.add_entry(&self.lane, EntryKind::Notice, self.turn.unwrap_or(0), &notice);
+            if !self.pick_option(&rpc_id, &options, &["reject_once", "reject_always"], false).await
+                && let Some(conn) = &self.conn
+            {
+                let _ = conn.acp.respond(rpc_id, json!({"outcome": {"outcome": "cancelled"}})).await;
+            }
+            return;
+        }
+        let allowed =
+            decision == Some(Decision::Allow) || (decision.is_none() && self.cfg.permission == Permission::Auto);
+        // Like the bot's automatic setting always did: with no allow option, its first option.
+        if allowed && self.pick_option(&rpc_id, &options, &["allow_once", "allow_always"], true).await {
+            return;
+        }
+        let mut detail = json!({"output": "", "diffs": []});
+        merge_tool_content(&mut detail, &tool["content"]);
         let data = json!({
             "title": title,
-            "toolKind": tool["kind"].as_str().unwrap_or("other"),
+            "toolKind": kind,
             "command": command,
             "detail": detail["output"],
             "diffs": detail["diffs"],
@@ -188,6 +198,8 @@ impl Actor {
             "options": options.iter().map(|o| json!({"optionId": o["optionId"], "name": o["name"], "kind": o["kind"]})).collect::<Vec<_>>(),
             "status": "pending",
             "selected": Value::Null,
+            // The rule that asked for this card, when one did (the bot itself approves everything).
+            "rule": rule.as_ref().map(|r| r.pattern.clone()),
         });
         let turn = self.turn.unwrap_or(0);
         self.close_seg();
@@ -210,8 +222,31 @@ impl Actor {
         );
     }
 
+    /// Answers permission request `rpc_id` with its first option of one of `kinds`, in that order
+    /// (with `any`, its first option when none fits); false when there's no such option or agent.
+    async fn pick_option(&self, rpc_id: &Value, options: &[Value], kinds: &[&str], any: bool) -> bool {
+        let pick = kinds
+            .iter()
+            .find_map(|k| options.iter().find(|o| o["kind"] == *k))
+            .or_else(|| if any { options.first() } else { None });
+        let (Some(option), Some(conn)) = (pick, &self.conn) else { return false };
+        let picked = json!({"outcome": {"outcome": "selected", "optionId": option["optionId"]}});
+        let _ = conn.acp.respond(rpc_id.clone(), picked).await;
+        true
+    }
+
     pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>) {
-        let Some(rpc_id) = self.perms.remove(entry_id) else { return };
+        let Some(rpc_id) = self.perms.remove(entry_id) else {
+            // No agent waits on it any more (its process went away): close the card, so it
+            // can't be answered as if it still mattered.
+            if let Some(mut e) = self.hub.store.entry(entry_id)
+                && e.data["status"] == "pending"
+            {
+                e.data["status"] = "cancelled".into();
+                self.hub.set_entry(entry_id, &e.data);
+            }
+            return;
+        };
         let outcome = match &option_id {
             Some(o) => json!({"outcome": {"outcome": "selected", "optionId": o}}),
             None => json!({"outcome": {"outcome": "cancelled"}}),

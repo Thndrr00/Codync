@@ -93,7 +93,9 @@ Codync/
 | Agent process, ACP, queue and session lifecycle | `host/src/agent/bot/` (`launch.rs`, `queue.rs`, `session.rs`, `turn.rs`, `updates.rs`), `acp.rs` |
 | Compaction timing and rollover | `host/src/agent/bot/compaction.rs`, the handoff card in `host/src/chat/handoff.rs`; the rules in `codync-mem`'s `compaction.rs` |
 | Group room turns / bot-to-bot requests | `host/src/chat/group.rs` / `team.rs` |
-| A bot's own name and instructions, their versions, its scratchpad | `host/src/chat/profile.rs`, `instruction_history.rs`, `scratchpad.rs` |
+| A bot's own name and instructions, their versions, its scratchpad, skills it writes | `host/src/chat/profile.rs`, `instruction_history.rs`, `scratchpad.rs`, `teach.rs` |
+| Fleet management (a bot organizing bots) | `host/src/chat/fleet.rs` ([bot collaboration](../features/bot-collaboration.md#fleet-management)) |
+| Approval rules and answering approval cards | `host/src/agent/approval_rules.rs`, `agent/bot/updates.rs` ([approvals](../features/approvals.md)) |
 | Turn watchdog (tool loops, stalls) | `host/src/agent/bot/watchdog.rs` |
 | Routines: schedules, runs, watch triggers, MCP tools | `host/src/routines/` (`schedule.rs`, `runner.rs`, `watch.rs`, `mcp_tools.rs`, `editor.rs`, `hooks.rs`) |
 | Prompt snapshots and memory | `host/src/chat/context.rs`, `memory/` (`api.rs`, `tools.rs`, `notices.rs`, `dream.rs`, `import.rs`; long-form files in `files.rs`, `file_api.rs`, `file_tools.rs`, `file_notices.rs`); the rules in `host/crates/memory` (`codync-mem`, files in `files.rs`, dreaming in `dream/`); harnesses' own memory turned off in `host/src/agent/own_memory.rs` |

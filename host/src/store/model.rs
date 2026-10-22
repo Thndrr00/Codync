@@ -108,6 +108,16 @@ pub struct BotConfig {
     /// The bot gets the built-in `computer` MCP server (see `screen`).
     #[serde(default)]
     pub computer: bool,
+    /// The user's rules for the agent's permission requests, first match wins (see `agent::approval_rules`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approval_rules: Vec<crate::agent::approval_rules::ApprovalRule>,
+    /// The bot may create and organize bots and groups with the `team` server's fleet tools (see
+    /// `chat::fleet`). Off unless the user turns it on; a bot can't turn it on for itself or others.
+    #[serde(default)]
+    pub fleet_management: bool,
+    /// The bot that created this one with its fleet tools; `None` for one the user made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     /// Uses the memory shared by all bots ("yours"). Unset: on for a bot in its own workspace, off for one in a
     /// project folder (see `chat::memory::shared`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

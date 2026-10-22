@@ -85,6 +85,30 @@ finishing an earlier request does not reset it. This bounds repeated A → B →
 messages even when few requests are outstanding. At the limit, the tool reports
 an error without queuing more work. A new user turn starts a fresh allowance.
 
+## Fleet management
+
+A bot the user lets organize others ("Organize bots" in its settings on desktop, Android and the
+terminal UI; `fleetManagement`, off by default) gets six more `team` tools
+(`host/src/chat/fleet.rs`). A bot can't turn the setting on, for itself or others. The setting is read
+again on every call, so turning it off stops the next one.
+
+| Tool | Does |
+| --- | --- |
+| `list_fleet` | Bots and groups: id, name, kind, members, agent, model, instructions, their version, and `createdByYou` |
+| `create_bot {name, instructions, model?}` | A bot with its creator's agent, permission setting, approval rules, account, connectors and skills, in a workspace of its own, without the computer or fleet tools (`createdBy` = the creator) |
+| `create_group {name, memberIds}` | A group of 2 to 10 visible bots |
+| `set_bot_instructions {botId, instructions, reason?, ifVersion?}` | Replaces a created bot's instructions; the version is authored `fleet`, with the reason naming the creator, and a stale `ifVersion` is refused (see [chat messages](chat-messages.md)) |
+| `set_bot_model {botId, model}` | Changes a created bot's model |
+| `create_bot_routine {botId, name, instruction, triggers, timeoutSeconds?}` | A new routine for a created bot, as `save_routine` |
+
+The editing tools work only on bots whose `createdBy` is the caller. Nothing deletes, moves or
+hides a bot. Nothing changes a bot's permissions, approval rules, computer access or fleet setting.
+A bot creates at most 20 bots and groups, and no more are created once the computer has 200 bots.
+Each change leaves a notice in the creator's chat. An instruction change also leaves one in the
+changed bot's chat. Rakazo shows approval cards for destructive fleet actions; there are no
+destructive fleet actions here. Idea from rakazo's `fleet-tools.ts` (Apache-2.0); no code
+copied. The iPhone app doesn't show the setting yet.
+
 ## Code and verification
 
 - `host/src/chat/team.rs`: discovery, request lifetime and persisted notices and structured conversation data.

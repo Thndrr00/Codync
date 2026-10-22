@@ -175,6 +175,12 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
                 },
                     draft.computer, { change(draft.copy(computer = it)) })
             }
+            // Only a host with fleet tools sends the setting (desktop `BotEditorView`).
+            if (draft.fleetManagement != null) row {
+                SwitchRow("Organize bots",
+                    "Let this bot create bots and groups when you ask, and tune the ones it created. It can't delete bots or change others.",
+                    draft.fleetManagement == true, { change(draft.copy(fleetManagement = it)) })
+            }
         }
         val plugins = state.plugins
         PluginToggles("Connectors", "No connectors yet. Add GitHub, Linear, Notion and more from Extensions.",

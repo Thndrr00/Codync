@@ -3,6 +3,7 @@
 
 pub mod account;
 pub mod acp;
+pub mod approval_rules;
 pub mod auth;
 pub mod backends;
 pub mod bot;

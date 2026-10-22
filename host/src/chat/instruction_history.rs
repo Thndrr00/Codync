@@ -40,6 +40,8 @@ pub enum Author {
     User,
     /// The bot itself (`set_instructions`).
     Bot,
+    /// The bot that created it, with its fleet tools (the reason names it; see `fleet`).
+    Fleet,
     /// What the bot had before its history started.
     Earlier,
 }
