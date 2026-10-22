@@ -275,6 +275,7 @@ impl Hub {
         if let Err(error) = crate::market::bot_secrets::remove_bot(&self.store, id) {
             tracing::warn!(bot = id, error = format!("{error:#}"), "couldn't forget a deleted bot's secrets");
         }
+        crate::chat::scratchpad::remove_bot(&self.store, id)?;
         self.team.cancel_bot(id);
         self.groups.stop(self, id);
         let _ = self.send_cmd(id, Cmd::Shutdown);

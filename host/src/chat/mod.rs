@@ -12,5 +12,6 @@ pub mod oneshot;
 pub mod outbox;
 pub mod profile;
 pub mod prompt;
+pub mod scratchpad;
 pub mod team;
 pub mod uploads;

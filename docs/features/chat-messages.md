@@ -34,6 +34,12 @@ it has no pointer tooltip or link-opening action.
   bot changes its own name or instructions (its description) when the user asks it to, exactly as an edit in its
   settings would, and a notice ("Renamed to …", "Instructions updated") shows it in the main chat. A name set this
   way ends automatic naming.
+- The `chat` server also keeps the bot's working notes for one conversation: its main chat, or one thread
+  (`scratchpad_read`, `scratchpad_write {text, mode: replace|append}`, `host/src/chat/scratchpad.rs`, kv
+  `scratchpad.v1.<bot>.<root|main>`). Use them for a plan, what's done and what's next. The notes outlive
+  compactions and session restarts. They are never in the transcript, memory or any client. They hold at most
+  16,000 characters; an empty replace clears them, and deleting the bot deletes them. Idea from rakazo's
+  `scratchpad-tools.ts` (Apache-2.0).
 - Every change to a bot's instructions, from its settings, the API or `set_instructions`, is kept as a numbered
   version. Each version records the text, the author (`user`, `bot`, or `earlier` for what the bot had before its
   history started), an optional reason and the time (`host/src/chat/instruction_history.rs`, kv

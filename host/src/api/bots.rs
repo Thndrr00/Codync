@@ -45,6 +45,8 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
             if crate::chat::profile::TOOLS.contains(&name) {
                 crate::chat::profile::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::scratchpad::TOOLS.contains(&name) {
+                crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }
