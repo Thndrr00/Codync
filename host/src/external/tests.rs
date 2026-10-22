@@ -174,7 +174,7 @@ async fn deleting_the_bot_stops_watching_that_session() {
     assert!(bot(&hub).is_none(), "the deleted session isn't recreated by its next event");
     // A new session in the same terminal is watched again.
     let fresh = json!({"hook_event_name": "UserPromptSubmit", "session_id": "s2", "cwd": "/w/p", "prompt": "new"});
-    super::ingest(&hub, &event(fresh)).await;
+    super::ingest(&hub, &event(&fresh)).await;
     assert!(bot(&hub).is_some());
     let _ = std::fs::remove_dir_all(dir);
 }
