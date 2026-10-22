@@ -4,6 +4,7 @@
 //! dreaming, and the one-time move from the old Engram memory.
 
 mod api;
+pub mod budget;
 mod dates;
 mod dream;
 mod file_api;

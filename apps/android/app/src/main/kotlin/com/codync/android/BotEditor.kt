@@ -166,6 +166,11 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
         }
         CardSection("Activity") {
             row { SwitchRow("Notifications", "Get notified when this bot finishes or needs you", draft.notify != false, { change(draft.copy(notify = it)) }) }
+            row {
+                SwitchRow("Chief of Staff (Coordinator)",
+                    "Supervises stalled or failing bots in teams and groups, with automatic triage and up to 2 retries per incident.",
+                    draft.isChief, { change(draft.copy(isChief = it)) })
+            }
             if (screen != null) row {
                 SwitchRow("Use the computer", when {
                     !screen.controlReady -> "Let this bot use apps. On that computer, open Codync → Settings → Computer access to set up permissions first."

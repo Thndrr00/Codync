@@ -18,9 +18,10 @@ import { VoiceChatSettingsView } from './VoiceChatSettingsView'
 import { ComputerAccessView } from '../computer-access/ComputerAccessView'
 import { FormSheet } from '../marketplace/pieces'
 import { AnalyticsSheet } from './AnalyticsSheet'
+import { DiagnosticsView } from './DiagnosticsView'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
-export type SettingsPage = 'general' | 'computers' | 'access' | 'voice' | 'usage' | 'updates'
+export type SettingsPage = 'general' | 'computers' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics'
 
 const thisComputer = isMac ? 'This Mac' : 'This computer'
 const pages: { id: SettingsPage; title: string; label?: string; group: string; icon: string }[] = [
@@ -30,6 +31,7 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
   { id: 'voice', title: 'Voice chat', group: 'Personal', icon: 'waveform' },
   { id: 'usage', title: 'Usage', group: 'Personal', icon: 'gauge.with.dots.needle.33percent' },
   { id: 'updates', title: 'Updates', group: thisComputer, icon: 'arrow.down.circle' },
+  { id: 'diagnostics', title: 'System diagnostics', label: 'Diagnostics', group: thisComputer, icon: 'stethoscope' },
 ]
 
 export function SettingsView({ page: initial }: { page: SettingsPage }) {
@@ -97,6 +99,8 @@ function PageContent({ page }: { page: SettingsPage }) {
           <UsageLimitsList />
         </CardForm>
       )
+    case 'diagnostics':
+      return <DiagnosticsView />
     case 'updates':
       return <UpdateSettings />
   }

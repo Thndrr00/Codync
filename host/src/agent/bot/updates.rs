@@ -1,6 +1,7 @@
 //! Agent → client: `session/update`s, permission requests and streamed text mapped onto entries.
 
 use super::fast_mode::Listing;
+use super::stall::ToolOutcome;
 use super::{Actor, Seg, SegKind};
 use crate::agent::acp::{self, Incoming};
 use crate::hub::BotStatus;
@@ -33,6 +34,9 @@ impl Actor {
                     && self.turn.is_some()
                 {
                     self.on_update(&params["update"]);
+                    if self.loop_guard.tripped().is_some() && !self.stop_requested {
+                        self.cancel_turn().await;
+                    }
                 }
             }
             Some(Incoming::Request { id, method, params }) => {
@@ -44,6 +48,18 @@ impl Actor {
                     let _ = acp.respond_error(id, -32601, &format!("{method} is not supported by Codync")).await;
                 }
             }
+        }
+    }
+
+    /// Feeds a finished tool call to the stall gate; a tripped gate is stopped by `on_incoming`.
+    fn observe_tool_end(&mut self, status: &str, title: &str, output: &str) {
+        let outcome = match status {
+            "completed" => ToolOutcome::Succeeded,
+            "failed" => ToolOutcome::Failed { title, output },
+            _ => return,
+        };
+        if let Some(reason) = self.loop_guard.observe(&outcome) {
+            tracing::warn!(bot = %self.cfg.id, %reason, "stopping a looping turn");
         }
     }
 
@@ -75,6 +91,8 @@ impl Actor {
                 merge_tool_content(&mut data, &u["content"]);
                 crate::chat::memory::files::touched(&self.hub.store, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
+                let status = data["status"].as_str().unwrap_or_default().to_owned();
+                self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
                     self.tools.insert(tool_id, e.id);
                 }
@@ -84,6 +102,7 @@ impl Actor {
                 let tool_id = u["toolCallId"].as_str().unwrap_or_default();
                 let Some(entry_id) = self.tools.get(tool_id).cloned() else { return };
                 let Some(mut e) = self.hub.store.entry(&entry_id) else { return };
+                let before = e.data["status"].as_str().unwrap_or_default().to_owned();
                 for (k, key) in [("title", "title"), ("kind", "toolKind"), ("status", "status")] {
                     if let Some(v) = u[k].as_str() {
                         e.data[key] = v.into();
@@ -97,6 +116,9 @@ impl Actor {
                 let status = e.data["status"].as_str().unwrap_or_default().to_owned();
                 let title = e.data["title"].as_str().unwrap_or_default().to_owned();
                 self.hub.set_entry(&entry_id, &e.data);
+                if status != before {
+                    self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());
+                }
                 if status == "in_progress" {
                     self.set_activity(super::activity(&title));
                 }

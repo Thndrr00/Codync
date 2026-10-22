@@ -160,6 +160,11 @@ export function RoutineEditorView({ botId, routine, saved }: {
                       Next {new Date(shownPreview.nextRunAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                     </Text>
                   ) : null}
+                  {shownPreview.nextRuns && shownPreview.nextRuns.length > 1 ? (
+                    <Text size="caption" tone="tertiary">
+                      Upcoming: {shownPreview.nextRuns.slice(0, 3).map((ts) => new Date(ts).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })).join(' · ')}
+                    </Text>
+                  ) : null}
                   {shownPreview.warning ? <Text size="caption" tone="secondary">{shownPreview.warning}</Text> : null}
                 </VStack>
               ) : (

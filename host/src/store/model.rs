@@ -121,6 +121,12 @@ pub struct BotConfig {
     /// until the user renames it.
     #[serde(default)]
     pub auto_name: bool,
+    /// Designates this bot as the Chief of Staff coordinator for team incidents and escalations.
+    #[serde(default, deserialize_with = "null_as_false")]
+    pub is_chief: bool,
+    /// For a group chat, the member bot ID designated as Chief of Staff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chief_bot_id: Option<String>,
     #[serde(default)]
     pub created_at: i64,
 }

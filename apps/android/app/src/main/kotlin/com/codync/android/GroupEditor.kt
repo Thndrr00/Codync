@@ -88,6 +88,14 @@ import com.codync.android.design.*
                     Text("Add Member", style = Type.body, color = Palette.secondary)
                 }
                 Text("Everyone answers in turn unless you @mention someone.", Modifier.padding(top = 10.dp), style = Type.caption, color = Palette.tertiary)
+                if (picked.isNotEmpty()) {
+                    val chiefOptions = listOf("" to "None (auto-detect Chief)") + picked.map { b -> b.id to (if (b.isChief) "${b.name} ★" else b.name) }
+                    Box(Modifier.padding(top = 14.dp)) {
+                        ValueRow("Chief of Staff", detail = "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.") {
+                            ChoicePicker(draft.chiefBotId.orEmpty(), chiefOptions, { draft = draft.copy(chiefBotId = it.ifEmpty { null }) }, label = "Chief of Staff")
+                        }
+                    }
+                }
             }
             AnimatedVisibility(state.error != null, enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
                 Text(state.error.orEmpty(), style = Type.footnote, color = Palette.danger)

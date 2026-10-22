@@ -58,6 +58,8 @@ data class Bot(
     val memoryRev: Long? = null,
     /** Host-owned isolated agent sign-in; independent of the app's cloud account. */
     val account: String? = null,
+    val isChief: Boolean = false,
+    val chiefBotId: String? = null,
 ) {
     /** An agent bot unless its agent said it has no Fast mode, or one that has it on (so it can be turned off). */
     val fastModeShown: Boolean get() = kind != "group" && (fastMode || fastModeSupport != "unsupported")

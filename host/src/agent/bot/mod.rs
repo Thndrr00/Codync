@@ -22,6 +22,7 @@ mod launch;
 mod lifecycle;
 mod queue;
 mod session;
+mod stall;
 mod turn;
 mod updates;
 
@@ -169,6 +170,7 @@ pub fn spawn(hub: Arc<Hub>, cfg: BotConfig) -> BotHandle {
         tools_changed: false,
         fast_support,
         idle_checked: Instant::now(),
+        loop_guard: stall::LoopGuard::default(),
     };
     let task = tokio::spawn(actor.run(rx, interrupted));
     BotHandle { tx, task }
@@ -333,6 +335,8 @@ struct Actor {
     fast_support: FastModeSupport,
     /// When idle sessions and agents were last looked for.
     idle_checked: Instant,
+    /// Stops the running turn when it keeps failing the same tool call (see `stall`).
+    loop_guard: stall::LoopGuard,
 }
 
 struct RoutineCompletion {

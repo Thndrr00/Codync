@@ -9,6 +9,7 @@ mod files;
 mod host;
 mod http;
 mod marketplace;
+mod rebinding;
 mod remote;
 mod roster;
 

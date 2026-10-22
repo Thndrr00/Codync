@@ -8,6 +8,7 @@ export interface Bot {
   /** `agent`, or `group`: several bots and the user in one chat. */
   kind: string
   members: string[]
+  chiefBotId?: string | null
   name: string
   description: string
   avatarColor: string
@@ -44,6 +45,8 @@ export interface Bot {
   harnessMemory: boolean | null
   /** Moves whenever memory changes, so an open memory screen fetches it again. */
   memoryRev: number
+  /** Chief of Staff coordinator role (INIC-04). */
+  isChief: boolean
   autoName: boolean
   createdAt: number
   rev: number
@@ -89,6 +92,8 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
     harnessMemory: raw.harnessMemory ?? null,
     memoryRev: raw.memoryRev ?? 0,
+    isChief: raw.isChief ?? false,
+    chiefBotId: raw.chiefBotId ?? null,
     autoName: raw.autoName ?? false,
     createdAt,
     rev: raw.rev ?? 0,
@@ -181,6 +186,45 @@ export interface HandoffCard {
   text?: string
 }
 
+export interface PasskeyWallCard {
+  kind: 'webauthn' | 'totp' | 'captcha' | 'login'
+  url: string
+  reason: string
+  tabId?: string
+  status?: 'waiting' | 'resolved' | 'cancelled'
+}
+
+export interface ChiefIncidentCard {
+  chiefBotId: string
+  workerBotId: string
+  reason: 'stall' | 'failed' | 'timeout' | 'loop'
+  retryAttempt: number
+  summary: string
+  status?: 'retrying' | 'escalated' | 'resolved'
+}
+
+export interface SentinelIssue {
+  id: string
+  severity: 'info' | 'warning' | 'critical'
+  category: string
+  message: string
+  autoFixable: boolean
+}
+
+export interface SentinelReport {
+  timestamp: string
+  healthy: boolean
+  issues: SentinelIssue[]
+}
+
+interface UnusedHandoffCard {
+  /** draft · sent · kept */
+  status: string
+  /** cold · away · full */
+  reason?: string
+  text?: string
+}
+
 export interface EntryData {
   /** Structured conversation data added to the existing team-tool notice. */
   botMessage?: BotMessage
@@ -188,6 +232,10 @@ export interface EntryData {
   compaction?: Compaction
   /** notice: the bot's chat starts over with this handoff (see `HandoffNotice`). */
   handoff?: HandoffCard
+  /** Interactive Passkey / 2FA assistance card from CDP browser detector (INIC-02). */
+  passkeyWall?: PasskeyWallCard
+  /** Chief of Staff incident intervention card (INIC-04). */
+  chiefIncident?: ChiefIncidentCard
   heading?: string
   delegationId?: string
   sourceBotId?: string
@@ -465,6 +513,8 @@ export interface BotDraft {
   computer?: boolean
   sharedMemory?: boolean
   harnessMemory?: boolean
+  isChief?: boolean
+  chiefBotId?: string | null
 }
 
 export function draftOf(bot: Bot): BotDraft {
@@ -488,6 +538,8 @@ export function draftOf(bot: Bot): BotDraft {
     connectors: bot.connectors,
     skills: bot.skills,
     computer: bot.computer,
+    isChief: bot.isChief,
+    chiefBotId: bot.chiefBotId ?? null,
   }
 }
 
@@ -504,5 +556,6 @@ export interface GroupDraft {
   name: string
   description: string
   members: string[]
+  chiefBotId?: string | null
   pinned?: boolean
 }

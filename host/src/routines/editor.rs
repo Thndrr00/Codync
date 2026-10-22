@@ -215,7 +215,19 @@ pub fn preview(body: &Value, now: i64) -> Result<Value> {
         .then(|| format!("Months without day {} are skipped.", draft.month_day));
     Ok(
         json!({"draft":draft,"triggers":triggers,"summary":triggers.iter().map(Trigger::description).collect::<Vec<_>>().join(" · "),
-        "nextRunAt":next,"warning":warning}),
+        "nextRunAt":next,"nextRuns":{
+            let mut runs = Vec::new();
+            let mut cursor = now;
+            for _ in 0..3 {
+                if let Some(ts) = triggers.iter().filter_map(|t| t.next(cursor).ok().flatten()).min() {
+                    runs.push(ts);
+                    cursor = ts;
+                } else {
+                    break;
+                }
+            }
+            runs
+        },"warning":warning}),
     )
 }
 

@@ -2,7 +2,7 @@ import { FileDownloadCard } from './FileDownloadCard'
 import { memo, useEffect, useRef, useState } from 'react'
 import { isGroup, isWorking, needsInput, type Bot, type Entry, type ThreadSummary } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
-import { Hairline, IconButton } from '../../components/Controls'
+import { Button, Hairline, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { AnchoredMenu, useContextMenu, type MenuItem, type ReactionPick } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
@@ -63,9 +63,78 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
     default:
       if (entry.data.connectionRequest) return <div className="chat-row group-start"><ConnectionRequestCard entry={entry} /></div>
       if (entry.data.handoff) return <div className="chat-row notice"><HandoffNotice entry={entry} card={entry.data.handoff} /></div>
+      if (entry.data.passkeyWall) return <div className="chat-row group-start"><PasskeyWallNotice entry={entry} /></div>
+      if (entry.data.chiefIncident) return <div className="chat-row group-start"><ChiefIncidentNotice entry={entry} /></div>
       return <div className="chat-row notice"><NoticeRow entry={entry} /></div>
   }
 })
+
+/** Interactive Passkey / 2FA / Captcha assistance card from CDP browser detector (INIC-02). */
+function PasskeyWallNotice({ entry }: { entry: Entry }) {
+  const store = useLiveStore()
+  const wall = entry.data.passkeyWall
+  if (!wall) return null
+  const resolved = wall.status === 'resolved' || wall.status === 'cancelled'
+  return (
+    <VStack gap={8} className="bubble agent">
+      <HStack gap={8}>
+        <Icon name="person.badge.key.fill" size={14} color="var(--warning, #ff9f0a)" />
+        <Text weight="semibold" tone="attention">
+          Authentication Required ({wall.kind.toUpperCase()})
+        </Text>
+      </HStack>
+      <Text size="footnote" tone="secondary">{wall.reason} · {wall.url}</Text>
+      {!resolved ? (
+        <HStack gap={8}>
+          <Button kind="primary" onClick={() => store.send('I have completed the authentication in the browser. Please continue.', entry.botId, entry.threadId ?? null)}>
+            Continue
+          </Button>
+          <Button kind="secondary" onClick={() => store.stop(entry.botId)}>
+            Cancel
+          </Button>
+        </HStack>
+      ) : (
+        <Text size="caption" tone="tertiary">{wall.status === 'resolved' ? 'Authentication completed' : 'Cancelled'}</Text>
+      )}
+    </VStack>
+  )
+}
+
+/** Chief of Staff automatic intervention / escalation card (INIC-04). */
+function ChiefIncidentNotice({ entry }: { entry: Entry }) {
+  const store = useLiveStore()
+  const incident = entry.data.chiefIncident
+  if (!incident) return null
+  const isEscalated = incident.status === 'escalated' || incident.retryAttempt >= 2
+  return (
+    <VStack gap={8} className="bubble agent">
+      <HStack gap={8}>
+        <Icon
+          name="shield.lefthalf.filled"
+          size={14}
+          color={isEscalated ? 'var(--danger)' : 'var(--warning, #ff9f0a)'}
+        />
+        <Text weight="semibold" tone={isEscalated ? 'danger' : 'attention'}>
+          Chief of Staff · {isEscalated ? 'Escalated Incident' : `Intervention (Attempt ${incident.retryAttempt}/2)`}
+        </Text>
+      </HStack>
+      <Text size="footnote" tone="secondary">
+        Worker: {store.authorName(incident.workerBotId)} · Reason: {incident.reason}
+      </Text>
+      <Text size="footnote">{incident.summary}</Text>
+      {isEscalated ? (
+        <HStack gap={8}>
+          <Button kind="secondary" onClick={() => store.send(`Retry assignment for ${store.authorName(incident.workerBotId)}`, entry.botId, entry.threadId ?? null)}>
+            Retry manually
+          </Button>
+          <Button kind="secondary" onClick={() => store.stop(incident.workerBotId)}>
+            Stop worker
+          </Button>
+        </HStack>
+      ) : null}
+    </VStack>
+  )
+}
 
 /** Follows the store: the card shows a spinner while its answer is on its way. */
 function LivePermission({ entry }: { entry: Entry }) {

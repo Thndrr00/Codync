@@ -235,6 +235,10 @@ import kotlinx.coroutines.launch
             preview != null -> {
                 Text(preview.summary, style = Type.caption.medium, color = Palette.text)
                 preview.nextRunAt?.let { Text("Next ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it))}", style = Type.caption, color = Palette.secondary) }
+                if ((preview.nextRuns?.size ?: 0) > 1) {
+                    val fmt = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                    Text("Upcoming: " + preview.nextRuns!!.take(3).joinToString(" · ") { fmt.format(Date(it)) }, style = Type.caption, color = Palette.tertiary)
+                }
                 preview.warning?.let { Text(it, style = Type.caption, color = Palette.secondary) }
             }
             else -> Text("minute  hour  day  month  weekday", style = Type.caption.monospaced, color = Palette.tertiary)

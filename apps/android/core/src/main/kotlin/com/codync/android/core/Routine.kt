@@ -48,7 +48,7 @@ import kotlinx.serialization.json.*
 
 @Serializable data class RoutineSchedulePreview(
     val draft: RoutineScheduleDraft, val triggers: List<JsonObject>, val summary: String,
-    val nextRunAt: Long? = null, val warning: String? = null,
+    val nextRunAt: Long? = null, val nextRuns: List<Long>? = null, val warning: String? = null,
 )
 
 @Serializable data class RoutineWebhook(val url: String? = null, val localUrl: String, val key: String, val connected: Boolean)

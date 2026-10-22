@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isGroup, type Bot } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
-import { IconButton, Spinner } from '../../components/Controls'
+import { ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, SheetPage, useDismiss } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
@@ -23,6 +23,7 @@ export function GroupEditorView({ group, members: initialMembers = [] }: { group
   const [name, setName] = useState(group?.name ?? '')
   const [about, setAbout] = useState(group?.description ?? '')
   const [members, setMembers] = useState<string[]>(group?.members ?? initialMembers)
+  const [chiefBotId, setChiefBotId] = useState<string | null>(group?.chiefBotId ?? null)
   const [query, setQuery] = useState('')
   // A new group starts in the picker; an existing one shows its members first.
   const [adding, setAdding] = useState(group === null && initialMembers.length === 0)
@@ -52,8 +53,8 @@ export function GroupEditorView({ group, members: initialMembers = [] }: { group
     const finalName = typed || defaultName
     const description = about.trim()
     const done = groupId
-      ? store.updateGroup({ id: groupId, kind: 'group', name: finalName, description, members, pinned: store.bots.get(groupId)?.pinned })
-      : store.createGroup(finalName, description, members)
+      ? store.updateGroup({ id: groupId, kind: 'group', name: finalName, description, members, pinned: store.bots.get(groupId)?.pinned, chiefBotId })
+      : store.createGroup(finalName, description, members, chiefBotId)
     void Promise.resolve(done)
       .then(() => dismiss())
       .catch((e: unknown) => setError(errorText(e)))
@@ -109,6 +110,21 @@ export function GroupEditorView({ group, members: initialMembers = [] }: { group
               </button>
             ) : null}
             <Text as="div" size="caption" tone="tertiary" className="group-note">Everyone answers in turn unless you @mention someone.</Text>
+            {picked.length > 0 ? (
+              <ValueRow
+                label="Chief of Staff"
+                detail="Coordinates delegated assignments and automatically intervenes if a member stalls or fails."
+              >
+                <ChoicePicker
+                  selection={chiefBotId ?? ''}
+                  options={[
+                    { id: '', label: 'None (auto-detect Chief)' },
+                    ...picked.map((b) => ({ id: b.id, label: b.isChief ? `${b.name} ★` : b.name })),
+                  ]}
+                  onChange={(id) => setChiefBotId(id || null)}
+                />
+              </ValueRow>
+            ) : null}
           </VStack>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
           {current ? (

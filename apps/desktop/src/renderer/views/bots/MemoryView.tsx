@@ -63,7 +63,7 @@ export function MemoryCard({ botId }: { botId: string }) {
           <div key="note" className="memory-layer-note">
             <p className="memory-muted">{section === 'yours'
               ? 'Your name, time zone, people and lasting preferences, shared by your bots.'
-              : 'What this bot learned about you.'} {layer.used} of {layer.cap} in use.</p>
+              : 'What this bot learned about you.'} {layer.used} of {layer.cap} in use ({layer.used / Math.max(1, layer.cap) >= 0.9 ? '🔴 Near capacity — auto-rotates' : layer.used / Math.max(1, layer.cap) >= 0.7 ? '🟡 Moderate usage' : '🟢 Healthy budget'}).</p>
             <div className="memory-header-actions">
               <IconButton title="Add memory" icon="plus" onClick={() => setDraft({ text: '' })} disabled={memory.busy} />
               <DropdownMenu className="icon-button memory-menu" title="More" items={() => [

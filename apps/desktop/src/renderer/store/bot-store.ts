@@ -10,6 +10,8 @@ import {
   type GroupDraft,
   type Hello,
   type ScreenState,
+  type SentinelReport,
+  type Usage,
   type Usage,
 } from '@shared/models'
 import { FileDownloads } from './file-downloads'
@@ -301,8 +303,9 @@ export class BotStore extends BotSync {
   }
 
   /** Creates a group chat (or opens the one these bots already share) and selects it. */
-  async createGroup(name: string, description: string, members: string[]) {
-    const draft: GroupDraft = { kind: 'group', name, description, members }
+  async createGroup(name: string, description: string, members: string[], chiefBotId: string | null = null) {
+    const draft: GroupDraft = { kind: 'group', name, description, members, chiefBotId }
+    // (handled above)
     const res = await (await this.ready()).call<{ bot: Bot }>('createBot', draft)
     this.bots.set(res.bot.id, res.bot)
     this.selection = res.bot.id
@@ -324,7 +327,7 @@ export class BotStore extends BotSync {
     const name = group.name === autoName(group.members) ? autoName(members) : group.name
     this.bots.set(group.id, { ...group, name, members })
     this.changed()
-    const draft: GroupDraft = { id: group.id, kind: 'group', name, description: group.description, members, pinned: group.pinned }
+    const draft: GroupDraft = { id: group.id, kind: 'group', name, description: group.description, members, pinned: group.pinned, chiefBotId: group.chiefBotId ?? null }
     this.perform((c) => c.call('updateBot', draft), true)
   }
 
@@ -359,6 +362,10 @@ export class BotStore extends BotSync {
       this.hello = { ...this.hello, backends: res.backends }
       this.changed()
     } catch {}
+  }
+
+  async sentinelHealth(): Promise<SentinelReport> {
+    return (await this.ready()).call<SentinelReport>('sentinelHealth', {})
   }
 
   async listDirs(path: string | null) {
@@ -421,6 +428,7 @@ function updatePayload(bot: Bot): BotDraft {
     backend: bot.backend, command: bot.command ?? null, cwd: bot.managedWorkspace ? '' : bot.cwd, permission: bot.permission,
     model: bot.model ?? null, pinned: bot.pinned, hidden: bot.hidden, notify: bot.notify ?? null,
     connectors: bot.connectors, skills: bot.skills, computer: bot.computer, fastMode: bot.fastMode,
+    isChief: bot.isChief, chiefBotId: bot.chiefBotId ?? null,
   }
 }
 

@@ -11,6 +11,7 @@ mod entries;
 mod memory;
 mod model;
 mod roster;
+pub mod runtime;
 mod schema;
 
 pub use devices::{Device, DeviceSource, Scope};
@@ -80,6 +81,9 @@ impl Store {
 
     pub fn current_rev(&self) -> i64 {
         self.kv_get("rev").and_then(|v| v.parse().ok()).unwrap_or(0)
+    }
+    pub fn with_connection<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+        f(&self.db.locked())
     }
 }
 
