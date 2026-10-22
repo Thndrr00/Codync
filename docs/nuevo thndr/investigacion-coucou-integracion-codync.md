@@ -333,3 +333,5 @@ Toda la base de código de Coucou permanece clonada y accesible localmente en `C
 - **Paridad:** el escritorio (macOS, Linux y Windows) y la TUI muestran las sesiones externas y sus tarjetas sin
   cambios propios; el compositor del escritorio y el de Android explican que la sesión se responde en la terminal.
 - **Siguiente:** INIC-02 (Isla 2.0: multimonitor, drag & drop, diff interactivo, cuestionarios), luego INIC-04.
+
+- **Desvío de transporte respecto a esta ficha:** el relay no usa named pipes ni sockets Unix, sino el HTTP local que ya existe (loopback + token de `~/.codync/token`). Se evita así código Win32 nuevo y el hook entra por la misma puerta autenticada que el resto de helpers locales; el binario sigue siendo ultraligero porque el relay es un subcomando de `codync-host` (hook) y no un crate aparte.
