@@ -33,6 +33,12 @@ impl Actor {
                     && self.turn.is_some()
                 {
                     self.on_update(&params["update"]);
+                    if let Some(reason) = self.loop_stop.take() {
+                        tracing::warn!(bot = %self.cfg.id, "stopping a turn stuck in a tool loop");
+                        let notice = json!({"text": reason, "style": "error"});
+                        self.hub.add_entry(&self.lane, EntryKind::Notice, self.turn.unwrap_or(0), &notice);
+                        self.cancel_turn().await;
+                    }
                 }
             }
             Some(Incoming::Request { id, method, params }) => {
@@ -61,6 +67,9 @@ impl Actor {
                 self.set_activity("Thinking…");
             }
             "tool_call" => {
+                if let Some(reason) = self.tool_loop.observe(u) {
+                    self.loop_stop = Some(reason);
+                }
                 self.close_seg();
                 let tool_id = u["toolCallId"].as_str().unwrap_or_default().to_owned();
                 let mut data = json!({

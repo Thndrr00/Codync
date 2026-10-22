@@ -22,6 +22,7 @@ mod launch;
 mod lifecycle;
 mod queue;
 mod session;
+mod tool_loop;
 mod turn;
 mod updates;
 
@@ -158,6 +159,8 @@ pub fn spawn(hub: Arc<Hub>, cfg: BotConfig) -> BotHandle {
         active_request: None,
         seg: Seg::None,
         tools: HashMap::new(),
+        tool_loop: tool_loop::ToolLoop::default(),
+        loop_stop: None,
         plan_entry: None,
         last_text: None,
         sent: Vec::new(),
@@ -314,6 +317,9 @@ struct Actor {
     active_request: Option<crate::chat::team::BotRequest>,
     seg: Seg,
     tools: HashMap<String, String>,
+    /// Counts identical tool calls in a row this turn; `loop_stop` is why the turn must stop.
+    tool_loop: tool_loop::ToolLoop,
+    loop_stop: Option<String>,
     plan_entry: Option<String>,
     last_text: Option<String>,
     /// Messages the bot sent the user this turn (`send_message`); none: its last text is the reply.
