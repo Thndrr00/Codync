@@ -7,9 +7,12 @@ pub mod auth;
 pub mod backends;
 pub mod bot;
 pub mod config;
+pub mod coordinator;
+pub mod envelope;
 pub mod node;
 pub mod own_memory;
 pub mod registry;
+pub mod sandbox;
 pub mod term;
 pub mod workspace;
 

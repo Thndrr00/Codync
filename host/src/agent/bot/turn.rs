@@ -115,6 +115,7 @@ impl Actor {
         self.exit_tail = None;
         self.seg = Seg::None;
         self.tools.clear();
+        self.loop_guard = super::stall::LoopGuard::default();
         self.plan_entry = None;
         self.last_text = None;
         self.sent.clear();
@@ -295,7 +296,9 @@ impl Actor {
             Ok(v) => v["stopReason"].as_str().unwrap_or("end_turn").to_owned(),
             Err(_) => "error".into(),
         };
+        let stalled = self.loop_guard.tripped().map(str::to_owned);
         match (&done, stop_reason.as_str()) {
+            _ if stalled.is_some() => self.notice(stalled.as_deref().unwrap_or_default(), NoticeStyle::Error),
             (Err(e), _) if !self.stop_requested => {
                 let tail = self.exit_tail.take().filter(|t| !t.is_empty());
                 if !self.invite_sign_in(e) {
@@ -312,7 +315,9 @@ impl Actor {
         let failure = done.as_ref().err().filter(|_| !self.stop_requested);
         let failed = failure.is_some();
         self.report_turn(stopped, failure, &stop_reason);
-        let reply = if stopped {
+        let reply = if let Some(reason) = &stalled {
+            Err(anyhow!("recipient was stopped by the host: {reason}"))
+        } else if stopped {
             Err(anyhow!("recipient was stopped; partial work may have happened"))
         } else if stop_reason != "end_turn" {
             Err(anyhow!("recipient did not finish ({stop_reason}); partial work may have happened"))
@@ -323,7 +328,9 @@ impl Actor {
                 .ok_or_else(|| anyhow!("recipient finished without a text reply"))
         };
         if routine {
-            let (status, detail) = if self.routine_timed_out {
+            let (status, detail) = if let Some(reason) = stalled.as_ref().filter(|_| !self.routine_timed_out) {
+                (crate::routines::Status::Failed, Some(reason.clone()))
+            } else if self.routine_timed_out {
                 (
                     crate::routines::Status::Failed,
                     Some("Routine exceeded its execution time limit; its agent process was stopped".into()),

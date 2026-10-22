@@ -27,6 +27,8 @@ data class BotDraft(
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
     val account: String? = null,
+    val isChief: Boolean = false,
+    val chiefBotId: String? = null,
 ) {
     val isValid: Boolean get() = id == null || name.isNotBlank()
     fun toggleNotifications(): BotDraft = copy(notify = !(notify ?: true))
@@ -46,6 +48,6 @@ data class BotDraft(
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
-            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account)
+            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account, bot.isChief, bot.chiefBotId)
     }
 }

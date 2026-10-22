@@ -33,6 +33,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/ingest/hook", post(hook))
         .route("/channel", get(channel))
         .route("/oauth/callback", get(oauth_callback))
+        .layer(axum::middleware::from_fn(super::rebinding::guard))
         .with_state(hub)
 }
 

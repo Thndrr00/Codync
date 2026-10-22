@@ -108,7 +108,11 @@ private fun CardRows.layer(memory: MemoryModel, view: BotMemory, bot: com.codync
     }
     row {
         Text((if (shared) "Your name, time zone, people and lasting preferences, shared by your bots." else "What this bot learned about you.") +
-            " ${layer.used} of ${layer.cap} in use.", style = Type.footnote, color = Palette.secondary)
+            " ${layer.used} of ${layer.cap} in use (${when {
+                layer.used.toFloat() / maxOf(1, layer.cap) >= 0.9f -> "🔴 Near capacity — auto-rotates"
+                layer.used.toFloat() / maxOf(1, layer.cap) >= 0.7f -> "🟡 Moderate usage"
+                else -> "🟢 Healthy budget"
+            }}).", style = Type.footnote, color = Palette.secondary)
     }
     if (layer.entries.isEmpty()) row {
         MemoryEmpty("brain", if (shared) "Nothing shared yet." else "Nothing yet. What this bot learns about you shows up here, and you can change any of it.")

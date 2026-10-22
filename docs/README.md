@@ -49,8 +49,12 @@ Source review, a passing build, local integration tests and production acceptanc
 
 ## Plans
 
+- [Implementations from other repos](nuevo%20thndr/implementaci%C3%B3nes%20de%20otros%20repos.md) (research catalog: 60 proposals and 40 additional pieces from OpenDots, openbot and rakazo; not implemented)
+- [Ideas from openbot to reuse](nuevo%20thndr/ideas-openbot-para-reutilizar.md) (deep dive of openbot at a fixed commit: 7 structural patterns and 61 ideas with exact contracts, top-20 by impact/effort, adoption waves; not implemented)
 - [Android identity and Windows companion opportunities](nuevo%20thndr/revision-integral-android-windows.md) (documentation/code review, proposed visual migration and twenty additional work items; not implemented)
 - [Android parity and acceptance](plans/android-app.md)
+- [Viabilidad de compilación Android en la nube (expo.dev)](viabilidad-compilacion-android-expo.md) (estudio de viabilidad técnica y alternativas para reducir recursos locales)
+- [Guía de reutilización de Openstark](guia-paso-a-paso-reutilizacion-openstark.md) (hoja de ruta paso a paso por fases y contratos de alto impacto)
 - [Harness memory](plans/harness-memory.md) (the switch that keeps a harness's own memory on; a choice of it instead of Codync's, planned)
 - [Error tracking detail](plans/error-tracking-detail.md) (proposal: symbolicated iPhone crashes, sessions, consented problem reports)
 

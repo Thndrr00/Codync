@@ -23,6 +23,7 @@ export interface Routine {
   updatedAt: number
   triggerDescriptions: string[]
   nextRunAt?: number | null
+  nextRuns?: number[] | null
   timeoutSeconds?: number | null
   lastError?: string | null
 }
@@ -95,6 +96,7 @@ export interface RoutineSchedulePreview {
   triggers: RoutineTrigger[]
   summary: string
   nextRunAt?: number | null
+  nextRuns?: number[] | null
   warning?: string | null
 }
 

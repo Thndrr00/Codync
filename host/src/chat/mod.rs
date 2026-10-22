@@ -2,6 +2,7 @@
 //! bot-to-bot requests, prompt snapshots, long-term memory and automatic bot names.
 
 pub mod context;
+pub mod decider;
 pub mod files;
 pub mod group;
 pub mod handoff;

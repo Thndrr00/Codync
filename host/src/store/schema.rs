@@ -77,6 +77,7 @@ impl Store {
              CREATE INDEX IF NOT EXISTS entries_bot ON entries(bot_id, seq);",
         )?;
         migrate(&c)?;
+        super::runtime::create_tables(&c)?;
         codync_mem::schema::migrate(&c)?;
         let secret_key = if path == Path::new(":memory:") {
             let mut key = vec![0; 32];

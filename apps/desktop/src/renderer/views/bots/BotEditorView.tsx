@@ -258,6 +258,12 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
 
         <CardSection title="Activity">
           <SwitchRow title="Notifications" detail="Get notified when this bot finishes or needs you" on={draft.notify ?? true} onChange={(on) => set('notify', on)} />
+          <SwitchRow
+            title="Chief of Staff (Coordinator)"
+            detail="Supervises stalled or failing bots in teams and groups, with automatic triage and up to 2 retries per incident."
+            on={draft.isChief ?? false}
+            onChange={(on) => set('isChief', on)}
+          />
           {store.screen && part === 'all' ? (
             <SwitchRow
               title="Use the computer"

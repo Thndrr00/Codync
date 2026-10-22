@@ -241,6 +241,8 @@ mod tests {
             shared_memory: None,
             harness_memory: false,
             auto_name: false,
+            is_chief: false,
+            chief_bot_id: None,
             created_at: 0,
         };
         s.save_bot(&cfg).unwrap();

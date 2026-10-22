@@ -4,6 +4,7 @@ mod agent;
 mod analytics;
 mod api;
 mod background;
+mod browser;
 mod chat;
 mod cli;
 mod compat;
@@ -15,6 +16,7 @@ mod mcp;
 mod remote;
 mod routines;
 mod screen;
+mod sentinel;
 mod service;
 mod shell;
 mod store;
@@ -186,6 +188,14 @@ enum Sub {
     },
     /// Rotate the local API token used by this computer's own apps and helpers.
     ResetToken,
+    /// Scan the database in read-only WAL mode for recurring tool errors, retry loops and queue lag.
+    Sentinel {
+        #[arg(long)]
+        json: bool,
+        /// Lookback window in hours (default: 168 = 7 days).
+        #[arg(long, default_value_t = 168)]
+        hours: i64,
+    },
     /// Send a message to a bot, optionally waiting for its reply.
     Send(cli::send::Args),
     /// Message your bots from this terminal.
@@ -526,6 +536,30 @@ async fn main() -> Result<()> {
                 HooksAction::Install => cli::hook::install()?,
                 HooksAction::Uninstall => cli::hook::uninstall()?,
                 HooksAction::Status => cli::hook::status()?,
+            }
+            Ok(())
+        }
+        Sub::Sentinel { json, hours } => {
+            let db = service::data_dir().join("codync.db");
+            let lookback_ms = hours.clamp(1, 720) * 3_600_000;
+            let report = sentinel::scan_db_path(&db, lookback_ms)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else if report.issues.is_empty() {
+                println!("Sentinel: no issues found ({} entries examined).", report.entries_examined);
+            } else {
+                println!("Sentinel: {} issues found ({} entries examined):", report.issues.len(), report.entries_examined);
+                for issue in &report.issues {
+                    println!(
+                        "  [{}] {} (bot={}, count={}, wasted_turns={}) — {}",
+                        issue.signature,
+                        issue.kind.as_str(),
+                        issue.bot_id,
+                        issue.count,
+                        issue.wasted_turns,
+                        issue.title
+                    );
+                }
             }
             Ok(())
         }

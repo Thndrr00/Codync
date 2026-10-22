@@ -137,9 +137,70 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
                 store.respond(entry, it)
             }
         }
-        else -> if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+        else -> if (entry.data["passkeyWall"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+            PasskeyWallCard(entry, store)
+        } else if (entry.data["chiefIncident"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+            ChiefIncidentCard(entry, state, store)
+        } else if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ConnectionRequestCard(entry, state, store, connect.openApp, connect.install)
         } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry) }
+    }
+}
+
+/** Interactive Passkey / 2FA / Captcha assistance card from CDP browser detector (INIC-02). */
+@Composable private fun PasskeyWallCard(entry: Entry, store: AppStore) {
+    val wall = entry.data["passkeyWall"] as? JsonObject ?: return
+    val kind = wall.text("kind")?.uppercase() ?: "AUTH"
+    val url = wall.text("url").orEmpty()
+    val reason = wall.text("reason").orEmpty()
+    val status = wall.text("status")
+    val resolved = status == "resolved" || status == "cancelled"
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Symbol("person.badge.key.fill", size = 16.dp, tint = Palette.warning)
+            Text("Authentication Required ($kind)", style = Type.chatSubheadline.semibold, color = Palette.warning)
+        }
+        Text("$reason · $url", style = Type.chatFootnote, color = Palette.secondary)
+        if (!resolved) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton("Continue", {
+                    store.send(entry.botId, entry.threadId, "I have completed the authentication in the browser. Please continue.", emptyList())
+                })
+                SecondaryButton("Cancel", { store.stop(entry.botId) })
+            }
+        } else {
+            Text(if (status == "resolved") "Authentication completed" else "Cancelled", style = Type.caption, color = Palette.tertiary)
+        }
+    }
+}
+
+/** Chief of Staff automatic intervention / escalation card (INIC-04). */
+@Composable private fun ChiefIncidentCard(entry: Entry, state: AppState, store: AppStore) {
+    val inc = entry.data["chiefIncident"] as? JsonObject ?: return
+    val workerId = inc.text("workerBotId").orEmpty()
+    val workerName = state.bots.firstOrNull { it.id == workerId }?.name ?: workerId
+    val reason = inc.text("reason").orEmpty()
+    val summary = inc.text("summary").orEmpty()
+    val attempt = inc["retryAttempt"]?.jsonPrimitive?.intOrNull ?: 1
+    val escalated = inc.text("status") == "escalated" || attempt >= 2
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Symbol("shield.lefthalf.filled", size = 16.dp, tint = if (escalated) Palette.danger else Palette.warning)
+            Text(if (escalated) "Chief of Staff · Escalated Incident" else "Chief of Staff · Intervention (Attempt $attempt/2)",
+                style = Type.chatSubheadline.semibold, color = if (escalated) Palette.danger else Palette.warning)
+        }
+        Text("Worker: $workerName · Reason: $reason", style = Type.chatFootnote, color = Palette.secondary)
+        if (summary.isNotEmpty()) Text(summary, style = Type.chatFootnote, color = Palette.text)
+        if (escalated) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton("Retry manually", {
+                    store.send(entry.botId, entry.threadId, "Retry assignment for $workerName", emptyList())
+                })
+                SecondaryButton("Stop worker", { store.stop(workerId) })
+            }
+        }
     }
 }
 
