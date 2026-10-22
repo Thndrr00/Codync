@@ -16,6 +16,7 @@ mod permission;
 mod session;
 mod tool;
 
+use crate::LockExt;
 use crate::hub::Hub;
 use crate::store::BotConfig;
 use serde_json::{Value, json};
