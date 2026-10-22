@@ -30,6 +30,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/api/{method}", post(command))
         .route("/term/{id}", get(term_stream))
         .route("/ingest/statusline", post(statusline))
+        .route("/ingest/hook", post(hook))
         .route("/channel", get(channel))
         .route("/oauth/callback", get(oauth_callback))
         .with_state(hub)
@@ -89,6 +90,22 @@ async fn statusline(
     };
     usage::ingest_statusline(&hub, &body);
     StatusCode::NO_CONTENT
+}
+
+/// `POST /ingest/hook`: one event of an agent running in a terminal, from `codync-host hook`. A permission request
+/// answers only once a person has decided (or the wait runs out), so the connection may stay open for minutes.
+async fn hook(
+    State(hub): State<Arc<Hub>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    let body = serde_json::from_slice::<Value>(&body)
+        .map_err(|e| ApiError(StatusCode::BAD_REQUEST, format!("invalid JSON: {e}")))?;
+    Ok(Json(crate::external::ingest(&hub, &body).await))
 }
 
 async fn command(

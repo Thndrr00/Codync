@@ -90,6 +90,17 @@ export function ChatWindow() {
             if (ref) app.store(ref.computerId)?.send(c.text, ref.botId)
             return
           }
+          case 'sendFiles': {
+            // Files dropped on the island: read here, then sent to that bot with no message of their own.
+            const ref = parseRef(c.ref)
+            const store = ref ? app.store(ref.computerId) : null
+            if (ref && store) {
+              void window.codync.app.readPaths(c.paths).then((files) => {
+                if (files.length) store.send('', ref.botId, null, files.map((f) => ({ id: crypto.randomUUID(), ...f })))
+              })
+            }
+            return
+          }
         }
       }),
     [app],

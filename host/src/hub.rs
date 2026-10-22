@@ -20,6 +20,7 @@ use tokio::sync::{broadcast, watch};
 
 mod order;
 mod sync;
+mod terminal;
 
 /// What a bot is doing right now (wire values: `idle` / `working` / `needsInput` / `error`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -82,6 +83,8 @@ pub struct Hub {
     pub screen: Arc<Screen>,
     /// Setup terminals (installs, sign-ins).
     pub terms: Arc<crate::agent::term::Terms>,
+    /// Agent sessions running in the person's own terminals (see `external`).
+    pub external: crate::external::External,
 }
 
 impl Hub {
@@ -117,6 +120,7 @@ impl Hub {
             cloud: crate::remote::cloud::Cloud::default(),
             screen,
             terms: Arc::default(),
+            external: crate::external::External::default(),
         })
     }
 
@@ -129,6 +133,9 @@ impl Hub {
         for row in self.store.bots()? {
             if row.deleted {
                 self.routines.disable_bot(&self.store, &row.config.id)?;
+            } else if crate::external::is_external(&row.config) {
+                // A terminal session doesn't outlive the host that was watching it.
+                self.delete_bot(&row.config.id)?;
             } else if !row.config.is_group() {
                 self.spawn_bot(row.config);
             }
@@ -191,6 +198,9 @@ impl Hub {
     }
 
     pub fn create_bot(self: &Arc<Self>, mut cfg: BotConfig) -> Result<Value> {
+        if crate::external::is_external(&cfg) {
+            bail!("a terminal session is created by its terminal, not by an app");
+        }
         cfg.id = uuid::Uuid::new_v4().to_string();
         cfg.created_at = crate::store::now_ms();
         cfg.position = self.new_bot_position()?;
@@ -245,6 +255,9 @@ impl Hub {
         if cfg.kind != row.config.kind {
             bail!("a bot can't become a group, or a group a bot");
         }
+        if crate::external::is_external(&row.config) && cfg.backend != row.config.backend {
+            bail!("this bot runs in your terminal: its agent can't change");
+        }
         if cfg.is_group() {
             cfg.members = crate::chat::group::valid_members(&self.store, &cfg.id, &cfg.members)?;
         }
@@ -269,13 +282,18 @@ impl Hub {
             if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&row.config) {
                 crate::chat::memory::changed(self, Some(&id));
             }
-            self.send_cmd(&id, Cmd::Reconfigure(Box::new(cfg)))?;
+            // A terminal session has no actor to reconfigure: its settings are read on the next event.
+            if !crate::external::is_external(&cfg) {
+                self.send_cmd(&id, Cmd::Reconfigure(Box::new(cfg)))?;
+            }
         }
         self.emit_bot(&id);
         Ok(self.bot_value(&id).unwrap_or(Value::Null))
     }
 
     pub fn delete_bot(&self, id: &str) -> Result<()> {
+        // A terminal session leaves with its bot, and a hook waiting on one of its cards is freed at once.
+        self.external.forget(self, id);
         self.routines.disable_bot(&self.store, id)?;
         // A locked vault keeps them; Credentials lists them under "A removed bot" to remove.
         if let Err(error) = crate::market::bot_secrets::remove_bot(&self.store, id) {
@@ -577,6 +595,7 @@ fn validate(cfg: &BotConfig) -> Result<()> {
     }
     if cfg.command.as_deref().map(str::trim).unwrap_or_default().is_empty()
         && !crate::agent::backends::is_known(&cfg.backend)
+        && !crate::external::is_external(cfg)
     {
         bail!("unknown backend {}", cfg.backend);
     }

@@ -9,6 +9,7 @@ mod cli;
 mod compat;
 mod egress;
 mod environment;
+mod external;
 mod hub;
 mod market;
 mod mcp;
@@ -169,6 +170,21 @@ enum Sub {
         #[arg(last = true)]
         wrapped: Vec<String>,
     },
+    /// Relay one hook event of an agent running in a terminal (what Claude Code's hooks run).
+    Hook {
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+        /// The agent this hook belongs to: `gemini`, `antigravity`, `codex`, `copilot`. Empty for Claude Code.
+        #[arg(long, default_value = "")]
+        agent: String,
+        /// The event name, for agents that don't name it in the payload.
+        event: Option<String>,
+    },
+    /// Add, remove or check the hook that shows Claude Code's terminal sessions in Codync.
+    Hooks {
+        #[command(subcommand)]
+        action: Option<HooksAction>,
+    },
     /// Rotate the local API token used by this computer's own apps and helpers.
     ResetToken,
     /// Send a message to a bot, optionally waiting for its reply.
@@ -209,6 +225,16 @@ enum DevicesAction {
     List,
     /// Remove a device's access; it disconnects at once.
     Revoke { key: String },
+}
+
+#[derive(Subcommand)]
+enum HooksAction {
+    /// Point Claude Code's hooks at Codync.
+    Install,
+    /// Take Codync's hooks out of Claude Code's settings.
+    Uninstall,
+    /// Whether Claude Code reports to Codync (the default).
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -490,6 +516,18 @@ async fn main() -> Result<()> {
         Sub::Npm { args } => std::process::exit(agent::node::npm(&args).await?),
         Sub::Statusline { port, wrapped } => {
             statusline(port, wrapped.join(" ")).await;
+            Ok(())
+        }
+        Sub::Hook { port, agent, event } => {
+            let code = cli::hook::run(port, agent, event).await;
+            std::process::exit(i32::from(code != std::process::ExitCode::SUCCESS));
+        }
+        Sub::Hooks { action } => {
+            match action.unwrap_or(HooksAction::Status) {
+                HooksAction::Install => cli::hook::install()?,
+                HooksAction::Uninstall => cli::hook::uninstall()?,
+                HooksAction::Status => cli::hook::status()?,
+            }
             Ok(())
         }
         Sub::ResetToken => {

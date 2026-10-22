@@ -7,7 +7,7 @@ import { updateAction } from '../shared/update-action'
 import { setShowInDock, showInDock } from './dock'
 import { identity } from './environment'
 import { islandSupported, type Island } from './island'
-import { islandLabel } from '../shared/island'
+import { islandLabel, placementLabel } from '../shared/island'
 
 interface Deps {
   openChat: () => unknown
@@ -211,6 +211,21 @@ export class Tray {
       },
       ...(process.platform === 'darwin' ? [{ label: 'Show in Dock', type: 'checkbox' as const, checked: showInDock(), click: () => { setShowInDock(!showInDock()); this.rebuild() } }] : []),
       ...(islandSupported ? [{ label: islandLabel(process.platform), type: 'checkbox' as const, checked: island.enabled, click: () => island.setEnabled(!island.enabled) }] : []),
+      ...(islandSupported
+        ? [{
+            label: 'Island position',
+            submenu: ([
+              ['automatic', placementLabel(process.platform)],
+              ['follow', 'Follow the pointer'],
+              ['primary', 'Main display'],
+            ] as const).map(([id, label]) => ({
+              label,
+              type: 'radio' as const,
+              checked: island.placement === id,
+              click: () => island.setPlacement(id),
+            })),
+          }]
+        : []),
       { type: 'separator' },
       { label: 'Updates', submenu: this.updatesMenu() },
       { type: 'separator' },

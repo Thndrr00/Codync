@@ -54,10 +54,14 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
   const pasted = useRef<string[]>([])
   const working = !!bot && isWorkingIn(bot, botId, thread)
   const empty = !draft.trim() && !files.length
-  const canSend = !empty && (store.connection.kind === 'online' || (store.canQueue && !files.length))
-  const canAttach = !!bot
+  /** A session the person runs in their own terminal: it is read here, answered in that terminal. */
+  const terminal = !!bot && bot.backend === 'external'
+  const canSend = !terminal && !empty && (store.connection.kind === 'online' || (store.canQueue && !files.length))
+  const canAttach = !!bot && !terminal
 
-  const placeholder = thread ? 'Reply…' : bot && isGroup(bot) ? 'Message everyone · @ to ask one bot' : working ? `Queue a message for ${bot?.name ?? ''}` : `Ask ${bot?.name ?? ''}`
+  const placeholder = terminal
+    ? `This bot runs in your terminal — reply there; approvals still work here`
+    : thread ? 'Reply…' : bot && isGroup(bot) ? 'Message everyone · @ to ask one bot' : working ? `Queue a message for ${bot?.name ?? ''}` : `Ask ${bot?.name ?? ''}`
 
   // A routine's "Try it" fills the box.
   const routineDraft = store.routineDrafts.get(botId)
@@ -143,7 +147,7 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
   const submit = () => {
     const command = files.length ? null : builtInCommand(bot, draft)
     if (command) return run(command)
-    if (!canSend) return
+    if (!canSend || terminal) return
     store.send(draft, botId, thread, files, undefined, pasted.current)
     pasted.current = []
     setDraft('')
@@ -151,7 +155,7 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
     field.current?.focus()
   }
 
-  const trailing: Trailing = onInterrupt && !draft && !files.length ? 'interrupt' : working && !draft && !files.length ? 'stop' : onCall && !draft && !files.length ? 'call' : 'send'
+  const trailing: Trailing = terminal ? 'send' : onInterrupt && !draft && !files.length ? 'interrupt' : working && !draft && !files.length ? 'stop' : onCall && !draft && !files.length ? 'call' : 'send'
   const [symbol, label] = ({
     interrupt: ['stop.fill', 'Interrupt'],
     stop: ['stop.fill', 'Stop'],
@@ -206,6 +210,7 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
                 rows={1}
                 value={draft}
                 placeholder={placeholder}
+                readOnly={terminal}
                 spellCheck
                 aria-label={thread ? 'Reply' : 'Message'}
                 aria-keyshortcuts="Enter Shift+Enter"

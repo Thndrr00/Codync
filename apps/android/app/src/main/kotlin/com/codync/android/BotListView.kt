@@ -514,7 +514,7 @@ internal fun backendName(state: AppState? = null, id: String): String =
     state?.hello?.get("backends")?.let { it as? kotlinx.serialization.json.JsonArray }
         ?.firstOrNull { (it as? kotlinx.serialization.json.JsonObject)?.get("id") == JsonPrimitive(id) }
         ?.let { ((it as kotlinx.serialization.json.JsonObject)["name"] as? JsonPrimitive)?.content }
-        ?: when (id) { "claude" -> "Claude Code"; "codex" -> "Codex"; "opencode" -> "OpenCode"; "grok" -> "Grok Build"; "gemini" -> "Gemini CLI"; else -> "Custom agent" }
+        ?: when (id) { "claude" -> "Claude Code"; "codex" -> "Codex"; "opencode" -> "OpenCode"; "grok" -> "Grok Build"; "gemini" -> "Gemini CLI"; "external" -> "Terminal"; else -> "Custom agent" }
 
 /** Saves a dragged roster order (the host syncs it to every device). */
 internal fun AppStore.reorder(ids: List<String>) =
