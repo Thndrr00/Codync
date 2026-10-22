@@ -1,6 +1,6 @@
 //! Skills: the anthropics/skills catalog, downloads, hand-written skills and the profile's skills block.
 
-use super::{SKILLS_REPO, Skill, TIMEOUT, UA, get_json, save, skills, skills_dir, slug, unique_id};
+use super::{GITHUB, SKILLS_REPO, Skill, TIMEOUT, fetch_json, get_bytes, save, skills, skills_dir, slug, unique_id};
 use crate::LockExt;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
@@ -8,6 +8,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 static SKILL_CATALOG: Mutex<Option<(Instant, Value)>> = Mutex::new(None);
+/// Largest skill file downloaded.
+const MAX_FILE: usize = 1_000_000;
 
 /// `name` and `description` from a SKILL.md front matter.
 fn front_matter(md: &str) -> (Option<String>, Option<String>) {
@@ -62,7 +64,7 @@ async fn catalog() -> Result<Value> {
     let catalog = if let Some(v) = cached {
         v
     } else {
-        let dirs = get_json(&format!("https://api.github.com/repos/{SKILLS_REPO}/contents/skills"))
+        let dirs = fetch_json(GITHUB, &format!("https://api.github.com/repos/{SKILLS_REPO}/contents/skills"), TIMEOUT)
             .await
             .context("listing skills on GitHub")?;
         let names: Vec<String> = dirs
@@ -74,7 +76,7 @@ async fn catalog() -> Result<Value> {
             .collect();
         let fetches = names.iter().map(|dir| async move {
             let url = format!("https://raw.githubusercontent.com/{SKILLS_REPO}/main/skills/{dir}/SKILL.md");
-            let md = crate::http().get(&url).header("user-agent", UA).timeout(TIMEOUT).send().await.ok()?.text().await.ok()?;
+            let md = String::from_utf8(get_bytes(GITHUB, &url, TIMEOUT, MAX_FILE).await.ok()?).ok()?;
             let (name, description) = front_matter(&md);
             Some(json!({"source": dir, "name": name.unwrap_or_else(|| dir.clone()), "description": description.unwrap_or_default(), "body": body(&md)}))
         });
@@ -132,7 +134,9 @@ pub async fn skill_details(store: &crate::store::Store, b: &Value) -> Result<Val
 
 /// Downloads a skill folder from anthropics/skills (files up to 1 MB, two levels deep).
 async fn download_dir(repo_path: &str, dest: &std::path::Path, depth: u8) -> Result<()> {
-    let listing = get_json(&format!("https://api.github.com/repos/{SKILLS_REPO}/contents/{repo_path}")).await?;
+    let listing =
+        fetch_json(GITHUB, &format!("https://api.github.com/repos/{SKILLS_REPO}/contents/{repo_path}"), TIMEOUT)
+            .await?;
     tokio::fs::create_dir_all(dest).await?;
     for item in listing.as_array().into_iter().flatten() {
         let name = item["name"].as_str().unwrap_or_default();
@@ -141,10 +145,9 @@ async fn download_dir(repo_path: &str, dest: &std::path::Path, depth: u8) -> Res
             continue;
         }
         match item["type"].as_str() {
-            Some("file") if item["size"].as_u64().unwrap_or(0) <= 1_000_000 => {
+            Some("file") if item["size"].as_u64().is_some_and(|n| n <= MAX_FILE as u64) => {
                 let Some(url) = item["download_url"].as_str() else { continue };
-                let bytes =
-                    crate::http().get(url).header("user-agent", UA).timeout(TIMEOUT).send().await?.bytes().await?;
+                let bytes = get_bytes(GITHUB, url, TIMEOUT, MAX_FILE).await?;
                 tokio::fs::write(dest.join(name), &bytes).await?;
             }
             Some("dir") if depth > 0 => {

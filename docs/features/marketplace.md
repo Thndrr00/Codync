@@ -17,7 +17,7 @@ The Connectors shelf opens with a short featured list, then pages through the wh
 
 Registry package installs use pinned package references: npm, PyPI and NuGet require the package’s own version; OCI uses the tag or SHA-256 digest already in its image identifier, even when the separate package version is omitted. Untagged images, `latest` tags without a digest, and invalid references are rejected; a server-level version does not pin the executable package.
 
-A custom connector is a command line (split like a shell), a URL, or a pasted MCP config (`importConnectors {config}`: the `mcpServers` / `servers` JSON from READMEs, Claude, Cursor or VS Code, or one server's entry); every server in a config is added.
+A custom connector is a command line (split like a shell), a URL (https, or plain http on this computer or its local network), or a pasted MCP config (`importConnectors {config}`: the `mcpServers` / `servers` JSON from READMEs, Claude, Cursor or VS Code, or one server's entry); every server in a config is added.
 
 A connector installed on the computer (or an app connected through Composio) is turned on for every existing bot, and a new bot starts with all of them on; each bot can turn one off in its settings. An enabled connector is passed to the agent as an MCP server when its session starts or resumes. Local connectors are spawned by the agent; remote ones always go through the host's stdio proxy (`codync-host mcp remote`, `host/src/mcp.rs`), so they work with agents that only speak stdio and always carry a fresh token. The proxy speaks streamable HTTP and falls back to the older HTTP+SSE transport when the first POST fails with 400/404/405, as the MCP spec suggests.
 
@@ -44,7 +44,7 @@ Typing `/` at the start of a message to a bot (desktop, iPhone, terminal; not in
 
 Picking a built-in command, or sending a message that is just one (`/fast`), runs it in the client and clears the box; nothing reaches the agent. Return on a skill whose name is already typed out sends the message. The host sees a message starting with `/<id of a skill the bot has on>` and hands the agent `[Codync: the user picked the "<name>" skill for this message. Read <path> first and follow it.]` followed by the rest of the message; the chat keeps the text as typed. Any other `/command`, including `/fast` for a bot without Fast mode on offer, reaches the agent unchanged, so its own commands keep working. Clients list skills and load skill instructions only from hosts 2.14.1 and newer.
 
-## Sign-in for remote connectors (`host/src/market/oauth.rs`)
+## Sign-in for remote connectors (`host/src/market/oauth.rs`, discovery in `discovery.rs`)
 
 Installing a remote connector probes it: a 401 to `initialize`, or (with no headers given) protected-resource metadata naming an authorization server, for servers like Call2Me that only refuse tool calls, marks it `signedOut`, and bots don't get it until someone signs in. Sign-in follows the MCP authorization spec: protected-resource metadata → authorization-server metadata → dynamic client registration (both redirect URIs at once) → PKCE. Tokens stay on the computer and are refreshed on use (or after a 401).
 
@@ -53,7 +53,7 @@ Installing a remote connector probes it: a 401 to `initialize`, or (with no head
 | On the computer (desktop app, TUI; loopback caller) | `http://127.0.0.1:<port>/oauth/callback` | the host's callback page |
 | On the phone (E2E channel caller) | `<cloud>/v1/oauth/callback` → 302 `codync://oauth?…` | the app's system sign-in sheet sends `connectorSignInFinish` |
 
-The cloud page is stateless and the code is useless without the PKCE verifier held by the host. Servers without dynamic client registration (e.g. GitHub) need a token header instead (custom connector, URL + headers). `connectorTarget` (loopback only) hands the proxy the URL and headers.
+The cloud page is stateless and the code is useless without the PKCE verifier held by the host. Servers without dynamic client registration (e.g. GitHub) need a token header instead (custom connector, URL + headers). `connectorTarget` (loopback only) hands the proxy the URL, the headers and whether the URL came from the MCP Registry. Every request to a connector, its sign-in servers, the MCP Registry, GitHub and ACP registry agent downloads goes through the [egress policy](../reference/egress-policy.md): cloud metadata and link-local addresses are always refused, the local network is reachable only from a connector the user added, and endpoints a public server names must be public too.
 
 Registry packages install only at the exact version the MCP Registry lists (no `latest`), since they run as the user. An enabled skill tells the bot where its instruction folder lives. These are distinct from the built-in `team` and `computer` MCP services.
 

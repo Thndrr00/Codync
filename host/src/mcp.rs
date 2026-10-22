@@ -2,6 +2,7 @@
 //! operates the desktop when enabled. Calls go through authenticated loopback
 //! HTTP to the running host, which owns delegation and screen control.
 
+use crate::egress::Policy;
 use anyhow::Result;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
@@ -182,18 +183,18 @@ pub async fn serve_remote(connector: String, port: u16) -> Result<()> {
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let mut session: Option<String> = None;
     // The POST endpoint of a server on the older SSE transport, and the task reading its stream.
-    let mut legacy: Option<String> = None;
+    let mut legacy: Option<Legacy> = None;
     let mut stream: Option<tokio::task::JoinHandle<()>> = None;
     while let Some(line) = lines.next_line().await? {
         let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
         let replies = match &legacy {
-            Some(endpoint) => remote.post_legacy(endpoint, &msg).await,
+            Some(l) => remote.post_legacy(l, &msg).await,
             None => match remote.forward(&msg, &mut session).await {
                 Ok(Some(replies)) => Ok(replies),
                 Ok(None) => match remote.open_legacy(tx.clone()).await {
-                    Ok((endpoint, reader)) => {
-                        let replies = remote.post_legacy(&endpoint, &msg).await;
-                        legacy = Some(endpoint);
+                    Ok((l, reader)) => {
+                        let replies = remote.post_legacy(&l, &msg).await;
+                        legacy = Some(l);
                         stream = Some(reader);
                         replies
                     }
@@ -223,6 +224,13 @@ pub async fn serve_remote(connector: String, port: u16) -> Result<()> {
     Ok(())
 }
 
+/// The older transport's POST endpoint and what it may reach: the server names it, so it may
+/// point at the local network only when the connector itself is a local one the user added.
+struct Legacy {
+    endpoint: String,
+    policy: Policy,
+}
+
 struct Remote {
     port: u16,
     token: String,
@@ -230,8 +238,9 @@ struct Remote {
 }
 
 impl Remote {
-    /// The connector's URL and headers, with a fresh sign-in token (`stale` forces a refresh).
-    async fn target(&self, stale: bool) -> Result<(String, reqwest::header::HeaderMap)> {
+    /// The connector's URL, headers with a fresh sign-in token (`stale` forces a refresh), and
+    /// what that URL may reach.
+    async fn target(&self, stale: bool) -> Result<(String, reqwest::header::HeaderMap, Policy)> {
         let res = crate::http()
             .post(format!("http://127.0.0.1:{}/api/connectorTarget", self.port))
             .bearer_auth(&self.token)
@@ -252,15 +261,17 @@ impl Remote {
                 reqwest::header::HeaderValue::from_str(v.as_str().unwrap_or_default())?,
             );
         }
-        Ok((target["url"].as_str().unwrap_or_default().to_owned(), headers))
+        let policy = if target["public"] == true { Policy::Public } else { Policy::UserChosen };
+        Ok((target["url"].as_str().unwrap_or_default().to_owned(), headers, policy))
     }
 
     /// Sends one message over streamable HTTP; returns what the server answered (JSON, or
     /// the events of an SSE stream). None: the server doesn't speak streamable HTTP.
     async fn forward(&self, msg: &Value, session: &mut Option<String>) -> Result<Option<Vec<Value>>> {
         for stale in [false, true] {
-            let (url, headers) = self.target(stale).await?;
-            let mut req = crate::http()
+            let (url, headers, policy) = self.target(stale).await?;
+            let mut req = crate::egress::client(policy, &url)
+                .await?
                 .post(&url)
                 .headers(headers)
                 .header("accept", "application/json, text/event-stream")
@@ -311,10 +322,11 @@ impl Remote {
 
     /// Opens the older transport's event stream, which carries every answer from now on
     /// (sent to `tx`); returns the URL messages are posted to and the task reading the stream.
-    async fn open_legacy(&self, tx: mpsc::UnboundedSender<Value>) -> Result<(String, tokio::task::JoinHandle<()>)> {
+    async fn open_legacy(&self, tx: mpsc::UnboundedSender<Value>) -> Result<(Legacy, tokio::task::JoinHandle<()>)> {
         for stale in [false, true] {
-            let (url, headers) = self.target(stale).await?;
-            let res = crate::http()
+            let (url, headers, policy) = self.target(stale).await?;
+            let res = crate::egress::client(policy, &url)
+                .await?
                 .get(&url)
                 .headers(headers)
                 .header("accept", "text/event-stream")
@@ -350,17 +362,19 @@ impl Remote {
                 eprintln!("{connector}: the server closed its event stream");
                 std::process::exit(1);
             });
-            return Ok((endpoint, reader));
+            return Ok((Legacy { endpoint, policy: crate::egress::derived(policy, &url).await }, reader));
         }
         anyhow::bail!("{} still refuses the sign-in; sign in again in Extensions", self.connector)
     }
 
     /// Posts one message on the older transport. Answers normally arrive on the stream;
     /// a server that answers in the body is heard too.
-    async fn post_legacy(&self, endpoint: &str, msg: &Value) -> Result<Vec<Value>> {
+    async fn post_legacy(&self, legacy: &Legacy, msg: &Value) -> Result<Vec<Value>> {
+        let endpoint = legacy.endpoint.as_str();
         for stale in [false, true] {
-            let (_, headers) = self.target(stale).await?;
-            let res = crate::http()
+            let (_, headers, _) = self.target(stale).await?;
+            let res = crate::egress::client(legacy.policy, endpoint)
+                .await?
                 .post(endpoint)
                 .headers(headers)
                 .json(msg)

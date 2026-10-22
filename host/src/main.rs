@@ -7,6 +7,7 @@ mod background;
 mod chat;
 mod cli;
 mod compat;
+mod egress;
 mod environment;
 mod hub;
 mod market;
