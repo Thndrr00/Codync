@@ -6,6 +6,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,12 +28,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -43,6 +47,7 @@ import com.codync.android.core.*
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import kotlin.math.abs
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -108,7 +113,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
 
 /** One chat-visible entry, with what can be done to it. `reply` opens its thread (main chat only). */
 @Composable internal fun ChatRow(entry: Entry, groupStart: Boolean, chat: Bot?, state: AppState, store: AppStore,
-    openTrace: () -> Unit, reply: (() -> Unit)?, connect: ConnectionRequestActions) {
+    openTrace: () -> Unit, reply: (() -> Unit)?, connect: ConnectionRequestActions, thread: String? = null) {
     val group = chat?.kind == "group"
     val compact = LocalUiDensity.current == UiDensity.Compact
     val topGroupGap = if (compact) 8.dp else 12.dp
@@ -117,14 +122,14 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
     when (entry.kind) {
         "user" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            UserBubble(entry, state, store, reply)
+            UserBubble(entry, state, store, reply, thread)
             ReactionsRow(entry, store)
             ThreadChip(entry, state, reply)
         }
         "agent" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (group && groupStart) AuthorLabel(entry.data.text("author"), state)
-            AgentBubble(entry, state, store, openTrace, reply)
+            AgentBubble(entry, state, store, openTrace, reply, thread)
             Column(Modifier.padding(start = if (group) 34.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ReactionsRow(entry, store)
                 ThreadChip(entry, state, reply)
@@ -155,13 +160,33 @@ internal class ConnectionRequestActions(val openApp: (String, ComposioApp) -> Un
     }
 }
 
-/** The menu a message opens on long press: copy, reply in its thread, what the agent did. */
-private fun messageMenu(context: android.content.Context, entry: Entry, reply: (() -> Unit)?, trace: (() -> Unit)?) = buildList {
+/** The menu a message opens on long press: copy, quote, reply in its thread, what the agent did. */
+private fun messageMenu(context: android.content.Context, entry: Entry, reply: (() -> Unit)?, trace: (() -> Unit)?, quote: (() -> Unit)?) = buildList {
     add(MenuItem("Copy", icon = "square.on.square") {
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Message", entry.text))
     })
+    if (quote != null) add(MenuItem("Quote", icon = "text.bubble", action = quote))
     if (reply != null) add(MenuItem("Reply in thread", icon = "arrowshape.turn.up.left", action = reply))
     if (trace != null) add(MenuItem("Show what it did", icon = "list.bullet", action = trace))
+}
+
+/**
+ * A decided horizontal swipe on a main-chat message opens its thread (idea 28). The threshold
+ * keeps vertical scroll, text selection and a code block's own horizontal scroll in charge.
+ */
+@Composable private fun Modifier.swipeToReply(reply: (() -> Unit)?): Modifier {
+    if (reply == null) return this
+    val current by rememberUpdatedState(reply)
+    val threshold = with(LocalDensity.current) { 64.dp.toPx() }
+    var total by remember { mutableStateOf(0f) }
+    return pointerInput(Unit) {
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onHorizontalDrag = { _, amount -> total += amount },
+            onDragEnd = { if (abs(total) >= threshold) current(); total = 0f },
+            onDragCancel = { total = 0f },
+        )
+    }
 }
 
 internal val quickReactions = listOf("👍", "❤️", "😂", "🎉", "👀", "✅")
@@ -172,14 +197,14 @@ private fun reactionPick(entry: Entry, store: AppStore) = ReactionPick(quickReac
 
 internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
 
-@Composable private fun UserBubble(entry: Entry, state: AppState, store: AppStore, reply: (() -> Unit)?) {
+@Composable private fun UserBubble(entry: Entry, state: AppState, store: AppStore, reply: (() -> Unit)?, thread: String?) {
     val context = LocalContext.current
     val attachments = entry.data["attachments"]?.jsonArray?.map { WireJson.decodeFromJsonElement<Attachment>(it) }.orEmpty()
     Column(Modifier.fillMaxWidth().padding(start = 56.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (attachments.isNotEmpty()) AttachmentList(attachments, entry.botId, state, store)
-        if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser)
+        if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser).swipeToReply(reply)
             .contextActions(reactions = reactionPick(entry, store), preview = { SelectionContainer { UserText(entry.text) } }) {
-                messageMenu(context, entry, reply, null)
+                messageMenu(context, entry, reply, null) { store.quoteMessage(entry, thread) }
             }) { UserText(entry.text) }
         SendStatusLine(entry.status, state.bots.firstOrNull { it.id == entry.botId }?.status == "working")
     }
@@ -237,17 +262,17 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     }
 }
 
-@Composable private fun AgentBubble(entry: Entry, state: AppState, store: AppStore, openTrace: () -> Unit, reply: (() -> Unit)?) {
+@Composable private fun AgentBubble(entry: Entry, state: AppState, store: AppStore, openTrace: () -> Unit, reply: (() -> Unit)?, thread: String?) {
     val context = LocalContext.current
     val files = entry.files
     Column(Modifier.fillMaxWidth().padding(end = 40.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // A message with files is its files: the text is only the computer's fallback.
-        if (files.isNotEmpty()) Column(Modifier.contextActions(reactions = reactionPick(entry, store)) { messageMenu(context, entry, reply, openTrace) },
+        if (files.isNotEmpty()) Column(Modifier.contextActions(reactions = reactionPick(entry, store)) { messageMenu(context, entry, reply, openTrace) { store.quoteMessage(entry, thread) } },
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             for (file in files) FileDownloadCard(entry, file, state, store)
-        } else if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent)
+        } else if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).swipeToReply(reply)
             .contextActions(reactions = reactionPick(entry, store), preview = { AgentText(entry.text, selectable = true) }) {
-                messageMenu(context, entry, reply, openTrace)
+                messageMenu(context, entry, reply, openTrace) { store.quoteMessage(entry, thread) }
             }) { AgentText(entry.text, selectable = false) }
     }
 }

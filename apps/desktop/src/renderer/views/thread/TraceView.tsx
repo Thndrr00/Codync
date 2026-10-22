@@ -10,6 +10,7 @@ import type { Weight } from '../../lib/fonts'
 import { useStore } from '../../store/context'
 import { MarkdownText } from './Markdown'
 import { CodeBox, DiffView } from './PermissionCard'
+import { filterCounts, matchesFilter, TRACE_FILTERS, type TraceFilterId } from './trace-filter'
 import './trace.css'
 
 /**
@@ -18,9 +19,12 @@ import './trace.css'
  */
 export function TraceView({ botId, thread = null }: { botId: string; thread?: string | null }) {
   const store = useStore()
+  const [filter, setFilter] = useState<TraceFilterId>('all')
+  const entries = store.allEntries(botId).filter((e) => (e.threadId ?? null) === thread)
+  const counts = filterCounts(entries)
   const turns = new Map<number, Entry[]>()
-  for (const e of store.allEntries(botId)) {
-    if ((e.threadId ?? null) !== thread) continue
+  for (const e of entries) {
+    if (!matchesFilter(e, filter)) continue
     turns.set(e.turn, [...(turns.get(e.turn) ?? []), e])
   }
   const sorted = [...turns.entries()].sort((a, b) => a[0] - b[0])
@@ -28,10 +32,11 @@ export function TraceView({ botId, thread = null }: { botId: string; thread?: st
   useLayoutEffect(() => {
     const el = scroller.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [])
+  }, [filter])
   return (
     <SheetPage>
       <ModalHeader title="Full conversation" />
+      <TraceFilters selection={filter} counts={counts} onSelect={setFilter} />
       <div ref={scroller} className="thread-scroll">
         <VStack gap={14} className="trace-content">
           {sorted.length === 0 ? <Text tone="tertiary">Nothing yet.</Text> : null}
@@ -50,6 +55,19 @@ export function TraceView({ botId, thread = null }: { botId: string; thread?: st
         </VStack>
       </div>
     </SheetPage>
+  )
+}
+
+/** The "Full conversation" filters: one pill per event type with its count (idea 32). */
+function TraceFilters({ selection, counts, onSelect }: { selection: TraceFilterId; counts: Record<TraceFilterId, number>; onSelect: (id: TraceFilterId) => void }) {
+  return (
+    <div className="trace-filters" role="tablist" aria-label="Filter conversation">
+      {TRACE_FILTERS.map((f) => (
+        <button key={f.id} role="tab" aria-selected={selection === f.id} className={selection === f.id ? 'trace-filter on' : 'trace-filter'} onClick={() => onSelect(f.id)}>
+          {f.id === 'all' ? f.label : `${f.label} ${counts[f.id]}`}
+        </button>
+      ))}
+    </div>
   )
 }
 

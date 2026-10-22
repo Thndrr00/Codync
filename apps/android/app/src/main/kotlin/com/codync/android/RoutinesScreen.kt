@@ -63,7 +63,7 @@ import kotlinx.coroutines.launch
  * A bot's routines, in a sheet over its chat (iOS `RoutinesView`); a row opens its editor.
  * `initialId`: open on that routine's editor (a run's notice in the chat was tapped).
  */
-@Composable fun RoutinesScreen(bot: Bot, state: AppState, store: AppStore, initialId: String?) {
+@Composable fun RoutinesScreen(bot: Bot, state: AppState, store: AppStore, initialId: String?, embedded: Boolean = false) {
     val dismiss = LocalDismissModal.current
     val online = state.actualConnection is LinkState.Ready
     val listing = state.routines[bot.id]
@@ -74,10 +74,12 @@ import kotlinx.coroutines.launch
     Column(Modifier.fillMaxSize().background(Palette.background).verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Routines", Modifier.weight(1f).padding(start = 2.dp), style = Type.system(13f).semibold, color = Palette.text)
+            // Embedded in the inspector (idea 33): the tab already names it and closes it, so no title or close here.
+            if (embedded) Spacer(Modifier.weight(1f))
+            else Text("Routines", Modifier.weight(1f).padding(start = 2.dp), style = Type.system(13f).semibold, color = Palette.text)
             IconButton("Ask the bot for a routine", "text.bubble", enabled = online) { store.editDraft(bot.id, null, "I want a routine that "); dismiss() }
             IconButton("Set up a routine", "plus", enabled = online) { editing = "" }
-            IconButton("Close routines", "xmark", action = dismiss)
+            if (!embedded) IconButton("Close routines", "xmark", action = dismiss)
         }
         val routines = listing?.routines.orEmpty()
         if (routines.isEmpty()) Text(if (listing != null) "No routines yet. Ask the bot for one, or set it up yourself with +." else "Loading routines…",

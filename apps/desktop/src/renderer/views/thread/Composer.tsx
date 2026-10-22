@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import { isBelow } from '@shared/compat'
 import { isGroup, isWorkingIn, type Bot } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
+import { DropdownMenu } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { usePresence } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
@@ -13,6 +14,7 @@ import { pluginsFor } from '../marketplace/plugins'
 import { composerEnter } from './composer-keyboard'
 import { CommandMenu, useCommandMenu } from './CommandMenu'
 import { ComposerAttachment } from './ComposerAttachment'
+import { insertCodeBlock, wrapInCode, type ComposerEdit } from './composer-edits'
 import { useDictation } from './dictation'
 import { builtInCommand, SKILLS_HOST, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
 
@@ -144,6 +146,27 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
     setFiles((list) => [...list, ...accepted])
   }
 
+  // A composer shortcut edits one range and moves the selection; it never replaces the draft or sends.
+  const pendingSelection = useRef<[number, number] | null>(null)
+  useLayoutEffect(() => {
+    const el = field.current
+    if (el && pendingSelection.current) {
+      el.focus()
+      el.setSelectionRange(pendingSelection.current[0], pendingSelection.current[1])
+      pendingSelection.current = null
+    }
+  }, [draft])
+  const applyEdit = (edit: ComposerEdit | null) => {
+    if (!edit) return
+    pendingSelection.current = [edit.selectionStart, edit.selectionEnd]
+    setDraft(draft.slice(0, edit.start) + edit.replacement + draft.slice(edit.end))
+  }
+  // The textarea keeps its selection when the menu takes focus, so it is still there at click time.
+  const fieldSelection = () => {
+    const el = field.current
+    return { start: el ? el.selectionStart : draft.length, end: el ? el.selectionEnd : draft.length }
+  }
+
   const submit = () => {
     const command = files.length ? null : builtInCommand(bot, draft)
     if (command) return run(command)
@@ -199,9 +222,17 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
           <div className="composer-box">
             {/* One capsule: attachments, the field, and send / stop / call. */}
             {canAttach ? (
-              <button className="press composer-add" aria-label="Add files" title="Add files" onClick={() => void window.codync.app.pickFiles().then(append)}>
+              <DropdownMenu
+                className="press composer-add"
+                title="Add files"
+                items={() => [
+                  { title: 'Add files', icon: 'folder', action: () => void window.codync.app.pickFiles().then(append) },
+                  { title: 'Wrap in code', icon: 'terminal', action: () => applyEdit(wrapInCode(draft, fieldSelection().start, fieldSelection().end)) },
+                  { title: 'Code block', icon: 'terminal', action: () => applyEdit(insertCodeBlock(draft, fieldSelection().start, fieldSelection().end)) },
+                ]}
+              >
                 <Icon name="plus" size={13} weight="medium" color="var(--text)" />
-              </button>
+              </DropdownMenu>
             ) : null}
             <div className="composer-field">
               <div ref={measure} className="composer-measure" aria-hidden="true">{draft + '\u200b'}</div>

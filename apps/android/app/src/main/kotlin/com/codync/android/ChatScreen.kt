@@ -78,6 +78,7 @@ import com.kyant.shapes.RoundedRectangle
     var confirmNewSession by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var routines by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(false) }
     // The routine the sheet opens on (a run's notice), or none for the list.
     var routineId by remember { mutableStateOf<String?>(null) }
     val openRoutine = { id: String? -> routineId = id; routines = true }
@@ -101,7 +102,7 @@ import com.kyant.shapes.RoundedRectangle
         ScrollEdge(Edge.Bottom, with(density) { composerHeight.toDp() } + 4.dp, Modifier.align(Alignment.BottomCenter))
         // 10 above the composer, as on iOS: the list already keeps 8 under its last row.
         JumpToLatest(scroll, Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { composerHeight.toDp() } + 10.dp))
-        ThreadHeader(bot, state, store, edit, { store.showTrace(true) }, { openRoutine(null) }, { confirmNewSession = true }, { confirmDelete = true })
+        ThreadHeader(bot, state, store, edit, { store.showTrace(true) }, { openRoutine(null) }, { confirmNewSession = true }, { confirmDelete = true }, { searching = true })
         // The call floats over the chat under the header, as on iOS; the chat stays readable and usable.
         AnimatedVisibility(state.voice != null, Modifier.padding(top = top + 54.dp),
             enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { -it }, exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { -it }) {
@@ -137,6 +138,7 @@ import com.kyant.shapes.RoundedRectangle
     // A thread over the chat, and "Full conversation" over either.
     CodyncSheet(state.thread, { store.openBot(bot.id) }) { root -> RepliesView(bot, root, state, store, connect) }
     CodyncSheet(state.trace, { store.showTrace(false) }) { TraceView(bot, state.thread, state) }
+    CodyncSheet(searching, { searching = false }) { ConversationSearch(bot, store) { searching = false } }
     CodyncSheet(routines, { routines = false }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded), initialDetent = SheetDetent.Expanded) {
         RoutinesScreen(bot, state, store, routineId)
     }
@@ -154,7 +156,7 @@ import com.kyant.shapes.RoundedRectangle
  *   and overflow menu (`${bot.name} actions`).
  */
 @Composable internal fun ThreadHeader(bot: Bot, state: AppState, store: AppStore, edit: (Bot) -> Unit, trace: () -> Unit,
-    routines: () -> Unit, newSession: () -> Unit, delete: () -> Unit) {
+    routines: () -> Unit, newSession: () -> Unit, delete: () -> Unit, search: () -> Unit) {
     val density = LocalDensity.current
     val host = state.computer?.name.orEmpty()
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 12.dp).height(48.dp)) {
@@ -206,6 +208,15 @@ import com.kyant.shapes.RoundedRectangle
                 ) {
                     Symbol("clock.arrow.circlepath", size = 20.dp, tint = Palette.text)
                 }
+            }
+            val (searchSource, searchPressed) = rememberPress()
+            Box(
+                Modifier.size(44.dp).glass(Capsule(), pressed = searchPressed)
+                    .clickable(searchSource, null, role = Role.Button, onClick = search)
+                    .semantics { contentDescription = "Search conversation" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Symbol("magnifyingglass", size = 20.dp, tint = Palette.text)
             }
             DropdownMenu({ buildList {
                 add(MenuItem("$host · ${connectionLabel(state)}", enabled = false))
@@ -273,7 +284,7 @@ import com.kyant.shapes.RoundedRectangle
     val working = bot.isWorking(bot.id, null) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
-    ConversationList(scroll, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
+    ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
         if (more) item("earlier") {
             Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
                 contentAlignment = Alignment.Center) { Spinner(14.dp) }
@@ -322,10 +333,10 @@ import com.kyant.shapes.RoundedRectangle
             }
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
             val items = chatItems(replies, pending)
-            Box(Modifier.weight(1f)) { ConversationList(scroll, items.lastOrNull()?.id, replies.lastOrNull()?.rev, working,
+            Box(Modifier.weight(1f)) { ConversationList(scroll, replies.map { it.id }, items.lastOrNull()?.id, replies.lastOrNull()?.rev, working,
                 PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = with(density) { composerHeight.toDp() } + 8.dp)) {
                 if (root != null) {
-                    item("root") { ChatRow(root, true, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect) }
+                    item("root") { ChatRow(root, true, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect, thread = rootId) }
                     item("count") {
                         val count = (root.data["thread"] as? kotlinx.serialization.json.JsonObject)?.get("count")
                             ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() } ?: 0
@@ -337,7 +348,7 @@ import com.kyant.shapes.RoundedRectangle
                 }
                 items(items.filter { it !is ChatItem.Separator }, key = { it.id }) { item ->
                     when (item) {
-                        is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect)
+                        is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect, thread = rootId)
                         is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, state, store)
                         is ChatItem.Separator, is ChatItem.Exchanges -> {}
                     }

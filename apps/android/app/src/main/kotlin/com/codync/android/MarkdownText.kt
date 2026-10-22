@@ -84,10 +84,7 @@ val LocalNetworkImages = staticCompositionLocalOf<ImageLoader> { error("Missing 
             Box(Modifier.width(3.dp).fillMaxHeight().background(Palette.border))
             Text(rememberInline(block.text, code, linkTint), Modifier.padding(start = 10.dp), style = Type.chatBody, color = Palette.secondary)
         }
-        is Block.Code -> Box(Modifier.fillMaxWidth().clip(RoundedRectangle(8.dp)).background(Palette.codeBackground)
-            .horizontalScroll(rememberScrollState())) {
-            Text(block.text, Modifier.padding(10.dp), style = Type.chatFootnote.monospaced, color = Palette.text, softWrap = false)
-        }
+        is Block.Code -> CodeBlock(block.text, block.language)
     }
 }
 

@@ -39,21 +39,34 @@ import kotlinx.serialization.json.jsonPrimitive
     var draft by remember(state.generation, initial.id) { mutableStateOf(initial) }
     var folders by remember { mutableStateOf(false) }
     var viewingSkill by remember { mutableStateOf<SkillRef?>(null) }
+    var tab by remember { mutableStateOf(InspectorTab.Settings) }
     val online = state.actualConnection is LinkState.Ready
     val saving = "editor" in state.busy
     val dismiss = LocalDismissModal.current
     val isNew = draft.id == null
+    val bot = state.bots.firstOrNull { it.id == draft.id }
     // A new bot starts on an installed agent we know, with every connector and skill on.
     LaunchedEffect(state.hello, state.plugins) { if (isNew) draft = fillDefaults(draft, state) }
     LaunchedEffect(online) { if (online) store.refreshPlugins() }
     Column(Modifier.fillMaxSize()) {
-        ModalHeader(if (isNew) "New bot" else "Settings") {
-            if (saving) Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Spinner() }
-            else IconButton(if (isNew) "Create" else "Save", "checkmark", enabled = draft.isValid && online) {
-                store.saveBot(draft) { dismiss() }
+        ModalHeader(if (isNew) "New bot" else "Bot") {
+            if (tab == InspectorTab.Settings) {
+                if (saving) Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Spinner() }
+                else IconButton(if (isNew) "Create" else "Save", "checkmark", enabled = draft.isValid && online) {
+                    store.saveBot(draft) { dismiss() }
+                }
             }
         }
-        BotSettingsForm(state, store, draft, { draft = it }, { viewingSkill = it }) { folders = true }
+        // An existing bot's settings, memory and routines sit behind one inspector (idea 33).
+        if (!isNew) SegmentedChoice(tab, InspectorTab.entries.map { it to it.label }, { tab = it },
+            Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp))
+        when (tab) {
+            InspectorTab.Settings -> BotSettingsForm(state, store, draft, { draft = it }, { viewingSkill = it }) { folders = true }
+            InspectorTab.Memory -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+                draft.id?.let { MemoryCard(it, state, store) }
+            }
+            InspectorTab.Routines -> bot?.let { RoutinesScreen(it, state, store, null, embedded = true) }
+        }
     }
     CodyncSheet(folders, { folders = false }) {
         FolderPicker(draft.cwd.ifEmpty { state.hello?.get("home")?.jsonPrimitive?.contentOrNull }, online, store::listDirs) {
@@ -62,6 +75,8 @@ import kotlinx.serialization.json.jsonPrimitive
     }
     CodyncSheet(viewingSkill, { viewingSkill = null }) { SkillSheet(it, state, store) }
 }
+
+private enum class InspectorTab(val label: String) { Settings("Settings"), Memory("Memory"), Routines("Routines") }
 
 /** Picks an installed agent we know; connectors and skills start on once the computer has listed them. */
 private fun fillDefaults(draft: BotDraft, state: AppState): BotDraft {
@@ -190,7 +205,6 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
             plugins?.skills.orEmpty().map { Triple(it.id, it.name, it.description) }, draft.skills, { change(draft.copy(skills = it)) }) { id ->
             plugins?.skills?.firstOrNull { it.id == id }?.let { viewSkill(SkillRef(it.id, it.name, it.description)) }
         }
-        draft.id?.let { MemoryCard(it, state, store) }
         state.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
     }
 }

@@ -20,6 +20,16 @@ fun AppStore.editDraft(botId: String, thread: String?, text: String) {
     catch (error: Exception) { showError(error) }
 }
 
+/** Quotes a whole message into the draft of the conversation it belongs to (idea 34's fallback). */
+fun AppStore.quoteMessage(entry: Entry, thread: String? = entry.threadId) {
+    val text = entry.text
+    if (text.isBlank()) return
+    val quoted = text.lineSequence().joinToString("\n") { "> $it" }
+    val lane = ComposerDraft.lane(entry.botId, thread)
+    val current = state.value.drafts[lane]?.text.orEmpty()
+    editDraft(entry.botId, thread, if (current.isEmpty()) "$quoted\n\n" else "$current\n$quoted\n\n")
+}
+
 fun AppStore.addDraftFiles(botId: String, thread: String?, files: List<OutgoingFile>) {
     check(!state.value.loading) { "Wait for the account to finish opening before adding files." }
     val current = state.value.drafts[ComposerDraft.lane(botId, thread)] ?: ComposerDraft(botId, thread)

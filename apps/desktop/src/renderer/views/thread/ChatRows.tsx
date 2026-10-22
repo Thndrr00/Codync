@@ -14,12 +14,23 @@ import { QUICK_REACTIONS, type BotStore } from '../../store/bot-store'
 import { AttachmentList } from './Attachments'
 import { relativeTime } from './chat-items'
 import { MarkdownText } from './Markdown'
+import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { HandoffNotice } from './HandoffNotice'
 
 export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
   return { emoji: QUICK_REACTIONS, chosen: entry.data.reactions ?? [], toggle: (e) => store.react(entry, e) }
+}
+
+/** Quotes a whole message into its conversation's draft (idea 34's fallback when there is no selection). */
+export function quoteEntry(store: BotStore, entry: Entry) {
+  const text = entry.data.text ?? ''
+  if (!text) return
+  const thread = entry.threadId ?? null
+  const current = store.composerDrafts.get(entry.botId, thread)
+  const quoted = quoteText(text)
+  store.composerDrafts.set(entry.botId, thread, current ? `${current}\n${quoted}\n\n` : `${quoted}\n\n`)
 }
 
 /** One chat-visible entry in a chat or a thread, with what can be done to it. */
@@ -152,6 +163,7 @@ export function UserBubble({ entry, botWorking, reply }: { entry: Entry; botWork
             reactions={reactionPick(store, entry)}
             items={() => [
               { title: 'Copy', icon: 'square.on.square', action: copy },
+              { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
               ...(reply ? [{ title: 'Reply in thread', icon: 'arrowshape.turn.up.left', action: reply }] : []),
             ]}
           >
@@ -200,6 +212,7 @@ export function AgentBubble({ entry, openTrace, reply }: { entry: Entry; openTra
           reactions={reactionPick(store, entry)}
           items={() => [
             { title: 'Copy', icon: 'square.on.square', action: copy },
+            { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
             ...(reply ? [{ title: 'Reply in thread', icon: 'arrowshape.turn.up.left', action: reply }] : []),
             { title: 'Show what it did', icon: 'list.bullet', action: openTrace },
           ]}
