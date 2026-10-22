@@ -283,6 +283,7 @@ export class FakeHost {
       case 'marketSkills':
       case 'marketConnectors':
       case 'credentialLogins':
+      case 'credentialBotSecrets':
       case 'composioToolkits':
         return { items: [] }
       case 'devices':

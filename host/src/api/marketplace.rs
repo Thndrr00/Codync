@@ -103,6 +103,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             market::logins::remove(&hub.store, str_arg(&b, "id")?)?;
             json!({})
         }
+        "credentialBotSecrets" => market::bot_secrets::list(&hub.store)?,
+        "credentialRemoveBotSecret" => {
+            market::bot_secrets::remove(&hub.store, str_arg(&b, "id")?)?;
+            json!({})
+        }
         "credentialSetOnePassword" => {
             market::passwords::set_token(&hub.store, b["token"].as_str().unwrap_or_default()).await?
         }

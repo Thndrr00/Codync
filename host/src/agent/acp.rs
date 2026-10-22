@@ -168,11 +168,7 @@ impl Acp {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         super::account::isolate_process_env(&mut process, env);
-        // Its own group, so `kill` can stop everything it started.
-        #[cfg(unix)]
-        process.process_group(0);
-        #[cfg(windows)]
-        process.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+        Process::prepare(&mut process);
         let mut child = process.spawn().with_context(|| format!("starting `{command}`"))?;
         let stdin = child.stdin.take().expect("stdin is piped");
         let stdout = child.stdout.take().expect("stdout is piped");

@@ -16,6 +16,7 @@
 //! they're reduced to a safe slug first. Secret values (API keys, tokens) stay
 //! on this computer; listings only say which keys are set.
 
+pub mod bot_secrets;
 pub mod composio;
 pub mod logins;
 pub mod oauth;
@@ -27,6 +28,7 @@ pub mod verify;
 mod discovery;
 mod install;
 mod registry;
+mod secret_tools;
 mod skills;
 mod updates;
 

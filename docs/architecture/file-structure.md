@@ -98,7 +98,7 @@ Codync/
 | Host cloud state and relay connection | `host/src/remote/cloud.rs`, `relay.rs` |
 | Agent discovery, sign-in, setup terminal, Node.js for npm agents | `host/src/agent/backends.rs`, `registry.rs`, `auth.rs`, `term.rs`, `node.rs` |
 | Fast mode (session config option) | `host/src/agent/config.rs`, `agent/bot/fast_mode.rs` |
-| Marketplace, Composio, connector OAuth | `host/src/market/` |
+| Marketplace, Composio, connector OAuth, bot secrets | `host/src/market/` (bot secrets: `bot_secrets.rs`, `secret_tools.rs`) |
 | Egress policy for outgoing requests to untrusted URLs | `host/src/egress.rs` ([egress policy](../reference/egress-policy.md)) |
 | Screen bridge and built-in MCP tools | `host/src/screen/`, `mcp.rs` |
 | Swift transport and cloud API | `apps/ios/Kit/Sources/CodyncKit/Client/` |

@@ -265,6 +265,10 @@ impl Hub {
 
     pub fn delete_bot(&self, id: &str) -> Result<()> {
         self.routines.disable_bot(&self.store, id)?;
+        // A locked vault keeps them; Credentials lists them under "A removed bot" to remove.
+        if let Err(error) = crate::market::bot_secrets::remove_bot(&self.store, id) {
+            tracing::warn!(bot = id, error = format!("{error:#}"), "couldn't forget a deleted bot's secrets");
+        }
         self.team.cancel_bot(id);
         self.groups.stop(self, id);
         let _ = self.send_cmd(id, Cmd::Shutdown);

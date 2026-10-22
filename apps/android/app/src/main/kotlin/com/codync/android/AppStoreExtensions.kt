@@ -111,6 +111,11 @@ suspend fun AppStore.saveLogin(site: String, username: String, password: String)
     return WireJson.decodeFromJsonElement(response.jsonObject.getValue("login"))
 }
 suspend fun AppStore.removeLogin(id: String) { hostQuery("credentialRemoveLogin", body("id" to id), 60_000) }
+suspend fun AppStore.botSecrets(): List<BotSecret> {
+    val response = hostQuery("credentialBotSecrets", JsonObject(emptyMap()), 60_000)
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("items"))
+}
+suspend fun AppStore.removeBotSecret(id: String) { hostQuery("credentialRemoveBotSecret", body("id" to id), 60_000) }
 suspend fun AppStore.onePasswordToken(token: String): CredentialStatus {
     val response = hostQuery("credentialSetOnePassword", body("token" to token), 60_000)
     return WireJson.decodeFromJsonElement(response)

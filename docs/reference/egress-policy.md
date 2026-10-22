@@ -18,7 +18,7 @@ IPv6 addresses that reach an IPv4 address (IPv4-mapped `::ffff:a.b.c.d`, IPv4-co
 | --- | --- |
 | `Connector::egress()`: `UserChosen` for a connector the user added (custom URL, pasted config), `Public` for one from the MCP Registry | The connector's own URL: the check when it is added, the install probe, and the `codync-host mcp remote` proxy (`connectorTarget` returns `public` so the proxy knows) |
 | `egress::derived(connector policy, url)` | Anything a connector's server names: OAuth resource and authorization-server metadata, client registration, the token endpoint, and the older SSE transport's POST endpoint. It is `UserChosen` only for a user-added connector whose every address is on the local network, and `Public` otherwise, including when the lookup fails. This way a public server can't point the host at the user's LAN. |
-| `Public` | MCP Registry JSON; agent archives from the ACP registry (`egress::get_following`) |
+| `Public` | MCP Registry JSON; agent archives from the ACP registry (`egress::get_following`); a bot's `api_request` calls ([bot secrets](../features/connector-credentials.md#bot-secrets)) |
 | `Only(["api.github.com", "raw.githubusercontent.com"])` | Skill catalog listings and `SKILL.md` files, and skill downloads |
 
 Redirects are followed only within the first request's origin (at most five), because only that host's addresses are pinned. A redirect to another host is returned as the 3xx response. `egress::get_following` is for downloads served from a CDN (GitHub release assets): it follows up to five redirects to other hosts, checking and pinning each hop under the same policy.

@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 const REAP_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(super) struct Process {
+pub struct Process {
     // Drop the tree before Child can reap the leader and make its PID reusable.
     tree: Tree,
     child: Child,
@@ -16,7 +16,17 @@ pub(super) struct Process {
 }
 
 impl Process {
-    pub(super) fn new(child: Child) -> Result<Self> {
+    /// Makes `command` start its own tree (Unix process group; Windows suspended until [`Process::new`]
+    /// puts it in a job), so [`Process::kill`] stops everything it started.
+    pub fn prepare(command: &mut tokio::process::Command) {
+        #[cfg(unix)]
+        command.process_group(0);
+        #[cfg(windows)]
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+    }
+
+    /// Owns the tree of a child spawned from a [`Process::prepare`]d command.
+    pub fn new(child: Child) -> Result<Self> {
         let tree = Tree::new(&child)?;
         let owned = Self { tree, child, stopping: false };
         #[cfg(windows)]
@@ -88,12 +98,17 @@ impl Process {
         Ok(status == WAIT_OBJECT_0)
     }
 
+    /// Waits for the leader to exit; what it left running dies with [`Process::kill`].
+    pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait().await
+    }
+
     /// The graceful-shutdown task keeps ownership until its deadline.
     pub(super) fn begin_stop(&mut self) -> bool {
         !std::mem::replace(&mut self.stopping, true)
     }
 
-    pub(super) async fn kill(&mut self) {
+    pub async fn kill(&mut self) {
         if let Err(error) = self.tree.terminate() {
             tracing::warn!(%error, "couldn't terminate agent descendants");
         }
