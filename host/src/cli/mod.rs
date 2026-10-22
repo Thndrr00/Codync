@@ -2,4 +2,5 @@
 
 mod api;
 mod events;
+pub mod hook;
 pub mod send;

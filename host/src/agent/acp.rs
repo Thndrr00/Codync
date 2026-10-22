@@ -162,6 +162,8 @@ impl Acp {
         let mut process = crate::shell::exec(command).tokio();
         process
             .envs(env.iter().map(|(k, v)| (k, v)))
+            // Tells `codync-host hook` this agent is already Codync's own: a hook set for terminals must stay silent.
+            .env(crate::external::OWN_AGENT_ENV, "1")
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
