@@ -61,6 +61,21 @@ A routine has an OR list of triggers:
   `messageContains` matches a substring of `text`. Source names are `slack`,
   `github`, `origin`, `microsoftTeams`, `linear`, `sentry`, `pagerduty`, and `email`.
 
+- `watch`: `kind` (`files` or `url`), `target` and `everyMinutes` (1 to 10080).
+  Every `everyMinutes`, the host fingerprints the target without calling the model
+  (`routines/watch.rs`). For a file or folder the fingerprint covers names, sizes and
+  modification times, relative to the bot's folder. A folder may hold up to 2000
+  entries; `.git` and `node_modules` aren't looked into, and symlinks aren't
+  followed. For a URL it covers the status and body of a public HTTPS page (egress
+  `Public`, 30 s, 4 MB). The first check only records a baseline. After that, a
+  changed fingerprint queues a run with the event `{source: "watch", kind, target}`;
+  while a run waits, later changes fold into it. Three failed checks in a row pause
+  the routine, with `lastError` and a notice in the chat saying why. Changing a
+  routine's triggers starts new baselines. Bots create watches through
+  `save_routine`. The forms show them by their description and keep them, as with
+  events. A page whose body changes on every load (a clock, an ad) fires on every
+  check.
+
 For example, Sunday at 14:20 in Taipei is `20 14 * * 0` with `Asia/Taipei`.
 The host computes and displays the next occurrence. Calendar parsing uses
 [Croner](https://docs.rs/croner/3.0.1/croner/), with chrono-tz for named zones.

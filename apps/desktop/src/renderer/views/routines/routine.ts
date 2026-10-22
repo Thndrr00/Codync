@@ -10,6 +10,10 @@ export interface RoutineTrigger {
   source?: string | null
   event?: string | null
   filters?: Record<string, string> | null
+  /** `watch` triggers: `files` or `url`, the path or URL, and how often it's checked. */
+  kind?: string | null
+  target?: string | null
+  everyMinutes?: number | null
 }
 
 export interface Routine {

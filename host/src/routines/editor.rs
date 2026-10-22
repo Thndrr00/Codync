@@ -65,7 +65,7 @@ impl ScheduleDraft {
                 draft.at = *at;
             }
             Trigger::Webhook => draft.kind = "webhook".into(),
-            Trigger::Event { .. } => draft.kind = "keep".into(),
+            Trigger::Event { .. } | Trigger::Watch { .. } => draft.kind = "keep".into(),
             Trigger::Cron { expression, time_zone } => {
                 draft.zone.clone_from(time_zone);
                 draft.expression.clone_from(expression);
