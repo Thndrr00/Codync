@@ -9,6 +9,11 @@ Turn it on or off in **Settings → General → System** (*Show in notch* on mac
 of screen* elsewhere) or the menu bar / tray menu's **Settings**. It is off by default while it
 is experimental. The setting belongs to the desktop installation (`showIsland` in `host-prefs.json`).
 
+**Where it sits** (tray menu → Settings → Island position): the display with the notch (else the
+main one), the display under the pointer (it moves when the pointer crosses to another screen),
+or this computer's main display. The choice is saved as `islandPlacement` beside the switch, so a
+laptop with an external monitor can keep it on the screen being used.
+
 ## What it shows
 
 Open, the island is 640 pt wide, with a header of tabs beside the notch
@@ -21,6 +26,11 @@ The working badge is Codync's thinking orb. The usage meter and the Usage tab sh
 local plan limit and every limit with its reset (amber from 70 %, red from 90 %, like the menu
 bar). A bot can be messaged from the island, and ⌥Y / ⌥N answer an approval from any app.
 
+A working character follows the pointer with its eyes: the openings move smoothly (`tanh` of the
+distance, so they ease toward the edge of the face instead of snapping) and the whole character
+breathes by about 1 %. An idle character is drawn once and never tracks, so a roster full of them
+costs no frames; with Reduce Motion on, nothing moves at all.
+
 | State | When | What it shows |
 |---|---|---|
 | Hidden | No bot works or waits | Invisible over the notch (a thin strip at a plain top edge still wakes it) |
@@ -28,7 +38,8 @@ bar). A bot can be messaged from the island, and ⌥Y / ⌥N answer an approval 
 | Compact | A bot works or needs you | The notch widened: the bot in focus with its badge on the left, the others (or an orb) on the right |
 | Overview | Pointer rest or a click, bots working | The bot in focus with its last three tool calls (newest brightest) and the other bots as pills; each opens its conversation |
 | Nothing running | Opened with no bot working | "Nothing running right now." and Message a bot |
-| Approval | A permission card is pending | The command and the card's options, deny left and Allow once right (⌥N / ⌥Y from any app while it shows) |
+| Approval | A permission card is pending | The command, what an edit changes (`+N −M` per file, the changed lines on click) and the card's options, deny left and Allow once right (⌥N / ⌥Y from any app while it shows) |
+| Dropping files | A file drag reaches the shape | A dashed outline and "Drop to send to *bot*"; the files are read here and sent to the bot in the big slot (or the one that needs you) |
 | Finished | A bot stops working | "*Bot* is done" with its last message, Open conversation / OK, for 5.2 s |
 | Failed | A bot stops on an error | "*Bot* stopped." with the error in red, until OK |
 | Message a bot | The header's bubble | The bot chip (click for the next bot) and a field; Enter sends, Esc closes |
@@ -49,7 +60,7 @@ slide to their new places.
 ## How it works
 
 - **Window** (`apps/desktop/src/main/island.ts`): a fixed 720 × 300 transparent, frameless,
-  non-focusable window at the top center of the notch's display (else the main display). macOS:
+  non-focusable window at the top center of the chosen display (see *Where it sits*). macOS:
   a non-activating panel at the main-menu level + 3, so it covers the menu bar, every Space and
   full-screen apps. Windows: a toolbar window (out of Alt+Tab). It never resizes; the shape
   animates inside it with CSS (spring open, plain close).
@@ -67,8 +78,10 @@ slide to their new places.
 - **Data**: the chat window owns the stores. `useIslandSummary` (next to the tray's summary)
   sends bots and pending permission cards when they change; the island window renders them
   (`views/island/`, state in `IslandModel`, pure rules in `shared/island.ts`). Buttons travel back
-  as `WindowCommand`s (`openBot`, `respondPermission`, `sendMessage`) to the chat window, which
-  calls the host. The island has no host connection of its own. It takes the keyboard when
+  as `WindowCommand`s (`openBot`, `respondPermission`, `sendMessage`, `sendFiles`) to the chat window, which
+  calls the host. The island has no host connection of its own. A drop sends the OS paths of the files
+  (`webUtils.getPathForFile`); the chat window reads them (at most 20 files, 100 MB each, like the composer) and
+  sends them with no message of their own. It takes the keyboard when
   the message field opens (`setFocusable`) and gives it back once the island has folded
   (giving it back takes the window off screen for a moment on macOS); ⌥Y / ⌥N are global
   shortcuts only while an approval shows.

@@ -26,6 +26,7 @@ mod turn;
 mod updates;
 
 pub(crate) use launch::{launch_commands, select_model, start_agent, system_prompt};
+pub(crate) use updates::diff_summary;
 
 use crate::agent::acp::{self, Acp, Incoming};
 use crate::agent::config::FastModeSupport;

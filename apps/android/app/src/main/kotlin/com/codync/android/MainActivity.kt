@@ -1,17 +1,24 @@
 package com.codync.android
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+
 import androidx.core.content.IntentCompat
+
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -31,10 +38,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.Path.Companion.toOkioPath
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val store: AppStore by viewModels()
+
+    /** A screen that just lit up is not the person deciding: see [Approvals]. */
+    private val screenOn = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Approvals.screenLit()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(
+            this,
+            screenOn,
+            IntentFilter(Intent.ACTION_SCREEN_ON),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         applyWindowOrientation(resources.configuration)
         NativeAccounts.initialize(this)
         Analytics.start(applicationContext)
@@ -88,6 +109,19 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handle(intent)
+    }
+    override fun onResume() {
+        super.onResume()
+        // Approvals are tapped on this screen: an activity that isn't on screen can't ask for a thumb.
+        Approvals.attach(this)
+    }
+    override fun onPause() {
+        Approvals.detach(this)
+        super.onPause()
+    }
+    override fun onDestroy() {
+        unregisterReceiver(screenOn)
+        super.onDestroy()
     }
     override fun onStart() { super.onStart(); store.setForeground(true); Analytics.becameActive() }
     override fun onStop() {

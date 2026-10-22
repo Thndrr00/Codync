@@ -260,6 +260,8 @@ export function builtInBackendName(id: string) {
       return 'Grok Build'
     case 'gemini':
       return 'Gemini CLI'
+    case 'external':
+      return 'Terminal'
     default:
       return 'Custom agent'
   }

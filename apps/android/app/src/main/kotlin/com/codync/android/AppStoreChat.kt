@@ -155,6 +155,8 @@ internal suspend fun AppStore.savePending(send: PendingSend) {
     refresh()
 }
 fun AppStore.respond(entry: Entry, option: String?) = action("permission:" + entry.id) {
+    // A command or a file change on the computer takes a thumb first; a deny never does.
+    if (!Approvals.confirmCurrent(entry, option)) return@action
     val active = ready()
     active.call("respondPermission", body("entryId" to entry.id, "optionId" to option))
     delay(2_000)

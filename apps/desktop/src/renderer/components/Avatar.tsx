@@ -119,6 +119,8 @@ export const CharacterAvatar = memo(function CharacterAvatar({ shape, color, tin
   const dark = useDark() || forceDark === true
   const reduce = useReduceMotion()
   const fill = tint ?? avatarColor(color)
+  /** Where the pointer was last seen (screen coordinates): a working character looks at it. */
+  const pointer = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const el = canvas.current
@@ -132,24 +134,50 @@ export const CharacterAvatar = memo(function CharacterAvatar({ shape, color, tin
     let frame = 0
     let drawn = -Infinity
     let visible = true
+    // How far the eyes turn to the pointer, −1…1 per axis, softened like a real gaze (tanh).
+    const look = () => {
+      const at = pointer.current
+      if (!at) return { x: 0, y: 0 }
+      const r = el.getBoundingClientRect()
+      const reach = Math.max(90, size * 2.2)
+      return {
+        x: Math.tanh((at.x - (r.left + r.width / 2)) / reach),
+        y: -Math.tanh((at.y - (r.top + r.height / 2)) / (reach * 0.78)),
+      }
+    }
     const draw = (time: number) => {
       frame = 0
       if (time - drawn >= 33) {
         drawn = time
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
         ctx.clearRect(0, 0, size, size)
-        drawCharacter(ctx, { shape, fill, size, mood, dark, t: still ? 0 : (time / 1000) % 3600, still })
+        drawCharacter(ctx, {
+          shape,
+          fill,
+          size,
+          mood,
+          dark,
+          t: still ? 0 : (time / 1000) % 3600,
+          still,
+          look: still ? { x: 0, y: 0 } : look(),
+        })
       }
       if (!still && visible) frame = requestAnimationFrame(draw)
     }
     draw(performance.now())
     if (still) return
+    // Only an animated character listens; an idle one never redraws, so it also never tracks.
+    const onPointer = (e: PointerEvent) => {
+      pointer.current = { x: e.clientX, y: e.clientY }
+    }
+    window.addEventListener('pointermove', onPointer, { passive: true })
     const onScreen = new IntersectionObserver(([e]) => {
       visible = e!.isIntersecting
       if (visible && !frame) frame = requestAnimationFrame(draw)
     })
     onScreen.observe(el)
     return () => {
+      window.removeEventListener('pointermove', onPointer)
       onScreen.disconnect()
       cancelAnimationFrame(frame)
     }
@@ -161,7 +189,17 @@ export const CharacterAvatar = memo(function CharacterAvatar({ shape, color, tin
 /** Draws one frame of a character at the context's origin (views and menu bar icons). */
 export function drawCharacter(
   ctx: CanvasRenderingContext2D,
-  { shape, fill, size, mood, dark, t, still }: { shape: string; fill: string; size: number; mood: Mood; dark: boolean; t: number; still: boolean },
+  { shape, fill, size, mood, dark, t, still, look = { x: 0, y: 0 } }: {
+    shape: string
+    fill: string
+    size: number
+    mood: Mood
+    dark: boolean
+    t: number
+    still: boolean
+    /** Where the eyes turn, −1…1 per axis (a working character looks at the pointer). */
+    look?: { x: number; y: number }
+  },
 ) {
   const cells = size < 18 ? 7 : size < 28 ? 9 : 13
   const eyeColumns = cells === 7 ? [2, 4] : cells === 9 ? [3, 6] : [4, 8]
@@ -171,19 +209,34 @@ export function drawCharacter(
   const [tr, tg, tb] = palette(dark).text
   const n = parseInt(fill.slice(1), 16)
   const [cr, cg, cb] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-  // Glance: whole-cell steps left / center / right, like a small display.
-  const glance = mood === 'working' ? Math.round(Math.sin((t * 2 * Math.PI) / 3.2) * 1.4) : 0
   const blinking = !still && (t / 4.7) % 1 < 0.035
   const eyeRows = blinking ? eyeRowsAll.slice(-1) : eyeRowsAll
-  const eyeCols = eyeColumns.map((c) => c + glance)
+  // The openings move smoothly with the gaze rather than jumping cell to cell; blinking flattens them.
+  const eyeY = (eyeRows[0]! + (eyeRows.length - 1) / 2 + 0.5) + look.y * 0.5
+  const eyeX = eyeColumns.map((c) => c + 0.5 + look.x * 0.55)
+  const eyeWidth = 0.62
+  const eyeHeight = (blinking ? 0.35 : eyeRows.length / 2) + 0.1
+  /** Is this dot inside one of the two openings? */
+  const inEye = (d: Dot) => {
+    const u = (d.col + 0.5 - eyeX[0]!) / eyeWidth
+    const w = (d.col + 0.5 - eyeX[1]!) / eyeWidth
+    const v = (d.row + 0.5 - eyeY) / eyeHeight
+    return u * u + v * v <= 1 || w * w + v * v <= 1
+  }
   const half = size / 2
+  // A slow breath: the whole character swells by ~1 % and settles back.
+  const breath = still ? 1 : 1 + 0.012 * Math.sin((t * 2 * Math.PI) / 5.5)
+  ctx.save()
+  ctx.translate(half, half)
+  ctx.scale(breath, breath)
+  ctx.translate(-half, -half)
   const yaw = mood === 'working' ? t * 1.4 : -0.7
   const lx = Math.sin(yaw) * 0.8
   const ly = 0.55
   const lz = Math.cos(yaw) * 0.5 + 0.6 // never fully behind
   const ll = Math.hypot(lx, ly, lz)
   for (const d of dots) {
-    if (eyeCols.includes(d.col) && eyeRows.includes(d.row)) continue
+    if (inEye(d)) continue
     const u = (d.x - half) / half
     const v = (half - d.y) / half
     const z = Math.sqrt(Math.max(0.2, 1 - u * u - v * v))
@@ -204,6 +257,7 @@ export function drawCharacter(
       ctx.fill()
     }
   }
+  ctx.restore()
 }
 
 export function moodOf(bot: Bot, animated = true): Mood {

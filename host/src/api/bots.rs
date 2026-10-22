@@ -156,6 +156,9 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
                 return Ok(ControlFlow::Break(json!({"entry": e})));
             }
             let row = hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            if crate::external::is_external(&row.config) {
+                bail!("this bot runs in your terminal: reply there, or use its approval cards here");
+            }
             // `threadId`: reply in the thread on that message of the main chat (threads are flat).
             let thread = match b["threadId"].as_str().filter(|t| !t.is_empty()) {
                 Some(root) => {
@@ -221,12 +224,17 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let bot = str_arg(&b, "botId")?;
             match hub.store.bot(bot)? {
                 Some(row) if row.config.is_group() => hub.groups.stop(hub, bot),
+                // The terminal answers to its own interrupt, not to us.
+                Some(row) if crate::external::is_external(&row.config) => {}
                 _ => hub.send_cmd(bot, Cmd::Stop)?,
             }
             json!({})
         }
         "newSession" => {
-            hub.send_cmd(str_arg(&b, "botId")?, Cmd::NewSession)?;
+            let bot = str_arg(&b, "botId")?;
+            if !hub.store.bot(bot)?.is_some_and(|r| crate::external::is_external(&r.config)) {
+                hub.send_cmd(bot, Cmd::NewSession)?;
+            }
             json!({})
         }
         "memory" | "saveMemory" | "pinMemory" | "archiveMemory" | "forgetMemory" | "clearMemory" | "undoDream"
@@ -241,6 +249,10 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            // A terminal session's hook is waiting for this, not a bot actor.
+            if hub.external.answer(hub, entry_id, option_id.as_deref()) {
+                return Ok(ControlFlow::Break(json!({})));
+            }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;

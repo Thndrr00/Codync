@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { sshBridge } from './ssh'
 import type { CallError, CodyncBridge, HostSnapshot, TraySummary, WindowCommand } from '../shared/ipc'
 
@@ -78,6 +78,7 @@ const bridge: CodyncBridge = {
     onKey: (cb) => listen('island:key', cb),
     respond: (ref, entryId, optionId) => ipcRenderer.send('island:respond', ref, entryId, optionId),
     send: (ref, text) => ipcRenderer.send('island:send', ref, text),
+    dropFiles: (ref, paths) => ipcRenderer.send('island:dropFiles', ref, paths),
     openBot: (ref) => ipcRenderer.send('island:openBot', ref),
     newBot: () => ipcRenderer.send('island:newBot'),
     openApp: () => ipcRenderer.send('island:openApp'),
@@ -105,6 +106,8 @@ const bridge: CodyncBridge = {
     openMemoryFile: (path) => ipcRenderer.send('app:openMemoryFile', path),
     copy: (text) => ipcRenderer.send('app:copy', text),
     pickFiles: () => ipcRenderer.invoke('app:pickFiles'),
+    readPaths: (paths) => ipcRenderer.invoke('app:readPaths', paths),
+    pathForFile: (file) => webUtils.getPathForFile(file),
     readClipboardFiles: () => ipcRenderer.invoke('app:clipboardFiles'),
     setTraySummary: (summary: TraySummary) => ipcRenderer.send('app:traySummary', summary),
     onCommand: (cb: (c: WindowCommand) => void) => listen('app:command', cb),

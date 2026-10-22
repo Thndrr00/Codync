@@ -40,6 +40,7 @@ Source review, a passing build, local integration tests and production acceptanc
 - [Remote screen](features/remote-screen.md) and [computer use](features/computer-use.md)
 - [Computer identity and list ordering](features/computer-order.md)
 - [Notch island (desktop)](features/notch-island.md)
+- [Terminal agent sessions](features/terminal-sessions.md) (Claude Code, Gemini CLI and friends in your own terminal, with approvals from Codync)
 - [Extensions and agent setup](features/marketplace.md)
 - [Connector setup and credentials](features/connector-credentials.md)
 - [Usage analytics and error tracking](features/analytics.md)

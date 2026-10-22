@@ -102,8 +102,10 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) store.importFiles(uris) { store.addDraftFiles(bot.id, thread, it) }
     }
-    val receiver = remember(bot.id, importing, queuing) { ReceiveContentListener { content ->
-        if (importing || queuing) content else {
+    // A session running in the person's own terminal is read here and answered in that terminal.
+    val terminal = bot.backend == "external"
+    val receiver = remember(bot.id, importing, queuing, terminal) { ReceiveContentListener { content ->
+        if (importing || queuing || terminal) content else {
             val uris = mutableListOf<android.net.Uri>()
             val remaining = content.consume { item -> item.uri?.takeIf { it.scheme == "content" }?.let { uris.add(it); true } ?: false }
             if (uris.isNotEmpty()) store.importFiles(uris) { store.addDraftFiles(bot.id, thread, it) }
@@ -113,16 +115,18 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     val online = state.actualConnection is LinkState.Ready
     val empty = text.text.isBlank() && files.isEmpty()
     // Offline computers still take text when the relay can hold it; files need the computer.
-    val canSend = !empty && !importing && !queuing && (online || state.actualConnection is LinkState.ComputerOffline && files.isEmpty())
+    val canSend = !terminal && !empty && !importing && !queuing && (online || state.actualConnection is LinkState.ComputerOffline && files.isEmpty())
     val working = bot.isWorking(bot.id, thread)
     val bare = text.text.isEmpty() && files.isEmpty()
     val trailing = when {
+        terminal -> Trailing.Send
         onInterrupt != null && bare -> Trailing.Interrupt
         working && bare -> Trailing.Stop
         onCall != null && bare -> Trailing.Call
         else -> Trailing.Send
     }
     val placeholder = when {
+        terminal -> "This bot runs in your terminal — reply there; approvals still work here"
         thread != null -> "Reply…"
         bot.kind == "group" -> "Message everyone · @ to ask one bot"
         working -> "Queue a message for ${bot.name}"
@@ -163,7 +167,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
                 val uris = if (data == null) emptyList() else (0 until data.itemCount).mapNotNull { data.getItemAt(it).uri?.takeIf { uri -> uri.scheme == "content" } }
                 if (uris.isNotEmpty()) store.importFiles(uris) { store.addDraftFiles(bot.id, thread, it) }
             } })
-        } }, Modifier.size(FIELD_HEIGHT).glass(Capsule()), enabled = !queuing, label = "Add files") {
+        } }, Modifier.size(FIELD_HEIGHT).glass(Capsule()), enabled = !queuing && !terminal, label = "Add files") {
             Symbol("plus", size = 26.dp, tint = Palette.text)
         }
         Column(Modifier.weight(1f).glass(RoundedRectangle(24.dp)).animateContentSize(Motion.layoutSize)) {
@@ -173,7 +177,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             }
             Row(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BasicTextField(state = text, enabled = !queuing, modifier = Modifier.weight(1f).contentReceiver(receiver).padding(vertical = 10.dp),
+                BasicTextField(state = text, enabled = !queuing && !terminal, modifier = Modifier.weight(1f).contentReceiver(receiver).padding(vertical = 10.dp),
                     textStyle = Type.chatBody.copy(color = Palette.text), cursorBrush = SolidColor(Palette.accent),
                     lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
                     decorator = { input -> Box { if (text.text.isEmpty()) Text(placeholder, style = Type.chatBody, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis); input() } })
