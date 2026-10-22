@@ -27,10 +27,12 @@ Provide a self-contained request: the recipient has its own conversation, workin
 tools and permissions, not your context. ask_bot returns its final reply to you. \
 Coordinate file ownership before asking for edits in a shared project. \
 Do not ask a bot that is waiting for you. Native subagents are managed by your own harness; \
-these tools are for collaborating with the user's existing bots.";
+these tools are for collaborating with the user's existing bots. \
+If the user turned fleet management on for you, list_fleet, create_bot, create_group, set_bot_instructions, \
+set_bot_model and create_bot_routine organize bots: only when the user asks, and only the bots you created.";
 
 pub fn tools() -> Value {
-    json!([
+    let mut tools = json!([
         {
             "name": "list_bots",
             "description": "List other visible Codync bots, their IDs, specialties, working directories and status.",
@@ -63,7 +65,11 @@ pub fn tools() -> Value {
             },
             "annotations": {"readOnlyHint": false, "idempotentHint": false},
         }
-    ])
+    ]);
+    if let Some(list) = tools.as_array_mut() {
+        list.extend(crate::chat::fleet::tools());
+    }
+    tools
 }
 
 /// Sent through the recipient's normal actor queue, but never merged with user
@@ -252,6 +258,7 @@ pub async fn call(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Resul
             let message = args["message"].as_str().unwrap_or_default().trim();
             message_bot(hub, &source, to, message)
         }
+        name if crate::chat::fleet::handles(name) => crate::chat::fleet::call(hub, &source, name, args).await,
         _ => bail!("unknown team tool: {name}"),
     }
 }

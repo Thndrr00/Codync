@@ -45,6 +45,10 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
             if crate::chat::profile::TOOLS.contains(&name) {
                 crate::chat::profile::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::scratchpad::TOOLS.contains(&name) {
+                crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::teach::TOOLS.contains(&name) {
+                crate::chat::teach::call(hub, bot, name, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }
@@ -90,8 +94,39 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             json!({"bot": tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??})
         }
         "updateBot" => {
+            // Edits through the API are the user's; only the bot's own tool says otherwise.
+            let mut b = b;
+            if let Some(patch) = b.as_object_mut() {
+                patch.remove(crate::chat::instruction_history::AUTHOR);
+            }
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&b)).await??})
+        }
+        // The versions of a bot's instructions, what changed between two, and going back to one.
+        "instructionHistory" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
+            crate::chat::instruction_history::list(&hub.store, &row.config)?
+        }
+        "instructionDiff" => {
+            let version =
+                |key: &str| b[key].as_u64().and_then(|v| u32::try_from(v).ok()).context("from and to are versions");
+            json!({"diff": crate::chat::instruction_history::diff(&hub.store, str_arg(&b, "botId")?, version("from")?, version("to")?)?})
+        }
+        "restoreInstructions" => {
+            use crate::chat::instruction_history as history;
+            let bot = str_arg(&b, "botId")?.to_owned();
+            let version = b["version"].as_u64().and_then(|v| u32::try_from(v).ok()).context("version is required")?;
+            let patch = json!({"id": bot, "description": history::text(&hub.store, &bot, version)?,
+                history::REASON: format!("Restored version {version}")});
+            let hub = hub.clone();
+            let saved = tokio::task::spawn_blocking(move || {
+                let saved = hub.update_bot(&patch)?;
+                let notice = json!({"text": format!("Instructions restored to version {version}")});
+                hub.add_entry(&Lane::main(&bot), EntryKind::Notice, hub.store.max_turn(&bot), &notice);
+                anyhow::Ok(saved)
+            })
+            .await??;
+            json!({"bot": saved})
         }
         // The roster as the user dragged it, top first.
         "reorderBots" => {
@@ -248,7 +283,20 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.kind != EntryKind::Permission.as_str() {
+                bail!("That isn't an approval card");
+            }
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            // The card is the effect's key: the first decision is the one that happens. The same
+            // answer again (another device, a retry) gets the card back; a different one is refused.
+            match e.data["status"].as_str() {
+                Some("pending") => {}
+                Some("answered") if e.data["selected"].as_str() == option_id.as_deref() => {
+                    return Ok(ControlFlow::Break(json!({"entry": e})));
+                }
+                Some("answered") => bail!("This approval was already answered with another choice"),
+                _ => bail!("This approval is closed: its turn ended or was stopped"),
+            }
             // A terminal session's hook is waiting for this, not a bot actor.
             if hub.external.answer(hub, entry_id, option_id.as_deref()) {
                 return Ok(ControlFlow::Break(json!({})));

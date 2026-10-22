@@ -12,6 +12,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - 可依專案分組及篩選機器人，搜尋完整訊息紀錄，並預覽最近三則訊息而不標記已讀。
 - 可在模型選單搜尋模型名稱與說明。
 - 可為 Antigravity 機器人選擇獨立帳號。
+- 機器人可透過安全卡片向你索取 API 金鑰或指令變數，值不會進入對話；可在「Credentials」中查看並移除。
 - 改善遠端螢幕連線與例行工作通知的可靠性。
 
 ### en-US
@@ -19,6 +20,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - Filter bots, group them by project, search message history, and preview the last three messages without marking them read.
 - Search model names and descriptions in the model picker.
 - Choose a separate Antigravity account for each bot.
+- Bots can ask for an API key or command variable on a secure card, and the value never enters the chat; review and remove them in Credentials.
 - Improved remote screen connections and routine notification reliability.
 
 ## 2.19.1

@@ -16,6 +16,7 @@
 //! they're reduced to a safe slug first. Secret values (API keys, tokens) stay
 //! on this computer; listings only say which keys are set.
 
+pub mod bot_secrets;
 pub mod composio;
 pub mod logins;
 pub mod oauth;
@@ -24,8 +25,10 @@ pub mod requests;
 pub mod vault;
 pub mod verify;
 
+mod discovery;
 mod install;
 mod registry;
+mod secret_tools;
 mod skills;
 mod updates;
 
@@ -39,6 +42,7 @@ pub use skills::{
 pub use updates::{automatic_loop, refresh_connector};
 
 use crate::LockExt;
+use crate::egress::Policy;
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -48,6 +52,8 @@ use std::time::Duration;
 
 const MCP_REGISTRY: &str = "https://registry.modelcontextprotocol.io/v0/servers";
 const SKILLS_REPO: &str = "anthropics/skills";
+/// Where skill listings and files may be fetched from (download links come from GitHub's answer).
+const GITHUB: Policy = Policy::Only(&["api.github.com", "raw.githubusercontent.com"]);
 const UA: &str = concat!("codync-host/", env!("CARGO_PKG_VERSION"));
 const TIMEOUT: Duration = Duration::from_secs(15);
 /// Registry search is slow (often 20-30 s); lookups by name are fast.
@@ -83,6 +89,12 @@ pub struct Connector {
 }
 
 impl Connector {
+    /// What its URL may reach: one the user typed may be on their own network; one the MCP
+    /// Registry lists may not.
+    pub fn egress(&self) -> Policy {
+        if self.registry_name.is_some() { Policy::Public } else { Policy::UserChosen }
+    }
+
     /// ACP `McpServer`. Remote servers run through this host's `remote` proxy (`codync-host mcp remote`),
     /// which keeps sign-in tokens fresh and works with agents that only speak stdio.
     /// A remote server still waiting for sign-in is left out.
@@ -229,11 +241,29 @@ async fn get_json(url: &str) -> Result<Value> {
 }
 
 async fn get_json_within(url: &str, timeout: Duration) -> Result<Value> {
-    let res = crate::http().get(url).header("user-agent", UA).timeout(timeout).send().await?;
+    fetch_json(Policy::Public, url, timeout).await
+}
+
+/// Largest registry or GitHub listing read.
+const MAX_JSON: usize = 8 * 1024 * 1024;
+
+/// GETs JSON from `url` under `policy`.
+async fn fetch_json(policy: Policy, url: &str, timeout: Duration) -> Result<Value> {
+    crate::egress::json(get(policy, url, timeout).await?, MAX_JSON).await
+}
+
+/// GETs `url` under `policy`, refusing answers over `max` bytes.
+async fn get_bytes(policy: Policy, url: &str, timeout: Duration, max: usize) -> Result<Vec<u8>> {
+    crate::egress::body(get(policy, url, timeout).await?, max).await
+}
+
+async fn get(policy: Policy, url: &str, timeout: Duration) -> Result<reqwest::Response> {
+    let res =
+        crate::egress::client(policy, url).await?.get(url).header("user-agent", UA).timeout(timeout).send().await?;
     if !res.status().is_success() {
         bail!("{} answered {}", url.split('/').nth(2).unwrap_or(url), res.status());
     }
-    Ok(res.json().await?)
+    Ok(res)
 }
 
 #[cfg(test)]

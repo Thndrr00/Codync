@@ -2,7 +2,7 @@
 //! servers, listing and removal.
 
 use super::registry::{listing, registry_server};
-use super::{Connector, add_connector, composio, connectors, oauth, unique_id, update_connectors};
+use super::{Connector, add_connector, composio, connectors, discovery, oauth, unique_id, update_connectors};
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -228,10 +228,11 @@ pub async fn install_connector(store: &crate::store::Store, name: &str, option: 
         }
         _ => bail!("unknown install option"),
     }
-    if let Some(url) = &c.url
-        && oauth::required(url, &c.headers).await
-    {
-        c.oauth = Some(oauth::OAuth::default());
+    if let Some(url) = c.url.clone() {
+        crate::egress::check(c.egress(), &url).await?;
+        if discovery::required(c.egress(), &url, &c.headers).await {
+            c.oauth = Some(oauth::OAuth::default());
+        }
     }
     add_connector(store, c)
 }
@@ -308,11 +309,9 @@ async fn custom(name: &str, b: &Value, all: &[Connector]) -> Result<Connector> {
     let url =
         ["url", "serverUrl", "httpUrl"].iter().find_map(|k| b[*k].as_str()).map(str::trim).filter(|s| !s.is_empty());
     if let Some(url) = url {
-        let local = ["http://localhost", "http://127.0.0.1", "http://[::1]"].iter().any(|p| url.starts_with(p));
-        if !url.starts_with("https://") && !local {
-            bail!("remote connectors need an https URL");
-        }
-        if oauth::required(url, &c.headers).await {
+        // https anywhere; plain http only on this computer or its network.
+        crate::egress::check(c.egress(), url).await?;
+        if discovery::required(c.egress(), url, &c.headers).await {
             c.oauth = Some(oauth::OAuth::default());
         }
         c.url = Some(url.to_owned());

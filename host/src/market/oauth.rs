@@ -9,7 +9,9 @@
 //!
 //! The authorization code alone is useless: the PKCE verifier never leaves this host.
 
+use super::discovery::{MAX_METADATA, TIMEOUT, resource_metadata, server_metadata, split};
 use crate::LockExt;
+use crate::egress::Policy;
 use crate::market::{self, Connector};
 use crate::store::Store;
 use anyhow::{Context, Result, anyhow, bail};
@@ -19,7 +21,6 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const TIMEOUT: Duration = Duration::from_secs(20);
 /// How long a started sign-in waits for its callback.
 const PENDING_FOR: Duration = Duration::from_secs(15 * 60);
 /// Tokens this close to expiring are refreshed before use.
@@ -93,104 +94,6 @@ fn app_uri(store: &Store) -> Option<String> {
     })
 }
 
-async fn get_json(url: &str) -> Result<Value> {
-    let res = crate::http().get(url).header("accept", "application/json").timeout(TIMEOUT).send().await?;
-    if !res.status().is_success() {
-        bail!("{url} answered {}", res.status());
-    }
-    Ok(res.json().await?)
-}
-
-/// `true` when the server wants sign-in: an unauthenticated `initialize` gets 401, or the server
-/// lets `initialize` through, refuses only tool calls, and says so in its resource metadata.
-pub async fn required(url: &str, headers: &std::collections::BTreeMap<String, String>) -> bool {
-    let mut req = crate::http()
-        .post(url)
-        .header("accept", "application/json, text/event-stream")
-        .json(&json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
-            "protocolVersion": crate::mcp::PROTOCOL_VERSION, "capabilities": {},
-            "clientInfo": {"name": "codync", "version": env!("CARGO_PKG_VERSION")},
-        }}))
-        .timeout(TIMEOUT);
-    for (k, v) in headers {
-        req = req.header(k, v);
-    }
-    let Ok(res) = req.send().await else { return false };
-    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return true;
-    }
-    if res.status().is_success() {
-        // Headers the user gave (an API key) are their way in; don't ask for sign-in on top.
-        return headers.is_empty()
-            && resource_metadata(url).await["authorization_servers"].as_array().is_some_and(|a| !a.is_empty());
-    }
-    if !matches!(res.status().as_u16(), 400 | 404 | 405) {
-        return false;
-    }
-    // Not streamable HTTP: ask the older SSE endpoint instead (the stream is dropped unread).
-    let mut req = crate::http().get(url).header("accept", "text/event-stream").timeout(TIMEOUT);
-    for (k, v) in headers {
-        req = req.header(k, v);
-    }
-    req.send().await.is_ok_and(|r| r.status() == reqwest::StatusCode::UNAUTHORIZED)
-}
-
-/// `resource_metadata="…"` from a `WWW-Authenticate: Bearer …` header.
-fn resource_metadata_hint(header: &str) -> Option<String> {
-    let (_, rest) = header.split_once("resource_metadata=")?;
-    let rest = rest.trim_start_matches('"');
-    let end = rest.find(['"', ',', ' ']).unwrap_or(rest.len());
-    Some(rest[..end].to_owned()).filter(|s| s.starts_with("https://") || s.starts_with("http://"))
-}
-
-/// `https://a.b/x/y` → (`https://a.b`, `/x/y`), without a trailing `/`.
-fn split(url: &str) -> Result<(String, String)> {
-    let u = reqwest::Url::parse(url)?;
-    let path = u.path().trim_end_matches('/').to_owned();
-    Ok((u.origin().ascii_serialization(), path))
-}
-
-/// The protected resource metadata (RFC 9728): which authorization server, which scopes.
-async fn resource_metadata(url: &str) -> Value {
-    let hint = crate::http()
-        .post(url)
-        .header("accept", "application/json, text/event-stream")
-        .json(&json!({"jsonrpc": "2.0", "id": 0, "method": "ping"}))
-        .timeout(TIMEOUT)
-        .send()
-        .await
-        .ok()
-        .and_then(|r| r.headers().get("www-authenticate")?.to_str().ok().and_then(resource_metadata_hint));
-    let mut tries: Vec<String> = hint.into_iter().collect();
-    if let Ok((origin, path)) = split(url) {
-        tries.push(format!("{origin}/.well-known/oauth-protected-resource{path}"));
-        tries.push(format!("{origin}/.well-known/oauth-protected-resource"));
-    }
-    for t in tries {
-        if let Ok(v) = get_json(&t).await {
-            return v;
-        }
-    }
-    Value::Null
-}
-
-/// The authorization server metadata (RFC 8414, then `OpenID` discovery).
-async fn server_metadata(issuer: &str) -> Result<Value> {
-    let (origin, path) = split(issuer)?;
-    for t in [
-        format!("{origin}/.well-known/oauth-authorization-server{path}"),
-        format!("{origin}/.well-known/openid-configuration{path}"),
-        format!("{issuer}/.well-known/openid-configuration"),
-    ] {
-        if let Ok(v) = get_json(&t).await
-            && v["authorization_endpoint"].is_string()
-        {
-            return Ok(v);
-        }
-    }
-    bail!("{origin} doesn't describe how to sign in")
-}
-
 fn text(v: &Value) -> Option<String> {
     v.as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned)
 }
@@ -215,11 +118,12 @@ pub async fn start(store: &Store, port: u16, id: &str, callback: Callback) -> Re
             .ok_or_else(|| anyhow!("The Codync cloud is off on this computer, so sign in from the computer itself."))?,
     };
 
-    let resource = resource_metadata(&url).await;
+    let resource = resource_metadata(c.egress(), &url).await;
     let issuer = resource["authorization_servers"][0]
         .as_str()
         .map_or_else(|| split(&url).map(|(origin, _)| origin), |s| Ok(s.trim_end_matches('/').to_owned()))?;
-    let meta = server_metadata(&issuer).await.with_context(|| format!("signing in to {}", c.name))?;
+    let policy = crate::egress::derived(c.egress(), &url).await;
+    let meta = server_metadata(policy, &issuer).await.with_context(|| format!("signing in to {}", c.name))?;
     let authorize = text(&meta["authorization_endpoint"]).ok_or_else(|| anyhow!("no authorization endpoint"))?;
     let token_endpoint = text(&meta["token_endpoint"]).ok_or_else(|| anyhow!("no token endpoint"))?;
 
@@ -233,7 +137,8 @@ pub async fn start(store: &Store, port: u16, id: &str, callback: Callback) -> Re
                 c.name
             )
         })?;
-        let res = crate::http()
+        let res = crate::egress::client(policy, &register)
+            .await?
             .post(&register)
             .json(&json!({
                 "client_name": "Codync",
@@ -306,8 +211,10 @@ pub async fn finish(store: &Store, state: &str, code: Option<&str>, error: Optio
         .into_iter()
         .find(|c| c.id == p.connector)
         .ok_or_else(|| anyhow!("unknown connector"))?;
+    let policy = sign_in_policy(&c).await;
     let oauth = c.oauth.ok_or_else(|| anyhow!("unknown connector"))?;
     let v = token_request(
+        policy,
         &oauth,
         &[
             ("grant_type", "authorization_code"),
@@ -321,14 +228,23 @@ pub async fn finish(store: &Store, state: &str, code: Option<&str>, error: Optio
     update(store, &p.connector, |c| store_tokens(c, &v))
 }
 
-async fn token_request(oauth: &OAuth, form: &[(&str, &str)]) -> Result<Value> {
+/// The policy for the endpoints a connector's sign-in server names (see `egress::derived`).
+async fn sign_in_policy(c: &Connector) -> Policy {
+    match c.url.as_deref() {
+        Some(url) => crate::egress::derived(c.egress(), url).await,
+        None => Policy::Public,
+    }
+}
+
+async fn token_request(policy: Policy, oauth: &OAuth, form: &[(&str, &str)]) -> Result<Value> {
     let mut form: Vec<(&str, &str)> = form.to_vec();
     form.push(("client_id", &oauth.client_id));
     if let Some(secret) = &oauth.client_secret {
         form.push(("client_secret", secret));
     }
     let body = form.iter().map(|(k, v)| format!("{}={}", encode(k), encode(v))).collect::<Vec<_>>().join("&");
-    let res = crate::http()
+    let res = crate::egress::client(policy, &oauth.token_endpoint)
+        .await?
         .post(&oauth.token_endpoint)
         .header("content-type", "application/x-www-form-urlencoded")
         .header("accept", "application/json")
@@ -338,7 +254,7 @@ async fn token_request(oauth: &OAuth, form: &[(&str, &str)]) -> Result<Value> {
         .await
         .context("can't reach the sign-in server")?;
     let status = res.status();
-    let v: Value = res.json().await.unwrap_or(Value::Null);
+    let v = crate::egress::json(res, MAX_METADATA).await.unwrap_or(Value::Null);
     if !status.is_success() || !v["access_token"].is_string() {
         bail!("The sign-in server refused the request ({status}). Reopen sign-in and try again.");
     }
@@ -372,7 +288,7 @@ fn sign_out(store: &Store, id: &str) -> Result<Connector> {
     })
 }
 
-/// What the `remote` MCP proxy sends to connector `id`: its URL and headers, with a fresh token.
+/// What the `remote` MCP proxy sends to connector `id`: its URL and headers, with a fresh token, and its egress policy.
 /// `stale`: the server just said 401, so refresh even if the token looks valid.
 pub async fn target(store: &Store, id: &str, stale: bool) -> Result<Value> {
     let c = market::connectors(store)?.into_iter().find(|c| c.id == id).ok_or_else(|| anyhow!("unknown connector"))?;
@@ -385,7 +301,8 @@ pub async fn target(store: &Store, id: &str, stale: bool) -> Result<Value> {
         let o = fresh(store, &c, o, stale).await?;
         headers.insert("Authorization".into(), format!("Bearer {}", o.access_token));
     }
-    Ok(json!({"url": url, "headers": headers}))
+    // `public`: the URL came from the MCP Registry, so the proxy may not reach the local network.
+    Ok(json!({"url": url, "headers": headers, "public": c.egress() == Policy::Public}))
 }
 
 async fn fresh(store: &Store, c: &Connector, o: &OAuth, stale: bool) -> Result<OAuth> {
@@ -410,7 +327,9 @@ async fn fresh(store: &Store, c: &Connector, o: &OAuth, stale: bool) -> Result<O
         sign_out(store, &c.id)?;
         return Err(signed_out());
     };
-    match token_request(o, &[("grant_type", "refresh_token"), ("refresh_token", &refresh)]).await {
+    match token_request(sign_in_policy(c).await, o, &[("grant_type", "refresh_token"), ("refresh_token", &refresh)])
+        .await
+    {
         Ok(v) => Ok(update(store, &c.id, |c| store_tokens(c, &v))?.oauth.unwrap_or_default()),
         Err(error) => {
             tracing::warn!(connector = %c.id, error = format!("{error:#}"), "token refresh failed");
@@ -423,52 +342,6 @@ async fn fresh(store: &Store, c: &Connector, o: &OAuth, stale: bool) -> Result<O
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn reads_the_resource_metadata_hint() {
-        let h = r#"Bearer error="invalid_token", resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource""#;
-        assert_eq!(
-            resource_metadata_hint(h).as_deref(),
-            Some("https://mcp.example.com/.well-known/oauth-protected-resource")
-        );
-        assert_eq!(resource_metadata_hint("Bearer realm=\"x\""), None);
-        assert_eq!(resource_metadata_hint("Bearer resource_metadata=\"javascript:x\""), None);
-    }
-
-    #[test]
-    fn splits_origin_and_path() {
-        assert_eq!(split("https://mcp.linear.app/mcp/").unwrap(), ("https://mcp.linear.app".into(), "/mcp".into()));
-        assert_eq!(split("https://a.b").unwrap(), ("https://a.b".into(), String::new()));
-    }
-
-    /// Serves `initialize` with `status`, and protected resource metadata when `metadata`.
-    async fn server(status: u16, metadata: bool) -> String {
-        use axum::{Json, Router, http::StatusCode, routing};
-        let code = StatusCode::from_u16(status).unwrap();
-        let mut router = Router::new().route("/mcp", routing::post(move || async move { (code, Json(json!({}))) }));
-        if metadata {
-            router = router.route(
-                "/.well-known/oauth-protected-resource",
-                routing::get(|| async { Json(json!({"authorization_servers": ["https://auth.example"]})) }),
-            );
-        }
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
-        tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        url
-    }
-
-    #[tokio::test]
-    async fn sign_in_is_required_when_the_server_asks_for_it() {
-        let none = std::collections::BTreeMap::new();
-        assert!(required(&server(401, false).await, &none).await);
-        assert!(!required(&server(200, false).await, &none).await);
-        // Lets `initialize` through, refuses tool calls, and publishes its metadata.
-        let lazy = server(200, true).await;
-        assert!(required(&lazy, &none).await);
-        let key = std::collections::BTreeMap::from([("x-api-key".to_owned(), "k".to_owned())]);
-        assert!(!required(&lazy, &key).await);
-    }
 
     #[test]
     fn form_values_are_encoded() {

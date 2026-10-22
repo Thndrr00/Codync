@@ -25,7 +25,7 @@ host exit. Locking the desktop keyring after unlock does not evict that cache;
 stop the host to remove it. The implementation does not claim to isolate secrets
 from arbitrary code running as the same OS user.
 
-Encrypted records include connector environment, headers, command arguments and
+Encrypted records include bot secrets, connector environment, headers, command arguments and
 OAuth tokens, the Composio config, agent API-key environment, and the optional
 1Password service-account token. Existing records migrate on their first read
 with an available key. Missing keys and corrupt ciphertext are errors, never an
@@ -95,6 +95,57 @@ only into a password field. Clients manage logins with `credentialLogins`,
 
 Terminal password prompts (sudo, ssh) are not covered: they aren't password fields
 to the accessibility API. The same-user boundary above applies.
+
+## Bot secrets
+
+`market/bot_secrets.rs` keeps secrets a bot needs for its own work, one vault record
+(`botSecrets`) for all bots: an API key pinned to one HTTPS origin, or a command
+variable. `market/secret_tools.rs` gives the bot these `connectors` MCP tools:
+
+| Tool | Does |
+| --- | --- |
+| `list_secrets` | The bot's secrets: name, destination, never the value |
+| `request_api_key {name, origin, auth, header?, username?, reason}` | A secure card for a key on one public HTTPS origin; `auth` is `bearer`, `header` (a header the bot names) or `basic` (username + the secret as password) |
+| `request_command_variable {name, reason}` | A secure card for a variable a shell command needs |
+| `api_request {secret, url, method?, headers?, body?}` | The host sends the request with the key attached. The URL must be on the key's origin, without a `user:password@`, and pass the [egress policy](../reference/egress-policy.md) (public HTTPS, same-origin redirects only, 30 s, 1 MB answer). The bot can't set `Authorization`, `Proxy-Authorization`, `Cookie`, `Host` or the key's own header, and sends at most 30 headers. |
+| `run_with_secrets {command}` | Runs the command in the bot's folder with every command variable in its environment, named in upper case with `-` as `_` (`netbird-setup-key` → `$NETBIRD_SETUP_KEY`, `%NETBIRD_SETUP_KEY%` on Windows). The command gets its own process tree (Unix process group, Windows job), killed when it ends or after 60 s, so nothing it started keeps the variables. The answer keeps the last 64 KB of each stream. |
+
+Names are letters, digits, `-` and `_`, starting with a letter; a name that would
+become a variable the shell relies on (`PATH`, `HOME`, `IFS`, `ENV`, `BASH_ENV`,
+`SHELL`, `USER`, `COMSPEC`, `PATHEXT`, `SYSTEMROOT`, `TEMP`, `TMP`, `TMPDIR`,
+`USERPROFILE`, `LD_*`, `DYLD_*`, `CODYNC_*`) is refused. On Windows `cmd` expands a
+variable only once when a line is handed to it through another variable, so the
+host writes the line to a temporary batch file. To keep the line meaning what it
+would mean typed, the host doubles every `%` that isn't part of `%NAME%` (or
+`%NAME:…%`) for a defined variable.
+
+The card is the existing `secret` connection request, so every client shows it
+without changes: `title` is the service's host (or the variable), `field` the name,
+`location` the destination the host wrote and `botSecret` where the value goes.
+On `connectorRequestFinish` the host saves the value with the destination from the
+card, never one from the client, and resumes the bot with a note naming the tool to
+use. Asking again for a name the bot already has replaces its value. A value is
+trimmed and must be 3 B to 16 KB (an `op://` reference is resolved on each use). A
+bot keeps at most 100. Deleting a bot forgets its secrets, unless the vault is
+locked at that moment; then Credentials lists them under "A removed bot" so you can
+remove them there.
+
+Values are read fresh for each use. In what comes back (answer bodies, command
+output), the host replaces each value with `[secret]`. It also replaces the
+value's JSON-escaped form and, for basic auth, its base64 form, before cutting the
+output to length. Values never reach the agent's environment, the transcript or
+the log: `api_request` and `run_with_secrets` log only the bot, the secret name,
+the host and the status. This is not a sandbox: a command the bot wrote can still
+encode and print the value it was given.
+
+Credentials → **Bot secrets** (desktop, iPhone, Android; hosts 2.20.0 and newer)
+lists them through `credentialBotSecrets` (`{id, botId, botName, name, use,
+destination}`) and removes one with `credentialRemoveBotSecret {id}`; the next use
+fails. The terminal UI completes the card but has no Credentials screen, as with
+sign-ins.
+
+Idea from rakazo's `docs/bot-secrets.md` (Apache-2.0); see
+[upstream attribution](../reference/upstream-attribution.md).
 
 ## Optional 1Password
 

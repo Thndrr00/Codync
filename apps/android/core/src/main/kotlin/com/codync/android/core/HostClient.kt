@@ -33,6 +33,10 @@ data class Bot(
     val connectors: List<String> = emptyList(),
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
+    /** Fleet tools on; null from a host without them. */
+    val fleetManagement: Boolean? = null,
+    /** The bot that created this one with its fleet tools. */
+    val createdBy: String? = null,
     val autoName: Boolean = false,
     val createdAt: Long = 0,
     val startedAt: Long? = null,

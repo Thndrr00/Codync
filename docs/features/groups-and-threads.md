@@ -40,7 +40,7 @@ replies itself.
 | `reorderBots` | `ids` | The roster as the user dragged it, top first; groups count as rows. See [bot order](computer-order.md#bot-order). |
 | `stop` | `botId` | For a group: ends its room turns (main and threads) and stops members working in it. |
 | `react` | `entryId, emoji` | Toggles the user's reaction on a chat message (`data.reactions`, oldest first, at most 8). A reacted-to message never turns unread again. The bot isn't told. |
-| `respondPermission` | `entryId, optionId?` | Routed to `data.author`, so cards in a group reach the bot that asked. |
+| `respondPermission` | `entryId, optionId?` | Routed to `data.author`, so cards in a group reach the bot that asked. The first answer wins; see [approvals](approvals.md). |
 | `markRead` | `botId, threadId?, all?` | The main chat, one thread (`threadId`), or everything (`all`, the roster's "Mark as read"). A no-op when nothing there is unread, so clients call it whenever a chat or thread is on screen. `send` marks its own lane read. |
 
 ## How a group answers (`host/src/chat/group.rs`, Grok Bot's design)

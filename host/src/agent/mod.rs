@@ -3,6 +3,7 @@
 
 pub mod account;
 pub mod acp;
+pub mod approval_rules;
 pub mod auth;
 pub mod backends;
 pub mod bot;
@@ -16,6 +17,6 @@ pub mod sandbox;
 pub mod term;
 pub mod workspace;
 
-mod process;
+pub mod process;
 #[cfg(windows)]
 mod process_windows;

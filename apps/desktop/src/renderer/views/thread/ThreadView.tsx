@@ -15,6 +15,7 @@ import { ChatRow, TimeSeparator, WorkingIndicator } from './ChatRows'
 import { Composer } from './Composer'
 import { ChatSidePanel } from './ChatSidePanel'
 import { DetailsPanel, type DetailsTab } from './DetailsPanel'
+import { useNewMessageCount } from './new-message-counter'
 import { RepliesView } from './RepliesView'
 import { TraceView } from './TraceView'
 import { useReading } from './reading'
@@ -279,6 +280,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, openThread, open
   const last = items[items.length - 1]
   const jump = usePresence(!following && items.length > 0, 200)
   const arrivals = useArrivals([...items.map((i) => i.id), ...(live ? ['working'] : [])], following)
+  const newCount = useNewMessageCount(items.map((i) => i.id), following)
 
   const toBottom = (smooth = false) => {
     const el = scroller.current
@@ -372,6 +374,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, openThread, open
       </div>
       {jump.mounted ? (
         <div className={`jump-to-latest ${jump.shown ? 'shown' : ''}`} inert={!jump.shown}>
+          {newCount > 0 ? <span className="jump-new-count">{newCount} new</span> : null}
           <MacChatButton
             title="Jump to latest"
             icon="arrow.down"

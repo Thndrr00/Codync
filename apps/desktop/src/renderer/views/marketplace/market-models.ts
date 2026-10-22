@@ -137,6 +137,19 @@ export interface SavedLogin {
   username: string
 }
 
+/** A secret a bot keeps for API calls or commands; the value never leaves the host. */
+export interface BotSecret {
+  id: string
+  botId: string
+  botName: string | null
+  name: string
+  /** Where it goes, worded by the host (`https://api.example.com · bearer token`). */
+  destination: string
+}
+
+/** The first host that keeps bot secrets. */
+export const BOT_SECRETS_HOST = '2.20.0'
+
 export interface CredentialStatus {
   provider: string
   onePasswordConnected: boolean
@@ -221,6 +234,8 @@ export const market = {
   logins: async (c: HostClient) => (await c.call<{ items: SavedLogin[] }>('credentialLogins', {}, s(60))).items,
   saveLogin: (c: HostClient, site: string, username: string, password: string) => c.call('credentialSaveLogin', { site, username, password }, s(60)),
   removeLogin: (c: HostClient, id: string) => c.call('credentialRemoveLogin', { id }, s(60)),
+  botSecrets: async (c: HostClient) => (await c.call<{ items: BotSecret[] }>('credentialBotSecrets', {}, s(60))).items,
+  removeBotSecret: (c: HostClient, id: string) => c.call('credentialRemoveBotSecret', { id }, s(60)),
   credentialStatus: (c: HostClient) => c.call<CredentialStatus>('credentialStatus', {}, s(60)),
   setOnePasswordToken: (c: HostClient, token: string) => c.call<CredentialStatus>('credentialSetOnePassword', { token }, s(60)),
   updateConnectorCredentials: (c: HostClient, id: string, fields: Record<string, string>) => c.call('credentialUpdateConnector', { id, fields }, s(120)),

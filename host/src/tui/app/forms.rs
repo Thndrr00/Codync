@@ -139,6 +139,7 @@ impl App {
             auto: b.auto,
             notify: b.notify,
             computer: b.computer,
+            fleet: b.fleet_management,
             color: COLORS.iter().position(|c| *c == b.color).unwrap_or(7),
             shape: SHAPES.iter().position(|s| *s == b.shape).unwrap_or(0),
             connectors: b.connectors.iter().map(|id| Toggle { id: id.clone(), name: id.clone(), on: true }).collect(),
@@ -182,6 +183,7 @@ impl App {
             auto: true,
             notify: true,
             computer: false,
+            fleet: false,
             color: (n * 7) % COLORS.len(),
             shape: n % SHAPES.len(),
             connectors: self
@@ -280,6 +282,7 @@ impl App {
                         | Field::Approvals
                         | Field::Notify
                         | Field::Computer
+                        | Field::Fleet
                         | Field::Color
                         | Field::Shape
                         | Field::ModelOptions
@@ -310,6 +313,7 @@ impl App {
                     Field::Approvals => f.auto = !f.auto,
                     Field::Notify => f.notify = !f.notify,
                     Field::Computer => f.computer = !f.computer,
+                    Field::Fleet => f.fleet = !f.fleet,
                     Field::Color if !space => f.color = cycle(f.color, d, COLORS.len()),
                     Field::Shape if !space => f.shape = cycle(f.shape, d, SHAPES.len()),
                     Field::ModelOptions => {
@@ -398,6 +402,7 @@ impl Form {
             "fastMode": self.fast,
             "notify": self.notify,
             "computer": self.computer,
+            "fleetManagement": self.fleet,
             "avatarColor": COLORS[self.color],
             "avatarShape": SHAPES[self.shape],
             "connectors": self.connectors.iter().filter(|t| t.on).map(|t| t.id.clone()).collect::<Vec<_>>(),

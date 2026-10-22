@@ -231,6 +231,8 @@ impl Hub {
 
     pub fn update_bot(&self, patch: &Value) -> Result<Value> {
         let id = patch["id"].as_str().ok_or_else(|| anyhow!("id required"))?.to_owned();
+        // From reading the bot to saving it, so no other update saves a stale copy in between.
+        let _one = crate::chat::instruction_history::lock();
         let row = self.store.bot(&id)?.filter(|b| !b.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
         let mut merged = serde_json::to_value(&row.config)?;
         for (k, v) in patch.as_object().into_iter().flatten() {
@@ -260,11 +262,21 @@ impl Hub {
             cfg.members = crate::chat::group::valid_members(&self.store, &cfg.id, &cfg.members)?;
         }
         validate(&cfg)?;
+        let mut edit = crate::chat::instruction_history::begin(&row.config, &cfg, patch, &self.store)?;
         crate::agent::workspace::prepare(&mut cfg)?;
         crate::agent::own_memory::settle(&mut cfg, &row.config, patch);
-        {
+        if let Some(edit) = &mut edit {
+            edit.record(&self.store, &row.config, &cfg)?;
+        }
+        let saved = {
             let _g = self.emit_lock.locked();
-            self.store.save_bot(&cfg)?;
+            self.store.save_bot(&cfg)
+        };
+        if let Err(error) = saved {
+            if let Some(edit) = edit {
+                edit.undo(&self.store)?;
+            }
+            return Err(error);
         }
         if !cfg.is_group() {
             if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&row.config) {
@@ -283,6 +295,10 @@ impl Hub {
         // A terminal session leaves with its bot, and a hook waiting on one of its cards is freed at once.
         self.external.forget(self, id);
         self.routines.disable_bot(&self.store, id)?;
+        // A locked vault keeps them; Credentials lists them under "A removed bot" to remove.
+        if let Err(error) = crate::market::bot_secrets::remove_bot(&self.store, id) {
+            tracing::warn!(bot = id, error = format!("{error:#}"), "couldn't forget a deleted bot's secrets");
+        }
         self.team.cancel_bot(id);
         self.groups.stop(self, id);
         let _ = self.send_cmd(id, Cmd::Shutdown);
@@ -573,6 +589,7 @@ fn validate(cfg: &BotConfig) -> Result<()> {
     if cfg.is_group() {
         return Ok(());
     }
+    crate::agent::approval_rules::validate(&cfg.approval_rules)?;
     if !cfg.cwd.is_empty() && !std::path::Path::new(&cfg.cwd).is_dir() {
         bail!("workspace folder does not exist: {}", cfg.cwd);
     }

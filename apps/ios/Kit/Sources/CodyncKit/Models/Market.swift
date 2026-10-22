@@ -259,6 +259,19 @@ public struct SavedLogin: Codable, Hashable, Sendable, Identifiable {
     public var username: String
 }
 
+/// A secret a bot keeps for API calls or commands; the value stays on the computer.
+public struct BotSecret: Decodable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var botId: String
+    public var botName: String?
+    public var name: String
+    /// Where it goes, worded by the host (`https://api.example.com · bearer token`).
+    public var destination: String
+
+    /// The first host that keeps bot secrets.
+    public static let minHost = "2.20.0"
+}
+
 public struct CredentialStatus: Decodable, Sendable {
     public var provider: String
     public var onePasswordConnected: Bool
@@ -292,6 +305,15 @@ public extension HostClient {
 
     func removeLogin(_ id: String) async throws {
         let _: Empty = try await call("credentialRemoveLogin", ["id": id], timeout: 60)
+    }
+
+    func botSecrets() async throws -> [BotSecret] {
+        let res: Items<BotSecret> = try await call("credentialBotSecrets", timeout: 60)
+        return res.items
+    }
+
+    func removeBotSecret(_ id: String) async throws {
+        let _: Empty = try await call("credentialRemoveBotSecret", ["id": id], timeout: 60)
     }
 
     func credentialStatus() async throws -> CredentialStatus { try await call("credentialStatus", timeout: 60) }

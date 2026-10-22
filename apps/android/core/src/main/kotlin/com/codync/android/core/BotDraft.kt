@@ -27,6 +27,8 @@ data class BotDraft(
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
     val account: String? = null,
+    /** Fleet tools (create and organize bots); null from a host without them, which hides the switch. */
+    val fleetManagement: Boolean? = null,
     val isChief: Boolean = false,
     val chiefBotId: String? = null,
 ) {
@@ -38,16 +40,17 @@ data class BotDraft(
         // switch must stay out (the host's booleans don't take null).
         return JsonObject(WireJson.encodeToJsonElement(normalized).jsonObject.filterNot { (key, value) -> value == JsonNull && key in SWITCHES })
     }
-    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account") }).toString()
+    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account", "fleetManagement") }).toString()
 
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val SWITCHES = setOf("fastMode", "notify")
+        private val SWITCHES = setOf("fastMode", "notify", "fleetManagement")
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
-            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account, bot.isChief, bot.chiefBotId)
+            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
+            bot.fleetManagement, bot.isChief, bot.chiefBotId)
     }
 }

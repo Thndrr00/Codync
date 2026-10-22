@@ -39,6 +39,10 @@ export interface Bot {
   skills: string[]
   /** The bot can see and operate the computer's desktop. */
   computer: boolean
+  /** The bot may create and organize bots and groups (fleet tools); absent from hosts before it. */
+  fleetManagement?: boolean
+  /** The bot that created this one with its fleet tools. */
+  createdBy?: string | null
   /** Uses the memory all the user's bots share ("About you"). */
   sharedMemory: boolean
   /** Keeps the harness's own memory (Claude Code's…) on beside Codync's; null where it has no switch. */
@@ -89,6 +93,9 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     connectors: raw.connectors ?? [],
     skills: raw.skills ?? [],
     computer: raw.computer ?? false,
+    // Kept undefined from an older host, which has no fleet tools.
+    fleetManagement: raw.fleetManagement,
+    createdBy: raw.createdBy ?? null,
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
     harnessMemory: raw.harnessMemory ?? null,
     memoryRev: raw.memoryRev ?? 0,
@@ -511,6 +518,7 @@ export interface BotDraft {
   connectors?: string[]
   skills?: string[]
   computer?: boolean
+  fleetManagement?: boolean
   sharedMemory?: boolean
   harnessMemory?: boolean
   isChief?: boolean
@@ -538,6 +546,8 @@ export function draftOf(bot: Bot): BotDraft {
     connectors: bot.connectors,
     skills: bot.skills,
     computer: bot.computer,
+    // Undefined from a host without fleet tools: the editor then hides the switch.
+    fleetManagement: bot.fleetManagement,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
   }

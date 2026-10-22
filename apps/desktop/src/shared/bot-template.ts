@@ -2,7 +2,8 @@ import type { BotDraft } from './models'
 
 /** Swift's `JSONEncoder` with `.prettyPrinted, .sortedKeys, .withoutEscapingSlashes`; nil fields are left out. */
 export function encodeTemplate(draft: BotDraft): string {
-  const { id: _id, pinned: _pinned, hidden: _hidden, account: _account, ...rest } = draft
+  // A template carries what the bot is, not what it's allowed to do here (fleet tools).
+  const { id: _id, pinned: _pinned, hidden: _hidden, account: _account, fleetManagement: _fleet, ...rest } = draft
   const sorted = Object.fromEntries(
     Object.entries(rest)
       .filter(([, v]) => v !== null && v !== undefined)

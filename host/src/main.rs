@@ -8,6 +8,7 @@ mod browser;
 mod chat;
 mod cli;
 mod compat;
+mod egress;
 mod environment;
 mod external;
 mod hub;

@@ -154,13 +154,15 @@ pub enum Field {
     Approvals,
     Notify,
     Computer,
+    /// Fleet tools: create and organize bots.
+    Fleet,
     Color,
     Shape,
     Connectors,
     Skills,
 }
 
-pub const FIELDS: [Field; 15] = [
+pub const FIELDS: [Field; 16] = [
     Field::Name,
     Field::Instructions,
     Field::Agent,
@@ -172,6 +174,7 @@ pub const FIELDS: [Field; 15] = [
     Field::Approvals,
     Field::Notify,
     Field::Computer,
+    Field::Fleet,
     Field::Color,
     Field::Shape,
     Field::Connectors,
@@ -202,6 +205,7 @@ pub struct Form {
     pub auto: bool,
     pub notify: bool,
     pub computer: bool,
+    pub fleet: bool,
     pub color: usize,
     pub shape: usize,
     pub connectors: Vec<Toggle>,

@@ -1,16 +1,22 @@
 package com.codync.android
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,25 +27,48 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.Bot
 import com.codync.android.core.Entry
+import com.codync.android.core.TraceFilter
 import com.codync.android.design.*
+import com.kyant.shapes.Capsule
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-/** "Full conversation": everything the agent did, grouped by turn (iOS `TraceView`). */
+/** "Full conversation": everything the agent did, grouped by turn, with typed filters (iOS `TraceView`). */
 @Composable internal fun TraceView(bot: Bot, thread: String?, state: AppState) {
-    val turns = state.entries.filter { it.botId == bot.id && it.threadId == thread }.groupBy { it.turn }.toSortedMap().toList()
+    val all = state.entries.filter { it.botId == bot.id && it.threadId == thread }
+    val counts = remember(all) { TraceFilter.counts(all) }
+    var filter by remember { mutableStateOf(TraceFilter.All) }
+    val turns = remember(all, filter) { all.filter { filter.matches(it) }.groupBy { it.turn }.toSortedMap().toList() }
     val list = rememberLazyListState()
+    // Where the reader was before the last filter change, to stay put across it.
+    val anchor = remember { mutableStateOf<Long?>(null) }
+    val beforeTurns = remember { mutableStateOf<List<Long>>(emptyList()) }
     LaunchedEffect(Unit) { if (turns.isNotEmpty()) list.scrollToItem(turns.lastIndex, Int.MAX_VALUE) }
+    LaunchedEffect(filter) {
+        val target = TraceFilter.anchorIndex(beforeTurns.value, anchor.value, turns.map { it.first })
+        if (target != null) list.scrollToItem(target)
+        anchor.value = null
+    }
     Column(Modifier.fillMaxSize()) {
         ModalHeader("Full conversation")
-        LazyColumn(state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        TraceFilters(filter, counts) { next ->
+            anchor.value = list.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? Long
+            beforeTurns.value = turns.map { it.first }
+            filter = next
+        }
+        LazyColumn(state = list, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             if (turns.isEmpty()) item { Text("Nothing yet.", style = Type.body, color = Palette.tertiary) }
             items(turns, key = { it.first }) { (turn, entries) ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -49,6 +78,29 @@ import kotlinx.serialization.json.jsonPrimitive
                 }
             }
         }
+    }
+}
+
+/** The "Full conversation" filters: one pill per event type with its count (idea 32). */
+@Composable private fun TraceFilters(selection: TraceFilter, counts: Map<TraceFilter, Int>, select: (TraceFilter) -> Unit) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (filter in TraceFilter.entries) {
+            val count = counts[filter] ?: 0
+            val label = if (filter == TraceFilter.All) filter.label else "${filter.label} $count"
+            TraceChip(label, filter == selection) { select(filter) }
+        }
+    }
+}
+
+@Composable private fun TraceChip(label: String, on: Boolean, action: () -> Unit) {
+    val fill = if (on) Palette.accentFill else Palette.surface
+    val ink = if (on) Palette.onAccent else Palette.secondary
+    Row(Modifier.height(32.dp).clip(Capsule()).background(fill)
+        .clickable(role = Role.Tab, onClick = action)
+        .semantics { contentDescription = label; selected = on }
+        .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = Type.caption.medium, color = ink, maxLines = 1)
     }
 }
 

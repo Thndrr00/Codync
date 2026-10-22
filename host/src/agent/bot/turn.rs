@@ -115,6 +115,7 @@ impl Actor {
         self.exit_tail = None;
         self.seg = Seg::None;
         self.tools.clear();
+        self.watchdog.reset();
         self.loop_guard = super::stall::LoopGuard::default();
         self.plan_entry = None;
         self.last_text = None;

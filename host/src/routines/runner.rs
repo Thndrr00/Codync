@@ -5,6 +5,7 @@ use super::{
     Arc, Context, EntryKind, Hub, Lane, LockExt, Result, Routines, Run, Status, Store, Value, bail, cancel_run,
     default_timeout, json, new_run, now_ms,
 };
+use super::{Trigger, watch::Check};
 use std::{sync::atomic::Ordering, time::Duration};
 
 pub struct Prepared {
@@ -186,7 +187,9 @@ impl Routines {
         Ok(())
     }
 
-    fn schedule_due(&self, store: &Store, now: i64) -> Result<()> {
+    /// Queues the runs whose time came; returns the `watch` checks that came due instead, which
+    /// queue a run themselves only if what they watch changed.
+    fn schedule_due(&self, store: &Store, now: i64) -> Result<Vec<Check>> {
         let due = self
             .state
             .locked()
@@ -194,22 +197,33 @@ impl Routines {
             .iter()
             .any(|r| !r.deleted && r.enabled && r.next_runs.iter().flatten().any(|at| *at <= now));
         if !due {
-            return Ok(());
+            return Ok(vec![]);
         }
         self.change(store, |s| {
+            let mut checks = vec![];
             for routine in &mut s.routines {
                 if routine.deleted || !routine.enabled {
                     continue;
                 }
                 let mut fired = false;
-                for (trigger, next) in routine.triggers.iter().zip(&mut routine.next_runs) {
+                for (index, (trigger, next)) in routine.triggers.iter().zip(&mut routine.next_runs).enumerate() {
                     if let Some(at) = *next
                         && at <= now
                     {
                         match trigger.advance(at, now) {
                             Ok(future) => {
-                                fired = true;
                                 *next = future;
+                                if let Trigger::Watch { kind, target, .. } = trigger {
+                                    checks.push(Check {
+                                        routine_id: routine.id.clone(),
+                                        bot_id: routine.bot_id.clone(),
+                                        index,
+                                        kind: *kind,
+                                        target: target.clone(),
+                                    });
+                                } else {
+                                    fired = true;
+                                }
                             }
                             Err(error) => {
                                 routine.enabled = false;
@@ -228,7 +242,7 @@ impl Routines {
                     s.runs.push(new_run(routine, json!({"source":"schedule"}), None));
                 }
             }
-            Ok(())
+            Ok(checks)
         })
     }
 }
@@ -257,7 +271,9 @@ fn tick(hub: &Arc<Hub>) -> Result<()> {
     if let Err(error) = hub.routines.publish(hub) {
         tracing::error!(%error, "routine result publication will retry");
     }
-    hub.routines.schedule_due(&hub.store, now_ms())?;
+    for check in hub.routines.schedule_due(&hub.store, now_ms())? {
+        tokio::spawn(super::watch::run(hub.clone(), check));
+    }
     let pending: Vec<_> =
         hub.routines.state.locked().runs.iter().filter(|r| r.status == Status::Pending).cloned().collect();
     for run in pending {
@@ -315,7 +331,7 @@ mod tests {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let routines = Routines::default();
         let mut routine = super::super::tests::routine();
-        routine.triggers = vec![super::super::Trigger::Once { at: 60_000 }];
+        routine.triggers = vec![Trigger::Once { at: 60_000 }];
         routines
             .change(&store, |s| {
                 let mut running = new_run(&routine, Value::Null, None);

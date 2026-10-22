@@ -2,9 +2,11 @@ package com.codync.android
 
 import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -40,8 +42,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,12 +57,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.*
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import java.io.File
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -94,7 +100,8 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         if (external != text.text.toString() && external !in echoes) text.setTextAndPlaceCursorAtEnd(external)
     }
     val clipboard = LocalClipboard.current
-    val clips = LocalContext.current.getSystemService(ClipboardManager::class.java)
+    val context = LocalContext.current
+    val clips = context.getSystemService(ClipboardManager::class.java)
     val scope = rememberCoroutineScope()
     val photos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
         if (uris.isNotEmpty()) store.importFiles(uris) { store.addDraftFiles(bot.id, thread, it) }
@@ -104,6 +111,17 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     }
     // A session running in the person's own terminal is read here and answered in that terminal.
     val terminal = bot.backend == "external"
+    // A photo the phone's camera just took (idea 29): a private temp file, then the annotation editor.
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraFile by remember { mutableStateOf<File?>(null) }
+    var annotating by remember { mutableStateOf<Pair<Uri, File>?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val uri = cameraUri
+        val file = cameraFile
+        cameraUri = null; cameraFile = null
+        if (taken && uri != null && file != null) annotating = uri to file
+        else file?.delete()
+    }
     val receiver = remember(bot.id, importing, queuing, terminal) { ReceiveContentListener { content ->
         if (importing || queuing || terminal) content else {
             val uris = mutableListOf<android.net.Uri>()
@@ -141,6 +159,10 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         bot.members.mapNotNull { id -> state.bots.firstOrNull { it.id == id } }.filter { query.isEmpty() || it.name.contains(query, true) }
     }.orEmpty()
     fun clear() = text.edit { replace(0, length, "") }
+    // A shortcut edits one range and moves the selection; it never replaces the draft or sends.
+    fun applyEdit(edit: ComposerEdits.Edit?) {
+        if (edit != null) text.edit { replace(edit.start, edit.end, edit.replacement); selection = TextRange(edit.selectionStart, edit.selectionEnd) }
+    }
     fun run(command: SlashCommand) {
         val skill = command.skill
         when {
@@ -160,7 +182,17 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         DropdownMenu({ buildList {
             add(MenuItem("Photos", icon = "photo.on.rectangle") { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+            add(MenuItem("Camera", icon = "camera.fill") {
+                val root = File(context.cacheDir, "shared-attachments").apply { mkdirs() }
+                val file = File(root, "camera-${System.currentTimeMillis()}.jpg")
+                file.createNewFile()
+                cameraFile = file
+                cameraUri = FileProvider.getUriForFile(context, context.packageName + ".files", file)
+                cameraUri?.let(camera::launch)
+            })
             add(MenuItem("Files", icon = "folder") { documents.launch(arrayOf("*/*")) })
+            add(MenuItem("Wrap in code", icon = "terminal") { applyEdit(ComposerEdits.wrapInCode(text.text.toString(), text.selection.start, text.selection.end)) })
+            add(MenuItem("Code block", icon = "terminal") { applyEdit(ComposerEdits.insertCodeBlock(text.text.toString(), text.selection.start, text.selection.end)) })
             // Only the clip's description: reading the clip itself would show Android's paste notice.
             if (clipOffersFiles(clips.primaryClipDescription?.mimeTypes().orEmpty())) add(MenuItem("Paste", icon = "doc.on.clipboard") { scope.launch {
                 val data = clipboard.getClipEntry()?.clipData
@@ -198,6 +230,11 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             }
         }
     }
+    CodyncSheet(annotating, { annotating = null }) { (uri, file) ->
+        PhotoAnnotation(uri, file) { exported ->
+            store.importFiles(listOf(exported)) { store.addDraftFiles(bot.id, thread, it) }
+            annotating = null
+        }
     }
 }
 
