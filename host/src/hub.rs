@@ -249,9 +249,15 @@ impl Hub {
         validate(&cfg)?;
         crate::agent::workspace::prepare(&mut cfg)?;
         crate::agent::own_memory::settle(&mut cfg, &row.config, patch);
+        let edit = crate::chat::instruction_history::begin(&row.config, &cfg, patch, &self.store)?;
         {
             let _g = self.emit_lock.locked();
             self.store.save_bot(&cfg)?;
+        }
+        if let Some(edit) = edit
+            && let Err(error) = edit.record(&self.store, &row.config, &cfg)
+        {
+            tracing::warn!(bot = %id, error = format!("{error:#}"), "couldn't keep the instructions' previous version");
         }
         if !cfg.is_group() {
             if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&row.config) {

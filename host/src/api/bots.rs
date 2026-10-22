@@ -93,6 +93,25 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&b)).await??})
         }
+        // The versions of a bot's instructions, what changed between two, and going back to one.
+        "instructionHistory" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
+            crate::chat::instruction_history::list(&hub.store, &row.config)?
+        }
+        "instructionDiff" => {
+            let version =
+                |key: &str| b[key].as_u64().and_then(|v| u32::try_from(v).ok()).context("from and to are versions");
+            json!({"diff": crate::chat::instruction_history::diff(&hub.store, str_arg(&b, "botId")?, version("from")?, version("to")?)?})
+        }
+        "restoreInstructions" => {
+            use crate::chat::instruction_history as history;
+            let bot = str_arg(&b, "botId")?.to_owned();
+            let version = b["version"].as_u64().and_then(|v| u32::try_from(v).ok()).context("version is required")?;
+            let patch = json!({"id": bot, "description": history::text(&hub.store, &bot, version)?,
+                history::REASON: format!("Restored version {version}")});
+            let hub = hub.clone();
+            json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&patch)).await??})
+        }
         // The roster as the user dragged it, top first.
         "reorderBots" => {
             let ids: Vec<String> = serde_json::from_value(b["ids"].clone()).context("ids is required")?;

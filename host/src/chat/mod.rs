@@ -5,6 +5,7 @@ pub mod context;
 pub mod files;
 pub mod group;
 pub mod handoff;
+pub mod instruction_history;
 pub mod memory;
 pub mod naming;
 pub mod oneshot;
