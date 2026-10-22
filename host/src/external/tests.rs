@@ -165,6 +165,39 @@ async fn one_session_is_one_bot_however_many_events_it_sends() {
 }
 
 #[tokio::test]
+async fn deleting_the_bot_stops_watching_that_session() {
+    let (hub, dir) = hub();
+    super::ingest(&hub, &prompt("go")).await;
+    let id = bot(&hub).unwrap();
+    hub.delete_bot(&id).unwrap();
+    super::ingest(&hub, &prompt("go again")).await;
+    assert!(bot(&hub).is_none(), "the deleted session isn't recreated by its next event");
+    // A new session in the same terminal is watched again.
+    let fresh = json!({"hook_event_name": "UserPromptSubmit", "session_id": "s2", "cwd": "/w/p", "prompt": "new"});
+    super::ingest(&hub, &event(fresh)).await;
+    assert!(bot(&hub).is_some());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn deleting_a_bot_frees_the_hook_waiting_on_its_card() {
+    let (hub, dir) = hub();
+    super::ingest(&hub, &prompt("run")).await;
+    let request = event(&json!({"hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/w/p",
+        "tool_name": "Bash", "tool_input": {"command": "npm publish"}}));
+    let task = tokio::spawn({
+        let hub = hub.clone();
+        async move { super::ingest(&hub, &request).await }
+    });
+    settle(&hub).await;
+    let id = bot(&hub).unwrap();
+    hub.delete_bot(&id).unwrap();
+    // Nobody decided: the terminal asks at once, instead of waiting out the 108 s.
+    assert_eq!(task.await.unwrap()["decision"], Value::Null);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn a_session_start_only_announces_the_bot() {
     let (hub, dir) = hub();
     let start = json!({"hook_event_name": "SessionStart", "session_id": "s1", "cwd": "/w/p"});
