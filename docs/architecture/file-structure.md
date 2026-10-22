@@ -15,7 +15,7 @@ Codync/
 │   │   ├── screen/            # Remote screen: helper protocol, helper socket, phone viewers, bot computer use (cua-driver)
 │   │   ├── api/               # Dispatch (mod.rs), HTTP/SSE routes (http.rs, events.rs), method groups (bots.rs, host.rs, marketplace.rs, remote.rs), caller permissions (devices.rs)
 │   │   ├── agent/             # ACP client, harness discovery, registry, sign-in, setup PTYs, bot actor
-│   │   ├── chat/              # Groups, bot-to-bot requests, prompt snapshots, memory
+│   │   ├── chat/              # Groups, bot-to-bot requests, prompt snapshots, memory, a bot's profile, instruction versions, scratchpad
 │   │   ├── remote/            # Identity, wire crypto, E2E channel, cloud, relay socket, push
 │   │   ├── market/            # Marketplace (registry.rs, install.rs, skills.rs), Composio, MCP OAuth
 │   │   └── tui/               # Terminal client (app/: state and input; view/: drawing; manage/ + sheets.rs: settings; connections.rs: secure connection requests)
@@ -93,6 +93,9 @@ Codync/
 | Agent process, ACP, queue and session lifecycle | `host/src/agent/bot/` (`launch.rs`, `queue.rs`, `session.rs`, `turn.rs`, `updates.rs`), `acp.rs` |
 | Compaction timing and rollover | `host/src/agent/bot/compaction.rs`, the handoff card in `host/src/chat/handoff.rs`; the rules in `codync-mem`'s `compaction.rs` |
 | Group room turns / bot-to-bot requests | `host/src/chat/group.rs` / `team.rs` |
+| A bot's own name and instructions, their versions, its scratchpad | `host/src/chat/profile.rs`, `instruction_history.rs`, `scratchpad.rs` |
+| Turn watchdog (tool loops, stalls) | `host/src/agent/bot/watchdog.rs` |
+| Routines: schedules, runs, watch triggers, MCP tools | `host/src/routines/` (`schedule.rs`, `runner.rs`, `watch.rs`, `mcp_tools.rs`, `editor.rs`, `hooks.rs`) |
 | Prompt snapshots and memory | `host/src/chat/context.rs`, `memory/` (`api.rs`, `tools.rs`, `notices.rs`, `dream.rs`, `import.rs`; long-form files in `files.rs`, `file_api.rs`, `file_tools.rs`, `file_notices.rs`); the rules in `host/crates/memory` (`codync-mem`, files in `files.rs`, dreaming in `dream/`); harnesses' own memory turned off in `host/src/agent/own_memory.rs` |
 | Identity, encryption and direct channel | `host/src/remote/identity.rs`, `crypto.rs`, `channel.rs` |
 | Host cloud state and relay connection | `host/src/remote/cloud.rs`, `relay.rs` |

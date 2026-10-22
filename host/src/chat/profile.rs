@@ -95,10 +95,12 @@ fn versions(hub: &Hub, bot: &str, version: Option<u64>) -> Result<Value> {
     if let Some(version) = version {
         let version = u32::try_from(version)?;
         out["text"] = history::text(&hub.store, bot, version)?.into();
-        if version > 1
-            && let Ok(diff) = history::diff(&hub.store, bot, version - 1, version)
-        {
-            out["diff"] = diff.into();
+        // The version before may be past the kept ones; then there's nothing to compare.
+        if version > 1 {
+            out["diff"] = match history::diff(&hub.store, bot, version - 1, version) {
+                Ok(diff) => diff.into(),
+                Err(error) => format!("({error:#})").into(),
+            };
         }
     }
     Ok(out)

@@ -36,14 +36,14 @@ it has no pointer tooltip or link-opening action.
   way ends automatic naming.
 - The `chat` server also keeps the bot's working notes for one conversation: its main chat, or one thread
   (`scratchpad_read`, `scratchpad_write {text, mode: replace|append}`, `host/src/chat/scratchpad.rs`, kv
-  `scratchpad.v1.<bot>.<root|main>`). Use them for a plan, what's done and what's next. The notes outlive
+  `lane_key("scratchpad", bot, lane)`, so in a group each member has its own). Use them for a plan, what's done and what's next. The notes outlive
   compactions and session restarts. They are never in the transcript, memory or any client. They hold at most
-  16,000 characters; an empty replace clears them, and deleting the bot deletes them. Idea from rakazo's
+  16,000 characters; an empty replace clears them, and they go with the bot, like other lane state. Idea from rakazo's
   `scratchpad-tools.ts` (Apache-2.0).
 - Every change to a bot's instructions, from its settings, the API or `set_instructions`, is kept as a numbered
   version. Each version records the text, the author (`user`, `bot`, or `earlier` for what the bot had before its
   history started), an optional reason and the time (`host/src/chat/instruction_history.rs`, kv
-  `instructionHistory.v1.<bot>`). The last 50 versions are kept. `set_instructions` takes an optional `reason`
+  `instructions.history.<bot>`, removed with the bot). The last 50 versions are kept. `set_instructions` takes an optional `reason`
   and an `ifVersion`; a patch to `updateBot` can carry `instructionsReason` and `ifInstructionsVersion`. When the
   instructions moved past that version since, the edit is refused with a conflict instead of overwriting someone
   else's change. The bot reads its history with `instruction_history {version?}`; with a version, it also gets

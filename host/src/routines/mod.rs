@@ -219,7 +219,17 @@ impl Routines {
             bail!("routine name or instruction is empty or too long");
         }
         let triggers: Vec<Trigger> = if let Some(draft) = body.get("schedule") {
-            serde_json::from_value::<editor::ScheduleDraft>(draft.clone()).context("invalid schedule")?.triggers()?
+            let draft = serde_json::from_value::<editor::ScheduleDraft>(draft.clone()).context("invalid schedule")?;
+            // "Keep" means the saved triggers, not the client's copy of them, which an older app
+            // may have decoded without the fields of a trigger type it doesn't know.
+            let kept = (draft.kind == "keep").then(|| body["id"].as_str()).flatten().and_then(|id| {
+                let s = self.state.locked();
+                s.routines.iter().find(|r| r.id == id && r.bot_id == bot && !r.deleted).map(|r| r.triggers.clone())
+            });
+            match kept {
+                Some(triggers) => triggers,
+                None => draft.triggers()?,
+            }
         } else {
             serde_json::from_value(body["triggers"].clone()).context("invalid triggers")?
         };
@@ -302,6 +312,8 @@ impl Routines {
                 .context("routine not found")?;
             if enabled && !r.enabled {
                 r.next_runs = r.triggers.iter().map(|t| t.next(now_ms())).collect::<Result<_>>()?;
+                // A watch paused for failing checks gets its full allowance again.
+                r.watch.iter_mut().for_each(|w| w.failures = 0);
             }
             r.enabled = enabled;
             r.updated_at = now_ms();

@@ -15,13 +15,21 @@ use std::sync::{Mutex, MutexGuard};
 
 /// Versions kept per bot (the oldest go first).
 const KEPT: usize = 50;
+/// Line pairs a diff compares before it shows the whole text as replaced.
+const MAX_DIFF_CELLS: usize = 4_000_000;
 /// Patch keys that describe an edit rather than set a field.
 pub const IF_VERSION: &str = "ifInstructionsVersion";
 pub const AUTHOR: &str = "instructionsAuthor";
 pub const REASON: &str = "instructionsReason";
 
-/// One check, save and record at a time, so two edits can't both pass the version check.
+/// One bot update at a time, from reading the bot to saving it: two edits can't both pass the
+/// version check, and an edit of something else can't save a stale copy of the instructions.
 static EDIT: Mutex<()> = Mutex::new(());
+
+/// Held by `Hub::update_bot` around its read, check, save and record.
+pub fn lock() -> MutexGuard<'static, ()> {
+    EDIT.locked()
+}
 
 /// Who changed the instructions.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -49,7 +57,7 @@ pub struct Revision {
 }
 
 fn key(bot: &str) -> String {
-    format!("instructionHistory.v1.{bot}")
+    format!("instructions.history.{bot}")
 }
 
 fn history(store: &Store, bot: &str) -> Result<Vec<Revision>> {
@@ -64,20 +72,20 @@ fn current(versions: &[Revision], text: &str) -> u32 {
     versions.last().map_or(u32::from(!text.is_empty()), |v| v.version)
 }
 
-/// An edit of `bot`'s instructions, held from the version check until it's recorded.
-pub struct Edit<'a> {
-    _one: MutexGuard<'a, ()>,
+/// An edit of `bot`'s instructions, from the version check until it's recorded (under [`lock`]).
+pub struct Edit {
     author: Author,
     reason: Option<String>,
+    /// The bot and its history as it was before `record`, for `undo`.
+    before: Option<(String, Option<String>)>,
 }
 
 /// Checks a patch that may change `old`'s instructions; `None` when it doesn't touch them.
-pub fn begin(old: &BotConfig, new: &BotConfig, patch: &Value, store: &Store) -> Result<Option<Edit<'static>>> {
+pub fn begin(old: &BotConfig, new: &BotConfig, patch: &Value, store: &Store) -> Result<Option<Edit>> {
     let expected = patch.get(IF_VERSION).filter(|v| !v.is_null());
     if new.description == old.description && expected.is_none() {
         return Ok(None);
     }
-    let one = EDIT.locked();
     let versions = history(store, &old.id)?;
     let now = current(&versions, &old.description);
     if let Some(expected) = expected {
@@ -91,16 +99,18 @@ pub fn begin(old: &BotConfig, new: &BotConfig, patch: &Value, store: &Store) -> 
     }
     let author = serde_json::from_value(patch[AUTHOR].clone()).unwrap_or_default();
     let reason = patch[REASON].as_str().map(str::trim).filter(|r| !r.is_empty()).map(|r| r.chars().take(300).collect());
-    Ok(Some(Edit { _one: one, author, reason }))
+    Ok(Some(Edit { author, reason, before: None }))
 }
 
-impl Edit<'_> {
-    /// Records the saved change: `old` becomes version 1 if the history was empty.
-    pub fn record(self, store: &Store, old: &BotConfig, new: &BotConfig) -> Result<()> {
+impl Edit {
+    /// Records the change before it's saved (`old` becomes version 1 if the history was empty);
+    /// [`Edit::undo`] takes it back when the save fails.
+    pub fn record(&mut self, store: &Store, old: &BotConfig, new: &BotConfig) -> Result<()> {
         if new.description == old.description {
             return Ok(());
         }
-        let mut versions = history(store, &old.id)?;
+        let raw = store.kv_read(&key(&old.id))?;
+        let mut versions: Vec<Revision> = raw.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default();
         if versions.is_empty() && !old.description.is_empty() {
             versions.push(Revision {
                 version: 1,
@@ -115,11 +125,22 @@ impl Edit<'_> {
             version,
             text: new.description.clone(),
             author: self.author,
-            reason: self.reason,
+            reason: self.reason.clone(),
             at: now_ms(),
         });
         let skip = versions.len().saturating_sub(KEPT);
-        store.kv_set(&key(&old.id), &serde_json::to_string(&versions[skip..])?)
+        store.kv_set(&key(&old.id), &serde_json::to_string(&versions[skip..])?)?;
+        self.before = Some((old.id.clone(), raw));
+        Ok(())
+    }
+
+    /// Puts the history back as it was before [`Edit::record`].
+    pub fn undo(self, store: &Store) -> Result<()> {
+        match self.before {
+            Some((bot, Some(raw))) => store.kv_set(&key(&bot), &raw),
+            Some((bot, None)) => store.kv_delete(&key(&bot)),
+            None => Ok(()),
+        }
     }
 }
 
@@ -148,10 +169,14 @@ pub fn diff(store: &Store, bot: &str, from: u32, to: u32) -> Result<String> {
     Ok(lines_diff(&text(store, bot, from)?, &text(store, bot, to)?))
 }
 
-/// A line diff by longest common subsequence; instructions are short enough for its O(n·m).
+/// A line diff by longest common subsequence, O(n·m) up to `MAX_DIFF_CELLS`.
 fn lines_diff(old: &str, new: &str) -> String {
     let (a, b): (Vec<&str>, Vec<&str>) = (old.lines().collect(), new.lines().collect());
-    let mut common = vec![vec![0u16; b.len() + 1]; a.len() + 1];
+    // Past this many line pairs the table costs too much: show the whole text replaced.
+    if a.len().saturating_mul(b.len()) > MAX_DIFF_CELLS {
+        return a.iter().map(|l| format!("- {l}\n")).chain(b.iter().map(|l| format!("+ {l}\n"))).collect();
+    }
+    let mut common = vec![vec![0u32; b.len() + 1]; a.len() + 1];
     for i in (0..a.len()).rev() {
         for j in (0..b.len()).rev() {
             common[i][j] = if a[i] == b[j] { common[i + 1][j + 1] + 1 } else { common[i + 1][j].max(common[i][j + 1]) };
@@ -185,13 +210,17 @@ mod tests {
     fn diffs_show_removed_and_added_lines() {
         assert_eq!(lines_diff("a\nb\nc", "a\nB\nc"), "  a\n- b\n+ B\n  c\n");
         assert_eq!(lines_diff("", "new"), "+ new\n");
+        // Too long to compare line by line: the whole text shows as replaced.
+        let long = (0..3000).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
+        assert!(lines_diff(&long, &long.replace("1\n", "x\n")).starts_with("- 0\n"));
     }
 
     #[test]
     fn edits_are_versioned_and_stale_ones_refused() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let (v1, v2, v3) = (bot("Reviews PRs."), bot("Reviews PRs.\nBe brief."), bot("Writes tests."));
-        let edit = begin(&v1, &v2, &json!({AUTHOR: "bot", REASON: "user asked for brevity"}), &store).unwrap().unwrap();
+        let mut edit =
+            begin(&v1, &v2, &json!({AUTHOR: "bot", REASON: "user asked for brevity"}), &store).unwrap().unwrap();
         edit.record(&store, &v1, &v2).unwrap();
         let listed = list(&store, &v2).unwrap();
         assert_eq!(listed["current"], 2);
@@ -200,8 +229,13 @@ mod tests {
         assert!(diff(&store, "bot", 1, 2).unwrap().contains("+ Be brief."));
         // Someone who read version 1 can't overwrite version 2.
         assert!(begin(&v2, &v3, &json!({IF_VERSION: 1}), &store).is_err());
-        begin(&v2, &v3, &json!({IF_VERSION: 2}), &store).unwrap().unwrap().record(&store, &v2, &v3).unwrap();
+        let mut edit = begin(&v2, &v3, &json!({IF_VERSION: 2}), &store).unwrap().unwrap();
+        edit.record(&store, &v2, &v3).unwrap();
         assert_eq!(text(&store, "bot", 3).unwrap(), "Writes tests.");
+        // A save that failed takes its version back.
+        edit.undo(&store).unwrap();
+        assert!(text(&store, "bot", 3).is_err());
+        assert_eq!(list(&store, &v2).unwrap()["current"], 2);
         assert!(begin(&v3, &v3, &json!({}), &store).unwrap().is_none());
     }
 }

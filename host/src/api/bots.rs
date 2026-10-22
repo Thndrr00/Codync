@@ -92,6 +92,11 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             json!({"bot": tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??})
         }
         "updateBot" => {
+            // Edits through the API are the user's; only the bot's own tool says otherwise.
+            let mut b = b;
+            if let Some(patch) = b.as_object_mut() {
+                patch.remove(crate::chat::instruction_history::AUTHOR);
+            }
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&b)).await??})
         }
@@ -112,7 +117,14 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let patch = json!({"id": bot, "description": history::text(&hub.store, &bot, version)?,
                 history::REASON: format!("Restored version {version}")});
             let hub = hub.clone();
-            json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&patch)).await??})
+            let saved = tokio::task::spawn_blocking(move || {
+                let saved = hub.update_bot(&patch)?;
+                let notice = json!({"text": format!("Instructions restored to version {version}")});
+                hub.add_entry(&Lane::main(&bot), EntryKind::Notice, hub.store.max_turn(&bot), &notice);
+                anyhow::Ok(saved)
+            })
+            .await??;
+            json!({"bot": saved})
         }
         // The roster as the user dragged it, top first.
         "reorderBots" => {

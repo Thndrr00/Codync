@@ -60,21 +60,27 @@ A routine has an OR list of triggers:
 - `event`: `source`, `event` (`*` matches all), and optional exact-match `filters`.
   `messageContains` matches a substring of `text`. Source names are `slack`,
   `github`, `origin`, `microsoftTeams`, `linear`, `sentry`, `pagerduty`, and `email`.
-
 - `watch`: `kind` (`files` or `url`), `target` and `everyMinutes` (1 to 10080).
   Every `everyMinutes`, the host fingerprints the target without calling the model
-  (`routines/watch.rs`). For a file or folder the fingerprint covers names, sizes and
-  modification times, relative to the bot's folder. A folder may hold up to 2000
-  entries; `.git` and `node_modules` aren't looked into, and symlinks aren't
-  followed. For a URL it covers the status and body of a public HTTPS page (egress
-  `Public`, 30 s, 4 MB). The first check only records a baseline. After that, a
-  changed fingerprint queues a run with the event `{source: "watch", kind, target}`;
-  while a run waits, later changes fold into it. Three failed checks in a row pause
-  the routine, with `lastError` and a notice in the chat saying why. Changing a
-  routine's triggers starts new baselines. Bots create watches through
-  `save_routine`. The forms show them by their description and keep them, as with
-  events. A page whose body changes on every load (a clock, an ad) fires on every
-  check.
+  (`routines/watch.rs`).
+  - A file or folder, relative to the bot's folder: the fingerprint covers names,
+    sizes and modification times. The target may be a symlink; links inside aren't
+    followed. A folder may hold up to 2000 entries, and `.git` and `node_modules`
+    aren't looked into. A missing target is a state of its own, so a file appearing
+    or going away is a change.
+  - A URL: the body of a public HTTPS page (egress `Public`, 30 s, 4 MB). An answer
+    other than success counts as a failed check, not a change.
+  - The first check only records a baseline. After that, a changed fingerprint queues
+    a run with the event `{source: "watch", kind, target}`; while a run waits, later
+    changes fold into it.
+  - Three failed checks in a row pause the routine: pending runs are cancelled, and
+    `lastError` plus an error notice in the chat say why. Resuming it resets the
+    count. Changing a routine's triggers starts new baselines.
+  - Bots create watches through `save_routine`. The forms show them by their
+    description and keep them, as with events. Saving a form left on "keep" uses the
+    host's stored triggers, so an older app that doesn't know watch triggers can still
+    save a watch routine's other fields. A page whose body changes on every load (a
+    clock, an ad) fires on every check.
 
 For example, Sunday at 14:20 in Taipei is `20 14 * * 0` with `Asia/Taipei`.
 The host computes and displays the next occurrence. Calendar parsing uses

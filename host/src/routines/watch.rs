@@ -78,9 +78,17 @@ pub async fn fingerprint(kind: WatchKind, target: &str, cwd: &Path) -> Result<St
     }
 }
 
-/// Names, sizes and modification times of a file, or of a folder's tree (symlinks not followed).
+/// Names, sizes and modification times of a file, or of a folder's tree (the target itself may be
+/// a symlink; links inside aren't followed). A missing target is a state of its own, so "when
+/// report.pdf appears" works.
 fn files(path: &Path) -> Result<String> {
-    let meta = std::fs::symlink_metadata(path).with_context(|| format!("can't read {}", path.display()))?;
+    let meta = match std::fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(crate::agent::registry::sha256_hex(b"absent"));
+        }
+        Err(error) => return Err(error).with_context(|| format!("can't read {}", path.display())),
+    };
     let mut entries = vec![];
     if meta.is_dir() {
         let mut folders = vec![PathBuf::new()];
@@ -111,12 +119,15 @@ fn line(name: &Path, meta: &std::fs::Metadata) -> String {
     format!("{}\t{}\t{}\t{modified}", name.display(), u8::from(meta.is_dir()), meta.len())
 }
 
-/// A public page's status and body.
+/// A public page's body. An answer other than success is a failed check, not a change, so a
+/// server's brief outage doesn't fire the routine twice.
 async fn page(url: &str) -> Result<String> {
     let res = crate::egress::client(Policy::Public, url).await?.get(url).timeout(URL_TIMEOUT).send().await?;
-    let status = res.status().as_u16();
+    if !res.status().is_success() {
+        bail!("{url} answered {}", res.status());
+    }
     let body = crate::egress::body(res, MAX_PAGE).await?;
-    Ok(crate::agent::registry::sha256_hex(&[status.to_string().as_bytes(), b"\n", &body].concat()))
+    Ok(crate::agent::registry::sha256_hex(&body))
 }
 
 impl Routines {
@@ -135,7 +146,7 @@ impl Routines {
                 return Ok(None);
             };
             // The triggers changed while it ran: this check no longer applies.
-            if !matches!(routine.triggers.get(check.index), Some(Trigger::Watch { target, .. }) if *target == check.target)
+            if !matches!(routine.triggers.get(check.index), Some(Trigger::Watch { kind, target, .. }) if *kind == check.kind && *target == check.target)
             {
                 return Ok(None);
             }
@@ -163,7 +174,10 @@ impl Routines {
                         format!("Paused: couldn't check {} {FAILURES_BEFORE_PAUSE} times in a row ({error:#})", check.target);
                     routine.enabled = false;
                     routine.last_error = Some(reason.clone());
-                    Ok(Some((routine.name.clone(), reason)))
+                    let paused = (routine.name.clone(), reason);
+                    // Paused like `set_enabled(false)`: what was waiting doesn't run.
+                    super::cancel_pending(s, &check.routine_id);
+                    Ok(Some(paused))
                 }
             }
         })
@@ -180,7 +194,7 @@ pub async fn run(hub: std::sync::Arc<Hub>, check: Check) {
     match hub.routines.record_watch(&hub.store, &check, found) {
         Ok(Some((name, reason))) => {
             tracing::warn!(routine = %check.routine_id, reason = %reason, "watch paused its routine");
-            let notice = json!({"text":format!("{name}: {reason}"),"routineId":check.routine_id,"style":"info"});
+            let notice = json!({"text":format!("{name}: {reason}"),"routineId":check.routine_id,"style":"error"});
             if hub.add_entry(&Lane::main(&check.bot_id), EntryKind::Notice, 0, &notice).is_none() {
                 tracing::error!(routine = %check.routine_id, "couldn't post the paused routine notice");
             }
@@ -213,7 +227,10 @@ mod tests {
         let with_git = files(&dir).unwrap();
         std::fs::write(dir.join(".git/HEAD"), "changed").unwrap();
         assert_eq!(files(&dir).unwrap(), with_git);
-        assert!(files(&dir.join("missing")).is_err());
+        // A missing file is a state, and its appearing is a change.
+        let absent = files(&dir.join("report.pdf")).unwrap();
+        std::fs::write(dir.join("report.pdf"), "pdf").unwrap();
+        assert_ne!(files(&dir.join("report.pdf")).unwrap(), absent);
         let _ = std::fs::remove_dir_all(dir);
     }
 

@@ -5,8 +5,9 @@
 //!
 //! Idea from rakazo's `packages/adapters/src/scratchpad-tools.ts` (Apache-2.0); no code copied.
 
+use crate::LockExt;
 use crate::hub::Hub;
-use crate::store::{Lane, Store};
+use crate::store::{Lane, lane_key};
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
@@ -39,22 +40,14 @@ pub fn tools() -> [Value; 2] {
     ]
 }
 
-fn key(lane: &Lane) -> String {
-    format!("scratchpad.v1.{}.{}", lane.chat, lane.thread.as_deref().unwrap_or("main"))
-}
-
-/// Forgets every scratchpad of a deleted bot.
-pub fn remove_bot(store: &Store, bot: &str) -> Result<()> {
-    for k in store.kv_prefix(&format!("scratchpad.v1.{bot}.")) {
-        store.kv_delete(&k)?;
-    }
-    Ok(())
-}
+/// One read-modify-write at a time, so two appends can't drop one.
+static WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
-    // The conversation of the turn that called, as the tool's notices use.
+    // The conversation of the turn that called; the bot's own notes there, even in a group.
     let lane = hub.runtime(bot).lane.unwrap_or_else(|| Lane::main(bot));
-    let key = key(&lane);
+    let key = lane_key("scratchpad", bot, &lane);
+    let _one = WRITE.locked();
     let notes = hub.store.kv_read(&key)?.unwrap_or_default();
     match name {
         "scratchpad_read" => Ok(json!({"text": notes})),
@@ -87,7 +80,7 @@ pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
 mod tests {
     use super::*;
     use crate::remote::identity::Identity;
-    use crate::store::BotConfig;
+    use crate::store::{BotConfig, Store};
 
     #[test]
     fn notes_are_kept_per_conversation_and_bounded() {
@@ -105,11 +98,12 @@ mod tests {
         assert!(call(&hub, "a", "scratchpad_write", &json!({"text": "x".repeat(MAX_CHARS + 1)})).is_err());
         assert!(call(&hub, "a", "scratchpad_write", &json!({"text": "x", "mode": "prepend"})).is_err());
         // A thread's notes are its own.
-        assert_eq!(hub.store.kv_read(&key(&Lane::in_thread("a", "root"))).unwrap(), None);
+        assert_eq!(hub.store.kv_read(&lane_key("scratchpad", "a", &Lane::in_thread("a", "root"))).unwrap(), None);
         call(&hub, "a", "scratchpad_write", &json!({"text": ""})).unwrap();
         assert_eq!(call(&hub, "a", "scratchpad_read", &json!({})).unwrap()["text"], "");
         call(&hub, "a", "scratchpad_write", &json!({"text": "keep"})).unwrap();
-        remove_bot(&hub.store, "a").unwrap();
+        // Lane state goes with the bot.
+        hub.store.delete_bot("a").unwrap();
         assert_eq!(call(&hub, "a", "scratchpad_read", &json!({})).unwrap()["text"], "");
         std::fs::remove_dir_all(&dir).unwrap();
     }

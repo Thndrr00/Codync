@@ -68,7 +68,9 @@ impl Store {
         codync_mem::store::drop_bot(&c, id)?;
         // Its dreaming bookmark, notices' revisions and the record of its moved memory.
         c.execute("DELETE FROM kv WHERE k GLOB ?1", [format!("memory.*{id}*")])?;
-        // Lane state (see `lane_key`) it owned, or that bots kept in it.
+        // Its instruction versions (`chat/instruction_history.rs`).
+        c.execute("DELETE FROM kv WHERE k = ?1", [format!("instructions.history.{id}")])?;
+        // Lane state (see `lane_key`: scratchpads, sessions, …) it owned, or that bots kept in it.
         c.execute("DELETE FROM kv WHERE k GLOB ?1 OR k GLOB ?2", [format!("lane.*.{id}@*"), format!("lane.*@{id}*")])?;
         // ponytail: snapshots of replaced sessions stay until the bot goes; prune by session if kv grows.
         c.execute(

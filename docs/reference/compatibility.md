@@ -58,6 +58,12 @@ couldn't get the matching side yet.
 - **Raise `minHost`** when the client's core flows need something older hosts lack. Hosts
   update without review, so this only asks the person to update the computer. An optional
   feature that needs a newer host hides its control instead.
+- **A new kind of value inside a list a client sends back** (a routine trigger `type`, say)
+  is additive only if an older client can't drop its fields on the way back. Routine
+  triggers: older iPhone builds decode them into fixed fields, so a `watch` trigger loses
+  `kind`, `target` and `everyMinutes` there. The host makes this safe by reusing its stored
+  triggers when a routine form saves with "keep". An older app's schedule preview of such a
+  routine still fails; the routine itself is untouched.
 - Floors never exceed the release that ships them (unit tests in both crates check this).
 - The encrypted channel's handshake version (`v` in its `hello`, rejected with
   `unsupportedVersion`, close code 4400) is separate: the host must keep accepting every `v`

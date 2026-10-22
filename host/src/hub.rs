@@ -221,6 +221,8 @@ impl Hub {
 
     pub fn update_bot(&self, patch: &Value) -> Result<Value> {
         let id = patch["id"].as_str().ok_or_else(|| anyhow!("id required"))?.to_owned();
+        // From reading the bot to saving it, so no other update saves a stale copy in between.
+        let _one = crate::chat::instruction_history::lock();
         let row = self.store.bot(&id)?.filter(|b| !b.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
         let mut merged = serde_json::to_value(&row.config)?;
         for (k, v) in patch.as_object().into_iter().flatten() {
@@ -247,17 +249,21 @@ impl Hub {
             cfg.members = crate::chat::group::valid_members(&self.store, &cfg.id, &cfg.members)?;
         }
         validate(&cfg)?;
+        let mut edit = crate::chat::instruction_history::begin(&row.config, &cfg, patch, &self.store)?;
         crate::agent::workspace::prepare(&mut cfg)?;
         crate::agent::own_memory::settle(&mut cfg, &row.config, patch);
-        let edit = crate::chat::instruction_history::begin(&row.config, &cfg, patch, &self.store)?;
-        {
-            let _g = self.emit_lock.locked();
-            self.store.save_bot(&cfg)?;
+        if let Some(edit) = &mut edit {
+            edit.record(&self.store, &row.config, &cfg)?;
         }
-        if let Some(edit) = edit
-            && let Err(error) = edit.record(&self.store, &row.config, &cfg)
-        {
-            tracing::warn!(bot = %id, error = format!("{error:#}"), "couldn't keep the instructions' previous version");
+        let saved = {
+            let _g = self.emit_lock.locked();
+            self.store.save_bot(&cfg)
+        };
+        if let Err(error) = saved {
+            if let Some(edit) = edit {
+                edit.undo(&self.store)?;
+            }
+            return Err(error);
         }
         if !cfg.is_group() {
             if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&row.config) {
@@ -275,7 +281,6 @@ impl Hub {
         if let Err(error) = crate::market::bot_secrets::remove_bot(&self.store, id) {
             tracing::warn!(bot = id, error = format!("{error:#}"), "couldn't forget a deleted bot's secrets");
         }
-        crate::chat::scratchpad::remove_bot(&self.store, id)?;
         self.team.cancel_bot(id);
         self.groups.stop(self, id);
         let _ = self.send_cmd(id, Cmd::Shutdown);

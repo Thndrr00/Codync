@@ -1,7 +1,9 @@
 //! Watches a running turn for two kinds of trouble:
-//! - a loop: the same tool with the same input `LOOP_LIMIT` times in a row is a loop, not
-//!   progress, and every round costs tokens. The turn is stopped. Any other call in between
-//!   resets the count, so retries and polling with changing input go on.
+//! - a loop: the same tool with the same input and the same result `LOOP_LIMIT` times in a row
+//!   is a loop, not progress, and every round costs tokens. The turn is stopped. A call is counted
+//!   when it finishes, with the input its updates settled on; one whose input never arrived isn't
+//!   counted. Any other call in between resets the count, so retries, and polling whose result
+//!   changes, go on.
 //! - a stall: nothing from the agent for `STALL_AFTER`, with no tool running and no approval
 //!   waiting, usually means a hung connection. The chat says so once; the turn keeps running.
 //!
@@ -10,7 +12,7 @@
 use super::Actor;
 use crate::store::EntryKind;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{Duration, Instant};
 
@@ -19,14 +21,21 @@ const LOOP_LIMIT: u32 = 10;
 /// Silence that's worth telling the user about.
 const STALL_AFTER: Duration = Duration::from_secs(10 * 60);
 
+/// A tool call started and not finished: what it is so far.
+#[derive(Default)]
+struct Call {
+    title: String,
+    kind: Option<String>,
+    input: Value,
+}
+
 pub(super) struct Watchdog {
     last_call: Option<u64>,
     streak: u32,
     /// Why the turn must stop, until the actor acts on it.
     tripped: Option<String>,
     last_update: Instant,
-    /// Tool calls started and not finished.
-    running: HashSet<String>,
+    running: HashMap<String, Call>,
     warned: bool,
 }
 
@@ -37,9 +46,19 @@ impl Default for Watchdog {
             streak: 0,
             tripped: None,
             last_update: Instant::now(),
-            running: HashSet::new(),
+            running: HashMap::new(),
             warned: false,
         }
+    }
+}
+
+/// Whether a tool's input says anything (adapters may send `{}` first and fill it in later).
+fn known(input: &Value) -> bool {
+    match input {
+        Value::Null => false,
+        Value::Object(map) => !map.is_empty(),
+        Value::String(s) => !s.is_empty(),
+        _ => true,
     }
 }
 
@@ -52,31 +71,41 @@ impl Watchdog {
     /// Notes one `session/update` of the turn.
     pub(super) fn seen(&mut self, update: &Value) {
         self.last_update = Instant::now();
+        let kind = update["sessionUpdate"].as_str();
+        if !matches!(kind, Some("tool_call" | "tool_call_update")) {
+            return;
+        }
         let id = update["toolCallId"].as_str().unwrap_or_default().to_owned();
-        match update["sessionUpdate"].as_str() {
-            Some("tool_call") => {
-                self.count_call(update);
-                if !matches!(update["status"].as_str(), Some("completed" | "failed")) {
-                    self.running.insert(id);
-                }
-            }
-            Some("tool_call_update") if matches!(update["status"].as_str(), Some("completed" | "failed")) => {
-                self.running.remove(&id);
-            }
-            _ => {}
+        let call = self.running.entry(id.clone()).or_default();
+        if let Some(title) = update["title"].as_str() {
+            title.clone_into(&mut call.title);
+        }
+        if let Some(kind) = update["kind"].as_str() {
+            call.kind = Some(kind.to_owned());
+        }
+        if known(&update["rawInput"]) {
+            call.input = update["rawInput"].clone();
+        }
+        if matches!(update["status"].as_str(), Some("completed" | "failed"))
+            && let Some(call) = self.running.remove(&id)
+        {
+            self.count(&call, &update["content"]);
         }
     }
 
-    fn count_call(&mut self, update: &Value) {
-        let title = update["title"].as_str().unwrap_or("a tool");
+    fn count(&mut self, call: &Call, result: &Value) {
+        if !known(&call.input) {
+            return;
+        }
         let mut hasher = DefaultHasher::new();
-        (title, update["kind"].as_str(), update["rawInput"].to_string()).hash(&mut hasher);
-        let call = hasher.finish();
-        self.streak = if self.last_call == Some(call) { self.streak + 1 } else { 1 };
-        self.last_call = Some(call);
+        (&call.title, &call.kind, call.input.to_string(), result.to_string()).hash(&mut hasher);
+        let fingerprint = hasher.finish();
+        self.streak = if self.last_call == Some(fingerprint) { self.streak + 1 } else { 1 };
+        self.last_call = Some(fingerprint);
         if self.streak == LOOP_LIMIT {
+            let title = if call.title.is_empty() { "a tool" } else { call.title.as_str() };
             self.tripped = Some(format!(
-                "Stopped: the agent called {title} with the same input {LOOP_LIMIT} times in a row. Send a message to continue differently."
+                "Stopped: the agent called {title} with the same input and got the same result {LOOP_LIMIT} times in a row. Send a message to continue differently."
             ));
         }
     }
@@ -131,6 +160,28 @@ mod tests {
         }
         assert!(dog.tripped().unwrap().contains("Read config.toml"));
         assert!(dog.tripped().is_none(), "it's told once");
+    }
+
+    #[test]
+    fn input_filled_in_later_and_changing_results_count_as_different_calls() {
+        let mut dog = Watchdog::default();
+        for n in 0..LOOP_LIMIT * 2 {
+            let id = format!("call-{n}");
+            // The adapter sends an empty input first, then the real one.
+            dog.seen(&json!({"sessionUpdate":"tool_call","toolCallId":id,"title":"Terminal","rawInput":{}}));
+            dog.seen(&json!({"sessionUpdate":"tool_call_update","toolCallId":id,"rawInput":{"command":format!("step {n}")},"status":"completed"}));
+        }
+        assert!(dog.tripped().is_none(), "different commands behind the same title");
+        for n in 0..LOOP_LIMIT * 2 {
+            let id = format!("poll-{n}");
+            dog.seen(&json!({"sessionUpdate":"tool_call","toolCallId":id,"title":"Check CI","rawInput":{"run":7}}));
+            dog.seen(&json!({"sessionUpdate":"tool_call_update","toolCallId":id,"status":"completed","content":[{"text":format!("{n}% done")}]}));
+        }
+        assert!(dog.tripped().is_none(), "polling whose result moves on");
+        for n in 0..LOOP_LIMIT {
+            dog.seen(&json!({"sessionUpdate":"tool_call","toolCallId":format!("blank-{n}"),"title":"Tool","status":"completed"}));
+        }
+        assert!(dog.tripped().is_none(), "calls whose input never arrived aren't counted");
     }
 
     #[test]
