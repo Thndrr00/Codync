@@ -22,9 +22,9 @@ mod launch;
 mod lifecycle;
 mod queue;
 mod session;
-mod tool_loop;
 mod turn;
 mod updates;
+mod watchdog;
 
 pub(crate) use launch::{launch_commands, select_model, start_agent, system_prompt};
 
@@ -159,8 +159,7 @@ pub fn spawn(hub: Arc<Hub>, cfg: BotConfig) -> BotHandle {
         active_request: None,
         seg: Seg::None,
         tools: HashMap::new(),
-        tool_loop: tool_loop::ToolLoop::default(),
-        loop_stop: None,
+        watchdog: watchdog::Watchdog::default(),
         plan_entry: None,
         last_text: None,
         sent: Vec::new(),
@@ -317,9 +316,8 @@ struct Actor {
     active_request: Option<crate::chat::team::BotRequest>,
     seg: Seg,
     tools: HashMap<String, String>,
-    /// Counts identical tool calls in a row this turn; `loop_stop` is why the turn must stop.
-    tool_loop: tool_loop::ToolLoop,
-    loop_stop: Option<String>,
+    /// Watches the running turn for tool loops and silence.
+    watchdog: watchdog::Watchdog,
     plan_entry: Option<String>,
     last_text: Option<String>,
     /// Messages the bot sent the user this turn (`send_message`); none: its last text is the reply.
@@ -410,6 +408,7 @@ impl Actor {
                         self.cancel_deadline = None;
                         if let Some(c) = self.conn.take() { c.acp.kill().await; }
                     }
+                    self.check_stall();
                     self.release_idle().await;
                     // The idle check may have queued a compaction.
                     if self.turn.is_none() && !self.queue.is_empty() {

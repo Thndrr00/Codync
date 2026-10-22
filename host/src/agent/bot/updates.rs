@@ -32,8 +32,9 @@ impl Actor {
                     && params["sessionId"].as_str() == self.turn_session.as_deref()
                     && self.turn.is_some()
                 {
+                    self.watchdog.seen(&params["update"]);
                     self.on_update(&params["update"]);
-                    if let Some(reason) = self.loop_stop.take() {
+                    if let Some(reason) = self.watchdog.tripped() {
                         tracing::warn!(bot = %self.cfg.id, "stopping a turn stuck in a tool loop");
                         let notice = json!({"text": reason, "style": "error"});
                         self.hub.add_entry(&self.lane, EntryKind::Notice, self.turn.unwrap_or(0), &notice);
@@ -67,9 +68,6 @@ impl Actor {
                 self.set_activity("Thinking…");
             }
             "tool_call" => {
-                if let Some(reason) = self.tool_loop.observe(u) {
-                    self.loop_stop = Some(reason);
-                }
                 self.close_seg();
                 let tool_id = u["toolCallId"].as_str().unwrap_or_default().to_owned();
                 let mut data = json!({
