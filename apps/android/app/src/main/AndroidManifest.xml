@@ -112,6 +112,21 @@
                 <data android:scheme="${urlScheme}" android:host="computers" />
                 <data android:scheme="${urlScheme}" android:host="plugins" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
         </activity>
+        <!-- An alert's reply or approval: explicit broadcasts only, raised by its own PendingIntent. -->
+        <receiver android:name=".NotificationActionReceiver" android:exported="false" />
     </application>
 </manifest>

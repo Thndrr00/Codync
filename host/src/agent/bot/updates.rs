@@ -184,22 +184,42 @@ impl Actor {
         });
         let turn = self.turn.unwrap_or(0);
         self.close_seg();
-        if let Some(e) = self.add(EntryKind::Permission, turn, data) {
-            self.perms.insert(e.id, rpc_id);
+        let created = self.add(EntryKind::Permission, turn, data);
+        if let Some(e) = &created {
+            self.perms.insert(e.id.clone(), rpc_id);
         }
         self.hub.set_runtime(&self.cfg.id, |r| {
             r.status = BotStatus::NeedsInput;
             r.activity = format!("Needs approval: {title}");
         });
+        // What a phone needs to answer the card without opening it: its id and the options the card itself
+        // shows, so a button can never offer something the card doesn't.
+        let approval = created.map(|e| {
+            let options = e.data["options"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .take(3)
+                .filter_map(|o| {
+                    Some(json!({
+                        "optionId": o["optionId"].as_str()?,
+                        "name": acp::truncate(o["name"].as_str()?, 60),
+                        "kind": o["kind"].as_str().unwrap_or(""),
+                    }))
+                })
+                .collect::<Vec<_>>();
+            json!({"entryId": e.id, "options": options})
+        });
         // Tapping it opens where the card is: the group, for a room turn.
         let target = self.hub.store.bot(&self.lane.chat).ok().flatten().map_or_else(|| self.cfg.clone(), |r| r.config);
-        push::notify(
+        push::notify_with(
             &self.hub,
             &target,
             Some(&self.cfg.id),
             &format!("{} needs you", self.cfg.name),
             &title,
             AlertKind::NeedsInput,
+            approval,
         );
     }
 

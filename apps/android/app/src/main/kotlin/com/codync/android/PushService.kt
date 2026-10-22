@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 import androidx.work.*
 import com.codync.android.core.*
 import com.google.firebase.messaging.FirebaseMessaging
@@ -53,6 +54,7 @@ object PushDelivery {
         gate.withLock {
             context.getSystemService(NotificationManager::class.java).cancelAll()
             AlertConversations.forget(context)
+            LauncherShortcuts.retire(context)
         }
     }
     suspend fun activate(context: Context, user: String?) {
@@ -155,7 +157,7 @@ class PushRegistrationWorker(context: Context, parameters: WorkerParameters) : C
     }
 }
 
-private suspend fun kotlinx.coroutines.flow.StateFlow<LinkState>.firstReady() {
+internal suspend fun kotlinx.coroutines.flow.StateFlow<LinkState>.firstReady() {
     val result = first { it is LinkState.Ready || it is LinkState.ComputerOffline || it is LinkState.Failed }
     if (result !is LinkState.Ready) throw java.io.IOException("Computer unavailable")
 }
@@ -212,7 +214,7 @@ internal object NotificationDisplay {
         manager.createNotificationChannel(NotificationChannel(ALERTS, "Bot updates", NotificationManager.IMPORTANCE_HIGH))
         manager.createNotificationChannel(NotificationChannel(TASKS, "Delegated tasks", NotificationManager.IMPORTANCE_LOW))
     }
-    private fun open(context: Context, scope: String, computer: String, bot: String): Intent {
+    internal fun open(context: Context, scope: String, computer: String, bot: String): Intent {
         val url = Uri.Builder().scheme(BuildConfig.URL_SCHEME).authority("bot").appendPath(bot).appendQueryParameter("scope", scope).appendQueryParameter("computer", computer).build()
         return Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(url)
     }
@@ -235,7 +237,73 @@ internal object NotificationDisplay {
             try { AlertConversations.style(context, builder, tag, computer, open(context, scope, computer, bot), alert.body, alert.subtitle, conversation); builder.setSubText(null) }
             catch (error: Exception) { android.util.Log.w("Codync", "Alert shown without its conversation", error) }
         }
+        addAlertActions(context, builder, tag, scope, computer, bot, alert)
         try { context.getSystemService(NotificationManager::class.java).notify(tag, 1, builder.build()) } catch (_: SecurityException) { }
+    }
+
+    /**
+     * Reply in the chat, or answer the pending approval with the agent's own options, without opening the app.
+     * An approval can't be used from the lock screen; a reply never sends twice (the intent carries one nonce).
+     */
+    private fun addAlertActions(context: Context, builder: NotificationCompat.Builder, tag: String, scope: String, computer: String, bot: String, alert: PushAlert) {
+        val approval = alert.approval
+        if (approval != null) {
+            // Only a platform that can require the unlock before running an action offers the answer inline;
+            // everywhere else the tap opens the card.
+            if (Build.VERSION.SDK_INT < 31) return
+            for (option in approval.options.take(PushApproval.MAX_OPTIONS)) {
+                val path = "approve/$tag/${option.optionId}"
+                val intent = actionIntent(context, NotificationActionReceiver.ACTION_APPROVE, path, scope, computer, bot)
+                    .putExtra(NotificationActionReceiver.EXTRA_NONCE, NotificationActionPlan.freshNonce())
+                    .putExtra(NotificationActionReceiver.EXTRA_ENTRY, approval.entryId)
+                    .putExtra(NotificationActionReceiver.EXTRA_OPTION, option.optionId)
+                builder.addAction(NotificationCompat.Action.Builder(0, option.name, actionPending(context, intent, path))
+                    .setAuthenticationRequired(true).build())
+            }
+            return
+        }
+        val nonce = NotificationActionPlan.freshNonce()
+        val path = "reply/$tag/$nonce"
+        val intent = actionIntent(context, NotificationActionReceiver.ACTION_REPLY, path, scope, computer, bot)
+            .putExtra(NotificationActionReceiver.EXTRA_NONCE, nonce)
+        val reply = RemoteInput.Builder(NotificationActionReceiver.REPLY_KEY).setLabel("Reply").build()
+        builder.addAction(NotificationCompat.Action.Builder(0, "Reply", actionPending(context, intent, path))
+            .addRemoteInput(reply).setAllowGeneratedReplies(true)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).build())
+    }
+
+    /** An explicit broadcast: no other app can answer for this alert. */
+    private fun actionIntent(context: Context, action: String, path: String, scope: String, computer: String, bot: String): Intent =
+        Intent(context, NotificationActionReceiver::class.java).setAction(action).setData(Uri.parse("codync://notification/$path"))
+            .putExtra(NotificationActionReceiver.EXTRA_SCOPE, scope)
+            .putExtra(NotificationActionReceiver.EXTRA_COMPUTER, computer)
+            .putExtra(NotificationActionReceiver.EXTRA_BOT, bot)
+
+    private fun actionPending(context: Context, intent: Intent, path: String): PendingIntent =
+        PendingIntent.getBroadcast(context, path.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+    /** An alert the user answered: its notification goes at once; the action itself runs in the background. */
+    fun cancelAlert(context: Context, scope: String, computer: String, bot: String) {
+        try { context.getSystemService(NotificationManager::class.java).cancel("$scope/$computer/$bot", 1) } catch (_: SecurityException) { }
+    }
+
+    /**
+     * A reply or approval that couldn't reach the computer: what happened, and the chat it belonged to. A reply
+     * keeps its text in the private notification, so the user can read it back before trying again.
+     */
+    fun actionFailed(context: Context, scope: String, computer: String, bot: String, message: String, reply: String? = null) {
+        if (!context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) return
+        channels(context)
+        val open = PendingIntent.getActivity(context, 0, open(context, scope, computer, bot), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val generic = NotificationCompat.Builder(context, ALERTS).setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.app_name)).setContentText("An action couldn't be completed.").build()
+        val body = reply?.trim().takeUnless { it.isNullOrEmpty() } ?: message
+        val builder = NotificationCompat.Builder(context, ALERTS).setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(if (reply.isNullOrBlank()) "Couldn't complete that" else "Reply not sent").setContentText(body)
+            .setSubText(message).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setContentIntent(open)
+            .setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setPublicVersion(generic)
+        try { context.getSystemService(NotificationManager::class.java).notify("$scope/$computer/$bot/failed", 3, builder.build()) }
+        catch (_: SecurityException) { }
     }
     /**
      * A delegated task: on Android 16 a Live update (promoted ongoing notification) with its

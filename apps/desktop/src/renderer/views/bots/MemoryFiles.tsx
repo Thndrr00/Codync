@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { CardForm, CardSection, IconButton, Spinner } from '../../components/Controls'
+import { Button, CardForm, CardSection, IconButton, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader } from '../../components/Overlay'
+import { VStack } from '../../components/Stack'
 import { useApp, useStore } from '../../store/context'
 import { type MemoryFile, type MemoryFileDetail, type MemoryFiles, type MemoryStore, versionLabel } from '../../store/memory-store'
 import { Field } from '../marketplace/pieces'
@@ -62,6 +63,31 @@ export function MemoryFileSheet({ memory, target, onClose }: { memory: MemorySto
     setDetail(await memory.file(file, target.shared))
   }
 
+  // The note changed on the computer while this sheet was open (or the save failed): read the latest instead of
+  // retrying blind, and let the user keep their draft or take the newer text.
+  const readLatest = async (replaceDraft: boolean) => {
+    const file = target.name
+    if (!file) return
+    const latest = await memory.file(file, target.shared)
+    if (!latest) return
+    memory.dismissError()
+    setDetail(latest)
+    if (replaceDraft) setDraft(latest.content ?? '')
+  }
+
+  // Keep what the user wrote and put it over the latest version: read its base once, then save.
+  const keepDraftAndSave = async () => {
+    const file = target.name
+    if (!file || draft === null) return
+    const latest = await memory.file(file, target.shared)
+    if (!latest) return
+    memory.dismissError()
+    setDetail(latest)
+    if (!(await memory.changeFile(file, target.shared, latest.hash, { content: draft }))) return
+    setDraft(null)
+    setDetail(await memory.file(file, target.shared))
+  }
+
   const actions = memory.busy ? <Spinner /> : draft !== null
     ? <IconButton title="Save" icon="checkmark" disabled={!draft.trim() || (!target.name && !validName)} onClick={() => void change({ content: draft })} />
     : detail?.content != null ? <div className="memory-header-actions">
@@ -74,6 +100,16 @@ export function MemoryFileSheet({ memory, target, onClose }: { memory: MemorySto
     <ModalHeader title={target.name ?? 'New note'} trailing={actions} />
     <CardForm>
       {memory.error ? <CardSection><p role="alert" className="memory-error">{memory.error}</p></CardSection> : null}
+      {memory.error && target.name ? <CardSection footer={draft !== null ? 'Your draft stays here until you save or leave.' : undefined}>
+        <VStack gap={8}>
+          <Button kind="secondary" disabled={memory.busy} onClick={() => void (draft !== null ? keepDraftAndSave() : readLatest(false))}>
+            {draft !== null ? 'Keep my draft and save over the latest' : 'Load the latest'}
+          </Button>
+          {draft !== null ? <Button kind="secondary" disabled={memory.busy || detail?.content == null} onClick={() => void readLatest(true)}>
+            Replace my draft with the latest
+          </Button> : null}
+        </VStack>
+      </CardSection> : null}
       {draft !== null ? <>
         {!target.name ? <CardSection footer="Lowercase letters, digits and dashes, ending in .md.">
           <Field value={name} onChange={setName} placeholder="people.md" label="File name" mono />

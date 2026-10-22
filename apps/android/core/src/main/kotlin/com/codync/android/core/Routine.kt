@@ -11,7 +11,7 @@ import kotlinx.serialization.json.*
     val triggerDescriptions: List<String> = emptyList(), val nextRunAt: Long? = null,
     val timeoutSeconds: Int? = null, val lastError: String? = null,
 ) {
-    val keepsOriginal: Boolean get() = triggers.size != 1 || triggers.single()["type"]?.jsonPrimitive?.content !in listOf("cron", "webhook")
+    val keepsOriginal: Boolean get() = triggers.size != 1 || triggers.single()["type"]?.jsonPrimitive?.content !in listOf("cron", "interval", "webhook")
     val hasWebhook: Boolean get() = triggers.any { it["type"]?.jsonPrimitive?.content in listOf("webhook", "event") }
 }
 
@@ -43,7 +43,16 @@ import kotlinx.serialization.json.*
     val monthDay: Int = 1, val minuteStep: Int = 15, val hour: Int = 9, val minute: Int = 0,
     val at: Long = 0, val expression: String = "", val zone: String = "", val original: List<JsonObject> = emptyList(),
 ) {
-    fun forMobileEditor(): RoutineScheduleDraft = copy(calendarStyle = "custom", kind = if (kind in listOf("cron", "webhook")) kind else "keep")
+    /**
+     * What the editor shows: the host's own reading of the trigger. Kinds the editor can't edit (`once`, events,
+     * several triggers) keep the original triggers; the visual style the host detected is retained, never forced to `custom`.
+     */
+    fun forMobileEditor(): RoutineScheduleDraft = copy(kind = if (kind in RoutineSchedule.editableKinds) kind else "keep")
+
+    /** Toggle one weekday (0 Sunday ... 6 Saturday) of the `days` style; the host rejects an empty set. */
+    fun toggleDay(day: Int): RoutineScheduleDraft =
+        copy(selectedDays = (if (day in selectedDays) selectedDays - day else selectedDays + day).sorted())
+
 }
 
 @Serializable data class RoutineSchedulePreview(

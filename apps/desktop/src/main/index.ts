@@ -8,6 +8,7 @@ import { devPort, HostController } from './host-controller'
 import { registerFileSaves } from './file-saves'
 import { registerHostProxy } from './host-proxy'
 import { readClipboardFiles, readFiles } from './files'
+import { JumpList } from './jump-list'
 import { Tray } from './tray'
 import { applyDockVisibility, setShowInDock, showInDock } from './dock'
 import { AccountService } from './account'
@@ -113,6 +114,8 @@ export function send(command: WindowCommand, show = true) {
   window?.webContents.send('app:command', command)
 }
 
+const jumpList = new JumpList((command) => send(command))
+
 function menu() {
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
@@ -173,7 +176,10 @@ function registerIPC(tray: Tray) {
   })
   ipcMain.handle('app:readPaths', (_e, paths: string[]) => readFiles(Array.isArray(paths) ? paths : []))
   ipcMain.handle('app:clipboardFiles', () => readClipboardFiles())
-  ipcMain.on('app:traySummary', (_e, summary) => tray.update(summary))
+  ipcMain.on('app:traySummary', (_e, summary) => {
+    tray.update(summary)
+    jumpList.update(summary.bots)
+  })
   ipcMain.handle('app:showInDock', () => showInDock())
   ipcMain.handle('app:setShowInDock', (_e, on: boolean) => {
     const visible = setShowInDock(on)
@@ -186,6 +192,7 @@ function registerIPC(tray: Tray) {
     return app.getLoginItemSettings().openAtLogin
   })
   ipcMain.handle('app:resetAllData', async () => {
+    jumpList.clear()
     // Tell paired devices first: connected ones see "No access" at once, and the account drops
     // this computer instead of keeping an unreachable older copy of it.
     await host.call('unclaim', {}, 30_000).catch(() => {})
@@ -211,7 +218,10 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', (_e, argv) => {
     const url = urlFromArgv(argv)
     if (url) handleURL(url)
-    else openChat()
+    else {
+      jumpList.request(argv)
+      openChat()
+    }
   })
   app.on('activate', () => openChat())
   app.on('window-all-closed', () => {
@@ -236,6 +246,14 @@ if (!app.requestSingleInstanceLock()) {
     // Calls use the microphone (realtime voice); nothing else asks for permissions.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, done) => done(permission === 'media' || permission === 'clipboard-sanitized-write'))
     account.register(() => BrowserWindow.getAllWindows())
+    // A sign-out leaves nothing of the account in the taskbar menu; signing in republishes it from the roster.
+    let signedIn: boolean | null = null
+    account.on('change', () => {
+      const now = !!account.state.user
+      if (now === signedIn) return
+      signedIn = now
+      if (!now) jumpList.clear()
+    })
     updates.register(() => BrowserWindow.getAllWindows())
     menu()
     host.on('change', () => {
@@ -249,5 +267,6 @@ if (!app.requestSingleInstanceLock()) {
     })
     host.start()
     openChat()
+    jumpList.request(process.argv)
   })
 }

@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
     var status by remember { mutableStateOf<CredentialStatus?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val unlock = rememberUnlock(state.contextId, scope) { error = it }
     LaunchedEffect(Unit) {
         store.refreshPlugins()
         try { status = store.credentialStatus() }
@@ -59,7 +60,7 @@ import kotlinx.coroutines.launch
             }
             CardSection("Saved connections") {
                 for (connector in saved) row {
-                    Row(Modifier.fillMaxWidth().plainButton { selected = connector }, verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().plainButton { unlock("Replace ${connector.name} credentials") { selected = connector } }, verticalAlignment = Alignment.CenterVertically) {
                         Text(connector.name, Modifier.weight(1f), style = Type.body, color = Palette.text)
                         Symbol("chevron.right", size = 13.dp, tint = Palette.tertiary)
                     }
@@ -73,8 +74,8 @@ import kotlinx.coroutines.launch
                 row { FieldRow("Service account token") { PlainInput(token, { token = it }, "Paste your token", secret = true) } }
                 row {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrimaryButton("Connect", enabled = !busy && token.isNotEmpty()) { save(token) }
-                        if (status?.onePasswordConnected == true) SecondaryButton("Disconnect", enabled = !busy) { save("") }
+                        PrimaryButton("Connect", enabled = !busy && token.isNotEmpty()) { unlock("Connect 1Password") { save(token) } }
+                        if (status?.onePasswordConnected == true) SecondaryButton("Disconnect", enabled = !busy) { unlock("Disconnect 1Password") { save("") } }
                     }
                 }
                 row {

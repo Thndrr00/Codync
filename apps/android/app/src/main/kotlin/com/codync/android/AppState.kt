@@ -32,6 +32,8 @@ data class AppState(
     val fileDownloads: Map<String, FileDownloadState> = emptyMap(),
     /** A downloaded file whose share sheet waits for its conversation to be on screen again. */
     val export: FileExport? = null,
+    /** Content shared from another app, waiting for the user to pick a bot. */
+    val incomingShare: IncomingShare? = null,
     val usage: JsonObject = JsonObject(emptyMap()),
     val hello: JsonObject? = null,
     val connection: LinkState = LinkState.Connecting,
