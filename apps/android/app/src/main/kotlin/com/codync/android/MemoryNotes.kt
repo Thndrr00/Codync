@@ -68,6 +68,8 @@ private val NOTE_NAME = Regex("^[a-z0-9-]+\\.md$")
 @Composable private fun MemoryNoteSheet(memory: MemoryModel, target: MemoryFileTarget, state: AppState) {
     val dismiss = LocalDismissModal.current
     val scope = rememberCoroutineScope()
+    // A saved note's name; the model is in another module, so the lambdas below read this copy.
+    val openName = target.name
     var detail by remember(target) { mutableStateOf<MemoryFileDetail?>(null) }
     var editing by remember(target) { mutableStateOf(target.name == null) }
     var draft by remember(target) { mutableStateOf(if (target.name == null) NOTE_TEMPLATE else "") }
@@ -76,6 +78,15 @@ private val NOTE_NAME = Regex("^[a-z0-9-]+\\.md$")
     val validName = NOTE_NAME.matches(name)
     // An error from an earlier action belongs to that action, not to this note.
     LaunchedEffect(target) { memory.error = null; target.name?.let { detail = memory.file(it, target.shared) } }
+
+    /** Reads the latest note, keeping the draft (or replacing it), so the next change is made over its base. */
+    suspend fun readLatest(replaceDraft: Boolean): Boolean {
+        val latest = memory.file(openName.orEmpty(), target.shared) ?: return false
+        detail = latest
+        memory.dismissError()
+        if (replaceDraft) draft = latest.content.orEmpty()
+        return true
+    }
 
     /** Saves (`content`), deletes (null) or restores `version`, over what was loaded. */
     fun change(content: String? = null, version: Long? = null) {
@@ -102,6 +113,27 @@ private val NOTE_NAME = Regex("^[a-z0-9-]+\\.md$")
         }
         CardForm {
             memory.error?.let { CardSection { row { SelectionContainer { Text(it, style = Type.body, color = Palette.danger) } } } }
+            // The note changed on the computer while this draft was open (or the save failed): the draft stays; read the latest and decide.
+            if (editing && memory.error != null && target.name != null) CardSection(footer = "Your draft stays here until you save or leave.") {
+                row {
+                    LinkButton("Keep my draft and save over the latest", enabled = !memory.busy) {
+                        scope.launch { if (readLatest(replaceDraft = false)) change(content = draft) }
+                    }
+                }
+                row {
+                    LinkButton("Replace my draft with the latest", enabled = !memory.busy && detail?.content != null) {
+                        scope.launch { readLatest(replaceDraft = true) }
+                    }
+                }
+            }
+            // Bringing back a version failed because the note changed: read the latest instead of reopening the note.
+            if (!editing && memory.error != null && target.name != null) CardSection {
+                row {
+                    LinkButton("Load the latest", enabled = !memory.busy) {
+                        scope.launch { readLatest(replaceDraft = false) }
+                    }
+                }
+            }
             val loaded = detail
             if (editing) {
                 if (target.name == null) CardSection(footer = "Lowercase letters, digits and dashes, ending in .md.") {

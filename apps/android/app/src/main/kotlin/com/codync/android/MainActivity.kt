@@ -3,6 +3,7 @@ package com.codync.android
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.content.IntentCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,10 +22,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import coil3.ImageLoader
 import coil3.disk.DiskCache
+import com.codync.android.core.ShareIntake
 import com.codync.android.design.CodyncTheme
 import com.codync.android.design.OverlayRoot
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okio.Path.Companion.toOkioPath
 
 class MainActivity : ComponentActivity() {
@@ -44,6 +49,12 @@ class MainActivity : ComponentActivity() {
                 if (BuildConfig.PUSH_CONFIGURED && state.computers.isNotEmpty() && android.os.Build.VERSION.SDK_INT >= 33 && !PushPreferences.asked(applicationContext)) {
                     PushPreferences.markAsked(applicationContext)
                     notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            LaunchedEffect(state.bots, state.computer?.id, state.contextId, state.rosterLoaded, state.loading) {
+                val computer = state.computer ?: return@LaunchedEffect
+                if (state.rosterLoaded && !state.loading) withContext(Dispatchers.IO) {
+                    LauncherShortcuts.sync(applicationContext, state.contextId, computer.id, state.bots)
                 }
             }
             val images = remember(state.contextId, state.generation) { AccountImages.open(applicationContext, state.contextId) }
@@ -81,11 +92,25 @@ class MainActivity : ComponentActivity() {
     override fun onStart() { super.onStart(); store.setForeground(true); Analytics.becameActive() }
     override fun onStop() {
         store.setForeground(false)
+        if (!isChangingConfigurations) SensitiveAccess.revoke()
         // A rotation isn't a trip to the background.
         if (!isChangingConfigurations) Analytics.enteredBackground()
         super.onStop()
     }
+    /** A system share: copy what it carries now, while its grant lasts, then let the user pick the bot. Returns whether it was one. */
+    private fun handleShare(intent: Intent): Boolean {
+        if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_SEND_MULTIPLE) return false
+        // Consumed: a rotation or process restoration must not share it again.
+        setIntent(Intent(this, MainActivity::class.java))
+        if (!ShareIntake.accepts(intent.type)) return true
+        val uris = if (intent.action == Intent.ACTION_SEND) listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+            else IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+        val text = ShareIntake.draftText(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
+        if (text.isNotEmpty() || uris.isNotEmpty()) store.receiveShare(text, uris)
+        return true
+    }
     private fun handle(intent: Intent?) {
+        if (intent != null && handleShare(intent)) return
         val uri = intent?.data ?: return
         if (uri.scheme == BuildConfig.URL_SCHEME && uri.host == "pair") {
             intent.data = null

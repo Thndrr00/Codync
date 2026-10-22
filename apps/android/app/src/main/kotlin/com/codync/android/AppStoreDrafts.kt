@@ -26,6 +26,17 @@ fun AppStore.addDraftFiles(botId: String, thread: String?, files: List<OutgoingF
     updateDraft(current.copy(files = current.files + files))
 }
 
+/** A shared text and files at once: the draft is validated before either is applied, so a failure changes nothing. */
+internal fun AppStore.addShareToDraft(botId: String, text: String, files: List<OutgoingFile>) {
+    check(!state.value.loading) { "Wait for the account to finish opening before adding the shared content." }
+    checkNotNull(draftBook) { "Connect to a computer to share this." }
+    val current = state.value.drafts[ComposerDraft.lane(botId, null)] ?: ComposerDraft(botId)
+    updateDraft(current.copy(
+        text = if (text.isBlank()) current.text else ShareIntake.merge(current.text, text),
+        files = current.files + files,
+    ))
+}
+
 fun AppStore.removeDraftFile(botId: String, thread: String?, file: OutgoingFile) = action("draft-file:" + file.path) {
     val current = state.value.drafts[ComposerDraft.lane(botId, thread)] ?: return@action
     updateDraft(current.copy(files = current.files - file))

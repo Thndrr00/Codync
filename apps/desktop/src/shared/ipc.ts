@@ -39,7 +39,7 @@ export interface CallError {
 export interface TraySummary {
   status: string
   canPair: boolean
-  bots: { ref: string; name: string; detail: string; working: boolean; avatar: string | null }[]
+  bots: { ref: string; name: string; detail: string; working: boolean; pinned: boolean; avatar: string | null }[]
   approval: string | null
   usage: { name: string; icon: string | null; lines: { title: string; bar: string | null }[] }[]
   screen: {

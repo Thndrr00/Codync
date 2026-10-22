@@ -35,6 +35,9 @@ internal class MemoryModel(private val botId: String, private val store: AppStor
 
     fun refresh() = scope.launch { load() }
 
+    /** Drops the error of an action that failed once the sheet has read the latest; what the user wrote stays. */
+    fun dismissError() { error = null }
+
     /** A long-form note as it is now, with its versions. */
     suspend fun file(name: String, shared: Boolean): MemoryFileDetail? = try {
         WireJson.decodeFromJsonElement<MemoryFileDetail>(store.hostCall("memoryFile", MemoryCalls.fileRead(botId, name, shared)))

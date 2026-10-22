@@ -149,6 +149,8 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
     CodyncSheet(editor.takeIf { !state.loading }, { editor = null }) { draft ->
         key(state.contextId, state.generation, draft.id) { BotEditor(state, draft, store) }
     }
+    // Content shared from another app: pick the bot whose draft receives it.
+    CodyncSheet(state.incomingShare.takeIf { !state.loading && root == Root.Tabs }, store::discardShare) { share -> ShareTargetView(state, share, store) }
     // The remote screen opens over the app once its sheets have slid away.
     LaunchedEffect(state.screenRequest) { if (state.screenRequest != null) { closeAll(); showUsage = false } }
     ScreenLayer(state, store)

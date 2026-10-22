@@ -31,6 +31,8 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     private var sessionJob: Job? = null
     internal var linkJob: Job? = null
     internal val asked = mutableSetOf<String>()
+    /** Orders incoming shares: only the newest one may stage itself. */
+    internal val shareRequests = java.util.concurrent.atomic.AtomicInteger()
     internal var attachments = AttachmentFiles(application, local.directory)
     internal val downloadLocks = ConcurrentHashMap<String, Mutex>()
     internal val mutableState = MutableStateFlow(AppState())
@@ -125,6 +127,7 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         if (mode == Retirement.Account) PushDelivery.retire(getApplication())
         else leaving?.let { NotificationDisplay.cancelComputer(getApplication(), local.referenceId, it.id, tasksOnly = mode == Retirement.Switch) }
         dropExport()
+        discardShare()
         val retiringChannel = channel?.takeIf { it.state.value is LinkState.Ready }
         val feed = TaskFeed(local.directory)
         if (retiringChannel != null) withTimeoutOrNull(2_000) {

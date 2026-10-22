@@ -7,6 +7,8 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { emptyDraft, errorText, sameDraft, type Routine, type RoutineScheduleDraft, type RoutineSchedulePreview } from './routine'
 import { Field } from '../bots/parts'
+import { editorKind } from '../../lib/routine-schedule'
+import { IntervalFields, ScheduleFields } from './RoutineScheduleFields'
 import { RoutineWebhookPanel } from './RoutineWebhookPanel'
 import './routines.css'
 
@@ -34,10 +36,11 @@ export function RoutineEditorView({ botId, routine, saved }: {
   latest.current = schedule
 
   // Anything the bot set up (a one-off time, an interval, events, several triggers) stays as it is until replaced.
-  const keepsOriginal = routine ? (routine.triggers.length === 1 ? !['cron', 'webhook'].includes(routine.triggers[0]!.type) : routine.triggers.length > 0) : false
+  const keepsOriginal = routine ? (routine.triggers.length === 1 ? !['cron', 'interval', 'webhook'].includes(routine.triggers[0]!.type) : routine.triggers.length > 0) : false
   const options = [
     ...(routine && keepsOriginal ? [{ id: 'keep', label: routine.triggerDescriptions.join(' · ') }] : []),
     { id: 'cron', label: 'Schedule' },
+    { id: 'interval', label: 'Interval' },
     { id: 'webhook', label: 'Webhook' },
   ]
   const canSave = !!name.trim() && !!instruction.trim() && !store.isOffline && !busy && loaded && sameDraft(checkedSchedule, schedule) && previewError === null
@@ -49,11 +52,12 @@ export function RoutineEditorView({ botId, routine, saved }: {
         triggers: routine?.triggers ?? [],
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
-      const draft = { ...result.draft, calendarStyle: 'custom' }
-      if (!['cron', 'webhook'].includes(draft.kind)) draft.kind = 'keep'
+      // The host's own reading of the trigger (style, days, times) stays; only kinds this editor can't edit keep the original.
+      const draft = { ...result.draft, kind: editorKind(result.draft.kind) }
       setSchedule(draft)
       setPreview(result)
-      setCheckedSchedule(result.draft)
+      // What the fields show, not the host's kind: `keep` is already what a later save sends.
+      setCheckedSchedule(draft)
       setLoaded(true)
       setError(null)
     } catch (e) {
@@ -132,42 +136,9 @@ export function RoutineEditorView({ botId, routine, saved }: {
   const triggerFields = () => {
     switch (schedule.kind) {
       case 'cron':
-        return (
-          <VStack gap={8} className="routine-cron">
-            <div className="routine-cron-fields">
-              <Field label="Cron">
-                <input
-                  className="routine-input routine-cron-input"
-                  value={schedule.expression}
-                  placeholder="0 9 * * 1-5"
-                  spellCheck={false}
-                  autoCorrect="off"
-                  onChange={(e) => update({ expression: e.target.value })}
-                />
-              </Field>
-              <Field label="Time zone">
-                <input className="routine-input" value={schedule.zone} placeholder="Asia/Taipei" spellCheck={false} autoCorrect="off" onChange={(e) => update({ zone: e.target.value })} />
-              </Field>
-            </div>
-            <div className="routine-cron-preview">
-              {previewError ? (
-                <Text size="caption" tone="danger" className="routine-cron-error">{previewError}</Text>
-              ) : shownPreview ? (
-                <VStack gap={2}>
-                  <Text size="caption" weight="medium">{shownPreview.summary}</Text>
-                  {shownPreview.nextRunAt ? (
-                    <Text size="caption" tone="secondary">
-                      Next {new Date(shownPreview.nextRunAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                    </Text>
-                  ) : null}
-                  {shownPreview.warning ? <Text size="caption" tone="secondary">{shownPreview.warning}</Text> : null}
-                </VStack>
-              ) : (
-                <Text size="caption" mono tone="tertiary" className="routine-cron-hint">minute  hour  day  month  weekday</Text>
-              )}
-            </div>
-          </VStack>
-        )
+        return <ScheduleFields schedule={schedule} update={update} preview={shownPreview} error={previewError} />
+      case 'interval':
+        return <IntervalFields schedule={schedule} update={update} preview={shownPreview} error={previewError} />
       case 'webhook':
         return routine && routine.triggers.some((t) => t.type === 'webhook' || t.type === 'event') ? (
           <RoutineWebhookPanel botId={botId} routineId={routine.id} />
@@ -175,7 +146,7 @@ export function RoutineEditorView({ botId, routine, saved }: {
           <Text size="caption" tone="secondary" className="routine-caption">Runs each time something is posted to its URL. Save to get the URL and key.</Text>
         )
       default:
-        return <Text size="caption" tone="secondary" className="routine-caption">Set up by the bot. Pick Schedule or Webhook to replace it.</Text>
+        return <Text size="caption" tone="secondary" className="routine-caption">Set up by the bot. Pick Schedule, Interval or Webhook to replace it.</Text>
     }
   }
 
@@ -238,7 +209,7 @@ export function RoutineEditorView({ botId, routine, saved }: {
             Retry loading schedule
           </button>
         ) : null}
-        {schedule.kind !== 'cron' && previewError ? <Text size="caption" tone="danger">{previewError}</Text> : null}
+        {!['cron', 'interval'].includes(schedule.kind) && previewError ? <Text size="caption" tone="danger">{previewError}</Text> : null}
         {error ? (
           <HStack as="span" gap={6} align="flex-start" className="routine-error">
             <Icon name="exclamationmark.circle" size={12} className="routine-error-icon" />

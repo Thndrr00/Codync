@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,6 +44,9 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.codync.android.core.Bot
 import com.codync.android.core.LinkState
 import com.codync.android.core.Routine
@@ -52,8 +56,6 @@ import com.codync.android.core.RoutineSchedulePreview
 import com.codync.android.core.RoutineWebhook
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
-import java.text.DateFormat
-import java.util.Date
 import java.util.TimeZone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -146,7 +148,7 @@ import kotlinx.coroutines.launch
     val canSave = draft.name.isNotBlank() && draft.instruction.isNotBlank() && online && !busy && loaded && checked == draft.schedule && previewError == null
     val options = buildList {
         if (routine != null && routine.keepsOriginal && routine.triggers.isNotEmpty()) add("keep" to routine.triggerDescriptions.joinToString(" · "))
-        add("cron" to "Schedule"); add("webhook" to "Webhook")
+        add("cron" to "Schedule"); add("interval" to "Interval"); add("webhook" to "Webhook")
     }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         ModalHeader(if (routine == null) "Set up a routine" else "Edit routine")
@@ -163,20 +165,11 @@ import kotlinx.coroutines.launch
                 }
                 if (!loaded) IconLabel("Loading schedule…", "clock", Palette.secondary, style = Type.body)
                 else when (draft.schedule.kind) {
-                    "cron" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Field("Cron") {
-                            FieldBox(draft.schedule.expression, { draft = draft.copy(schedule = draft.schedule.copy(expression = it)) }, "0 9 * * 1-5",
-                                style = Type.body.monospaced, fill = Palette.bubbleUser, capitalize = false)
-                        }
-                        Field("Time zone") {
-                            FieldBox(draft.schedule.zone, { draft = draft.copy(schedule = draft.schedule.copy(zone = it)) }, "Asia/Taipei",
-                                fill = Palette.bubbleUser, capitalize = false)
-                        }
-                        SchedulePreview(if (checked == draft.schedule) preview else null, previewError)
-                    }
-                    "webhook" -> if (routine?.hasWebhook == true) RoutineWebhookPanel(botId, routine.id, online, store)
+                    "cron" -> ScheduleFields(draft.schedule, { draft = draft.copy(schedule = it) }, if (checked == draft.schedule) preview else null, previewError)
+                    "interval" -> IntervalFields(draft.schedule, { draft = draft.copy(schedule = it) }, if (checked == draft.schedule) preview else null, previewError)
+                    "webhook" -> if (routine?.hasWebhook == true) RoutineWebhookPanel(botId, routine.id, online, state.contextId, store)
                         else Note("Runs each time something is posted to its URL. Save to get the URL and key.")
-                    else -> Note("Set up by the bot. Pick Schedule or Webhook to replace it.")
+                    else -> Note("Set up by the bot. Pick Schedule, Interval or Webhook to replace it.")
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -201,7 +194,7 @@ import kotlinx.coroutines.launch
         Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (previewError != null) LinkButton("Check schedule again", enabled = online) { checkAttempt++ }
             if (!loaded && error != null) LinkButton("Retry loading schedule") { loadAttempt++ }
-            if (draft.schedule.kind != "cron") previewError?.let { Text(it, style = Type.caption, color = Palette.danger) }
+            if (draft.schedule.kind !in listOf("cron", "interval")) previewError?.let { Text(it, style = Type.caption, color = Palette.danger) }
             error?.let { IconLabel(it, "exclamationmark.circle", Palette.danger, style = Type.callout) }
             if (!online) IconLabel("Connect to this computer to save your routine.", "wifi.slash", Palette.danger, style = Type.caption)
             if (loaded && online && (draft.name.isBlank() || draft.instruction.isBlank()))
@@ -227,25 +220,10 @@ import kotlinx.coroutines.launch
     }
 }
 
-/** One quiet line under the cron fields: what the host read, or why it can't. */
-@Composable private fun SchedulePreview(preview: RoutineSchedulePreview?, error: String?) {
-    Column(Modifier.padding(start = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        when {
-            error != null -> Text(error, style = Type.caption, color = Palette.danger)
-            preview != null -> {
-                Text(preview.summary, style = Type.caption.medium, color = Palette.text)
-                preview.nextRunAt?.let { Text("Next ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it))}", style = Type.caption, color = Palette.secondary) }
-                preview.warning?.let { Text(it, style = Type.caption, color = Palette.secondary) }
-            }
-            else -> Text("minute  hour  day  month  weekday", style = Type.caption.monospaced, color = Palette.tertiary)
-        }
-    }
-}
-
 @Composable private fun Note(text: String) = Text(text, Modifier.padding(start = 4.dp), style = Type.caption, color = Palette.secondary)
 
 /** A saved webhook routine's address and key: copy either, reveal or replace the key (iOS `RoutineWebhookPanel`). */
-@Composable private fun RoutineWebhookPanel(botId: String, id: String, online: Boolean, store: AppStore) {
+@Composable private fun RoutineWebhookPanel(botId: String, id: String, online: Boolean, contextId: String, store: AppStore) {
     var webhook by remember(id) { mutableStateOf<RoutineWebhook?>(null) }
     var showKey by remember(id) { mutableStateOf(false) }
     var confirm by remember(id) { mutableStateOf(false) }
@@ -254,6 +232,14 @@ import kotlinx.coroutines.launch
     var copied by remember(id) { mutableStateOf<String?>(null) }
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val unlock = rememberUnlock(contextId, scope) { error = it }
+    // The unlock ends when the app leaves the foreground; a revealed key must not come back with it.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) showKey = false }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     suspend fun load(rotate: Boolean) {
         rotating = rotate
         try {
@@ -281,14 +267,17 @@ import kotlinx.coroutines.launch
                 }
                 Field("Key") {
                     WebhookValue(if (showKey) value.key else "•".repeat(16)) {
-                        IconButton(if (showKey) "Hide key" else "Show key", if (showKey) "eye.slash" else "eye") { showKey = !showKey }
-                        IconButton("Replace key", "arrow.triangle.2.circlepath", enabled = !rotating && online) { confirm = true }
-                        IconButton(if (copied == "key") "Copied" else "Copy", if (copied == "key") "checkmark" else "doc.on.doc") { copy("key", value) }
+                        IconButton(if (showKey) "Hide key" else "Show key", if (showKey) "eye.slash" else "eye") {
+                            if (showKey) showKey = false else unlock("Show this routine's webhook key") { showKey = true }
+                        }
+                        IconButton("Replace key", "arrow.triangle.2.circlepath", enabled = !rotating && online) { unlock("Replace this routine's webhook key") { confirm = true } }
+                        IconButton(if (copied == "key") "Copied" else "Copy", if (copied == "key") "checkmark" else "doc.on.doc") { unlock("Copy this routine's webhook key") { copy("key", value) } }
                     }
                 }
                 Note(if (value.url == null) "The Codync cloud is off, so only this computer can send to it."
                     else "POST with Authorization: Bearer <key>. For GitHub, use content type application/json and the key as the secret. " +
                         "Deliveries wait up to 72 hours while this computer is off. They pass through the Codync cloud, which can read them.")
+                error?.let { Text(it, Modifier.padding(start = 4.dp), style = Type.caption, color = Palette.danger) }
             }
             error != null -> Text(error.orEmpty(), Modifier.padding(start = 4.dp), style = Type.caption, color = Palette.danger)
             else -> Note("Loading webhook…")
