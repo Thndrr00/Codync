@@ -70,6 +70,8 @@ export type WindowCommand =
   | { kind: 'toggleDetails' }
   | { kind: 'respondPermission'; ref: string; entryId: string; optionId: string }
   | { kind: 'sendMessage'; ref: string; text: string }
+  /** Files dropped on the island: read from disk here and sent to that bot. */
+  | { kind: 'sendFiles'; ref: string; paths: string[] }
 
 /** The app's own updates (electron-updater, release builds only). */
 export interface UpdateState {
@@ -167,6 +169,8 @@ export interface CodyncBridge {
     onKey(cb: (answer: 'allow' | 'deny') => void): () => void
     respond(ref: string, entryId: string, optionId: string): void
     send(ref: string, text: string): void
+    /** Files dropped on the island, by their path on this computer. */
+    dropFiles(ref: string, paths: string[]): void
     openBot(ref: string): void
     newBot(): void
     openApp(): void
@@ -199,6 +203,10 @@ export interface CodyncBridge {
     copy(text: string): void
     /** Files picked in the system dialog: name and bytes. */
     pickFiles(): Promise<{ name: string; data: Uint8Array }[]>
+    /** Files a window dropped from the OS, by path: name and bytes. */
+    readPaths(paths: string[]): Promise<{ name: string; data: Uint8Array }[]>
+    /** The OS path of a dropped file (a renderer can't see it directly). */
+    pathForFile(file: File): string
     readClipboardFiles(): Promise<{ name: string; data: Uint8Array }[]>
     setTraySummary(summary: TraySummary): void
     onCommand(cb: (command: WindowCommand) => void): () => void

@@ -171,6 +171,7 @@ function registerIPC(tray: Tray) {
       : await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
     return result.canceled ? [] : readFiles(result.filePaths)
   })
+  ipcMain.handle('app:readPaths', (_e, paths: string[]) => readFiles(Array.isArray(paths) ? paths : []))
   ipcMain.handle('app:clipboardFiles', () => readClipboardFiles())
   ipcMain.on('app:traySummary', (_e, summary) => tray.update(summary))
   ipcMain.handle('app:showInDock', () => showInDock())

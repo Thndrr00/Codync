@@ -319,7 +319,7 @@ Toda la base de código de Coucou permanece clonada y accesible localmente en `C
 
 ---
 
-## 8. Estado de implementación (Fase 1)
+## 8. Estado de implementación
 
 - **INIC-01 — Hook Bridge: hecho.** `codync-host hook` (relay no bloqueante, presupuesto 300 ms, 115 s solo para
   aprobaciones), POST /ingest/hook, normalización de Claude Code / Gemini CLI / Antigravity / Codex / Copilot CLI,
@@ -332,6 +332,15 @@ Toda la base de código de Coucou permanece clonada y accesible localmente en `C
   las aprobaciones por voz pasan por el mismo guardián (`Approvals.kt`). iOS queda como estaba.
 - **Paridad:** el escritorio (macOS, Linux y Windows) y la TUI muestran las sesiones externas y sus tarjetas sin
   cambios propios; el compositor del escritorio y el de Android explican que la sesión se responde en la terminal.
-- **Siguiente:** INIC-02 (Isla 2.0: multimonitor, drag & drop, diff interactivo, cuestionarios), luego INIC-04.
+- **INIC-02 — Isla 2.0: hecho salvo los cuestionarios.** Posición configurable (pantalla con notch, pantalla bajo el
+  puntero con seguimiento, o pantalla principal) desde el menú de la bandeja; arrastrar archivos sobre la isla los
+  envía al bot en foco (rutas del SO, 20 archivos y 100 MB cada uno como el compositor); y la tarjeta de aprobación
+  muestra `+N −M` por archivo con las líneas cambiadas al hacer clic. Pendiente: responder `AskUserQuestion` desde
+  la isla (y desde el resto de clientes), que necesita el mapa de respuestas y el `updatedInput` del hook.
+- **INIC-03 — Expresividad: hecho el seguimiento ocular de escritorio.** Los personajes halftone en movimiento miran
+  al puntero con `tanh` (suavizado hacia el borde de la cara) y respiran un ~1 %; uno inactivo se dibuja una vez y
+  no consume cuadros, y con Reducir movimiento no se anima nada. Pendiente: el «Free Bot» flotante y el seguimiento
+  en Android/iOS.
+- **Siguiente:** INIC-04 (Flow Dictation y Notetaker offline), INIC-06 (sonidos), INIC-07 (resumen semanal) e INIC-08.
 
 - **Desvío de transporte respecto a esta ficha:** el relay no usa named pipes ni sockets Unix, sino el HTTP local que ya existe (loopback + token de `~/.codync/token`). Se evita así código Win32 nuevo y el hook entra por la misma puerta autenticada que el resto de helpers locales; el binario sigue siendo ultraligero porque el relay es un subcomando de `codync-host` (hook) y no un crate aparte.
