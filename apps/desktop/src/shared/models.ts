@@ -224,14 +224,6 @@ export interface SentinelReport {
   issues: SentinelIssue[]
 }
 
-interface UnusedHandoffCard {
-  /** draft · sent · kept */
-  status: string
-  /** cold · away · full */
-  reason?: string
-  text?: string
-}
-
 export interface EntryData {
   /** Structured conversation data added to the existing team-tool notice. */
   botMessage?: BotMessage

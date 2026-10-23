@@ -143,7 +143,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
             }
         }
         else -> if (entry.data["passkeyWall"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
-            PasskeyWallCard(entry, store)
+            PasskeyWallCard(entry, state, store)
         } else if (entry.data["chiefIncident"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ChiefIncidentCard(entry, state, store)
         } else if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
@@ -153,7 +153,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
 }
 
 /** Interactive Passkey / 2FA / Captcha assistance card from CDP browser detector (INIC-02). */
-@Composable private fun PasskeyWallCard(entry: Entry, store: AppStore) {
+@Composable private fun PasskeyWallCard(entry: Entry, state: AppState, store: AppStore) {
     val wall = entry.data["passkeyWall"] as? JsonObject ?: return
     val kind = wall.text("kind")?.uppercase() ?: "AUTH"
     val url = wall.text("url").orEmpty()
@@ -169,10 +169,10 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
         Text("$reason · $url", style = Type.chatFootnote, color = Palette.secondary)
         if (!resolved) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Continue", {
-                    store.send(entry.botId, entry.threadId, "I have completed the authentication in the browser. Please continue.", emptyList())
-                })
-                SecondaryButton("Cancel", { store.stop(entry.botId) })
+                PrimaryButton("Continue") {
+                    store.sendDraft(entry.botId, entry.threadId, "I have completed the authentication in the browser. Please continue.") {}
+                }
+                SecondaryButton("Cancel") { state.bots.firstOrNull { it.id == entry.botId }?.let { store.stopBot(it) } }
             }
         } else {
             Text(if (status == "resolved") "Authentication completed" else "Cancelled", style = Type.caption, color = Palette.tertiary)
@@ -200,10 +200,10 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
         if (summary.isNotEmpty()) Text(summary, style = Type.chatFootnote, color = Palette.text)
         if (escalated) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SecondaryButton("Retry manually", {
-                    store.send(entry.botId, entry.threadId, "Retry assignment for $workerName", emptyList())
-                })
-                SecondaryButton("Stop worker", { store.stop(workerId) })
+                SecondaryButton("Retry manually") {
+                    store.sendDraft(entry.botId, entry.threadId, "Retry assignment for $workerName") {}
+                }
+                SecondaryButton("Stop worker") { state.bots.firstOrNull { it.id == workerId }?.let { store.stopBot(it) } }
             }
         }
     }

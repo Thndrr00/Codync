@@ -12,7 +12,6 @@ import {
   type ScreenState,
   type SentinelReport,
   type Usage,
-  type Usage,
 } from '@shared/models'
 import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'

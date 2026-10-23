@@ -100,7 +100,7 @@ import kotlin.math.roundToInt
                         detectDragGestures(
                             onDragStart = { current = listOf(it) },
                             onDrag = { change, _ -> current = current + change.position },
-                            onDragEnd = { if (current.isNotEmpty()) { strokes = strokes + current; current = emptyList() } },
+                            onDragEnd = { if (current.isNotEmpty()) { strokes = strokes + listOf(current); current = emptyList() } },
                             onDragCancel = { current = emptyList() },
                         )
                     }) {

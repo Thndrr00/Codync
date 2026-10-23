@@ -236,6 +236,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             annotating = null
         }
     }
+    }
 }
 
 private val FIELD_HEIGHT = 54.dp

@@ -473,4 +473,3 @@ private val ConnectionRoute.icon get() = when (this) {
         }
     }
 }
-}
