@@ -35,7 +35,7 @@ impl Actor {
                 {
                     self.watchdog.seen(&params["update"]);
                     self.on_update(&params["update"]);
-if let Some(reason) = self.watchdog.tripped() {
+                    if let Some(reason) = self.watchdog.tripped() {
                         tracing::warn!(bot = %self.cfg.id, "stopping a turn stuck in a tool loop");
                         let notice = json!({"text": reason, "style": "error"});
                         self.hub.add_entry(&self.lane, EntryKind::Notice, self.turn.unwrap_or(0), &notice);

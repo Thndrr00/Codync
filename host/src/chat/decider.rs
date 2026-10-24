@@ -120,29 +120,20 @@ mod tests {
     fn selects_single_bot_when_probability_meets_threshold() {
         let candidates = sample_candidates();
         let scores = vec![("rust-bot".into(), 0.78), ("ui-bot".into(), 0.12)];
-        assert_eq!(
-            evaluate_probabilities(&scores, 0.10, &candidates),
-            RoutingDecision::SingleBot("rust-bot".into())
-        );
+        assert_eq!(evaluate_probabilities(&scores, 0.10, &candidates), RoutingDecision::SingleBot("rust-bot".into()));
     }
 
     #[test]
     fn selects_all_members_when_multi_member_score_is_high() {
         let candidates = sample_candidates();
         let scores = vec![("rust-bot".into(), 0.45), ("ui-bot".into(), 0.45)];
-        assert_eq!(
-            evaluate_probabilities(&scores, 0.65, &candidates),
-            RoutingDecision::AllMembers
-        );
+        assert_eq!(evaluate_probabilities(&scores, 0.65, &candidates), RoutingDecision::AllMembers);
     }
 
     #[test]
     fn falls_back_to_lead_when_uncertain() {
         let candidates = sample_candidates();
         let scores = vec![("rust-bot".into(), 0.42), ("ui-bot".into(), 0.39)];
-        assert_eq!(
-            evaluate_probabilities(&scores, 0.19, &candidates),
-            RoutingDecision::FallbackToLead
-        );
+        assert_eq!(evaluate_probabilities(&scores, 0.19, &candidates), RoutingDecision::FallbackToLead);
     }
 }

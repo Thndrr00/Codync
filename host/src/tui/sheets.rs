@@ -8,7 +8,13 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use serde_json::Value;
 
+mod computer;
+mod documents;
+pub use computer::draw as computer;
+mod mcp_tools;
+pub use mcp_tools::draw as mcp_tools;
 mod memory_view;
+pub use documents::draw as documents;
 pub use memory_view::draw as memory;
 
 use super::app::{App, Editor};
@@ -283,7 +289,7 @@ pub fn market(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
     }
     let keys = match m.tab {
         Tab::Agents => "tab switch · ↵ install / sign in · ^r refresh · esc close",
-        Tab::Connectors => "tab switch · ↵ add / sign in · ^x remove · ^r refresh · esc",
+        Tab::Connectors => "tab switch · ↵ add / sign in · ^t tools & requests · ^x remove · ^r refresh · esc",
         Tab::Skills => "tab switch · ↵ details · ^x remove · esc close",
     };
     let loading = m.loading && m.tab == Tab::Connectors && !rows.is_empty();

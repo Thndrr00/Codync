@@ -33,7 +33,13 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         x = put(buf, x, r.y, 2, "‹", t.bold) + 1;
     }
     put_line(buf, x, r.y, 2, &avatar(app, &b));
-    let title = if app.thread.is_some() { format!("Thread · {}", b.name) } else { b.name.clone() };
+    let title = if app.thread.as_deref().is_some_and(|thread| thread.starts_with("doc:")) {
+        format!("Document conversation · {}", b.name)
+    } else if app.thread.is_some() {
+        format!("Thread · {}", b.name)
+    } else {
+        b.name.clone()
+    };
     x = put(buf, x + 3, r.y, r.width / 3, &title, t.bold) + 2;
     let (status, ss) = match b.mark() {
         Mark::Need => ("◆ needs you".to_owned(), t.amber),

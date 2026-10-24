@@ -41,11 +41,7 @@ pub struct CdpClient {
 
 impl CdpClient {
     pub fn new(owns_all_tabs: bool, place: BrowserPlace) -> Self {
-        Self {
-            next_id: AtomicU64::new(1),
-            guard: TabGuard::new(owns_all_tabs),
-            place,
-        }
+        Self { next_id: AtomicU64::new(1), guard: TabGuard::new(owns_all_tabs), place }
     }
 
     pub fn guard_mut(&mut self) -> &mut TabGuard {
@@ -94,12 +90,7 @@ impl CdpClient {
     }
 
     /// Builds a `Runtime.evaluate` command for clicking or typing into a selector on an owned tab.
-    pub fn build_dom_action(
-        &self,
-        target_id: &str,
-        session_id: &str,
-        expression: &str,
-    ) -> Result<CdpCommand> {
+    pub fn build_dom_action(&self, target_id: &str, session_id: &str, expression: &str) -> Result<CdpCommand> {
         self.guard.check_access(target_id)?;
         Ok(CdpCommand {
             id: self.alloc_id(),

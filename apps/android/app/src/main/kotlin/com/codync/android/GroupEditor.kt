@@ -100,6 +100,7 @@ import com.codync.android.design.*
             AnimatedVisibility(state.error != null, enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
                 Text(state.error.orEmpty(), style = Type.footnote, color = Palette.danger)
             }
+            draft.id?.let { DocumentsCard(it, state, store) }
             if (draft.id != null) LinkButton("Delete group chat", color = Palette.danger) { confirmDelete = true }
         }
     }

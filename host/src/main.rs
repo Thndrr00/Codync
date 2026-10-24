@@ -8,6 +8,8 @@ mod browser;
 mod chat;
 mod cli;
 mod compat;
+mod computer;
+mod documents;
 mod egress;
 mod environment;
 mod external;
@@ -15,11 +17,13 @@ mod hub;
 mod market;
 mod mcp;
 mod remote;
+mod research;
 mod routines;
 mod screen;
 mod sentinel;
 mod service;
 mod shell;
+mod slack;
 mod store;
 mod tui;
 mod update;
@@ -549,7 +553,11 @@ async fn main() -> Result<()> {
             } else if report.issues.is_empty() {
                 println!("Sentinel: no issues found ({} entries examined).", report.entries_examined);
             } else {
-                println!("Sentinel: {} issues found ({} entries examined):", report.issues.len(), report.entries_examined);
+                println!(
+                    "Sentinel: {} issues found ({} entries examined):",
+                    report.issues.len(),
+                    report.entries_examined
+                );
                 for issue in &report.issues {
                     println!(
                         "  [{}] {} (bot={}, count={}, wasted_turns={}) — {}",

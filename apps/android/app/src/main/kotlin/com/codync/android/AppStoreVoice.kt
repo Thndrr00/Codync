@@ -15,6 +15,7 @@ import okhttp3.OkHttpClient
 
 /** The call in progress: its engine (replaced on a fallback), start times and which replies it has read. */
 internal class VoiceBinding(val id: String, val botId: String, val generation: Int, val startedAt: Long, val replies: VoiceReplyGate) {
+    var transcript: CallTranscript? = null
     var engine: VoiceEngine? = null
     /** When the current cloud engine started, for this month's minutes. */
     var cloudSince: Long? = null
@@ -48,6 +49,7 @@ internal fun AppStore.attachVoice(id: String, botId: String): VoiceBinding? {
     val entries = state.value.entries
     val head = maxOf(state.value.hello?.get("rev")?.jsonPrimitive?.longOrNull ?: 0, entries.maxOfOrNull(Entry::rev) ?: 0)
     val binding = VoiceBinding(id, botId, state.value.generation, SystemClock.elapsedRealtime(), VoiceReplyGate(botId, head, entries))
+    binding.transcript = if (VoicePreferences.transcripts(getApplication())) CallTranscript() else null
     voiceBinding = binding
     begin(binding, voiceChoices().provider)
     connect()
@@ -86,12 +88,13 @@ private fun AppStore.begin(call: VoiceBinding, provider: VoiceProvider?) {
                     send = { sendFromCall(call, it) }))
             }
             // WebRTC records the microphone itself.
-            provider == VoiceProvider.OpenAI -> OpenAIRealtimeEngine(contextScope, settings, credential, operator, WebRtcPeer(getApplication())) { secret, offer ->
+            provider == VoiceProvider.OpenAI -> OpenAIRealtimeEngine(contextScope, settings, credential, operator, WebRtcPeer(getApplication()), transcriptionModel = choices.model(provider, VoiceChoices.Model.Transcribe)) { secret, offer ->
                 OpenAIRealtimeEngine.answer(voiceHttp, secret, offer)
             }
             else -> GeminiLiveEngine(contextScope, settings, model, voice, credential, operator, mic(), AndroidPcmPlayer(), voiceHttp)
         }
     }
+    engine.transcript = call.transcript
     call.engine = engine
     call.cloudSince = if (provider != null) SystemClock.elapsedRealtime() else null
     contextScope.launch {
@@ -155,7 +158,10 @@ internal fun AppStore.finishVoice(id: String, error: String? = null) {
             engine?.awaitEnd()
             if (call != null && state.value.generation == call.generation && channel?.state?.value is LinkState.Ready) {
                 val seconds = ((SystemClock.elapsedRealtime() - call.startedAt) / 1_000).coerceAtLeast(0)
-                withTimeoutOrNull(3_000) { hostQuery("logCall", buildJsonObject { put("botId", call.botId); put("seconds", seconds) }, 3_000, call.generation) }
+                withTimeoutOrNull(3_000) { hostQuery("logCall", buildJsonObject {
+                    put("botId", call.botId); put("seconds", seconds); put("callId", call.id)
+                    call.transcript?.let { put("transcript", it.snapshot()) }
+                }, 3_000, call.generation) }
             }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Duration is best effort; an uncertain log is never retried. */ }

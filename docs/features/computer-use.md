@@ -6,6 +6,39 @@ Bots with **Use the computer** on get the built-in `computer` MCP server (`codyn
 - `type_login` types a saved login only into its own site or app, and a password only into a password field. The agent never sees the value.
 - The harness's own approval rules still apply to each call.
 
+## Host activity history
+
+The host retains the latest 1,000 completed computer calls per bot in SQLite,
+including refusals for disabled computer access and takeover. Only known tool
+names are recorded. Each record contains `id`, `botId`, `action`, `actorKind`
+(`bot`), `actorId`, `result` (`success` or `failed`) and `createdAt` (Unix
+milliseconds). MCP results with `isError: true` count as failures.
+
+The record excludes arguments, typed values, file contents, command lines,
+screenshots, returned content and error text. Unknown tool names are rejected
+without being stored, because a caller could put sensitive text in the name.
+Deleting a bot removes its history; a call finishing after deletion cannot
+recreate that history. A cancelled future or a host crash before a call completes
+does not create a completed record. This is an operational history, not a
+tamper-proof audit ledger. If persistence fails after an action, the host logs a
+content-free warning and preserves the original tool result to avoid encouraging
+a retry of an effect that already happened.
+
+Authenticated API methods (body `{"botId":"..."}`):
+
+- `listComputerActivity` returns `{"items":[...]}`, newest first.
+- `exportComputerActivity` returns `{"csv":"..."}`, with the same fields and
+  ordering, CRLF record separators, quoted text and spreadsheet formula escaping.
+
+Both methods use the existing loopback bearer-token authentication or the E2E
+channel's `control` scope. A screen-only or unpaired device cannot read them.
+Missing or deleted bots are rejected. No new minimum client version is required.
+
+This first delivery is the host/API foundation for OpenDots catalogue item 28.
+The desktop, iOS, Android and TUI interfaces are unchanged: the corresponding
+activity panel and export controls are still pending, so item 28 is not yet
+complete as a user-facing feature. See [integration status](opendots-integration.md).
+
 ## Computer access setup
 
 Desktop onboarding includes **Computer access**, also available from **Settings → Computer access** and the tray's **Set up computer access…** action. Users can choose **Set up later** and keep using chat. Setup choices stay on this installation.

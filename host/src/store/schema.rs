@@ -74,10 +74,25 @@ impl Store {
                 rev INTEGER NOT NULL, kind TEXT NOT NULL, turn INTEGER NOT NULL, data TEXT NOT NULL,
                 created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
              CREATE INDEX IF NOT EXISTS entries_rev ON entries(rev);
-             CREATE INDEX IF NOT EXISTS entries_bot ON entries(bot_id, seq);",
+             CREATE INDEX IF NOT EXISTS entries_bot ON entries(bot_id, seq);
+             CREATE TABLE IF NOT EXISTS computer_activity(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, bot_id TEXT NOT NULL,
+                action TEXT NOT NULL, result TEXT NOT NULL CHECK(result IN ('success', 'failed')),
+                created_at INTEGER NOT NULL);
+             CREATE INDEX IF NOT EXISTS computer_activity_bot ON computer_activity(bot_id, id);
+             CREATE TABLE IF NOT EXISTS computer_activity_actors(
+                 activity_id INTEGER PRIMARY KEY REFERENCES computer_activity(id) ON DELETE CASCADE,
+                 actor_kind TEXT NOT NULL, actor_id TEXT NOT NULL);
+             CREATE TRIGGER IF NOT EXISTS computer_activity_cleanup_actor AFTER DELETE ON computer_activity
+             BEGIN DELETE FROM computer_activity_actors WHERE activity_id=old.id; END;",
         )?;
         migrate(&c)?;
         super::runtime::create_tables(&c)?;
+        super::documents::open(&c)?;
+        super::mcp_policies::open(&c)?;
+        super::slack::open(&c)?;
+        super::research::open(&c)?;
+        super::analytics::open(&c)?;
         codync_mem::schema::migrate(&c)?;
         let secret_key = if path == Path::new(":memory:") {
             let mut key = vec![0; 32];

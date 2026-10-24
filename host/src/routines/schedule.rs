@@ -151,9 +151,7 @@ pub fn calculate_next_occurrences(cron_expr: &str, tz_name: &str, count: usize) 
     let mut cursor = Utc::now().with_timezone(&tz);
     let mut out = Vec::with_capacity(count);
     for _ in 0..count {
-        let next = cron
-            .find_next_occurrence(&cursor, false)
-            .context("schedule has no future occurrence")?;
+        let next = cron.find_next_occurrence(&cursor, false).context("schedule has no future occurrence")?;
         cursor = next;
         out.push(next);
     }

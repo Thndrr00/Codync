@@ -82,18 +82,14 @@ pub fn ensure_bot_profile(
         .with_context(|| format!("failed to create download dir {}", download_dir.display()))?;
 
     let meta_path = profile_dir.join("codync-profile.json");
-    let previous: Option<BotBrowserProfile> = std::fs::read_to_string(&meta_path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok());
+    let previous: Option<BotBrowserProfile> =
+        std::fs::read_to_string(&meta_path).ok().and_then(|s| serde_json::from_str(&s).ok());
 
-    if let (Some(prev), Some(curr)) = (
-        previous.as_ref().and_then(|p| p.last_browser_version.as_deref()),
-        current_version,
-    ) && major_version(curr) < major_version(prev)
+    if let (Some(prev), Some(curr)) =
+        (previous.as_ref().and_then(|p| p.last_browser_version.as_deref()), current_version)
+        && major_version(curr) < major_version(prev)
     {
-        bail!(
-            "refused(profile_downgrade): profile was used with Chrome {prev}, cannot downgrade to {curr}"
-        );
+        bail!("refused(profile_downgrade): profile was used with Chrome {prev}, cannot downgrade to {curr}");
     }
 
     let profile = BotBrowserProfile {

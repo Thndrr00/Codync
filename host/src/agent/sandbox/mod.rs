@@ -26,10 +26,7 @@ mod tests {
         );
         let args = linux_bwrap::bwrap_args(&plan, Some(Path::new("/home/user")));
         let joined = args.join(" ");
-        assert!(
-            joined.contains("--tmpfs /home/user/.codync"),
-            "host data dir must be masked with tmpfs: {joined}"
-        );
+        assert!(joined.contains("--tmpfs /home/user/.codync"), "host data dir must be masked with tmpfs: {joined}");
         assert!(
             joined.contains("--bind /home/user/.codync/workspaces/bot-1 /home/user/.codync/workspaces/bot-1"),
             "bot workspace must be mounted back after tmpfs: {joined}"
@@ -41,11 +38,7 @@ mod tests {
 
     #[test]
     fn workspace_boundary_rejects_parent_traversal_and_host_db() {
-        let plan = SandboxPlan::new(
-            "bot-1",
-            PathBuf::from("/work/bot-1"),
-            PathBuf::from("/home/user/.codync"),
-        );
+        let plan = SandboxPlan::new("bot-1", PathBuf::from("/work/bot-1"), PathBuf::from("/home/user/.codync"));
         assert!(plan.is_within_workspace(Path::new("src/main.rs")));
         assert!(plan.is_within_workspace(Path::new("a/b/../c.rs")));
         assert!(!plan.is_within_workspace(Path::new("../other-bot/secret.txt")));
@@ -79,9 +72,8 @@ mod tests {
         let env_vars = windows_appcontainer::restricted_env_overrides(&plan);
         assert!(env_vars.iter().any(|(k, _)| k == "CODYNC_HOME"));
         let mut gated = plan.clone();
-        gated.network_mode = plan::NetworkIsolationMode::LoopbackOnlyWithGate {
-            egress_socket: PathBuf::from("/tmp/egress.sock"),
-        };
+        gated.network_mode =
+            plan::NetworkIsolationMode::LoopbackOnlyWithGate { egress_socket: PathBuf::from("/tmp/egress.sock") };
         assert_ne!(gated.network_mode, plan::NetworkIsolationMode::Disabled);
     }
 }

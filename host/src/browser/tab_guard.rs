@@ -27,9 +27,7 @@ pub fn validate_navigation_url(url: &str) -> Result<()> {
     let lower = trimmed.to_ascii_lowercase();
     for scheme in BLOCKED_SCHEMES {
         if lower.starts_with(scheme) {
-            bail!(
-                "refused(blocked_scheme): navigation to '{scheme}*' is forbidden by Codync browser security"
-            );
+            bail!("refused(blocked_scheme): navigation to '{scheme}*' is forbidden by Codync browser security");
         }
     }
     Ok(())
@@ -44,10 +42,7 @@ pub struct TabGuard {
 
 impl TabGuard {
     pub fn new(owns_all_tabs: bool) -> Self {
-        Self {
-            owns_all_tabs,
-            owned_targets: HashSet::new(),
-        }
+        Self { owns_all_tabs, owned_targets: HashSet::new() }
     }
 
     pub fn owns_all_tabs(&self) -> bool {

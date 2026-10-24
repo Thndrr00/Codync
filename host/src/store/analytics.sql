@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS analytics_outbox(
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS analytics_client_events(
+    id TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);

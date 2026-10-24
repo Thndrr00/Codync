@@ -60,9 +60,8 @@ impl IncidentCoordinator {
                 && row.config.members.iter().any(|m| m == failing_bot_id)
                 && let Some(chief_id) = &row.config.chief_bot_id
                 && chief_id != failing_bot_id
-                && let Some(chief) = bots
-                    .iter()
-                    .find(|b| !b.deleted && !b.config.is_group() && &b.config.id == chief_id)
+                && let Some(chief) =
+                    bots.iter().find(|b| !b.deleted && !b.config.is_group() && &b.config.id == chief_id)
             {
                 return Some(chief.config.clone());
             }

@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, watch};
 
+mod documents;
 mod order;
 mod sync;
 mod terminal;
@@ -81,6 +82,7 @@ pub struct Hub {
     pub cloud_synced: AtomicBool,
     pub cloud: crate::remote::cloud::Cloud,
     pub screen: Arc<Screen>,
+    pub computer: crate::computer::Access,
     /// Setup terminals (installs, sign-ins).
     pub terms: Arc<crate::agent::term::Terms>,
     /// Agent sessions running in the person's own terminals (see `external`).
@@ -97,6 +99,7 @@ impl Hub {
         let (events, _) = broadcast::channel(1024);
         let screen = Arc::new(Screen::new(Screen::load_enabled(&store), events.clone()));
         Arc::new(Self {
+            computer: crate::computer::Access::default(),
             analytics: crate::analytics::Analytics::load(&store),
             routines: crate::routines::Routines::default(),
             team: crate::chat::team::Requests::default(),
@@ -125,6 +128,8 @@ impl Hub {
     }
 
     pub fn start(self: &Arc<Self>) -> Result<()> {
+        self.screen.restore_protected_entry(&self.store)?;
+        bot::recover_results(self)?;
         // Approval cards and queued sends from a previous run can't be honored anymore.
         self.store.expire_pending()?;
         crate::chat::memory::import_old_memory(self);
@@ -269,8 +274,9 @@ impl Hub {
             edit.record(&self.store, &row.config, &cfg)?;
         }
         let saved = {
+            let _connectors = self.store.connector_lock.locked();
             let _g = self.emit_lock.locked();
-            self.store.save_bot(&cfg)
+            self.save_bot_access(&id, &row.config, &cfg)
         };
         if let Err(error) = saved {
             if let Some(edit) = edit {
@@ -291,9 +297,30 @@ impl Hub {
         Ok(self.bot_value(&id).unwrap_or(Value::Null))
     }
 
+    /// Saves `cfg`, first revoking the connectors and computer access it dropped. Called under the
+    /// connector and emit locks.
+    fn save_bot_access(&self, id: &str, before: &BotConfig, cfg: &BotConfig) -> Result<()> {
+        if before.computer && !cfg.computer {
+            self.screen.forget_bot_snapshots(id);
+        }
+        for connector in &before.connectors {
+            if !cfg.connectors.contains(connector) {
+                self.store.revoke_mcp_connector(Some(id), connector)?;
+            }
+        }
+        self.store.save_bot(cfg)?;
+        self.computer.changed(id, before, cfg);
+        if before.computer_permissions.browser && !cfg.computer_permissions.browser {
+            self.screen.forget_bot_snapshots(id);
+        }
+        Ok(())
+    }
+
     pub fn delete_bot(&self, id: &str) -> Result<()> {
         // A terminal session leaves with its bot, and a hook waiting on one of its cards is freed at once.
         self.external.forget(self, id);
+        self.computer.revoke_all(id);
+        self.screen.forget_bot_snapshots(id);
         self.routines.disable_bot(&self.store, id)?;
         // A locked vault keeps them; Credentials lists them under "A removed bot" to remove.
         if let Err(error) = crate::market::bot_secrets::remove_bot(&self.store, id) {
@@ -307,6 +334,7 @@ impl Hub {
         {
             let _g = self.emit_lock.locked();
             let rev = self.store.delete_bot(id)?;
+            self.computer.revoke_all(id);
             let _ =
                 self.events.send(json!({"type": "bot", "rev": rev, "bot": {"id": id, "deleted": true, "rev": rev}}));
         }
@@ -340,10 +368,15 @@ impl Hub {
     /// may call it whenever a chat or thread is on screen.
     pub fn mark_read(&self, id: &str, scope: ReadScope) -> Result<()> {
         let Some(row) = self.store.bot(id)? else { bail!("unknown bot") };
-        if let ReadScope::Thread(root) = scope
-            && !self.store.entry(root).is_some_and(|r| r.bot_id == id && r.thread_id.is_none())
-        {
-            bail!("unknown thread");
+        if let ReadScope::Thread(root) = scope {
+            let valid = if let Some(document) = root.strip_prefix("doc:") {
+                self.store.document(document)?.is_some_and(|doc| doc.bot_id == id)
+            } else {
+                self.store.entry(root).is_some_and(|entry| entry.bot_id == id && entry.thread_id.is_none())
+            };
+            if !valid {
+                bail!("unknown thread");
+            }
         }
         // A thread gets its own read mark the first time, or the main chat's would cover it.
         let first = matches!(scope, ReadScope::Thread(root) if self.store.kv_get(&format!("read.{root}")).is_none());

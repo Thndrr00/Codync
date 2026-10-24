@@ -43,8 +43,7 @@ mod tests {
 
     #[test]
     fn rebinding_domains_and_other_addresses_are_refused() {
-        for host in ["evil.example", "evil.example:19222", "localhost.evil.example", "192.168.1.20:19222", "", "[::1"]
-        {
+        for host in ["evil.example", "evil.example:19222", "localhost.evil.example", "192.168.1.20:19222", "", "[::1"] {
             assert!(!is_loopback_name(host), "{host} is not a loopback name");
         }
     }

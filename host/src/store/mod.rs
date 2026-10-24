@@ -5,16 +5,26 @@
 //! microseconds, so async callers use them directly; the one bulk read (a fresh
 //! client's catch-up) is capped per bot, and the history search runs through `spawn_blocking`.
 
+mod analytics;
 mod bots;
+mod computer_activity;
 mod devices;
+mod documents;
 mod entries;
+mod inflight;
+pub(crate) mod mcp_policies;
 mod memory;
 mod model;
+mod research;
 mod roster;
 pub mod runtime;
 mod schema;
+mod setup;
+pub(crate) mod slack;
 
+pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};
+pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use model::{BotConfig, BotKind, BotRow, Entry, EntryKind, Lane, Permission, ReadScope, lane_key};
 
 use crate::LockExt;

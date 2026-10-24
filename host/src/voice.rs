@@ -3,7 +3,10 @@
 //! call gets a short-lived credential minted here and then streams audio to the
 //! provider directly, so audio never crosses the channel or the relay.
 
+pub(crate) mod decisions;
 mod endpoint;
+pub(crate) mod receipts;
+mod transcript;
 
 use crate::market::vault;
 use crate::store::Store;

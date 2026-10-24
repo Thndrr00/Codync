@@ -37,11 +37,7 @@ pub fn escape_envelope(text: &str) -> String {
 }
 
 /// Generates a deterministic protective envelope for an inter-bot delegation.
-pub fn generate_delegation_envelope(
-    assignment: &Assignment,
-    requester_name: &str,
-    task_brief: &str,
-) -> String {
+pub fn generate_delegation_envelope(assignment: &Assignment, requester_name: &str, task_brief: &str) -> String {
     let safe_requester = requester_name.replace(['[', ']', '\n', '\r'], " ").trim().to_owned();
     let who = if safe_requester.is_empty() {
         assignment.requester_bot_id.as_deref().unwrap_or("User")

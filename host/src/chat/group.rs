@@ -135,11 +135,7 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
                     description: m.description.clone(),
                 })
                 .collect();
-            let user_msg = since_user
-                .first()
-                .and_then(|e| e.data["text"].as_str())
-                .unwrap_or_default()
-                .to_owned();
+            let user_msg = since_user.first().and_then(|e| e.data["text"].as_str()).unwrap_or_default().to_owned();
             let req = crate::chat::decider::DeciderRequest {
                 group_name: group.name.clone(),
                 recent_transcript: vec![],

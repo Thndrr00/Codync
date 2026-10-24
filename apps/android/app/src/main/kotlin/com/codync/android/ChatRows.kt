@@ -148,7 +148,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
             ChiefIncidentCard(entry, state, store)
         } else if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ConnectionRequestCard(entry, state, store, connect.openApp, connect.install)
-        } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry) }
+        } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry, store) }
     }
 }
 
@@ -400,10 +400,11 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     }
 }
 
-@Composable private fun NoticeRow(entry: Entry) {
+@Composable private fun NoticeRow(entry: Entry, store: AppStore) {
     val text = entry.text
     val seconds = entry.data["callSeconds"]?.jsonPrimitive?.longOrNull
     when {
+        seconds != null && entry.data.text("source") == "voice_receipt" -> VoiceReceipt(entry, store, seconds, entry.data.text("voiceTranscriptText") ?: "No transcript was captured. Write only decisions you remember and personally confirm.")
         seconds != null -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Symbol("waveform", size = 15.dp, tint = Palette.secondary)
             Spacer(Modifier.width(6.dp))

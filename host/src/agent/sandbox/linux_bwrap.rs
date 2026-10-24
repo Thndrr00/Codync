@@ -55,14 +55,7 @@ pub fn bwrap_args(plan: &SandboxPlan, home_dir: Option<&std::path::Path>) -> Vec
         let s = ro.to_string_lossy().into_owned();
         args.extend(["--ro-bind-try".into(), s.clone(), s]);
     }
-    args.extend([
-        "--proc".into(),
-        "/proc".into(),
-        "--dev".into(),
-        "/dev".into(),
-        "--tmpfs".into(),
-        "/tmp".into(),
-    ]);
+    args.extend(["--proc".into(), "/proc".into(), "--dev".into(), "/dev".into(), "--tmpfs".into(), "/tmp".into()]);
     if let Some(home) = home_dir {
         let h = home.to_string_lossy().into_owned();
         args.extend(["--bind".into(), h.clone(), h]);
