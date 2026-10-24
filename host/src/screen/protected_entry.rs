@@ -47,6 +47,7 @@ impl Screen {
     }
 }
 
+#[cfg_attr(not(windows), allow(clippy::unused_async, reason = "only the Windows protected browser awaits"))]
 pub async fn call(hub: &Arc<Hub>, method: &str, body: Value) -> Result<Value> {
     #[cfg(windows)]
     let _operation = hub.screen.protected_operation.lock().await;

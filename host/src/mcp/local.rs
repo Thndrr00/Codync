@@ -175,14 +175,12 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
     let _ = reader.await;
     drop(input);
     drop(child);
-    if let Ok(Ok(Ok(()))) = tokio::time::timeout(std::time::Duration::from_secs(5), upstream).await {
-    } else {
-        tracing::debug!("connector output stopped before it could be fully drained")
+    if !matches!(tokio::time::timeout(std::time::Duration::from_secs(5), upstream).await, Ok(Ok(Ok(())))) {
+        tracing::debug!("connector output stopped before it could be fully drained");
     }
     drop(reply_tx);
-    if let Ok(Ok(Ok(()))) = tokio::time::timeout(std::time::Duration::from_secs(35), writer).await {
-    } else {
-        tracing::warn!("MCP replies did not finish draining; missing receipts have an unknown outcome")
+    if !matches!(tokio::time::timeout(std::time::Duration::from_secs(35), writer).await, Ok(Ok(Ok(())))) {
+        tracing::warn!("MCP replies did not finish draining; missing receipts have an unknown outcome");
     }
     if let Some(error) = failure {
         return Err(error);
