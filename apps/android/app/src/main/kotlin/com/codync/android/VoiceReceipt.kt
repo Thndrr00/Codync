@@ -7,13 +7,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codync.android.design.*
 import com.codync.android.core.Entry
 
 @Composable internal fun VoiceReceipt(entry: Entry, store: AppStore, seconds: Long, transcript: String) {
     var expanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val model = remember(store, entry.id, store.state.value.generation) { VoiceDecisionsModel(store, entry, scope) }
+    val generation = store.state.collectAsStateWithLifecycle().value.generation
+    val model = remember(store, entry.id, generation) { VoiceDecisionsModel(store, entry, scope) }
     LaunchedEffect(model, expanded) { if (expanded) model.load() }
     DisposableEffect(model) { onDispose { model.dispose() } }
     Column(Modifier.fillMaxWidth().animateContentSize(Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(8.dp)) {

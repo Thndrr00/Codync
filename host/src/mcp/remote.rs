@@ -41,11 +41,11 @@ pub async fn serve_remote(connector: String, port: u16) -> Result<()> {
     };
     // Both transports answer through one writer: the SSE one answers from its own stream.
     let (tx, mut rx) = mpsc::channel::<Value>(16);
-    let observer = observed.clone();
+    let seen = observed.clone();
     let writer = tokio::spawn(async move {
         let mut out = tokio::io::stdout();
         while let Some(reply) = rx.recv().await {
-            observer.observe(&reply).await;
+            seen.observe(&reply).await;
             let mut line = serde_json::to_vec(&reply)?;
             line.push(b'\n');
             out.write_all(&line).await?;
@@ -70,10 +70,10 @@ pub async fn serve_remote(connector: String, port: u16) -> Result<()> {
                         continue;
                     }
                     if message["method"] == "ping" {
-                        if let Some(id) = message.get("id") {
-                            if immediate.try_send(json!({"jsonrpc":"2.0","id":id,"result":{}})).is_err() {
-                                break;
-                            }
+                        if let Some(id) = message.get("id")
+                            && immediate.try_send(json!({"jsonrpc":"2.0","id":id,"result":{}})).is_err()
+                        {
+                            break;
                         }
                         continue;
                     }

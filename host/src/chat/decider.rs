@@ -1,4 +1,4 @@
-//! Fast Decision Model (`server/decider/`, `docs/decision-model.md` from OpenMausBot)
+//! Fast Decision Model (`server/decider/`, `docs/decision-model.md` from `OpenMausBot`)
 //! for low-latency group chat speaker routing.
 //!
 //! When a user writes in a group without explicit `@bot` mentions, the decider
@@ -38,7 +38,7 @@ pub enum RoutingDecision {
 }
 
 /// Evaluates raw probability scores returned by a fast decision model endpoint.
-/// Applies the $\ge 0.6$ threshold from OpenMausBot's decision model contract.
+/// Applies the $\ge 0.6$ threshold from `OpenMausBot`'s decision model contract.
 pub fn evaluate_probabilities(
     scores: &[(String, f64)],
     all_members_prob: f64,

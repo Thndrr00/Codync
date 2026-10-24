@@ -1,4 +1,4 @@
-//! Passkey and security-key wall detection (OpenMausBot `shared/passkey-wall.ts`
+//! Passkey and security-key wall detection (`OpenMausBot` `shared/passkey-wall.ts`
 //! and `server/browser/passkey-notice.ts`).
 //!
 //! Detects when a sign-in step stops at a passkey or security key challenge

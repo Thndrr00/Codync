@@ -1,10 +1,9 @@
 //! Bot-Box process sandboxing (`host/src/agent/sandbox/`).
 //!
 //! Provides cross-platform isolation plans (`plan`), Linux Bubblewrap + Seccomp (`linux_bwrap`),
-//! macOS Seatbelt (`macos_sandbox`), Windows containment (`windows_appcontainer`), and outbound
-//! domain filtering (`egress`).
+//! macOS Seatbelt (`macos_sandbox`), Windows containment (`windows_appcontainer`); outbound traffic
+//! goes through `crate::egress`.
 
-pub mod egress;
 pub mod linux_bwrap;
 pub mod macos_sandbox;
 pub mod plan;
@@ -47,16 +46,9 @@ mod tests {
     }
 
     #[test]
-    fn seccomp_program_blocks_dangerous_syscalls_and_egress_blocks_loopback() {
+    fn seccomp_program_blocks_dangerous_syscalls() {
         let bytes = linux_bwrap::seccomp_bytes();
         assert_eq!(bytes.len(), (linux_bwrap::DENIED_SYSCALLS.len() + 6) * 8);
-        let allowed = vec!["api.anthropic.com".into(), "*.github.com".into()];
-        assert!(egress::is_egress_allowed("api.anthropic.com:443", &allowed));
-        assert!(egress::is_egress_allowed("codeload.github.com", &allowed));
-        assert!(!egress::is_egress_allowed("127.0.0.1:19222", &allowed));
-        assert!(!egress::is_egress_allowed("localhost:19222", &allowed));
-        assert!(!egress::is_egress_allowed("192.168.1.10", &allowed));
-        assert!(!egress::is_egress_allowed("evil.example.com", &allowed));
     }
 
     #[test]

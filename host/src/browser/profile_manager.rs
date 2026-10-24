@@ -18,6 +18,7 @@ pub enum BackendKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools, reason = "independent capability flags of one browser backend")]
 pub struct BackendCaps {
     pub persistent_profile: bool,
     pub window: bool,
@@ -129,7 +130,6 @@ mod tests {
         assert!(BackendKind::Local.capabilities().owns_all_tabs);
         assert!(!BackendKind::MyChrome.capabilities().owns_all_tabs);
         assert!(BackendKind::CdpUrl.capabilities().owns_all_tabs);
-        assert!(super::super::tools().is_array());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

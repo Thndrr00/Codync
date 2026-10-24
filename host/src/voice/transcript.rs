@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::Write as _;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -72,7 +73,7 @@ impl Transcript {
                 Source::Generated => "Assistant (provider text)",
                 Source::Queued => "Assistant (queued for speech)",
             };
-            text.push_str(&format!("\n{label}: {}\n", entry.text));
+            let _ = write!(text, "\n{label}: {}\n", entry.text);
         }
         text
     }

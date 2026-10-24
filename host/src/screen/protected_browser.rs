@@ -70,12 +70,12 @@ pub async fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
     ensure!(!browser.process.exited()?, "Protected browser closed; finish this entry and start again");
     let kind = if method == "fillProtectedCode" { "code" } else { "password" };
     let operation = async {
-        let mut socket = &mut browser.pipe;
+        let socket = &mut browser.pipe;
         let attached =
-            rpc(&mut socket, "Target.attachToTarget", json!({"targetId":browser.target,"flatten":true}), None).await?;
+            rpc(socket, "Target.attachToTarget", json!({"targetId":browser.target,"flatten":true}), None).await?;
         let session = attached["sessionId"].as_str().context("Could not bind protected browser")?;
         let focus = rpc(
-            &mut socket,
+            socket,
             "Runtime.evaluate",
             json!({"expression":"document.activeElement","objectGroup":"protected-entry","silent":true}),
             Some(session),
@@ -83,7 +83,7 @@ pub async fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
         .await?;
         let object = focus["result"]["objectId"].as_str().context("Focus a password or one-time-code input first")?;
         let base = json!({"objectId":object,"functionDeclaration":FILL,"arguments":[{"value":site},{"value":kind}],"returnByValue":true,"silent":true});
-        let probe = rpc(&mut socket, "Runtime.callFunctionOn", base.clone(), Some(session)).await?;
+        let probe = rpc(socket, "Runtime.callFunctionOn", base.clone(), Some(session)).await?;
         ensure!(
             probe["result"]["value"]["ready"] == true && probe["result"]["value"]["origin"] == site,
             "Focus the correct protected field on the exact approved HTTPS origin"
@@ -118,7 +118,7 @@ pub async fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
             .as_array_mut()
             .context("Invalid private fill request")?
             .push(json!({"value":secret.as_str()}));
-        let result = rpc(&mut socket, "Runtime.callFunctionOn", fill, Some(session)).await?;
+        let result = rpc(socket, "Runtime.callFunctionOn", fill, Some(session)).await?;
         ensure!(
             result["result"]["value"] == "filled",
             "The field changed before delivery; nothing is confirmed. Check it yourself before retrying"
@@ -143,7 +143,9 @@ pub(super) async fn release(screen: &Screen, id: &str, keep_session: bool) -> Re
             match tokio::time::timeout(Duration::from_secs(10), reset_private_pages(browser)).await {
                 Ok(Ok(())) => return Ok("preserved"),
                 _ => {
-                    tracing::warn!("Private browser pages could not be reset; closing the entire owned browser instead")
+                    tracing::warn!(
+                        "Private browser pages could not be reset; closing the entire owned browser instead"
+                    );
                 }
             }
         }
@@ -154,8 +156,8 @@ pub(super) async fn release(screen: &Screen, id: &str, keep_session: bool) -> Re
     Ok("none")
 }
 async fn reset_private_pages(browser: &mut Browser) -> Result<()> {
-    let mut socket = &mut browser.pipe;
-    let initial = rpc(&mut socket, "Target.getTargets", json!({}), None).await?;
+    let socket = &mut browser.pipe;
+    let initial = rpc(socket, "Target.getTargets", json!({}), None).await?;
     let pages = initial["targetInfos"].as_array().context("Could not inspect private pages")?;
     ensure!(
         pages
@@ -165,7 +167,7 @@ async fn reset_private_pages(browser: &mut Browser) -> Result<()> {
         "A page is outside the private session"
     );
     let blank = rpc(
-        &mut socket,
+        socket,
         "Target.createTarget",
         json!({"url":"about:blank","browserContextId":browser.context,"newWindow":true}),
         None,
@@ -173,7 +175,7 @@ async fn reset_private_pages(browser: &mut Browser) -> Result<()> {
     .await?;
     let blank = blank["targetId"].as_str().context("Could not create a clean private page")?.to_owned();
     for _ in 0..3 {
-        let targets = rpc(&mut socket, "Target.getTargets", json!({}), None).await?;
+        let targets = rpc(socket, "Target.getTargets", json!({}), None).await?;
         let pages = targets["targetInfos"].as_array().context("Could not inspect private pages")?;
         let mut closed = false;
         for page in pages.iter().filter(|target| target["type"] == "page") {
@@ -182,7 +184,7 @@ async fn reset_private_pages(browser: &mut Browser) -> Result<()> {
             if id == blank {
                 continue;
             }
-            let result = rpc(&mut socket, "Target.closeTarget", json!({"targetId":id}), None).await?;
+            let result = rpc(socket, "Target.closeTarget", json!({"targetId":id}), None).await?;
             ensure!(result["success"] == true, "Could not close a private page");
             closed = true;
         }
@@ -206,10 +208,10 @@ async fn reset_private_pages(browser: &mut Browser) -> Result<()> {
     bail!("Private pages continued changing during handback")
 }
 pub(super) async fn handed_back(screen: &Screen, id: &str) {
-    if let Some(browser) = screen.protected_browser.lock().await.as_mut() {
-        if browser.id == id {
-            browser.id.clear();
-        }
+    if let Some(browser) = screen.protected_browser.lock().await.as_mut()
+        && browser.id == id
+    {
+        browser.id.clear();
     }
 }
 async fn destroy(browser: &mut Browser) -> Result<()> {
@@ -236,7 +238,7 @@ async fn open(id: &str, site: &str) -> Result<Browser> {
     std::fs::create_dir_all(&parent)?;
     let folder = parent.join(uuid::Uuid::new_v4().to_string());
     std::fs::create_dir(&folder)?;
-    let (process, mut socket) = pipe::spawn(&exe, &folder).await?;
+    let (process, mut socket) = pipe::spawn(&exe, &folder)?;
     let targets = rpc(&mut socket, "Target.getTargets", json!({}), None).await?;
     let context = rpc(&mut socket, "Target.createBrowserContext", json!({"disposeOnDetach":false}), None).await?;
     let context = context["browserContextId"]

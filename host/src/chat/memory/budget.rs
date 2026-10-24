@@ -1,8 +1,9 @@
 //! Markdown memory budget enforcement (`MEMORY.md` max 200 lines / 24 KB),
 //! secret redaction (`<redacted N chars>`), and automatic rotation to `archive.md`
-//! (`docs/memory.md` from OpenMausBot).
+//! (`docs/memory.md` from `OpenMausBot`).
 
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 
 pub const MAX_MEMORY_LINES: usize = 200;
 pub const MAX_MEMORY_BYTES: usize = 24 * 1024;
@@ -42,7 +43,7 @@ fn redact_pem_blocks(input: &str) -> String {
             && let Some(close) = after_start[end_marker + 9..].find("-----")
         {
             let total_len = end_marker + 9 + close + 5;
-            out.push_str(&format!("<redacted {total_len} chars>"));
+            let _ = write!(out, "<redacted {total_len} chars>");
             rest = &after_start[total_len..];
             continue;
         }

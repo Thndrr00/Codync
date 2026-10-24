@@ -11,7 +11,7 @@ impl Connector {
     }
     pub(crate) fn runtime_fingerprint(&self) -> Result<String> {
         let bytes = Sha256::digest(serde_json::to_vec(&self.runtime_identity())?);
-        Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+        Ok(crate::chat::files::digest_hex(&bytes))
     }
 }
 #[cfg(test)]

@@ -5,11 +5,11 @@ use serde_json::Value;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub fn on_document_reply(&mut self, reply: DocumentReply, value: Value) {
+    pub fn on_document_reply(&mut self, reply: &DocumentReply, value: &Value) {
         let Some(index) = self
             .overlays
             .iter()
-            .position(|overlay| matches!(overlay, Overlay::Documents(sheet) if sheet.accepts(&reply)))
+            .position(|overlay| matches!(overlay, Overlay::Documents(sheet) if sheet.accepts(reply)))
         else {
             return;
         };
@@ -17,7 +17,7 @@ impl App {
             return;
         };
         match reply {
-            DocumentReply::List(_, _, more) => {
+            &DocumentReply::List(_, _, more) => {
                 let items = value["items"].as_array().cloned().unwrap_or_default();
                 if more {
                     for item in items {
@@ -31,7 +31,7 @@ impl App {
                 sheet.next = value["next"].as_str().map(str::to_owned);
                 sheet.loading = false;
             }
-            DocumentReply::Extras(_, _, reviews) => {
+            &DocumentReply::Extras(_, _, reviews) => {
                 let items = value["items"].as_array().cloned().unwrap_or_default();
                 if reviews {
                     sheet.reviews = items;
@@ -49,7 +49,7 @@ impl App {
             }
             DocumentReply::Save(..) => {
                 sheet.busy = false;
-                if s(&value, "status") == "conflict" {
+                if s(value, "status") == "conflict" {
                     sheet.conflict = Some(value["document"].clone());
                     sheet.status = "Conflict: draft preserved. Ctrl+R reloads latest; Ctrl+O overwrites latest.".into();
                 } else if let Some(draft) = &mut sheet.draft {
@@ -80,10 +80,10 @@ impl App {
             }
             DocumentReply::Change(..) => {
                 sheet.busy = false;
-                if s(&value, "status") == "conflict" {
+                if s(value, "status") == "conflict" {
                     sheet.conflict = Some(value["document"].clone());
                     sheet.mode = DocumentMode::Edit;
-                } else if s(&value, "status") == "deleted" {
+                } else if s(value, "status") == "deleted" {
                     sheet.draft = None;
                     sheet.mode = DocumentMode::Browse;
                 } else {
@@ -93,7 +93,7 @@ impl App {
                 self.fetch_documents(&mut sheet, false);
             }
             DocumentReply::Csv(_) => {
-                copy(s(&value, "csv"));
+                copy(s(value, "csv"));
                 sheet.status = "Activity CSV copied".into();
             }
         }

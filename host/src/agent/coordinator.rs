@@ -1,5 +1,5 @@
 //! Chief of Staff: autonomous incident and escalation coordinator (`docs/team-incidents.md`
-//! and `docs/team-escalations.md` from OpenMausBot).
+//! and `docs/team-escalations.md` from `OpenMausBot`).
 //!
 //! Supervises peer bots:
 //! - Rate-limits incident reports to at most 5 per hour per bot to prevent failure storms.
@@ -175,7 +175,7 @@ mod tests {
         let mut coord = IncidentCoordinator::new();
         let t0 = 1_700_000_000_000;
         for i in 0..MAX_INCIDENTS_PER_HOUR {
-            assert!(coord.admit_incident("bot-a", t0 + (i as i64) * 1000));
+            assert!(coord.admit_incident("bot-a", t0 + i64::try_from(i).expect("small count") * 1000));
         }
         // 6th within the same hour is throttled
         assert!(!coord.admit_incident("bot-a", t0 + 10_000));

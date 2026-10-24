@@ -1,12 +1,15 @@
 //! Composio execution shares the immutable MCP policy and receipt boundary.
-use super::*;
+use super::{
+    Config, Connection, Context, Duration, PREFIX, Result, Store, Value, bail, checked_slug, config, connections, json,
+    post, text, tool,
+};
 use crate::{LockExt, hub::Hub};
 use sha2::{Digest, Sha256};
 
 fn identity(c: &Config, app: &Connection) -> Result<String> {
     let digest = Sha256::digest(serde_json::to_vec(&json!({"key":c.key,"user":c.user_id,
         "account":app.id,"toolkit":app.toolkit}))?);
-    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+    Ok(crate::chat::files::digest_hex(&digest))
 }
 
 pub(crate) fn installed(store: &Store, connector: &str) -> Result<bool> {

@@ -256,7 +256,7 @@ mod tests {
             approval_rules: vec![],
             fleet_management: false,
             created_by: None,
-            computer_permissions: Default::default(),
+            computer_permissions: crate::computer::Permissions::default(),
             shared_memory: None,
             harness_memory: false,
             auto_name: false,

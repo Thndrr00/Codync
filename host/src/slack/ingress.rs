@@ -1,5 +1,5 @@
 //! Verify the raw request before parsing or acknowledging an event.
-use super::*;
+use super::{Arc, Context, Hub, LockExt, Result, Value, json, load};
 use axum::{
     Json,
     body::Bytes,
@@ -40,7 +40,7 @@ pub(super) fn stable_id(parts: &[&str]) -> String {
         digest.update(part.as_bytes());
     }
     let hash = digest.finalize();
-    format!("slack-{}", hash.iter().map(|b| format!("{b:02x}")).collect::<String>())
+    format!("slack-{}", crate::chat::files::digest_hex(&hash))
 }
 pub(crate) async fn receive(State(hub): State<Arc<Hub>>, headers: HeaderMap, body: Bytes) -> Response {
     if body.len() > 256 * 1024 {
@@ -127,7 +127,7 @@ mod tests {
         let mut mac = hmac::Hmac::<Sha256>::new_from_slice(b"secret").unwrap();
         mac.update(b"v0:1000:");
         mac.update(body);
-        let sig = format!("v0={}", mac.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>());
+        let sig = format!("v0={}", crate::chat::files::digest_hex(&mac.finalize().into_bytes()));
         let mut headers = HeaderMap::new();
         headers.insert("x-slack-request-timestamp", "1000".parse().unwrap());
         headers.insert("x-slack-signature", sig.parse().unwrap());

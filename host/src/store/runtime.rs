@@ -10,7 +10,7 @@ use anyhow::{Result, bail, ensure};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
-/// Maximum delegation depth in an assignment tree (OpenMausBot §4).
+/// Maximum delegation depth in an assignment tree (`OpenMausBot` §4).
 pub const MAX_ASSIGNMENT_DEPTH: u8 = 4;
 /// Default step budget for a newly created assignment.
 pub const DEFAULT_STEP_BUDGET: i64 = 48;
@@ -166,6 +166,7 @@ pub fn effective_permission(own: Permission, inherited: Permission) -> Permissio
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names, reason = "mirrors the assignments table and its `assignmentId` wire name")]
 pub struct Assignment {
     pub assignment_id: String,
     pub root_id: String,
@@ -187,6 +188,7 @@ pub struct Assignment {
     pub updated_at: i64,
 }
 
+#[allow(dead_code, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssignmentEvent {
@@ -367,12 +369,14 @@ impl Store {
         Ok(row)
     }
 
+    #[allow(dead_code, reason = "OpenMausBot scaffolding, not wired into the host yet")]
     pub fn assignment(&self, id: &str) -> Result<Option<Assignment>> {
         let c = self.db.locked();
         Ok(c.query_row(&format!("SELECT {COLS} FROM assignments WHERE assignment_id = ?1"), [id], row_assignment)
             .optional()?)
     }
 
+    #[allow(dead_code, reason = "OpenMausBot scaffolding, not wired into the host yet")]
     pub fn assignment_events(&self, id: &str) -> Result<Vec<AssignmentEvent>> {
         let c = self.db.locked();
         let mut st = c.prepare(
@@ -397,6 +401,7 @@ impl Store {
     }
 
     /// Parks an assignment on `needs_input`; if it has a parent, parks the parent on `waiting`.
+    #[allow(dead_code, reason = "OpenMausBot scaffolding, not wired into the host yet")]
     pub fn mark_assignment_needs_input(&self, id: &str, question: Option<&str>) -> Result<Option<Assignment>> {
         let mut c = self.db.locked();
         let tx = c.transaction()?;
@@ -433,6 +438,7 @@ impl Store {
 
     /// Records a tool/step execution on an assignment; if `steps_used` exceeds `step_budget`,
     /// settles the assignment as `failed(budget_exceeded)`.
+    #[allow(dead_code, reason = "OpenMausBot scaffolding, not wired into the host yet")]
     pub fn record_assignment_step(&self, id: &str) -> Result<Option<Assignment>> {
         let mut c = self.db.locked();
         let tx = c.transaction()?;
@@ -590,6 +596,6 @@ mod tests {
         assert_eq!(step3.outcome, Some(AssignmentOutcome::Failed));
         assert!(step3.outcome_detail.unwrap().starts_with("budget_exceeded"));
         let events = s.assignment_events("a3").unwrap();
-        assert!(!events.is_empty());
+        assert_ne!(events.len(), 0);
     }
 }

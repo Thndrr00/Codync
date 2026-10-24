@@ -1,6 +1,7 @@
 use super::{Buffer, Rect, centered, footer, frame_box, input_line, put, row, s, theme, window};
 use crate::tui::manage::computer::{ComputerMode, ComputerSheet};
 use ratatui::widgets::{Paragraph, Widget, Wrap};
+use std::fmt::Write as _;
 pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
     let palette = theme();
     let inner = frame_box(buf, centered(area, 105, 34), palette.text, palette.panel, Some(("Computer", palette.text)));
@@ -103,12 +104,10 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
                 .render(Rect::new(body.x, body.y + 2, body.width, body.height.saturating_sub(2)), buf);
         }
     } else {
-        let text = sheet.state["activity"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|entry| format!("{} · {} · {}\n", s(entry, "action"), s(entry, "result"), entry["createdAt"]))
-            .collect::<String>();
+        let text = sheet.state["activity"].as_array().into_iter().flatten().fold(String::new(), |mut text, entry| {
+            let _ = writeln!(text, "{} · {} · {}", s(entry, "action"), s(entry, "result"), entry["createdAt"]);
+            text
+        });
         Paragraph::new(if text.is_empty() { "No computer activity recorded." } else { &text })
             .wrap(Wrap { trim: false })
             .scroll((sheet.scroll, 0))

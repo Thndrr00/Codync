@@ -17,7 +17,7 @@ impl App {
         match r {
             Reply::Computer(reply) => self.computer_reply(&reply, Ok(v)),
             Reply::McpTools(reply) => self.mcp_tools_reply(&reply, Ok(v)),
-            Reply::Documents(reply) => self.on_document_reply(reply, v),
+            Reply::Documents(reply) => self.on_document_reply(&reply, &v),
             Reply::Memory(bot) => {
                 for o in &mut self.overlays {
                     if let Overlay::Memory(m) = o

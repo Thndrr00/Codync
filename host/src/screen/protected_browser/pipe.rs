@@ -8,13 +8,18 @@ use tokio::{
     process::{ChildStdin, ChildStdout},
 };
 
+/// Request ids stay within JavaScript's safe integers (the broker is Node).
+const MAX_SAFE_ID: u64 = (1 << 53) - 1;
+/// Largest request or reply line, in bytes.
+const MAX_MESSAGE: usize = 256 * 1024;
+
 pub(super) struct Pipe {
     input: ChildStdin,
     output: BufReader<ChildStdout>,
     next: u64,
     poisoned: bool,
 }
-pub(super) async fn spawn(browser: &Path, folder: &Path) -> Result<(Process, Pipe)> {
+pub(super) fn spawn(browser: &Path, folder: &Path) -> Result<(Process, Pipe)> {
     let node = crate::agent::backends::which("node")
         .or_else(|| {
             crate::agent::node::search_dirs().iter().map(|dir| dir.join("node.exe")).find(|path| path.is_file())
@@ -33,7 +38,10 @@ pub(super) async fn spawn(browser: &Path, folder: &Path) -> Result<(Process, Pip
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED | 0x08000000)
+        .creation_flags(
+            windows_sys::Win32::System::Threading::CREATE_SUSPENDED
+                | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
+        )
         .kill_on_drop(true);
     let mut child = command.spawn().context("Could not start private browser transport")?;
     let input = child.stdin.take().context("Private browser input pipe missing")?;
@@ -49,7 +57,7 @@ pub(super) async fn rpc(pipe: &mut Pipe, method: &str, params: Value, session: O
     pipe.next = pipe
         .next
         .checked_add(1)
-        .filter(|id| *id <= 9007199254740991)
+        .filter(|id| *id <= MAX_SAFE_ID)
         .context("Private browser request identity exhausted")?;
     let id = pipe.next;
     let mut message = json!({"id":id,"method":method,"params":params});
@@ -58,14 +66,14 @@ pub(super) async fn rpc(pipe: &mut Pipe, method: &str, params: Value, session: O
     }
     let mut encoded = serde_json::to_vec(&message)?;
     encoded.push(b'\n');
-    ensure!(encoded.len() <= 262144, "Private browser request exceeded its limit");
+    ensure!(encoded.len() <= MAX_MESSAGE, "Private browser request exceeded its limit");
     // A cancelled read_line can consume part of a reply. Never reuse that stream after cancellation.
     pipe.poisoned = true;
     pipe.input.write_all(&encoded).await.context("Private browser connection failed")?;
     loop {
         let mut line = String::new();
         ensure!(pipe.output.read_line(&mut line).await? > 0, "Private browser disconnected; outcome unknown");
-        ensure!(line.len() <= 262144, "Private browser reply exceeded its limit");
+        ensure!(line.len() <= MAX_MESSAGE, "Private browser reply exceeded its limit");
         let value: Value = serde_json::from_str(&line).context("Invalid private browser reply")?;
         if value["id"] != id {
             continue;

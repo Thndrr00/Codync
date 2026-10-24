@@ -5,6 +5,7 @@ use super::{
 };
 use crate::tui::manage::documents::{DocumentMode, DocumentSheet};
 use ratatui::widgets::{Paragraph, Widget, Wrap};
+use std::fmt::Write as _;
 
 pub fn draw(buf: &mut Buffer, area: Rect, app: &App, sheet: &DocumentSheet) {
     let palette = theme();
@@ -189,11 +190,12 @@ fn review(buf: &mut Buffer, area: Rect, sheet: &DocumentSheet) {
         s(draft, "body")
     );
     if !review["document"].is_null() {
-        text.push_str(&format!(
+        let _ = write!(
+            text,
             "\n\nCURRENT DOCUMENT\n{}\n{}",
             s(&review["document"], "title"),
             s(&review["document"], "body")
-        ));
+        );
     }
     if s(review, "status") == "conflict" {
         text.push_str("\n\nThe document changed. This proposal was not applied.");

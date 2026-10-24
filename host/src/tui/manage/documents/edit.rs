@@ -31,7 +31,7 @@ impl App {
                 }
                 KeyCode::Char('o') => self.save_document_draft(sheet, true),
                 KeyCode::Char('x') if !sheet.busy && sheet.draft.as_ref().is_some_and(|draft| draft.id.is_some()) => {
-                    sheet.mode = DocumentMode::Delete
+                    sheet.mode = DocumentMode::Delete;
                 }
                 KeyCode::Char('m') if !sheet.busy && !sheet.dirty() => {
                     sheet.mode = DocumentMode::Move;
@@ -40,7 +40,7 @@ impl App {
                 KeyCode::Char('n') if !sheet.busy && !sheet.dirty() => {
                     let parent = sheet.draft.as_ref().and_then(|draft| draft.id.clone());
                     if parent.is_some() {
-                        self.new_document(sheet, parent);
+                        Self::new_document(sheet, parent);
                     }
                 }
                 _ => {}

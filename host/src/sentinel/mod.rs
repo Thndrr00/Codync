@@ -77,6 +77,11 @@ pub struct ScanReport {
     pub issues: Vec<SentinelIssue>,
 }
 
+/// A turn's repeated tool: (bot id, turn, retry-loop signature).
+type TurnTool = (String, i64, String);
+/// One call of it: (tool key, title, updated at, entry id).
+type ToolCall = (String, String, i64, String);
+
 /// Scans `db_path` in strictly read-only WAL-compatible mode.
 pub fn scan_db_path(db_path: &Path, lookback_ms: i64) -> Result<ScanReport> {
     if !db_path.exists() {
@@ -113,7 +118,7 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
 
     let mut issues: BTreeMap<String, SentinelIssue> = BTreeMap::new();
     // Track per-(bot_id, turn, tool_sig) count to detect retry loops within a single turn.
-    let mut turn_tool_calls: BTreeMap<(String, i64, String), Vec<(String, String, i64, String)>> = BTreeMap::new();
+    let mut turn_tool_calls: BTreeMap<TurnTool, Vec<ToolCall>> = BTreeMap::new();
     let mut entries_examined = 0usize;
 
     for row in rows {
@@ -180,25 +185,23 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
                     }
                 }
             }
-            "user" => {
-                if row.data["status"].as_str() == Some("queued") {
-                    let wait_ms = now.saturating_sub(row.created_at);
-                    if wait_ms >= QUEUE_LAG_THRESHOLD_MS {
-                        let sig = signature::signature(IssueKind::QueueLag.as_str(), &row.bot_id);
-                        let title = format!("Message queued over {}s", QUEUE_LAG_THRESHOLD_MS / 1000);
-                        record_issue(
-                            &mut issues,
-                            sig,
-                            IssueKind::QueueLag,
-                            Severity::Medium,
-                            title,
-                            None,
-                            &row.bot_id,
-                            row.created_at,
-                            &row.id,
-                            false,
-                        );
-                    }
+            "user" if row.data["status"].as_str() == Some("queued") => {
+                let wait_ms = now.saturating_sub(row.created_at);
+                if wait_ms >= QUEUE_LAG_THRESHOLD_MS {
+                    let sig = signature::signature(IssueKind::QueueLag.as_str(), &row.bot_id);
+                    let title = format!("Message queued over {}s", QUEUE_LAG_THRESHOLD_MS / 1000);
+                    record_issue(
+                        &mut issues,
+                        sig,
+                        IssueKind::QueueLag,
+                        Severity::Medium,
+                        title,
+                        None,
+                        &row.bot_id,
+                        row.created_at,
+                        &row.id,
+                        false,
+                    );
                 }
             }
             _ => {}
@@ -286,7 +289,7 @@ fn record_issue(
     }
     if at >= entry.last_seen_at {
         entry.last_seen_at = at;
-        entry.evidence_entry_id = entry_id.to_owned();
+        entry_id.clone_into(&mut entry.evidence_entry_id);
     }
 }
 

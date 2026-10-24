@@ -57,12 +57,12 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
     let cancellation = Arc::new(Cancellation::default());
     let mut tasks = Tasks::default();
     let (reply_tx, mut reply_rx) = mpsc::channel::<Value>(16);
-    let observer = observed.clone();
+    let seen = observed.clone();
     let writer_cancel = cancellation.clone();
     let writer = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
         while let Some(reply) = reply_rx.recv().await {
-            observer.observe(&reply).await;
+            seen.observe(&reply).await;
             writer_cancel.finish(&reply["id"]);
             let mut line = serde_json::to_vec(&reply)?;
             line.push(b'\n');
@@ -94,10 +94,10 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
         while let Ok(Some(message)) = read_value(&mut lines, 128 * 1024).await {
             cancelled.observe(&message);
             if message["method"] == "ping" {
-                if !message["id"].is_null() {
-                    if immediate.try_send(json!({"jsonrpc":"2.0","id":message["id"],"result":{}})).is_err() {
-                        break;
-                    }
+                if !message["id"].is_null()
+                    && immediate.try_send(json!({"jsonrpc":"2.0","id":message["id"],"result":{}})).is_err()
+                {
+                    break;
                 }
                 continue;
             }
@@ -149,12 +149,12 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
             break;
         }
         if let Some(approval) = approval {
-            let observer = observed.clone();
+            let watched = observed.clone();
             let input = input.clone();
             let token = token.clone();
             let cancelled = cancellation.clone();
             let monitor = tokio::spawn(async move {
-                while observer.pending(&id) {
+                while watched.pending(&id) {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     if cancelled.cancelled(&id) || policy::check(port, &token, Some(&approval)).await.is_err() {
                         let notification = json!({"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":id,"reason":"Authorization revoked or caller cancelled"}});
@@ -175,14 +175,14 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
     let _ = reader.await;
     drop(input);
     drop(child);
-    match tokio::time::timeout(std::time::Duration::from_secs(5), upstream).await {
-        Ok(Ok(Ok(()))) => {}
-        _ => tracing::debug!("connector output stopped before it could be fully drained"),
+    if let Ok(Ok(Ok(()))) = tokio::time::timeout(std::time::Duration::from_secs(5), upstream).await {
+    } else {
+        tracing::debug!("connector output stopped before it could be fully drained")
     }
     drop(reply_tx);
-    match tokio::time::timeout(std::time::Duration::from_secs(35), writer).await {
-        Ok(Ok(Ok(()))) => {}
-        _ => tracing::warn!("MCP replies did not finish draining; missing receipts have an unknown outcome"),
+    if let Ok(Ok(Ok(()))) = tokio::time::timeout(std::time::Duration::from_secs(35), writer).await {
+    } else {
+        tracing::warn!("MCP replies did not finish draining; missing receipts have an unknown outcome")
     }
     if let Some(error) = failure {
         return Err(error);

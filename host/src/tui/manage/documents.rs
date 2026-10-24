@@ -76,6 +76,7 @@ impl DocumentDraft {
     }
 }
 
+#[allow(clippy::struct_excessive_bools, reason = "independent UI flags, not a state machine")]
 pub struct DocumentSheet {
     pub bot: String,
     pub scope: String,
@@ -323,7 +324,7 @@ impl App {
             KeyCode::Down | KeyCode::Char('j') => sheet.cursor = (sheet.cursor + 1).min(rows.saturating_sub(1)),
             KeyCode::Up | KeyCode::Char('k') => sheet.cursor = sheet.cursor.saturating_sub(1),
             KeyCode::Char('/') if sheet.tab == 0 => sheet.mode = DocumentMode::Search,
-            KeyCode::Char('n') if sheet.tab == 0 && !sheet.busy => self.new_document(&mut sheet, None),
+            KeyCode::Char('n') if sheet.tab == 0 && !sheet.busy => Self::new_document(&mut sheet, None),
             KeyCode::Char('r') => {
                 self.fetch_documents(&mut sheet, false);
                 self.fetch_document_extras(&mut sheet);
@@ -340,7 +341,7 @@ impl App {
         Some(Overlay::Documents(sheet))
     }
 
-    fn new_document(&self, sheet: &mut DocumentSheet, parent: Option<String>) {
+    fn new_document(sheet: &mut DocumentSheet, parent: Option<String>) {
         sheet.generation += 1;
         sheet.draft = Some(DocumentDraft {
             id: None,
@@ -365,8 +366,7 @@ impl App {
                 .cursor
                 .checked_sub(1)
                 .and_then(|index| sheet.items.get(index))
-                .map(|item| item["id"].clone())
-                .unwrap_or(Value::Null);
+                .map_or(Value::Null, |item| item["id"].clone());
             if let Some(draft) = &sheet.draft {
                 self.document_call(
                     "moveDocument",

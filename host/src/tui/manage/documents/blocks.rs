@@ -43,7 +43,7 @@ pub(super) fn complete(editor: &mut Editor) -> bool {
         match fence {
             None => fence = Some((marker, size)),
             Some((previous, length)) if marker == previous && size >= length && trimmed[size..].trim().is_empty() => {
-                fence = None
+                fence = None;
             }
             _ => {}
         }
