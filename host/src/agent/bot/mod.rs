@@ -21,6 +21,7 @@ mod files;
 mod launch;
 mod lifecycle;
 mod queue;
+mod results;
 mod session;
 mod stall;
 mod turn;
@@ -28,6 +29,7 @@ mod updates;
 mod watchdog;
 
 pub(crate) use launch::{launch_commands, select_model, start_agent, system_prompt};
+pub(crate) use results::recover_results;
 pub(crate) use updates::diff_summary;
 
 use crate::agent::acp::{self, Acp, Incoming};

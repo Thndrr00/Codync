@@ -93,6 +93,16 @@ impl App {
     }
 
     pub(super) fn answer(&mut self, entry: &str, option: &str) {
+        if option == "approve"
+            && self
+                .entries
+                .values()
+                .flat_map(|items| items.values())
+                .any(|item| item.id == entry && item.data["mcpToolCallId"].is_string())
+        {
+            self.flash("Review the complete MCP arguments in the desktop or Android app before approving");
+            return;
+        }
         // One answer per card: while it is on its way, the card spins and takes no other.
         if self.answering.contains_key(entry) {
             return;
@@ -134,7 +144,9 @@ impl App {
         let picks: Vec<(String, bool)> = group(&id, &lane, self.thread.is_none())
             .into_iter()
             .filter_map(|item| match item {
-                Item::Entry(e) if e.is_message() || e.is_bot_message() || e.unfolds() => {
+                Item::Entry(e)
+                    if e.is_message() || e.is_bot_message() || e.unfolds() || e.data["source"] == "voice_receipt" =>
+                {
                     Some((e.id.clone(), e.is_message()))
                 }
                 Item::Group(g) => Some((g.first.id.clone(), false)),
@@ -198,6 +210,12 @@ impl App {
                     self.overlays.push(super::Overlay::Fields(Box::new(crate::tui::manage::handoff_fields(&e))));
                 }
             }
+            KeyCode::Char('v') if picked.as_ref().is_some_and(|e| e.data["source"] == "voice_receipt") => {
+                if let Some(e) = picked {
+                    self.overlays
+                        .push(super::Overlay::Fields(Box::new(crate::tui::manage::voice_decision_fields(&id, &e.id))));
+                }
+            }
             KeyCode::Char('K') if picked.as_ref().is_some_and(|e| e.data["handoff"]["status"] == "draft") => {
                 if let Some(e) = picked {
                     self.call("keepConversation", json!({"entryId": e.id}), After::Answered(e.id.clone()));
@@ -235,7 +253,7 @@ impl App {
         true
     }
 
-    pub(super) fn open_thread(&mut self, root: String) {
+    pub(in crate::tui) fn open_thread(&mut self, root: String) {
         let Some(id) = self.selected.clone() else { return };
         self.pick = None;
         self.chat_scroll = 0;

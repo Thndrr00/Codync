@@ -78,7 +78,8 @@ impl Routines {
             prepared.lane.thread.as_deref().context("missing routine thread")?,
             &Lane::main(bot),
             EntryKind::Notice,
-            &json!({"text":format!("Routine · {name}"),"routineId":routine_id,"runId":id,"style":"info"}),
+            &json!({"text":format!("Routine · {name}"),"routineId":routine_id,"runId":id,"style":"info",
+                "source":"scheduled_task","scheduledMessage":{"version":1,"runId":id,"phase":"started"}}),
         )?;
         Ok(Some(prepared))
     }
@@ -156,7 +157,7 @@ impl Routines {
     fn publish(&self, hub: &Hub) -> Result<()> {
         let pending: Vec<_> = self.state.locked().runs.iter().filter(|r| r.report_pending).cloned().collect();
         for run in pending {
-            let (kind, data) = if let Some(text) = &run.result {
+            let (kind, mut data) = if let Some(text) = &run.result {
                 (EntryKind::Agent, json!({"text":text,"final":true,"routineId":run.routine_id,"runId":run.id}))
             } else {
                 (
@@ -164,6 +165,8 @@ impl Routines {
                     json!({"text":format!("Routine could not finish: {}",run.detail.as_deref().unwrap_or("inspect its run history")),"style":"error","routineId":run.routine_id,"runId":run.id}),
                 )
             };
+            data["source"] = "scheduled_task".into();
+            data["scheduledMessage"] = json!({"version":1,"runId":run.id,"phase":"result"});
             let (_, added) =
                 hub.add_entry_once(&format!("routine-result-{}", run.id), &Lane::main(&run.bot_id), kind, &data)?;
             self.change(&hub.store, |s| {

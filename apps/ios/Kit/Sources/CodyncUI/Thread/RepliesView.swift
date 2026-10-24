@@ -15,16 +15,18 @@ struct RepliesView: View {
 
     var chat: Bot? { model.bots[botId] }
     var root: Entry? { model.allEntries(botId).first { $0.id == rootId } }
+    private var isDocumentConversation: Bool { rootId.hasPrefix("doc:") }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Thread").font(.body.weight(.semibold)).foregroundStyle(Palette.text)
+                    Text(isDocumentConversation ? "Document conversation" : "Thread")
+                        .font(.body.weight(.semibold)).foregroundStyle(Palette.text)
                     Text(chat?.name ?? "").font(.caption).foregroundStyle(Palette.tertiary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                IconButton("Close thread", systemImage: "xmark", action: close)
+                IconButton(isDocumentConversation ? "Close document conversation" : "Close thread", systemImage: "xmark", action: close)
                     .keyboardShortcut(.cancelAction)
             }
             .padding(.leading, 20)

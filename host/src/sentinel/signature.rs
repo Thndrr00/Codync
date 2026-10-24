@@ -39,7 +39,7 @@ pub fn normalize(text: &str) -> String {
 /// A short, stable id for one kind of failure: `<kind>:<16 hex digits>`.
 pub fn signature(kind: &str, normalized: &str) -> String {
     let digest = Sha256::digest(format!("{kind}\n{normalized}").as_bytes());
-    let hex: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    let hex = crate::chat::files::digest_hex(&digest[..8]);
     format!("{kind}:{hex}")
 }
 

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "apps/desktop/src/renderer/views/chat-window.css"
+        ],
+        "createdAt": "2026-10-24T06:54:39.495Z",
+        "reason": "Agent reviewed: existing width/padding transitions remain for other platforms; Windows-specific overrides use no width transition and only opacity/transform on the header. Production CSS verified in Chrome by tools/verify-sidebar-motion.mjs. User excludes macOS changes, so preserve its existing behavior."
+      }
+    ]
+  }
+}

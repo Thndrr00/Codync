@@ -1,10 +1,9 @@
 //! Bot-Box process sandboxing (`host/src/agent/sandbox/`).
 //!
 //! Provides cross-platform isolation plans (`plan`), Linux Bubblewrap + Seccomp (`linux_bwrap`),
-//! macOS Seatbelt (`macos_sandbox`), Windows containment (`windows_appcontainer`), and outbound
-//! domain filtering (`egress`).
+//! macOS Seatbelt (`macos_sandbox`), Windows containment (`windows_appcontainer`); outbound traffic
+//! goes through `crate::egress`.
 
-pub mod egress;
 pub mod linux_bwrap;
 pub mod macos_sandbox;
 pub mod plan;
@@ -26,10 +25,7 @@ mod tests {
         );
         let args = linux_bwrap::bwrap_args(&plan, Some(Path::new("/home/user")));
         let joined = args.join(" ");
-        assert!(
-            joined.contains("--tmpfs /home/user/.codync"),
-            "host data dir must be masked with tmpfs: {joined}"
-        );
+        assert!(joined.contains("--tmpfs /home/user/.codync"), "host data dir must be masked with tmpfs: {joined}");
         assert!(
             joined.contains("--bind /home/user/.codync/workspaces/bot-1 /home/user/.codync/workspaces/bot-1"),
             "bot workspace must be mounted back after tmpfs: {joined}"
@@ -41,11 +37,7 @@ mod tests {
 
     #[test]
     fn workspace_boundary_rejects_parent_traversal_and_host_db() {
-        let plan = SandboxPlan::new(
-            "bot-1",
-            PathBuf::from("/work/bot-1"),
-            PathBuf::from("/home/user/.codync"),
-        );
+        let plan = SandboxPlan::new("bot-1", PathBuf::from("/work/bot-1"), PathBuf::from("/home/user/.codync"));
         assert!(plan.is_within_workspace(Path::new("src/main.rs")));
         assert!(plan.is_within_workspace(Path::new("a/b/../c.rs")));
         assert!(!plan.is_within_workspace(Path::new("../other-bot/secret.txt")));
@@ -54,16 +46,9 @@ mod tests {
     }
 
     #[test]
-    fn seccomp_program_blocks_dangerous_syscalls_and_egress_blocks_loopback() {
+    fn seccomp_program_blocks_dangerous_syscalls() {
         let bytes = linux_bwrap::seccomp_bytes();
         assert_eq!(bytes.len(), (linux_bwrap::DENIED_SYSCALLS.len() + 6) * 8);
-        let allowed = vec!["api.anthropic.com".into(), "*.github.com".into()];
-        assert!(egress::is_egress_allowed("api.anthropic.com:443", &allowed));
-        assert!(egress::is_egress_allowed("codeload.github.com", &allowed));
-        assert!(!egress::is_egress_allowed("127.0.0.1:19222", &allowed));
-        assert!(!egress::is_egress_allowed("localhost:19222", &allowed));
-        assert!(!egress::is_egress_allowed("192.168.1.10", &allowed));
-        assert!(!egress::is_egress_allowed("evil.example.com", &allowed));
     }
 
     #[test]
@@ -79,9 +64,8 @@ mod tests {
         let env_vars = windows_appcontainer::restricted_env_overrides(&plan);
         assert!(env_vars.iter().any(|(k, _)| k == "CODYNC_HOME"));
         let mut gated = plan.clone();
-        gated.network_mode = plan::NetworkIsolationMode::LoopbackOnlyWithGate {
-            egress_socket: PathBuf::from("/tmp/egress.sock"),
-        };
+        gated.network_mode =
+            plan::NetworkIsolationMode::LoopbackOnlyWithGate { egress_socket: PathBuf::from("/tmp/egress.sock") };
         assert_ne!(gated.network_mode, plan::NetworkIsolationMode::Disabled);
     }
 }

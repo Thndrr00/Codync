@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isWorkingIn } from '@shared/models'
-import { Hairline } from '../../components/Controls'
+import { Button, Hairline } from '../../components/Controls'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { HStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
@@ -17,7 +17,8 @@ import { useReading } from './reading'
  * continue there. In a bot's own chat the thread is a separate branch of the conversation (its
  * own session, forked from the chat); in a group the room answers inside the thread.
  */
-export function RepliesView({ botId, rootId, close }: { botId: string; rootId: string; close: () => void }) {
+export function RepliesView({ botId, rootId, close, documentTitle }: { botId: string; rootId: string; close: () => void; documentTitle?: string }) {
+  const documentConversation = rootId.startsWith('doc:')
   const store = useStore()
   const chat = store.bots.get(botId) ?? null
   const root = store.allEntries(botId).find((e) => e.id === rootId)
@@ -26,12 +27,20 @@ export function RepliesView({ botId, rootId, close }: { botId: string; rootId: s
   const items = buildChat(replies)
   const arrivals = useArrivals([...items.map((i) => i.id), ...(live ? ['working'] : [])], true)
   const [showTrace, setShowTrace] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const scroller = useRef<HTMLDivElement>(null)
   useReading(store, botId, rootId)
 
   useEffect(() => {
-    void store.loadThread(botId, rootId)
-  }, [store, botId, rootId])
+    let active = true
+    setLoading(true); setLoadError(null)
+    void store.loadThread(botId, rootId).catch((error: unknown) => {
+      if (active) setLoadError(error instanceof Error ? error.message : String(error))
+    }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [store, botId, rootId, store.connection.kind, retry])
 
   useLayoutEffect(() => {
     const el = scroller.current
@@ -41,10 +50,14 @@ export function RepliesView({ botId, rootId, close }: { botId: string; rootId: s
   const openTrace = () => setShowTrace(true)
   return (
     <SheetPage>
-      <ModalHeader title="Thread" subtitle={chat?.name ?? ''} onClose={close} closeTitle="Close thread" />
+      <ModalHeader title={documentConversation ? 'Document conversation' : 'Thread'} subtitle={documentConversation ? [documentTitle, chat?.name].filter(Boolean).join(' · ') : chat?.name ?? ''} onClose={close}
+        closeTitle={documentConversation ? 'Close document conversation' : 'Close thread'} />
       <div className="thread-hairline" />
       <div ref={scroller} className="thread-scroll">
         <div className="replies-content">
+          {loading && <Text as="div" tone="secondary" role="status">Loading conversation…</Text>}
+          {loadError && <div role="alert"><Text as="div" tone="danger">{loadError}</Text><Button kind="secondary" onClick={() => setRetry((n) => n + 1)}>Retry loading conversation</Button></div>}
+          {documentConversation && !loading && !loadError && !items.length && !live && <Text as="div" tone="secondary">Ask this bot about the saved document. This page has its own conversation.</Text>}
           {root ? (
             <>
               <ChatRow entry={root} groupStart chat={chat} openTrace={openTrace} />

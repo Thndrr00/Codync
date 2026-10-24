@@ -1,4 +1,4 @@
-//! Passkey and security-key wall detection (OpenMausBot `shared/passkey-wall.ts`
+//! Passkey and security-key wall detection (`OpenMausBot` `shared/passkey-wall.ts`
 //! and `server/browser/passkey-notice.ts`).
 //!
 //! Detects when a sign-in step stops at a passkey or security key challenge
@@ -49,8 +49,7 @@ fn is_google_challenge_path(path: &str) -> bool {
 }
 
 fn is_version_segment(seg: &str) -> bool {
-    seg.strip_prefix('v')
-        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+    seg.strip_prefix('v').is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Detects if a URL corresponds to Google's passkey (`pk`) or security key (`sk`) challenge.
@@ -70,9 +69,8 @@ pub fn passkey_wall_in(text: &str) -> Option<PasskeyWall> {
     let mut rest = text;
     while let Some(pos) = rest.find(needle) {
         let after = &rest[pos + "https://accounts.google.com".len()..];
-        let end = after
-            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '?' | '#' | ')'))
-            .unwrap_or(after.len());
+        let end =
+            after.find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '?' | '#' | ')')).unwrap_or(after.len());
         if is_google_challenge_path(&after[..end]) {
             return Some(PasskeyWall::Google);
         }
@@ -85,9 +83,8 @@ pub fn passkey_wall_in(text: &str) -> Option<PasskeyWall> {
         return Some(PasskeyWall::Google);
     }
 
-    let has_ms_page = text.contains("Microsoft")
-        || lower.contains("login.microsoftonline.com")
-        || lower.contains("login.live.com");
+    let has_ms_page =
+        text.contains("Microsoft") || lower.contains("login.microsoftonline.com") || lower.contains("login.live.com");
     if has_ms_page && has_microsoft_words(&lower) {
         return Some(PasskeyWall::Microsoft);
     }
@@ -132,11 +129,7 @@ fn has_microsoft_words(lower: &str) -> bool {
 pub fn passkey_notice(wall: PasskeyWall, place: BrowserPlace) -> String {
     let (name, apps, other_way) = match wall {
         PasskeyWall::Google => ("Google", "Gmail, Calendar or Drive", "Try another way"),
-        PasskeyWall::Microsoft => (
-            "Microsoft",
-            "Outlook, Calendar, OneDrive or Teams",
-            "Other ways to sign in",
-        ),
+        PasskeyWall::Microsoft => ("Microsoft", "Outlook, Calendar, OneDrive or Teams", "Other ways to sign in"),
     };
     let mut msg = format!(
         "Passkey step, from Codync: this {name} account wants a passkey or security key, which lives on the person's own phone or computer. \
@@ -166,10 +159,7 @@ mod tests {
             passkey_wall_at("https://accounts.google.com/signin/v2/challenge/sk/presend"),
             Some(PasskeyWall::Google)
         );
-        assert_eq!(
-            passkey_wall_at("https://accounts.google.com/v3/signin/challenge/pwd"),
-            None
-        );
+        assert_eq!(passkey_wall_at("https://accounts.google.com/v3/signin/challenge/pwd"), None);
     }
 
     #[test]

@@ -286,7 +286,9 @@ impl Store {
             let c = self.db.locked();
             let mut st = c.prepare(
                 "SELECT id FROM entries WHERE (kind = 'permission' AND json_extract(data, '$.status') = 'pending')
-                  OR (kind = 'user' AND json_extract(data, '$.status') = 'queued')
+                  OR (kind = 'user' AND json_extract(data, '$.status') = 'queued'
+                      AND NOT (COALESCE(json_extract(data,'$.source'),'')='slack'
+                          AND EXISTS(SELECT 1 FROM slack_inbox s WHERE s.entry_id=entries.id AND s.state='queued')))
                   OR (kind = 'notice' AND json_extract(data, '$.delegationId') IS NOT NULL
                       AND json_extract(data, '$.status') IN ('queued', 'sent'))",
             )?;

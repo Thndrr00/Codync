@@ -18,6 +18,7 @@ import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { HandoffNotice } from './HandoffNotice'
+import { VoiceReceipt } from './VoiceReceipt'
 
 export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
   return { emoji: QUICK_REACTIONS, chosen: entry.data.reactions ?? [], toggle: (e) => store.react(entry, e) }
@@ -295,6 +296,7 @@ export function AgentBubble({ entry, openTrace, reply }: { entry: Entry; openTra
 }
 
 export function NoticeRow({ entry }: { entry: Entry }) {
+  if (window.codync.platform === 'win32' && entry.data.source === 'voice_receipt') return <VoiceReceipt entry={entry} />
   const text = entry.data.text ?? ''
   if (entry.data.callSeconds !== undefined) {
     const s = entry.data.callSeconds

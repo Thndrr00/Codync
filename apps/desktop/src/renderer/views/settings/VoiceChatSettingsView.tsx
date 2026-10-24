@@ -11,6 +11,7 @@ import { useStore } from '../../store/context'
 import { errorText, liveClient, Reveal } from './parts'
 import * as voice from './voice-settings'
 import type { VoiceModels, VoiceProvider } from './voice-settings'
+import { SwitchRow } from '../bots/parts'
 
 /**
  * Voice chat settings: which voice carries calls (on-device speech, or OpenAI / Gemini on the
@@ -21,6 +22,7 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
   const [engine, setEngine] = usePref(voice.engine)
   const [rate, setRate] = usePref(voice.rate)
   const [language, setLanguage] = usePref(voice.language)
+  const [captureTranscript, setCaptureTranscript] = usePref(voice.captureTranscript)
   const languages = useMemo(() => voice.languageOptions(window.codync.speech.locales()), [])
   const provider = voice.isVoiceProvider(engine) ? engine : null
   const [mode, setMode] = usePref(voice.mode(provider ?? 'openai'))
@@ -66,6 +68,9 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
             ]}
           </CardSection>
           {provider ? <ProviderVoiceSettings key={provider} provider={provider} /> : null}
+          {window.codync.platform === 'win32' ? <CardSection title="Call receipts" footer="Applies to the next call. Text is stored with this bot on the host. Realtime transcription can add provider charges. Text may be incomplete and does not confirm playback or decisions.">
+            <SwitchRow title="Save call transcripts" on={captureTranscript} onChange={setCaptureTranscript} />
+          </CardSection> : null}
         </CardForm>
       </div>
     </SheetPage>

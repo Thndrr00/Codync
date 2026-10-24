@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
     val choices = remember { store.voiceChoices() }
     var engine by remember { mutableStateOf(choices.provider) }
     var settings by remember { mutableStateOf(VoicePreferences.load(context)) }
+    var transcripts by remember { mutableStateOf(VoicePreferences.transcripts(context)) }
     fun change(next: VoiceSettings) { settings = next; store.voiceSettings(next) }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         ModalHeader("Voice chat")
@@ -59,6 +60,9 @@ import kotlinx.coroutines.launch
                 }
             }
             if (provider != null) key(provider) { ProviderVoiceSettings(provider, speech, state, store, choices) }
+            CardSection("Call receipts", "Applies to the next call. Text is stored with this bot on the host. Realtime transcription can add provider charges. Text may be incomplete and does not confirm playback or decisions.") {
+                row { SwitchRow("Save call transcripts", null, transcripts, { transcripts = it; VoicePreferences.transcripts(context, it) }) }
+            }
         }
     }
 }

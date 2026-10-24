@@ -21,6 +21,7 @@ import { OnDeviceEngine } from './OnDeviceEngine'
 import { OpenAIRealtimeEngine } from './OpenAIRealtimeEngine'
 import { countVoiceUsage, fromBase64, onDeviceAvailable, onDeviceUnavailableReason, providerName, toBase64, VoiceEngine, VoiceSettings, type VoiceProvider, type VoiceStatus } from './voice'
 import { watchVoiceCall } from './voice-call'
+import { CallTranscript } from '../../lib/voice-transcript'
 import './call.css'
 
 /**
@@ -47,6 +48,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
   /** When the current cloud engine started, for this month's minutes. */
   const cloudStartedAt = useRef<number | null>(null)
   const closed = useRef(false)
+  const transcript = useRef<CallTranscript | null>(null)
   const bot = store.bots.get(botId)
   const color = bot ? avatarColor(bot.avatarColor) : null
 
@@ -106,6 +108,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
         stopWatching = null
       }
     }
+    next.transcript = transcript.current
     engine.current = next
     setSession(next)
     void next.start()
@@ -135,6 +138,8 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
 
   useEffect(() => {
     const startedAt = Date.now()
+    const callId = crypto.randomUUID()
+    transcript.current = VoiceSettings.captureTranscript() ? new CallTranscript() : null
     begin(VoiceSettings.provider())
     return () => {
       closed.current = true
@@ -142,7 +147,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
       countCloudMinutes()
       onSpeaking(false)
       interrupt.current = null
-      store.logCall(botId, Math.floor((Date.now() - startedAt) / 1000))
+      store.logCall(botId, Math.floor((Date.now() - startedAt) / 1000), callId, transcript.current?.snapshot())
     }
   }, [])
 

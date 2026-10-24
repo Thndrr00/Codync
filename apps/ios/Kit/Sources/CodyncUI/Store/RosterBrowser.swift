@@ -4,9 +4,16 @@ import Observation
 
 @MainActor @Observable public final class RosterBrowser {
     public struct Match: Identifiable {
-        public var id: String { "\(store.computer.id):\(hit.id)" }
+        /// Fixed when the match is made: `store.computer` lives on the main actor.
+        public let id: String
         public let store: BotStore
         public let hit: RosterSearchHit
+
+        @MainActor init(store: BotStore, hit: RosterSearchHit) {
+            self.id = "\(store.computer.id):\(hit.id)"
+            self.store = store
+            self.hit = hit
+        }
     }
 
     public private(set) var matches: [Match] = []

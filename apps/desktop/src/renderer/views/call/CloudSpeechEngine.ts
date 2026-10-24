@@ -108,6 +108,7 @@ export class CloudSpeechEngine extends VoiceEngine {
 
   interrupt() {
     if (this.phase !== 'speaking') return
+    this.transcript?.interrupted()
     this.stopSpeaking()
     this.setPhase('listening')
   }
@@ -154,7 +155,10 @@ export class CloudSpeechEngine extends VoiceEngine {
     this.transcribing = this.transcribing.then(async () => {
       try {
         const text = (await this.speech.transcribe(audio)).trim()
-        if (!this.ended && text) this.speech.send(text)
+        if (!this.ended && text) {
+          this.transcript?.add('user', 'recognized', text)
+          this.speech.send(text)
+        }
       } catch (e) {
         console.error('transcribe:', errorMessage(e))
         if (!this.ended) this.fail(errorMessage(e))
@@ -178,6 +182,7 @@ export class CloudSpeechEngine extends VoiceEngine {
   /** Queues text in clips the provider can turn into one channel message each. */
   private say(text: string) {
     if (this.ended || this.phase === 'failed' || this.phase === 'starting' || !text) return
+    this.transcript?.add('assistant', 'queued', text)
     this.queue.push(...clips(text, this.chunk))
     if (!this.player && !this.next) this.playNext()
   }

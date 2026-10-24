@@ -127,7 +127,7 @@ fn list(hub: &Hub, source: &BotConfig) -> Result<Value> {
         .filter(|r| !r.deleted && !r.config.hidden && r.config.id != source.id)
         .map(|r| {
             let b = &r.config;
-            let version = history::list(&hub.store, b).map(|v| v["current"].clone()).unwrap_or(Value::Null);
+            let version = history::list(&hub.store, b).map_or(Value::Null, |v| v["current"].clone());
             json!({"id": b.id, "name": b.name, "kind": b.kind, "members": b.members, "backend": b.backend,
                 "model": b.model, "description": b.description, "instructionsVersion": version,
                 "createdByYou": b.created_by.as_deref() == Some(source.id.as_str())})

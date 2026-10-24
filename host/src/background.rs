@@ -10,6 +10,7 @@ use crate::{
 use std::sync::Arc;
 
 pub fn start(hub: &Arc<Hub>) {
+    tokio::spawn(crate::slack::run(hub.clone()));
     tokio::spawn(registry::refresh_loop());
     tokio::spawn(market::refresh_first_page());
     tokio::spawn(market::automatic_loop(hub.clone()));

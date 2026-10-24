@@ -64,7 +64,20 @@ impl Store {
         let rev = next_rev(&c)?;
         c.execute("UPDATE bots SET rev = ?2, deleted = 1, session_id = NULL WHERE id = ?1", params![id, rev])?;
         c.execute("DELETE FROM kv WHERE k IN (SELECT 'read.' || id FROM entries WHERE bot_id = ?1)", [id])?;
+        c.execute("DELETE FROM slack_outbox WHERE entry_id IN (SELECT id FROM entries WHERE bot_id=?1)", [id])?;
+        c.execute("DELETE FROM slack_inbox WHERE bot_id=?1", [id])?;
+        c.execute("DELETE FROM slack_threads WHERE bot_id=?1", [id])?;
+        c.execute("DELETE FROM research_packets WHERE bot_id=?1", [id])?;
+        c.execute(
+            "DELETE FROM kv WHERE k IN (?1,?2)",
+            params![format!("turn.sources.{id}"), format!("turn.inflight.{id}")],
+        )?;
         c.execute("DELETE FROM entries WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM computer_activity WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM pending_tool_calls WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM document_reviews WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM document_creations WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM documents WHERE bot_id = ?1", [id])?;
         codync_mem::store::drop_bot(&c, id)?;
         // Its dreaming bookmark, notices' revisions and the record of its moved memory.
         c.execute("DELETE FROM kv WHERE k GLOB ?1", [format!("memory.*{id}*")])?;
@@ -243,6 +256,7 @@ mod tests {
             approval_rules: vec![],
             fleet_management: false,
             created_by: None,
+            computer_permissions: crate::computer::Permissions::default(),
             shared_memory: None,
             harness_memory: false,
             auto_name: false,

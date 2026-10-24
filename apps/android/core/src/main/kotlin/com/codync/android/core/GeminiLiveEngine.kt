@@ -52,6 +52,7 @@ class GeminiLiveEngine(parent: CoroutineScope, settings: VoiceSettings, private 
     }
     override fun interrupt() = hop {
         if (phase != VoicePhase.Speaking) return@hop
+        transcript?.interrupted()
         stopPlayback(); dropping = !turnDone; phase(VoicePhase.Listening)
     }
     override fun focus(active: Boolean) = hop {
@@ -88,6 +89,10 @@ class GeminiLiveEngine(parent: CoroutineScope, settings: VoiceSettings, private 
     private fun setup() = buildJsonObject {
         putJsonObject("setup") {
             put("model", "models/$model")
+            if (transcript != null) {
+                putJsonObject("inputAudioTranscription") { }
+                putJsonObject("outputAudioTranscription") { }
+            }
             putJsonObject("generationConfig") {
                 putJsonArray("responseModalities") { add("AUDIO") }
                 putJsonObject("speechConfig") { putJsonObject("voiceConfig") { putJsonObject("prebuiltVoiceConfig") { put("voiceName", voice) } } }
@@ -114,6 +119,7 @@ class GeminiLiveEngine(parent: CoroutineScope, settings: VoiceSettings, private 
             flush()
         }
         message.objectAt("serverContent")?.let { content ->
+            transcript?.gemini(content)
             if (content.flag("interrupted")) {
                 stopPlayback(); dropping = false
                 if (phase == VoicePhase.Speaking) phase(VoicePhase.Listening)

@@ -1,4 +1,5 @@
 import { Observable } from '../../lib/observable'
+import type { CallTranscript } from '../../lib/voice-transcript'
 import {
   addVoiceUsage,
   chosenModel,
@@ -9,6 +10,7 @@ import {
   mode,
   pause,
   rate,
+  captureTranscript,
   rememberStatus,
   voiceInfo,
   type VoiceProvider,
@@ -31,6 +33,7 @@ export const onDeviceUnavailableReason = () =>
     : `On-device speech isn't available on ${window.codync.platform === 'win32' ? 'Windows' : 'Linux'}.`
 
 export const VoiceSettings = {
+  captureTranscript: () => window.codync.platform === 'win32' && captureTranscript.get() === true,
   /** The provider picked in the call settings; null for on-device. */
   provider: (): VoiceProvider | null => {
     const value = engine.get()
@@ -69,6 +72,7 @@ export abstract class VoiceEngine extends Observable {
   abstract readonly provider: VoiceProvider | null
   /** Keeps the call subscribed to replies while audio is active. */
   onActivityChanged: ((active: boolean) => void) | null = null
+  transcript: CallTranscript | null = null
   protected ended = false
   private mutedValue = false
 

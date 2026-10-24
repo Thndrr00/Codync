@@ -55,6 +55,7 @@ export const configured = (s: VoiceStatus, p: VoiceProvider) => s.providers.some
 
 /** `device` (on-device speech) or a provider. */
 export const engine = pref('callEngine', 'device')
+export const captureTranscript = pref('callTranscript', false)
 /** On-device reading speed (AVSpeechUtterance's scale: 0.5 is normal). */
 export const DEFAULT_RATE = 0.5
 export const rate = pref('callRate', DEFAULT_RATE)

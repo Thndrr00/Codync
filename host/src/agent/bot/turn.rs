@@ -32,6 +32,9 @@ impl Actor {
         let fresh = matches!(snapshot.prelude, Some(context::Prelude::New | context::Prelude::UnpromptedFork));
         let remind_files = !snapshot.system.contains("send_file");
         let mut prompt = text.to_owned();
+        if let Some(document) = crate::documents::context(&self.hub, &self.lane.chat, self.lane.thread.as_deref())? {
+            prompt = format!("{document}\n\n{prompt}");
+        }
         if let Some(handoff) = self.handoff.take() {
             prompt = format!("{handoff}\n\n{prompt}");
         }
@@ -298,11 +301,13 @@ impl Actor {
             Err(_) => "error".into(),
         };
         let stalled = self.loop_guard.tripped().map(str::to_owned);
+        let mut awaiting_sign_in = false;
         match (&done, stop_reason.as_str()) {
             _ if stalled.is_some() => self.notice(stalled.as_deref().unwrap_or_default(), NoticeStyle::Error),
             (Err(e), _) if !self.stop_requested => {
                 let tail = self.exit_tail.take().filter(|t| !t.is_empty());
-                if !self.invite_sign_in(e) {
+                awaiting_sign_in = self.invite_sign_in(e);
+                if !awaiting_sign_in {
                     let detail = tail.map(|t| format!("\n\n{}", acp::truncate(&t, 1200))).unwrap_or_default();
                     self.notice(&format!("The agent failed: {e}{detail}"), NoticeStyle::Error);
                 }
@@ -315,6 +320,28 @@ impl Actor {
         }
         let failure = done.as_ref().err().filter(|_| !self.stop_requested);
         let failed = failure.is_some();
+        let completion = if awaiting_sign_in {
+            "waitingForSignIn"
+        } else if stopped {
+            "stopped"
+        } else if failed {
+            "failed"
+        } else if stop_reason == "end_turn" {
+            "done"
+        } else {
+            "incomplete"
+        };
+        self.record_user_result(completion, final_text.as_deref(), &stop_reason);
+        if !grouped && !delegated && self.active_request.is_none() {
+            if failed {
+                analytics::setup::failed(&self.hub, false);
+            } else if !stopped
+                && stop_reason == "end_turn"
+                && final_text.as_ref().is_some_and(|text| !text.trim().is_empty())
+            {
+                analytics::setup::activated(&self.hub);
+            }
+        }
         self.report_turn(stopped, failure, &stop_reason);
         let reply = if let Some(reason) = &stalled {
             Err(anyhow!("recipient was stopped by the host: {reason}"))

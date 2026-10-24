@@ -8,11 +8,13 @@ pub mod auth;
 pub mod backends;
 pub mod bot;
 pub mod config;
+#[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod coordinator;
 pub mod envelope;
 pub mod node;
 pub mod own_memory;
 pub mod registry;
+#[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod sandbox;
 pub mod term;
 pub mod workspace;

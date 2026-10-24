@@ -1,0 +1,11 @@
+.mcp-tool-arguments {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bubble-agent);
+  color: var(--text);
+  font-family: var(--mono);
+}
