@@ -114,7 +114,7 @@ async fn resolves_exact_names_and_rejects_missing_or_ambiguous_names() {
 }
 
 #[tokio::test]
-async fn accepts_utf8_files_stdin_and_thread_replies_without_exposing_the_token() {
+async fn accepts_utf8_files_stdin_and_replies_without_exposing_the_token() {
     let host = Host::start().await;
     let bot = host.bot("Input").await;
     let file = host.home.join("message.txt");
@@ -131,10 +131,11 @@ async fn accepts_utf8_files_stdin_and_thread_replies_without_exposing_the_token(
         .to_owned();
     host.entry(&bot, |e| e["kind"] == "agent" && e["data"]["final"] == true).await;
     let result =
-        json_output(&host.run(&["--bot", &bot, "--wait", "--json", "--thread", &root, "CLI_MODE=normal"]).await, 0);
+        json_output(&host.run(&["--bot", &bot, "--wait", "--json", "--reply-to", &root, "CLI_MODE=normal"]).await, 0);
     assert_eq!(result["reply"], "CLI reply");
-    let entries = host.call("thread", json!({"botId":bot,"rootId":root})).await;
-    assert!(entries["entries"].as_array().unwrap().iter().any(|e| e["seq"] == result["entrySeq"]));
+    let history = host.call("history", json!({"botId":bot})).await;
+    let sent = history["entries"].as_array().unwrap().iter().find(|e| e["seq"] == result["entrySeq"]).cloned().unwrap();
+    assert_eq!(sent["data"]["replyTo"]["id"], root, "the message quotes the one it answers");
     let message = format!("CLI_MODE=echo\nCLI_TEXT={}", host.token);
     let output = host.run(&["--bot", &bot, "--wait", "--json", &message]).await;
     let result = json_output(&output, 0);
@@ -170,7 +171,7 @@ async fn help_arguments_and_unreachable_hosts_use_the_documented_exit_codes() {
     let help = host.run(&["--help"]).await;
     assert_eq!(help.status.code(), Some(0));
     let help = String::from_utf8(help.stdout).unwrap();
-    for flag in ["--bot", "--file", "--wait", "--timeout", "--json", "--thread", "--port", "Exit codes:"] {
+    for flag in ["--bot", "--file", "--wait", "--timeout", "--json", "--reply-to", "--port", "Exit codes:"] {
         assert!(help.contains(flag), "help must describe {flag}");
     }
     for args in [

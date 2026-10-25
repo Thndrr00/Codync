@@ -34,9 +34,9 @@ pub struct Args {
     /// Print one JSON object instead of plain text.
     #[arg(long)]
     json: bool,
-    /// Reply in the thread rooted at this entry ID.
+    /// Reply to this message of the chat (its entry ID); the bot reads it quoted.
     #[arg(long, value_name = "ENTRY-ID")]
-    thread: Option<String>,
+    reply_to: Option<String>,
     /// Local host port (development builds use their own default).
     #[arg(long, default_value_t = crate::service::DEFAULT_PORT)]
     port: u16,
@@ -141,8 +141,8 @@ async fn execute(args: &Args) -> Result<i32, Failure> {
         feed.track(&bot);
     }
     let mut body = json!({"botId": bot, "text": text, "clientNonce": uuid::Uuid::new_v4().to_string()});
-    if let Some(thread) = &args.thread {
-        body["threadId"] = thread.clone().into();
+    if let Some(reply_to) = &args.reply_to {
+        body["replyTo"] = reply_to.clone().into();
     }
     let response = api.send(body).await?;
     let entry = &response["entry"];

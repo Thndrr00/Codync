@@ -227,7 +227,7 @@ codync-host send --bot "mi-bot" "Resume el estado del proyecto"
 codync-host send --bot "mi-bot" --wait --json "Resume el estado del proyecto"
 codync-host send --bot "mi-bot" --file ".\peticion.txt" --wait --json
 "Explica los resultados" | codync-host send --bot "mi-bot" --file - --wait
-codync-host send --bot "mi-bot" --thread "ID-DE-ENTRADA-RAIZ" --wait "Continúa este hilo"
+codync-host send --bot "mi-bot" --reply-to "ID-DEL-MENSAJE" --wait "Respondiendo a ese mensaje"
 codync-host send --bot "mi-bot" --wait --timeout 120 "Analiza el fallo"
 ```
 
