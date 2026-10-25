@@ -327,8 +327,10 @@ mod tests {
     #[test]
     fn a_finished_edit_keeps_its_text_whole_for_the_chat_diff() {
         let big = "line\n".repeat(4_000);
+        // The text inside JSON: its line breaks escaped, as the agent sends them.
+        let json = big.replace('\n', "\\n");
         let raw = format!(
-            r#"{{"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{{"file_path":"a","old_string":"{big}","new_string":"{big}"}},"cwd":"{}"}}"#,
+            r#"{{"hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{{"file_path":"a","old_string":"{json}","new_string":"{json}"}},"cwd":"{}"}}"#,
             "c".repeat(5_000)
         );
         let (v, _) = forwarded(&raw, "", "");
@@ -337,7 +339,7 @@ mod tests {
         assert!(v["payload"].get("diffTruncated").is_none());
         // Before the edit happens: the ordinary cap.
         let raw =
-            format!(r#"{{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{{"old_string":"{big}"}}}}"#);
+            format!(r#"{{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{{"old_string":"{json}"}}}}"#);
         let (v, _) = forwarded(&raw, "", "");
         assert!(v["payload"]["tool_input"]["old_string"].as_str().unwrap().len() <= MAX_FIELD_LEN + 4);
     }
