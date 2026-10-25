@@ -18,13 +18,13 @@ struct HandoffCardRow: View {
                 Disclosure(isExpanded: $expanded) {
                     carried
                 } label: {
-                    Text("What it carries").font(.footnote.weight(.medium)).foregroundStyle(Palette.text)
+                    Text(L10n.tr("What it carries")).font(.footnote.weight(.medium)).foregroundStyle(Palette.text)
                 }
                 HStack(spacing: 8) {
                     if model.answering[entry.id] != nil {
                         Spinner()
                     } else {
-                        Button("Keep this conversation") { model.keepConversation(entry) }
+                        Button(L10n.tr("Keep this conversation")) { model.keepConversation(entry) }
                             .buttonStyle(SecondaryButtonStyle())
                         IconButton("Edit what it carries", systemImage: "pencil") {
                             withAnimation(Motion.layout) { editing = true }
@@ -53,6 +53,39 @@ struct HandoffCardRow: View {
             .foregroundStyle(Palette.secondary)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The bot moved to another agent of its chain, or back to its own: one line, like a fresh conversation's, that
+/// unfolds to what the new agent was told.
+struct AgentSwitchRow: View {
+    let entry: Entry
+    let change: AgentSwitch
+    @State private var expanded = false
+
+    var body: some View {
+        if let carried = change.carried, !carried.isEmpty {
+            Disclosure(isExpanded: $expanded) {
+                Text(carried)
+                    .font(.footnote)
+                    .foregroundStyle(Palette.secondary)
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.bubbleAgent, in: RoundedRectangle(cornerRadius: 12))
+                    .transition(.opacity)
+            } label: {
+                line
+            }
+        } else {
+            line.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var line: some View {
+        Label(entry.data.text ?? "", systemImage: "arrow.turn.down.right")
+            .font(.footnote)
+            .foregroundStyle(Palette.secondary)
     }
 }
 

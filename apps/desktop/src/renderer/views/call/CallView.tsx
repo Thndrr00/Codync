@@ -1,13 +1,18 @@
+import type { VoiceCallEngine } from '@shared/analytics'
 import { isWorking } from '@shared/models'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { BotAvatar } from '../../components/Avatar'
 import { Icon } from '../../components/Icon'
+import { LevelDots } from '../../components/LevelDots'
 import { Sheet } from '../../components/Overlay'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
-import { avatarColor, useDark, useReduceMotion, withAlpha } from '../../lib/theme'
+import { avatarColor } from '../../lib/theme'
+import { analytics } from '../../store/analytics'
 import { useStore } from '../../store/context'
 import { VoiceChatSettingsView } from '../settings/VoiceChatSettingsView'
+import { voiceStatus } from '../settings/voice-settings'
+import { stopDictation } from '../thread/dictation'
 import { CallOperator } from './call-operator'
 
 /**
@@ -19,7 +24,7 @@ import { CloudSpeechEngine } from './CloudSpeechEngine'
 import { GeminiLiveEngine } from './GeminiLiveEngine'
 import { OnDeviceEngine } from './OnDeviceEngine'
 import { OpenAIRealtimeEngine } from './OpenAIRealtimeEngine'
-import { countVoiceUsage, fromBase64, onDeviceAvailable, onDeviceUnavailableReason, providerName, toBase64, VoiceEngine, VoiceSettings, type VoiceProvider, type VoiceStatus } from './voice'
+import { countVoiceUsage, fromBase64, onDeviceAvailable, onDeviceUnavailableReason, providerName, transcribeOnHost, VoiceEngine, VoiceSettings, type VoiceProvider } from './voice'
 import { watchVoiceCall } from './voice-call'
 import { CallTranscript } from '../../lib/voice-transcript'
 import './call.css'
@@ -49,6 +54,9 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
   const cloudStartedAt = useRef<number | null>(null)
   const closed = useRef(false)
   const transcript = useRef<CallTranscript | null>(null)
+  /** What carries the current engine's audio, and whether the call has been counted (once its first engine runs). */
+  const engineName = useRef<VoiceCallEngine>('on_device')
+  const counted = useRef(false)
   const bot = store.bots.get(botId)
   const color = bot ? avatarColor(bot.avatarColor) : null
 
@@ -67,6 +75,8 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
   /** Starts the engine: a realtime provider on the key kept by the computer, or on-device speech. */
   const begin = (provider: VoiceProvider | null) => {
     if (closed.current) return
+    // Every engine takes the microphone (and the speech helper) from any dictation in progress.
+    stopDictation()
     if (!provider && !onDeviceAvailable()) return void fallbackFromDevice()
     const op = new CallOperator(store, botId)
     const send = (text: string) => store.send(text, botId)
@@ -77,8 +87,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
       const voice = VoiceSettings.voice(provider)
       next = new CloudSpeechEngine(provider, {
         // ponytail: kit turns Simplified Chinese transcripts into Traditional (ICU Hans-Hant); Chromium has no such transform.
-        transcribe: async (audio) =>
-          (await (await store.ready()).call<{ text: string }>('voiceTranscribe', { provider, model: transcribe, audio: toBase64(audio) }, 60_000)).text,
+        transcribe: async (audio) => transcribeOnHost(await store.ready(), provider, transcribe, audio),
         speak: async (text) => {
           const clip = await (await store.ready()).call<{ audio: string; format: string }>('voiceSpeak', { provider, model: speechModel, voice, text }, 90_000)
           return { audio: fromBase64(clip.audio), format: clip.format }
@@ -86,6 +95,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
         send,
       })
       cloudStartedAt.current = Date.now()
+      engineName.current = 'cloud'
     } else if (provider) {
       const model = VoiceSettings.model(provider)
       const voice = VoiceSettings.voice(provider)
@@ -94,8 +104,10 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
           ? new OpenAIRealtimeEngine(credential(provider, model, voice), op)
           : new GeminiLiveEngine(model, voice, credential(provider, model, voice), op)
       cloudStartedAt.current = Date.now()
+      engineName.current = provider
     } else {
       next = new OnDeviceEngine(send)
+      engineName.current = 'on_device'
     }
     // Picks up the computer's newest models for the next call; this one starts right away.
     if (provider) void rememberStatus()
@@ -116,9 +128,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
 
   const rememberStatus = async () => {
     try {
-      const status = await (await store.ready()).call<VoiceStatus>('voiceStatus')
-      VoiceSettings.remember(status)
-      return status
+      return await voiceStatus(await store.ready())
     } catch {
       return null
     }
@@ -140,8 +150,10 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
     const startedAt = Date.now()
     const callId = crypto.randomUUID()
     transcript.current = VoiceSettings.captureTranscript() ? new CallTranscript() : null
+    window.codync.speech.setCalling(true)
     begin(VoiceSettings.provider())
     return () => {
+      window.codync.speech.setCalling(false)
       closed.current = true
       engine.current?.end()
       countCloudMinutes()
@@ -156,6 +168,10 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
     if (!session) return
     onSpeaking(phase === 'speaking')
     interrupt.current = phase === 'speaking' ? () => session.interrupt() : null
+    if (session.isActive && !counted.current) {
+      counted.current = true
+      analytics.track({ event: 'voice_call_started', engine: engineName.current })
+    }
     // A cloud engine that can't start or drops mid-call hands over to on-device voice.
     if (phase === 'failed' && session.provider && onDeviceAvailable()) {
       countCloudMinutes()
@@ -193,7 +209,13 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
         >
           {bot ? <BotAvatar bot={bot} size={34} /> : <span className="call-avatar-empty" />}
         </button>
-        <CallLevelDots engine={session} working={working} color={color} label={statusText} />
+        <LevelDots
+          sample={() => ({ level: session?.level ?? 0, speaking: session?.phase === 'speaking', working })}
+          color={color}
+          width={120}
+          label={statusText}
+          className="call-dots"
+        />
         {/* Audio leaves the computer: say where. */}
         {session?.provider ? (
           <Text size="caption2" weight="semibold" tone="secondary" aria-label={`Voice by ${providerName(session.provider)}`}>
@@ -229,56 +251,4 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
       </Sheet>
     </div>
   )
-}
-
-const DOTS_WIDTH = 120
-const DOTS_HEIGHT = 16
-
-/**
- * The dotted line in the call bar: it follows your voice while listening, ripples while the bot
- * talks, breathes while it works, and rests as faint dots otherwise.
- */
-function CallLevelDots({ engine, working, color, label }: { engine: VoiceEngine | null; working: boolean; color: string | null; label: string }) {
-  const canvas = useRef<HTMLCanvasElement>(null)
-  const dark = useDark()
-  const reduceMotion = useReduceMotion()
-  const live = useRef({ engine, working, color, dark, reduceMotion })
-  live.current = { engine, working, color, dark, reduceMotion }
-
-  useEffect(() => {
-    const el = canvas.current
-    const ctx = el?.getContext('2d')
-    if (!el || !ctx) return
-    const scale = window.devicePixelRatio || 1
-    el.width = DOTS_WIDTH * scale
-    el.height = DOTS_HEIGHT * scale
-    let frame = 0
-    const draw = (now: number) => {
-      const { engine, working, color, dark, reduceMotion } = live.current
-      const t = reduceMotion ? 0 : now / 1000
-      const speaking = engine?.phase === 'speaking'
-      const level = engine?.level ?? 0
-      const accent = dark ? '#ffffff' : '#000000'
-      const tint = speaking ? accent : (color ?? accent)
-      ctx.setTransform(scale, 0, 0, scale, 0, 0)
-      ctx.clearRect(0, 0, DOTS_WIDTH, DOTS_HEIGHT)
-      const spacing = 8
-      const count = Math.max(1, Math.floor(DOTS_WIDTH / spacing))
-      for (let i = 0; i < count; i++) {
-        const x = i * spacing + spacing / 2
-        const wave = (Math.sin(i * 0.55 - t * 6) + 1) / 2
-        const amount = speaking ? 0.5 + 0.5 * wave : level > 0.05 ? Math.max(0.2, level) * (0.45 + 0.55 * wave) : working ? 0.25 * ((Math.sin(t * 2.4) + 1) / 2) : 0.08
-        const height = 4 + amount * (DOTS_HEIGHT - 4)
-        ctx.fillStyle = withAlpha(tint, 0.5 + 0.5 * amount)
-        ctx.beginPath()
-        ctx.roundRect(x - 1.25, (DOTS_HEIGHT - height) / 2, 2.5, height, 1.25)
-        ctx.fill()
-      }
-      frame = requestAnimationFrame(draw)
-    }
-    frame = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(frame)
-  }, [])
-
-  return <canvas ref={canvas} role="img" aria-label={label} className="call-dots" style={{ width: DOTS_WIDTH, height: DOTS_HEIGHT }} />
 }

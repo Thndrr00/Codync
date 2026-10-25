@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { BrowserWindow, globalShortcut, ipcMain, screen } from 'electron'
 import type { WindowCommand } from '../shared/ipc'
+import type { VoiceKey } from '../shared/voice-shortcut'
 import {
   hitRect,
   hits,
@@ -130,7 +131,7 @@ export class Island {
       if (!Array.isArray(paths) || paths.length === 0) return
       this.deps.send({ kind: 'sendFiles', ref, paths: paths.filter((p) => typeof p === 'string').slice(0, 20) }, false)
     })
-    ipcMain.on('island:newBot', () => this.deps.send({ kind: 'newChat' }))
+    ipcMain.on('island:newBot', () => this.deps.send({ kind: 'newBot' }))
     ipcMain.on('island:openApp', () => this.deps.openApp())
     ipcMain.on('island:focusable', (_e, on: boolean) => this.setFocusable(on))
     ipcMain.on('island:keys', (_e, on: boolean) => this.setKeys(on))
@@ -243,6 +244,11 @@ export class Island {
         console.error(`island: ${accelerator} is taken by another app`)
       }
     }
+  }
+
+  /** The voice input shortcut's taps, while the island is on. */
+  voiceKey(key: VoiceKey) {
+    this.window?.webContents.send('island:voiceKey', key)
   }
 
   /** Top center of the chosen display (see [`Island::placement`]). */

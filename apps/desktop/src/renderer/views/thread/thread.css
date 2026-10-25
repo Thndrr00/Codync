@@ -113,7 +113,7 @@
   overflow-y: auto;
   overflow-anchor: none;
 }
-/* The scrolling body of a thread or the trace sheet, under its header. */
+/* The scrolling body of the trace sheet, under its header. */
 .thread-scroll {
   flex: 1;
   overflow-y: auto;
@@ -196,13 +196,6 @@
 }
 .chat-notice {
   text-align: center;
-}
-.chat-notice-divider {
-  padding: 6px 0;
-}
-.chat-notice-divider-text {
-  text-align: center;
-  max-width: 260px;
 }
 .chat-notice-error {
   padding: 12px;
@@ -315,61 +308,52 @@
   border-radius: var(--radius-pill);
   background: var(--surface);
 }
-.thread-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  background: var(--surface);
+.reaction-chip-bots > * + * {
+  margin-left: -5px;
 }
-.thread-chip-authors > * + * {
-  margin-left: -6px;
+/* The message a reply quotes, at the top of its bubble: one line, no wider than a short message. */
+.bubble-quote {
+  max-width: 320px;
+  margin-bottom: 4px;
+  user-select: none;
 }
 /* Agent-side cards (working, approvals) stop short of the far edge. */
 .agent-inset {
   padding-right: 40px;
 }
 .chat-working {
+  --working-duration: 0.42s;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--working-duration) var(--spring), opacity var(--working-duration) var(--ease-out);
+}
+.chat-working.shown {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.chat-working-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-working-content {
   padding-top: 6px;
+  transform: translateY(6px) scale(0.98);
+  transform-origin: top left;
+  transition: transform var(--working-duration) var(--spring);
+}
+.chat-working.shown .chat-working-content {
+  transform: none;
 }
 .working {
   display: flex;
+  /* A column stretches the row to the pill's width, so a long activity truncates. */
   flex-direction: column;
-  gap: 8px;
   padding: 12px;
   border-radius: var(--radius-xl);
   background: var(--bubble-agent);
   text-align: left;
   min-width: 0;
-}
-.working-chevron {
-  transition: transform var(--layout);
-}
-.working-chevron.expanded {
-  transform: rotate(180deg);
-}
-.thinking {
-  max-height: 180px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  text-align: left;
-  font-size: var(--text-caption);
-  color: var(--secondary);
-}
-
-/* Thread */
-.replies-content {
-  padding: 8px 16px 0;
-}
-.replies-count {
-  padding: 12px 0;
-}
-.replies-count-label {
-  white-space: nowrap;
-}
-.replies-composer {
-  flex: none;
 }
 
 .call-overlay {
@@ -426,6 +410,10 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .chat-working, .chat-working-content {
+    transition: none;
+    transform: none;
+  }
   .row-in {
     animation: fade-in 0.12s both;
   }

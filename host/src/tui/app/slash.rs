@@ -1,11 +1,11 @@
 //! The composer's `/` commands, listed while the draft is just `/partial`: Fast mode runs here
 //! (`updateBot`; a new session is `S`); a skill fills in `/<id> `, which the host turns into "read
-//! this skill first" (`market::expand_command`).
+//! this skill first" (`market::expand_command`). A group offers the same, over its members.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::json;
 
-use super::{After, App, Editor};
+use super::{After, App, Bot, Editor};
 
 /// What picking a command does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,28 +35,38 @@ impl SlashCommand {
 }
 
 impl App {
-    /// The selected bot's built-in commands; a group has none.
-    fn built_in(&self) -> Vec<SlashCommand> {
-        let Some(bot) = self.bot().filter(|b| !b.group) else { return vec![] };
-        let fast = bot.fast_shown().then(|| SlashCommand {
-            name: "fast".into(),
-            title: "Fast mode".into(),
-            detail: bot.fast_detail(),
-            action: SlashAction::Fast,
-        });
-        fast.into_iter().collect()
+    /// The bots the commands reach: the selected bot, or a group's members.
+    fn reached(&self) -> Vec<&Bot> {
+        let Some(bot) = self.bot() else { return vec![] };
+        if bot.group { bot.members.iter().filter_map(|m| self.bots.get(m)).collect() } else { vec![bot] }
     }
 
-    /// Built-in commands, then the selected bot's skills, whose name or title holds the
-    /// `/partial` being typed (none in a group).
+    /// The bots `/fast` sets: those reached that offer Fast mode.
+    fn fast_bots(&self) -> Vec<&Bot> {
+        self.reached().into_iter().filter(|b| b.fast_shown()).collect()
+    }
+
+    /// Fast mode, when the bot (or any member of a group) offers it.
+    fn built_in(&self) -> Vec<SlashCommand> {
+        let bots = self.fast_bots();
+        let detail = match bots.as_slice() {
+            [] => return vec![],
+            [bot] if self.bot().is_some_and(|b| !b.group) => bot.fast_detail(),
+            _ => group_fast_detail(&bots),
+        };
+        vec![SlashCommand { name: "fast".into(), title: "Fast mode".into(), detail, action: SlashAction::Fast }]
+    }
+
+    /// Built-in commands, then the skills the bot (or any member of a group) has on, whose name
+    /// or title holds the `/partial` being typed.
     pub fn slash_commands(&self) -> Vec<SlashCommand> {
-        let Some(bot) = self.bot().filter(|b| !b.group) else { return vec![] };
         let draft = self.draft();
         let Some((query, None)) = crate::market::slash_command(&draft.text) else { return vec![] };
         let query = query.to_lowercase();
+        let bots = self.reached();
         let skills = self.plugins.1.iter().filter_map(|s| {
             let id = s["id"].as_str()?;
-            bot.skills.iter().any(|on| on == id).then(|| SlashCommand {
+            bots.iter().any(|b| b.skills.iter().any(|on| on == id)).then(|| SlashCommand {
                 name: id.to_owned(),
                 title: s["name"].as_str().unwrap_or(id).to_owned(),
                 detail: s["description"].as_str().unwrap_or_default().to_owned(),
@@ -111,26 +121,41 @@ impl App {
     }
 
     fn run_slash(&mut self, command: &SlashCommand) {
-        let Some((id, fast)) = self.bot().map(|b| (b.id.clone(), b.fast_mode)) else { return };
         let fill = match command.action {
+            // Each bot's own setting, so it holds in its own chat too.
             SlashAction::Fast => {
-                self.call("updateBot", json!({"id": id, "fastMode": !fast}), After::Nothing);
-                self.flash(if fast { "Fast mode off" } else { "Fast mode on" });
+                let bots = self.fast_bots();
+                let on = !bots.is_empty() && bots.iter().all(|b| b.fast_mode);
+                for b in bots {
+                    self.call("updateBot", json!({"id": b.id, "fastMode": !on}), After::Nothing);
+                }
+                self.flash(if on { "Fast mode off" } else { "Fast mode on" });
                 String::new()
             }
             SlashAction::Skill => format!("/{} ", command.name),
         };
-        if let Some(key) = self.draft_key() {
+        if let Some(key) = self.selected.clone() {
             self.drafts.insert(key, Editor::with(&fill));
         }
     }
 
     /// Starting a draft with `/` loads the computer's skills again, so the menu is current.
     pub(super) fn slash_typed(&self) {
-        if self.bot().is_some_and(|b| !b.group) && self.draft().text == "/" {
+        if self.draft().text == "/" {
             self.call("skills", json!({}), After::Skills);
         }
     }
+}
+
+/// A group's Fast mode: on when every member offering it has it on; then the first member whose
+/// agent refused it says why.
+fn group_fast_detail(bots: &[&Bot]) -> String {
+    if !bots.iter().all(|b| b.fast_mode) {
+        return "Turn on for every bot here: faster replies and more usage".into();
+    }
+    bots.iter()
+        .find_map(|b| b.fast_refusal().map(|why| format!("{}: {why}", b.name)))
+        .unwrap_or_else(|| "Turn off for every bot here and return to standard speed".into())
 }
 
 #[cfg(test)]
@@ -188,6 +213,40 @@ mod tests {
         app.drafts.insert("b".into(), super::Editor::with("/fa"));
         assert!(app.slash_key(key(KeyCode::Tab)), "a built-in command runs");
         assert_eq!(app.draft().text, "", "and the draft clears");
+    }
+
+    #[tokio::test]
+    async fn a_group_offers_its_members_fast_mode_and_skills() {
+        let mut app = app_with(&json!({"id": "b", "name": "Bea", "skills": ["docx"], "fastModeSupport": "offered"}));
+        let members = [("c", "Cal", json!(["xlsx", "docx"])), ("d", "Dot", json!([]))];
+        for (id, name, skills) in members {
+            let bot = json!({"id": id, "name": name, "skills": skills, "fastModeSupport": "offered"});
+            app.bots.insert(id.into(), Bot::parse(&bot).expect("a bot parses"));
+        }
+        let group = json!({"id": "g", "kind": "group", "members": ["b", "c", "d"]});
+        app.bots.insert("g".into(), Bot::parse(&group).expect("a group parses"));
+        app.selected = Some("g".into());
+        app.drafts.insert("g".into(), super::Editor::with("/"));
+        assert_eq!(names(&app), ["fast", "docx", "xlsx"], "every member's skills, once each");
+        let detail = |app: &super::App| app.slash_commands().remove(0).detail;
+        assert!(detail(&app).starts_with("Turn on for every bot here"));
+        app.bots.get_mut("b").expect("Bea").fast_mode = true;
+        assert!(detail(&app).starts_with("Turn on"), "on only when every member has it on");
+        app.bots.get_mut("d").expect("Dot").fast_support = "unsupported".into();
+        app.bots.get_mut("c").expect("Cal").fast_mode = true;
+        assert!(detail(&app).starts_with("Turn off for every bot here"), "Dot has no Fast mode to count");
+        let cal = app.bots.get_mut("c").expect("Cal");
+        (cal.fast_support, cal.fast_issue) = ("refused".into(), Some("requires extra usage".into()));
+        assert!(detail(&app).starts_with("Cal: The agent turned it off: requires extra usage"));
+        assert!(app.built_in_command("/fast"), "a bare /fast runs in a group too");
+        assert_eq!(app.hint.as_ref().map(|(text, _)| text.as_str()), Some("Fast mode off"));
+        for id in ["b", "c"] {
+            let bot = app.bots.get_mut(id).expect("a member");
+            (bot.fast_mode, bot.fast_support) = (false, "unsupported".into());
+        }
+        app.drafts.insert("g".into(), super::Editor::with("/"));
+        assert_eq!(names(&app), ["docx", "xlsx"], "no member offers Fast mode");
+        assert!(!app.built_in_command("/fast"), "then it reaches the bots as typed");
     }
 
     #[tokio::test]

@@ -78,8 +78,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
  * cuts the bot off while it speaks in a voice call.
  */
 @OptIn(ExperimentalFoundationApi::class)
+/** `replyingTo`: the chat message this one answers (`replyTo`), shown above the box until sent or cancelled. */
 @Composable fun MessageComposer(bot: Bot, thread: String?, state: AppState, store: AppStore, onCall: (() -> Unit)?,
-    onInterrupt: (() -> Unit)? = null) {
+    onInterrupt: (() -> Unit)? = null, replyingTo: Entry? = null, cancelReply: () -> Unit = {}) {
     val lane = ComposerDraft.lane(bot.id, thread)
     val draft = state.drafts[lane]
     val text = rememberTextFieldState(initialText = draft?.text.orEmpty())
@@ -134,7 +135,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     val empty = text.text.isBlank() && files.isEmpty()
     // Offline computers still take text when the relay can hold it; files need the computer.
     val canSend = !terminal && !empty && !importing && !queuing && (online || state.actualConnection is LinkState.ComputerOffline && files.isEmpty())
-    val working = bot.isWorking(bot.id, thread)
+    val working = bot.isWorking(bot.id)
     val bare = text.text.isEmpty() && files.isEmpty()
     val trailing = when {
         terminal -> Trailing.Send
@@ -151,7 +152,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         else -> "Ask ${bot.name}"
     }
     val typed = text.text.toString()
-    val commands = SlashCommands.query(typed)?.let { SlashCommands.list(bot, it, state.plugins?.skills.orEmpty(), state.hello?.text("version")) }.orEmpty()
+    val commands = SlashCommands.query(typed)?.let { SlashCommands.list(bot, it, state.plugins?.skills.orEmpty()) }.orEmpty()
     // Starting a command: list the computer's skills again, once each time the draft becomes "/".
     val startingCommand = typed == "/" && bot.kind != "group"
     LaunchedEffect(startingCommand) { if (startingCommand && online) store.refreshPlugins() }
@@ -174,6 +175,10 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     AnimatedVisibility(commands.isNotEmpty(), enter = fadeIn(Motion.fade()) + expandVertically(Motion.layoutSize),
         exit = fadeOut(Motion.fade()) + shrinkVertically(Motion.layoutSize)) {
         CommandList(commands, ::run, Modifier.padding(horizontal = 16.dp))
+    }
+    AnimatedVisibility(replyingTo != null, enter = fadeIn(Motion.fade()) + expandVertically(Motion.layoutSize),
+        exit = fadeOut(Motion.fade()) + shrinkVertically(Motion.layoutSize)) {
+        replyingTo?.let { ReplyBanner(it, state, cancelReply) }
     }
     AnimatedVisibility(mentions.isNotEmpty(), enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
         MentionChips(mentions, state.bots) { member -> text.setTextAndPlaceCursorAtEnd(typed.substring(0, typed.lastIndexOf('@')) + "@${member.name} ") }
@@ -220,9 +225,10 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
                         Trailing.Call -> onCall?.invoke()
                         Trailing.Send -> {
                             val command = if (files.isEmpty()) SlashCommands.builtIn(bot, typed) else null
-                            if (command != null) run(command) else store.sendDraft(bot.id, thread, typed) {
+                            if (command != null) run(command) else store.sendDraft(bot.id, thread, typed, replyingTo?.replyQuote) {
                                 haptics.perform(CodyncHaptic.MessageSent)
                                 clear()
+                                cancelReply()
                             }
                         }
                     }
@@ -284,4 +290,18 @@ fun formatBytes(size: Long): String = when {
     size >= 1024 * 1024 -> "%.1f MB".format(size / (1024.0 * 1024))
     size >= 1024 -> "%.0f KB".format(size / 1024.0)
     else -> "$size bytes"
+}
+
+/** What the next message answers: its author and a line of it, with a way to drop it. */
+@Composable private fun ReplyBanner(entry: Entry, state: AppState, cancel: () -> Unit) {
+    val quote = entry.replyQuote
+    val author = if (quote.author == "user") "You" else state.bots.firstOrNull { it.id == quote.author }?.name ?: "Bot"
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text("Replying to $author", style = Type.caption.medium, color = Palette.secondary, maxLines = 1)
+            Text(quote.text, style = Type.caption, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton("Cancel reply", "xmark", action = cancel)
+    }
 }

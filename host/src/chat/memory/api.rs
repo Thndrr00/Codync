@@ -1,10 +1,10 @@
-//! The apps' memory methods: the two layers, the user's own edits, the dream log, and the chat cards.
+//! The apps' memory methods: the two layers' `MEMORY.md` as facts, the notes, the dream log and Claude Code's own
+//! notes, read-only. The user changes memory by telling the bot.
 
-use super::{file_notices, notices};
 use crate::hub::Hub;
 use crate::store::BotConfig;
 use anyhow::{Result, anyhow, bail};
-use codync_mem::store::{self as mem, Entry, Error, New, State, Writer};
+use codync_mem::files::{self as mf, Author, Fact, MAIN};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -21,116 +21,58 @@ pub async fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
 }
 
 fn dispatch(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
-    if let "answerMemory" | "undoMemory" = method {
-        let id = str_arg(b, "entryId")?;
-        let file = hub.store.entry(id).is_some_and(|e| file_notices::is_file_card(&e.data));
-        return match (method, file) {
-            ("answerMemory", true) => file_notices::answer(hub, id, b["accept"] == true),
-            ("answerMemory", false) => notices::answer(hub, id, b["accept"] == true),
-            (_, true) => file_notices::undo(hub, id),
-            _ => notices::undo(hub, id),
-        };
-    }
-    if method == "memoryFile" || method.ends_with("MemoryFile") {
-        return super::file_api::call(hub, &bot(hub, str_arg(b, "botId")?)?, method, b);
-    }
-    let cfg = bot(hub, str_arg(b, "botId")?)?;
-    let id = || b["id"].as_i64().ok_or_else(|| anyhow!("id required"));
     match method {
-        "memory" => view(hub, &cfg),
-        "saveMemory" => {
-            let text = str_arg(b, "text")?;
-            let entry = if let Some(id) = b["id"].as_i64() {
-                edit(hub, &cfg, id, |c, now, rev| mem::revise(c, Writer::User, id, text, now, rev))?
-            } else {
-                let layer = (b["shared"] != true).then_some(cfg.id.as_str());
-                let new = New { bot: layer, text, room: None, evidence: &[] };
-                let entry = hub.store.memory_write(|c, now, rev| mem::add(c, Writer::User, new, now, rev))?;
-                super::changed(hub, entry.bot.as_deref());
-                entry
-            };
-            Ok(json!({"entry": entry}))
-        }
-        "pinMemory" => {
-            let (id, pinned) = (id()?, b["pinned"] == true);
-            edit(hub, &cfg, id, |c, now, rev| mem::pin(c, id, pinned, now, rev))?;
-            Ok(json!({}))
-        }
-        "archiveMemory" => {
-            let id = id()?;
-            if b["archived"] == false {
-                edit(hub, &cfg, id, |c, now, rev| mem::bring_back(c, id, now, rev))?;
-            } else {
-                edit(hub, &cfg, id, |c, now, rev| mem::archive(c, Writer::User, id, None, now, rev))?;
-            }
-            Ok(json!({}))
-        }
-        "forgetMemory" => {
-            let id = id()?;
-            edit(hub, &cfg, id, |c, _, _| mem::forget(c, id))?;
-            Ok(json!({}))
-        }
-        "clearMemory" => {
-            let layer = (b["shared"] != true).then_some(cfg.id.as_str());
-            hub.store.memory_write(|c, _, _| mem::forget_layer(c, layer))?;
-            super::files::forget_layer(hub, layer)?;
-            super::changed(hub, layer);
-            Ok(json!({}))
-        }
-        "undoDream" => {
-            let id = id()?;
-            let dream = hub.store.memory_read(|c| codync_mem::dream::get(c, id))?;
-            if dream.is_none_or(|d| d.bot != cfg.id) {
-                bail!("unknown dream");
-            }
-            let dream = hub.store.memory_write(|c, now, rev| codync_mem::dream::undo(c, id, now, rev))?;
-            super::files::undo_notes(hub, &dream);
-            // A run may have written to either layer.
-            super::changed(hub, None);
-            Ok(json!({}))
-        }
+        "memory" => view(hub, &bot(hub, str_arg(b, "botId")?)?),
+        "memoryFile" => super::file_api::detail(hub, &bot(hub, str_arg(b, "botId")?)?, b),
         _ => bail!("unknown method: {method}"),
     }
 }
 
-/// Changes one entry the bot can see, then tells the bots that see it.
-fn edit(
-    hub: &Hub,
-    cfg: &BotConfig,
-    id: i64,
-    change: impl FnOnce(&rusqlite::Connection, i64, i64) -> mem::Result<Entry>,
-) -> Result<Entry> {
-    let bot = cfg.id.clone();
-    let entry = hub.store.memory_write(|c, now, rev| {
-        let entry = mem::get(c, id)?.ok_or(Error::NotFound)?;
-        if entry.bot.as_deref().is_some_and(|owner| owner != bot) {
-            return Err(Error::NotFound);
-        }
-        change(c, now, rev)
-    })?;
-    super::changed(hub, entry.bot.as_deref());
-    Ok(entry)
-}
-
 fn view(hub: &Hub, cfg: &BotConfig) -> Result<Value> {
+    super::files::scan(hub, cfg);
     let bot = cfg.id.as_str();
-    let (yours, own, dreams) = hub.store.memory_read(|c| {
-        Ok((mem::layer(c, None)?, mem::layer(c, Some(bot))?, codync_mem::dream::recent(c, bot, DREAMS_SHOWN)?))
-    })?;
-    let layer = |entries: Vec<Entry>, layer: Option<&str>| {
-        let used: usize =
-            entries.iter().filter(|e| e.state == State::Active).map(|e| codync_mem::tokens::estimate(&e.text)).sum();
-        json!({"entries": entries, "used": used, "cap": mem::cap(layer)})
+    let layer = |layer: Option<&str>| -> Result<Value> {
+        let (facts, content) = hub
+            .store
+            .memory_read(|c| Ok((mf::facts_of(c, layer)?, mf::current(c, layer, MAIN)?.unwrap_or_default())))?;
+        // The same fact twice is one memory to the apps, which key memories by id.
+        let mut seen = std::collections::HashSet::new();
+        let entries: Vec<Value> =
+            facts.iter().filter(|fact| seen.insert(mf::fact_id(&fact.text))).map(|fact| entry(layer, fact)).collect();
+        Ok(json!({"entries": entries, "used": codync_mem::tokens::estimate(&content), "cap": mf::cap(layer)}))
     };
     Ok(json!({
         "shared": super::shared(cfg),
-        "yours": layer(yours, None),
-        "bot": layer(own, Some(bot)),
+        "yours": layer(None)?,
+        "bot": layer(Some(bot))?,
         "files": super::file_api::listing(hub, cfg)?,
-        "dreams": dreams,
+        "dreams": hub.store.memory_read(|c| codync_mem::dream::recent(c, bot, DREAMS_SHOWN))?,
         "projectMemory": project_memory(cfg),
         "memoryRev": hub.store.memory_rev(),
     }))
+}
+
+/// A fact as the apps show a memory: who wrote it and where it was learned. One the user changed in the file
+/// themselves (outside Codync) is theirs.
+fn entry(layer: Option<&str>, fact: &Fact) -> Value {
+    let author = match fact.author {
+        Author::User | Author::Computer => "user",
+        Author::Bot => "bot",
+        Author::Dream => "dream",
+        Author::Imported => "imported",
+    };
+    json!({
+        "id": mf::fact_id(&fact.text),
+        "bot": layer,
+        "state": "active",
+        "text": fact.text,
+        "author": author,
+        "authorBot": fact.author_bot,
+        "pinned": false,
+        "evidence": fact.message.iter().collect::<Vec<_>>(),
+        "createdAt": fact.at,
+        "updatedAt": fact.at,
+    })
 }
 
 /// Claude Code's own memory of the bot's folder (`~/.claude/projects/<folder>/memory/MEMORY.md`), where the user

@@ -43,7 +43,8 @@ impl Host {
             .post(format!("{}/api/{method}", self.base))
             .bearer_auth(&self.token)
             .json(&body)
-            .timeout(Duration::from_secs(10))
+            // As long as `common::host`'s: on a busy machine (parallel tests) `createBot` alone can take over 10 s.
+            .timeout(Duration::from_secs(120))
             .send()
             .await;
         let response = response_result.unwrap();
@@ -74,7 +75,7 @@ async fn ready(host: &Host, bot: &str, expected_files: usize) -> Vec<Value> {
 }
 
 #[tokio::test]
-async fn publishes_all_types_with_final_text_and_survives_restart_workspace_changes_and_threads() {
+async fn publishes_all_types_with_final_text_and_survives_restart_workspace_changes_and_replies() {
     use base64::Engine as _;
     let mut host = Host::start().await;
     let cwd = host.home.join("workspace");
@@ -133,28 +134,10 @@ async fn publishes_all_types_with_final_text_and_survives_restart_workspace_chan
     host.call("send", json!({"botId":bot,"text":"share-files resumed"})).await;
     ready(&host, bot, 8).await;
     assert!(cwd.join("resumed").exists());
-    host.call("send", json!({"botId":bot,"text":"share-files in a thread", "threadId":root["entry"]["id"]})).await;
-    let waited = tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            let response = host.call("thread", json!({"botId":bot,"rootId":root["entry"]["id"]})).await;
-            let files: Vec<_> = response["entries"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter(|e| e["data"]["files"].is_array())
-                .cloned()
-                .collect();
-            if files.len() == 4 {
-                let file = &files[0];
-                host.call("readFile", json!({"entryId":file["id"],"fileId":file["data"]["files"][0]["id"],"offset":0}))
-                    .await;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    })
-    .await;
-    waited.unwrap();
+    host.call("send", json!({"botId":bot,"text":"share-files in a reply", "replyTo":root["entry"]["id"]})).await;
+    let entries = ready(&host, bot, 12).await;
+    let file = entries.iter().rfind(|e| e["data"]["files"].is_array()).unwrap();
+    host.call("readFile", json!({"entryId":file["id"],"fileId":file["data"]["files"][0]["id"],"offset":0})).await;
     let mut updated = created["bot"].clone();
     updated["cwd"] = host.home.to_string_lossy().into();
     host.call("updateBot", updated).await;
@@ -193,7 +176,10 @@ async fn rejected(path: &std::path::Path) {
             {
                 assert!(
                     results.as_array().unwrap().iter().all(|result| result["isError"] == true
-                        && result["content"][0]["text"].as_str().unwrap().contains("own chat and threads")),
+                        && result["content"][0]["text"]
+                            .as_str()
+                            .unwrap()
+                            .contains("only available in the bot's own chat")),
                     "{results}"
                 );
                 break;

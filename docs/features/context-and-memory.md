@@ -8,9 +8,9 @@ conversation and compaction. The design, including what is still to come, is in
 
 | | Where | Owner | Lifetime |
 |---|---|---|---|
-| Transcript | SQLite `entries` | Codync | Persistent main chat and flat reply threads per bot |
-| Model context | ACP session (`bots.session_id`) | The harness | Until *New session*, a failed resume, or an agent/command/folder change |
-| Long-term memory | SQLite `memory_*` tables | Codync: the user, the bots' memory tools, dreaming | Forever, across sessions |
+| Transcript | SQLite `entries` | Codync | One persistent chat per bot; replies quote the message they answer |
+| Model context | ACP session (`bots.session_id`) | The harness | Until *New session*, a failed resume, or an agent/command/folder change; each [fallback agent](agent-fallback.md) keeps its own, parked while another answers |
+| Long-term memory | Markdown files per layer (`MEMORY.md` and notes); versions and who wrote what in SQLite `memory_*` tables | Codync: the bots, through their tools or their own file tools, and dreaming | Forever, across sessions |
 
 Codync never replays the transcript into a session. Each turn sends only the new message(s); the harness keeps
 its own context and compacts it itself.
@@ -18,7 +18,8 @@ its own context and compacts it itself.
 ## Instruction snapshot (`host/src/chat/context.rs`)
 
 - The bot's instructions are rendered once, in English and kept general: profile (name, description), how to
-  message the user, other conversations, workspace, skills, plus the memory section. How to use each tool
+  message the user, where the user is (Codync's apps, not the engine's own CLI; New session to start over),
+  other conversations, workspace, skills, plus the memory section. How to use each tool
   lives with the tool (MCP server instructions, tool descriptions), not here. They're stored as a snapshot in `kv` under `context.<bot>`, keyed by **session + compaction
   epoch**, and don't change until one of those changes. This keeps the prompt byte-identical so the prompt
   cache stays warm.
@@ -40,62 +41,81 @@ its own context and compacts it itself.
 
 ## Memory (`host/src/chat/memory/`, crate `host/crates/memory`)
 
-Memory entries record the person, not the work; what a bot learns about a project goes in its own notes. The
-[design](../design/bot-memory.md) explains why. The rules live in
-the `codync-mem` crate; `chat/memory` runs them in the host.
+Memory records the person, not the work; what a bot learns about a project goes in a note of its own. The
+[design](../design/bot-memory.md#memory-is-files) explains why. Memory is Markdown files the bot keeps itself, like
+Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/memory` runs them in the host.
 
-- **Two layers** in the host database (`memory_entries`): "yours", shared by every bot that uses it, and one per
-  bot. Caps count tokens (one per CJK character, one per four others): 400 for "yours", 1,200 per bot. A bot in
-  its own workspace uses "yours" by default and one in a project folder doesn't; the user switches it per bot
-  (`sharedMemory`).
-- **The opening** holds every active entry the bot sees, pinned first, within the caps, with ids so the bot can
-  revise or archive one. Archived entries stay searchable (`search_memory`). The opening doesn't change for a
-  memory change, so the prompt cache holds: every change (the user's, a bot's, dreaming's) reaches each session of
-  the bots that see it on its next message as a `<memory_update>` with the whole memory. The session whose own
-  tool call made the change isn't told. A ledger in `kv` keeps, per session, the revision its opening holds and
-  the one it has heard; after a compaction the second falls back to the first, so whatever is newer is told again.
-- **The bot's tools** (built-in `memory` MCP server): `remember`, `revise_memory`, `archive_memory`,
-  `search_memory`, `search_history`. Every bot writes at once, in any turn and to either layer, whatever its
-  permission: memory isn't an action on the user's computer. Nothing about memory shows in the chat (no lines,
-  cards or working line); the user reviews and changes it in the bot's memory settings. A forgotten memory is never
-  written again by a bot or dreaming, reworded or not: its text stays closed to that layer, and the message it came
-  from to both layers the bot uses. Entry ids are never reused, so a stale id can't reach a newer entry. Memory
-  lines and cards that older hosts put in the chat are hidden by the apps; `answerMemory` and `undoMemory` still
-  answer them for older apps.
-- **Checks** on every write but the user's own (`codync_mem::check`): no hidden characters, prompt-carrying
-  links, planted instructions, passwords, keys, ID or card numbers, nothing the user forgot, no duplicates, and
-  the cap. Entries the user wrote can't be changed by a bot or dreaming.
-- **Long-form files** (`chat/memory/files.rs`, rules in `codync_mem::files`): Markdown notes, one topic each, in
-  `<data>/shared-memory/` and `<data>/bots/<id>/bot-memory/`. Names are lowercase slugs (`people.md`); each starts
-  with frontmatter whose `description:` becomes its line in the opening's index (path, description, tokens). Caps:
-  2,000 tokens per file, 20 files per folder, marked in the index when passed, never cut. Links, hidden files and
-  folders are ignored.
-  - The bot reads and edits them with its own tools: agents that take `additionalDirectories` get both folders on
-    every session request. Others use `read_memory` and `edit_memory` (old/new, whole content, or delete), which
-    write at once like `remember`.
-  - A scan at the start and end of every turn and on the memory screen records each change as a version with its
-    full content: mtime and size first, then SHA-256; a file younger than 2 s waits (the turn-end scan looks again
-    once it settles). A change from a bot's tool call that changes files (an edit, delete or move, or one with
-    diffs, naming the path; a read doesn't count) runs the checks, the cap and the description; one that fails is
-    put back (logged, nothing in the chat). Other changes (an editor, another program) are recorded as "this
-    computer". The note's versions in the memory settings show every change and bring any one back; a description
-    that fails the checks is withheld from the index.
-  - Every host write (the apps, `edit_memory`, dreaming, undo) is compare-and-swap on the content's hash, through a
-    temporary file renamed over the note. `search_memory` also returns matching lines of the files.
-  - Deleting a bot deletes its folder and versions; "Forget everything" deletes a layer's files and versions; a
-    file deleted one at a time stays restorable from its versions.
-- **Dreaming** replaces the keeper (`chat/memory/dream.rs`). After five idle minutes or eight user messages
-  (sooner on a new session or compaction, and once a day for the time review, which rewrites an entry whose
-  date has passed once, never its own rewrite again), it reads the bot's chat and
-  threads since its bookmark on the bot's own harness (Claude: Haiku, no tools). Each change must quote what the
-  user typed: pasted text (the apps send `pasted`), fenced code, quoted lines and forwarded messages don't count,
-  nor do bare acknowledgements. It only adds and archives, at most 10 changes and never more than a quarter of
-  the entries, and drops a run when the user edited memory meanwhile. It waits while the plan's usage is above
-  75%. Every run is logged and can be undone; what an undo removes isn't learned again, and an entry the user
-  brought back (undoing an archive, or Bring back) isn't archived by dreaming again. It may also append a cited
-  line to a long-form file (a new file gets frontmatter with the run's description), and, when a layer is
-  nine-tenths full, move an entry the user didn't write out into one. It never rewrites a file; undoing the run
-  puts the files back unless they changed since.
+- **Two layers, two kinds of file.** Each layer is a folder: "yours", shared by every bot that uses it, in
+  `<data>/shared-memory/`, and one per bot in `<data>/bots/<id>/bot-memory/`. A bot in its own workspace uses
+  "yours" by default and one in a project folder doesn't; the user switches it per bot (`sharedMemory`).
+  - `MEMORY.md`: the short version, one short fact per line (at most 150 tokens a line), the way a project keeps
+    its `CLAUDE.md` short and its `docs/` detailed. Caps count tokens (one per CJK character, one per four others):
+    400 for "yours", 1,200 per bot. It may be empty. Dreaming keeps it within its cap (below).
+  - Notes: the detail, one topic each, `lowercase-with-dashes.md` in up to three topic folders
+    (`health/allergies.md`), starting with frontmatter whose `description:` says when to read it; at most 2,000
+    tokens a note and 20 notes a layer, marked when passed, never cut. Links (a topic folder too: the host never
+    reads or writes through one), hidden files and folders, and folders deeper than three are ignored.
+- **The opening** holds each `MEMORY.md` the bot sees in full (over its cap: marked, never cut), then the index of
+  its notes (path, description, tokens). It doesn't change for a memory change, so the prompt cache holds: every
+  change (the bot's, another bot's in "yours", dreaming's, an edit on the computer) reaches each session of the
+  bots that see it on its next message as a `<memory_update>` with the whole memory. The session whose own change
+  it was isn't told. A ledger in `kv` keeps, per session, the revision its opening holds and the one it has heard;
+  after a compaction the second falls back to the first, so whatever is newer is told again.
+- **One way to write, for every harness.** The bot changes memory by editing the files:
+  - The built-in `memory` MCP server is the same for every harness: `read_memory` (a file, or the list),
+    `edit_memory` (`append` a line, `old`/`new`, the whole `content`, or `delete`), `search_memory` (lines of the
+    files; a `MEMORY.md` line names the message it was learned from as `source`) and `search_history`.
+  - Agents that take ACP `additionalDirectories` (Claude, Codex) get both folders on every session request and may
+    use their own file tools instead. A tool call that changes a file there (an edit, delete or move, or one with
+    diffs, naming the path) is noted with the turn it came in; a change no tool call named (a shell command) is
+    still the bot's when it turns up during a turn of the bot that ran a tool able to write files (an edit,
+    delete, move or command).
+  - Memory writes go in at once whatever the bot's permission: memory isn't an action on the user's computer.
+    Nothing about memory shows in the chat.
+- **What a bot may change** (`codync_mem::files::admit`). What every change brings in passes the checks
+  (`codync_mem::files::check_change`): no hidden characters, prompt-carrying links, planted instructions,
+  passwords, keys, ID or card numbers, and the caps. Lines already there aren't checked again, and a file over its
+  cap may still shrink. In a turn the user started in the bot's own chat (`Runtime.message`; a message the
+  host wrote in the user's place doesn't count), the bot may change anything, and `MEMORY.md` may grow to twice
+  its cap, so what the user asks to remember is never turned away for space. Otherwise (routines, rooms, other
+  bots) it may only add lines, none the user had forgotten, and within the cap: a full `MEMORY.md` sends the bot
+  to a note instead.
+- **Forgetting.** When a change in the user's own turn takes a fact out of a layer (and no other file of the layer
+  holds it), that fact and the message it was learned from are tombstoned (`codync_mem::store::bury`): no bot
+  outside the user's turn and no dream writes it again or learns from that message. Written again in the user's
+  own turn, it may come back. Earlier versions are kept 30 days (`files::prune`, once a day), so what was forgotten
+  is gone from the history after that.
+- **The scan** at the start and end of every turn, on the memory screen and before a tool call records each change
+  as a version with its full content: mtime and size first, then SHA-256; a file younger than 2 s waits (the
+  turn-end scan looks again once it settles). A bot's change that breaks a rule is put back, and the session that
+  made it hears why at the start of its next message (`memory::put_back`). A change is the bot's when its tool call named the file,
+  or when it turns up from the bot's prompt until the scan after its turn, and that turn ran a tool that can write
+  files (`turns::begin_turn`; when several bots' turns could have made it, the strictest rules apply). Any other
+  change (an editor, another program) is recorded as the computer's, unchecked; the opening withholds each of its
+  lines that fails the checks. Host writes (`edit_memory`, dreaming, the moves below) are compare-and-swap on the
+  content's hash, one at a time with the scans, through a temporary file renamed over it. Each fact of `MEMORY.md`
+  keeps who wrote it, when, and the message it was learned from (`memory_facts`).
+- **Dreaming** (`chat/memory/dream.rs`). After five idle minutes or eight user messages (sooner on a new session or
+  compaction, and once a day for the time review, which rewrites a dated line whose date has passed, once), it
+  reads the bot's chat since its bookmark on the bot's own harness (Claude: Haiku, no tools) and proposes lines to
+  add to and take out of `MEMORY.md` and lines to append to notes. Each change must quote what the user typed:
+  pasted text (the apps send `pasted`), fenced code, quoted lines and forwarded messages don't count, nor do bare
+  acknowledgements. At most 10 changes and never more than a quarter of the lines taken out; it never takes out a
+  line the user wrote, never writes one the user had forgotten (an add, a review's rewrite, a pointer below), and
+  never rewrites a note.
+  **Tidying:** when a `MEMORY.md` the bot sees is nine-tenths full (`codync_mem::dream::full`), a run moves its
+  detail word for word into the notes of their topics (`moveOut`), a topic's lines together, the user's lines too,
+  and leaves one line per topic that sums it up and points to its note, the way `CLAUDE.md` points into `docs/`
+  (`Allergic to peanuts → health/allergies.md`): the run's `summary`, else the note's description, else its name,
+  the first that passes `MEMORY.md`'s checks and fits; when none does, the topic gets no line and the index still
+  lists the note, so a pointer never costs the run its other changes. A topic that already points to its note
+  keeps that line unless the run sums it up anew and the user didn't write it; a pointing line never moves itself.
+  A move keeps the line, so it doesn't count toward the quarter. It runs for this even with no new conversation,
+  and again after each run that moved something, until there is room or a run moves nothing (`tidied` in `kv`
+  holds, per layer, the hash of the `MEMORY.md` a run last saw nearly full). Runs of bots that see the shared
+  layer take turns, so one run tidies it and the others find it tidied. It waits while the plan's usage is above 75%. It writes the files
+  compare-and-swap; when one changed meanwhile, the rest waits for the next run. Every run is logged (the lines it
+  added and took out, the notes it wrote).
 - **The harness's own memory** is off for every bot and for background jobs (`agent/own_memory.rs`): Claude Code
   (`autoMemoryEnabled` and `autoDreamEnabled` false, `CLAUDE_CODE_DISABLE_AUTO_MEMORY`), Copilot (its memory tools
   excluded), CodeBuddy, and Qwen Code (workspace settings, so only in a bot's own workspace: a project folder's
@@ -109,16 +129,22 @@ the `codync-mem` crate; `chat/memory` runs them in the host.
   (empty until it saves something). An edit to another harness turns the switch off. Using the harness's memory
   instead of Codync's is planned: [harness memory](../plans/harness-memory.md).
 - **The apps** (iPhone, desktop, terminal) show "About you", "This bot", the dream log and Claude Code's notes,
-  with add, edit, pin, archive, forget and forget-everything. Under each layer's entries (the terminal: a Notes
-  section) they list its notes with description, size and date, marked past a cap; a note opens to read, edit,
-  delete or bring back any version, and on the desktop, when the host is this computer, in the user's editor. They
-  fetch with `memory` and fetch again when the bot's `memoryRev` moves. Methods: `memory`, `saveMemory`,
-  `pinMemory`, `archiveMemory`, `forgetMemory`, `clearMemory`, `undoDream`, `memoryFile`, `saveMemoryFile`,
-  `deleteMemoryFile`, `restoreMemoryFile`.
-- **Moving the old memory**: on the first start of this version, each bot's Engram database (or the Markdown
-  memory before it) moves in once. What the old opening showed comes in active as far as the cap allows (the
-  profile and pinned facts first, then the newest), the rest archived; then the old files (deleted bots' too) and
-  the Engram download go. Dreaming starts from that point in the chat.
+  read-only: the user changes memory by telling the bot in the chat. Each layer shows its `MEMORY.md` facts with
+  who wrote them (the `memory` method keeps the shape of the earlier entries: one per fact, `state` active), then
+  its notes (the terminal: a Notes section) with description, size and date, marked past a cap; a note opens to
+  read. The dream log shows added lines green and taken-out ones red, beside an info button (the terminal: a short
+  paragraph above it) saying what dreaming does. The switches stay: "Use what your bots share" and the harness's
+  own memory. They fetch with `memory` and `memoryFile`, and fetch again when the bot's `memoryRev` moves. The
+  apps' edit methods of 2.18 to 2.20 are gone, so the host's `minApp` is 2.21.0
+  ([floor history](../reference/compatibility.md#floor-history)).
+- **Moving the old memory**, once, on the first start of a host that has it:
+  - the memory entries of 2.18 to 2.20 (`codync_mem::legacy`): each layer's active entries go into its `MEMORY.md`
+    as far as the cap allows (pinned first, then the newest), each with who wrote it and its source message; the
+    rest, the archived ones and any too long for one line go into a note, `earlier.md`. Entries a newer one
+    replaced, and facts the checks refuse (secrets, planted instructions, hidden characters), stay out. Old dream
+    runs keep their lines. Then the entries' tables go.
+  - each bot's Engram database (or the Markdown memory before it), the same way. Then the old files (deleted bots'
+    too) and the Engram download go, and dreaming starts from that point in the chat.
 
 ## Compaction and rollover (`host/src/agent/bot/compaction.rs`, rules in `codync_mem::compaction`)
 
@@ -126,7 +152,7 @@ the `codync-mem` crate; `chat/memory` runs them in the host.
   from `usage_update`, compactions, and when turns end. How long the provider keeps prompts cached is learned
   from turns that came after a pause (`cache.life.<bot>`); until then it is an hour for Claude on a subscription
   and five minutes otherwise. Each turn's cached read and write tokens are logged (`turn usage`).
-- **Compacting ahead of time**, in the bot's own chat only (never threads, rooms, routines or bot requests):
+- **Compacting ahead of time**, in the bot's own chat only (never rooms, routines or bot requests):
   - at the end of a turn past three quarters of the window or 200k tokens, whichever is less;
   - while idle, with a one-hour cache and over 100k in use, five minutes before the cache expires.
 
@@ -160,7 +186,7 @@ the `codync-mem` crate; `chat/memory` runs them in the host.
   the next turn). `session/new`, `session/load` and `session/fork` get three minutes before the agent is
   stopped. Connector or computer changes restart an agent that can resume sessions before its next turn; one
   that can't keeps its session, and its next new session gets them.
-- `turn.inflight.<bot>` records the running turn start and its thread lane. If the host stops mid-turn (update, crash, restart), the next
+- `turn.inflight.<bot>` records when the running turn in the bot's chat started. If the host stops mid-turn (update, crash, restart), the next
   start resumes that session with a hidden "you were interrupted, don't repeat finished steps" prompt. If the
   session can't be resumed, or the turn started over an hour ago, it does nothing.
 
@@ -175,7 +201,9 @@ the `codync-mem` crate; `chat/memory` runs them in the host.
 - Memory search is a substring scan, not semantic vectors. Voice transcripts aren't marked yet, so dreaming
   treats them like typed text. Group rooms don't feed dreaming.
 - `search_history` covers the bot's own chat, not group chats it took part in. It finds messages by words, or
-  reads back from a message id (`from`, then each page's `next`); `search_memory` gives each entry's source
-  messages, so a bot can check where a memory came from.
+  reads back from a message id (`from`, then each page's `next`); `search_memory` gives each `MEMORY.md` line's
+  source message, so a bot can check where a memory came from.
+- A bot told by something it read in the user's own turn (a web page, a file) can still change or take out
+  memory; routines, rooms and other bots can't.
 
-Reply threads have separate session/context lanes; see [groups and threads](groups-and-threads.md). Group and delegated requests don't feed dreaming.
+A reply stays in its chat's session, and its quote stays out of what memory takes as the user's words; see [groups and replies](groups-and-replies.md). Group and delegated requests don't feed dreaming.

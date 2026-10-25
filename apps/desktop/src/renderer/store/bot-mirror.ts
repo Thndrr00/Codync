@@ -43,7 +43,7 @@ export class BotMirror extends Observable {
   routineDrafts = new Map<string, string>()
   readonly composerDrafts: ComposerDrafts
   lastError: string | null = null
-  /** A kit view selected a bot on this store (new chat, editor); the account picks it up. */
+  /** A kit view selected a bot on this store (new bot or group, editor); the account picks it up. */
   selection: string | null = null
   messageContext: { botId: string; id: string; threadId: string | null; entries: Entry[] } | null = null
   /** Permission cards whose answer is on its way, with the chosen option. */
@@ -116,21 +116,23 @@ export class BotMirror extends Observable {
     return this.hello?.backends.find((b) => b.id === id)?.name ?? builtInBackendName(id)
   }
 
-  /** A bot's or group's main chat (thread replies are left out). */
-  chat(botId: string) {
-    return (this.entries.get(botId) ?? []).filter((e) => !e.threadId)
+  /** The ACP registry id an agent's logo is under (`AgentIcon`). */
+  agentRegistry(id: string) {
+    return this.hello?.backends.find((b) => b.id === id)?.registry ?? id
   }
 
+  /** A bot's or group's chat, trace entries included. */
   allEntries(botId: string) {
     return this.entries.get(botId) ?? []
   }
 
-  canLoadOlder(botId: string) {
-    return canLoadHistory(this.allEntries(botId), this.historyComplete.has(botId))
+  /** The chat itself, without its documents' side conversations. */
+  chatEntries(botId: string) {
+    return this.allEntries(botId).filter((e) => !e.threadId)
   }
 
-  replies(botId: string, root: string) {
-    return (this.entries.get(botId) ?? []).filter((e) => e.threadId === root)
+  canLoadOlder(botId: string) {
+    return canLoadHistory(this.allEntries(botId), this.historyComplete.has(botId))
   }
 
   members(group: Bot) {
@@ -139,18 +141,6 @@ export class BotMirror extends Observable {
 
   authorName(id: string | null | undefined) {
     return (id && this.bots.get(id)?.name) || 'A deleted bot'
-  }
-
-  /** The latest thinking of the turn running in a chat (`thread` null) or thread. */
-  currentThinking(botId: string, thread: string | null) {
-    const list = this.allEntries(botId)
-    for (let i = list.length - 1; i >= 0; i--) {
-      const e = list[i]!
-      if ((e.threadId ?? null) !== thread) continue
-      if (e.kind === 'user' || (e.kind === 'agent' && e.data.final === true)) return null
-      if (e.kind === 'thought' && e.data.text) return e.data.text
-    }
-    return null
   }
 
   get connectionLabel() {

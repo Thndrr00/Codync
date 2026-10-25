@@ -89,8 +89,7 @@ impl Actor {
 
     /// A routine run's session is spent once the run is. When it was the only session open and nothing waits, the
     /// agent ran just for the run and stops with it, with everything it started; otherwise the session alone closes,
-    /// so a bot on a short schedule doesn't hold a set of MCP servers per run until [`IDLE`]. Opening the run's thread
-    /// loads it again.
+    /// so a bot on a short schedule doesn't hold a set of MCP servers per run until [`IDLE`].
     pub(super) async fn release_spent(&mut self, sid: &str) {
         let Some(conn) = &self.conn else { return };
         if !conn.sessions.load {

@@ -321,6 +321,7 @@ impl Online {
         if let Err(error) = hub.store.touch_device(&key) {
             tracing::warn!(error = format!("{error:#}"), "couldn't record when a device was last seen");
         }
+        crate::analytics::phone_connected(&hub, &key);
         Self(hub, key)
     }
 }
@@ -554,6 +555,7 @@ impl Channel {
             return (close::NORMAL, "");
         }
         tracing::info!(device = self.key, platform, "device paired");
+        crate::analytics::device_paired(&self.hub, crate::analytics::Via::Qr, platform, false);
         let name = crate::service::host_name();
         self.send(json!({"id": id, "ok": {"computerId": self.hub.identity.computer_id(), "name": name}})).await;
         (close::PAIRED, "paired")

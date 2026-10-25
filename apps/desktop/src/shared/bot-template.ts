@@ -1,9 +1,13 @@
 import type { BotDraft } from './models'
 
-/** Swift's `JSONEncoder` with `.prettyPrinted, .sortedKeys, .withoutEscapingSlashes`; nil fields are left out. */
+/**
+ * Swift's `JSONEncoder` with `.prettyPrinted, .sortedKeys, .withoutEscapingSlashes`; nil fields are left out. A
+ * template carries what the bot is, not this computer's specifics: its account, its team management, or its
+ * fallbacks (they depend on the agents a computer has).
+ */
 export function encodeTemplate(draft: BotDraft): string {
-  // A template carries what the bot is, not what it's allowed to do here (fleet tools).
-  const { id: _id, pinned: _pinned, hidden: _hidden, account: _account, fleetManagement: _fleet, ...rest } = draft
+  const { id: _id, pinned: _pinned, hidden: _hidden, account: _account, manageTeam: _manage, fallbacks: _fallbacks,
+    selfFallbacks: _selfFallbacks, ...rest } = draft
   const sorted = Object.fromEntries(
     Object.entries(rest)
       .filter(([, v]) => v !== null && v !== undefined)

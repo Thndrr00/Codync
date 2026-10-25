@@ -89,6 +89,12 @@ pub struct BotConfig {
     pub fast_mode: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
+    /// Agents that carry on, in order, when the bot's own can't answer (see `agent::fallback`).
+    #[serde(default)]
+    pub fallbacks: Vec<Fallback>,
+    /// The bot may set its own fallbacks (`chat` server's `set_fallbacks`). On unless the user turns it off.
+    #[serde(default = "yes")]
+    pub self_fallbacks: bool,
     #[serde(default)]
     pub pinned: bool,
     /// Place in the roster, lowest first (after pinned bots). All 0 until the user drags one:
@@ -111,15 +117,15 @@ pub struct BotConfig {
     /// The user's rules for the agent's permission requests, first match wins (see `agent::approval_rules`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub approval_rules: Vec<crate::agent::approval_rules::ApprovalRule>,
-    /// The bot may create and organize bots and groups with the `team` server's fleet tools (see
-    /// `chat::fleet`). Off unless the user turns it on; a bot can't turn it on for itself or others.
-    #[serde(default)]
-    pub fleet_management: bool,
-    /// The bot that created this one with its fleet tools; `None` for one the user made.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub created_by: Option<String>,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
+    /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it
+    /// created (see `chat::manage`). The user turns it on; the bots such a bot creates have it too.
+    #[serde(default)]
+    pub manage_team: bool,
+    /// The bot that created this one with `create_bot`; none when the user did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     /// Uses the memory shared by all bots ("yours"). Unset: on for a bot in its own workspace, off for one in a
     /// project folder (see `chat::memory::shared`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -149,9 +155,31 @@ impl BotConfig {
     }
 }
 
+/// One step of a bot's fallback chain: another agent and the model to use on it.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Fallback {
+    pub backend: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub model_options: BTreeMap<String, String>,
+}
+
+fn yes() -> bool {
+    true
+}
+
 fn null_as_false<'de, D: serde::Deserializer<'de>>(value: D) -> Result<bool, D::Error> {
     Ok(Option::<bool>::deserialize(value)?.unwrap_or(false))
 }
+
+/// The avatar colors and shapes every client offers.
+pub const AVATAR_COLORS: [&str; 11] =
+    ["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray"];
+pub const AVATAR_SHAPES: [&str; 8] = ["blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop"];
 
 fn default_color() -> String {
     "blue".into()
@@ -160,21 +188,14 @@ fn default_shape() -> String {
     "blob".into()
 }
 
-/// kv key for per-bot state in one lane (`what`: `session`, `seen`).
-pub fn lane_key(what: &str, bot_id: &str, lane: &Lane) -> String {
-    format!("lane.{what}.{bot_id}@{}", lane.key())
+/// kv key for the agent session of one of a bot's routine runs (`slot`: see `routines::session_slot`).
+pub fn run_session_key(bot_id: &str, slot: &str) -> String {
+    format!("lane.session.{bot_id}@{bot_id}/{slot}")
 }
 
-/// What the user has read (`markRead`): the main chat, one thread, or all of a chat.
-#[derive(Clone, Copy, Debug)]
-pub enum ReadScope<'a> {
-    All,
-    Chat,
-    Thread(&'a str),
-}
-
-/// Where an entry lives: a bot's or group's chat (`bot_id`), and optionally a thread in it,
-/// named by its root entry. Every lane a bot talks in has its own ACP session.
+/// Where entries go and a turn talks: a bot's own chat or a group's (`chat`, a bot id), or one of its side
+/// conversations (`thread`: a document's `doc:<id>` or a Slack thread's `slack-…`), kept apart from the chat.
+/// The chat itself has no threads: a message answers another with `replyTo` (`chat::replies`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Lane {
     pub chat: String,
@@ -190,13 +211,18 @@ impl Lane {
         Self { chat: chat.to_owned(), thread: Some(root.to_owned()) }
     }
 
-    /// Stable text form for kv keys: `chat` or `chat/root`.
+    /// The lane as one string: `chat`, or `chat/thread` for a side conversation.
     pub fn key(&self) -> String {
         match &self.thread {
-            Some(t) => format!("{}/{t}", self.chat),
+            Some(thread) => format!("{}/{thread}", self.chat),
             None => self.chat.clone(),
         }
     }
+}
+
+/// kv key for per-bot state in one lane (`what`: `scratchpad`, …).
+pub fn lane_key(what: &str, bot_id: &str, lane: &Lane) -> String {
+    format!("lane.{what}.{bot_id}@{}", lane.key())
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -205,14 +231,27 @@ pub struct Entry {
     pub id: String,
     pub seq: i64,
     pub bot_id: String,
-    /// The thread's root entry; `None` in the main chat.
-    pub thread_id: Option<String>,
     pub rev: i64,
     pub kind: String,
     pub turn: i64,
     pub data: Value,
     pub created_at: i64,
     pub updated_at: i64,
+    /// The side conversation it's in (see `Lane::thread`); none in the chat itself.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
+}
+
+/// A message's text, or the names of its files when it has none.
+pub fn message_text(data: &Value) -> String {
+    match data["text"].as_str().unwrap_or_default() {
+        "" => {
+            let names: Vec<&str> =
+                data["attachments"].as_array().into_iter().flatten().filter_map(|a| a["name"].as_str()).collect();
+            names.join(", ")
+        }
+        text => text.to_owned(),
+    }
 }
 
 pub struct LastMessage {

@@ -19,14 +19,15 @@ mod pages;
 mod replies;
 mod routines;
 mod skill;
+mod when;
 
 pub use analytics::AnalyticsSheet;
 pub use documents::{DocumentReply, DocumentSheet};
-pub use fields::{handoff_fields, memory_file_fields, protected_fill_fields, voice_decision_fields};
-pub use memory::{MemoryMode, MemorySheet, Section};
+pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields};
+pub use memory::{MemoryMode, MemorySheet, Scroll, Section};
 pub use pages::Page;
-pub use routines::local_zone;
 pub use skill::SkillSheet;
+pub use when::{complete_zone, local_zone};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
@@ -93,6 +94,8 @@ pub struct BotChatSheet {
 pub struct RoutineList {
     pub bot: String,
     pub items: Option<Vec<Value>>,
+    /// The bot's runs, newest first.
+    pub runs: Vec<Value>,
     pub cursor: usize,
 }
 
@@ -193,13 +196,6 @@ pub enum Submit {
         id: String,
         code: bool,
     },
-    /// A long-form memory note: a new one (`name` none) or a change over the content with hash `base`.
-    MemoryFile {
-        bot: String,
-        shared: bool,
-        name: Option<String>,
-        base: Option<String>,
-    },
 }
 
 /// A few labeled text fields: an agent's keys, a connector's setup, a pasted MCP config.
@@ -295,6 +291,15 @@ impl App {
     }
 
     // ---------- model picker ----------
+
+    /// The models of `backend` on its default account.
+    pub(super) fn want_models(&mut self, backend: &str) {
+        self.want_models_for(backend, None);
+    }
+
+    pub(super) fn cycle_model(&self, backend: &str, current: &str, d: isize) -> Option<String> {
+        self.cycle_model_for(backend, None, current, d)
+    }
 
     pub(super) fn want_models_for(&mut self, backend: &str, account: Option<&str>) {
         let key = model_key(backend, account);

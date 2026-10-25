@@ -34,6 +34,18 @@ protocol VoiceEngine: AnyObject, Observable {
     func announce(_ notice: String)
 }
 
+extension VoiceEngine {
+    /// The engine's name in analytics.
+    var analyticsName: AnalyticsEvent.VoiceEngine {
+        if self is CloudSpeechEngine { return .cloud }
+        return switch provider {
+        case .openAI: .openai
+        case .gemini: .gemini
+        case nil: .onDevice
+        }
+    }
+}
+
 struct VoiceError: LocalizedError {
     let message: String
     init(_ message: String) { self.message = message }
@@ -46,6 +58,13 @@ enum VoiceSettings {
 
     static var provider: VoiceProvider? {
         UserDefaults.standard.string(forKey: engineKey).flatMap(VoiceProvider.init(rawValue:))
+    }
+
+    /// The same choice for dictation into the message box, picked beside its mic.
+    static let dictationEngineKey = "dictationEngine"
+
+    static var dictationProvider: VoiceProvider? {
+        UserDefaults.standard.string(forKey: dictationEngineKey).flatMap(VoiceProvider.init(rawValue:))
     }
 
     static func modelKey(_ provider: VoiceProvider) -> String { "callModel.\(provider.rawValue)" }
@@ -120,6 +139,9 @@ enum VoiceSettings {
 }
 
 enum MicTap {
+    /// Bytes per second of what `pcm16k` hands out: 16 kHz mono PCM16.
+    static let bytesPerSecond = 16000 * 2
+
     struct Unavailable: LocalizedError {
         var errorDescription: String? { "no microphone is available right now" }
     }

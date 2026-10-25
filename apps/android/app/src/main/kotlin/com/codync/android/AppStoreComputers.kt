@@ -46,7 +46,7 @@ fun AppStore.switchComputer(id: String) {
  * already under way. The account's push registrations stay, so the computers not shown still notify
  * this phone. Nothing is torn down when `pick` finds nothing (it was removed meanwhile).
  */
-internal fun AppStore.showComputer(after: suspend () -> Unit = {}, pick: (List<Computer>) -> Computer?) = sessionAction(queue = true) {
+internal fun AppStore.showComputer(after: suspend () -> Unit = {}, pick: (List<Computer>) -> Computer?) = sessionAction(wait = true) {
     transitions.withLock {
         val chosen = pick(withContext(Dispatchers.IO) { local.computers() }) ?: return@withLock
         if (chosen.id == state.value.computer?.id) return@withLock
@@ -70,7 +70,7 @@ internal suspend fun AppStore.addComputer(computer: Computer) {
 }
 
 /** Removes a computer from this phone with its mirror, drafts and notifications; the next one is shown if it was the one open. */
-fun AppStore.forgetComputer(id: String) = sessionAction(queue = true) {
+fun AppStore.forgetComputer(id: String) = sessionAction(wait = true) {
     transitions.withLock {
         val userId = state.value.account.userId
         val removed = state.value.computers.firstOrNull { it.id == id } ?: return@withLock

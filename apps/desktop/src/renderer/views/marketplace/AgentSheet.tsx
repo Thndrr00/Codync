@@ -8,6 +8,7 @@ import { HStack, IconSlot, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { ThinkingOrb } from '../../components/ThinkingOrb'
 import { useStore } from '../../store/context'
+import { useTr } from '../../lib/use-language'
 import { errorText, market, type AgentAuth, type AuthMethod } from './market-models'
 import { ErrorText, Field, ScreenHeader, SlideStack, WebLink, filled } from './pieces'
 import { SetupTerminalView } from './SetupTerminal'
@@ -58,12 +59,13 @@ function TintedAgentIcon({ registry, size }: { registry?: string | null; size: n
  */
 export function NodeNotice({ onAdd }: { onAdd: () => void }) {
   const store = useStore()
+  const tr = useTr()
   return (
     <div className="node-notice fade-in">
       <Icon name="shippingbox" size={15} color="var(--secondary)" />
       <VStack as="span" gap={2} grow>
-        <Text size="subheadline" weight="semibold" tone="text">Node.js isn't on {store.hostName}</Text>
-        <Text size="caption" tone="secondary">Some agents need it to run. Codync can add a copy just for them.</Text>
+        <Text size="subheadline" weight="semibold" tone="text">{tr("Node.js isn't on {name}").replaceAll('{name}', store.hostName)}</Text>
+        <Text size="caption" tone="secondary">{tr(`Some agents need it to run. Codync can add a copy just for them.`)}</Text>
       </VStack>
       <Button onClick={onAdd}>Add Node.js</Button>
     </div>
@@ -74,7 +76,7 @@ export function NodeNotice({ onAdd }: { onAdd: () => void }) {
  * Getting an agent ready on the computer: install it, add Node.js when it runs on Node and
  * the computer has none, then sign in. Sign-in
  * options come from the agent itself (ACP), plus Codync's own command for
- * CLIs it knows. Bots are made from New chat, not here.
+ * CLIs it knows. Bots are made from New bot, not here.
  */
 /** `recheck`: opened from a chat's sign-in request, whose agent refused a turn, so the agent is
  *  asked again however signed in it looked. */
@@ -188,17 +190,12 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
 
   const overview = (
     <SheetPage>
-      <ModalHeader title={backend.name} />
+      <ModalHeader
+        icon={<AgentTile registry={backend.registry ?? backend.id} icon={18} tile={32} radius={9} />}
+        title={backend.name}
+        subtitle={backend.description || undefined}
+      />
       <CardForm>
-        <CardSection>
-          <HStack gap={14} className="market-card-header">
-            <AgentTile registry={backend.registry ?? backend.id} icon={30} tile={52} radius={14} />
-            <VStack gap={2} shrink>
-              <Text size="title3" weight="semibold">{backend.name}</Text>
-              {backend.description ? <Text size="subheadline" tone="secondary" lines={3}>{backend.description}</Text> : null}
-            </VStack>
-          </HStack>
-        </CardSection>
         {curated ? (
           <CardSection>
             <SetupStepRow
@@ -228,7 +225,7 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
         >
           <HStack>
             <VStack grow>
-              <SetupStepRow number={1 + Number(curated) + Number(backend.node !== undefined)} title="Sign in" detail={statusText} done={signedIn === true} action={null} />
+              <SetupStepRow number={1 + Number(curated) + Number(Boolean(backend.node))} title="Sign in" detail={statusText} done={signedIn === true} action={null} />
             </VStack>
             {checking ? (
               <ThinkingOrb state="connecting" size={16} color="var(--secondary)" />
@@ -257,6 +254,7 @@ function AgentKeysForm({ backend, method, saved, back, done }: {
   back: () => void
   done: (auth: AgentAuth) => void
 }) {
+  const tr = useTr()
   const store = useStore()
   const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -296,7 +294,7 @@ function AgentKeysForm({ backend, method, saved, back, done }: {
                   placeholder={saved.includes(v.name) ? 'Saved (type to replace)' : v.name}
                   onChange={(x) => setValues((old) => ({ ...old, [v.name]: x }))}
                 />
-                <Text size="caption" tone="secondary">{v.label + (v.optional ? ' (optional)' : '')}</Text>
+                <Text size="caption" tone="secondary">{v.label + (v.optional ? tr(` (optional)`) : '')}</Text>
               </VStack>
             ))}
           </CardSection>
@@ -326,8 +324,9 @@ function SetupStepRow({ number, title, detail, done, action }: {
   done: boolean
   action: { label: string; run: () => void } | null
 }) {
+  const tr = useTr()
   return (
-    <HStack gap={12} className="agent-step-row" aria-label={`${title}. ${detail}${done ? '. Done' : ''}`}>
+    <HStack gap={12} className="agent-step-row" aria-label={`${tr(title)}. ${tr(detail)}${done ? `. ${tr('Done')}` : ''}`}>
       <span aria-hidden className={`agent-step-number${done ? ' done' : ''}`}>
         {done
           ? <Icon name="checkmark" size={10} weight="bold" color="var(--on-accent)" />
@@ -340,7 +339,7 @@ function SetupStepRow({ number, title, detail, done, action }: {
       <span className="agent-row-gap" />
       {action ? (
         <button className="capsule-action agent-step-action" onClick={action.run}>
-          {action.label}
+          {tr(action.label)}
         </button>
       ) : null}
     </HStack>

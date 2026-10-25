@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fastModeRefusal, fastModeShown } from '@shared/fast-mode'
-import { draftOf, type BotDraft, type DirListing } from '@shared/models'
+import { restLine, restOf, withBackend } from '@shared/fallbacks'
+import { draftOf, type Bot, type BotDraft, type DirListing } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { CharacterAvatar } from '../../components/Avatar'
 import { CardSection, ChoicePicker, DropdownMenu, IconButton, Pill, SearchField, Spinner, ValueRow } from '../../components/Controls'
@@ -8,32 +9,30 @@ import { Icon } from '../../components/Icon'
 import { ModalHeader, Sheet, SheetPage, useDismiss } from '../../components/Overlay'
 import { HStack, IconSlot, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
-import { AVATAR_COLORS, AVATAR_SHAPES } from '../../lib/theme'
 import { useStore } from '../../store/context'
 import { useAgentModels } from './agent-models'
 import { AgentModelPicker } from './AgentModelPicker'
 import { AgentAccountPicker } from './AgentAccountPicker'
-import { errorText, fillDefaults, isValid, lastPathComponent, normalized, usePlugins, type Plugins } from './drafts'
+import { agentChoice, AgentStepBanner, FallbacksRow } from './Fallbacks'
+import { errorText, isValid, lastPathComponent, normalized, useFollowSaved, usePlugins, type Plugins } from './drafts'
 import { FormSheet } from '../marketplace/pieces'
 import { SkillSheet, type SkillRef } from '../marketplace/SkillSheet'
-import { AnchoredPanel, AutoTextArea, Field, SwitchRow } from './parts'
+import { AnchoredPanel, AutoTextArea, AvatarPicker, Field, SwitchRow } from './parts'
 import './bots.css'
+import { useTr } from '../../lib/use-language'
 
-/** Create or edit a bot in a modal: the settings form plus Close / Save. */
+
+/** Edit a bot in a modal: the settings form plus Close / Save. New bots start in `NewBotView`. */
 export function BotEditorView({ draft: initial }: { draft: BotDraft }) {
+  const tr = useTr()
   const store = useStore()
   const dismiss = useDismiss()
   const plugins = usePlugins(store)
-  const isNew = !initial.id
-  const [draft, setDraft] = useState(() => (isNew ? fillDefaults(store, initial, { connectors: [], skills: [] }) : initial))
+  const [draft, setDraft] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const online = store.connection.kind === 'online'
-
-  // A new bot's connectors and skills start on once the computer has listed them.
-  useEffect(() => {
-    if (isNew && plugins) setDraft((d) => fillDefaults(store, d, plugins))
-  }, [isNew, plugins, store])
+  useFollowSaved(initial.id ? store.bots.get(initial.id) : undefined, setDraft)
 
   const save = () => {
     if (!isValid(draft) || saving || !online) return
@@ -41,10 +40,7 @@ export function BotEditorView({ draft: initial }: { draft: BotDraft }) {
     setError(null)
     store
       .save(normalized(draft))
-      .then((bot) => {
-        dismiss()
-        if (isNew) store.setSelection(bot.id)
-      })
+      .then(dismiss)
       .catch((e: unknown) => setError(errorText(e)))
       .finally(() => setSaving(false))
   }
@@ -52,8 +48,8 @@ export function BotEditorView({ draft: initial }: { draft: BotDraft }) {
   return (
     <SheetPage>
       <ModalHeader
-        title={isNew ? 'New bot' : 'Settings'}
-        trailing={saving ? <Spinner /> : <IconButton title={isNew ? 'Create' : 'Save'} icon="checkmark" disabled={!isValid(draft) || saving || !online} onClick={save} />}
+        title={tr(`Settings`)}
+        trailing={saving ? <Spinner /> : <IconButton title="Save" icon="checkmark" disabled={!isValid(draft) || saving || !online} onClick={save} />}
       />
       <div className="bot-editor-body">
         <BotSettingsForm draft={draft} onChange={setDraft} error={error} plugins={plugins} />
@@ -63,7 +59,7 @@ export function BotEditorView({ draft: initial }: { draft: BotDraft }) {
 }
 
 /**
- * Which settings a form shows: all of them (a new bot, the editor sheet), what changes often
+ * Which settings a form shows: all of them (the editor sheet), what changes often
  * (instructions, model, fast mode: the inspector's Details tab) or the rest (its Settings tab).
  */
 export type FormPart = 'all' | 'often' | 'rarely'
@@ -81,6 +77,7 @@ export function BotSettingsPanel({ botId, part }: { botId: string; part: FormPar
     setDraft(bot ? draftOf(bot) : null)
     // Only a different bot reloads the form; the host's echo of a save must not undo typing.
   }, [botId])
+  useFollowSaved(store.bots.get(botId), change)
 
   // Autosave a moment after the last change.
   useEffect(() => {
@@ -98,6 +95,18 @@ export function BotSettingsPanel({ botId, part }: { botId: string; part: FormPar
   return draft ? <BotSettingsForm draft={draft} onChange={change} error={error} plugins={plugins} part={part} /> : null
 }
 
+/** The bot that created this one with its team tools, and when. */
+function CreatedBy({ bot, creator }: { bot: Bot; creator: string }) {
+  const tr = useTr()
+  const store = useStore()
+  const date = new Date(bot.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return (
+    <ValueRow label="Created by">
+      <Text truncate>{`${store.bots.get(creator)?.name ?? tr(`A bot`)} · ${date}`}</Text>
+    </ValueRow>
+  )
+}
+
 /** Bot settings, in sections in the Settings style (`CardSection`). */
 function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   draft: BotDraft
@@ -106,6 +115,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   plugins: Plugins | null
   part?: FormPart
 }) {
+  const tr = useTr()
   const store = useStore()
   const [pickingAvatar, setPickingAvatar] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
@@ -146,16 +156,14 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
     ) : null,
   ]
 
+  const ownRest = saved ? restOf(saved, draft.backend, Date.now()) : null
   const agent = (
     <VStack key="agent" gap={8}>
-      <ValueRow label="Agent">
+      <ValueRow label="Agent" detail={ownRest ? restLine(ownRest, Date.now()) : null}>
         <ChoicePicker
           selection={draft.backend}
-          options={[
-            ...backends.map((b) => ({ id: b.id, label: b.available ? b.name : `${b.name} (not installed)`, leading: <AgentIcon registry={b.registry ?? b.id} size={14} /> })),
-            { id: 'custom', label: 'Custom command', leading: <AgentIcon registry="custom" size={14} /> },
-          ]}
-          onChange={(id) => onChange((d) => d.backend === id ? d : { ...d, backend: id, account: null, model: null, modelOptions: {} })}
+          options={[...backends.map(agentChoice), { id: 'custom', label: 'Custom command', leading: <AgentIcon registry="custom" size={14} /> }]}
+          onChange={(id) => onChange((d) => d.backend === id ? d : { ...withBackend(d, id), account: null, model: null, modelOptions: {} })}
         />
       </ValueRow>
       {backend && !backend.available ? <Text size="caption" tone="attention">{backend.installHint}</Text> : null}
@@ -170,6 +178,19 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       ) : null}
     </VStack>
   )
+  // While the bot runs on a fallback, the Agent card starts with it.
+  const step = saved?.agentStep ? <AgentStepBanner key="step" bot={saved} /> : null
+  // Only from a host that has them (its bots say).
+  const fallbacks = saved && saved.selfFallbacks !== null ? [
+    <FallbacksRow key="fallbacks" draft={draft} bot={saved} onChange={onChange} />,
+    <SwitchRow
+      key="self"
+      title="Let the bot change its fallbacks"
+      detail="It can set this list itself, for example when you ask it to."
+      on={draft.selfFallbacks ?? true}
+      onChange={(on) => set('selfFallbacks', on)}
+    />,
+  ] : null
 
   if (part === 'often') {
     return (
@@ -177,8 +198,10 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
         <div className="bot-form-content">
           <CardSection title="Instructions">{instructions}</CardSection>
           <CardSection title="Agent">
+            {step}
             {agent}
             {model}
+            {fallbacks}
           </CardSection>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
         </div>
@@ -200,22 +223,23 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
               </div>
             </AnchoredPanel>
           </ValueRow>
-          {/* A new bot is named from its first conversations (Grok Bot's flow); rename it any time after. */}
-          {draft.id ? (
-            <Field label="Name">
-              <input className="field-box" value={draft.name} placeholder="Name" onChange={(e) => set('name', e.target.value)} />
-            </Field>
-          ) : null}
+          <Field label="Name">
+            <input className="field-box" value={draft.name} placeholder="Name" onChange={(e) => set('name', e.target.value)} />
+          </Field>
           {part === 'all' ? instructions : null}
+          {/* Only a row when a bot made it: CardSection gives every child a row. */}
+          {saved?.createdBy ? <CreatedBy bot={saved} creator={saved.createdBy} /> : null}
         </CardSection>
 
         {/* In the inspector the agent and its model are on the Details tab; what's left is where it works. */}
         <CardSection title={part === 'all' ? 'Agent' : 'Workspace'}>
+          {part === 'all' ? step : null}
           <ValueRow label="Computer">
             <Text truncate>{store.hostName}</Text>
           </ValueRow>
           {part === 'all' ? agent : null}
           {part === 'all' ? model : null}
+          {part === 'all' ? fallbacks : null}
           <ValueRow
             label="Workspace"
             detail={
@@ -232,7 +256,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
               ]}
             >
               <Pill outlined className="workspace-pill">
-                <Text truncate className="workspace-pill-label">{draft.cwd ? lastPathComponent(draft.cwd) : 'Personal'}</Text>
+                <Text truncate className="workspace-pill-label">{draft.cwd ? lastPathComponent(draft.cwd) : tr(`Personal`)}</Text>
                 <Icon name="chevron.down" size={10} weight="semibold" color="var(--secondary)" />
               </Pill>
             </DropdownMenu>
@@ -280,12 +304,13 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
               onChange={(on) => set('computer', on)}
             />
           ) : null}
-          {draft.fleetManagement !== undefined && part === 'all' ? (
+          {/* Only from a host that has it (its bots say). */}
+          {part === 'all' && [...store.bots.values()].some((b) => b.manageTeam !== null) ? (
             <SwitchRow
-              title="Organize bots"
-              detail="Let this bot create bots and groups when you ask, and tune the ones it created. It can't delete bots or change others."
-              on={draft.fleetManagement}
-              onChange={(on) => set('fleetManagement', on)}
+              title="Manage the team"
+              detail="Let this bot create bots and change its own setup and the bots it created. The bots it creates can too."
+              on={draft.manageTeam ?? false}
+              onChange={(on) => set('manageTeam', on)}
             />
           ) : null}
         </CardSection>
@@ -333,9 +358,10 @@ function PluginToggles({ title, empty, items, selection, onChange, onInfo }: {
   /** Shows an item's details from an info button beside its switch. */
   onInfo?: (item: { id: string; name: string; detail: string }) => void
 }) {
+  const tr = useTr()
   return (
     <CardSection title={title}>
-      {items.length ? null : <Text tone="secondary">{empty}</Text>}
+      {items.length ? null : <Text tone="secondary">{tr(empty)}</Text>}
       {items.map((item) => {
         const row = (
           <SwitchRow
@@ -354,27 +380,6 @@ function PluginToggles({ title, empty, items, selection, onChange, onInfo }: {
         ) : row
       })}
     </CardSection>
-  )
-}
-
-function AvatarPicker({ shape, color, onShape, onColor }: { shape: string; color: string; onShape: (s: string) => void; onColor: (c: string) => void }) {
-  return (
-    <VStack gap={12}>
-      <div className="swatch-row">
-        {AVATAR_SHAPES.map((s) => (
-          <button key={s} className={`swatch ${s === shape ? 'on' : ''}`} aria-label={`${s} shape`} aria-pressed={s === shape} onClick={() => onShape(s)}>
-            <CharacterAvatar shape={s} color={color} size={36} />
-          </button>
-        ))}
-      </div>
-      <div className="swatch-row">
-        {AVATAR_COLORS.map((c) => (
-          <button key={c.id} className={`swatch ${c.id === color ? 'on' : ''}`} aria-label={c.label} aria-pressed={c.id === color} onClick={() => onColor(c.id)}>
-            <span className="swatch-color" style={{ background: c.hex }} />
-          </button>
-        ))}
-      </div>
-    </VStack>
   )
 }
 

@@ -6,7 +6,8 @@ use crate::chat::{naming, oneshot};
 use crate::hub::Hub;
 use crate::store::{BotConfig, Entry, EntryKind, Store};
 use anyhow::{Result, anyhow};
-use codync_mem::dream::{self, Message, Outcome};
+use codync_mem::dream::{self, Edits, Message};
+use codync_mem::files::{self as mf, Author, Cause, Fact, MAIN};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -46,6 +47,30 @@ fn reviewed_key(bot: &str) -> String {
     format!("memory.dream.reviewed.{bot}")
 }
 
+/// A layer's MEMORY.md (`None`: the shared one) as a run last saw it nearly full, by its hash: it is tidied again
+/// once it changed.
+fn tidied_key(layer: Option<&str>) -> String {
+    format!("memory.dream.tidied.{}", layer.unwrap_or("shared"))
+}
+
+/// Whether a layer's MEMORY.md (`content`) is nearly full and changed since a run last saw it so.
+fn untidied(store: &Store, layer: Option<&str>, content: &str) -> bool {
+    dream::full(content, layer) && store.kv_get(&tidied_key(layer)) != Some(mf::hash(content))
+}
+
+/// A run saw a layer's MEMORY.md (`content`): when it is nearly full, it isn't tidied again until it changes.
+fn mark_tidied(store: &Store, layer: Option<&str>, content: &str) -> Result<()> {
+    if dream::full(content, layer) {
+        store.kv_set(&tidied_key(layer), &mf::hash(content))?;
+    }
+    Ok(())
+}
+
+/// Runs of bots that see the shared layer take turns, from what they read to what they write, so two never tidy or
+/// change the shared MEMORY.md from the same copy.
+// ponytail: one lock for every such run; a lock per layer if runs ever queue for long.
+static SHARED: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Dreaming starts reading after `seq`.
 pub(super) fn set_bookmark(store: &Store, bot: &str, seq: i64) -> Result<()> {
     store.kv_set(&bookmark_key(bot), &seq.to_string())
@@ -56,8 +81,9 @@ fn bookmark(store: &Store, bot: &str) -> i64 {
 }
 
 /// Starts the bot's dreamer. It runs once the bot has been quiet for [`IDLE`] after the user's turns, or right
-/// away when [`BATCH`] of them are waiting, and once a day for the time review. It also names an unnamed bot. It
-/// stops when the bot actor drops the sender; what it hasn't read waits for the next one.
+/// away when [`BATCH`] of them are waiting, once a day for the time review, and when a MEMORY.md it sees is nearly
+/// full, until it has room again or a run moves nothing out. It also names an unnamed bot. It stops when the bot
+/// actor drops the sender; what it hasn't read waits for the next one.
 pub fn spawn_dreamer(hub: Arc<Hub>, bot_id: String) -> mpsc::UnboundedSender<DreamEvent> {
     let (tx, mut rx) = mpsc::unbounded_channel::<DreamEvent>();
     tokio::spawn(async move {
@@ -71,7 +97,7 @@ pub fn spawn_dreamer(hub: Arc<Hub>, bot_id: String) -> mpsc::UnboundedSender<Dre
             retry_at.map_or(after, |at| at.max(after))
         };
         loop {
-            let due = waiting > 0 || review_due(&hub.store, &bot_id);
+            let due = waiting > 0 || review_due(&hub.store, &bot_id) || tidy_due(&hub.store, &bot_id);
             let run = tokio::select! {
                 event = rx.recv() => match event {
                     None => break,
@@ -122,15 +148,23 @@ fn waiting(store: &Store, bot: &str) -> usize {
         .map_or(0, |entries| entries.iter().filter(|e| e.kind == EntryKind::User.as_str()).count())
 }
 
-/// Once a day, when the bot's memory holds a dated entry it may rewrite (the time review).
+/// Once a day, when the bot's MEMORY.md holds a dated line it may rewrite (the time review).
 fn review_due(store: &Store, bot: &str) -> bool {
     if store.kv_get(&reviewed_key(bot)).as_deref() == Some(today().as_str()) {
         return false;
     }
-    store.memory_read(|c| codync_mem::store::layer(c, Some(bot))).is_ok_and(|entries| {
-        entries.iter().any(|e| {
-            e.state == codync_mem::store::State::Active && e.author != codync_mem::store::Author::User && dated(&e.text)
-        })
+    store
+        .memory_read(|c| mf::facts_of(c, Some(bot)))
+        .is_ok_and(|facts| facts.iter().any(|f| !f.author.is_users() && dated(&f.text)))
+}
+
+/// When a MEMORY.md the bot sees is nearly full, and changed since a run last saw it so.
+fn tidy_due(store: &Store, bot: &str) -> bool {
+    let Some(cfg) = store.bot(bot).ok().flatten().filter(|b| !b.deleted).map(|b| b.config) else { return false };
+    super::files::layers(&cfg).iter().any(|layer| {
+        let layer = layer.as_deref();
+        let content = store.memory_read(|c| mf::current(c, layer, MAIN)).ok().flatten().unwrap_or_default();
+        untidied(store, layer, &content)
     })
 }
 
@@ -158,6 +192,8 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
     if near_limit(hub, &cfg) {
         return Ok(Ran::Later);
     }
+    let shared = super::shared(&cfg);
+    let _turn = if shared { Some(SHARED.lock().await) } else { None };
     let after = bookmark(&hub.store, bot_id);
     let entries = hub.store.conversation_since(bot_id, after, READ_LIMIT)?;
     let read = within_batch(&entries);
@@ -166,41 +202,87 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
     let messages: Vec<Message> = read.iter().filter_map(message).collect();
     let today = today();
     let review = review_due(&hub.store, bot_id);
+    let tidy = tidy_due(&hub.store, bot_id);
     let worth = messages.iter().any(|m| m.from_user && m.text.iter().any(|run| codync_mem::evidence::substantive(run)));
-    if !worth && !review {
+    if !worth && !review && !tidy {
         set_bookmark(&hub.store, bot_id, last_seq)?;
         return Ok(Ran::Done { more });
     }
 
-    let shared = super::shared(&cfg);
+    let (h, c) = (hub.clone(), cfg.clone());
+    tokio::task::spawn_blocking(move || super::files::scan(&h, &c)).await?;
     let snapshot = hub.store.memory_read(|c| dream::snapshot(c, bot_id, shared, &today))?;
     let (system, material) = dream::prompt(&snapshot, &messages);
     let raw = oneshot::one_shot(hub, &cfg, &system, &material).await?;
     let plan = dream::parse(&raw).ok_or_else(|| anyhow!("dreaming answered without a plan"))?;
-    let (kept, rejected) = dream::audit(&snapshot, &messages, plan);
+    let (kept, mut rejected) = dream::audit(&snapshot, &messages, plan);
+    let (edits, dropped) = hub.store.memory_read(|c| dream::edits(c, &snapshot, &kept, &messages))?;
+    rejected.extend(dropped);
     if !rejected.is_empty() {
         tracing::info!(bot = %bot_id, dropped = rejected.len(), reasons = ?rejected, "dreaming dropped changes");
     }
-    let outcome = hub.store.memory_write(|c, now, rev| dream::apply(c, &snapshot, &kept, &messages, now, rev))?;
-    match outcome {
-        Outcome::Stale => return Ok(Ran::Later),
-        Outcome::Changed(dream) => {
-            let notes = dream::notes(&snapshot, &kept);
-            tracing::info!(
-                bot = %bot_id, added = dream.added.len(), archived = dream.archived.len(), notes = notes.len(), "memory dreamed"
-            );
-            let (h, c, id) = (hub.clone(), cfg.clone(), dream.id);
-            tokio::task::spawn_blocking(move || super::files::write_notes(&h, &c, id, &notes)).await?;
-            let layer = if kept.add.iter().any(|a| a.shared) { None } else { Some(bot_id) };
-            super::changed(hub, layer);
+    if !edits.files.is_empty() {
+        let (h, c) = (hub.clone(), cfg.clone());
+        if !tokio::task::spawn_blocking(move || write(&h, &c, &edits)).await?? {
+            return Ok(Ran::Later);
         }
-        Outcome::Unchanged => {}
     }
     set_bookmark(&hub.store, bot_id, last_seq)?;
     if review {
         hub.store.kv_set(&reviewed_key(bot_id), &today)?;
     }
+    // A run that moved lines out changed MEMORY.md, so the next one tidies on; one that moved none waits for a change.
+    for layer in &snapshot.layers {
+        mark_tidied(&hub.store, snapshot.layer_bot(layer.shared), layer.content.as_deref().unwrap_or_default())?;
+    }
     Ok(Ran::Done { more })
+}
+
+/// Writes a run's files over what it saw, and logs it. False when a file changed meanwhile: what was written stays,
+/// and the rest waits for the next run.
+fn write(hub: &Hub, cfg: &BotConfig, edits: &Edits) -> Result<bool> {
+    let dream = hub.store.memory_write(|c, now, _| dream::begin(c, &cfg.id, now))?;
+    let writer = super::files::Writer { author: Author::Dream, bot: Some(cfg), cause: Cause::Dream, message: None };
+    let mut whole = true;
+    for edit in &edits.files {
+        let layer = edit.bot.as_deref();
+        let expected = edit.before.as_deref().map(mf::hash);
+        let version = match super::files::write(hub, layer, &edit.name, Some(&edit.after), expected.as_deref(), writer)
+        {
+            Ok(version) => version,
+            Err(error) => {
+                tracing::info!(bot = %cfg.id, file = %edit.name, error = format!("{error:#}"), "dreaming's change wasn't written");
+                whole = false;
+                break;
+            }
+        };
+        hub.store.memory_write(|c, now, _| {
+            dream::record_file(c, dream, version.id)?;
+            if edit.name != MAIN {
+                return Ok(());
+            }
+            for line in edits.removed.iter().filter(|l| l.bot == edit.bot) {
+                dream::record_line(c, dream, false, &line.text)?;
+            }
+            for line in edits.added.iter().filter(|l| l.bot == edit.bot) {
+                dream::record_line(c, dream, true, &line.text)?;
+                // A review's rewrite stays its writer's, and isn't reviewed again; a new line is dreaming's.
+                let (author, author_bot) = match &line.rewrites {
+                    Some(fact) => {
+                        dream::mark_reviewed(c, layer, &line.text)?;
+                        (fact.author, fact.author_bot.clone())
+                    }
+                    None => (Author::Dream, Some(cfg.id.clone())),
+                };
+                let fact = Fact { text: line.text.clone(), author, author_bot, message: line.message.clone(), at: now };
+                mf::set_origin(c, layer, &fact)?;
+            }
+            Ok(())
+        })?;
+    }
+    hub.store.memory_write(|c, _, _| dream::discard_if_empty(c, dream))?;
+    tracing::info!(bot = %cfg.id, added = edits.added.len(), removed = edits.removed.len(), files = edits.files.len(), "memory dreamed");
+    Ok(whole)
 }
 
 /// Usage of the bot's harness above [`HEADROOM_PERCENT`] in any window.
@@ -236,12 +318,19 @@ fn message(e: &Entry) -> Option<Message> {
         if e.data["from"] == "host" {
             return None;
         }
-        (true, super::notices::typed(&e.data).iter().map(|run| clip(run)).collect::<Vec<_>>())
+        (true, typed(&e.data).iter().map(|run| clip(run)).collect::<Vec<_>>())
     } else {
         (false, vec![clip(e.data["text"].as_str().unwrap_or_default())])
     };
     let text: Vec<String> = text.into_iter().filter(|run| !run.trim().is_empty()).collect();
     (!text.is_empty()).then(|| Message { id: e.id.clone(), from_user, text, date: super::dates::ymd(e.created_at) })
+}
+
+/// The runs of a user message the user typed themselves: not pasted, quoted or forwarded text.
+fn typed(data: &serde_json::Value) -> Vec<String> {
+    let pasted: Vec<String> =
+        data["pasted"].as_array().into_iter().flatten().filter_map(|p| p.as_str().map(str::to_owned)).collect();
+    codync_mem::evidence::typed(data["text"].as_str().unwrap_or_default(), &pasted)
 }
 
 #[cfg(test)]

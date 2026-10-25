@@ -60,8 +60,8 @@ private const val BOT_SECRETS_HOST = "2.20.0"
         ModalHeader("Credentials")
         CardForm(Modifier.weight(1f)) {
             CardSection("Storage") {
-                row { Text(status?.provider ?: "System credential store", style = Type.body, color = Palette.text) }
-                row { Text("Encrypted on the connected computer.", style = Type.body, color = Palette.secondary) }
+                row { Text(tr(status?.provider ?: "System credential store"), style = Type.body, color = Palette.text) }
+                row { Text(tr("Encrypted on the connected computer."), style = Type.body, color = Palette.secondary) }
             }
             CardSection("Saved connections") {
                 for (connector in saved) row {
@@ -70,13 +70,13 @@ private const val BOT_SECRETS_HOST = "2.20.0"
                         Symbol("chevron.right", size = 13.dp, tint = Palette.tertiary)
                     }
                 }
-                if (saved.isEmpty()) row { Text("No saved connection credentials yet.", style = Type.caption, color = Palette.secondary) }
-                row { Text("Values stay hidden. Select a connection to replace its credentials.", style = Type.caption, color = Palette.secondary) }
+                if (saved.isEmpty()) row { Text(tr("No saved connection credentials yet."), style = Type.caption, color = Palette.secondary) }
+                row { Text(tr("Values stay hidden. Select a connection to replace its credentials."), style = Type.caption, color = Palette.secondary) }
             }
             LoginsSection(store)
             if (!AppVersion.isBelow(state.hello?.text("version") ?: "", BOT_SECRETS_HOST)) BotSecretsSection(store)
             CardSection("1Password", "Use a service account with read access only to a dedicated shared vault. The 1Password CLI must be installed on the computer.") {
-                row { Text(if (status?.onePasswordConnected == true) "Connected" else "Connect a shared vault", style = Type.body, color = Palette.text) }
+                row { Text(tr(if (status?.onePasswordConnected == true) "Connected" else "Connect a shared vault"), style = Type.body, color = Palette.text) }
                 row { FieldRow("Service account token") { PlainInput(token, { token = it }, "Paste your token", secret = true) } }
                 row {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -85,7 +85,7 @@ private const val BOT_SECRETS_HOST = "2.20.0"
                     }
                 }
                 row {
-                    Text("Use op://vault/item/field in a connector's credential field. Codync retrieves the value when the connector runs.",
+                    Text(tr("Use op://vault/item/field in a connector's credential field. Codync retrieves the value when the connector runs."),
                         style = Type.footnote, color = Palette.secondary)
                 }
             }

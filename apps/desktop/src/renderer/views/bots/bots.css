@@ -81,6 +81,27 @@ textarea.field-box {
   user-select: text;
 }
 
+/* Fallbacks in the Agent card (Fallbacks.tsx). */
+.fallback-switch-back {
+  flex: none;
+  white-space: nowrap;
+}
+/* The step the bot is on: the chosen-chip capsule. */
+.fallback-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--chip-on);
+  box-shadow: var(--chip-shadow);
+  white-space: nowrap;
+}
+.fallback-menu {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-s);
+}
+
 /* Folder picker (FolderPicker). */
 .folder-back {
   padding-left: 10px;
@@ -122,8 +143,11 @@ textarea.field-box {
   border-radius: var(--radius-s);
 }
 .avatar-picker-panel {
-  width: 300px;
   padding: 14px;
+}
+/* Five shapes and six colors to a row, like the new bot sheet. */
+.avatar-picker {
+  width: 272px;
 }
 
 /* A selectable avatar shape or color, ringed when chosen. */
@@ -140,9 +164,9 @@ textarea.field-box {
 }
 .swatch-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
-  padding: 4px;
-  overflow-x: auto;
 }
 .swatch-color {
   display: block;
@@ -151,120 +175,39 @@ textarea.field-box {
   border-radius: 50%;
 }
 
-/* A picked bot: To: field and group editor. */
-.bot-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px 5px 8px;
-  background: var(--bubble-agent);
-  border-radius: var(--radius-pill);
-  flex: none;
-  animation: chip-in var(--layout) both;
+/* New bot and new group chat (NewBotView): the face, a centered name, the choices, then the buttons. */
+.create-sheet {
+  width: 400px;
 }
-.bot-chip-name {
-  max-width: 220px;
-}
-.bot-chip-remove {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-}
-@keyframes chip-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-}
-.chip-row {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  overflow-x: auto;
-  min-width: 0;
-}
-
-/* Rows in the new message list and the group editor. */
-.pick-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--radius-m);
-  transition: background-color var(--hover), transform var(--press);
-}
-.pick-row.hover:hover {
-  background: var(--bubble-agent);
-}
-.key-cap {
-  min-width: 18px;
-  min-height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-xs);
-  background: var(--background);
-  color: var(--secondary);
-  font-family: var(--mono);
-  font-size: var(--text-caption);
-}
-
-/* The new message page's To: row (NewChatView). */
-.compose-to {
-  padding: 12px 22px;
-  font-size: var(--text-title3);
-  font-weight: 400;
-}
-.compose-to-label {
-  flex: none;
-}
-.compose-to-input {
-  flex: 1;
-  min-width: 200px;
-  color: var(--text);
-  user-select: text;
-}
-.compose-create-icon {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--bubble-agent);
-}
-
-.compose-list {
-  max-height: 460px;
+.create-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  background: var(--surface);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow-m);
-  max-width: 620px;
-  margin: 10px 22px 0;
-  padding: 8px;
+  padding: 4px 24px 20px;
+}
+.create-name.field-box {
+  background: var(--field);
+  text-align: center;
+  font-size: var(--text-title3);
+  padding: 10px 12px;
+}
+.create-members {
+  width: 100%;
+}
+.create-member {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
+  width: 68px;
+  padding: 2px 0;
+  transition: transform var(--press);
 }
-.compose-box {
-  display: flex;
-  align-items: flex-end;
-  margin: 16px;
-  padding: 6px 6px 6px 18px;
-  background: var(--bubble-user);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-s);
+.create-member-name {
+  max-width: 100%;
 }
-.compose-box textarea {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--conversation);
-  line-height: calc(round(up, calc(var(--conversation) * 1.25), 1px));
-  padding: 11px 0;
-  user-select: text;
-  cursor: text;
+.create-footer {
+  padding: 12px 20px 20px;
 }
 
 /* Folder levels slide in from the side they were opened toward. */
@@ -287,16 +230,16 @@ textarea.field-box {
 /* Create template (BotTemplateView). */
 .bot-template {
   width: 560px;
-  height: 540px;
+  max-height: 560px;
   background: var(--background);
 }
 .bot-template-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  padding: 0 24px 24px;
+  padding: 4px 20px 20px;
 }
 .bot-template-code {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
   background: var(--surface);
@@ -315,8 +258,9 @@ textarea.field-box {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 14px;
-  border-radius: 9px;
+  min-height: calc(30px * var(--scale));
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
   background: var(--accent-fill);
   color: var(--on-accent);
   font-size: var(--text-body);

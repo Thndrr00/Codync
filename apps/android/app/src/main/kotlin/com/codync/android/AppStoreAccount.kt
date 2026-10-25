@@ -12,8 +12,16 @@ import kotlinx.serialization.json.*
 
 // Accounts, account computers and starting over: what the account sheet and Computers & settings ask for.
 
-fun AppStore.signIn(apple: Boolean = false, hosted: Boolean = false) = sessionAction {
-    if (hosted) NativeAccounts.hostedSignIn() else NativeAccounts.signIn(apple)
+internal fun AppStore.signIn(provider: SignInProvider) = sessionAction {
+    Analytics.capture(AnalyticsEvent.SignInStarted(provider))
+    try {
+        if (provider == SignInProvider.Hosted) NativeAccounts.hostedSignIn() else NativeAccounts.signIn(apple = provider == SignInProvider.Apple)
+    } catch (error: CancellationException) { throw error }
+    catch (error: Exception) {
+        Analytics.capture(AnalyticsEvent.SignInFailed(provider, (error as? SignInError)?.reason ?: SignInFailure.Error))
+        throw error
+    }
+    Analytics.capture(AnalyticsEvent.SignedIn(provider))
 }
 fun AppStore.switchAccount(account: SavedAccount) = sessionAction { NativeAccounts.switch(account) }
 fun AppStore.retryAccounts() { NativeAccounts.retry() }
@@ -49,9 +57,11 @@ fun AppStore.refreshCloud() = action("cloud") {
 /** A pull to refresh: the account's computers, joining a refresh already under way. */
 suspend fun AppStore.refreshComputers() { refreshCloud(); actions["cloud"]?.join() }
 
-fun AppStore.requestAccess(target: CloudComputer) = action("access") {
+/** `renew`: replaces this phone's grant and request first (an approval that no longer works). */
+fun AppStore.requestAccess(target: CloudComputer, renew: Boolean = false) = action("access") {
     val client = requireNotNull(cloud) { "Sign in to reach your account." }
     asked.add(target.computerId)
+    if (renew) client.revokeAccess(target.computerId)
     val ticket = client.requestAccess(target.computerId, target.signKey)
     mutableState.update { it.copy(access = ticket) }
     try {

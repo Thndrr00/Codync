@@ -80,7 +80,7 @@ internal fun AppStore.persistDrafts() {
     }
 }
 
-fun AppStore.sendDraft(botId: String, thread: String?, text: String, onQueued: () -> Unit) {
+fun AppStore.sendDraft(botId: String, thread: String?, text: String, replyTo: ReplyQuote? = null, onQueued: () -> Unit) {
     editDraft(botId, thread, text)
     val lane = ComposerDraft.lane(botId, thread)
     val draft = state.value.drafts[lane] ?: return
@@ -92,7 +92,8 @@ fun AppStore.sendDraft(botId: String, thread: String?, text: String, onQueued: (
         persistDrafts()
         draftWriter?.join()
         check(savedDrafts[lane] == draft) { "Couldn't save this draft. Retry to send it." }
-        val send = PendingSend(draft.nonce, botId, thread, draft.text.trim(), System.currentTimeMillis(), files = draft.files)
+        val send = PendingSend(draft.nonce, botId, draft.text.trim(), System.currentTimeMillis(), files = draft.files,
+            replyTo = replyTo, threadId = thread)
         savePending(send)
         mutableState.update { it.copy(drafts = it.drafts - lane) }
         persistDrafts()

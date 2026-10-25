@@ -3,8 +3,8 @@ import SwiftUI
 import UIKit
 
 /// One endless conversation with a bot or a group chat. Only deliberate messages show
-/// here; tool calls and thinking live in the "Full conversation" sheet. Any message can
-/// start a thread, which opens over it.
+/// here; tool calls and thinking live in the "Full conversation" sheet. Any message can be
+/// quoted in a reply.
 public struct ThreadView: View {
     let botId: String
 
@@ -12,7 +12,8 @@ public struct ThreadView: View {
     @Environment(BotStore.self) var model
     @Environment(\.dismiss) var dismiss
     @State var showTrace = false
-    @State var openThread: ThreadTarget?
+    /// The message the composer's next send quotes.
+    @State var replyingTo: Entry?
     @State var botChat: BotChatTarget?
     @State var editingGroup = false
     @State var details: DetailsRequest?
@@ -28,11 +29,6 @@ public struct ThreadView: View {
 
     var bot: Bot? { model.bots[botId] }
 
-
-    func closeThread() {
-        withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { openThread = nil }
-    }
-
     /// The messages (each platform's own `transcript`, in its `ThreadView+` file) and the
     /// composer, without the platform's top chrome.
     private var chat: some View {
@@ -47,7 +43,7 @@ public struct ThreadView: View {
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 } else {
-                    Composer(botId: botId,
+                    Composer(botId: botId, replyingTo: $replyingTo,
                              onCall: !calling && bot != nil ? { calling = true } : nil,
                              onInterrupt: callSpeaking ? interruptCall : nil)
                 }
@@ -76,7 +72,7 @@ public struct ThreadView: View {
             }
             .readingConversation(botId)
             .codyncSheet(item: Binding<FileDownloads.Export?>(get: {
-                guard let item = model.fileDownloads.export, item.botId == botId, item.threadId == nil else { return nil }
+                guard let item = model.fileDownloads.export, item.botId == botId else { return nil }
                 return item
             }, set: { if $0 == nil { model.fileDownloads.dismissExport() } })) { item in
                 FileExportSheet(url: item.url) { model.fileDownloads.dismissExport() }
@@ -86,10 +82,10 @@ public struct ThreadView: View {
             }
             .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
             .codyncSheet(item: $details) { request in
-                BotDetailsView(botId: botId, request: request)
+                BotDetailsView(botId: request.botId ?? botId, request: request)
             }
             .codyncSheet(isPresented: $editingGroup) {
-                GroupEditorView(group: bot)
+                if let bot { GroupEditorView(group: bot) }
             }
             .codyncDialog("Start a new session?", isPresented: $confirmNewSession,
                           message: "The conversation stays here, but the agent starts with a fresh context.") {
@@ -108,21 +104,20 @@ public struct ThreadView: View {
             BotMessageRow(group: group) { botChat = BotChatTarget(id: group.peerId) }
         case .entry(let e, let groupStart):
             if e.kind == "notice", let id = e.data.routineId {
-                Button {
-                    openRoutine(id)
-                } label: {
-                    Label(e.data.text ?? "Routine", systemImage: "clock.arrow.circlepath")
-                        .font(.footnote).foregroundStyle(Palette.secondary).padding(.vertical, 10)
-                }.buttonStyle(.plain)
+                RoutineNoticeRow(entry: e) { openRoutine(id) }
             } else {
-                ChatRow(entry: e, groupStart: groupStart, chat: bot) {
-                    showTrace = true
-                } openThread: { root in
-                    withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { openThread = ThreadTarget(id: root.id) }
-                }
+                ChatRow(entry: e, groupStart: groupStart, chat: bot, openTrace: { showTrace = true },
+                        // An update card takes the composer's place, so there's nothing to reply with.
+                        reply: e.isReplyable && model.mismatch == nil ? { reply(to: e) } : nil,
+                        // In a group, the bot whose agent failed.
+                        addFallback: { details = DetailsRequest(botId: e.data.author ?? e.botId) })
                     .equatable()
             }
         }
+    }
+
+    private func reply(to entry: Entry) {
+        withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { replyingTo = entry }
     }
 
     // MARK: chrome
@@ -138,15 +133,15 @@ public struct ThreadView: View {
             }
             .frame(width: 12)
             .accessibilityHidden(true)
-            Text(model.connectionLabel)
+            Text(L10n.tr(model.connectionLabel))
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
         .font(.system(size: 10, weight: .medium))
         .foregroundStyle(Palette.secondary)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(model.hostName), \(connectionDescription)")
-        .help("\(model.hostName) · \(connectionDescription)")
+        .accessibilityLabel("\(model.hostName), \(L10n.tr(connectionDescription))")
+        .help("\(model.hostName) · \(L10n.tr(connectionDescription))")
     }
 
     private var connectionSymbol: String {
@@ -228,13 +223,13 @@ struct ChatItem: Identifiable {
     let kind: Kind
 
     /// Chat-visible entries plus time separators (gaps > 1 h) and author grouping. A bot's
-    /// messages arrive whole (Grok Bot's `send_message`); what it writes along the way is trace.
-    static func build(_ entries: [Entry], groupingExchanges: Bool = false) -> [ChatItem] {
+    /// messages arrive whole (Grok Bot's `send_message`); what it writes along the way is trace. Runs of
+    /// bot exchanges with one peer fold into one item.
+    static func build(_ entries: [Entry]) -> [ChatItem] {
         var out: [ChatItem] = []
         var lastDate: Date?
         var lastAuthor: String?
-        let slots = groupingExchanges ? BotExchangeGroup.collapse(entries) : entries.filter(\.isChat).map(BotExchangeGroup.Item.entry)
-        for slot in slots {
+        for slot in BotExchangeGroup.collapse(entries) {
             let date = slot.date
             // Bot-originated messages carry an empty nonce. Their entry IDs
             // distinguish them; only real nonces identify optimistic echoes.
@@ -286,7 +281,7 @@ struct GroupIntroCard: View {
                     .foregroundStyle(Palette.secondary)
                     .multilineTextAlignment(.center)
             }
-            Text("Everyone answers in turn. @mention a bot to ask just that one.")
+            Text(L10n.tr("Everyone answers in turn. @mention a bot to ask just that one."))
                 .font(.subheadline)
                 .foregroundStyle(Palette.secondary)
                 .multilineTextAlignment(.center)
@@ -305,7 +300,11 @@ struct IntroCard: View {
         VStack(spacing: 12) {
             CharacterAvatar(bot: bot, size: 72)
             Text(bot.name).font(.title2.weight(.semibold)).foregroundStyle(Palette.text)
-            Text(bot.managedWorkspace ? "\(model.backendName(bot.backend)) · Personal workspace" : "\(model.backendName(bot.backend)) in \(bot.cwd)")
+            Text(bot.managedWorkspace
+                 ? "\(model.backendName(bot.backend)) · \(L10n.tr("Personal workspace"))"
+                 : L10n.tr("{agent} in {path}")
+                    .replacingOccurrences(of: "{agent}", with: model.backendName(bot.backend))
+                    .replacingOccurrences(of: "{path}", with: bot.cwd))
                 .font(.subheadline)
                 .foregroundStyle(Palette.secondary)
                 .multilineTextAlignment(.center)
@@ -315,7 +314,7 @@ struct IntroCard: View {
                     .foregroundStyle(Palette.secondary)
                     .multilineTextAlignment(.center)
             }
-            Text("Tell it what you need. You'll get a notification when it's done or needs you.")
+            Text(L10n.tr("Tell it what you need. You'll get a notification when it's done or needs you."))
                 .font(.subheadline)
                 .foregroundStyle(Palette.secondary)
                 .multilineTextAlignment(.center)
@@ -329,19 +328,16 @@ struct IntroCard: View {
 extension ThreadView {
     public var body: some View {
         conversation
-            .codyncSheet(item: $openThread) { target in
-                RepliesView(botId: botId, rootId: target.id) { closeThread() }
-            }
+            .tracked(.screenViewed(.chat))
     }
 
-    private var working: Bool { bot?.isWorking(in: botId, thread: nil) == true && !model.isOffline }
+    private var working: Bool { bot?.isWorking(in: botId) == true && !model.isOffline }
 
     /// iPhone's messages: all this device has, earlier ones from the computer as the reader
     /// scrolls up; the chat follows the newest message until they scroll away, and a reply is
     /// revealed steadily as it's written.
     var transcript: some View {
-        let thread = model.chat(botId)
-        let items = ChatItem.build(thread, groupingExchanges: true)
+        let items = ChatItem.build(model.chat(botId))
         var rows: [ConversationRow] = []
         if moreOnComputer {
             rows.append(ConversationRow("earlier") {
@@ -362,7 +358,8 @@ extension ThreadView {
         // Offline, "working" is only what the computer last said; don't show it as live.
         if let bot, working {
             rows.append(ConversationRow("working") {
-                WorkingIndicator(bot: bot, thinking: model.currentThinking(botId, thread: nil))
+                WorkingIndicator(bot: bot)
+                    .id(bot.startedAt)
                     .padding(.top, 6)
             })
         }
@@ -408,14 +405,14 @@ extension ThreadView {
     var header: some View {
         // Like Grok Bot: the title pill holds the bot's actions; the corner is the computer.
         Menu {
-            Text("\(model.hostName) · \(model.connectionLabel)")
-            Button("Reconnect", systemImage: "arrow.clockwise") { model.restartStream() }
+            Text("\(model.hostName) · \(L10n.tr(model.connectionLabel))")
+            Button(L10n.tr("Reconnect"), systemImage: "arrow.clockwise") { model.restartStream() }
             Divider()
-            Button("Details", systemImage: "info.circle", action: openDetails)
+            Button(L10n.tr("Details"), systemImage: "info.circle", action: openDetails)
             ForEach(menuItems) { item in
                 if item.divider { Divider() }
                 Button(role: item.destructive ? .destructive : nil, action: item.action) {
-                    if let icon = item.icon { Label(item.title, systemImage: icon) } else { Text(item.title) }
+                    if let icon = item.icon { Label(L10n.tr(item.title), systemImage: icon) } else { Text(L10n.tr(item.title)) }
                 }
             }
         } label: {
@@ -431,7 +428,7 @@ extension ThreadView {
     /// Opens the computer's screen; pulses while this bot is operating it (watch, then take over).
     private var computerButton: some View {
         let operating = model.screen?.agentBot == botId
-        return Button("Computer", systemImage: "desktopcomputer") {
+        return Button(L10n.tr("Computer"), systemImage: "desktopcomputer") {
             model.screenRequest = operating ? ScreenRequest(watching: botId) : ScreenRequest()
         }
         .symbolEffect(.pulse, options: .repeating, isActive: operating)

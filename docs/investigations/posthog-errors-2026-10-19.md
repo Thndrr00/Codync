@@ -17,7 +17,8 @@ richer error detail is proposed in [error tracking detail](../plans/error-tracki
 - **Desktop renderer frames**: the renderer bundle is reproducible. `git archive v2.18.0
   apps/desktop`, link `node_modules`, `npx electron-vite build`: the same `index-<hash>.js`
   comes out, so a frame's line and column map to source.
-- **iPhone frames** (`Codync + <offset>`, the offset into the binary's text segment): the dSYM of
+- **iPhone frames** (`Codync + <offset>`, the offset into the binary's text segment; from 2.19.2
+  PostHog symbolicates them, see [iPhone crash tracing](../guides/iphone-crash-tracing.md)): the dSYM of
   that version comes from its Xcode Cloud run ([iOS releases](../guides/development.md#ios-releases-xcode-cloud)).
   With the App Store Connect API: `GET /v1/ciProducts/<iOS product>/buildRuns?sort=-number` (the
   commit message names the version) → `/v1/ciBuildRuns/<id>/actions` → `/v1/ciBuildActions/<id>/artifacts`;
@@ -55,4 +56,5 @@ frames from `localhost:5173`) reports into the project with `env = main`. Its `d
 ## Open
 
 - 10 and 11 need more detail than the reports carry; see [error tracking detail](../plans/error-tracking-detail.md).
+  From 2.19.2 PostHog symbolicates iPhone crashes itself and every error carries its session.
 - 7: watch `agent_reason` and `rpc_code` on failed Claude turns after 2.19.1; bursts that remain with `rate_limit` or `overloaded` are the provider, not Codync.

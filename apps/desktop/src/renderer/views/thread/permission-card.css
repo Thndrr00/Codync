@@ -1,5 +1,7 @@
 /* The approval card in the chat, and the command and diff boxes it shares with the trace. */
 .permission-card {
+  width: fit-content;
+  max-width: min(100%, 420px);
   padding: 16px;
   background: var(--bubble-agent);
   border-radius: var(--radius-xl);

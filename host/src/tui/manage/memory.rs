@@ -1,11 +1,14 @@
-//! A bot's memory, as in the other apps: what it knows about you (shared by your bots) and on its own, its dream
-//! log, and Claude Code's own memory where the user kept it on, driven from the keyboard.
+//! A bot's memory, read-only as in the other apps: what it knows about you (shared by your bots) and on its own,
+//! its notes, its dream log, and Claude Code's own memory where the user kept it on. The user changes memory by
+//! telling the bot.
 
-use super::super::app::{App, Confirm, ConfirmAct, Editor, Overlay};
+use super::super::app::{App, Confirm, ConfirmAct, Overlay};
+use super::super::l10n::tr;
 use super::s;
-use super::{Page, Reply};
+use super::{Page, Reply, ctrl};
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::{Value, json};
+use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Section {
@@ -30,15 +33,6 @@ impl Section {
             Self::Harness => "Claude Code",
         }
     }
-
-    /// Whether the section holds memory entries, and of which layer: `Some(true)` the shared one.
-    pub fn shared(self) -> Option<bool> {
-        match self {
-            Self::Yours => Some(true),
-            Self::Bot => Some(false),
-            Self::Notes | Self::Dreams | Self::Harness => None,
-        }
-    }
 }
 
 pub struct MemorySheet {
@@ -46,7 +40,10 @@ pub struct MemorySheet {
     /// The host's `memory` reply.
     pub view: Option<Value>,
     pub section: Section,
+    /// The row picked in the section's list.
     pub cursor: usize,
+    /// The open note's, or Claude Code's memory's, scroll.
+    pub scroll: Scroll,
     pub mode: MemoryMode,
     pub error: Option<String>,
     pub busy: bool,
@@ -54,12 +51,7 @@ pub struct MemorySheet {
 
 pub enum MemoryMode {
     Browse,
-    /// Writing a new entry (`id` none) or changing one.
-    Edit {
-        id: Option<i64>,
-        editor: Editor,
-    },
-    /// One note: what it holds and its versions (`detail`, once fetched). The cursor moves over the versions.
+    /// One note: what it holds (`detail`, once fetched).
     File {
         name: String,
         shared: bool,
@@ -67,27 +59,48 @@ pub enum MemoryMode {
     },
 }
 
+/// A read-only text's scroll, by wrapped row; the last draw sets how far it goes and a page's height.
+#[derive(Default)]
+pub struct Scroll {
+    pub pos: usize,
+    pub max: Cell<usize>,
+    pub page: Cell<usize>,
+}
+
+impl Scroll {
+    /// ↑↓, PageUp/PageDown and Ctrl-d/u; false for a key it doesn't take.
+    fn key(&mut self, k: KeyEvent) -> bool {
+        let max = self.max.get();
+        let half = (self.page.get() / 2).max(1);
+        // A refresh or a resize can leave the position past the end.
+        let pos = self.pos.min(max);
+        self.pos = match k.code {
+            KeyCode::Down | KeyCode::Char('j') => (pos + 1).min(max),
+            KeyCode::Up | KeyCode::Char('k') => pos.saturating_sub(1),
+            KeyCode::PageDown => (pos + half).min(max),
+            KeyCode::PageUp => pos.saturating_sub(half),
+            KeyCode::Char('d') if ctrl(k) => (pos + half).min(max),
+            KeyCode::Char('u') if ctrl(k) => pos.saturating_sub(half),
+            _ => return false,
+        };
+        true
+    }
+}
+
 impl MemorySheet {
     pub fn body(&self) -> Value {
         json!({"botId": self.bot})
-    }
-
-    pub fn editor(&mut self) -> Option<&mut Editor> {
-        match &mut self.mode {
-            MemoryMode::Edit { editor, .. } => Some(editor),
-            MemoryMode::Browse | MemoryMode::File { .. } => None,
-        }
     }
 
     /// The note sheet's fetch, when one is open.
     pub fn file_body(&self) -> Option<Value> {
         match &self.mode {
             MemoryMode::File { name, shared, .. } => Some(json!({"botId": self.bot, "file": name, "shared": shared})),
-            _ => None,
+            MemoryMode::Browse => None,
         }
     }
 
-    /// The current section's rows: entries, or dream runs.
+    /// The current section's rows: entries, notes (deleted ones left out), or dream runs.
     pub fn rows(&self) -> Vec<Value> {
         let Some(view) = &self.view else { return Vec::new() };
         let list = match self.section {
@@ -98,7 +111,9 @@ impl MemorySheet {
                 // This bot's own first, then the shared ones; each row says which.
                 let mut rows = Vec::new();
                 for (layer, shared) in [("bot", false), ("yours", true)] {
-                    for file in view["files"][layer]["files"].as_array().into_iter().flatten() {
+                    for file in
+                        view["files"][layer]["files"].as_array().into_iter().flatten().filter(|f| f["deleted"] != true)
+                    {
                         let mut file = file.clone();
                         file["shared"] = shared.into();
                         rows.push(file);
@@ -117,10 +132,8 @@ impl MemorySheet {
         let was = self.rows().get(self.cursor).map(key);
         self.view = Some(view);
         if !self.sections().contains(&self.section) {
-            // Claude Code's memory was just turned off; its scroll position means nothing elsewhere.
+            // Claude Code's memory was just turned off.
             self.section = Section::Bot;
-            self.cursor = 0;
-            return;
         }
         let rows = self.rows();
         self.cursor = was
@@ -139,6 +152,7 @@ impl MemorySheet {
         let at = sections.iter().position(|s| *s == self.section).unwrap_or(0);
         self.section = sections[at.saturating_add_signed(by).min(sections.len() - 1)];
         self.cursor = 0;
+        self.scroll = Scroll::default();
     }
 }
 
@@ -153,6 +167,7 @@ impl App {
             view: None,
             section: Section::Bot,
             cursor: 0,
+            scroll: Scroll::default(),
             mode: MemoryMode::Browse,
             error: None,
             busy: true,
@@ -163,8 +178,7 @@ impl App {
 
     /// The name of the bot's harness as the agent list gives it ("Claude Code").
     pub fn harness_name(&self, bot: &str) -> String {
-        let Some(backend) = self.bots.get(bot).map(|b| b.backend.as_str()) else { return String::new() };
-        self.backends.iter().find(|b| b["id"] == backend).map_or_else(|| backend.to_owned(), |b| s(b, "name"))
+        self.bots.get(bot).map(|b| self.agent_name(&b.backend)).unwrap_or_default()
     }
 
     /// A bot's memory changed somewhere (its `memoryRev` moved): an open sheet fetches it again.
@@ -185,19 +199,10 @@ impl App {
 
     pub(in crate::tui) fn memory_key(&mut self, mut m: MemorySheet, k: KeyEvent) -> Option<Overlay> {
         if let MemoryMode::File { .. } = m.mode {
-            return self.note_key(m, k);
-        }
-        if let MemoryMode::Edit { id, editor } = &mut m.mode {
-            match k.code {
-                KeyCode::Esc => m.mode = MemoryMode::Browse,
-                KeyCode::Enter if !m.busy && !editor.text.trim().is_empty() => {
-                    m.busy = true;
-                    let body = json!({"botId": m.bot, "id": id, "shared": m.section == Section::Yours, "text": editor.text.trim()});
-                    self.sheet("saveMemory", body, Reply::MemorySaved(m.bot.clone()));
-                }
-                _ => {
-                    editor.key(k);
-                }
+            if matches!(k.code, KeyCode::Esc | KeyCode::Char('q')) {
+                m.mode = MemoryMode::Browse;
+            } else {
+                m.scroll.key(k);
             }
             return Some(Overlay::Memory(m));
         }
@@ -205,75 +210,28 @@ impl App {
             self.open_page(page);
             return None;
         }
+        // Claude Code's memory scrolls; the other sections move between rows.
+        if m.section == Section::Harness && m.scroll.key(k) {
+            return Some(Overlay::Memory(m));
+        }
         let rows = m.rows();
-        let selected = rows.get(m.cursor).cloned();
-        let entry = selected.as_ref().filter(|_| m.section.shared().is_some());
         match k.code {
             KeyCode::Esc | KeyCode::Char('q' | 'M') => return None,
             KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => self.step_section(&mut m, 1),
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => self.step_section(&mut m, -1),
-            KeyCode::Down | KeyCode::Char('j') => {
-                // Claude Code's memory scrolls by line; the other sections move between rows.
-                let last = if m.section == Section::Harness {
-                    m.view
-                        .as_ref()
-                        .map_or(0, |v| v["projectMemory"]["text"].as_str().unwrap_or_default().lines().count())
-                } else {
-                    rows.len()
-                };
-                m.cursor = (m.cursor + 1).min(last.saturating_sub(1));
-            }
+            KeyCode::Down | KeyCode::Char('j') => m.cursor = (m.cursor + 1).min(rows.len().saturating_sub(1)),
             KeyCode::Up | KeyCode::Char('k') => m.cursor = m.cursor.saturating_sub(1),
             KeyCode::Char('r') => {
                 m.busy = true;
                 self.sheet("memory", m.body(), Reply::Memory(m.bot.clone()));
             }
-            KeyCode::Char('n') if m.section.shared().is_some() => {
-                m.mode = MemoryMode::Edit { id: None, editor: Editor::default() };
-            }
-            KeyCode::Char('n') if m.section == Section::Notes => {
-                let fields = super::memory_file_fields(&m.bot, false, None, None, NOTE_TEMPLATE);
-                self.overlays.push(Overlay::Memory(m));
-                self.overlays.push(Overlay::Fields(Box::new(fields)));
-                return None;
-            }
-            KeyCode::Enter | KeyCode::Char('e') if m.section == Section::Notes && selected.is_some() => {
-                let file = selected.expect("checked above");
-                m.mode = MemoryMode::File { name: s(&file, "name"), shared: file["shared"] == true, detail: None };
-                m.cursor = 0;
-                if let Some(body) = m.file_body() {
-                    self.sheet("memoryFile", body, Reply::MemoryFile(m.bot.clone()));
-                }
-            }
-            KeyCode::Enter | KeyCode::Char('e') if entry.is_some() => {
-                let e = entry.expect("checked above");
-                m.mode = MemoryMode::Edit {
-                    id: e["id"].as_i64(),
-                    editor: Editor::with(e["text"].as_str().unwrap_or_default()),
-                };
-            }
-            KeyCode::Char('p' | 'a' | 'x') if entry.is_some() && !m.busy => {
-                let e = entry.expect("checked above");
-                let (method, body) = match k.code {
-                    KeyCode::Char('p') => {
-                        ("pinMemory", json!({"botId": m.bot, "id": e["id"], "pinned": e["pinned"] != true}))
+            KeyCode::Enter if m.section == Section::Notes => {
+                if let Some(file) = rows.get(m.cursor) {
+                    m.mode = MemoryMode::File { name: s(file, "name"), shared: file["shared"] == true, detail: None };
+                    m.scroll = Scroll::default();
+                    if let Some(body) = m.file_body() {
+                        self.sheet("memoryFile", body, Reply::MemoryFile(m.bot.clone()));
                     }
-                    KeyCode::Char('a') => {
-                        ("archiveMemory", json!({"botId": m.bot, "id": e["id"], "archived": e["state"] != "archived"}))
-                    }
-                    _ => ("forgetMemory", json!({"botId": m.bot, "id": e["id"]})),
-                };
-                m.busy = true;
-                self.sheet(method, body, Reply::MemorySaved(m.bot.clone()));
-            }
-            KeyCode::Char('u') if m.section == Section::Dreams && !m.busy => {
-                if let Some(dream) = selected.filter(|d| d["undone"] != true) {
-                    m.busy = true;
-                    self.sheet(
-                        "undoDream",
-                        json!({"botId": m.bot, "id": dream["id"]}),
-                        Reply::MemorySaved(m.bot.clone()),
-                    );
                 }
             }
             KeyCode::Char('s') if !m.busy => {
@@ -286,30 +244,6 @@ impl App {
                 );
             }
             KeyCode::Char('m') if !m.busy => return self.harness_memory_key(m),
-            KeyCode::Char('D') if !rows.is_empty() && !m.busy => {
-                if let Some(shared) = m.section.shared() {
-                    let c = Confirm {
-                        title: if shared {
-                            "Forget everything shared about you?"
-                        } else {
-                            "Forget everything this bot remembers?"
-                        }
-                        .into(),
-                        detail: if shared {
-                            "Every bot loses these memories."
-                        } else {
-                            "This bot's own memories are removed."
-                        }
-                        .into(),
-                        note: "The chat stays.".into(),
-                        button: "Forget everything",
-                        act: ConfirmAct::ClearMemory(m.bot.clone(), shared),
-                    };
-                    self.overlays.push(Overlay::Memory(m));
-                    self.overlays.push(Overlay::Confirm(c));
-                    return None;
-                }
-            }
             _ => {}
         }
         Some(Overlay::Memory(m))
@@ -339,7 +273,7 @@ impl App {
             Some(false) => {
                 // One line each in the confirmation: the info sheets' points, short.
                 let c = Confirm {
-                    title: format!("Turn on {}'s own memory?", self.harness_name(&m.bot)),
+                    title: tr("Turn on {name}'s own memory?").replace("{name}", &self.harness_name(&m.bot)),
                     detail: "It may store things twice; the two memories can disagree.".into(),
                     note: "Forgetting something in Codync doesn't reach it.".into(),
                     button: "Turn on",
@@ -353,64 +287,7 @@ impl App {
         }
         Some(Overlay::Memory(m))
     }
-
-    /// Keys on a note: read it, edit it, delete it, or bring back a version.
-    fn note_key(&mut self, mut m: MemorySheet, k: KeyEvent) -> Option<Overlay> {
-        let MemoryMode::File { name, shared, detail } = &m.mode else { return Some(Overlay::Memory(m)) };
-        let (name, shared) = (name.clone(), *shared);
-        let content = detail.as_ref().and_then(|d| d["content"].as_str()).map(str::to_owned);
-        let base = detail.as_ref().and_then(|d| d["hash"].as_str()).map(str::to_owned);
-        let versions = detail.as_ref().and_then(|d| d["versions"].as_array()).cloned().unwrap_or_default();
-        match k.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                m.mode = MemoryMode::Browse;
-                m.cursor = 0;
-            }
-            KeyCode::Down | KeyCode::Char('j') => m.cursor = (m.cursor + 1).min(versions.len().saturating_sub(1)),
-            KeyCode::Up | KeyCode::Char('k') => m.cursor = m.cursor.saturating_sub(1),
-            KeyCode::Char('e') if content.is_some() => {
-                let fields = super::memory_file_fields(
-                    &m.bot,
-                    shared,
-                    Some(&name),
-                    base,
-                    content.as_deref().unwrap_or_default(),
-                );
-                self.overlays.push(Overlay::Memory(m));
-                self.overlays.push(Overlay::Fields(Box::new(fields)));
-                return None;
-            }
-            KeyCode::Char('x') if content.is_some() && !m.busy => {
-                let c = Confirm {
-                    title: format!("Delete {name}?"),
-                    detail: "The bot no longer sees it.".into(),
-                    note: "Its versions stay, so you can bring it back.".into(),
-                    button: "Delete",
-                    act: ConfirmAct::DeleteMemoryFile { bot: m.bot.clone(), shared, name, base },
-                };
-                self.overlays.push(Overlay::Memory(m));
-                self.overlays.push(Overlay::Confirm(c));
-                return None;
-            }
-            KeyCode::Enter | KeyCode::Char('r') if !m.busy => {
-                if let Some(version) = versions
-                    .get(m.cursor)
-                    .filter(|v| v["content"].is_string() && v["content"].as_str() != content.as_deref())
-                {
-                    m.busy = true;
-                    let body =
-                        json!({"botId": m.bot, "file": name, "shared": shared, "version": version["id"], "base": base});
-                    self.sheet("restoreMemoryFile", body, Reply::MemorySaved(m.bot.clone()));
-                }
-            }
-            _ => {}
-        }
-        Some(Overlay::Memory(m))
-    }
 }
-
-/// What a new note starts with.
-const NOTE_TEMPLATE: &str = "---\ndescription: When to read this note\n---\n";
 
 #[cfg(test)]
 mod tests {
@@ -424,6 +301,7 @@ mod tests {
             view: Some(view([1, 2, 3])),
             section: Section::Bot,
             cursor: 2,
+            scroll: Scroll::default(),
             mode: MemoryMode::Browse,
             error: None,
             busy: false,
@@ -435,18 +313,52 @@ mod tests {
     }
 
     #[test]
+    fn a_memory_change_keeps_an_open_notes_scroll_and_its_row() {
+        let files = |names: [&str; 2]| json!({"files": {"bot": {"files": names.map(|n| json!({"name": n}))}}});
+        let mut m = MemorySheet {
+            bot: "b".into(),
+            view: Some(files(["a", "n"])),
+            section: Section::Notes,
+            cursor: 1,
+            scroll: Scroll { pos: 10, ..Scroll::default() },
+            mode: MemoryMode::File { name: "n".into(), shared: false, detail: None },
+            error: None,
+            busy: false,
+        };
+        m.show(files(["n", "a"]));
+        assert_eq!((m.cursor, m.scroll.pos), (0, 10), "the list keeps its row, the note its scroll");
+    }
+
+    #[test]
+    fn scrolling_stops_at_the_end_the_draw_set() {
+        let key = |code| KeyEvent::from(code);
+        let mut scroll = Scroll { pos: 10, ..Scroll::default() };
+        scroll.max.set(30);
+        scroll.page.set(20);
+        assert!(scroll.key(key(KeyCode::PageDown)));
+        assert_eq!(scroll.pos, 20);
+        assert!(scroll.key(key(KeyCode::PageDown)));
+        assert_eq!(scroll.pos, 30, "no further than the last wrapped row");
+        scroll.max.set(5);
+        assert!(scroll.key(key(KeyCode::Up)));
+        assert_eq!(scroll.pos, 4, "a shorter text: the first ↑ moves from its end");
+        assert!(!scroll.key(key(KeyCode::Enter)));
+    }
+
+    #[test]
     fn turning_claude_codes_memory_off_leaves_its_section() {
         let entries = json!({"entries": [{"id": 1}, {"id": 2}]});
         let mut m = MemorySheet {
             bot: "b".into(),
             view: Some(json!({"bot": entries, "projectMemory": {"path": "p", "text": "a\nb\nc\nd"}})),
             section: Section::Harness,
-            cursor: 3,
+            cursor: 0,
+            scroll: Scroll { pos: 3, ..Scroll::default() },
             mode: MemoryMode::Browse,
             error: None,
             busy: false,
         };
         m.show(json!({"bot": entries, "projectMemory": null}));
-        assert_eq!((m.section, m.cursor), (Section::Bot, 0), "its scroll position isn't a row");
+        assert_eq!((m.section, m.cursor), (Section::Bot, 0));
     }
 }

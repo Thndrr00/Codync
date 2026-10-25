@@ -36,6 +36,8 @@ export function hostUpdateFixture(options: { environment?: 'main' | 'dev'; platf
     existsSync: (name: string) => !options.missingBinary && name === binary,
     realpathSync: (name: string) => name,
     readFileSync: (name: string) => name.endsWith('host-prefs.json') ? JSON.stringify(persisted) : service(),
+    mkdirSync: () => {},
+    writeFileSync: (_name: string, value: string) => { Object.assign(persisted, JSON.parse(value)) },
     promises: {
       mkdir: async () => {},
       writeFile: async (_name: string, value: string) => { Object.assign(persisted, JSON.parse(value)) },

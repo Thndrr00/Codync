@@ -109,7 +109,7 @@ fn build(store: &Store, bot: &str, session: &str) -> Result<String> {
     .render())
 }
 
-fn plan_text(data: &Value) -> String {
+pub(crate) fn plan_text(data: &Value) -> String {
     let steps = data["entries"].as_array().into_iter().flatten();
     steps
         .map(|s| {

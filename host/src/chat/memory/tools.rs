@@ -1,12 +1,14 @@
-//! The built-in `memory` MCP server: the bot's own memory tools, and search over its chat history.
+//! The built-in `memory` MCP server, the same for every harness: the bot's memory files ([`super::file_tools`]),
+//! search over them, and search over its chat history.
 
 use super::dates::ymd;
-use super::notices::{self, Action};
 use crate::agent::acp;
 use crate::hub::Hub;
 use crate::store::BotConfig;
 use anyhow::{Result, anyhow, bail};
+use codync_mem::files::{self as mf, MAIN};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 const SEARCH_DEFAULT: i64 = 10;
@@ -15,52 +17,22 @@ const SEARCH_TERMS: usize = 8;
 const SEARCH_TEXT_CHARS: usize = 1_500;
 
 pub const INSTRUCTIONS: &str = "Your memory holds what you know about the user, and every session opens with it. \
-Save lasting facts about the user with remember, and keep entries true with revise_memory and archive_memory \
-(the [id] is in your instructions). Project and code knowledge worth keeping goes in a long-form note of yours on \
-that project, not in entries; don't make the project's CLAUDE.md or AGENTS.md your memory unless the user asks. \
-Lists, itineraries, histories and other detail longer than a sentence or two go in a long-form note on that topic \
-(listed in your instructions), not in entries. search_memory finds archived entries and lines of those notes; \
-search_history finds what was actually said in your past chats. When the user asks you to forget something, \
-take it out of entries and notes, and don't bring it back from your chat history either.";
+It is Markdown files you keep yourself: MEMORY.md, one short fact about the user per line, in every session in \
+full; and notes, one topic each, for detail too long for MEMORY.md (lists, itineraries, histories), listed in your \
+instructions. When the user tells you something lasting about themselves, or asks you to remember, change or \
+forget something, change the files with edit_memory (or your own file tools, where you were given the memory \
+folders). The user reads memory in the app but can't edit it: they ask you. Project and code knowledge worth \
+keeping goes in a note on that project, not MEMORY.md; don't make the project's CLAUDE.md or AGENTS.md your memory \
+unless the user asks. Only in a turn the user started in your own chat can memory lose or change a line; at other \
+times you can only add. search_memory finds lines of your memory files; search_history finds what was actually \
+said in your past chats. When the user asks you to forget something, take it out of MEMORY.md and your notes, and \
+don't bring it back from your chat history either.";
 
 pub fn tools() -> Value {
     let mut tools = json!([
         {
-            "name": "remember",
-            "description": "Save one short fact about the user to your memory: who they are, their people, preferences, standing requests, plans or commitments. Use it when the user asks you to remember something or tells you something lasting about themselves. Write one self-contained fact in the user's language, with absolute dates. The user sees all of it in the bot's memory settings and changes or deletes it there.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string", "description": "The fact, in one short sentence."},
-                    "shared": {"type": "boolean", "description": "True for facts all the user's bots should know (name, time zone, language, important people, lasting preferences); false (default) keeps it with you."},
-                },
-                "required": ["text"],
-            },
-        },
-        {
-            "name": "revise_memory",
-            "description": "Correct an entry of your memory, by the [id] your instructions show. Entries the user wrote can't be changed.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "integer"},
-                    "text": {"type": "string", "description": "The corrected fact."},
-                },
-                "required": ["id", "text"],
-            },
-        },
-        {
-            "name": "archive_memory",
-            "description": "Take an entry out of your memory when it's no longer true, by its [id]. It stays searchable. Entries the user wrote can't be archived.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {"id": {"type": "integer"}},
-                "required": ["id"],
-            },
-        },
-        {
             "name": "search_memory",
-            "description": "Search your memory, including archived entries and your long-form files, for text containing the query (case-insensitive). Each entry's source lists the messages it was learned from: pass one to search_history as from to read it. files lists matching lines of your memory files.",
+            "description": "Search your memory files for lines containing the query (case-insensitive). A MEMORY.md line lists the message it was learned from as source: pass it to search_history as from to read it.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
@@ -90,12 +62,7 @@ pub fn tools() -> Value {
 
 pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Result<Value> {
     let cfg = hub.store.bot(bot_id)?.filter(|b| !b.deleted).ok_or_else(|| anyhow!("unknown bot"))?.config;
-    let text = || args["text"].as_str().map(str::to_owned).ok_or_else(|| anyhow!("text required"));
-    let id = || args["id"].as_i64().ok_or_else(|| anyhow!("id required"));
     match name {
-        "remember" => write(hub, &cfg, Action::Remember { text: text()?, shared: args["shared"] == true }).await,
-        "revise_memory" => write(hub, &cfg, Action::Revise { entry: id()?, text: text()? }).await,
-        "archive_memory" => write(hub, &cfg, Action::Archive { entry: id()? }).await,
         "search_memory" => search_memory(hub, &cfg, args["query"].as_str().unwrap_or_default()).await,
         "search_history" => search_history(hub, &cfg, args).await,
         "read_memory" | "edit_memory" => super::file_tools::call(hub, &cfg, name, args).await,
@@ -103,59 +70,48 @@ pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Res
     }
 }
 
-/// Writes at once, whatever the bot's permission: memory isn't an action on the user's computer, and the user
-/// reviews and changes it in the bot's memory settings.
-async fn write(hub: &Arc<Hub>, cfg: &BotConfig, action: Action) -> Result<Value> {
-    let hub = hub.clone();
-    let cfg = cfg.clone();
-    tokio::task::spawn_blocking(move || {
-        let turn = hub.runtime(&cfg.id);
-        let before = super::current_revision(&hub.store, &cfg.id);
-        let entry = notices::apply(&hub, &cfg, turn.lane, turn.message, &action)?;
-        // The session that wrote it needs no notice about its own write.
-        if let Some(session) = &turn.session
-            && let Err(error) = super::heard_own_write(&hub.store, &cfg.id, session, &before)
-        {
-            tracing::warn!(bot = %cfg.id, error = format!("{error:#}"), "couldn't record the bot's own write");
-        }
-        Ok(json!({"status": "saved", "id": entry.id}))
-    })
-    .await?
-}
-
 async fn search_memory(hub: &Arc<Hub>, cfg: &BotConfig, query: &str) -> Result<Value> {
     if query.trim().is_empty() {
         bail!("query required");
     }
-    let (hub, bot, shared, query) = (hub.clone(), cfg.id.clone(), super::shared(cfg), query.to_owned());
-    let (found, lines) = tokio::task::spawn_blocking(move || {
-        hub.store.memory_read(|c| {
-            let entries = codync_mem::store::search(c, &bot, &query, 20)?;
-            Ok((entries, codync_mem::files::search(c, &bot, shared, &query, 20)?))
-        })
+    let (hub, cfg, query) = (hub.clone(), cfg.clone(), query.to_owned());
+    let results = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
+        super::files::scan(&hub, &cfg);
+        let shared = super::shared(&cfg);
+        let (hits, mut sources) = hub.store.memory_read(|c| {
+            let hits = mf::search(c, &cfg.id, shared, &query, 20)?;
+            // Where each MEMORY.md fact was learned, by layer and line.
+            let mut sources = HashMap::new();
+            for layer in super::files::layers(&cfg) {
+                for fact in mf::facts_of(c, layer.as_deref())? {
+                    if let Some(message) = fact.message {
+                        sources.insert((layer.clone(), mf::fact_id(&fact.text)), message);
+                    }
+                }
+            }
+            Ok((hits, sources))
+        })?;
+        // A shared fact may come from another bot's chat, which search_history can't open.
+        sources.retain(|(layer, _), message| {
+            layer.is_some() || hub.store.entry(message).is_some_and(|e| e.bot_id == cfg.id)
+        });
+        Ok(hits
+            .into_iter()
+            .map(|hit| {
+                let source =
+                    (hit.name == MAIN).then(|| sources.get(&(hit.bot.clone(), mf::fact_id(&hit.text)))).flatten();
+                json!({
+                    "file": hit.name,
+                    "shared": hit.bot.is_none(),
+                    "line": hit.line,
+                    "text": acp::truncate(&hit.text, 300),
+                    "source": source,
+                })
+            })
+            .collect())
     })
     .await??;
-    let files: Vec<Value> = lines
-        .into_iter()
-        .map(|hit| {
-            json!({"file": hit.name, "shared": hit.bot.is_none(), "line": hit.line, "text": acp::truncate(&hit.text, 300)})
-        })
-        .collect();
-    let results: Vec<Value> = found
-        .into_iter()
-        .filter(|e| shared || e.bot.is_some())
-        .map(|e| {
-            json!({
-                "id": e.id,
-                "text": e.text,
-                "state": e.state,
-                "shared": e.bot.is_none(),
-                "date": ymd(e.updated_at),
-                "source": e.evidence,
-            })
-        })
-        .collect();
-    Ok(json!({"results": results, "files": files}))
+    Ok(json!({"results": results}))
 }
 
 async fn search_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<Value> {
@@ -189,7 +145,6 @@ async fn search_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result
                 "id": e.id,
                 "date": ymd(e.created_at),
                 "from": if e.kind == crate::store::EntryKind::User.as_str() { "user" } else { "you" },
-                "inThread": e.thread_id.is_some(),
                 "text": acp::truncate(e.data["text"].as_str().unwrap_or_default(), SEARCH_TEXT_CHARS),
             })
         })

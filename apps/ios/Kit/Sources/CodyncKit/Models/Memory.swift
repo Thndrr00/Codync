@@ -23,7 +23,7 @@ public struct MemoryLayer: Decodable, Hashable, Sendable {
     public var cap: Int
 }
 
-/// One dreaming run: what it added and archived. It can be undone.
+/// One dreaming run: what it added and archived (`undone` when an older app undid it).
 public struct DreamRun: Decodable, Identifiable, Hashable, Sendable {
     public struct Change: Decodable, Hashable, Sendable {
         public var id: Int64
@@ -76,10 +76,5 @@ public func pastedInsertion(from old: String, to new: String, minimum: Int = 24)
 extension HostClient {
     public func memory(botId: String) async throws -> MemoryView {
         try await call("memory", ["botId": botId])
-    }
-
-    /// A memory method on one bot (`saveMemory`, `pinMemory`, `archiveMemory`, `forgetMemory`, `clearMemory`, `undoDream`).
-    public func memoryCall(_ method: String, _ body: some Encodable) async throws {
-        let _: Empty = try await call(method, body)
     }
 }

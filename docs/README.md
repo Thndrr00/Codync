@@ -23,17 +23,18 @@ Source review, a passing build, local integration tests and production acceptanc
 | Set up accounts, approvals or desktop SSH | [Accounts and SSH](guides/accounts-and-ssh.md) |
 | Check connectors against live services | [Connector verification](guides/connector-verification.md) |
 | Change transport or cryptography | [Remote protocol](reference/remote-relay.md) and [shared vectors](reference/fixtures/README.md) |
-| Look into errors or failed turns users hit | [Usage analytics](features/analytics.md), [investigations](#investigations) |
+| Look into errors or failed turns users hit | [Usage analytics](features/analytics.md), [iPhone crash tracing](guides/iphone-crash-tracing.md), [investigations](#investigations) |
 
 ## Features
 
 - [Chat messages](features/chat-messages.md)
-- [Group chats and reply threads](features/groups-and-threads.md)
+- [Group chats and replies](features/groups-and-replies.md)
 - [Bot-to-bot collaboration](features/bot-collaboration.md)
 - [Context and memory](features/context-and-memory.md)
 - [Bot memory and compaction](design/bot-memory.md) (design; storage, gate and dreaming built, compaction to come)
 - [Bot memory research](design/bot-memory-research.md) (files vs. database, embeddings, open-source systems, harness instructions)
 - [Bot workspaces](features/bot-workspaces.md)
+- [Agent fallbacks](features/agent-fallback.md) (the next agent carries a turn on when the bot's own runs out of usage)
 - [Routines](features/routines.md)
 - [Voice calls](features/voice-call.md)
 - [File attachments](features/file-attachments.md)
@@ -56,7 +57,7 @@ Source review, a passing build, local integration tests and production acceptanc
 - [Viabilidad de compilación Android en la nube (expo.dev)](viabilidad-compilacion-android-expo.md) (estudio de viabilidad técnica y alternativas para reducir recursos locales)
 - [Guía de reutilización de Openstark](guia-paso-a-paso-reutilizacion-openstark.md) (hoja de ruta paso a paso por fases y contratos de alto impacto)
 - [Harness memory](plans/harness-memory.md) (the switch that keeps a harness's own memory on; a choice of it instead of Codync's, planned)
-- [Error tracking detail](plans/error-tracking-detail.md) (proposal: symbolicated iPhone crashes, sessions, consented problem reports)
+- [Error tracking detail](plans/error-tracking-detail.md) (symbolicated iPhone crashes and sessions, built; consented problem reports, proposed)
 
 ## Investigations
 
@@ -65,6 +66,7 @@ Source review, a passing build, local integration tests and production acceptanc
 Production signals (PostHog errors, failed turns) traced to a root cause, newest first. Dated
 records: the fixes they name have shipped or are listed as open.
 
+- [Claude reported signed in on Windows while signed out, 2026-10-20](investigations/windows-claude-sign-in-2026-10-20.md)
 - [PostHog error triage, 2026-10-19](investigations/posthog-errors-2026-10-19.md): host panics, desktop and iPhone crashes, failed Claude turns
 - [npm agents failing to start on Windows, 2026-10-14](investigations/windows-npm-agents-2026-10-14.md)
 

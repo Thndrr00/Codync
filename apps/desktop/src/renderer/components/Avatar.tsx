@@ -1,10 +1,11 @@
 import { memo, useEffect, useRef, type CSSProperties } from 'react'
 import { isGroup, isWorking, needsInput, type Bot } from '@shared/models'
-import { avatarColor, palette, useDark, useReduceMotion } from '../lib/theme'
+import { DOT_RADIUS, dotGrid } from '../lib/dot-grid'
+import { avatarColor, palette, useDark, usePixelRatio, useReduceMotion } from '../lib/theme'
 import { Icon } from './Icon'
 import './avatar.css'
 
-export type Mood = 'idle' | 'working' | 'needsInput'
+export type Mood = 'idle' | 'working' | 'needsInput' | 'failed'
 
 /** The eight Grok Bot character silhouettes, in a w×h box. */
 export function characterPath(kind: string, w: number, h: number) {
@@ -118,18 +119,21 @@ export const CharacterAvatar = memo(function CharacterAvatar({ shape, color, tin
   const canvas = useRef<HTMLCanvasElement>(null)
   const dark = useDark() || forceDark === true
   const reduce = useReduceMotion()
+  const ratio = usePixelRatio()
   const fill = tint ?? avatarColor(color)
   /** Where the pointer was last seen (screen coordinates): a working character looks at it. */
   const pointer = useRef<{ x: number; y: number } | null>(null)
+  // A whole number of device pixels, so the bitmap shows 1:1 and drawCharacter's pixels are the screen's.
+  const pixels = Math.max(1, Math.round(size * ratio))
 
   useEffect(() => {
     const el = canvas.current
     if (!el) return
-    const ratio = window.devicePixelRatio || 1
-    el.width = Math.round(size * ratio)
-    el.height = Math.round(size * ratio)
+    el.width = pixels
+    el.height = pixels
+    const scale = pixels / size
     const ctx = el.getContext('2d')!
-    const still = mood === 'idle' || reduce
+    const still = mood === 'idle' || mood === 'failed' || reduce
     // A moving character draws at 30 fps (its light turns slowly), and only while on screen.
     let frame = 0
     let drawn = -Infinity
@@ -149,7 +153,7 @@ export const CharacterAvatar = memo(function CharacterAvatar({ shape, color, tin
       frame = 0
       if (time - drawn >= 33) {
         drawn = time
-        ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+        ctx.setTransform(scale, 0, 0, scale, 0, 0)
         ctx.clearRect(0, 0, size, size)
         drawCharacter(ctx, {
           shape,
@@ -181,9 +185,9 @@ export const CharacterAvatar = memo(function CharacterAvatar({ shape, color, tin
       onScreen.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [shape, fill, size, mood, dark, reduce])
+  }, [shape, fill, size, mood, dark, reduce, pixels])
 
-  return <canvas ref={canvas} aria-hidden style={{ width: size, height: size, display: 'block', flex: 'none' }} />
+  return <canvas ref={canvas} aria-hidden style={{ width: pixels / ratio, height: pixels / ratio, display: 'block', flex: 'none' }} />
 })
 
 /** Draws one frame of a character at the context's origin (views and menu bar icons). */
@@ -201,10 +205,10 @@ export function drawCharacter(
     look?: { x: number; y: number }
   },
 ) {
-  const cells = size < 18 ? 7 : size < 28 ? 9 : 13
+  // The grid fits the context's device pixels (its scale).
+  const { cells, pitch, first } = dotGrid(size, ctx.getTransform().a || 1)
   const eyeColumns = cells === 7 ? [2, 4] : cells === 9 ? [3, 6] : [4, 8]
   const eyeRowsAll = cells === 13 ? [4, 5, 6] : cells === 9 ? [3, 4] : [2, 3]
-  const step = size / cells
   const dots = grid(shape, size, cells)
   const [tr, tg, tb] = palette(dark).text
   const n = parseInt(fill.slice(1), 16)
@@ -235,8 +239,18 @@ export function drawCharacter(
   const ly = 0.55
   const lz = Math.cos(yaw) * 0.5 + 0.6 // never fully behind
   const ll = Math.hypot(lx, ly, lz)
+  const mouthCenter = Math.floor(cells / 2)
+  const closedEyeRow = eyeRowsAll[eyeRowsAll.length - 1]!
   for (const d of dots) {
-    if (inEye(d)) continue
+    // Closed eyes droop away from the nose, like a disappointed face; open ones follow the pointer.
+    const isEye = mood === 'failed'
+      ? eyeColumns.some((col) => Math.abs(d.col - col) <= 1
+        && d.row === closedEyeRow - (Math.abs(d.col - mouthCenter) < Math.abs(col - mouthCenter) ? 1 : 0))
+      : inEye(d)
+    if (isEye) continue
+    // A downturned mouth, cut out of the same dot grid as the eyes.
+    const mouthOffset = Math.abs(d.col - mouthCenter)
+    if (mood === 'failed' && mouthOffset <= 1 && d.row === Math.floor(cells * 0.65) + mouthOffset) continue
     const u = (d.x - half) / half
     const v = (half - d.y) / half
     const z = Math.sqrt(Math.max(0.2, 1 - u * u - v * v))
@@ -246,10 +260,10 @@ export function drawCharacter(
       const ripple = 0.5 + 0.5 * Math.sin(Math.hypot(u, v) * 9 - t * 5)
       shade *= 0.6 + 0.4 * ripple
     }
-    const r = step * 0.42 * (0.55 + 0.45 * shade)
+    const r = pitch * DOT_RADIUS * (0.55 + 0.45 * shade)
     const ink = cells < 13 ? 0.4 + 0.4 * shade : 0.2 + 0.4 * Math.min(1, shade / 0.7)
     ctx.beginPath()
-    ctx.arc(d.x, d.y, r, 0, Math.PI * 2)
+    ctx.arc(first + d.col * pitch, first + d.row * pitch, r, 0, Math.PI * 2)
     ctx.fillStyle = `rgba(${tr},${tg},${tb},${ink})`
     ctx.fill()
     if (shade > 0.6) {

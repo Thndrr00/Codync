@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { Entry, EntryData } from '@shared/models'
+import { isWorkingIn, type Entry, type EntryData } from '@shared/models'
 import { CardSection, Disclosure } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, SheetPage } from '../../components/Overlay'
@@ -8,38 +8,48 @@ import { Text, type Tone } from '../../components/Text'
 import { ThinkingOrb, type OrbState } from '../../components/ThinkingOrb'
 import type { Weight } from '../../lib/fonts'
 import { useStore } from '../../store/context'
+import { useScreenViewed } from '../../store/analytics'
 import { MarkdownText } from './Markdown'
 import { CodeBox, DiffView } from './PermissionCard'
 import { filterCounts, matchesFilter, TRACE_FILTERS, type TraceFilterId } from './trace-filter'
+import { runningTurn, scrolledToEnd, traceTurns } from './trace-turns'
 import './trace.css'
+import { useTr } from '../../lib/use-language'
+
 
 /**
  * "Full conversation": everything the agent did (narration, thinking, tool calls with output
- * and diffs, plans) grouped by turn. A chat's trace, or one thread's (`thread`: its root).
+ * and diffs, plans) grouped by turn.
  */
+/** `thread`: a document's side conversation, whose steps stay out of the chat's. */
 export function TraceView({ botId, thread = null }: { botId: string; thread?: string | null }) {
+  const tr = useTr()
   const store = useStore()
+  useScreenViewed('trace')
   const [filter, setFilter] = useState<TraceFilterId>('all')
-  const entries = store.allEntries(botId).filter((e) => (e.threadId ?? null) === thread)
-  const counts = filterCounts(entries)
-  const turns = new Map<number, Entry[]>()
-  for (const e of entries) {
-    if (!matchesFilter(e, filter)) continue
-    turns.set(e.turn, [...(turns.get(e.turn) ?? []), e])
-  }
-  const sorted = [...turns.entries()].sort((a, b) => a[0] - b[0])
+  const all = store.allEntries(botId).filter((e) => (e.threadId ?? null) === thread)
+  const counts = filterCounts(all)
+  const sorted = traceTurns(all.filter((e) => matchesFilter(e, filter)))
+  // The running turn's thoughts start unfolded.
+  const bot = store.bots.get(botId)
+  const running = runningTurn(all, !!bot && isWorkingIn(bot, botId))
   const scroller = useRef<HTMLDivElement>(null)
+  // Opens at the end and follows new steps there until the reader scrolls up.
+  const atEnd = useRef(true)
   useLayoutEffect(() => {
     const el = scroller.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [filter])
+    if (el && atEnd.current) el.scrollTop = el.scrollHeight
+  })
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    atEnd.current = scrolledToEnd(e.currentTarget)
+  }
   return (
     <SheetPage>
-      <ModalHeader title="Full conversation" />
+      <ModalHeader title={tr(`Full conversation`)} />
       <TraceFilters selection={filter} counts={counts} onSelect={setFilter} />
-      <div ref={scroller} className="thread-scroll">
+      <div ref={scroller} className="thread-scroll" onScroll={onScroll}>
         <VStack gap={14} className="trace-content">
-          {sorted.length === 0 ? <Text tone="tertiary">Nothing yet.</Text> : null}
+          {sorted.length === 0 ? <Text tone="tertiary">{tr(`Nothing yet.`)}</Text> : null}
           {sorted.map(([turn, entries]) => (
             <VStack key={turn} gap={8}>
               <Text as="div" size="compactSecondary" weight="semibold" tone="text" truncate className="trace-turn-title">
@@ -47,7 +57,7 @@ export function TraceView({ botId, thread = null }: { botId: string; thread?: st
               </Text>
               <CardSection>
                 {entries.map((e) => (
-                  <TraceRow key={e.id} entry={e} />
+                  <TraceRow key={e.id} entry={e} unfolded={turn === running} />
                 ))}
               </CardSection>
             </VStack>
@@ -81,8 +91,10 @@ function Label({ icon, weight, tone, children }: { icon: React.ReactNode; weight
   )
 }
 
-function TraceRow({ entry }: { entry: Entry }) {
-  const [expanded, setExpanded] = useState(false)
+/** The running turn's thoughts start `unfolded`, so its reasoning reads as it comes in. */
+function TraceRow({ entry, unfolded }: { entry: Entry; unfolded: boolean }) {
+  const tr = useTr()
+  const [expanded, setExpanded] = useState(unfolded)
   const d = entry.data
   switch (entry.kind) {
     case 'user':
@@ -94,7 +106,7 @@ function TraceRow({ entry }: { entry: Entry }) {
     case 'agent':
       return (
         <VStack gap={4}>
-          <Text size="caption2" weight="semibold" tone="tertiary">{d.final ? 'Reply' : 'Said'}</Text>
+          <Text size="caption2" weight="semibold" tone="tertiary">{d.final ? tr(`Reply`) : tr(`Said`)}</Text>
           <MarkdownText text={d.text ?? ''} />
         </VStack>
       )
@@ -106,7 +118,7 @@ function TraceRow({ entry }: { entry: Entry }) {
           label={
             <HStack as="span" gap={6}>
               <ThinkingOrb size={16} color="var(--secondary)" animated={false} />
-              <Text size="subheadline" tone="secondary">Thinking</Text>
+              <Text size="subheadline" tone="secondary">{tr(`Thinking`)}</Text>
             </HStack>
           }
         >
@@ -155,6 +167,7 @@ const toolIcon = (kind?: string) =>
 const toolOrb = (kind?: string): OrbState => ({ search: 'searching', fetch: 'connecting', edit: 'shaping' } as const)[kind ?? ''] ?? 'working'
 
 export function ToolRow({ data }: { data: EntryData }) {
+  const tr = useTr()
   const [expanded, setExpanded] = useState(false)
   const hasBody = !!data.output || !!data.diffs?.length
   const label = (
@@ -162,7 +175,7 @@ export function ToolRow({ data }: { data: EntryData }) {
       <IconSlot width={18} tone="secondary">
         <Icon name={toolIcon(data.toolKind)} size={10} />
       </IconSlot>
-      <Text size="subheadline" tone="text" lines={2} grow>{data.title ?? 'Tool'}</Text>
+      <Text size="subheadline" tone="text" lines={2} grow>{data.title ?? tr(`Tool`)}</Text>
       {data.status === 'completed' ? (
         <Icon name="checkmark" size={10} color="var(--accent)" />
       ) : data.status === 'failed' ? (

@@ -113,6 +113,7 @@ fn deliver(hub: &Hub, event: &SlackIncoming) -> Result<()> {
         &root,
         &Lane::main(&event.bot),
         EntryKind::User,
+        hub.store.max_turn(&event.bot),
         &json!({"text":format!("Slack conversation · {}",event.channel),
         "source":"slack","status":"sent","slackChannel":event.channel,"slackThread":event.thread}),
     )?;
@@ -121,6 +122,7 @@ fn deliver(hub: &Hub, event: &SlackIncoming) -> Result<()> {
         &event.entry,
         &lane,
         EntryKind::User,
+        hub.store.max_turn(&event.bot) + 1,
         &json!({"text":event.text,"status":"queued","source":"slack",
         "slackGeneration":event.generation,"slackChannel":event.channel,"slackUser":event.user}),
     )?;
@@ -128,7 +130,7 @@ fn deliver(hub: &Hub, event: &SlackIncoming) -> Result<()> {
         hub.store.reject_slack(&event.event)?;
         return Ok(());
     }
-    let text = crate::chat::prompt::of_message(&hub.store, &bot.config, &event.text, &[]);
+    let text = crate::chat::prompt::of_entry(hub, &bot.config, &entry.data);
     hub.send_cmd(&event.bot, Cmd::Send { lane, entry_id: entry.id, text })?;
     Ok(())
 }

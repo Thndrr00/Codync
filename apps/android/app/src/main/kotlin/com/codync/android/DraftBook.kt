@@ -31,7 +31,10 @@ class DraftBook(private val directory: File, computerId: String) {
     @Synchronized fun read(): List<ComposerDraft> {
         if (!file.baseFile.exists()) return emptyList()
         require(file.baseFile.length() <= MAX_BYTES) { "The saved drafts are too large." }
-        val drafts = WireJson.decodeFromString<List<ComposerDraft>>(file.readFully().toString(Charsets.UTF_8))
+        // Message threads are gone (a message replies to another instead): only chats and documents' conversations keep drafts.
+        val drafts = WireJson.parseToJsonElement(file.readFully().toString(Charsets.UTF_8)).jsonArray
+            .filter { (it.jsonObject["threadId"] as? JsonPrimitive)?.contentOrNull?.startsWith("doc:") ?: true }
+            .map { WireJson.decodeFromJsonElement<ComposerDraft>(it) }
         validate(drafts)
         return drafts
     }

@@ -1,5 +1,4 @@
 import type { SpeechEvent } from '@shared/ipc'
-import { stopDictation } from '../thread/dictation'
 import { onDeviceUnavailableReason, spokenText, VoiceEngine, VoiceSettings } from './voice'
 
 /**
@@ -55,8 +54,6 @@ export class OnDeviceEngine extends VoiceEngine {
 
   async start() {
     if (!window.codync.speech.available) return this.fail(onDeviceUnavailableReason())
-    // The call takes the recognizer from any dictation in progress.
-    stopDictation()
     speechSynthesis.getVoices()
     this.offEvents = window.codync.speech.onEvent((e) => this.event(e))
     this.listen()

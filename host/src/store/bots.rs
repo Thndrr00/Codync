@@ -1,6 +1,6 @@
 //! The `bots` table: roster rows, sessions, read marks and unread counts.
 
-use super::model::{BotConfig, BotRow, EntryKind, LastMessage, ReadScope};
+use super::model::{BotConfig, BotRow, EntryKind, LastMessage, message_text};
 use super::{Store, logged, next_rev};
 use crate::LockExt;
 use anyhow::Result;
@@ -85,6 +85,13 @@ impl Store {
         c.execute("DELETE FROM kv WHERE k = ?1", [format!("instructions.history.{id}")])?;
         // Lane state (see `lane_key`: scratchpads, sessions, …) it owned, or that bots kept in it.
         c.execute("DELETE FROM kv WHERE k GLOB ?1 OR k GLOB ?2", [format!("lane.*.{id}@*"), format!("lane.*@{id}*")])?;
+        // Its routine runs' sessions (see `run_session_key`).
+        c.execute("DELETE FROM kv WHERE k GLOB ?1", [format!("lane.session.{id}@*")])?;
+        // Its fallback chain's place and each agent's parked session (`agent::bot::fallback::park`).
+        c.execute(
+            "DELETE FROM kv WHERE k GLOB ?1 OR k GLOB ?2",
+            [format!("fallback.*.{id}"), format!("fallback.*.{id}.*")],
+        )?;
         // ponytail: snapshots of replaced sessions stay until the bot goes; prune by session if kv grows.
         c.execute(
             "DELETE FROM kv WHERE k GLOB ?1 OR k GLOB ?2",
@@ -99,100 +106,37 @@ impl Store {
         Ok(())
     }
 
-    /// Main chat read: bumps the bot's `read_rev`. A thread never opened counts from `read_rev`
-    /// (see `unread`), so it keeps the old one: reading the chat doesn't read its threads.
+    /// The chat read: bumps the bot's `read_rev`.
     pub fn mark_read(&self, id: &str) -> Result<i64> {
         let c = self.db.locked();
         let rev = next_rev(&c)?;
-        c.execute(
-            "INSERT OR IGNORE INTO kv(k, v)
-             SELECT DISTINCT 'read.' || thread_id, (SELECT read_rev FROM bots WHERE id = ?1)
-             FROM entries WHERE bot_id = ?1 AND thread_id IS NOT NULL",
-            [id],
-        )?;
         c.execute("UPDATE bots SET read_rev = ?2, rev = ?2 WHERE id = ?1", params![id, rev])?;
         Ok(rev)
     }
 
-    /// One thread read (kv `read.<root>`); the bot's row changes too, since its badge does.
-    pub fn mark_thread_read(&self, id: &str, root: &str) -> Result<i64> {
-        let c = self.db.locked();
-        let rev = next_rev(&c)?;
-        c.execute("UPDATE bots SET rev = ?2 WHERE id = ?1", params![id, rev])?;
-        c.execute(
-            "INSERT INTO kv(k, v) VALUES(?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2",
-            params![format!("read.{root}"), rev.to_string()],
-        )?;
-        Ok(rev)
-    }
-
-    /// The main chat and every thread read.
-    pub fn mark_all_read(&self, id: &str) -> Result<i64> {
-        let rev = self.mark_read(id)?;
-        let c = self.db.locked();
-        c.execute(
-            "UPDATE kv SET v = ?2 WHERE k IN (SELECT 'read.' || id FROM entries WHERE bot_id = ?1 AND thread_id IS NULL)",
-            params![id, rev.to_string()],
-        )?;
-        Ok(rev)
-    }
-
-    /// Final agent messages + pending permission cards newer than what the user has read in
-    /// `scope`. A thread counts from when it was last read (never read: the main chat's
-    /// `read_rev`). A thread root or a reacted-to message doesn't count again when it
-    /// changes: the user replied or reacted, so they have seen it. Routine execution
-    /// replies are private copies; only their published main-chat result counts.
-    /// Legacy replies have no origin marker; only those before the thread's first
-    /// user message are treated as internal, so later conversations stay unread.
-    pub fn unread(&self, id: &str, read_rev: i64, scope: ReadScope) -> i64 {
-        let mut args: Vec<&dyn rusqlite::ToSql> = vec![&id, &read_rev];
-        let filter = match &scope {
-            ReadScope::All => "",
-            ReadScope::Chat => "AND thread_id IS NULL",
-            ReadScope::Thread(root) => {
-                args.push(root);
-                "AND thread_id = ?3"
-            }
-        };
+    /// Final agent messages + pending permission cards newer than what the user has read. A reacted-to message
+    /// doesn't count again when it changes: the user reacted, so they have seen it. A bot's reaction isn't a change
+    /// either (`contentRev`, see `Hub::bot_react`).
+    pub fn unread(&self, id: &str, read_rev: i64) -> i64 {
         let c = self.db.locked();
         let n = c.query_row(
-            &format!(
-                "SELECT COUNT(*) FROM entries WHERE bot_id = ?1 {filter} AND
-                   ((kind = 'agent' AND json_extract(data, '$.final') = 1 AND NOT EXISTS (
-                       SELECT 1 FROM entries root WHERE root.id = entries.thread_id AND
-                         root.bot_id = entries.bot_id AND root.thread_id IS NULL AND root.kind = 'notice' AND
-                         json_extract(root.data, '$.routineId') IS NOT NULL AND
-                         json_extract(root.data, '$.runId') IS NOT NULL AND (
-                           json_extract(entries.data, '$.routineRunId') = json_extract(root.data, '$.runId') OR
-                           (json_type(entries.data, '$.routineRunId') IS NULL AND NOT EXISTS (
-                             SELECT 1 FROM entries user WHERE user.bot_id = entries.bot_id AND
-                               user.thread_id = entries.thread_id AND user.kind = 'user' AND user.seq < entries.seq))))) OR
-                    (kind = 'permission' AND json_extract(data, '$.status') = 'pending')) AND
-                   json_extract(data, '$.reactions') IS NULL AND
-                   CASE WHEN thread_id IS NULL THEN rev > ?2 AND json_extract(data, '$.thread') IS NULL
-                        ELSE rev > COALESCE((SELECT CAST(v AS INTEGER) FROM kv WHERE k = 'read.' || thread_id), ?2) END"
-            ),
-            args.as_slice(),
+            "SELECT COUNT(*) FROM entries WHERE bot_id = ?1 AND thread_id IS NULL AND
+               ((kind = 'agent' AND json_extract(data, '$.final') = 1) OR
+                (kind = 'permission' AND json_extract(data, '$.status') = 'pending')) AND
+               json_extract(data, '$.reactions') IS NULL AND
+               COALESCE(json_extract(data, '$.contentRev'), rev) > ?2",
+            params![id, read_rev],
             |r| r.get(0),
         );
         logged("unread", n).unwrap_or(0)
     }
 
-    /// Roots whose summary shows unread replies.
-    pub fn unread_roots(&self, id: &str) -> Vec<String> {
-        let c = self.db.locked();
-        let roots = c
-            .prepare("SELECT id FROM entries WHERE bot_id = ?1 AND json_extract(data, '$.thread.unread') > 0")
-            .and_then(|mut st| st.query_map([id], |r| r.get(0))?.collect());
-        logged("unread roots", roots).unwrap_or_default()
-    }
-
-    /// Newest chat-visible line in the main chat for the roster preview, with its author
+    /// Newest chat-visible line for the roster preview, with its author
     /// (`None` for the user; a group reply names the bot that wrote it).
     pub fn last_message(&self, id: &str) -> Option<LastMessage> {
         let c = self.db.locked();
         let row = c.query_row(
-            "SELECT kind, data, updated_at FROM entries WHERE bot_id = ?1 AND thread_id IS NULL AND
+            "SELECT kind, data, updated_at FROM entries WHERE bot_id = ?1 AND
                (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1))
              ORDER BY seq DESC LIMIT 1",
             [id],
@@ -201,17 +145,8 @@ impl Store {
                 let data: String = r.get(1)?;
                 let at: i64 = r.get(2)?;
                 let data = serde_json::from_str::<Value>(&data).unwrap_or_default();
-                let mut text = data["text"].as_str().unwrap_or_default().to_owned();
                 // A files-only message previews as its file names.
-                if text.is_empty() {
-                    let names: Vec<&str> = data["attachments"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|a| a["name"].as_str())
-                        .collect();
-                    text = names.join(", ");
-                }
+                let text = message_text(&data);
                 let author =
                     (kind != EntryKind::User.as_str()).then(|| data["author"].as_str().unwrap_or(id).to_owned());
                 Ok(LastMessage { text, at, author })
@@ -246,6 +181,8 @@ mod tests {
             model_options: std::collections::BTreeMap::new(),
             fast_mode: false,
             account: None,
+            fallbacks: vec![],
+            self_fallbacks: true,
             pinned: false,
             position: 0,
             hidden: false,
@@ -254,9 +191,9 @@ mod tests {
             skills: vec![],
             computer: false,
             approval_rules: vec![],
-            fleet_management: false,
-            created_by: None,
             computer_permissions: crate::computer::Permissions::default(),
+            manage_team: false,
+            created_by: None,
             shared_memory: None,
             harness_memory: false,
             auto_name: false,
@@ -270,90 +207,28 @@ mod tests {
             .insert_entry(&Lane::main("b1"), EntryKind::Agent, 1, &serde_json::json!({"text": "yo", "final": false}))
             .unwrap();
         assert!(a.rev > u.rev);
-        assert_eq!(s.unread("b1", 0, ReadScope::All), 0, "narration is not unread");
+        assert_eq!(s.unread("b1", 0), 0, "narration is not unread");
         let a2 = s.update_entry(&a.id, &serde_json::json!({"text": "yo!", "final": true})).unwrap().unwrap();
-        assert_eq!(s.unread("b1", 0, ReadScope::All), 1);
+        assert_eq!(s.unread("b1", 0), 1);
         assert_eq!(s.entries_since(a2.rev - 1, 500).unwrap().len(), 1);
         assert_eq!(s.entries_since(0, 1).unwrap().len(), 1, "fresh sync is capped per bot");
         assert_eq!(s.last_message("b1").unwrap().text, "yo!");
         let r = s.mark_read("b1").unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 0);
+        assert_eq!(s.unread("b1", r), 0);
         assert_eq!(s.history("b1", a.seq, 10).unwrap().len(), 1);
         assert_eq!(s.bot("b1").unwrap().unwrap().config.permission, Permission::Ask);
         assert!(s.bot("missing").unwrap().is_none());
 
-        // Reading the chat leaves a thread nobody opened unread.
         let reply = serde_json::json!({"text": "done", "final": true});
-        s.insert_entry(&Lane::in_thread("b1", &u.id), EntryKind::Agent, 2, &reply).unwrap();
-        let r = s.mark_read("b1").unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::Thread(&u.id)), 1);
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1);
-
-        s.mark_thread_read("b1", &u.id).unwrap();
-        routine_results_are_counted_once(&s);
-
         // A deleted bot stays deleted, and its winding-down actor leaves no lines behind.
+        s.kv_set("fallback.session.b1.codex", "s1").unwrap();
+        s.kv_set("fallback.on.b1", "codex").unwrap();
+        s.kv_set("fallback.on.b10", "codex").unwrap();
         s.delete_bot("b1").unwrap();
+        assert_eq!((s.kv_get("fallback.session.b1.codex"), s.kv_get("fallback.on.b1")), (None, None));
+        assert!(s.kv_get("fallback.on.b10").is_some(), "another bot's");
         assert!(s.insert_entry(&Lane::main("b1"), EntryKind::Notice, 3, &reply).is_err());
         s.save_bot(&cfg).unwrap();
         assert!(s.bot("b1").unwrap().unwrap().deleted);
-    }
-
-    fn routine_results_are_counted_once(s: &Store) {
-        let root = "routine-run";
-        s.insert_entry_once(
-            root,
-            &Lane::main("b1"),
-            EntryKind::Notice,
-            &serde_json::json!({"routineId": "routine", "runId": "run"}),
-        )
-        .unwrap();
-        let lane = Lane::in_thread("b1", root);
-        let reply = serde_json::json!({"text": "done", "final": true});
-        s.insert_entry(&lane, EntryKind::Agent, 3, &reply).unwrap();
-        let r = s.bot("b1").unwrap().unwrap().read_rev;
-        assert_eq!(s.unread("b1", r, ReadScope::All), 0, "internal routine reply is not a second unread");
-        s.insert_entry(
-            &lane,
-            EntryKind::Agent,
-            3,
-            &serde_json::json!({"text": "ordinary reply", "final": true, "routineRunId": null}),
-        )
-        .unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "explicit null is not a missing legacy origin");
-        s.mark_thread_read("b1", root).unwrap();
-        s.insert_entry(&Lane::main("b1"), EntryKind::Agent, 0, &reply).unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "the published result is unread once");
-        let r = s.mark_read("b1").unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 0, "reading the main chat clears the result");
-
-        // Silent runs publish nothing, but a request for approval must still surface.
-        s.insert_entry(&lane, EntryKind::Agent, 4, &serde_json::json!({"text": "(pass)", "final": true})).unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 0);
-        s.insert_entry(&lane, EntryKind::Permission, 4, &serde_json::json!({"status": "pending"})).unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1);
-
-        let r = s.mark_thread_read("b1", root).unwrap();
-        s.insert_entry(&lane, EntryKind::User, 5, &serde_json::json!({"text": "follow up"})).unwrap();
-        s.insert_entry(&lane, EntryKind::Agent, 5, &reply).unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "legacy follow-ups remain unread");
-        // The explicit origin wins even if a user message was queued during the run.
-        s.insert_entry(
-            &lane,
-            EntryKind::Agent,
-            5,
-            &serde_json::json!({"text": "internal", "final": true, "routineRunId": "run"}),
-        )
-        .unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1);
-        let r = s.mark_thread_read("b1", root).unwrap();
-        s.insert_entry(
-            &lane,
-            EntryKind::Agent,
-            6,
-            &serde_json::json!({"text": "resumed follow-up", "final": true, "routineRunId": null}),
-        )
-        .unwrap();
-        assert_eq!(s.unread("b1", r, ReadScope::All), 1, "ordinary resumed replies retain their origin");
     }
 }

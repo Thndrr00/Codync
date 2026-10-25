@@ -87,14 +87,6 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
         onboarding -> Root.Pairing
         else -> Root.Tabs
     }
-    LaunchedEffect(root) {
-        OnboardingTelemetry.step(when (root) {
-            Root.Welcome -> OnboardingTelemetry.Step.Welcome
-            Root.Pairing -> OnboardingTelemetry.Step.Pairing
-            Root.Tabs -> OnboardingTelemetry.Step.Ready
-            Root.Loading -> null
-        })
-    }
     BackHandler(root == Root.Pairing && !signedIn) { welcomed = false }
     val openMarketplace = { showAccount = false; accountSettings = false; showComputers = false; showMarketplace = true }
     Box(Modifier.fillMaxSize().background(Palette.background)) {
@@ -186,13 +178,12 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
     var known by remember { mutableStateOf(false) }
     LaunchedEffect(state.loading, state.setupComplete) {
         if (state.loading) return@LaunchedEffect
-        if (setup == false && state.setupComplete) Analytics.capture(AnalyticsEvent.OnboardingCompleted)
+        if (setup == false && state.setupComplete) Analytics.completeOnboarding(OnboardingVia.Paired)
         setup = state.setupComplete
     }
     LaunchedEffect(state.account.ready, state.account.userId) {
         if (!state.account.ready) return@LaunchedEffect
         val now = state.account.userId
-        if (known && now != user) Analytics.capture(if (now != null) AnalyticsEvent.SignedIn else AnalyticsEvent.SignedOut)
         user = now; known = true
     }
 }

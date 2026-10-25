@@ -17,10 +17,10 @@ emulator against a real host; device acceptance is listed separately.
 | Welcome/pairing | Ported: welcome crew and chat glimpse, Install (Mac/Linux) and Scan pages with the camera on the page, paste link, Tailscale note, sign-in | Physical optical scan, camera permission denial |
 | Accounts/access | Ported: account sheet and switcher, Computers & settings (connection status, badge color, Revoke this phone's access, older copies removed from the account), account computer access with its code, access banner, `codync-dev://computers` and `codync-dev://plugins` | Provider browser round trip on a device; Revoke and older copies against a signed-in account (covered by cloud request tests only) |
 | Roster | Ported: rows, menus, pin/hide/delete, groups, drag to reorder (host-synced order) and TalkBack Move up/down, computer header (names the computer shown and switches to another), pull to refresh (also in Computers & settings), several computers per phone, *This computer was removed* | Several computers at once (see below) |
-| Conversation/threads | Ported: bubbles, Markdown/code, permissions, reactions, threads, Full conversation, bot-to-bot exchange lines and their conversation, routine notices that open their routine, files a bot shares (verified download, then the share sheet), sent images full size, pull down to reconnect, jump to latest, read receipts for every conversation on screen | Physical keyboard and TalkBack |
+| Conversation/threads | Ported: bubbles, Markdown/code, permissions, reactions, quote replies (documents keep their own conversation), Full conversation, bot-to-bot exchange lines and their conversation, routine notices that open their routine, files a bot shares (verified download, then the share sheet), sent images full size, pull down to reconnect, jump to latest, read receipts for every conversation on screen | Physical keyboard and TalkBack |
 | Composer | Ported: files/photos/paste (groups too, image thumbnails, Paste only when the clipboard holds files), `/` commands (Fast mode, skills listed fresh on `/`), @mentions in groups, call/send/stop/interrupt button | — |
 | Bot and group editors | Ported: avatar, profile, agent and model options, Fast mode, workspace folder picker, permissions, activity, connectors, skills (with their details) | — |
-| Memory | Ported: the two layers (yours and the bot's) with archived entries, add/edit, pin, archive/bring back, forget, forget all, dreams with undo, notes (new, edit, delete, versions, bring back), the harness's own memory switch and its info sheet | — |
+| Memory | Ported, read-only since the host merge (2.25.0): the two layers, dreams, notes; the user changes memory by telling the bot | Add the dream info sheet |
 | Routines | Ported: list with switches, editor (schedule, webhook panel, run settings), test run, delete | Live provider/routine acceptance |
 | Extensions | Ported: agents (install, sign-in, setup terminal), registry connectors, Composio apps, skills, installed list, custom connector, own skill, credentials, chat connection request card | Real provider OAuth, 1Password |
 | Voice | Ported: call bar (provider name, fallback notice), Voice chat settings (engine, mode, models, voice, minutes this month), on device (the call's language through Android's on-device recognizer, Vosk English as the fallback, replies read by an offline voice for their language), OpenAI Realtime (WebRTC), Gemini Live, Speech mode, fallback to on device, group calls | Both providers with a real key on a device; a live microphone on a device |
@@ -47,13 +47,13 @@ was walked through on an emulator against a real host.
 
 ### Not ported yet
 
-Nothing from the iPhone app is missing; the platform differences are below.
+Nothing from the iPhone app is missing beyond the upstream 2.21–2.24 additions not ported yet: agent fallbacks UI, interface languages, renewing access, the new-bot profile sheet.
 
 ### Not verified (needs an account, a key, a device or the real Mac)
 
 | What | Code | What it needs |
 | --- | --- | --- |
-| Revoke this phone's access; removing older copies of the computer from the account | `core/.../CloudClient.kt` (`revokeAccess`, `removeComputer`), `SettingsView.kt` | A signed-in account on the emulator or a phone; only request tests cover it |
+| Revoke this phone's access (also on Remove of a computer approved through the account); removing older copies of the computer from the account | `core/.../CloudClient.kt` (`revokeAccess`, `removeComputer`), `AppStoreAccount.kt`, `SettingsView.kt` | A signed-in account on the emulator or a phone; only request tests cover it |
 | Push delivery (alerts, background Live update refresh) | `PushService.kt`, `AppStoreNotifications.kt` | A Firebase project and the push Worker's FCM secret (owner's go-ahead). The notification look is covered by `AlertNotificationTest` |
 | OpenAI Realtime, Gemini Live and Speech mode with a real key | `WebRtcPeer.kt`, `core/.../OpenAIRealtimeEngine.kt`, `GeminiLiveEngine.kt`, `CloudSpeechEngine.kt` | A provider key on the paired computer; the fallback to on-device voice is verified |
 | Remote screen: Chinese IME composition, a hardware keyboard, the TURN relay path and its credential renewal | `ScreenKeys.kt`, `ScreenSession.kt`, `ScreenView.kt` | A computer it's safe to type into, and a signed-in host for the relay; viewing, trackpad and pinch zoom are verified |
@@ -100,7 +100,5 @@ the `0004_android_devices.sql` migration. The push Worker needs the matching Fir
 service account as an external secret; the client configuration contains no private key.
 
 ![Android roster](../screenshots/android-roster.png)
-
-![Android reply thread](../screenshots/android-thread.png)
 
 ![Android account](../screenshots/android-account.png)

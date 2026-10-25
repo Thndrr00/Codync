@@ -39,8 +39,8 @@ Claude Code sessions in the terminal. The choice adds an off switch for Codync's
   one goes back to Codync's.
 - **Turning Codync's memory off starts a fresh conversation**: the instructions and tools change, and resuming
   would mix the two memories.
-- **Nothing is deleted.** Codync's entries and notes stay; turning it back on brings them back. Dreaming skips the
-  time spent without it.
+- **Nothing is deleted.** Codync's memory files (`MEMORY.md` and the notes) stay; turning it back on brings them
+  back. Dreaming skips the time spent without it.
 - **What the detail text says the user gives up**: "About you" shared across bots, editing from the iPhone (only
   Claude Code's notes are readable; Copilot's are in the cloud), the "forgotten stays forgotten" rule and the write
   checks (passwords, keys, planted instructions), and memory that follows the bot to another agent.

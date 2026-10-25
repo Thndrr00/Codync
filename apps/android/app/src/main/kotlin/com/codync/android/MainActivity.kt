@@ -123,7 +123,7 @@ class MainActivity : FragmentActivity() {
         unregisterReceiver(screenOn)
         super.onDestroy()
     }
-    override fun onStart() { super.onStart(); store.setForeground(true); Analytics.becameActive() }
+    override fun onStart() { super.onStart(); store.setForeground(true); Analytics.becameActive(this) }
     override fun onStop() {
         store.setForeground(false)
         if (!isChangingConfigurations) SensitiveAccess.revoke()
