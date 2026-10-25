@@ -77,15 +77,15 @@ pub struct ScanReport {
     pub issues: Vec<SentinelIssue>,
 }
 
+/// A turn's repeated tool: (bot id, turn, retry-loop signature).
+type TurnTool = (String, i64, String);
+/// One call of it: (tool key, title, updated at, entry id).
+type ToolCall = (String, String, i64, String);
+
 /// Scans `db_path` in strictly read-only WAL-compatible mode.
 pub fn scan_db_path(db_path: &Path, lookback_ms: i64) -> Result<ScanReport> {
     if !db_path.exists() {
-        return Ok(ScanReport {
-            scanned_at: now_ms(),
-            lookback_ms,
-            entries_examined: 0,
-            issues: Vec::new(),
-        });
+        return Ok(ScanReport { scanned_at: now_ms(), lookback_ms, entries_examined: 0, issues: Vec::new() });
     }
     let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
     let conn = Connection::open_with_flags(db_path, flags)
@@ -118,7 +118,7 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
 
     let mut issues: BTreeMap<String, SentinelIssue> = BTreeMap::new();
     // Track per-(bot_id, turn, tool_sig) count to detect retry loops within a single turn.
-    let mut turn_tool_calls: BTreeMap<(String, i64, String), Vec<(String, String, i64, String)>> = BTreeMap::new();
+    let mut turn_tool_calls: BTreeMap<TurnTool, Vec<ToolCall>> = BTreeMap::new();
     let mut entries_examined = 0usize;
 
     for row in rows {
@@ -131,11 +131,8 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
                     let output = row.data["output"].as_str().unwrap_or_default();
                     let norm_out = signature::normalize(output);
                     let norm_title = signature::normalize(title);
-                    let key = if norm_out.is_empty() {
-                        norm_title.clone()
-                    } else {
-                        format!("{norm_title}: {norm_out}")
-                    };
+                    let key =
+                        if norm_out.is_empty() { norm_title.clone() } else { format!("{norm_title}: {norm_out}") };
                     let sig = signature::signature(IssueKind::ToolError.as_str(), &format!("{}\n{key}", row.bot_id));
                     record_issue(
                         &mut issues,
@@ -152,10 +149,12 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
                     if row.turn > 0 {
                         let loop_sig =
                             signature::signature(IssueKind::RetryLoop.as_str(), &format!("{}\n{key}", row.bot_id));
-                        turn_tool_calls
-                            .entry((row.bot_id.clone(), row.turn, loop_sig))
-                            .or_default()
-                            .push((key, title.to_owned(), row.updated_at, row.id.clone()));
+                        turn_tool_calls.entry((row.bot_id.clone(), row.turn, loop_sig)).or_default().push((
+                            key,
+                            title.to_owned(),
+                            row.updated_at,
+                            row.id.clone(),
+                        ));
                     }
                 }
             }
@@ -186,25 +185,23 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
                     }
                 }
             }
-            "user" => {
-                if row.data["status"].as_str() == Some("queued") {
-                    let wait_ms = now.saturating_sub(row.created_at);
-                    if wait_ms >= QUEUE_LAG_THRESHOLD_MS {
-                        let sig = signature::signature(IssueKind::QueueLag.as_str(), &row.bot_id);
-                        let title = format!("Message queued over {}s", QUEUE_LAG_THRESHOLD_MS / 1000);
-                        record_issue(
-                            &mut issues,
-                            sig,
-                            IssueKind::QueueLag,
-                            Severity::Medium,
-                            title,
-                            None,
-                            &row.bot_id,
-                            row.created_at,
-                            &row.id,
-                            false,
-                        );
-                    }
+            "user" if row.data["status"].as_str() == Some("queued") => {
+                let wait_ms = now.saturating_sub(row.created_at);
+                if wait_ms >= QUEUE_LAG_THRESHOLD_MS {
+                    let sig = signature::signature(IssueKind::QueueLag.as_str(), &row.bot_id);
+                    let title = format!("Message queued over {}s", QUEUE_LAG_THRESHOLD_MS / 1000);
+                    record_issue(
+                        &mut issues,
+                        sig,
+                        IssueKind::QueueLag,
+                        Severity::Medium,
+                        title,
+                        None,
+                        &row.bot_id,
+                        row.created_at,
+                        &row.id,
+                        false,
+                    );
                 }
             }
             _ => {}
@@ -244,12 +241,7 @@ pub fn scan_connection(conn: &Connection, now: i64, lookback_ms: i64) -> Result<
         .collect();
     list.sort_by(|a, b| b.last_seen_at.cmp(&a.last_seen_at).then_with(|| a.signature.cmp(&b.signature)));
 
-    Ok(ScanReport {
-        scanned_at: now,
-        lookback_ms,
-        entries_examined,
-        issues: list,
-    })
+    Ok(ScanReport { scanned_at: now, lookback_ms, entries_examined, issues: list })
 }
 
 struct RawRow {
@@ -297,7 +289,7 @@ fn record_issue(
     }
     if at >= entry.last_seen_at {
         entry.last_seen_at = at;
-        entry.evidence_entry_id = entry_id.to_owned();
+        entry_id.clone_into(&mut entry.evidence_entry_id);
     }
 }
 
@@ -352,7 +344,12 @@ mod tests {
 
         let report = scan_db_path(&db, DEFAULT_LOOKBACK_MS).expect("scan succeeds");
         assert_eq!(report.entries_examined, 4);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::ToolError && i.count == 3 && i.severity == Severity::High));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::ToolError && i.count == 3 && i.severity == Severity::High)
+        );
         assert!(report.issues.iter().any(|i| i.kind == IssueKind::RetryLoop && i.wasted_turns == 1));
         assert!(report.issues.iter().any(|i| i.kind == IssueKind::TurnError && i.wasted_turns == 1));
         // Privacy invariant: private path `/Users/alice/secret` is scrubbed to `<path>`.

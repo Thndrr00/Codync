@@ -89,6 +89,7 @@ export class GeminiLiveEngine extends VoiceEngine {
       // Audio sessions are otherwise capped at 15 minutes.
       contextWindowCompression: { slidingWindow: {} },
       sessionResumption: this.resumeHandle ? { handle: this.resumeHandle } : {},
+      ...(this.transcript ? { inputAudioTranscription: {}, outputAudioTranscription: {} } : {}),
     }
     this.send({ setup }, socket)
   }
@@ -113,6 +114,7 @@ export class GeminiLiveEngine extends VoiceEngine {
 
   interrupt() {
     if (this.phase !== 'speaking') return
+    this.transcript?.interrupted()
     this.stopPlayback()
     this.dropping = !this.turnDone
     this.setPhase('listening')
@@ -161,6 +163,7 @@ export class GeminiLiveEngine extends VoiceEngine {
     }
     const content = msg.serverContent
     if (content) {
+      this.transcript?.gemini(content)
       if (content.interrupted === true) {
         this.stopPlayback()
         this.dropping = false

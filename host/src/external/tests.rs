@@ -30,7 +30,7 @@ fn entries(hub: &Hub, kind: &str) -> Vec<Entry> {
 
 /// The only external bot, once one exists.
 fn bot(hub: &Hub) -> Option<String> {
-    hub.store.bots().ok()?.into_iter().map(|r| r.config).find(super::is_external).map(|c| c.id)
+    hub.store.bots().ok()?.into_iter().filter(|r| !r.deleted).map(|r| r.config).find(super::is_external).map(|c| c.id)
 }
 
 async fn settle(hub: &Hub) {

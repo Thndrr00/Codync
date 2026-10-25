@@ -10,16 +10,18 @@ import './controls.css'
 export const IconButton = IconButtonBase
 
 /** The filled call-to-action (`.primary`) or the quieter filled one (`.secondary`). */
-export function Button({ kind = 'primary', children, onClick, disabled, className, title }: {
+export function Button({ kind = 'primary', children, onClick, disabled, className, title, 'aria-pressed': pressed, 'aria-expanded': expanded }: {
   kind?: 'primary' | 'secondary'
   children: ReactNode
   onClick?: () => void
   disabled?: boolean
   className?: string
   title?: string
+  'aria-pressed'?: boolean
+  'aria-expanded'?: boolean
 }) {
   return (
-    <button className={`styled-button ${kind} ${className ?? ''}`} onClick={onClick} disabled={disabled} title={title}>
+    <button className={`styled-button ${kind} ${className ?? ''}`} onClick={onClick} disabled={disabled} title={title} aria-pressed={pressed} aria-expanded={expanded}>
       {children}
     </button>
   )

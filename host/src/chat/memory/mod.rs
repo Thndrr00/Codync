@@ -4,6 +4,7 @@
 //! dreaming, and the one-time move from the old Engram memory.
 
 mod api;
+#[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod budget;
 mod dates;
 mod dream;

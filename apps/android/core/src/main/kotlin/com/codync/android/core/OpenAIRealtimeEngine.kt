@@ -30,6 +30,7 @@ interface RealtimePeer {
  */
 class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, private val credential: suspend () -> String,
     private val operator: CallOperator, private val peer: RealtimePeer,
+    private val transcriptionModel: String = VoiceProvider.OpenAI.transcribeModel,
     private val exchange: suspend (secret: String, offer: String) -> String,
 ) : ProviderEngine(parent, VoiceProvider.OpenAI, settings, "OpenAI Realtime"), RealtimePeer.Events {
     /** A response is being generated; new replies wait for it to finish. */
@@ -80,7 +81,10 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
                 put("type", "realtime")
                 put("instructions", operator.instructions)
                 put("tools", JsonArray(CallOperator.tools.map(CallTool::openAI)))
-                putJsonObject("audio") { putJsonObject("input") { putJsonObject("turn_detection") { put("type", "semantic_vad") } } }
+                putJsonObject("audio") { putJsonObject("input") {
+                    putJsonObject("turn_detection") { put("type", "semantic_vad") }
+                    if (transcript != null) putJsonObject("transcription") { put("model", transcriptionModel) }
+                } }
             }
         })
         phase(VoicePhase.Listening)
@@ -90,6 +94,7 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
     override fun received(text: String) = hop {
         val message = runCatching { WireJson.parseToJsonElement(text).jsonObject }.getOrNull() ?: return@hop
         when (message.text("type")) {
+            "conversation.item.input_audio_transcription.completed", "response.output_audio_transcript.done" -> transcript?.openAI(message)
             "input_audio_buffer.speech_started" -> level(if (muted) 0f else .7f)
             "input_audio_buffer.speech_stopped" -> level(0f)
             "output_audio_buffer.started" -> if (phase == VoicePhase.Listening) phase(VoicePhase.Speaking)
@@ -126,6 +131,7 @@ class OpenAIRealtimeEngine(parent: CoroutineScope, settings: VoiceSettings, priv
     }
 
     private fun cancelResponse() {
+        transcript?.interrupted()
         send(buildJsonObject { put("type", "response.cancel") })
         send(buildJsonObject { put("type", "output_audio_buffer.clear") })
     }

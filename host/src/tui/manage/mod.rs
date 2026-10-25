@@ -9,8 +9,11 @@ mod accounts;
 mod agent;
 mod analytics;
 mod bot_chat;
+pub(in crate::tui) mod computer;
+pub(in crate::tui) mod documents;
 mod fields;
 mod market;
+pub(in crate::tui) mod mcp_tools;
 mod memory;
 mod pages;
 mod replies;
@@ -18,7 +21,8 @@ mod routines;
 mod skill;
 
 pub use analytics::AnalyticsSheet;
-pub use fields::{handoff_fields, memory_file_fields};
+pub use documents::{DocumentReply, DocumentSheet};
+pub use fields::{handoff_fields, memory_file_fields, protected_fill_fields, voice_decision_fields};
 pub use memory::{MemoryMode, MemorySheet, Section};
 pub use pages::Page;
 pub use routines::local_zone;
@@ -37,6 +41,9 @@ pub const REACTIONS: [&str; 6] = ["👍", "❤️", "😂", "🎉", "👀", "✅
 /// Replies to the sheets' commands.
 #[derive(Clone)]
 pub enum Reply {
+    Computer(computer::ComputerReply),
+    McpTools(mcp_tools::McpReply),
+    Documents(DocumentReply),
     Memory(String),
     MemorySaved(String),
     /// A note the bot's memory sheet has open.
@@ -178,6 +185,14 @@ pub enum Submit {
     Import,
     /// A handoff card's text (the card's entry id).
     Handoff(String),
+    VoiceDecisions {
+        bot: String,
+        receipt: String,
+    },
+    ProtectedFill {
+        id: String,
+        code: bool,
+    },
     /// A long-form memory note: a new one (`name` none) or a change over the content with hash `base`.
     MemoryFile {
         bot: String,

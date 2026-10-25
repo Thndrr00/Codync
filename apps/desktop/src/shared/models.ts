@@ -43,6 +43,7 @@ export interface Bot {
   fleetManagement?: boolean
   /** The bot that created this one with its fleet tools. */
   createdBy?: string | null
+  computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   /** Uses the memory all the user's bots share ("About you"). */
   sharedMemory: boolean
   /** Keeps the harness's own memory (Claude Code's…) on beside Codync's; null where it has no switch. */
@@ -96,6 +97,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     // Kept undefined from an older host, which has no fleet tools.
     fleetManagement: raw.fleetManagement,
     createdBy: raw.createdBy ?? null,
+    computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
     harnessMemory: raw.harnessMemory ?? null,
     memoryRev: raw.memoryRev ?? 0,
@@ -225,6 +227,7 @@ export interface SentinelReport {
 }
 
 export interface EntryData {
+  source?: string
   /** Structured conversation data added to the existing team-tool notice. */
   botMessage?: BotMessage
   /** notice: the agent summarized its context; kept out of the chat. */
@@ -269,6 +272,7 @@ export interface EntryData {
   attachments?: Attachment[]
   files?: SharedFile[]
   callSeconds?: number
+  voiceTranscriptText?: string
 }
 
 export interface Entry {
@@ -511,6 +515,7 @@ export interface BotDraft {
   skills?: string[]
   computer?: boolean
   fleetManagement?: boolean
+  computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   sharedMemory?: boolean
   harnessMemory?: boolean
   isChief?: boolean
@@ -542,6 +547,7 @@ export function draftOf(bot: Bot): BotDraft {
     fleetManagement: bot.fleetManagement,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
+    computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
   }
 }
 

@@ -1,8 +1,9 @@
 //! Markdown memory budget enforcement (`MEMORY.md` max 200 lines / 24 KB),
 //! secret redaction (`<redacted N chars>`), and automatic rotation to `archive.md`
-//! (`docs/memory.md` from OpenMausBot).
+//! (`docs/memory.md` from `OpenMausBot`).
 
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 
 pub const MAX_MEMORY_LINES: usize = 200;
 pub const MAX_MEMORY_BYTES: usize = 24 * 1024;
@@ -29,11 +30,7 @@ pub struct MemoryBudgetStatus {
 /// Scrubs API keys, tokens, passwords, and private key blocks before writing memory notes to disk.
 pub fn redact_secrets(input: &str) -> String {
     let without_pem = redact_pem_blocks(input);
-    without_pem
-        .lines()
-        .map(redact_line_secrets)
-        .collect::<Vec<_>>()
-        .join("\n")
+    without_pem.lines().map(redact_line_secrets).collect::<Vec<_>>().join("\n")
 }
 
 fn redact_pem_blocks(input: &str) -> String {
@@ -46,7 +43,7 @@ fn redact_pem_blocks(input: &str) -> String {
             && let Some(close) = after_start[end_marker + 9..].find("-----")
         {
             let total_len = end_marker + 9 + close + 5;
-            out.push_str(&format!("<redacted {total_len} chars>"));
+            let _ = write!(out, "<redacted {total_len} chars>");
             rest = &after_start[total_len..];
             continue;
         }
@@ -68,10 +65,8 @@ fn redact_line_secrets(line: &str) -> String {
             {
                 let after_sep = trimmed[1..].trim_start();
                 let unquoted = after_sep.trim_start_matches(['\'', '"']);
-                let secret_len = unquoted
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
-                    .count();
+                let secret_len =
+                    unquoted.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').count();
                 if secret_len >= 8 {
                     let prefix = &line[..pos + kw.len()];
                     return format!("{prefix}{sep} <redacted {secret_len} chars>");
@@ -131,8 +126,7 @@ pub fn rotate_memory_if_needed(content: &str, date_ymd: &str) -> (String, Option
 
     // Second pass: if still over budget, evict oldest non-header lines from the top
     let mut idx = 0;
-    while (kept.len() > MAX_MEMORY_LINES
-        || kept.iter().map(|l| l.len() + 1).sum::<usize>() > MAX_MEMORY_BYTES)
+    while (kept.len() > MAX_MEMORY_LINES || kept.iter().map(|l| l.len() + 1).sum::<usize>() > MAX_MEMORY_BYTES)
         && idx < kept.len()
     {
         if kept[idx].trim_start().starts_with('#') || kept[idx].trim().is_empty() {
@@ -146,10 +140,7 @@ pub fn rotate_memory_if_needed(content: &str, date_ymd: &str) -> (String, Option
         return (kept.join("\n"), None);
     }
 
-    let archive_block = format!(
-        "## [Archivado el {date_ymd}]\n{}\n",
-        archived.join("\n")
-    );
+    let archive_block = format!("## [Archivado el {date_ymd}]\n{}\n", archived.join("\n"));
     (kept.join("\n"), Some(archive_block))
 }
 

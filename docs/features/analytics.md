@@ -52,6 +52,32 @@ UI: *About usage analytics…*) shows the same promise in the app, in one text p
 
 ## Event properties
 
+### Persistent delivery and onboarding on Windows/Android
+
+The host persists events in SQLite before delivery, bounded to the newest 500
+events. It sends up to 50 at a time with stable event UUIDs. Exact acknowledgements
+cannot delete concurrently queued events. Network failures, HTTP 408/429 and
+server failures retain the batch; permanent client errors discard it. Client
+intent deduplication receipts retain the newest 2,000 identities. This bounded
+storage deliberately does not promise unlimited offline history.
+
+Windows persists up to 64 onboarding intents locally before calling `track`.
+The host accepts only UUID `clientEventId` and closed step values for
+`onboarding_step_viewed` and `onboarding_abandoned`: welcome, account,
+computer_access, pairing and ready. Current root-screen instrumentation emits
+welcome, computer_access, pairing and ready; account-provider internal screens
+are not separately tracked. Backgrounding and recovery of an unfinished step
+record abandonment. The TUI has no onboarding screen.
+
+Android records welcome, pairing and ready with unfinished-step recovery and
+background abandonment. Its existing direct analytics transport now persists
+up to 500 events in preferences and retries batches of 20. Both transports clear
+queued data and cancel active delivery on opt-out; host enqueue checks consent
+inside the storage transaction. Windows also clears pending local intents when
+consent is disabled. Existing identity and destination rules apply. This work
+does not change Apple clients. Four tracker and four production-SQL interpreted
+tests passed; native UI/provider delivery has not been validated.
+
 Besides `env`, `app_version`, `$os`, `$lib`:
 
 | Event | Properties |

@@ -374,6 +374,7 @@ impl App {
 
     /// Drops expired toasts and keeps the viewed bot marked read.
     pub fn tick(&mut self) {
+        self.documents_tick();
         if self.selected.is_none()
             && let Some(id) = self.roster().first().map(|b| b.id.clone())
         {

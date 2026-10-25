@@ -67,6 +67,7 @@ impl Drop for Script {
 /// hands it the line itself, so the line runs from a batch file instead (keep the [`Script`]
 /// until the command ends).
 #[cfg(unix)]
+#[allow(clippy::unused_async, reason = "same signature as the Windows version, which writes a file")]
 pub async fn expanding(line: &str, _vars: &[&str]) -> std::io::Result<(Shell, Option<Script>)> {
     Ok((self::line(line), None))
 }
@@ -251,6 +252,7 @@ mod tests {
         assert_eq!(batch_line("100%", defined), "100%%");
     }
 
+    #[cfg(unix)]
     #[test]
     fn quotes_for_sh() {
         assert_eq!(quote("/usr/bin/x"), "/usr/bin/x");

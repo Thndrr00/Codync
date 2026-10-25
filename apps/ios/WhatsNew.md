@@ -9,6 +9,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 
 ### zh-Hant
 
+- 新增文件庫、Markdown 編輯與自動儲存，可審閱機器人提出的文件變更並查看電腦操作紀錄。
 - 可依專案分組及篩選機器人，搜尋完整訊息紀錄，並預覽最近三則訊息而不標記已讀。
 - 可在模型選單搜尋模型名稱與說明。
 - 可為 Antigravity 機器人選擇獨立帳號。
@@ -17,6 +18,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 
 ### en-US
 
+- Keep Markdown documents with each bot, edit with autosave and conflict recovery, review proposed changes, and inspect computer activity.
 - Filter bots, group them by project, search message history, and preview the last three messages without marking them read.
 - Search model names and descriptions in the model picker.
 - Choose a separate Antigravity account for each bot.

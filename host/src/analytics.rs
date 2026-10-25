@@ -15,6 +15,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 pub mod errors;
+pub(crate) mod setup;
 
 const KV_ENABLED: &str = "analytics_enabled";
 /// The account the install id was last merged into (one `$identify` per account).
@@ -23,15 +24,17 @@ const KV_IDENTIFIED: &str = "analytics_identified";
 const TOKEN: &str = "phc_rQHvxdSFKnMquPfMjmiMhXhM4tqJ5qCYsWuVEoFxCCWX";
 const BATCH_URL: &str = "https://us.i.posthog.com/batch/";
 const FLUSH_EVERY: Duration = Duration::from_secs(30);
-/// Unsent events kept while offline; the oldest go first.
-const MAX_PENDING: usize = 500;
-
 /// Everything the host reports. Names follow the `object_verb` convention.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Event {
     AppOpened,
     OnboardingCompleted,
+    OnboardingStepViewed,
+    OnboardingAbandoned,
+    SetupReady,
+    SetupActivated,
+    SetupFailed,
     SignedIn,
     SignedOut,
     BotCreated,
@@ -59,6 +62,11 @@ impl Event {
         match self {
             Self::AppOpened => "app_opened",
             Self::OnboardingCompleted => "onboarding_completed",
+            Self::OnboardingStepViewed => "onboarding_step_viewed",
+            Self::OnboardingAbandoned => "onboarding_abandoned",
+            Self::SetupReady => "setup_ready",
+            Self::SetupActivated => "setup_activated",
+            Self::SetupFailed => "setup_failed",
             Self::SignedIn => "signed_in",
             Self::SignedOut => "signed_out",
             Self::BotCreated => "bot_created",
@@ -83,18 +91,26 @@ impl Event {
 
     /// Events the computer's own apps report through `track` (the rest come from API calls).
     fn client_reported(self) -> bool {
-        matches!(self, Self::AppOpened | Self::OnboardingCompleted | Self::SignedIn | Self::SignedOut)
+        matches!(
+            self,
+            Self::AppOpened
+                | Self::OnboardingCompleted
+                | Self::OnboardingStepViewed
+                | Self::OnboardingAbandoned
+                | Self::SignedIn
+                | Self::SignedOut
+        )
     }
 }
 
 pub struct Analytics {
     enabled: Mutex<bool>,
+    consent: tokio::sync::watch::Sender<bool>,
     tx: mpsc::UnboundedSender<Msg>,
     rx: Mutex<Option<mpsc::UnboundedReceiver<Msg>>>,
 }
 
 enum Msg {
-    Event(Value),
     /// A panic, captured off the panicking thread (`errors::report_panics`).
     Report(errors::Report),
     /// Send what's queued now and answer when done.
@@ -103,9 +119,16 @@ enum Msg {
 
 impl Analytics {
     pub fn load(store: &Store) -> Self {
-        let enabled = store.kv_get(KV_ENABLED).as_deref() != Some("0");
+        let enabled = match store.kv_read(KV_ENABLED) {
+            Ok(value) => value.as_deref() != Some("0"),
+            Err(error) => {
+                tracing::warn!(%error, "Could not read analytics consent; reporting disabled");
+                false
+            }
+        };
         let (tx, rx) = mpsc::unbounded_channel();
-        Self { enabled: Mutex::new(enabled), tx, rx: Mutex::new(Some(rx)) }
+        let (consent, _) = tokio::sync::watch::channel(enabled);
+        Self { enabled: Mutex::new(enabled), consent, tx, rx: Mutex::new(Some(rx)) }
     }
 
     pub fn state(&self) -> bool {
@@ -113,8 +136,10 @@ impl Analytics {
     }
 
     pub fn set_enabled(&self, store: &Store, on: bool) -> Result<()> {
-        store.kv_set(KV_ENABLED, if on { "1" } else { "0" })?;
-        *self.enabled.locked() = on;
+        let mut enabled = self.enabled.locked();
+        store.set_analytics_enabled(on)?;
+        *enabled = on;
+        self.consent.send_replace(on);
         Ok(())
     }
 }
@@ -123,7 +148,26 @@ impl Analytics {
 pub fn track(hub: &Hub, b: &Value) -> Result<()> {
     let event = Event::deserialize(&b["event"]).map_err(|_| anyhow::anyhow!("unknown event"))?;
     anyhow::ensure!(event.client_reported(), "unknown event");
-    capture(hub, event, Map::new());
+    if matches!(event, Event::OnboardingStepViewed | Event::OnboardingAbandoned) {
+        let step = b["step"].as_str().unwrap_or_default();
+        anyhow::ensure!(
+            matches!(step, "welcome" | "account" | "computer_access" | "pairing" | "ready"),
+            "Unknown onboarding step"
+        );
+        let id = uuid::Uuid::parse_str(b["clientEventId"].as_str().unwrap_or_default())?;
+        if hub.analytics.state() {
+            let account = hub.cloud.status().owner.map(|o| o.user_id);
+            queue_identified(
+                hub,
+                event.name(),
+                account.as_deref().unwrap_or(&hub.host_id),
+                json!({"step":step}).as_object().cloned().unwrap_or_default(),
+                Some(id),
+            )?;
+        }
+    } else {
+        capture(hub, event, Map::new());
+    }
     Ok(())
 }
 
@@ -313,7 +357,18 @@ pub fn capture(hub: &Hub, event: Event, mut properties: Map<String, Value>) {
     queue(hub, event.name(), account.as_deref().unwrap_or(&hub.host_id), properties);
 }
 
-fn queue(hub: &Hub, event: &str, distinct_id: &str, mut properties: Map<String, Value>) {
+fn queue(hub: &Hub, event: &str, distinct_id: &str, properties: Map<String, Value>) {
+    if let Err(error) = queue_identified(hub, event, distinct_id, properties, None) {
+        tracing::warn!(%error,"Could not persist analytics event");
+    }
+}
+fn queue_identified(
+    hub: &Hub,
+    event: &str,
+    distinct_id: &str,
+    mut properties: Map<String, Value>,
+    client_id: Option<uuid::Uuid>,
+) -> Result<()> {
     properties.extend([
         ("$lib".into(), "codync-host".into()),
         ("app_version".into(), env!("CARGO_PKG_VERSION").into()),
@@ -323,14 +378,16 @@ fn queue(hub: &Hub, event: &str, distinct_id: &str, mut properties: Map<String, 
         // Joins this computer's events across accounts and with its phones' `computer_paired`.
         ("computer".into(), computer_tag(&hub.identity.computer_id()).into()),
     ]);
-    let _ = hub.analytics.tx.send(Msg::Event(json!({
+    let payload = json!({
         "event": event,
         "distinct_id": distinct_id,
         // When it happened, not when its batch left; the uuid makes a resent batch count once.
         "timestamp": chrono::Utc::now().to_rfc3339(),
-        "uuid": uuid::Uuid::new_v4().to_string(),
+        "uuid": client_id.unwrap_or_else(uuid::Uuid::new_v4).to_string(),
         "properties": properties,
-    })));
+    });
+    hub.store.enqueue_analytics(&payload, client_id.is_some())?;
+    Ok(())
 }
 
 /// A computer's analytics key: a hash of its id, so a phone's `computer_paired` joins the
@@ -351,33 +408,43 @@ pub fn start(hub: &Arc<Hub>) {
     errors::report_panics(hub);
     let hub = hub.clone();
     tokio::spawn(async move {
-        let mut pending: Vec<Value> = Vec::new();
         let mut tick = tokio::time::interval(FLUSH_EVERY);
         loop {
             tokio::select! {
                 msg = rx.recv() => match msg {
-                    Some(Msg::Event(e)) => pending.push(e),
                     Some(Msg::Report(r)) => errors::capture_report(&hub, r),
                     Some(Msg::Flush(done)) => {
-                        flush(&hub, &mut pending).await;
+                        flush(&hub).await;
                         let _ = done.send(());
                     }
                     None => return,
                 },
-                _ = tick.tick() => flush(&hub, &mut pending).await,
-            }
-            if pending.len() > MAX_PENDING {
-                pending.drain(..pending.len() - MAX_PENDING);
+                _ = tick.tick() => flush(&hub).await,
             }
         }
     });
 }
 
-async fn flush(hub: &Hub, pending: &mut Vec<Value>) {
-    let on = hub.analytics.state();
-    let sent = on && !pending.is_empty() && send(pending).await;
-    if sent || !on {
-        pending.clear();
+async fn flush(hub: &Hub) {
+    let mut consent = hub.analytics.consent.subscribe();
+    if !*consent.borrow_and_update() {
+        return;
+    }
+    let batch = match hub.store.pending_analytics() {
+        Ok(batch) if !batch.is_empty() => batch,
+        Ok(_) => return,
+        Err(error) => {
+            tracing::warn!(%error,"Could not read analytics outbox");
+            return;
+        }
+    };
+    let sent = tokio::select! {
+        biased;
+        _ = consent.changed() => false,
+        sent = send(&batch) => sent,
+    };
+    if sent && let Err(error) = hub.store.acknowledge_analytics(&batch) {
+        tracing::warn!(%error,"Could not acknowledge analytics batch");
     }
 }
 
@@ -401,7 +468,7 @@ async fn send(batch: &[Value]) -> bool {
         Ok(r) => {
             tracing::debug!(status = %r.status(), "analytics batch refused");
             // Refused for good (bad payload): retrying would only repeat it.
-            r.status().is_client_error()
+            r.status().is_client_error() && !matches!(r.status().as_u16(), 408 | 429)
         }
         Err(e) => {
             tracing::debug!(error = format!("{e:#}"), "analytics batch not sent");
@@ -411,93 +478,4 @@ async fn send(batch: &[Value]) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn observed_events_carry_no_content() {
-        let b = json!({"botId": "b1", "text": "secret plan", "threadId": "e1", "attachments": ["u1", "u2"]});
-        let (event, p) = observe(&Caller::Local, "send", &b).expect("send is tracked");
-        assert_eq!(event, Event::MessageSent);
-        assert_eq!(Value::Object(p.clone()), json!({"in_thread": true, "attachments": 2, "client": "local"}));
-        assert!(!Value::Object(p).to_string().contains("secret"));
-
-        let custom = json!({"name": "mine", "command": "/Users/me/bin/server"});
-        let (_, p) = observe(&Caller::Local, "installConnector", &custom).expect("tracked");
-        assert_eq!(p["connector"], "custom");
-        assert!(observe(&Caller::Local, "history", &json!({})).is_none());
-    }
-
-    #[tokio::test]
-    async fn a_resent_message_counts_once_and_names_its_agent() {
-        let dir = std::env::temp_dir().join(format!("codync-analytics-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        let hub = Hub::new(
-            store,
-            "h".into(),
-            crate::remote::identity::Identity::load_or_create(&dir).unwrap(),
-            "t".into(),
-            0,
-        );
-        let cfg = serde_json::from_value(json!({"id": "b1", "name": "b", "backend": "codex", "cwd": "/tmp"})).unwrap();
-        hub.store.save_bot(&cfg).unwrap();
-        let send = json!({"botId": "b1", "text": "hi", "clientNonce": "n1"});
-
-        let (_, p) = observe_call(&hub, &Caller::Local, "send", &send).expect("a new message is tracked");
-        assert_eq!((p["agent"].as_str(), p["kind"].as_str()), (Some("codex"), Some("bot")));
-        let lane = crate::store::Lane::main("b1");
-        hub.store
-            .insert_entry(&lane, crate::store::EntryKind::User, 1, &json!({"text": "hi", "clientNonce": "n1"}))
-            .unwrap();
-        assert!(observe_call(&hub, &Caller::Local, "send", &send).is_none(), "a replay is the same message");
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn on_until_the_owner_turns_it_off() {
-        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        assert!(Analytics::load(&store).state());
-        Analytics::load(&store).set_enabled(&store, false).unwrap();
-        assert!(!Analytics::load(&store).state(), "an off stays off");
-    }
-
-    #[test]
-    fn computer_tag_matches_the_iphone() {
-        // Same vector as the iPhone's AnalyticsTests.
-        assert_eq!(computer_tag("AAECAwQFBgcICQoLDA0ODw"), "2d6878bee20aba04");
-    }
-
-    #[test]
-    fn a_failed_turn_names_its_kind_not_its_text() {
-        use crate::agent::acp::{Failure, FailureKind, RpcError};
-        use anyhow::Context as _;
-        let code = |e: &anyhow::Error| {
-            let (kind, rpc) = failure_kind(e);
-            (kind, rpc.map(|r| r.code))
-        };
-        let setup = Failure::error(FailureKind::NotSetUp, "Codex isn't set up on this computer.");
-        assert_eq!(code(&setup), ("not_installed", None));
-        let hung = Err::<(), _>(Failure::error(FailureKind::Timeout, "no answer")).context("starting");
-        assert_eq!(code(&hung.expect_err("failed")), ("timeout", None));
-        let missing = std::io::Error::new(std::io::ErrorKind::NotFound, "/Users/me/bin/agent");
-        let spawn = Err::<(), _>(missing).context("starting `/Users/me/bin/agent`");
-        assert_eq!(code(&spawn.expect_err("failed")), ("not_installed", None));
-        let auth = anyhow::Error::new(RpcError { code: -32000, message: "Authentication required".into(), kind: None });
-        assert_eq!(code(&auth), ("sign_in", None));
-        let rpc =
-            anyhow::Error::new(RpcError { code: -32603, message: "Internal error: /Users/me".into(), kind: None });
-        assert_eq!(code(&rpc), ("agent_error", Some(-32603)));
-        let limited =
-            anyhow::Error::new(RpcError { code: -32603, message: "x".into(), kind: Some("rate_limit".into()) });
-        assert_eq!(failure_kind(&limited).1.and_then(|r| r.kind.as_deref()), Some("rate_limit"));
-        assert_eq!(code(&anyhow::anyhow!("something else")), ("other", None));
-    }
-
-    #[test]
-    fn only_app_events_can_be_tracked_directly() {
-        assert!(Event::deserialize(&json!("app_opened")).is_ok_and(Event::client_reported));
-        assert!(!Event::deserialize(&json!("message_sent")).is_ok_and(Event::client_reported));
-        assert!(Event::deserialize(&json!("anything_else")).is_err());
-    }
-}
+mod tests;

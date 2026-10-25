@@ -3,12 +3,15 @@
 //! direct end-to-end encrypted channel phones use (see `channel`).
 
 mod bots;
+mod computer_activity;
 pub mod devices;
+mod documents;
 mod events;
 mod files;
 mod host;
 mod http;
 mod marketplace;
+mod origin;
 mod rebinding;
 mod remote;
 mod roster;
@@ -60,6 +63,12 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
     devices::permit(caller, method)?;
     let observed = crate::analytics::observe_call(hub, caller, method, &b);
     let result = route(hub, caller, method, b).await;
+    if method == "createBot" && result.as_ref().is_ok_and(|value| value["bot"]["kind"] != "group") {
+        crate::analytics::setup::ready(hub);
+    }
+    if method == "setSlackChannel" && result.is_err() {
+        crate::analytics::setup::failed(hub, true);
+    }
     if result.is_ok()
         && let Some((event, properties)) = observed
     {
@@ -69,6 +78,48 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 }
 
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+    if crate::research::METHODS.contains(&method) {
+        if method == "setResearchKey" && !matches!(caller, Caller::Local) {
+            return Err(Forbidden.into());
+        }
+        return crate::research::call(hub, method, &b).await;
+    }
+    if crate::slack::METHODS.contains(&method) {
+        if !matches!(caller, Caller::Local) && method != "slackStatus" {
+            return Err(Forbidden.into());
+        }
+        return crate::slack::call(hub, method, b).await;
+    }
+    if matches!(method, "beginProtectedEntry" | "finishProtectedEntry") {
+        return crate::screen::protected_entry::call(hub, method, b).await;
+    }
+    if matches!(method, "voiceDecisions" | "confirmVoiceDecisions") {
+        return crate::voice::decisions::call(hub, caller, method, b);
+    }
+    #[cfg(windows)]
+    if matches!(method, "openProtectedBrowser" | "fillProtectedLogin" | "fillProtectedCode") {
+        return crate::screen::protected_browser::call(hub, method, b).await;
+    }
+    if crate::computer::panel::METHODS.contains(&method) {
+        let (kind, id) = match caller {
+            Caller::Device { key, .. } => ("device", key.as_str()),
+            _ => ("owner", "local"),
+        };
+        return crate::computer::panel::call(hub, method, &b, kind, id).await;
+    }
+    if crate::mcp::policy_management::METHODS.contains(&method) {
+        market::vault::unlock(hub.clone()).await?;
+        return crate::mcp::policy_management::call(hub, method, &b);
+    }
+    if crate::mcp::policy::METHODS.contains(&method) {
+        return crate::mcp::policy::call(hub, caller, method, b).await;
+    }
+    if documents::METHODS.contains(&method) {
+        return documents::call(hub, method, b);
+    }
+    if matches!(method, "listComputerActivity" | "exportComputerActivity") {
+        return computer_activity::read(hub, method, &b);
+    }
     if method == "searchMessages" {
         return roster::search(hub, &b).await;
     }

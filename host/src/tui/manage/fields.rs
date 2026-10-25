@@ -78,6 +78,18 @@ impl App {
             Submit::Handoff(entry) => {
                 self.sheet("editHandoff", json!({"entryId": entry, "text": values["text"]}), Reply::FieldsSaved);
             }
+            Submit::VoiceDecisions { bot, receipt } => {
+                self.sheet(
+                    "confirmVoiceDecisions",
+                    json!({"botId":bot,"receiptId":receipt,"summary":values["summary"]}),
+                    Reply::FieldsSaved,
+                );
+            }
+            Submit::ProtectedFill { id, code } => {
+                let mut body = json!({"id":id});
+                body[if *code { "code" } else { "loginId" }] = values["value"].clone();
+                self.sheet(if *code { "fillProtectedCode" } else { "fillProtectedLogin" }, body, Reply::FieldsSaved);
+            }
             Submit::MemoryFile { bot, shared, name, base } => {
                 let file = name.clone().map_or_else(|| values.get("file").cloned().unwrap_or_default(), Value::from);
                 // A note keeps its text as typed: trimming would drop its last line break.
@@ -86,6 +98,25 @@ impl App {
                 self.sheet("saveMemoryFile", body, Reply::FieldsSaved);
             }
         }
+    }
+}
+
+/// Edits what a handoff card carries into the next conversation.
+pub fn protected_fill_fields(id: &str, code: bool) -> Fields {
+    Fields {
+        title:if code {"Fill one-time code"} else {"Fill saved password"}.into(),
+        note:"Local Windows only. First open the protected browser and focus its exact approved-origin input. Enter confirms filling; no automatic retry on failure.".into(),
+        choices:vec![],choice:0,inputs:vec![Input{name:"value".into(),label:if code {"One-time code"} else {"Saved login ID"}.into(),secret:code,required:true,multiline:false,placeholder:String::new(),ed:Editor::default()}],
+        cursor:0,error:None,saving:false,submit:Submit::ProtectedFill{id:id.into(),code},
+    }
+}
+pub fn voice_decision_fields(bot: &str, receipt: &str) -> Fields {
+    Fields {
+        title: "Confirm call decisions".into(),
+        note: "Write only decisions you personally confirm. Enter saves an immutable receipt; no actions execute. Shift+Enter adds a line.".into(),
+        choices: vec![], choice: 0,
+        inputs: vec![Input { name:"summary".into(),label:"Decisions".into(),secret:false,required:true,multiline:true,placeholder:String::new(),ed:Editor::default() }],
+        cursor:0,error:None,saving:false,submit:Submit::VoiceDecisions{bot:bot.into(),receipt:receipt.into()},
     }
 }
 

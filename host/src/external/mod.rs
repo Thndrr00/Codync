@@ -104,7 +104,7 @@ impl External {
             state.waiting.keys().cloned().collect()
         };
         for entry in entries {
-            if !hub.store.entry(&entry).is_some_and(|e| e.bot_id == bot_id) {
+            if hub.store.entry(&entry).is_none_or(|e| e.bot_id != bot_id) {
                 continue;
             }
             if let Some(waiting) = self.state.locked().waiting.remove(&entry) {

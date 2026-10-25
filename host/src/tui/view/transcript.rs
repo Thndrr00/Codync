@@ -294,7 +294,9 @@ fn entry_lines(
                 bot_message_line(out, app, e, x.peer(), &lead, failed, from);
                 return;
             }
-            let text = if let Some(status) = e.data["connectionRequest"]["status"].as_str() {
+            let text = if e.data["voiceTranscriptText"].is_string() {
+                format!("{} · o shows the call transcript · v confirms decisions", e.notice_text())
+            } else if let Some(status) = e.data["connectionRequest"]["status"].as_str() {
                 let hint = if e.data["connectionRequest"]["kind"] == "agent" { "C signs in" } else { "C connects" };
                 format!(
                     "{} · {} · {}",
@@ -341,7 +343,7 @@ fn entry_lines(
                     &[Span::raw("   │ ")],
                 ));
             }
-            if e.data["connectionRequest"].is_object() || folded.is_some() {
+            if e.data["connectionRequest"].is_object() || folded.is_some() || e.data["source"] == "voice_receipt" {
                 out.messages.push((e.id.clone(), from, out.lines.len()));
             }
         }
@@ -351,7 +353,7 @@ fn entry_lines(
 
 /// The full text a chat line folds away: what a handoff carries.
 pub(in crate::tui) fn unfoldable(e: &Entry) -> Option<&str> {
-    e.data["handoff"]["text"].as_str().filter(|t| !t.is_empty())
+    e.data["voiceTranscriptText"].as_str().or_else(|| e.data["handoff"]["text"].as_str()).filter(|t| !t.is_empty())
 }
 
 /// A bot-to-bot exchange, or a run of them, as one compact line ("· Messaged ▌O▐ Owen",

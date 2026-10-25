@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.codync.android.design.*
+import com.codync.android.core.InstalledConnector
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -42,6 +43,7 @@ private data class Removal(val id: String, val name: String, val skill: Boolean)
     var removing by remember { mutableStateOf<Removal?>(null) }
     var signingIn by remember { mutableStateOf<String?>(null) }
     var viewingSkill by remember { mutableStateOf<SkillRef?>(null) }
+    var tools by remember(state.generation) { mutableStateOf<InstalledConnector?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val connectors = state.plugins?.connectors.orEmpty()
     val skills = state.plugins?.skills.orEmpty()
@@ -64,6 +66,7 @@ private data class Removal(val id: String, val name: String, val skill: Boolean)
                     InstalledRow(c.name, if (c.needsSignIn) "Sign in so bots can use it" else c.command ?: c.url ?: c.description, icon = {
                         if (c.kind == "composio") AppLogo(c.logo, c.name, 32.dp) else ServiceLogo(null, c.name, c.registryName, 32.dp)
                     }, accessory = {
+                        SecondaryButton("Tools & requests") { tools = c }
                         if (signingIn == c.id) Spinner()
                         else if (c.needsSignIn) PrimaryButton("Sign in") {
                             signingIn = c.id
@@ -87,6 +90,7 @@ private data class Removal(val id: String, val name: String, val skill: Boolean)
         listOf(DialogAction("Remove", destructive = true) { target?.let { r -> run { store.removePlugin(if (r.skill) "removeSkill" else "removeConnector", r.id) } } })
     }
     CodyncSheet(viewingSkill, { viewingSkill = null }) { SkillSheet(it, state, store) }
+    CodyncSheet(tools, { tools = null }) { McpToolsSheet(it, state, store) }
 }
 
 @Composable private fun InstalledRow(title: String, subtitle: String, open: (() -> Unit)? = null, icon: @Composable () -> Unit,

@@ -12,6 +12,7 @@ import { ComposioSection } from './ComposioViews'
 import { CredentialsView } from './CredentialsView'
 import { CustomConnectorSheet, InstallConnectorSheet, NewSkillSheet } from './ConnectorSheets'
 import { SetupTerminalView } from './SetupTerminal'
+import { McpToolsSheet } from './McpToolsSheet'
 import { SkillSheet, type SkillRef } from './SkillSheet'
 import {
   appendPage, emptyPage, errorText, hasHiddenItems, market, needsSignIn, replacePage, revealMore, visible,
@@ -364,6 +365,7 @@ function InstalledView({ back }: { back: () => void }) {
   const plugins = usePlugins(store)
   const [removing, setRemoving] = useState<{ id: string; name: string; isSkill: boolean } | null>(null)
   const [signingIn, setSigningIn] = useState<string | null>(null)
+  const [tools, setTools] = useState<{ id: string; name: string } | null>(null)
   const [viewingSkill, setViewingSkill] = useState<SkillRef | null>(null)
   const empty = plugins.installedConnectors.length === 0 && plugins.installedSkills.length === 0
 
@@ -405,6 +407,7 @@ function InstalledView({ back }: { back: () => void }) {
                       trailing={(
                         <>
                           {signingIn === c.id ? <Spinner /> : needsSignIn(c) ? <Button onClick={() => void signIn(c.id)}>Sign in</Button> : null}
+                          <Button kind="secondary" onClick={() => setTools(c)}>Tools &amp; requests</Button>
                           <RemoveButton title={c.name} onClick={() => setRemoving({ id: c.id, name: c.name, isSkill: false })} />
                         </>
                       )}
@@ -441,6 +444,9 @@ function InstalledView({ back }: { back: () => void }) {
       />
       <FormSheet open={viewingSkill !== null} onClose={() => setViewingSkill(null)}>
         {viewingSkill ? <SkillSheet key={viewingSkill.name} skill={viewingSkill} /> : null}
+      </FormSheet>
+      <FormSheet open={tools !== null} onClose={() => setTools(null)}>
+        {tools && <McpToolsSheet key={`${store.contextId}:${store.computer.id}:${tools.id}`} connector={tools} />}
       </FormSheet>
     </SheetPage>
   )

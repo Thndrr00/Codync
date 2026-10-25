@@ -141,25 +141,6 @@ impl Trigger {
     }
 }
 
-/// Calculates the next `count` occurrences for a 5-field cron expression in an IANA timezone.
-pub fn calculate_next_occurrences(cron_expr: &str, tz_name: &str, count: usize) -> Result<Vec<DateTime<Tz>>> {
-    if cron_expr.split_whitespace().count() != 5 {
-        bail!("use a five-field cron expression");
-    }
-    let cron = Cron::from_str(cron_expr).context("invalid cron expression")?;
-    let tz: Tz = tz_name.parse().context("invalid IANA time zone")?;
-    let mut cursor = Utc::now().with_timezone(&tz);
-    let mut out = Vec::with_capacity(count);
-    for _ in 0..count {
-        let next = cron
-            .find_next_occurrence(&cursor, false)
-            .context("schedule has no future occurrence")?;
-        cursor = next;
-        out.push(next);
-    }
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,8 +181,6 @@ mod tests {
     fn invalid_schedules_are_rejected() {
         assert!(Trigger::Interval { seconds: 0 }.validate(0).is_err());
         assert!(Trigger::Once { at: 0 }.validate(0).is_err());
-        let next3 = calculate_next_occurrences("0 9 * * 1", "UTC", 3).unwrap();
-        assert_eq!(next3.len(), 3);
         assert!(Trigger::Cron { expression: "* * * * *".into(), time_zone: "not-a-zone".into() }.validate(0).is_err());
     }
 }
