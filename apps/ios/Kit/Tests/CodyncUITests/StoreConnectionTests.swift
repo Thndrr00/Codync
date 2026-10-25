@@ -22,7 +22,7 @@ import Testing
     // Streaming and final content have the same ID. The final update must be read
     // even though the roster has not yet reported any unread messages.
     await fake.emit(#"{"type":"entry","entry":{"id":"answer","seq":1,"botId":"b1","rev":2,"kind":"agent","turn":1,"data":{"text":"draft","final":false},"createdAt":1,"updatedAt":1}}"#)
-    #expect(await until { store.allEntries("b1").last?.rev == 2 })
+    #expect(await until { store.entries["b1"]?.last?.rev == 2 })
     await fake.emit(#"{"type":"entry","entry":{"id":"answer","seq":1,"botId":"b1","rev":3,"kind":"agent","turn":1,"data":{"text":"done","final":true},"createdAt":1,"updatedAt":2}}"#)
     #expect(await until { await fake.readReceipts.count == 2 })
     await fake.emit(#"{"type":"bot","bot":{"id":"b1","name":"Bot","rev":4,"unread":1}}"#)
@@ -148,7 +148,7 @@ import Testing
     let down = FakeRemote(.failed("Can't reach"))
     let up = FakeRemote(.ready(.relay))
     var made = 0
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) {
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in
         made += 1
         return made == 1 ? down : up
     }
@@ -179,7 +179,7 @@ import Testing
     let release = AsyncStream<Void>.makeStream()
     defer { release.continuation.finish(); requested.continuation.finish() }
     var made = 0
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) {
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in
         made += 1
         if made == 1 { return down }
         requested.continuation.yield(true)
