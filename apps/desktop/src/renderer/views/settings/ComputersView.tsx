@@ -19,7 +19,6 @@ import { errorText, liveClient, relativeDay, Reveal, SectionHeader, statusText, 
 import { useSSH } from './ssh-model'
 import { SSHRow } from './SSHRow'
 import { VoiceChatSettingsView } from './VoiceChatSettingsView'
-import '../pairing-window.css'
 import { openComputerScreen } from '../screen/open'
 
 /**
