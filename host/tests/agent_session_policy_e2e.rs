@@ -11,6 +11,7 @@ use lifecycle::{Host, events, sid};
 use serde_json::json;
 
 #[tokio::test]
+#[ignore = "message threads are gone (2.25.0): port to replies or a document's side lane"]
 async fn nonresumable_agents_keep_multiple_threads_and_accept_new_main_sessions() {
     let host = Host::start().await;
     let (bot, cwd) = host.bot("NoSessionCap", json!({"load":false,"fork":true})).await;
@@ -31,6 +32,7 @@ async fn nonresumable_agents_keep_multiple_threads_and_accept_new_main_sessions(
 }
 
 #[tokio::test]
+#[ignore = "message threads are gone (2.25.0): port to replies or a document's side lane"]
 async fn claude_style_missing_saved_sessions_recover_main_and_threads_with_a_notice() {
     let mut host = Host::start().await;
     let (bot, cwd) = host.bot("MissingTranscript", json!({})).await;

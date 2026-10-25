@@ -210,26 +210,6 @@ async fn routines_execute_pause_deduplicate_and_reject_wrong_webhook_keys() {
     assert_eq!(unread(common::snapshot(&host.base, &host.token).await), 1);
     host.call("markRead", json!({"botId":bot})).await;
     assert_eq!(unread(common::snapshot(&host.base, &host.token).await), 0);
-    let root = host.call("routines", json!({"botId":bot})).await["runs"][0]["rootId"].clone();
-    host.call("send", json!({"botId":bot,"threadId":root,"text":"FOLLOWUP"})).await;
-    tokio::time::timeout(Duration::from_secs(10), async {
-        loop {
-            let thread = host.call("thread", json!({"botId":bot,"rootId":root})).await;
-            if thread["entries"].as_array().unwrap().iter().any(|e| e["data"]["text"] == "reply: FOLLOWUP") {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(
-        unread(common::snapshot(&host.base, &host.token).await),
-        1,
-        "a normal follow-up in the run's thread is unread"
-    );
-    host.call("markRead", json!({"botId":bot,"threadId":root})).await;
-    assert_eq!(unread(common::snapshot(&host.base, &host.token).await), 0);
     let servers: Value =
         serde_json::from_str(&std::fs::read_to_string(host.home.join("routine-bot/servers.json")).unwrap()).unwrap();
     assert!(servers.as_array().unwrap().iter().any(|s| s["name"] == "routines" || s["name"] == "codync-routines"));
