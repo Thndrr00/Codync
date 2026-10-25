@@ -252,6 +252,7 @@ mod tests {
         assert_eq!(batch_line("100%", defined), "100%%");
     }
 
+    #[cfg(unix)]
     #[test]
     fn quotes_for_sh() {
         assert_eq!(quote("/usr/bin/x"), "/usr/bin/x");
