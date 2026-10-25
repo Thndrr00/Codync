@@ -40,7 +40,13 @@ pub(crate) fn call(hub: &Hub, caller: &Caller, method: &str, body: Value) -> Res
     };
     let data = json!({"source":"voice_decisions","text":format!("Owner-confirmed call decisions\n\n{summary}\n\nThis receipt records confirmation only; it does not execute actions."),
         "voiceDecisions":{"version":1,"receiptId":receipt.id,"summary":summary,"confirmedBy":actor}});
-    let (entry, added) = hub.add_entry_once(&id, &Lane::main(&request.bot_id), EntryKind::Notice, &data)?;
+    let (entry, added) = hub.add_entry_once(
+        &id,
+        &Lane::main(&request.bot_id),
+        EntryKind::Notice,
+        hub.store.max_turn(&request.bot_id),
+        &data,
+    )?;
     ensure!(
         added || entry.data["voiceDecisions"]["summary"] == data["voiceDecisions"]["summary"],
         "These call decisions were already confirmed with different content"

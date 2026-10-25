@@ -3,6 +3,7 @@ package com.codync.android.core
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 
@@ -24,34 +25,51 @@ data class BotDraft(
     val hidden: Boolean = false,
     val notify: Boolean? = null,
     val connectors: List<String>? = null,
-    val skills: List<String> = emptyList(),
+    /** Unset on a new bot, like [connectors]: the host turns on every installed one. */
+    val skills: List<String>? = null,
     val computer: Boolean = false,
     val account: String? = null,
-    /** Fleet tools (create and organize bots); null from a host without them, which hides the switch. */
-    val fleetManagement: Boolean? = null,
+    val manageTeam: Boolean = false,
     val isChief: Boolean = false,
     val chiefBotId: String? = null,
     val computerPermissions: ComputerPermissions = ComputerPermissions(),
+    /** Null where the host has none (an older one), so it isn't sent. */
+    val fallbacks: List<Fallback>? = null,
+    val selfFallbacks: Boolean? = null,
 ) {
-    val isValid: Boolean get() = id == null || name.isNotBlank()
+    /** A saved bot keeps a name; only a new one goes without (the host names it after its first conversations). */
+    val isValid: Boolean get() = name.isNotBlank()
     fun toggleNotifications(): BotDraft = copy(notify = !(notify ?: true))
+    /** On agent [id]: its model starts over, and it leaves the fallbacks (each agent appears once in the chain). */
+    fun withAgent(id: String): BotDraft = copy(backend = id, model = null, modelOptions = emptyMap(), fallbacks = fallbacks?.filter { it.backend != id })
     fun body(): JsonObject {
         val normalized = copy(command = command.takeIf { backend == "custom" }, account = account.takeIf { backend == "antigravity" })
         // updateBot merges a patch: null clears model, command or the connector choice, but an unset
-        // switch must stay out (the host's booleans don't take null).
-        return JsonObject(WireJson.encodeToJsonElement(normalized).jsonObject.filterNot { (key, value) -> value == JsonNull && key in SWITCHES })
+        // switch or fallback list must stay out (the host's booleans and lists don't take null).
+        return JsonObject(WireJson.encodeToJsonElement(normalized).jsonObject.filterNot { (key, value) -> value == JsonNull && key in UNSET })
     }
-    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account", "fleetManagement") }).toString()
+
+    /**
+     * This draft with each field it hasn't changed from [base] (the bot as the form loaded it) taken from [fresh] (the
+     * bot as the host has it now), so saving the form keeps a change made elsewhere: a bot that manages the team,
+     * another device.
+     */
+    fun rebased(base: BotDraft, fresh: BotDraft): BotDraft {
+        val (mine, old, new) = listOf(this, base, fresh).map { WireJson.encodeToJsonElement(it).jsonObject }
+        return WireJson.decodeFromJsonElement(JsonObject(mine.mapValues { (key, value) -> if (value == old[key]) new.getValue(key) else value }))
+    }
+    /** A template carries the bot's setup, not this computer's specifics (its account, team management, fallbacks). */
+    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks") }).toString()
 
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val SWITCHES = setOf("fastMode", "notify", "fleetManagement")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks")
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
-            bot.fleetManagement, bot.isChief, bot.chiefBotId, bot.computerPermissions)
+            bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks)
     }
 }

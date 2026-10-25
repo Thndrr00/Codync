@@ -5,8 +5,6 @@ public struct MemoryFile: Decodable, Identifiable, Hashable, Sendable {
     /// The bot whose folder holds it; nil for what all bots share.
     public var bot: String?
     public var name: String
-    /// SHA-256 of what it holds; a save is made over it.
-    public var hash: String
     public var description: String?
     public var tokens: Int
     public var deleted: Bool
@@ -32,45 +30,18 @@ public struct MemoryFiles: Decodable, Hashable, Sendable {
     public var folderCap: Int
 }
 
-/// One version of a file: who made it, why, and what it held then.
-public struct MemoryFileVersion: Decodable, Identifiable, Hashable, Sendable {
-    public var id: Int64
-    /// nil: the file was deleted.
-    public var content: String?
-    /// user · bot · dream · computer
-    public var author: String
-    public var authorBot: String?
-    /// edit · delete · restore · undo · dream
-    public var cause: String
-    public var at: Int64
-}
-
-/// A file as it is on disk now, with its recent versions.
+/// A file as it is on disk now.
 public struct MemoryFileDetail: Decodable, Hashable, Sendable {
     public var file: String
     public var shared: Bool
     /// nil when the file is gone.
     public var content: String?
-    /// The hash to save over; nil when the file is gone.
-    public var hash: String?
     public var path: String
-    public var versions: [MemoryFileVersion]
 }
 
 extension HostClient {
     public func memoryFile(botId: String, file: String, shared: Bool) async throws -> MemoryFileDetail {
         struct Body: Encodable { var botId: String; var file: String; var shared: Bool }
         return try await call("memoryFile", Body(botId: botId, file: file, shared: shared))
-    }
-
-    /// Saves (`content`), deletes (`content` and `version` nil) or brings back a version of a file, over the content
-    /// whose hash is `base` (nil: a new file).
-    public func changeMemoryFile(botId: String, file: String, shared: Bool, base: String?, content: String? = nil,
-                                 version: Int64? = nil) async throws {
-        struct Body: Encodable {
-            var botId: String; var file: String; var shared: Bool; var base: String?; var content: String?; var version: Int64?
-        }
-        let method = version != nil ? "restoreMemoryFile" : content != nil ? "saveMemoryFile" : "deleteMemoryFile"
-        let _: Empty = try await call(method, Body(botId: botId, file: file, shared: shared, base: base, content: content, version: version))
     }
 }

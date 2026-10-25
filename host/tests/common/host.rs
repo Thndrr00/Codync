@@ -74,6 +74,11 @@ impl Host {
         self.call("createBot", bot).await["bot"]["id"].as_str().unwrap().to_owned()
     }
 
+    /// What a client holds after catching up (see `common::snapshot`).
+    pub async fn snapshot(&self) -> Value {
+        super::snapshot(&self.base, &self.token).await
+    }
+
     pub async fn memory(&self, bot: &str) -> Value {
         self.call("memory", json!({"botId": bot})).await
     }
@@ -84,6 +89,21 @@ impl Host {
 
     pub async fn tool_refused(&self, bot: &str, name: &str, arguments: Value) -> String {
         self.refused("memoryCall", json!({"botId": bot, "name": name, "arguments": arguments})).await
+    }
+
+    /// A memory layer's folder: a bot's own, or the shared one (`None`).
+    pub fn memory_folder(&self, bot: Option<&str>) -> PathBuf {
+        bot.map_or_else(|| self.home.join("shared-memory"), |bot| self.home.join("bots").join(bot).join("bot-memory"))
+    }
+
+    /// Writes a memory file the way an editor would, already settled, so the host's next scan takes it.
+    pub fn write_memory(&self, bot: Option<&str>, name: &str, content: &str) {
+        let dir = self.memory_folder(bot);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, content).unwrap();
+        let file = std::fs::File::options().write(true).open(&path).unwrap();
+        file.set_modified(std::time::SystemTime::now() - Duration::from_secs(5)).unwrap();
     }
 
     /// A bot running `tests/fixtures/<fixture>` with `args`.
@@ -118,10 +138,15 @@ impl Host {
         }
     }
 
+    /// The JSON lines a fixture agent logged to `file` in a bot's workspace.
+    pub fn log(&self, bot: &str, file: &str) -> Vec<Value> {
+        let log = std::fs::read_to_string(self.home.join("bots").join(bot).join("workspace").join(file)).unwrap();
+        log.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()).collect()
+    }
+
     /// The requests `instructions_agent.py` logged in a bot's workspace.
     pub fn requests(&self, bot: &str, method: &str) -> Vec<Value> {
-        let log = std::fs::read_to_string(self.home.join("bots").join(bot).join("workspace/requests.jsonl")).unwrap();
-        log.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()).filter(|r| r["method"] == method).collect()
+        self.log(bot, "requests.jsonl").into_iter().filter(|r| r["method"] == method).collect()
     }
 
     /// The text of every prompt a bot's agent got, oldest first.

@@ -27,12 +27,45 @@ function mediaQuery(media: string) {
 const darkQuery = mediaQuery('(prefers-color-scheme: dark)')
 const motionQuery = mediaQuery('(prefers-reduced-motion: reduce)')
 
+/**
+ * The screen's pixel ratio, for canvases' backing size. It changes when the window moves to another
+ * screen or the Mac sleeps with the lid closed; a canvas drawn meanwhile would stay blurry at 1x.
+ * The query names the current ratio, so it is renewed on every change.
+ */
+const pixelRatio = {
+  get: () => window.devicePixelRatio || 1,
+  subscribe: (cb: () => void) => {
+    let query: MediaQueryList | null = null
+    const changed = () => {
+      watch()
+      cb()
+    }
+    const watch = () => {
+      query?.removeEventListener('change', changed)
+      query = window.matchMedia(`(resolution: ${pixelRatio.get()}dppx)`)
+      query.addEventListener('change', changed)
+    }
+    watch()
+    document.addEventListener('visibilitychange', changed)
+    window.addEventListener('focus', changed)
+    return () => {
+      query?.removeEventListener('change', changed)
+      document.removeEventListener('visibilitychange', changed)
+      window.removeEventListener('focus', changed)
+    }
+  },
+}
+
 export function useDark() {
   return useSyncExternalStore(darkQuery.subscribe, darkQuery.get)
 }
 
 export function useReduceMotion() {
   return useSyncExternalStore(motionQuery.subscribe, motionQuery.get)
+}
+
+export function usePixelRatio() {
+  return useSyncExternalStore(pixelRatio.subscribe, pixelRatio.get)
 }
 
 export const isDark = darkQuery.get
@@ -70,6 +103,9 @@ export const AVATAR_SHAPES = ['blob', 'pebble', 'squircle', 'tablet', 'wedge', '
 export function avatarColor(id: string) {
   return (AVATAR_COLORS.find((c) => c.id === id) ?? AVATAR_COLORS[7]!).hex
 }
+
+/** `[r, g, b]` → `#RRGGBB`. */
+export const rgbHex = (rgb: number[]) => `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`
 
 /** `#RRGGBB` → `rgba(r, g, b, a)`. */
 export function withAlpha(hex: string, alpha: number) {

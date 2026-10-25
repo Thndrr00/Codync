@@ -1,4 +1,5 @@
 import { identity } from './environment'
+import { registerAppearance } from './appearance'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -12,9 +13,10 @@ import { JumpList } from './jump-list'
 import { Tray } from './tray'
 import { applyDockVisibility, setShowInDock, showInDock } from './dock'
 import { AccountService } from './account'
-import { Updates } from './updates'
+import { Updates, yieldsToInstall } from './updates'
 import { handleURL, registerAuthIPC, registerSchemes, urlFromArgv } from './auth'
 import { registerSpeech } from './speech'
+import { VoiceShortcutKeys } from './voice-shortcut'
 import { registerScreenIPC } from './screen'
 import { registerScreenViewer } from './screen-viewer'
 import { registerCloud } from './cloud'
@@ -22,6 +24,8 @@ import { registerSSH } from './ssh'
 import { QuitLifecycle } from './quit-lifecycle'
 import { Island } from './island'
 import { registerErrorReports } from './error-reports'
+import { reportHostSetupFailure } from './analytics'
+import { launchAtLogin, openedAtLogin, setLaunchAtLogin, updateLoginItem } from './login-item'
 
 /** macOS's user-facing computer name, else the host name. */
 function computerName() {
@@ -38,6 +42,7 @@ if (!app.isPackaged && process.env.CODYNC_REMOTE_DEBUG) app.commandLine.appendSw
 
 const host = new HostController()
 registerErrorReports(host)
+host.on('setupFailed', reportHostSetupFailure)
 const account = new AccountService()
 const updates = new Updates(host)
 let chat: BrowserWindow | null = null
@@ -60,6 +65,8 @@ function snapshot(): HostSnapshot {
 /** The chat window: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
 function openChat() {
   if (chat) {
+    // Shown again after being hidden (closed to the background): the launch itself is `app_opened`.
+    if (!chat.isVisible() && !chat.webContents.isLoading()) chat.webContents.send('app:command', { kind: 'windowOpened' } satisfies WindowCommand)
     chat.show()
     chat.focus()
     return chat
@@ -128,12 +135,14 @@ function menu() {
         { label: 'Smaller', accelerator: 'CmdOrCtrl+-', click: () => send({ kind: 'stepTextSize', up: false }, false) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => send({ kind: 'stepTextSize', up: null }, false) },
         { type: 'separator' },
-        { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: () => send({ kind: 'newChat' }) },
+        { label: 'New Bot', accelerator: 'CmdOrCtrl+N', click: () => send({ kind: 'newBot' }) },
         { label: 'Search Bots', accelerator: 'CmdOrCtrl+F', click: () => send({ kind: 'search' }) },
         { label: 'Toggle Sidebar', accelerator: 'Ctrl+CmdOrCtrl+S', click: () => send({ kind: 'toggleSidebar' }, false) },
         { label: 'Conversation Details', accelerator: 'Alt+CmdOrCtrl+I', click: () => send({ kind: 'toggleDetails' }, false) },
+        { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => send({ kind: 'refresh' }, false) },
         { type: 'separator' },
-        ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }, { role: 'reload' as const }]),
+        // The dev page reload sits on ⇧⌘R, leaving ⌘R to Refresh.
+        ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }, { role: 'forceReload' as const }]),
         { role: 'togglefullscreen' },
       ],
     },
@@ -150,18 +159,13 @@ function registerIPC(tray: Tray) {
   registerFileSaves()
   ipcMain.on('app:version', (e) => (e.returnValue = app.getVersion()))
   ipcMain.on('app:computerName', (e) => (e.returnValue = computerName()))
+  ipcMain.on('app:openedAtLogin', (e) => (e.returnValue = openedAtLogin()))
   ipcMain.on('app:debugOpen', (e) => (e.returnValue = app.isPackaged ? null : (process.env.CODYNC_DEBUG_OPEN ?? null)))
   ipcMain.handle('host:snapshot', () => snapshot())
   ipcMain.on('host:install', () => void host.install())
   ipcMain.on('host:restart', () => host.restart())
   ipcMain.on('app:openExternal', (_e, url: string) => {
     if (/^(https?|mailto|x-apple\.systempreferences):/.test(url)) void shell.openExternal(url)
-  })
-  ipcMain.on('app:openMemoryFile', (_e, path: string) => {
-    // A note's own name in a memory folder, nothing else: the renderer can't open arbitrary files through this.
-    if (/[\\/](shared-memory|bot-memory)[\\/][a-z0-9-]+\.md$/.test(path) && !/(^|[\\/])\.\.([\\/]|$)/.test(path)) {
-      void shell.openPath(path)
-    }
   })
   ipcMain.on('app:openSettings', (_e, url: string) => {
     if (url.startsWith('x-apple.systempreferences:')) void shell.openExternal(url)
@@ -186,11 +190,8 @@ function registerIPC(tray: Tray) {
     tray.hostChanged()
     return visible
   })
-  ipcMain.handle('app:launchAtLogin', () => app.getLoginItemSettings().openAtLogin)
-  ipcMain.handle('app:setLaunchAtLogin', (_e, on: boolean) => {
-    app.setLoginItemSettings({ openAtLogin: on })
-    return app.getLoginItemSettings().openAtLogin
-  })
+  ipcMain.handle('app:launchAtLogin', () => launchAtLogin())
+  ipcMain.handle('app:setLaunchAtLogin', (_e, on: boolean) => setLaunchAtLogin(on))
   ipcMain.handle('app:resetAllData', async () => {
     jumpList.clear()
     // Tell paired devices first: connected ones see "No access" at once, and the account drops
@@ -210,7 +211,9 @@ function registerIPC(tray: Tray) {
   })
 }
 
-if (!app.requestSingleInstanceLock()) {
+if (yieldsToInstall()) {
+  app.exit(0)
+} else if (!app.requestSingleInstanceLock()) {
   if (!app.isPackaged) console.error(`${app.getName()} is already running. Quit it first, or run another copy beside it: npm run dev -- --name <name>`)
   app.quit()
 } else {
@@ -228,15 +231,19 @@ if (!app.requestSingleInstanceLock()) {
     // A menu bar app: it keeps running with no window.
   })
   void app.whenReady().then(() => {
+    registerAppearance()
     // Packaged builds take the icon from the bundle (resources/AppIcon.icon); a development run
     // would otherwise show Electron's.
     if (isMac && !app.isPackaged) app.dock?.setIcon(join(__dirname, '../../resources/icon.png'))
     applyDockVisibility()
+    updateLoginItem()
     const island = new Island({ url: rendererURL('island'), preload: join(__dirname, '../preload/index.js'), send, openApp: openChat, changed: () => tray.hostChanged() })
     const tray = new Tray({ openChat, openPairing, send, host, updates, island })
     updates.on('change', () => tray.hostChanged())
     registerIPC(tray)
     island.register()
+    // Voice input goes to the island while it's on, else to the chat window's composer.
+    new VoiceShortcutKeys((key) => (island.enabled ? island.voiceKey(key) : send({ kind: 'voiceKey', key }, key === 'double'))).register()
     registerAuthIPC()
     registerSpeech()
     registerScreenIPC()

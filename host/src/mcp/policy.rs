@@ -190,6 +190,7 @@ pub async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, body: Value) ->
                     &id,
                     &lane,
                     EntryKind::Permission,
+                    hub.store.max_turn(&lane.chat),
                     &json!({
                         "title":format!("Run {} · {}", request.connector, request.tool), "toolKind":"other",
                         "detail":serde_json::to_string_pretty(&request.message["params"]["arguments"])?,

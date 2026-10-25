@@ -16,6 +16,8 @@ actor FakeRemote: RemoteTransport {
     private var eventSinks: [AsyncThrowingStream<Data, Error>.Continuation] = []
     private var mailboxSinks: [AsyncStream<MailboxEvent>.Continuation] = []
     private(set) var sent: [String] = []
+    /// Each `send`'s quoted message, in order.
+    private(set) var replyTos: [String?] = []
     private(set) var readReceipts: [Data] = []
     private var failReadReceipts = false
     private(set) var readAttempts = 0
@@ -90,6 +92,7 @@ actor FakeRemote: RemoteTransport {
         case "send":
             let b = (try JSONSerialization.jsonObject(with: body) as? [String: String]) ?? [:]
             sent.append(b["text"] ?? "")
+            replyTos.append(b["replyTo"])
             let entry = #"{"id":"e\#(sent.count)","seq":\#(sent.count),"botId":"\#(b["botId"] ?? "")","rev":\#(sent.count),"kind":"user","turn":1,"data":{"text":"\#(b["text"] ?? "")","clientNonce":"\#(b["clientNonce"] ?? "")"},"createdAt":1,"updatedAt":1}"#
             return Data(#"{"entry":\#(entry)}"#.utf8)
         default:
@@ -122,7 +125,7 @@ actor FakeRemote: RemoteTransport {
 
     nonisolated func computerUpdates() -> AsyncStream<Computer> { AsyncStream { _ in } }
 
-    func enqueue(botId: String, text: String, clientNonce: String, threadId: String?) async throws { enqueued.append(clientNonce) }
+    func enqueue(botId: String, text: String, clientNonce: String, replyTo: String?) async throws { enqueued.append(clientNonce) }
     func cancelQueued(clientNonce: String) async -> MailboxCancel { cancelResult }
     func listQueued() async throws -> [QueuedItem] { enqueued.map { QueuedItem(nonce: $0, exp: nil, state: "queued") } }
 

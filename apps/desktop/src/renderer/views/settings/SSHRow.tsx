@@ -3,6 +3,7 @@ import { Button, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { HStack, IconSlot, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
+import { analytics } from '../../store/analytics'
 import { Reveal } from './parts'
 import { sshStatusDetail } from '@shared/ssh-startup'
 
@@ -68,7 +69,7 @@ export function SSHRow({ profile, status, edit, attached = true }: { profile: SS
       <Reveal show={status.kind === 'notInstalled' && !dev}>
         <HStack gap={6} className="settings-row">
           <span className="settings-code selectable">{SSH_INSTALL_COMMAND}</span>
-          <IconButton title="Copy install command" icon="doc.on.doc" onClick={() => window.codync.app.copy(SSH_INSTALL_COMMAND)} />
+          <IconButton title="Copy install command" icon="doc.on.doc" onClick={() => { analytics.track({ event: 'link_opened', link: 'install_command' }); window.codync.app.copy(SSH_INSTALL_COMMAND) }} />
         </HStack>
       </Reveal>
     </div>

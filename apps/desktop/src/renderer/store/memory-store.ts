@@ -19,7 +19,7 @@ export interface MemoryEntry {
 
 export interface MemoryLayer { entries: MemoryEntry[]; used: number; cap: number }
 
-/** One dreaming run: what it added and archived; it can be undone. */
+/** One dreaming run: what it added and archived (`undone` when an older app undid it). */
 export interface DreamRun {
   id: number
   at: number
@@ -34,8 +34,6 @@ export interface DreamRun {
 export interface MemoryFile {
   bot: string | null
   name: string
-  /** SHA-256 of what it holds; a save is made over it. */
-  hash: string
   description: string | null
   tokens: number
   deleted: boolean
@@ -50,26 +48,12 @@ export interface MemoryFiles {
   folderCap: number
 }
 
-export interface MemoryFileVersion {
-  id: number
-  /** null: the file was deleted. */
-  content: string | null
-  /** user · bot · dream · computer */
-  author: string
-  authorBot: string | null
-  /** edit · delete · restore · undo · dream */
-  cause: string
-  at: number
-}
-
-/** A file as it is on disk now, with its recent versions. */
+/** A file as it is on disk now. */
 export interface MemoryFileDetail {
   file: string
   shared: boolean
   content: string | null
-  hash: string | null
   path: string
-  versions: MemoryFileVersion[]
 }
 
 export interface MemoryView {
@@ -87,10 +71,9 @@ export interface MemoryView {
 
 const OLDER_HOST = "Update Codync on your computer to see this bot's memory."
 
-/** One bot's memory: fetches it, and changes it through the host. */
+/** One bot's memory, read-only: the bot changes it. */
 export class MemoryStore extends Observable {
   view: MemoryView | null = null
-  busy = false
   error: string | null = null
   private request = 0
 
@@ -128,31 +111,6 @@ export class MemoryStore extends Observable {
       return null
     }
   }
-
-  /** Saves (`content`), deletes (neither) or brings back `version` of a file, over what was loaded (`base`). */
-  changeFile(name: string, shared: boolean, base: string | null, change: { content?: string; version?: number } = {}) {
-    const method = change.version !== undefined ? 'restoreMemoryFile' : change.content !== undefined ? 'saveMemoryFile' : 'deleteMemoryFile'
-    return this.mutate(method, { file: name, shared, base, ...change })
-  }
-
-  /** A memory method for this bot; reloads after it. */
-  async mutate(method: string, body: object = {}) {
-    if (this.busy) return false
-    this.busy = true
-    this.error = null
-    this.changed()
-    try {
-      await (await this.client()).call(method, { botId: this.botId, ...body })
-      await this.load()
-      return true
-    } catch (error) {
-      this.error = message(error)
-      return false
-    } finally {
-      this.busy = false
-      this.changed()
-    }
-  }
 }
 
 /** Who wrote an entry, for its detail line. */
@@ -162,19 +120,6 @@ export function authorLabel(entry: MemoryEntry, botName: (id: string | null) => 
     case 'bot': return `${botName(entry.authorBot)} remembered it`
     case 'dream': return 'Dreaming'
     default: return 'Moved from the old memory'
-  }
-}
-
-/** Who made a file's version and why, for its row. */
-export function versionLabel(version: MemoryFileVersion, botName: (id: string | null) => string) {
-  const by = version.author === 'user' ? 'You'
-    : version.author === 'bot' ? botName(version.authorBot)
-    : version.author === 'dream' ? 'Dreaming' : 'This computer'
-  switch (version.cause) {
-    case 'delete': return `${by} deleted it`
-    case 'restore': return `${by} brought back a version`
-    case 'undo': return `${by} undid a change`
-    default: return `${by} changed it`
   }
 }
 

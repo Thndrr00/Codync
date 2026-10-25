@@ -1,32 +1,42 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { isBelow } from '@shared/compat'
-import { isGroup, isWorkingIn, type Bot } from '@shared/models'
+import { groupFastMode } from '@shared/fast-mode'
+import { isGroup, isWorkingIn, quoteOf, type Bot, type Entry } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { DropdownMenu } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
+import { IconButton } from '../../components/Controls'
+import { RecordingPill } from '../../components/RecordingPill'
 import { usePresence } from '../../components/Overlay'
-import { VStack } from '../../components/Stack'
+import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
+import { useTr } from '../../lib/use-language'
 import { useStore } from '../../store/context'
 import { MAX_FILE_SIZE, type OutgoingFile } from '../../store/bot-store'
 import { pluginsFor } from '../marketplace/plugins'
 import { composerEnter } from './composer-keyboard'
 import { CommandMenu, useCommandMenu } from './CommandMenu'
 import { ComposerAttachment } from './ComposerAttachment'
+import { QuoteRow } from './ChatRows'
 import { insertCodeBlock, wrapInCode, type ComposerEdit } from './composer-edits'
-import { useDictation } from './dictation'
-import { builtInCommand, SKILLS_HOST, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
+import { useDictation } from './dictation-platform'
+import { DictationEngineMenu } from './DictationEngineMenu'
+import { builtInCommand, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
+import { useVoiceShortcut } from './voice-shortcut-keys'
 
 type Trailing = 'interrupt' | 'stop' | 'call' | 'send'
 
 /**
- * The message box under a chat or a thread: send, or stop while the bot (or the group) is
- * working there. In a group, typing `@` suggests its bots; with one bot, a leading `/` lists its commands.
+ * The message box under a chat: send, or stop while the bot (or the group) is working there. A leading `/` lists
+ * the commands (a group's are its bots'); in a group, typing `@` suggests its bots. While `reply` is set, the
+ * message it quotes sits at the top of the box and goes out with the next send.
  */
-export function Composer({ botId, thread = null, onCall, onInterrupt }: {
+export function Composer({ botId, thread = null, reply = null, cancelReply, onCall, onInterrupt }: {
   botId: string
+  /** A document's side conversation (`doc:<id>`) the message goes to, instead of the chat. */
   thread?: string | null
+  reply?: Entry | null
+  cancelReply?: () => void
   /** Starts a voice call; while the box is empty it takes the send button's place. */
   onCall?: (() => void) | null
   /** Interrupts the bot while it is speaking in a voice call. */
@@ -35,46 +45,63 @@ export function Composer({ botId, thread = null, onCall, onInterrupt }: {
   const store = useStore()
   // Remount transient editor state (selection, attachments, IME) when its destination changes.
   return <DestinationComposer key={JSON.stringify([store.contextId, store.computer.id, botId, thread])}
-    botId={botId} thread={thread} onCall={onCall} onInterrupt={onInterrupt} />
+    botId={botId} thread={thread} reply={reply} cancelReply={cancelReply} onCall={onCall} onInterrupt={onInterrupt} />
 }
 
-function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
-  botId: string; thread: string | null; onCall?: (() => void) | null; onInterrupt?: (() => void) | null
+function DestinationComposer({ botId, thread, reply, cancelReply, onCall, onInterrupt }: {
+  botId: string; thread: string | null; reply: Entry | null; cancelReply?: () => void; onCall?: (() => void) | null; onInterrupt?: (() => void) | null
 }) {
   const store = useStore()
+  const tr = useTr()
   const plugins = useModel(pluginsFor(store))
   const bot = store.bots.get(botId) ?? null
   const drafts = store.composerDrafts
-  const draft = useSyncExternalStore(drafts.subscribe, () => drafts.get(botId, thread))
-  const setDraft = (text: string) => drafts.set(botId, thread, text)
+  // A document's conversation keeps its own draft.
+  const draftKey = thread ? `${botId}/${thread}` : botId
+  const draft = useSyncExternalStore(drafts.subscribe, () => drafts.get(draftKey))
+  const setDraft = (text: string) => drafts.set(draftKey, text)
   const [files, setFiles] = useState<OutgoingFile[]>([])
-  const dictation = useDictation(draft, setDraft)
+  const dictation = useDictation((change) => drafts.set(draftKey, change(drafts.get(draftKey))))
   const field = useRef<HTMLTextAreaElement>(null)
   const measure = useRef<HTMLDivElement>(null)
   const composing = useRef(false)
   /** Text pasted into this draft since the last send. */
   const pasted = useRef<string[]>([])
-  const working = !!bot && isWorkingIn(bot, botId, thread)
+  const working = !!bot && isWorkingIn(bot, botId)
   const empty = !draft.trim() && !files.length
   /** A session the person runs in their own terminal: it is read here, answered in that terminal. */
   const terminal = !!bot && bot.backend === 'external'
   const canSend = !terminal && !empty && (store.connection.kind === 'online' || (store.canQueue && !files.length))
   const canAttach = !!bot && !terminal
 
+  const members = bot && isGroup(bot) ? store.members(bot) : []
+
+  const name = bot?.name ?? ''
   const placeholder = terminal
-    ? `This bot runs in your terminal — reply there; approvals still work here`
-    : thread ? 'Reply…' : bot && isGroup(bot) ? 'Message everyone · @ to ask one bot' : working ? `Queue a message for ${bot?.name ?? ''}` : `Ask ${bot?.name ?? ''}`
+    ? tr('This bot runs in your terminal — reply there; approvals still work here')
+    : reply || thread
+      ? tr('Reply…')
+      : bot && isGroup(bot)
+        ? tr('Ask everyone · @ to ask one bot')
+        : working
+          ? tr('Queue a message for {name}').replace('{name}', name)
+          : tr('Ask {name}').replace('{name}', name)
 
   // A routine's "Try it" fills the box.
   const routineDraft = store.routineDrafts.get(botId)
   useEffect(() => {
-    if (thread || routineDraft === undefined) return
+    if (routineDraft === undefined) return
     const incoming = store.consumeRoutineDraft(botId)
     if (incoming === undefined) return
-    const previous = drafts.get(botId, thread)
-    drafts.set(botId, thread, previous ? `${previous}\n${incoming}` : incoming)
+    const previous = drafts.get(draftKey)
+    drafts.set(draftKey, previous ? `${previous}\n${incoming}` : incoming)
     field.current?.focus()
-  }, [routineDraft, thread, botId, store, drafts])
+  }, [routineDraft, botId, store, drafts])
+
+  // Picking a message to reply to brings the caret here.
+  useEffect(() => {
+    if (reply) field.current?.focus()
+  }, [reply])
 
   // Measure a separate, wrapping copy: collapsing the live textarea to zero breaks its
   // height transition, caret scroll and IME composition. Observe font/width changes too.
@@ -104,7 +131,7 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
     return /\n/.test(query) || query.length > 24 ? null : query
   })()
   const suggestions: Bot[] =
-    mentionQuery !== null && bot ? store.members(bot).filter((m) => !mentionQuery || m.name.toLowerCase().includes(mentionQuery.toLowerCase())) : []
+    mentionQuery !== null ? members.filter((m) => !mentionQuery || m.name.toLowerCase().includes(mentionQuery.toLowerCase())) : []
 
   const mention = (member: Bot) => {
     const at = draft.lastIndexOf('@')
@@ -113,16 +140,20 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
     field.current?.focus()
   }
 
-  // Not in a group: each member has its own skills.
-  const skillsShown = !!bot && !isGroup(bot) && !isBelow(store.hello?.version ?? '', SKILLS_HOST)
   const slash = slashQuery(draft)
-  const commands = slash === null ? [] : slashCommands(bot, slash, skillsShown ? plugins.installedSkills : [])
+  const commands = slash === null ? [] : slashCommands(bot, slash, plugins.installedSkills, members)
 
   const run = (command: SlashCommand) => {
     if (!bot) return
     switch (command.action.kind) {
       case 'fast':
-        store.setFastMode(bot, !bot.fastMode)
+        if (isGroup(bot)) {
+          // Each member's own Fast mode: all on, or all back off.
+          const fast = groupFastMode(members)
+          for (const m of fast?.members ?? []) store.setFastMode(m, fast?.state === 'off')
+        } else {
+          store.setFastMode(bot, !bot.fastMode)
+        }
         setDraft('')
         break
       case 'skill':
@@ -168,15 +199,20 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
   }
 
   const submit = () => {
-    const command = files.length ? null : builtInCommand(bot, draft)
+    const command = files.length ? null : builtInCommand(bot, draft, members)
+    if (!command && !canSend) return
+    // Words still on their way would land in the emptied box (and the shortcut's tap would send them again).
+    dictation.cancel()
     if (command) return run(command)
     if (!canSend || terminal) return
-    store.send(draft, botId, thread, files, undefined, pasted.current)
+    store.send(draft, botId, { files, pasted: pasted.current, replyTo: reply && quoteOf(reply), thread })
+    cancelReply?.()
     pasted.current = []
     setDraft('')
     setFiles([])
     field.current?.focus()
   }
+  useVoiceShortcut(dictation, draft, submit, () => field.current?.focus())
 
   const trailing: Trailing = terminal ? 'send' : onInterrupt && !draft && !files.length ? 'interrupt' : working && !draft && !files.length ? 'stop' : onCall && !draft && !files.length ? 'call' : 'send'
   const [symbol, label] = ({
@@ -212,6 +248,14 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
       >
         <div className="composer-surface">
           <CommandMenu commands={menu.shown} index={menu.index} hover={menu.hover} pick={run} />
+          <ComposerReveal open={!!reply}>
+            {reply ? (
+              <HStack gap={4} className="composer-reply">
+                <QuoteRow quote={quoteOf(reply)} className="composer-reply-quote" />
+                <IconButton title="Cancel reply" icon="xmark" size={24} onClick={cancelReply} />
+              </HStack>
+            ) : null}
+          </ComposerReveal>
           <ComposerReveal open={files.length > 0}>
             <div className="file-chips">
               {files.map((f) => (
@@ -243,17 +287,22 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
                 placeholder={placeholder}
                 readOnly={terminal}
                 spellCheck
-                aria-label={thread ? 'Reply' : 'Message'}
+                aria-label={reply ? 'Reply' : 'Message'}
                 aria-keyshortcuts="Enter Shift+Enter"
                 onCompositionStart={() => { composing.current = true }}
                 onCompositionEnd={() => { composing.current = false }}
                 onChange={(e) => {
                   setDraft(e.target.value)
                   // Starting a command: list the computer's skills again.
-                  if (skillsShown && e.target.value === '/') void plugins.refresh()
+                  if (bot && e.target.value === '/') void plugins.refresh()
                 }}
                 onKeyDown={(e) => {
                   if (menu.onKey(e, composing.current || e.nativeEvent.isComposing || e.keyCode === 229)) return
+                  if (e.key === 'Escape' && reply) {
+                    e.preventDefault()
+                    cancelReply?.()
+                    return
+                  }
                   // Return sends, Shift-Return adds a line; an input method's Return picks its candidate.
                   const action = composerEnter({ key: e.key, shiftKey: e.shiftKey, altKey: e.altKey, repeat: e.repeat, isComposing: composing.current || e.nativeEvent.isComposing, keyCode: e.keyCode })
                   if (e.key === 'Enter' && e.repeat && !e.shiftKey && !e.altKey) e.preventDefault()
@@ -278,16 +327,21 @@ function DestinationComposer({ botId, thread, onCall, onInterrupt }: {
                 }}
               />
             </div>
-            {dictation.available ? (
-              <button
-                className={`press composer-mic ${dictation.listening ? 'on' : ''}`}
-                aria-label={dictation.listening ? 'Stop dictating' : 'Dictate'}
-                title={dictation.listening ? 'Stop dictating' : 'Dictate'}
-                aria-pressed={dictation.listening}
-                onClick={dictation.toggle}
-              >
-                <Icon name={dictation.listening ? 'mic.fill' : 'mic'} size={13} weight="medium" />
-              </button>
+            {dictation.listening || dictation.transcribing ? (
+              <RecordingPill
+                startedAt={dictation.startedAt}
+                sample={() => dictation}
+                onStop={() => dictation.finish()}
+                transcribing={dictation.transcribing}
+                className="composer-recording"
+              />
+            ) : dictation.available ? (
+              <HStack as="span" gap={0} className="composer-mic-group">
+                <button className="press composer-mic" aria-label="Dictate" title="Dictate" onClick={() => dictation.start(draft)}>
+                  <Icon name="mic" size={13} weight="medium" />
+                </button>
+                <DictationEngineMenu />
+              </HStack>
             ) : null}
             <button
               className={trailing === 'interrupt' ? 'press composer-send interrupt' : 'press composer-send'}

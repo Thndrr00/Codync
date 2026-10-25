@@ -57,12 +57,12 @@ final class CloudSpeechEngine: VoiceEngine {
     private var speakGeneration = 0
 
     private static let threshold: Float = 0.3
-    private static let prerollBytes = 16000 * 2 * 3 / 10
+    private static let prerollBytes = MicTap.bytesPerSecond * 3 / 10
     /// An utterance has to fit one channel message once base64-encoded.
-    private static let maxBytes = 16000 * 2 * 20
+    private static let maxBytes = MicTap.bytesPerSecond * 20
     /// Under 0.4 s of voice is a cough or noise, not something to send (and speech-to-text models
     /// invent words for noise).
-    private static let minVoicedBytes = 16000 * 2 * 4 / 10
+    private static let minVoicedBytes = MicTap.bytesPerSecond * 4 / 10
 
     private var endOfUtterance: TimeInterval {
         let seconds = UserDefaults.standard.double(forKey: OnDeviceEngine.pauseKey)

@@ -6,9 +6,9 @@ import { Dialog, SheetPage, useDismiss } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
+import { useScreenViewed } from '../../store/analytics'
 import { ComputerBadge } from '../ComputerBadge'
 import { AgentSheet, AgentTile, NodeNotice } from './AgentSheet'
-import { ComposioSection } from './ComposioViews'
 import { CredentialsView } from './CredentialsView'
 import { CustomConnectorSheet, InstallConnectorSheet, NewSkillSheet } from './ConnectorSheets'
 import { SetupTerminalView } from './SetupTerminal'
@@ -20,6 +20,7 @@ import {
 } from './market-models'
 import { AppLogo, FormSheet, ItemGrid, ItemRow, MarketRow, MarketSection, ScreenHeader, ServiceLogo, SkeletonGrid, SkillGlyph, SlideStack, TileIcon } from './pieces'
 import { usePlugins } from './plugins'
+import { useTr } from '../../lib/use-language'
 
 const connectorId = (c: MarketConnector) => c.name
 
@@ -29,13 +30,13 @@ const connectorId = (c: MarketConnector) => c.name
  * computer; each bot turns connectors and skills on in its settings.
  * With more than one computer, the header switches between them (the caller swaps the store).
  */
-export function MarketplaceView({ computers, computer, onComputer, appsFirst = false }: { appsFirst?: boolean; computers: { id: string; name: string }[]; computer: string; onComputer: (id: string) => void }) {
+export function MarketplaceView({ computers, computer, onComputer }: { computers: { id: string; name: string }[]; computer: string; onComputer: (id: string) => void }) {
   const store = useStore()
+  const tr = useTr()
   const plugins = usePlugins(store)
   const dismiss = useDismiss()
+  useScreenViewed('marketplace')
   const [search, setSearch] = useState('')
-  /** Bumped on each submitted search, so every section searches again. */
-  const [searchToken, setSearchToken] = useState(0)
   const [connectors, setConnectors] = useState(emptyPage<MarketConnector>)
   /** The registry page after the ones shown; null at the end. */
   const [connectorCursor, setConnectorCursor] = useState<string | null>(null)
@@ -126,7 +127,6 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
   }, [])
 
   const submit = (q: string) => {
-    setSearchToken((t) => t + 1)
     void loadConnectors(q)
   }
 
@@ -146,14 +146,14 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
       <HStack gap={10} shrink>
         <ComputerBadge computer={store.computer} size={32} />
         <VStack shrink className="market-heading-titles">
-          <Text size="title" weight="semibold" tone="text">Extensions</Text>
+          <Text size="title" weight="semibold" tone="text">{tr(`Extensions`)}</Text>
           {computers.length > 1 ? (
             <DropdownMenu
-              title="Switch computer"
+              title={tr('Switch computer')}
               className="market-computer-switch"
               items={() => computers.map((c) => ({ title: c.name, selected: c.id === computer, action: () => onComputer(c.id) }))}
             >
-              <Text truncate aria-label={`Computer: ${store.hostName}`}>{store.hostName}</Text>
+              <Text truncate aria-label={tr('Computer: {name}').replaceAll('{name}', store.hostName)}>{store.hostName}</Text>
               <Icon name="chevron.down" size={10} weight="semibold" />
             </DropdownMenu>
           ) : (
@@ -162,7 +162,7 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
         </VStack>
       </HStack>
       <Spacer />
-      <Button kind="secondary" onClick={() => setShowCredentials(true)}><Icon name="lock.shield" size={12} />Credentials</Button>
+      <Button kind="secondary" onClick={() => setShowCredentials(true)}><Icon name="lock.shield" size={12} />{tr('Credentials')}</Button>
       {installedCount > 0 ? (
         <button className="press market-installed" onClick={() => setShowInstalled(true)}>
           <HStack as="span" align="stretch" className="market-installed-logos">
@@ -173,8 +173,8 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
             ))}
           </HStack>
           <VStack as="span" align="flex-start" className="market-installed-text">
-            <Text tone="secondary">{installedCount} installed</Text>
-            <Text size="caption" tone="secondary">Connectors & skills</Text>
+            <Text tone="secondary">{tr('{count} installed').replaceAll('{count}', String(installedCount))}</Text>
+            <Text size="caption" tone="secondary">{tr(`Connectors & skills`)}</Text>
           </VStack>
           <Icon name="chevron.right" size={10} weight="semibold" color="var(--tertiary)" />
         </button>
@@ -187,8 +187,8 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
       <Icon name="magnifyingglass" size={13} color="var(--secondary)" />
       <input
         value={search}
-        placeholder="Search agents, connectors and skills"
-        aria-label="Search agents, connectors and skills"
+        placeholder={tr('Search agents, connectors and skills')}
+        aria-label={tr('Search agents, connectors and skills')}
         spellCheck={false}
         onChange={(e) => {
           setSearch(e.target.value)
@@ -200,8 +200,8 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
       />
       {search ? (
         <button
-          aria-label="Clear search"
-          title="Clear search"
+          aria-label={tr('Clear search')}
+          title={tr('Clear search')}
           className="market-search-clear"
           onClick={() => {
             setSearch('')
@@ -223,9 +223,8 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
         <div className="market-page-content">
           {header}
           {searchField}
-          {appsFirst ? <ComposioSection query={query} searchToken={searchToken} /> : null}
           {agents.length > 0 ? (
-            <MarketSection title={query ? `Agents matching “${query}”` : 'Agents'}>
+            <MarketSection title={query ? tr('Agents matching “{query}”').replaceAll('{query}', query) : 'Agents'}>
               {allAgents.some((b) => b.node === 'missing') ? <NodeNotice onAdd={() => setAddingNode(true)} /> : null}
               <div className="agent-grid">
                 {agents.slice(0, agentLimit).map((b) => <AgentCard key={b.id} backend={b} onClick={() => setAgent(b)} />)}
@@ -237,7 +236,7 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
             {loadingConnectors ? (
               <SkeletonGrid />
             ) : connectors.items.length === 0 ? (
-              <Text tone="secondary">{query ? `No connectors match “${query}”.` : "Couldn't load connectors."}</Text>
+              <Text tone="secondary">{query ? tr('No connectors match “{query}”.').replaceAll('{query}', query) : tr(`Couldn't load connectors.`)}</Text>
             ) : (
               <>
                 <ItemGrid>
@@ -262,7 +261,6 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
               </>
             )}
           </MarketSection>
-          {!appsFirst ? <ComposioSection query={query} searchToken={searchToken} /> : null}
           <MarketSection title="Skills">
             {loadingSkills ? (
               <SkeletonGrid />
@@ -305,7 +303,7 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
           </MarketSection>
           {error ? <Text size="footnote" tone="danger">{error}</Text> : null}
           <Text size="footnote" tone="tertiary">
-            Connectors come from the official MCP Registry, apps through Composio, skills from Anthropic, agents from the ACP registry. Everything installs on {store.hostName}.
+            {tr('Connectors come from the official MCP Registry, skills from Anthropic, agents from the ACP registry. Everything installs on {name}.').replaceAll('{name}', store.hostName)}
           </Text>
         </div>
       </div>
@@ -331,10 +329,10 @@ export function MarketplaceView({ computers, computer, onComputer, appsFirst = f
       <FormSheet open={viewingSkill !== null} onClose={() => setViewingSkill(null)}>
         {viewingSkill ? <SkillSheet key={viewingSkill.name} skill={viewingSkill} /> : null}
       </FormSheet>
-      <FormSheet open={addingNode} onClose={() => setAddingNode(false)} width={560} height={560}>
+      <FormSheet open={addingNode} onClose={() => setAddingNode(false)} width={560} height={560} fixed>
         {addingNode ? <SetupTerminalView backend={null} step="node" back={() => setAddingNode(false)} /> : null}
       </FormSheet>
-      <FormSheet open={agent !== null} onClose={() => setAgent(null)} width={560} height={560}>
+      <FormSheet open={agent !== null} onClose={() => setAgent(null)} width={560} height={560} fixed>
         {agent ? <AgentSheet key={agent.id} initial={agent} /> : null}
       </FormSheet>
     </>
@@ -362,6 +360,7 @@ function AgentCard({ backend, onClick }: { backend: Backend; onClick: () => void
 
 function InstalledView({ back }: { back: () => void }) {
   const store = useStore()
+  const tr = useTr()
   const plugins = usePlugins(store)
   const [removing, setRemoving] = useState<{ id: string; name: string; isSkill: boolean } | null>(null)
   const [signingIn, setSigningIn] = useState<string | null>(null)
@@ -437,8 +436,8 @@ function InstalledView({ back }: { back: () => void }) {
       </div>
       <Dialog
         open={removing !== null}
-        title={`Remove ${removing?.name ?? ''}?`}
-        message={removing ? (removing.isSkill ? 'Bots stop using this skill.' : 'Bots lose this connector, and the keys saved for it are deleted.') : null}
+        title={tr('Remove {name}?').replaceAll('{name}', removing?.name ?? '')}
+        message={removing ? tr(removing.isSkill ? 'Bots stop using this skill.' : 'Bots lose this connector, and the keys saved for it are deleted.') : null}
         actions={removing ? [{ title: 'Remove', destructive: true, action: () => void remove(removing) }] : []}
         onClose={() => setRemoving(null)}
       />
@@ -454,11 +453,12 @@ function InstalledView({ back }: { back: () => void }) {
 
 /** A quiet "nothing here" message (replaces `ContentUnavailableView`). */
 function EmptyState({ icon, title, detail }: { icon: string; title: string; detail: string }) {
+  const tr = useTr()
   return (
     <VStack align="center" gap={8} className="market-empty">
       <Icon name={icon} size={28} color="var(--tertiary)" />
-      <Text size="compactBody" weight="semibold" tone="text">{title}</Text>
-      <Text size="compactSecondary" tone="secondary">{detail}</Text>
+      <Text size="compactBody" weight="semibold" tone="text">{tr(title)}</Text>
+      <Text size="compactSecondary" tone="secondary">{tr(detail)}</Text>
     </VStack>
   )
 }

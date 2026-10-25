@@ -10,7 +10,6 @@ struct DocumentsView: View {
     @State private var review = false
     @State private var search = ""
     @State private var copied = false
-    @State private var conversation: ThreadTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -47,11 +46,6 @@ struct DocumentsView: View {
         }
         .codyncSheet(isPresented: $review) {
             if let library { DocumentReviewView(library: library) }
-        }
-        .codyncSheet(item: $conversation) { target in
-            RepliesView(botId: botId, rootId: target.id) {
-                withAnimation(Motion.layout) { conversation = nil }
-            }
         }
     }
 
@@ -104,9 +98,6 @@ struct DocumentsView: View {
                             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.secondary)
                         }.frame(minHeight: 44).contentShape(Rectangle())
                     }.buttonStyle(.plain)
-                    IconButton("Discuss document: \(document.title)", systemImage: "bubble.left.and.bubble.right") {
-                        withAnimation(Motion.layout) { conversation = ThreadTarget(id: "doc:\(document.id)") }
-                    }
                 }.disabled(library.dirty || library.saving || library.opening)
             }
             if library.next != nil {

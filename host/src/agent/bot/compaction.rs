@@ -52,11 +52,10 @@ impl Actor {
         if claude && !api_key { CacheLife::OneHour } else { CacheLife::FiveMinutes }
     }
 
-    /// The bot's own chat, not a thread, a room, a routine or another bot's request: the conversation the user comes
+    /// The bot's own chat, not a room, a routine or another bot's request: the conversation the user comes
     /// back to, and the only one compacted ahead of time.
     fn in_main_chat(&self) -> bool {
-        self.lane.thread.is_none()
-            && self.lane.chat == self.cfg.id
+        self.lane.chat == self.cfg.id
             && self.active_group.is_none()
             && self.active_routine.is_none()
             && self.active_request.is_none()
@@ -115,9 +114,6 @@ impl Actor {
         }
         if self.conn.as_ref().is_some_and(|c| c.instructions() == Instructions::FirstMessage) {
             self.profile_resend.insert(sid.clone());
-        }
-        if let Some(root) = self.lane.thread.clone() {
-            self.thread_intro = Some((sid.clone(), self.thread_intro(&root, false)));
         }
         let mut c = self.conversation(&sid);
         c.compacted(self.compacting.is_some(), self.compacting == Some(true), now_ms());

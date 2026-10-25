@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync, rmSync, rmdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-async function run(handle, thread, timeout='1') {
+async function run(handle, replyTo, timeout='1') {
   const requests=[]
   const server=createServer(async(req,res)=>{
     let raw=''; for await(const chunk of req) raw+=chunk
@@ -22,7 +22,7 @@ async function run(handle, thread, timeout='1') {
   try {
     const args=[resolve('tools/run-headless.mjs'),'--token-file',token,
       '--port',String(server.address().port),'--bot','bot','--prompt-file',prompt,'--timeout',timeout]
-    if(thread) args.push('--thread',thread)
+    if(replyTo) args.push('--reply-to',replyTo)
     const child=spawn(process.execPath,args,{windowsHide:true})
     child.stdin.end()
     const timer=setTimeout(()=>child.kill(),15_000)
@@ -43,9 +43,9 @@ test('headless runner sends once and returns the matching final result', async()
 })
 test('headless uses an exact message lookup independently of history pagination', async()=>{
   const result=await run((path,body)=>{
-    if(path.endsWith('/send')) {assert.equal(body.threadId,'root');return {body:{entry}}}
+    if(path.endsWith('/send')) {assert.equal(body.replyTo,'root');return {body:{entry}}}
     assert.equal(path,'/api/messageResult');assert.deepEqual(body,{botId:'bot',id:'sent'})
-    return {body:{...completed,threadId:'root'}}
+    return {body:completed}
   },'root')
   assert.equal(result.exit,0,result.stderr)
 })

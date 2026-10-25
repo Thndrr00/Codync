@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,7 +55,7 @@ import kotlinx.serialization.json.jsonPrimitive
     }
     val diffs = (d["diffs"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
     val hasDetail = !d.text("command").isNullOrEmpty() || !d.text("detail").isNullOrEmpty() || diffs.isNotEmpty()
-    Column(Modifier.padding(end = 40.dp).clip(RoundedRectangle(22.dp)).background(Palette.bubbleAgent).padding(16.dp),
+    Column(Modifier.padding(end = 40.dp).widthIn(max = 420.dp).clip(RoundedRectangle(22.dp)).background(Palette.bubbleAgent).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(headline, style = Type.headline, color = Palette.text)

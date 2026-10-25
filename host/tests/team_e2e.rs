@@ -39,7 +39,8 @@ impl Host {
             .post(format!("{}/api/{method}", self.base))
             .bearer_auth(&self.token)
             .json(&body)
-            .timeout(Duration::from_secs(10))
+            // As long as `common::host`'s: on a busy machine (parallel tests) `createBot` alone can take over 10 s.
+            .timeout(Duration::from_secs(120))
             .send()
             .await
             .unwrap();

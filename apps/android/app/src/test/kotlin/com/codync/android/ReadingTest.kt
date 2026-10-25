@@ -13,7 +13,7 @@ class ReadingTest {
     private val thread = ReadingScope("bot", "root")
 
     private fun message(thread: String?, kind: String = "user", bot: String = "bot") =
-        MirrorEvent.EntryChanged(Entry("e", 1, bot, thread, 1, kind, data = buildJsonObject { put("text", "hi") }))
+        MirrorEvent.EntryChanged(Entry("e", 1, bot, 1, kind, data = buildJsonObject { put("text", "hi") }, threadId = thread))
 
     @Test fun `the chat stays read under its thread and Full conversation`() {
         assertEquals(listOf(main, thread), AppState(selectedBot = "bot", thread = "root", trace = true).readingScopes)

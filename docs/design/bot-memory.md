@@ -1,9 +1,11 @@
 # Bot memory and compaction
 
-Status (2026-10-18): the whole [rollout](#rollout) is built on 2.18.0. That is the cards, the move from
+Status (2026-10-21): the whole [rollout](#rollout) is built on 2.18.0. That is the cards, the move from
 Engram, writes by permission, the checks, dreaming and all three apps (M0); instructions for every harness (M1);
 the cache-safe opening with host-run compaction and the handoff (M2); long-form memory files (M3); and the
-evaluation, run once (M4). The public mirror (M5) is live at `leepokai/codync-mem`. How it works today is in
+evaluation, run once (M4). The public mirror (M5) is live at `leepokai/codync-mem`. Since 2.21.0 the apps are
+read-only and [memory is files](#memory-is-files): the cards became each layer's `MEMORY.md`, and the bot edits
+memory like any file, through one set of tools in every harness. How it works today is in
 [context and memory](../features/context-and-memory.md); the research behind it is in
 [bot memory research](bot-memory-research.md). The numbers are starting values, tuned against the
 [evaluation](#evaluation).
@@ -26,24 +28,22 @@ Built differently from the plan below, for now:
 
 - Search is a substring scan, not an FTS5 trigram index. Memory has a few hundred entries; the transcript scan
   took 0.6 s over 180k messages of one bot, so the index waits until a bot's search passes a second.
-- No revision history per entry; the dream log and the chat lines carry undo.
 - No proposals: since 2026-10-18 every bot writes memory at once, and nothing about memory shows in the chat.
 - Health, religion and politics get no special notice yet; voice transcripts aren't marked, and group rooms
   don't feed dreaming.
-- Entries show who wrote them, not a link to the message they were learned from. The bot can follow it:
-  `search_memory` returns each entry's source messages, and `search_history` reads back from a message id.
-- A memory notice carries the whole memory (at most 1,600 tokens) rather than a delta: a forgotten entry leaves
-  no row to diff against, and a whole copy also replaces whatever an earlier notice said.
+- Facts show who wrote them, not a link to the message they were learned from. The bot can follow it:
+  `search_memory` returns a `MEMORY.md` line's source message, and `search_history` reads back from a message id.
+- A memory notice carries the whole memory (1,600 tokens within the caps, up to twice that after the user's own
+  turns until dreaming tidies it) rather than a delta: a whole copy also replaces whatever an earlier notice said.
 - The cache's lifetime is learned from turns that come after a pause (most of the input read from cache, or
   not); until a bot has one, Claude on a subscription counts as an hour and everything else as five minutes.
 - The host compacts only Claude and Codex ahead of time; other harnesses keep their own timing. Codex's
   compaction line in the chat has no summary, since Codex reports none; its handoff is built from the chat.
 - The handoff card appears as soon as a rollover is due, not when the user returns, so it can be edited before
   the message that sends it.
-- A memory file changed by no bot's tool call (an editor, another program) is recorded without the checks or a
-  chat line: the user owns their computer. Its description is left out of the index when it fails the checks.
-- "Drops more than a quarter" is measured as the file getting more than a quarter shorter, so a changed line
-  isn't flagged; the diff shows a rewrite either way.
+- A memory file changed outside every bot's turn (an editor, another program) is recorded without the checks or a
+  chat line: the user owns their computer. A line of it, or its description, that fails the checks is left out of
+  the opening.
 
 In one line: **memory records the person, the transcript stays in the host, the opening stays frozen until
 compaction, and the host decides when to compact.**
@@ -73,8 +73,7 @@ Reading the current implementation turned up these problems.
     (`COMPACT_USER_MESSAGE_MAX_TOKENS`). Remote compaction keeps developer messages only behind a feature flag.
   - `codex-acp` passes developer instructions only on `session/new`, not on load or resume.
   - Codync re-sends the profile in none of these cases.
-- **Fork drops the opening.** `session/fork` sends no `_meta`, and the adapter forwards none, so a new thread needs
-  an immediate `session/load` (`host/src/agent/bot/session.rs`).
+- **Fork drops the opening.** `session/fork` sends no `_meta`, and the adapter forwards none.
 - **Adapter signals are ignored.** Both `claude-agent-acp` and `codex-acp` report:
   - `usage_update{used,size}`;
   - per-prompt `cachedReadTokens` / `cachedWriteTokens`;
@@ -177,221 +176,138 @@ and keep the file camp's real requirement: no hidden state.
 
 ## The design
 
-### Two layers
+### Memory is files
 
-Caps count tokens, not characters, so Chinese users aren't penalised. 2,000 CJK characters are 2–3k tokens, but
-2,000 English characters are about 500. The estimate is CJK-aware: one token per CJK character, one per four Latin
-characters.
+Since 2.21.0 memory is Markdown files the bot keeps itself, the way Claude Code keeps its own `MEMORY.md`. Until
+then the always-loaded part was cards in SQLite, written through fixed tools (`remember`, `revise_memory`,
+`archive_memory`) and edited by the user in the apps. The apps became read-only (the owner's call: the user
+changes memory by telling the bot), and with that the cards' reasons went: no per-card pin, archive or undo in a
+UI, and no "the user's own words" to keep out of a bot's reach. What was left was two write paths for one memory,
+so they became one.
 
-| Layer | Holds | Cap (initial) | Default | Scope |
-|---|---|---|---|---|
-| **Yours** | Name, time zone, language, important people, standing preferences | ≤ 400 tokens | On for personal bots, off for project bots | Shared by all bots |
-| **This bot** | How to work with you, promises, ongoing commitments | ≤ 1,200 tokens | Always on | One bot; wins over "yours" when they conflict |
+**Two layers, two kinds of file.** Caps count tokens, not characters, so Chinese users aren't penalised: one token
+per CJK character, one per four Latin characters.
 
-Active total: ≤ 1,600 tokens per opening. For comparison:
-
-- Hermes: about 800 + 500 tokens;
-- the Claude Code `MEMORY.md` index: 200 lines or 25 KB;
-- Letta blocks: 5,000 characters by default.
-
-Placement:
-
-- **Active** memory is placed in full in the session opening.
-- **Archived** memory is out of the prompt and searchable with FTS5 trigram, which also handles Chinese.
-- Past a cap, dreaming moves detail into a long-form file or archives entries.
-- Project knowledge stays in the harness's files (`AGENTS.md`, `CLAUDE.md`).
-
-### Long-form memory
-
-Cards hold what a reply goes wrong without. Detail that matters only when its topic comes up lives in Markdown
-files the bot reads and edits with its own tools: every system studied keeps a small always-loaded layer and a
-larger one read on demand ([research](bot-memory-research.md#lessons-across-systems)).
-
-| | Cards | Long-form files |
+| | `MEMORY.md` | Notes |
 |---|---|---|
-| Holds | Name, time zone, allergies, "don't …" | One topic's detail: people, health, plans, trips |
-| Home | `memory_entries` | `shared-memory/*.md` and `bots/<id>/bot-memory/*.md`; versions in `memory_file_versions` |
-| Cap | 400 + 1,200 tokens; 150 per entry | 20 files per folder; 2,000 tokens per file |
+| Holds | One short fact per line: name, time zone, people, "don't …", commitments | One topic's detail: people, health, plans, trips |
+| Cap | 400 tokens for "yours", 1,200 per bot; 150 a line | 2,000 tokens a note, 20 notes a layer |
 | In the opening | In full | An index: path, description, size |
-| The bot reads | — | With its own file tools, or `read_memory` |
-| The bot writes | Memory tools | With its own file tools, or `edit_memory` |
-| Checked | Before the write | Before the write through `edit_memory`; at turn end for its own edits |
+| Names | `MEMORY.md` | `lowercase-with-dashes.md` in up to three topic folders (`health/allergies.md`), frontmatter `description:` first |
 
-**What lives where, and why.** The split isn't raw versus summary. The transcript (every word, the source of truth)
-and the cards (the fewest facts) are both in `codync.db`; the files sit between them, detail organized by topic.
-They aren't conversation summaries: Codync writes none of its own, and a harness's compaction summary is kept as a
-transcript entry.
+| Layer | Folder | Default | Scope |
+|---|---|---|---|
+| **Yours** | `<data>/shared-memory/` | On for personal bots, off for project bots | Shared by all bots |
+| **This bot** | `<data>/bots/<id>/bot-memory/` | Always on | One bot; wins over "yours" when they conflict |
 
-- **Cards and the transcript need more than one file's atomicity.** A rename replaces one file atomically, but a
-  card write commits the card, its `rev` and its provenance together, and the transcript has concurrent
-  writers (the user, a streaming reply, routines, dreaming) whose read-modify-write a rename doesn't serialize.
-  Files would also need `fsync` on the file and its folder, a retry when Windows refuses to rename a file another
-  process holds open, and a whole-file rewrite for every streamed update. SQLite is built from those same file
-  system parts, already assembled. Search speed isn't the reason: the transcript search is a scan.
-- **Claude Code's transcript shows when files are enough.** It keeps one JSONL file per session
-  (`~/.claude/projects/<project>/<session>.jsonl`): one process writes it, lines are only appended and never
-  changed, nothing else commits with them, no other client syncs from it, and a torn last line after a crash is
-  skipped. Codync's transcript has none of those properties.
-- **A card is one row**, so it can point at its source message, be undone, pinned or superseded on its own, and be
-  checked before it's written. A file is prose the bot changes a sentence at a time with Edit.
-- **Most card operations aren't appends.** Revising, archiving with a pointer to the replacement, pinning,
-  forgetting, the daily time review, the cascade when a message is deleted and making room in a full layer each
-  change one entry in place; in a file each is a rewrite.
-- **Cards are reached only through fixed memory tools, which keeps their provenance out of a prompt injection's
-  reach.** `remember` takes the text and the layer; `revise_memory` and `archive_memory` take an id and refuse the
-  user's own entries. The host fills in the author, the writing bot, the source messages and the time, and the
-  harness's file tools edit text files, which cards aren't. A bot tricked by a web page can therefore write at most
-  a card under its own name, from that turn, listed on the memory screen. It can't mark a card as the
-  user's, cite a message that never said it, or rewrite the user's entries. In a Markdown file that provenance
-  would be text the bot edits: `- authorized automatic payments <!-- author: you | source: #3051 -->` would show
-  as the user's own entry, and dreaming, which never changes the user's words, couldn't remove it. Grok Bot, files
-  only, keeps provenance in separate hash-named files for this reason; OpenClaw keeps it in SQLite because the
-  model "cannot write through prose". This holds against text that steers the bot, not against a bot running
-  `sqlite3` from its shell on purpose: it isn't a sandbox.
-- **A file is its note's only live copy, not a pointer into the database.** The bot reads it from disk (Read or
-  `read_memory`); its index line in the opening comes from its frontmatter. `memory_file_versions` is history taken
-  by the scan, for undo and authorship, and can trail the file until the turn ends. Cards reach the bot through the
-  opening, from `codync.db`.
+Active total: 1,600 tokens per opening within the caps, up to twice that after the user's own turns until dreaming
+tidies it (Hermes about 800 + 500, Claude Code's `MEMORY.md` index 200 lines, Letta blocks 5,000 characters). A file past a cap is marked in the opening and the apps, never cut.
+Project knowledge stays in the harness's files (`AGENTS.md`, `CLAUDE.md`) or a note on the project.
 
-**Paths and format.**
+**Memory is never full.** `MEMORY.md` relates to the notes the way a project's `CLAUDE.md` relates to its `docs/`:
+the short version in every session, with one line per topic that sums it up and points to its note
+(`Allergic to peanuts → health/allergies.md`), and the detail by topic in folders. Dreaming keeps it that way: once
+a `MEMORY.md` is nine-tenths full it moves detail out into topic notes and leaves the pointing line (see Dreaming). What the user asks a bot to remember in
+their own chat is never turned away for space: there `MEMORY.md` may grow to twice its cap until dreaming tidies
+it. Other turns stay within the cap and write what doesn't fit in a note.
 
-- `<data>/shared-memory/` belongs to the shared layer; `<data>/bots/<id>/bot-memory/` to one bot. Not `memory/`:
-  the move from the old memory deletes `bots/<id>/memory` on every start.
-- File names are lowercase ASCII slugs (`[a-z0-9-]+.md`), one level deep. The title inside can be any language.
-  Unicode and case variants of a name would otherwise become duplicate notes (Basic Memory #1275, #1281).
-- Every file starts with frontmatter whose `description:` says when to read it. It becomes the file's index line.
-- Only regular `.md` files count. Symlinks, hidden files and subfolders are ignored, so a link can't make the host
-  read, journal or restore another file.
-- An index or a file over its cap is marked in the opening and the apps, never cut.
+**The file is the live copy.** The bot reads it from disk (its own tools or `read_memory`); the opening renders
+from the last recorded version, which a scan keeps current. SQLite keeps the history beside it:
 
-**The scan.** At the end of every turn, before an opening is rendered and when an app asks, the host scans the
-folders the bot can see:
+- every version's full content, author and cause (`memory_file_versions`), kept 30 days;
+- who wrote each fact of `MEMORY.md`, when, and the message it was learned from (`memory_facts`, keyed by the
+  fact's fingerprint), so the apps show provenance and `search_memory` can point back at the message;
+- tombstones of what the user had a bot forget (`memory_tombstones`).
 
-1. Unchanged mtime and size skip a file. One modified in the last 2 s waits for the next scan.
-2. A SHA-256 different from the recorded version is a change. A folder that went missing is not "every file
-   deleted".
-3. The change runs the same checks as every other write (hidden characters, prompt links, planted instructions,
-   secrets), plus the caps and the description.
-4. It becomes a new version holding the full content. Its author is the bot whose tool call touched that path
-   since the last version, otherwise "this computer".
-5. A change that fails a check is restored to the previous version and the chat says why. A change that drops more
-   than a quarter of the file is kept, flagged in the chat, and can be undone.
+Provenance is the host's, not text in the file: a bot tricked by a web page can write a line, but not mark it as
+the user's or cite a message that never said it.
 
-**Host writes** (the apps, `edit_memory`, dreaming) are compare-and-swap: re-read the hash, write a temporary file
-in the same folder, rename it over the note. A note that changed meanwhile isn't overwritten; the write fails, a
-scan records the other change, and the write is retried on top of it. The host never reformats a file
-(Basic Memory's own rewrites duplicated frontmatter, #1171).
+**One way to write, for every harness.** The `memory` MCP server is the same everywhere: `read_memory`,
+`edit_memory` (`append`, `old`/`new`, `content`, `delete`), `search_memory` and `search_history`. Agents that take
+ACP `additionalDirectories` (Claude, Codex) also get the folders and may use their own Read and Edit. Both paths
+meet in the same rules:
 
-**Permission.** The bot's own file edits go through the harness's permission requests, which an `Ask` bot shows as
-cards and an `Auto` bot approves. `edit_memory` writes at once like `remember`.
+- `edit_memory` checks before writing and answers with the refusal, so the bot can correct itself.
+- A bot's own file tool writes first. The scan at the end of the turn (or at the next scan) checks the change and
+  puts it back when it breaks a rule; the session that made it hears why at the start of its next message.
+- A change that turns up during a bot's turn (until the scan after it) is the bot's even when no tool call named the
+  file, once that turn ran a tool that can write files (an edit, delete, move or command), so a shell command meets
+  the same rules. Any other change (an editor on the computer) is recorded as the computer's, unchecked: the user
+  owns their computer. The opening shows such a line only once it passes the checks.
 
-**Dreaming** may append to a file, or move detail from a full card layer into one, under the same evidence rules.
-It never rewrites a file.
+Host writes (`edit_memory`, dreaming, the one-time moves) are compare-and-swap on the content's hash, through a
+temporary file renamed over the file. A file that changed meanwhile isn't overwritten; the other change is
+recorded and the write fails. The host never reformats a file.
 
-**Scope and lifecycle.** A bot that doesn't use the shared layer sees neither `shared-memory/` in its index nor the
-folder itself. Deleting a bot deletes its folder and versions, and "Forget everything" deletes a layer's files
-with their versions. Deleting one file through the apps or the bot keeps it as a version that can be restored.
+### What a bot may change
 
-**Version history (open).** Every version keeps its full content and nothing is pruned yet: about 6 KB per version at
-the file cap, so a note edited a few times a week adds about 1 MB a year. Two ways to bound it:
+These checks are deterministic code in the crate (`check`, `files::check_change`, `files::admit`), not another
+model's judgment.
 
-- keep every version for 30 days and the last one of each day after that;
-- keep the history in a git repository outside the folders (`<data>/memory-history.git`, used with `--git-dir` and
-  `--work-tree`, committed only by the host at the scan), which stores deltas and gives `log`, `diff` and `blame`.
-  Hosts without git embed it (`gix`). Removing content from git history takes a rewrite and `gc`, so with git
-  "Forget" takes a note out of current memory and leaves its history, and bots get no tool that reads that history.
+- **What memory may say**, on what every change brings in: no hidden characters, prompt-carrying links, planted
+  instructions (`ignore previous`, `system prompt`, `you are now`, 忽略之前, 系統提示, …), passwords, keys, ID,
+  card or account numbers; the caps (`MEMORY.md`'s doubled in the user's own turn); a note's description. Lines
+  the file already had aren't checked again, and a
+  file over its cap may still shrink, so a line the user wrote that the checks withhold never blocks the bot's
+  changes around it. The list catches known attack wording only; a planted fact in plain words passes, bounded by
+  the turn rule below, the provenance the bot can't set, and dreaming's review.
+- **Who asked.** In a turn the user started in the bot's own chat, the bot may add, change and take out lines.
+  In any other turn (routines, webhooks, rooms, other bots, a message the host wrote in the user's place) it may
+  only add lines. That keeps a routine or another bot that read a planted instruction from wiping memory; a bot
+  told by a page the user had it read in their own turn still can.
+- **Forgetting.** When a change in the user's own turn takes a fact out of a layer, and no other file of the layer
+  holds it (it may have moved into a note), the fact and the message it was learned from are tombstoned. No bot
+  outside the user's turn adds it again, and dreaming neither adds it nor learns from that message. Written again
+  in the user's own turn, the tombstone goes. Versions older than 30 days are pruned, so a forgotten fact is gone
+  from the history after that.
 
-### Writers and the gate
-
-- **The user, in the UI**: writes directly.
-- **The bot**, through its memory tool: the write goes straight in, to this bot's layer or to "yours", in any turn,
-  whatever the bot's permission mode. The memory screen lists the entry with the bot that wrote it; nothing shows in
-  the chat. (Until 2026-10-18 an `Auto` bot left a "Remembered" line with undo and an `Ask` bot a confirm card; the
-  owner took memory out of the chat.)
-- **Dreaming**: proposes. It is the only background writer, and it also records an explicit "remember …" the user
-  typed when the bot didn't call its tool. It may merge or archive bot-written entries, never the user's own.
-
-These checks are deterministic code in the core, not another model's judgment. Dreaming proposals pass all of
-them. Bot writes, in either mode, pass the last two (instruction-like content and sensitive data) and the cap.
-
-- **Evidence must be user-authored.** Each item quotes the user verbatim and cites at least one message id.
-  - The quote must appear in a user-authored span.
-  - Code fences, blockquotes, attachments, forwarded text and spans the composer tagged as pasted don't count.
-    The iOS, desktop and TUI composers mark pasted spans.
-- **Minimum content.** A quote of three content tokens or fewer, or one that is only an acknowledgement (好, yes, ok,
-  sure), can't carry a memory. This stops the delayed-trigger attack and "shall I remember X?" loops.
-- **Instruction-like content is rejected:**
-  - "remember / 記住" imperatives addressed to the assistant that didn't come from the user's typing;
-  - a fixed list of planted phrases (`ignore previous`, `system prompt`, `you are now`, `trusted source`, 忽略之前,
-    系統提示, 可信來源, …);
-  - invisible Unicode;
-  - URLs with prompt-carrying parameters (`q`, `prompt`, `query`, `instructions`).
-
-  The list catches known attack wording only. A planted fact in plain words ("the user authorized automatic
-  payments") passes; what bounds it is provenance the bot can't set, the memory screen where the user reviews
-  every entry, and dreaming's review.
-- **Sensitive data.**
-  - Passwords, government ID numbers and account numbers are never stored, even when asked.
-  - Health, religion and politics are stored only on explicit request, with a visible notice.
-
-Source policy:
+Source policy for dreaming:
 
 | Source | Can create memory |
 |---|---|
-| UI edit | Directly |
-| User text in the main chat or a thread | Yes, through the gate |
-| User text in a group room | Only for the bot(s) addressed, tagged with the room id |
-| Voice transcript (`source: voice`) | Only after UI confirmation or a second occurrence. Audio-model attacks such as AudioHijack reach 79–96%. |
-| Bot-to-bot requests | Never. They also never read another bot's private layer. |
-| Bot output, routines, webhooks, files, web pages | Never |
-
-The table governs dreaming. In `Auto`, the bot decides what it writes, in any turn and from anything it read,
-including turns a routine, a webhook or another bot started. That is the risk `Auto` accepts, bounded by the
-visible line with undo, the hard checks and dreaming's later review. A bot that shouldn't see what others write
-can switch "yours" off.
+| User text in the bot's own chat | Yes, through dreaming's audit |
+| User text in a group room | Not yet: rooms don't feed dreaming |
+| Voice transcript | Like typed text until transcripts are marked |
+| Bot-to-bot requests, bot output, routines, webhooks, files, web pages | Never |
 
 ### Dreaming
 
 **Schedule.**
 
 - It runs after five idle minutes or eight queued user messages.
-- It also runs before any host-initiated compaction or rollover.
+- It also runs before any host-initiated compaction or rollover, and when a `MEMORY.md` the bot sees is
+  nine-tenths full, with or without new conversation, until there is room or a run moves nothing. Runs of bots
+  that share a layer take turns, so one run tidies it.
 - It is skipped while subscription usage is above 75% of the window. Codex keeps the same 25% headroom with
   `min_rate_limit_remaining_percent`.
 
 **How it runs.**
 
-- It uses a fresh, tool-free context on the bot's cheapest model. The keeper already does this: `tools: []`, Haiku.
-- It reads the transcript from a bookmark forward.
-- Untrusted and system-provenance spans are stripped before the proposal prompt (OpenClaw does the same).
-- It reads the current entries, bot-written ones included, and doesn't add what is already there.
+- It uses a fresh, tool-free context on the bot's cheapest model: `tools: []`, Haiku for Claude.
+- It reads the transcript from a bookmark forward. Untrusted and system-provenance spans are stripped before the
+  proposal prompt (OpenClaw does the same).
+- It reads each `MEMORY.md` with who wrote each line, and the notes' index, and doesn't add what is already there.
 
-**Pipeline.**
-
-1. Proposal.
-2. Audit.
-3. The host re-checks the result deterministically.
-4. One transaction writes memories, revisions, the dream log and `rev`.
-
-The transaction aborts if the bot's memory `rev` changed since the dream's snapshot, so a UI edit made during the
-run is never overwritten (OpenClaw uses optimistic concurrency the same way).
+**Pipeline.** Proposal (`prompt`, `parse`), audit (`audit`), the files' new content (`edits`, which also drops
+what the user had forgotten, what memory already has and what doesn't fit), then compare-and-swap writes and the
+log. A file that changed while the model worked fails its write; what was written stays, and the rest waits for
+the next run.
 
 **Rules:**
 
-- **Your words are fixed.** Entries the user wrote, or explicitly asked for, can never be changed by dreaming.
-- **Add and archive only.** Dreaming never rewrites or deletes. Archiving names what superseded the entry.
-  Deletion happens only when the user presses Forget.
-- **Limits.** At most 10 operations per run. A batch that would archive more than ¼ of active entries is rejected
-  whole (OpenClaw's default is also 0.25).
-- **Tombstones.** A forgotten entry leaves only a content hash, so dreaming can't grow it back. Its revisions are
-  deleted too.
-- **Cascade.** Deleting a message deletes memories learned only from it. ChatGPT ("Deleting a chat alone does not
-  necessarily delete a separate saved memory") and Claude ("related memory entries generated from it won't be
-  removed") don't do this.
-- **Time review, daily.** Future tense turns into the past once the date passes. Relative dates become absolute at
-  write time.
-- **Dream log.** Every run's changes are visible and can be undone in one tap.
-- **Migrated entries.** Entries imported from Engram or Markdown change only on contrary evidence.
+- **The user's lines are fixed.** A line the user wrote (moved from the old memory, or edited on the computer) is
+  never taken out or rewritten by dreaming; tidying may only move it word for word into a note.
+- **Adds, takes out, appends.** Each add and removal quotes the user's own words from one message. Notes only get
+  lines appended; dreaming never rewrites a note.
+- **Limits.** At most 10 changes per run. A run that would take out more than a quarter of the lines is dropped
+  whole (OpenClaw's default is also 0.25); a move keeps its line, in a note, so it doesn't count.
+- **Tidying.** When a `MEMORY.md` is nine-tenths full, dreaming moves its detail word for word into the notes of
+  their topics (`health/allergies.md`), a topic's lines together, and leaves one line per topic saying what every
+  reply needs and pointing to the note (`Allergic to peanuts → health/allergies.md`). A later tidy of the same
+  topic rewrites that line rather than adding another, unless the user wrote it.
+- **Time review, daily.** A line about a future event whose date has passed is rewritten in the past tense, once;
+  its rewrite isn't reviewed again. Relative dates become absolute when written.
+- **Dream log.** Every run's added and taken-out lines and the notes it wrote, shown read-only in the apps.
 
 ### Frozen opening
 
@@ -409,7 +325,7 @@ It stays byte-identical until compaction or a new session.
   - Not the ACP spec `systemPrompt` field yet: for Claude the adapter rebuilds it as preset plus append and drops
     the other options.
   - `excludeDynamicSections` moves the working directory, git status and similar per-session context into the
-    first user message. The opening is then identical across a bot's main chat, threads and routines, and a new
+    first user message. The opening is then identical across a bot's chat, group turns and routines, and a new
     session reads the cache.
 - **Change the opening only at compaction or rollover.** Every change restarts the adapter's query and replays
   history. Resume has had regressions, such as 2.1.288 dropping files a compaction had just restored.
@@ -417,13 +333,13 @@ It stays byte-identical until compaction or a new session.
     `CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD`).
   - They are unstable and any re-render invalidates the system-prompt cache layer, so the design doesn't depend on
     them.
-- **Deltas.** Changes made elsewhere reach the bot as one `<system-reminder>`-style block prefixed to its next
-  message. That covers UI edits and what other threads or bots learned.
+- **Deltas.** Changes made elsewhere reach the bot as one `<memory_update>` block prefixed to its next message.
+  That covers edits on the computer, dreaming, and what other sessions or bots wrote; a change of the bot's that
+  was put back rides along with why.
   - Nothing is sent for what this session learned itself, because the bot already heard it.
 - **Ledger.** It records two numbers per session: the memory revision the opening contains, and the revision deltas
   have delivered up to.
 - **The handoff summary goes in the first user message**, not the opening, because it differs per session.
-- **Fork.** Re-send the parent's `_meta.systemPrompt` on `session/fork`.
 - **Settings isolation.** Consider `settingSources: []` or `["project"]`. The adapter default
   `["user","project","local"]` loads the user's own `~/.claude/CLAUDE.md` and settings into every bot.
 
@@ -436,8 +352,8 @@ it offers (`Instructions` in `agent/bot`):
    rebuilds that field without the object options (`excludeDynamicSections`), so Claude stays on `_meta`.
 2. **ACP `systemPrompt`** ([Client-Provided System Prompt](https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/rfds/client-system-prompt.mdx),
    unstable): when an agent advertises `sessionCapabilities.systemPrompt`, the opening goes as
-   `{"mode": "append", "content": [text]}` on `session/new`, `session/load` (the session's current snapshot) and
-   `session/fork` (the main session's). The agent keeps it at system level, across compaction.
+   `{"mode": "append", "content": [text]}` on `session/new` and `session/load` (the session's current snapshot). The
+   agent keeps it at system level, across compaction.
 3. **Every other agent: the first message.** A `<bot-profile>` block precedes the first prompt of a new session.
    After a compaction the next prompt carries a fresh one that says it replaces any earlier profile, so the agent
    never holds two versions that disagree. The compaction is the agent's `compaction_update`, or, for an agent
@@ -520,8 +436,8 @@ to true "does not turn idle compaction on".
   "conversations being compacted over and over" in 2.1.301.
 - One issue reported 211 compactions in a single session.
 
-Threads, group rooms and routines are never compacted early. Most are not revisited, so the cost isn't spent ahead
-of time. When the main chat is nearly full, a new thread starts from a handoff instead of a fork.
+Group rooms and routines are never compacted early. Most are not revisited, so the cost isn't spent ahead
+of time.
 
 **Before a host-initiated compaction:**
 
@@ -542,7 +458,7 @@ The keep-list:
 
 - **Verbatim:** the last user request, and every "don't / 不要".
 - **Exact identifiers:** paths, URLs and ids (OpenClaw keeps "exact opaque identifiers").
-- **Kept:** decisions with reasons, pending tasks with the next step, who said what in rooms, and the thread intro.
+- **Kept:** decisions with reasons, pending tasks with the next step, and who said what in rooms.
 - **Left out:** identity and memory, because the host re-injects them.
 
 The keep-list also lives in the opening, so harness-initiated compactions see it.
@@ -552,8 +468,7 @@ The keep-list also lives in the opening, so harness-initiated compactions see it
 
 1. Reset the ledger's delivered number to the opening's, and send one merged delta.
 2. Re-send `<bot-profile>` to non-Claude harnesses. Do the same after every resume.
-3. Re-send the thread intro inside a thread.
-4. Store the summary as a transcript entry and show an "Earlier conversation summarized" card.
+3. Store the summary as a transcript entry and show an "Earlier conversation summarized" card.
    - Codex's `compaction_update` carries no summary. For Codex the host builds the card from its own transcript:
      the boundary plus the latest turns.
 
@@ -592,13 +507,15 @@ The adapter passes `claudeCode.options.settings` and `.env` through untouched, s
 
 Host SQLite (`codync.db`), one transaction per change, every change stamped with `rev`. The `codync-mem` tables:
 
-- `memory_entries`: the cards, with layer, active/archived, author and writing bot, room, pin, dates and evidence
-  message ids;
-- `memory_tombstones`: hashes of forgotten text;
-- `memory_dreams` and `memory_dream_changes`: the dream log;
-- `memory_files` and `memory_file_versions` (M3): each long-form file's path, layer, hash, size, mtime,
-  description and tokens, and every version's full content, author and cause;
+- `memory_files` and `memory_file_versions`: each file's layer, name, hash, size, mtime, description and tokens,
+  and every version's full content, author and cause (30 days);
+- `memory_facts`: who wrote each fact of a layer's `MEMORY.md`, when, and the message it was learned from;
+- `memory_tombstones`: hashes of forgotten facts and of the messages they came from, and dreaming's own marks;
+- `memory_dreams`, `memory_dream_lines` and `memory_dream_files`: the dream log;
 - `memory_meta`: the schema version.
+
+The cards of 2.18 to 2.20 (`memory_entries`, `memory_dream_changes`) move into the files once
+(`codync_mem::legacy`), and their tables go. A card a newer one replaced, and a fact the checks refuse, stay out.
 
 The transcript is the host's own `entries` table: it is the chat itself, which the apps sync by `rev` and which
 changes in place while a reply streams. Search is a substring scan. When one bot's search passes a second, its
@@ -608,18 +525,14 @@ build.
 
 ### UI (all three clients)
 
-- **Two sections**, "About you" and the bot's own. Each entry shows where it was learned, with a link to the
-  message.
+- **Two sections**, "About you" and the bot's own: each `MEMORY.md` as facts with who wrote them, read-only.
 - **A per-bot switch** for "yours".
 - **Bot writes:** nothing in the chat (changed 2026-10-18 at the owner's request: memory lines and cards cluttered the
-  chat). Every bot writes at once whatever its permission, and the user reviews, edits or forgets in the memory
-  settings.
-- **The dream log** with undo.
-- **Entry actions:** edit, pin, forget, and forget everything.
+  chat). Every bot writes at once whatever its permission; the user reviews it in the memory settings, which are
+  read-only since 2.21.0 (the owner's call: the user changes memory by telling the bot).
+- **The dream log** (added green, archived red) with an info button saying what dreaming does.
 - **The harness's own memory switch** in the bot's section, off by default, with an info button; kept on, Claude Code's `MEMORY.md` shows read-only.
-- **Long-form memory** under each layer's cards: the files with name, description, size and date, an over-cap
-  mark, and a detail view to read, edit, and restore any version. The desktop app can open a file in the user's
-  editor.
+- **Notes** under each layer's facts: name, description, size and date, an over-cap mark, and a view to read one.
 - **In the chat**, only an editable handoff draft at rollover, folding to one line once sent; compactions and a
   kept handoff leave no line (2026-10-18, at the owner's request).
 

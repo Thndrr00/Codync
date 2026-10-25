@@ -1,114 +1,123 @@
-import { ChoicePicker } from '../../components/Controls'
+import type { ReactNode } from 'react'
+import { CardSection, ChipChoice, ChoicePicker } from '../../components/Controls'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
-import { clock, intervalUnits, minuteSteps, scheduleStyles, toggleDay, usesTime, weekdayInitials, weekdayNames, wrap } from '../../lib/routine-schedule'
-import { Field } from '../bots/parts'
-import type { RoutineScheduleDraft, RoutineSchedulePreview } from './routine'
+import { TimeZonePicker } from './TimeZonePicker'
+import { compiledCron, repeatChoice, repeatChoices, type RepeatChoice, type RoutineScheduleDraft, type RoutineSchedulePreview } from './routine'
+import './routines.css'
+import { useTr } from '../../lib/use-language'
 
-type Change = (change: Partial<RoutineScheduleDraft>) => void
 
-const hours = Array.from({ length: 24 }, (_, i) => ({ id: i, label: clock(i, 0).slice(0, 2) }))
-const minutes = Array.from({ length: 60 }, (_, i) => ({ id: i, label: clock(0, i).slice(3) }))
+const weekdays = [
+  { id: 1, label: 'Mon', title: 'Monday' },
+  { id: 2, label: 'Tue', title: 'Tuesday' },
+  { id: 3, label: 'Wed', title: 'Wednesday' },
+  { id: 4, label: 'Thu', title: 'Thursday' },
+  { id: 5, label: 'Fri', title: 'Friday' },
+  { id: 6, label: 'Sat', title: 'Saturday' },
+  { id: 0, label: 'Sun', title: 'Sunday' },
+]
+const pad = (n: number) => String(n).padStart(2, '0')
+const minutes = Array.from({ length: 60 }, (_, m) => ({ id: m, label: `:${pad(m)}` }))
 
 /**
- * The visual fields of a recurring routine schedule (days, times, zone). The host turns them into a cron
- * expression, validates them and reports the next run; nothing here computes a date.
+ * A schedule's fields in one group (how often, the day and time, the time zone), then what the
+ * host read from them. The host compiles the cron; Custom edits it directly.
  */
-export function ScheduleFields({ schedule, update, preview, error }: { schedule: RoutineScheduleDraft; update: Change; preview: RoutineSchedulePreview | null; error: string | null }) {
-  const style = schedule.calendarStyle
-  return (
-    <VStack gap={14} className="routine-cron">
-      <Field label="Repeats">
-        <ChoicePicker selection={style} options={scheduleStyles} onChange={(calendarStyle) => update({ calendarStyle })} fits />
-      </Field>
-      {style === 'custom' ? (
-        <Field label="Cron">
-          <input className="routine-input routine-cron-input" value={schedule.expression} placeholder="0 9 * * 1-5" spellCheck={false} autoCorrect="off" onChange={(e) => update({ expression: e.target.value })} />
-        </Field>
-      ) : null}
-      {style === 'minutes' ? (
-        <Field label="Every">
-          <ChoicePicker selection={schedule.minuteStep} options={minuteSteps.map((id) => ({ id, label: `${id} min` }))} onChange={(minuteStep) => update({ minuteStep })} fits />
-        </Field>
-      ) : null}
-      {style === 'weekly' ? (
-        <Field label="Day">
-          <ChoicePicker selection={schedule.weekday} options={weekdayNames.map((label, id) => ({ id, label }))} onChange={(weekday) => update({ weekday })} fits />
-        </Field>
-      ) : null}
-      {style === 'days' ? (
-        <Field label="Days">
-          <HStack gap={6} role="group" aria-label="Days">
-            {weekdayInitials.map((initial, day) => {
-              const on = schedule.selectedDays.includes(day)
-              return (
-                <button key={day} className={`press routine-day ${on ? 'on' : ''}`} aria-pressed={on} aria-label={weekdayNames[day]} onClick={() => update({ selectedDays: toggleDay(schedule.selectedDays, day) })}>
-                  {initial}
-                </button>
-              )
-            })}
-          </HStack>
-        </Field>
-      ) : null}
-      {style === 'monthly' ? (
-        <Field label="Day of the month">
-          <ChoicePicker selection={schedule.monthDay} options={Array.from({ length: 31 }, (_, i) => ({ id: i + 1, label: String(i + 1) }))} onChange={(monthDay) => update({ monthDay })} fits />
-        </Field>
-      ) : null}
-      {style === 'hourly' ? (
-        <Field label="Minute past the hour">
-          <ChoicePicker selection={wrap(schedule.minute, 60)} options={minutes} onChange={(minute) => update({ minute })} fits />
-        </Field>
-      ) : null}
-      {usesTime(style) ? (
-        <Field label="At">
-          <HStack gap={8}>
-            <ChoicePicker selection={wrap(schedule.hour, 24)} options={hours} onChange={(hour) => update({ hour })} fits />
-            <Text tone="secondary">:</Text>
-            <ChoicePicker selection={wrap(schedule.minute, 60)} options={minutes} onChange={(minute) => update({ minute })} fits />
-          </HStack>
-        </Field>
-      ) : null}
-      <Field label="Time zone" detail="The schedule follows this zone, including daylight saving.">
-        <input className="routine-input" value={schedule.zone} placeholder="Asia/Taipei" spellCheck={false} autoCorrect="off" onChange={(e) => update({ zone: e.target.value })} />
-      </Field>
-      <SchedulePreview preview={preview} error={error} />
-    </VStack>
-  )
-}
+export function RoutineScheduleFields({ schedule, update, preview, error }: {
+  schedule: RoutineScheduleDraft
+  update: (change: Partial<RoutineScheduleDraft>) => void
+  /** The host's reading of exactly these fields, once it has checked them. */
+  preview: RoutineSchedulePreview | null
+  error: string | null
+}) {
+  const tr = useTr()
+  const repeat = repeatChoice(schedule.calendarStyle)
+  // Custom starts from the host's cron for the choice it replaces; empty while that check is
+  // still out, never the cron the routine opened with.
+  const choose = (id: RepeatChoice) => {
+    if (id !== repeat) update(id === 'custom' ? { calendarStyle: id, expression: compiledCron(preview) ?? '' } : { calendarStyle: id })
+  }
 
-/** Every N units, for the `interval` kind. */
-export function IntervalFields({ schedule, update, preview, error }: { schedule: RoutineScheduleDraft; update: Change; preview: RoutineSchedulePreview | null; error: string | null }) {
   return (
-    <VStack gap={14}>
-      <Field label="Every">
-        <HStack gap={8}>
-          <input className="routine-input" inputMode="numeric" value={schedule.amount} placeholder="1" onChange={(e) => update({ amount: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
-          <ChoicePicker selection={schedule.unit} options={intervalUnits} onChange={(unit) => update({ unit })} fits />
-        </HStack>
-      </Field>
-      <SchedulePreview preview={preview} error={error} />
-    </VStack>
-  )
-}
-
-/** One quiet line under the fields: what the host read, when it runs next, or why it can't. */
-function SchedulePreview({ preview, error }: { preview: RoutineSchedulePreview | null; error: string | null }) {
-  return (
-    <div className="routine-cron-preview">
-      {error ? (
-        <Text size="caption" tone="danger" className="routine-cron-error">{error}</Text>
-      ) : preview ? (
-        <VStack gap={2}>
-          <Text size="caption" weight="medium">{preview.summary}</Text>
-          {preview.nextRunAt ? (
-            <Text size="caption" tone="secondary">Next {new Date(preview.nextRunAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</Text>
-          ) : null}
-          {preview.warning ? <Text size="caption" tone="secondary">{preview.warning}</Text> : null}
-        </VStack>
+    <CardSection footer={<SchedulePreview preview={preview} error={error} />}>
+      <LabeledRow key="Repeat" label="Repeat">
+        <ChipChoice label="Repeat" selection={repeat} options={repeatChoices} onChange={choose} />
+      </LabeledRow>
+      {repeat === 'weekly' ? (
+        <LabeledRow key="On" label="On">
+          <ChipChoice label="Day" selection={schedule.weekday} options={weekdays} onChange={(weekday) => update({ weekday })} />
+        </LabeledRow>
+      ) : null}
+      {repeat === 'hourly' ? (
+        <LabeledRow key="At minute" label="At minute">
+          <ChoicePicker selection={schedule.minute} options={minutes} onChange={(minute) => update({ minute })} fill="var(--field)" />
+        </LabeledRow>
+      ) : repeat === 'custom' ? (
+        <LabeledRow key="Cron" label="Cron" top>
+          <VStack gap={6} grow>
+            <input
+              className="schedule-input routine-cron-input"
+              aria-label="Cron"
+              value={schedule.expression}
+              placeholder="0 9 * * 1-5"
+              spellCheck={false}
+              autoCorrect="off"
+              onChange={(e) => update({ expression: e.target.value })}
+            />
+            <Text size="caption" mono tone="tertiary" className="routine-cron-hint">{tr(`minute  hour  day  month  weekday`)}</Text>
+          </VStack>
+        </LabeledRow>
       ) : (
-        <Text size="caption" tone="tertiary">Checking this schedule…</Text>
+        <LabeledRow key="At" label="At">
+          <input
+            type="time"
+            className="schedule-input schedule-time"
+            aria-label="Time"
+            value={`${pad(schedule.hour)}:${pad(schedule.minute)}`}
+            onChange={(e) => {
+              const [hour, minute] = e.target.value.split(':').map(Number)
+              if (hour !== undefined && minute !== undefined && !Number.isNaN(hour) && !Number.isNaN(minute)) update({ hour, minute })
+            }}
+          />
+        </LabeledRow>
       )}
-    </div>
+      <LabeledRow key="Time zone" label="Time zone">
+        <TimeZonePicker zone={schedule.zone} onChange={(zone) => update({ zone })} />
+      </LabeledRow>
+    </CardSection>
+  )
+}
+
+/** A row of the routine editor's groups (`CardSection`): its label in a fixed column, then the field; `top` for a tall one. */
+export function LabeledRow({ label, top = false, className, children }: { label: string; top?: boolean; className?: string; children: ReactNode }) {
+  return (
+    <HStack align={top ? 'flex-start' : 'center'} className={`labeled-row${top ? ' top' : ''}${className ? ` ${className}` : ''}`}>
+      <Text size="callout" weight="medium" tone="secondary" className="labeled-row-label">{label}</Text>
+      {children}
+    </HStack>
+  )
+}
+
+/** One quiet line under the group: what the host read, or why it can't. */
+function SchedulePreview({ preview, error }: { preview: RoutineSchedulePreview | null; error: string | null }) {
+  const tr = useTr()
+  if (error) return <Text size="callout" tone="danger" className="schedule-preview">{error}</Text>
+  return (
+    <VStack gap={2} className="schedule-preview" aria-live="polite">
+      {preview ? (
+        <>
+          <HStack gap={8} wrap>
+            <Text size="callout" weight="medium" tone="text">{preview.summary}</Text>
+            {preview.nextRunAt ? (
+              <Text size="callout" tone="secondary">
+                {tr('Next')} {new Date(preview.nextRunAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+              </Text>
+            ) : null}
+          </HStack>
+          {preview.warning ? <Text size="callout" tone="secondary">{preview.warning}</Text> : null}
+        </>
+      ) : null}
+    </VStack>
   )
 }

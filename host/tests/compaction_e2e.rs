@@ -28,7 +28,7 @@ async fn a_full_conversation_is_compacted_with_its_keep_list() {
     let host = Host::start().await;
     let claude = host.fixture_bot("Claude-like", "instructions_agent.py", "claude").await;
     host.reply(&claude, "hello").await;
-    host.call("saveMemory", json!({"botId": claude, "text": "Allergic to peanuts"})).await;
+    host.write_memory(Some(&claude), "MEMORY.md", "- Allergic to peanuts\n");
     host.reply(&claude, "USAGE 210000 SIZE 1000000").await;
     let line = notice(&host, &claude, "compaction").await;
     assert_eq!(line["data"]["compaction"]["byHost"], true);

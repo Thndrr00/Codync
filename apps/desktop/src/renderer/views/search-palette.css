@@ -41,6 +41,18 @@
 .palette-row.active {
   background: var(--bubble-user);
 }
+/* A row's shortcut key. */
+.key-cap {
+  min-width: 18px;
+  min-height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  background: var(--background);
+  color: var(--secondary);
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+}
 .palette-key {
   flex: none;
   font-family: inherit;

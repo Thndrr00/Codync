@@ -37,8 +37,9 @@ type Pending = Arc<std::sync::Mutex<HashMap<i64, oneshot::Sender<Result<Value, V
 pub struct RpcError {
     pub code: i64,
     pub message: String,
-    /// The adapter's own category (`data.errorKind`: Claude's `rate_limit`, `overloaded`, …), kept only
-    /// when it's an identifier, as it can go to usage analytics.
+    /// The adapter's own category (`data.errorKind`: Claude's `rate_limit`, `overloaded`, …; codex-acp's
+    /// `data.codexErrorInfo` as `usage_limit_exceeded`), kept only when it's an identifier, as it can go to usage
+    /// analytics.
     pub kind: Option<String>,
 }
 
@@ -81,6 +82,8 @@ pub enum FailureKind {
     Timeout,
     /// The agent process went away mid-request.
     Exited,
+    /// The agent wouldn't take the bot's model.
+    NoModel,
 }
 
 #[derive(Debug)]
@@ -123,10 +126,11 @@ impl Answer {
                 };
                 let kind = e["data"]["errorKind"]
                     .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| codex_kind(&e["data"]["codexErrorInfo"]))
                     .filter(|k| {
                         !k.is_empty() && k.len() <= 40 && k.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
-                    })
-                    .map(str::to_owned);
+                    });
                 Err(RpcError { code: e["code"].as_i64().unwrap_or_default(), message, kind }.into())
             }
             // The reader drops every waiter when the process goes away.
@@ -139,6 +143,20 @@ impl Drop for Answer {
     fn drop(&mut self) {
         self.pending.locked().remove(&self.id);
     }
+}
+
+/// codex-acp's category (`data.codexErrorInfo`: `"usageLimitExceeded"`, or `{"httpConnectionFailed": {…}}`) in the
+/// same form as Claude's `errorKind`: `usage_limit_exceeded`.
+fn codex_kind(info: &Value) -> Option<String> {
+    let name = info.as_str().or_else(|| info.as_object().and_then(|o| o.keys().next()).map(String::as_str))?;
+    let mut kind = String::with_capacity(name.len() + 4);
+    for c in name.chars() {
+        if c.is_ascii_uppercase() {
+            kind.push('_');
+        }
+        kind.push(c.to_ascii_lowercase());
+    }
+    Some(kind)
 }
 
 pub struct Acp {
@@ -434,6 +452,14 @@ mod tests {
         assert_eq!(kind(json!({"errorKind": "Usage: /Users/me"})).await, None);
         assert_eq!(kind(json!({"errorKind": ""})).await, None);
         assert_eq!(kind(json!("details")).await, None);
+        assert_eq!(
+            kind(json!({"codexErrorInfo": "usageLimitExceeded"})).await.as_deref(),
+            Some("usage_limit_exceeded")
+        );
+        assert_eq!(
+            kind(json!({"codexErrorInfo": {"httpConnectionFailed": {"httpStatusCode": 502}}})).await.as_deref(),
+            Some("http_connection_failed")
+        );
     }
 
     #[cfg(unix)]

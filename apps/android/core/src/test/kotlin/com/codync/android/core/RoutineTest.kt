@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RoutineTest {
+    @Test fun `a waiting retry reads as retrying, not queued`() {
+        val run = RoutineRun("run", "routine", "bot", "pending")
+        assertEquals("Queued", run.label)
+        assertTrue(run.copy(notBefore = System.currentTimeMillis() + 60_000).label.startsWith("Retrying at "))
+        assertEquals("Retrying", run.copy(notBefore = 1).label)
+    }
+
     @Test fun `editing unsupported schedules preserves every trigger field`() {
         val original = WireJson.parseToJsonElement("""[{"type":"event","source":"github","event":"*","filters":{"repo":"org/project"},"future":true},{"type":"interval","seconds":5400}]""").jsonArray.map { it.jsonObject }
         val schedule = RoutineScheduleDraft(kind = "once", original = original).forMobileEditor()
@@ -36,6 +43,21 @@ class RoutineTest {
         assertTrue(RoutineSchedule.usesTime("weekly"))
         assertFalse(RoutineSchedule.usesTime("hourly"))
         assertFalse(RoutineSchedule.usesTime("minutes"))
+    }
+
+    @Test fun `a routine's editor waits for the routine to be listed`() {
+        val listing = RoutineListing(listOf(Routine("r", "bot", "Check CI", "Check", emptyList(), false)), emptyList())
+        assertFalse(null.canEdit("r"))
+        assertTrue(listing.canEdit("r"))
+        assertFalse(listing.canEdit("other"))
+        assertTrue(null.canEdit(""))
+    }
+
+    @Test fun `timeout reads as a human duration`() {
+        for ((seconds, text) in listOf("3600" to "1 hour", "7200" to "2 hours", "1800" to "30 minutes", "60" to "1 minute",
+            "90" to "90 seconds", "1" to "1 second", "0" to "0 seconds", "abc" to "abcs")) {
+            assertEquals(text, RoutineDraft(timeoutSeconds = seconds).timeoutText)
+        }
     }
 
     @Test fun `routine status reflects active recovery and failed runs before the schedule`() {

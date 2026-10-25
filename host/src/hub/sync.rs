@@ -2,7 +2,7 @@
 
 use super::Hub;
 use crate::LockExt;
-use crate::store::{BotRow, ReadScope};
+use crate::store::BotRow;
 use anyhow::Result;
 use serde_json::{Value, json};
 
@@ -35,9 +35,12 @@ impl Hub {
         v["startedAt"] = rt.started_at.into();
         v["workingChat"] = rt.lane.as_ref().map(|l| l.chat.clone()).into();
         v["fastModeSupport"] = rt.fast_mode.as_str().into();
+        if !cfg.is_group() {
+            v["agentStep"] = json!(rt.agent_step);
+            v["resting"] = json!(crate::agent::fallback::resting(&self.store, cfg, crate::store::now_ms()));
+        }
         v["fastModeIssue"] = rt.fast_mode.issue().into();
-        v["workingThread"] = rt.lane.and_then(|l| l.thread).into();
-        v["unread"] = self.store.unread(&cfg.id, row.read_rev, ReadScope::All).into();
+        v["unread"] = self.store.unread(&cfg.id, row.read_rev).into();
         let preview = last.as_ref().map(|l| match &l.author {
             // A group names who spoke.
             Some(author) if cfg.is_group() => format!("{}: {}", self.bot_name(author), l.text),

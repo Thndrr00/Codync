@@ -56,15 +56,8 @@ private enum class Tab { Yours, Bot, Dreams, Harness }
     LaunchedEffect(view != null && view.projectMemory == null) { if (view != null && view.projectMemory == null && tab == Tab.Harness) tab = Tab.Bot }
     val shared = tab == Tab.Yours
     CardSection("Memory", accessory = {
-        if (tab == Tab.Yours || tab == Tab.Bot) IconButton("Add memory", "plus", enabled = !memory.busy) {
-            editor = MemoryEditTarget(null, shared, "")
-        }
-        DropdownMenu({ listOf(
-            MenuItem("Refresh", icon = "arrow.clockwise") { memory.refresh() },
-            MenuItem("Forget everything here", icon = "trash", destructive = true, divider = true, enabled = tab == Tab.Yours || tab == Tab.Bot) {
-                confirmClear = true
-            },
-        ) }, Modifier.size(32.dp), label = "More") { Symbol("ellipsis", size = 20.dp, tint = Palette.secondary) }
+        // Read-only: the user changes memory by telling the bot (host 2.21+, as on the other apps).
+        IconButton("Refresh", "arrow.clockwise", enabled = !memory.busy) { memory.refresh() }
     }) {
         row {
             val options = listOf(Tab.Yours to "About you", Tab.Bot to "This bot", Tab.Dreams to "Dreams") +
@@ -123,23 +116,13 @@ private fun CardRows.layer(memory: MemoryModel, view: BotMemory, bot: com.codync
 
 @Composable private fun EntryRow(memory: MemoryModel, entry: MemoryEntry, shared: Boolean, state: AppState, open: () -> Unit) {
     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Column(Modifier.weight(1f).plainButton(action = open), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (entry.pinned) Symbol("pin.fill", size = 12.dp, tint = Palette.secondary, modifier = Modifier.padding(top = 4.dp))
                 Text(entry.text, style = Type.body, color = if (entry.archived) Palette.tertiary else Palette.text)
             }
             Text("${author(entry, state)} · ${ago(entry.updatedAt)}${if (entry.archived) " · archived" else ""}", style = Type.caption, color = Palette.secondary)
         }
-        DropdownMenu({ listOf(
-            MenuItem("Edit", icon = "pencil") { open() },
-            MenuItem(if (entry.pinned) "Unpin" else "Pin", icon = if (entry.pinned) "pin.slash" else "pin") {
-                memory.mutate("pinMemory", id = entry.id, pinned = !entry.pinned)
-            },
-            MenuItem(if (entry.archived) "Bring back" else "Archive", icon = if (entry.archived) "arrow.up" else "arrow.down.to.line") {
-                memory.mutate("archiveMemory", id = entry.id, archived = !entry.archived)
-            },
-            MenuItem("Forget", icon = "trash", destructive = true, divider = true) { memory.mutate("forgetMemory", id = entry.id) },
-        ) }, Modifier.size(32.dp), enabled = !memory.busy, label = "Memory actions") { Symbol("ellipsis", size = 20.dp, tint = Palette.secondary) }
     }
 }
 
@@ -157,7 +140,6 @@ private fun CardRows.dreams(memory: MemoryModel, runs: List<DreamRun>) {
                     Text("Added to ${note.name}", style = Type.body, color = Palette.secondary)
                 }
             }
-            if (!run.undone) IconButton("Undo this dream", "arrow.counterclockwise", enabled = !memory.busy) { memory.mutate("undoDream", id = run.id) }
         }
     }
 }

@@ -28,7 +28,8 @@ pub(crate) fn log(hub: &Hub, body: &Value) -> Result<Value> {
         data["voiceReceipt"]["kind"] = json!("client_reported_transcript");
         data["voiceReceipt"]["transcript"] = serde_json::to_value(transcript)?;
     }
-    let (entry, added) = hub.add_entry_once(&id, &Lane::main(bot), EntryKind::Notice, &data)?;
+    let (entry, added) =
+        hub.add_entry_once(&id, &Lane::main(bot), EntryKind::Notice, hub.store.max_turn(bot), &data)?;
     if !added && entry.data["voiceReceipt"] != data["voiceReceipt"] {
         bail!("The call receipt already exists with different content.");
     }

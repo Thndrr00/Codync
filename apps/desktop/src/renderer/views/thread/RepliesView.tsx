@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isWorkingIn } from '@shared/models'
-import { Button, Hairline } from '../../components/Controls'
+import { Button } from '../../components/Controls'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
-import { HStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { UpdateNeededCard } from '../UpdateNeededCard'
@@ -10,20 +9,16 @@ import { buildChat, rowIn, useArrivals } from './chat-items'
 import { ChatRow, WorkingIndicator } from './ChatRows'
 import { Composer } from './Composer'
 import { TraceView } from './TraceView'
-import { useReading } from './reading'
 
 /**
- * A thread (Slack's "reply in thread"): the message it started on, its replies and a box to
- * continue there. In a bot's own chat the thread is a separate branch of the conversation (its
- * own session, forked from the chat); in a group the room answers inside the thread.
+ * A document's own conversation (`doc:<id>`): the bot answers about that page in a session of its
+ * own, kept out of the chat (the chat itself has no threads; a message there replies to another).
  */
 export function RepliesView({ botId, rootId, close, documentTitle }: { botId: string; rootId: string; close: () => void; documentTitle?: string }) {
-  const documentConversation = rootId.startsWith('doc:')
   const store = useStore()
   const chat = store.bots.get(botId) ?? null
-  const root = store.allEntries(botId).find((e) => e.id === rootId)
-  const replies = store.replies(botId, rootId)
-  const live = !!chat && isWorkingIn(chat, botId, rootId) && !store.isOffline
+  const replies = store.allEntries(botId).filter((e) => e.threadId === rootId)
+  const live = !!chat && isWorkingIn(chat, botId) && !store.isOffline
   const items = buildChat(replies)
   const arrivals = useArrivals([...items.map((i) => i.id), ...(live ? ['working'] : [])], true)
   const [showTrace, setShowTrace] = useState(false)
@@ -31,7 +26,6 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
   const [loadError, setLoadError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
   const scroller = useRef<HTMLDivElement>(null)
-  useReading(store, botId, rootId)
 
   useEffect(() => {
     let active = true
@@ -50,25 +44,14 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
   const openTrace = () => setShowTrace(true)
   return (
     <SheetPage>
-      <ModalHeader title={documentConversation ? 'Document conversation' : 'Thread'} subtitle={documentConversation ? [documentTitle, chat?.name].filter(Boolean).join(' · ') : chat?.name ?? ''} onClose={close}
-        closeTitle={documentConversation ? 'Close document conversation' : 'Close thread'} />
+      <ModalHeader title="Document conversation" subtitle={[documentTitle, chat?.name].filter(Boolean).join(' · ')} onClose={close}
+        closeTitle="Close document conversation" />
       <div className="thread-hairline" />
       <div ref={scroller} className="thread-scroll">
         <div className="replies-content">
           {loading && <Text as="div" tone="secondary" role="status">Loading conversation…</Text>}
           {loadError && <div role="alert"><Text as="div" tone="danger">{loadError}</Text><Button kind="secondary" onClick={() => setRetry((n) => n + 1)}>Retry loading conversation</Button></div>}
-          {documentConversation && !loading && !loadError && !items.length && !live && <Text as="div" tone="secondary">Ask this bot about the saved document. This page has its own conversation.</Text>}
-          {root ? (
-            <>
-              <ChatRow entry={root} groupStart chat={chat} openTrace={openTrace} />
-              <HStack gap={10} className="replies-count">
-                <Text size="caption" tone="tertiary" className="replies-count-label">
-                  {replyCount(root.data.thread?.count ?? 0)}
-                </Text>
-                <Hairline grow />
-              </HStack>
-            </>
-          ) : null}
+          {!loading && !loadError && !items.length && !live && <Text as="div" tone="secondary">Ask this bot about the saved document. This page has its own conversation.</Text>}
           {items.map((item) =>
             item.kind === 'entry' ? (
               <div key={item.id} className={arrivals.has(item.id) ? rowIn(item) : undefined}>
@@ -78,7 +61,7 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
           )}
           {chat && live ? (
             <div className={arrivals.has('working') ? 'chat-working row-in' : 'chat-working'}>
-              <WorkingIndicator bot={chat} thinking={store.currentThinking(botId, rootId)} />
+              <WorkingIndicator bot={chat} />
             </div>
           ) : null}
           <div className="chat-end" />
@@ -98,9 +81,4 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
       </Sheet>
     </SheetPage>
   )
-}
-
-/** The host's count, as on the thread's chip: messages, not the agent's trace. */
-function replyCount(count: number) {
-  return count === 0 ? 'No replies yet' : count === 1 ? '1 reply' : `${count} replies`
 }

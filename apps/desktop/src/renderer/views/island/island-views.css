@@ -413,6 +413,26 @@
 .island-send:disabled {
   opacity: 0.35;
 }
+.island-mic {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: rgba(var(--text-rgb), 0.08);
+  color: var(--secondary);
+  transition: background-color var(--morph), color var(--morph);
+}
+.island-mic:hover {
+  color: var(--text);
+}
+/* How to talk from any app, until the voice input shortcut is first used. */
+.island-hint {
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--island-quiet);
+}
 
 /* Folding soon: a line that runs out. */
 .island-countdown {

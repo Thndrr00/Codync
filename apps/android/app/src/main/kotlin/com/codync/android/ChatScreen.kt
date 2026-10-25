@@ -90,6 +90,8 @@ import com.kyant.shapes.RoundedRectangle
     var connector by remember { mutableStateOf<MarketConnector?>(null) }
     val connect = ConnectionRequestActions({ id, item -> setupEntry = id; app = item }, { id, item -> setupEntry = id; connector = item })
     val startCall = rememberStartVoice(bot.id, state, store) { micDenied = true }
+    // The chat message the next one answers (`replyTo`).
+    var replyingTo by remember(bot.id) { mutableStateOf<Entry?>(null) }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var composerHeight by remember { mutableIntStateOf(0) }
     val scroll = rememberConversationScroll()
@@ -115,11 +117,12 @@ import com.kyant.shapes.RoundedRectangle
             val mismatch = state.mismatch
             if (mismatch != null) UpdateNeededCard(state, mismatch, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             else MessageComposer(bot, null, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
+                replyingTo = replyingTo, cancelReply = { replyingTo = null },
                 onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null)
         }
     }) {
         Transcript(bot, chatState, store, connect, scroll, PaddingValues(start = 16.dp, end = 16.dp, top = top + 60.dp,
-            bottom = with(density) { composerHeight.toDp() } + 8.dp), indicatorTop = top + 50.dp, openRoutine = openRoutine) { peer = it }
+            bottom = with(density) { composerHeight.toDp() } + 8.dp), indicatorTop = top + 50.dp, openRoutine = openRoutine, reply = { replyingTo = it }) { peer = it }
     }
     CodyncDialog("Start a new session?", confirmNewSession, { confirmNewSession = false },
         message = "The conversation stays here, but the agent starts with a fresh context.") {
@@ -277,11 +280,11 @@ import com.kyant.shapes.RoundedRectangle
 
 /** The messages: all this phone has, earlier ones from the computer near the top, following the newest. */
 @Composable private fun Transcript(bot: Bot, state: AppState, store: AppStore, connect: ConnectionRequestActions, scroll: ConversationScroll, padding: PaddingValues,
-    indicatorTop: Dp, openRoutine: (String) -> Unit, openPeer: (String) -> Unit) {
+    indicatorTop: Dp, openRoutine: (String) -> Unit, reply: (Entry) -> Unit, openPeer: (String) -> Unit) {
     val entries = state.entries.filter { it.botId == bot.id && it.threadId == null && it.isChat }
     val pending = state.pending.filter { it.botId == bot.id && it.threadId == null }
     val items = chatItems(entries, pending)
-    val working = bot.isWorking(bot.id, null) && state.connection is LinkState.Ready
+    val working = bot.isWorking(bot.id) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
     ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
@@ -299,7 +302,7 @@ import com.kyant.shapes.RoundedRectangle
                     val routine = item.entry.data.text("routineId").takeIf { item.entry.kind == "notice" }
                     if (routine != null) RoutineNotice(item.entry) { openRoutine(routine) }
                     else ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = { store.showTrace(true) },
-                        reply = { store.openBot(bot.id, item.entry.id) }, connect = connect)
+                        reply = { reply(item.entry) }, connect = connect)
                 }
                 is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, state, store)
                 is ChatItem.Exchanges -> BotMessageRow(item.group, state) { openPeer(item.group.peerId) }
@@ -319,7 +322,7 @@ import com.kyant.shapes.RoundedRectangle
     LaunchedEffect(rootId, replies.lastOrNull()?.rev) {
         if (rootId.startsWith("doc:")) store.acknowledgeVisible(listOf(ReadingScope(bot.id, rootId)))
     }
-    val working = bot.isWorking(bot.id, rootId) && state.connection is LinkState.Ready
+    val working = bot.isWorking(bot.id) && state.connection is LinkState.Ready
     var composerHeight by remember { mutableIntStateOf(0) }
     val scroll = rememberConversationScroll()
     val density = LocalDensity.current

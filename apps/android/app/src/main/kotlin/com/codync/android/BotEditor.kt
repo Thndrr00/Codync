@@ -86,13 +86,13 @@ private fun fillDefaults(draft: BotDraft, state: AppState): BotDraft {
         ?.let { if (it != next.backend) next = next.copy(backend = it, account = null, model = null, modelOptions = emptyMap()) }
     val plugins = state.plugins
     if (plugins != null && next.connectors == null && plugins.connectors.isNotEmpty()) next = next.copy(connectors = plugins.connectors.map { it.id })
-    if (plugins != null && next.skills.isEmpty() && plugins.skills.isNotEmpty() && draft.skills.isEmpty()) next = next.copy(skills = plugins.skills.map { it.id })
+    if (plugins != null && next.skills.isNullOrEmpty() && plugins.skills.isNotEmpty() && draft.skills.isNullOrEmpty()) next = next.copy(skills = plugins.skills.map { it.id })
     return next
 }
 
-private fun backends(state: AppState): List<JsonObject> = (state.hello?.get("backends") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-private val JsonObject.available get() = this["available"]?.jsonPrimitive?.booleanOrNull == true
-private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOrNull != false
+internal fun backends(state: AppState): List<JsonObject> = (state.hello?.get("backends") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+internal val JsonObject.available get() = this["available"]?.jsonPrimitive?.booleanOrNull == true
+internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOrNull != false
 
 /** Bot settings: a big avatar, then sections in the Settings style (`CardSection`). */
 @Composable private fun BotSettingsForm(state: AppState, store: AppStore, draft: BotDraft, change: (BotDraft) -> Unit, viewSkill: (SkillRef) -> Unit,
@@ -195,11 +195,11 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
                 },
                     draft.computer, { change(draft.copy(computer = it)) })
             }
-            // Only a host with fleet tools sends the setting (desktop `BotEditorView`).
-            if (draft.fleetManagement != null) row {
-                SwitchRow("Organize bots",
-                    "Let this bot create bots and groups when you ask, and tune the ones it created. It can't delete bots or change others.",
-                    draft.fleetManagement == true, { change(draft.copy(fleetManagement = it)) })
+            // Only a host with team management sends the setting (desktop `BotEditorView`).
+            if (state.bots.any { it.manageTeam != null }) row {
+                SwitchRow("Manage the team",
+                    "Let this bot create bots and change its own setup and the bots it created. The bots it creates can too.",
+                    draft.manageTeam, { change(draft.copy(manageTeam = it)) })
             }
         }
         val plugins = state.plugins
@@ -207,7 +207,7 @@ private val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanOr
             plugins?.connectors.orEmpty().map { Triple(it.id, it.name, it.command ?: it.url.orEmpty()) },
             draft.connectors ?: plugins?.connectors.orEmpty().map { it.id }, { change(draft.copy(connectors = it)) })
         PluginToggles("Skills", "No skills yet. Get some from Extensions, or write your own.",
-            plugins?.skills.orEmpty().map { Triple(it.id, it.name, it.description) }, draft.skills, { change(draft.copy(skills = it)) }) { id ->
+            plugins?.skills.orEmpty().map { Triple(it.id, it.name, it.description) }, draft.skills.orEmpty(), { change(draft.copy(skills = it)) }) { id ->
             plugins?.skills?.firstOrNull { it.id == id }?.let { viewSkill(SkillRef(it.id, it.name, it.description)) }
         }
         draft.id?.let { MemoryCard(it, state, store) }

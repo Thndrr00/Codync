@@ -78,7 +78,8 @@ function startApp(env = process.env) {
     try {
       process.kill(-child.pid, 'SIGTERM')
     } catch (e) {
-      if (e.code !== 'ESRCH') throw e
+      // ESRCH: the group is gone. EPERM: macOS answers this for a group left with only zombies (Electron quit at once).
+      if (e.code !== 'ESRCH' && e.code !== 'EPERM') throw e
     }
   }
   return { child, stop }

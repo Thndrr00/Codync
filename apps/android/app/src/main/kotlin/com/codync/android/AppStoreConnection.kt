@@ -60,7 +60,7 @@ fun AppStore.pair(text: String) {
             val identity = withContext(Dispatchers.IO) { local.identity() }
             val computer = HostConnector.pair(pairing, identity, Build.MODEL.take(100)).copy(color = old?.color)
             // Tagged here: the page that asked only learns that pairing ended, maybe before the switch to this computer.
-            Analytics.capture(AnalyticsEvent.ComputerPaired, mapOf("via" to "qr", "computer" to Analytics.computerTag(computer.id)))
+            Analytics.capture(AnalyticsEvent.ComputerPaired(PairedVia.Qr, computer.id))
             withContext(Dispatchers.IO) { local.completeSetup() }
             if (state.value.computer?.id != computer.id) { addComputer(computer); return@launch }
             saveComputer(computer)

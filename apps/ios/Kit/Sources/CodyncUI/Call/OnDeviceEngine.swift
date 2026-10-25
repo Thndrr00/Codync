@@ -195,7 +195,8 @@ final class OnDeviceEngine: VoiceEngine {
 
     // MARK: audio-thread closures (built outside the main actor)
 
-    private nonisolated static func tap(_ request: SFSpeechAudioBufferRecognitionRequest,
+    /// Feeds the recognizer and reports the microphone's level, 0…1 (dictation uses it too).
+    nonisolated static func tap(_ request: SFSpeechAudioBufferRecognitionRequest,
                                         meter: @escaping @Sendable (Float) -> Void) -> AVAudioNodeTapBlock {
         { buffer, _ in
             request.append(buffer)

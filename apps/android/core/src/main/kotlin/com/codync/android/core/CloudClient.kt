@@ -22,7 +22,10 @@ import java.util.concurrent.TimeUnit
 data class CloudComputer(val computerId: String, val name: String, val signKey: String,
     val platform: String? = null, val device: String? = null, val boxKey: String? = null,
     val version: String? = null, val online: Boolean? = null, val lastSeenAt: Long? = null,
-    val claimedAt: Long? = null, val access: String? = null)
+    val claimedAt: Long? = null, val access: String? = null) {
+    /** This device was approved on it through the account. */
+    val isGranted: Boolean get() = access == "granted"
+}
 
 data class AccessTicket(val requestId: String, val expiresAt: Long, val code: String, val computerId: String, val signKey: String)
 
@@ -96,6 +99,9 @@ class CloudClient private constructor(base: String, private val identity: Device
     }
 
     /** Takes back this device's grants on a computer, including one approved for an earlier install. */
+    /** Takes a computer out of the account; its grants and pending requests go with it. */
+    suspend fun removeComputer(id: String) { request("DELETE", listOf("v1", "computers", id)) }
+
     suspend fun revokeAccess(computerId: String) {
         val devices = request("GET", listOf("v1", "devices")).getValue("devices").jsonArray.map { it.jsonObject }
         val device = devices.firstOrNull { it.text("deviceKey") == identity.publicKey }?.text("deviceId") ?: return
@@ -104,9 +110,6 @@ class CloudClient private constructor(base: String, private val identity: Device
             request("DELETE", listOf("v1", "computers", computerId, "grants", requireNotNull(grant.text("grantId")) { "Invalid grant" }))
         }
     }
-
-    /** Takes a computer out of the account; its grants and pending requests go with it. */
-    suspend fun removeComputer(id: String) { request("DELETE", listOf("v1", "computers", id)) }
 
     suspend fun accessStatus(id: String): AccessStatus {
         val result = request("GET", listOf("v1", "access-requests", id))
@@ -132,12 +135,12 @@ class CloudClient private constructor(base: String, private val identity: Device
                             val source = response.body?.source()
                             if (source?.request(MAX_RESPONSE + 1) == true) throw IOException("Cloud response is too large.")
                             val text = source?.readUtf8().orEmpty().ifBlank { "{}" }
-                            val result = json.parseToJsonElement(text).jsonObject
                             if (!response.isSuccessful) {
-                                val detail = result["error"]?.jsonObject
+                                // A proxy or platform error page isn't JSON; the status still says what happened.
+                                val detail = runCatching { json.parseToJsonElement(text).jsonObject["error"]?.jsonObject }.getOrNull()
                                 throw CloudError(response.code, detail?.text("code") ?: "http${response.code}", detail?.text("message"))
                             }
-                            result
+                            json.parseToJsonElement(text).jsonObject
                         }
                         continuation.resumeWith(Result.success(parsed))
                     } catch (error: Exception) { continuation.resumeWith(Result.failure(error)) }

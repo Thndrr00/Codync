@@ -19,14 +19,18 @@ use serde::{Deserialize, Serialize};
 pub struct Identity {
     pub name: String,
     pub description: String,
-    pub skills: Vec<String>,
+    /// The skills block the agent is told (`market::skills_brief`), so a skill renamed or redescribed counts too.
+    #[serde(default)]
+    pub skills_brief: String,
 }
 
 impl Identity {
-    pub fn of(cfg: &BotConfig) -> Self {
-        let mut skills = cfg.skills.clone();
-        skills.sort();
-        Self { name: cfg.name.trim().to_owned(), description: cfg.description.trim().to_owned(), skills }
+    pub fn of(store: &Store, cfg: &BotConfig) -> Self {
+        Self {
+            name: cfg.name.trim().to_owned(),
+            description: cfg.description.trim().to_owned(),
+            skills_brief: crate::market::skills_brief(store, &cfg.skills).unwrap_or_default(),
+        }
     }
 }
 
@@ -57,7 +61,7 @@ pub enum Prelude {
     UnpromptedFork,
 }
 
-// A bot talks in several lanes (its chat, threads, groups), each its own session: snapshots
+// A bot talks in several sessions (its chat and groups, routine runs), each with its own: snapshots
 // and epochs are kept per session.
 fn key(bot_id: &str, session: &str) -> String {
     format!("context.{bot_id}.{session}")
@@ -112,7 +116,7 @@ pub fn resolve(store: &Store, cfg: &BotConfig, session: &str) -> Result<Snapshot
     if let Some(s) = stored.as_ref().filter(|s| s.epoch == epoch && !s.system.is_empty()) {
         return Ok(s.clone());
     }
-    let identity = Identity::of(cfg);
+    let identity = Identity::of(store, cfg);
     let memory = crate::chat::memory::current_revision(store, &cfg.id);
     let s = Snapshot {
         session: session.to_owned(),
@@ -175,7 +179,7 @@ fn adopt_with_prelude(
     memory: String,
     prelude: Option<Prelude>,
 ) -> Result<Snapshot> {
-    let identity = Identity::of(cfg);
+    let identity = Identity::of(store, cfg);
     let s = Snapshot {
         session: session.to_owned(),
         epoch: epoch(store, &cfg.id, session),
@@ -187,19 +191,6 @@ fn adopt_with_prelude(
     };
     save(store, &cfg.id, &s)?;
     Ok(s)
-}
-
-/// A fork inherits what its parent actually heard, with its own pending thread introduction.
-pub fn fork(store: &Store, cfg: &BotConfig, parent: &Snapshot, session: &str) -> Result<()> {
-    let mut snapshot = parent.clone();
-    session.clone_into(&mut snapshot.session);
-    snapshot.epoch = epoch(store, &cfg.id, session);
-    snapshot.prelude = Some(if matches!(parent.prelude, Some(Prelude::New | Prelude::UnpromptedFork)) {
-        Prelude::UnpromptedFork
-    } else {
-        Prelude::Fork
-    });
-    save(store, &cfg.id, &snapshot)
 }
 
 /// Acknowledges only the opening that was actually written, never a newer snapshot.
@@ -230,6 +221,15 @@ pub fn render(store: &Store, cfg: &BotConfig) -> String {
         "You are a persistent agent the user delegates work to through Codync, from their phone or computer."
             .to_owned(),
     );
+    // Claude Code's own system prompt, which this is appended to, says the user is in its CLI.
+    let engine = if cfg.backend == "custom" {
+        "the coding agent".to_owned()
+    } else {
+        crate::agent::fallback::name(&cfg.backend)
+    };
+    lines.push(format!(
+        "Environment: you run inside Codync. The user talks to you through Codync (its phone, desktop or terminal app), not in {engine}'s own CLI, IDE or app. The engine Codync runs you on is {engine}: where your base instructions describe its CLI, terminal, slash commands or keyboard shortcuts, they describe that engine, not where the user is, so don't point the user to them. To start over, the user starts a New session for this chat in Codync (the chat's menu in the apps, S in the terminal UI)."
+    ));
     lines.push(String::new());
     lines.push(format!("Messages: {}", crate::chat::outbox::INSTRUCTIONS));
     lines.push(String::new());
@@ -257,18 +257,18 @@ pub fn render(store: &Store, cfg: &BotConfig) -> String {
 /// The `<agent_profile_update>` block to append to the next message when the
 /// bot's identity changed since the agent last heard it.
 pub fn profile_update(store: &Store, snapshot: &Snapshot, cfg: &BotConfig) -> Option<(String, Identity)> {
-    let identity = Identity::of(cfg);
+    let identity = Identity::of(store, cfg);
     if identity == snapshot.announced {
         return None;
     }
     let or_none = |s: &str, none: &str| if s.is_empty() { none.to_owned() } else { s.to_owned() };
-    let skills = crate::market::skills_brief(store, &cfg.skills).unwrap_or_else(|| "Skills: none.".into());
+    let skills = if identity.skills_brief.is_empty() { "Skills: none." } else { &identity.skills_brief };
     let text = [
         "<agent_profile_update>".to_owned(),
         "Your agent profile changed. This full update is authoritative and supersedes the Agent profile section in your instructions and every earlier profile update in this conversation.".to_owned(),
         format!("Current name: {}", or_none(&identity.name, "(no name)")),
         format!("Current description: {}", or_none(&identity.description, "(no description)")),
-        skills,
+        skills.to_owned(),
         "Use this identity until a future conversation summary folds it into the Agent profile section.".to_owned(),
         "</agent_profile_update>".to_owned(),
     ]
@@ -309,21 +309,13 @@ mod tests {
     }
 
     #[test]
-    fn initial_instructions_survive_reload_and_other_sessions() {
+    fn initial_instructions_survive_reload() {
         let store = store();
         let cfg = cfg("Worker", "Keep context");
         let parent = adopt_new(&store, &cfg, "main", "SYSTEM".into(), "memory-v1".into()).expect("new");
-        fork(&store, &cfg, &parent, "thread").expect("fork");
+        assert_eq!(resolve(&store, &cfg, "main").expect("main").prelude, Some(Prelude::New));
         mark_prompted(&store, &cfg.id, &parent).expect("main prompted");
         assert_eq!(resolve(&store, &cfg, "main").expect("main").prelude, None);
-        let thread = resolve(&store, &cfg, "thread").expect("persisted thread");
-        assert_eq!(thread.prelude, Some(Prelude::UnpromptedFork));
-        assert_eq!(thread.memory, "memory-v1");
-        mark_prompted(&store, &cfg.id, &thread).expect("thread prompted");
-        let thread = resolve(&store, &cfg, "thread").expect("thread");
-        assert_eq!(thread.prelude, None);
-        fork(&store, &cfg, &thread, "next-thread").expect("prompted fork");
-        assert_eq!(resolve(&store, &cfg, "next-thread").expect("next").prelude, Some(Prelude::Fork));
     }
 
     #[test]
@@ -363,6 +355,13 @@ mod tests {
     }
 
     #[test]
+    fn instructions_place_the_user_in_codync_not_in_the_engine() {
+        let system = render(&store(), &cfg("Reporter", ""));
+        assert!(system.contains("not in Claude Code's own CLI, IDE or app"), "{system}");
+        assert!(system.contains("The engine Codync runs you on is Claude Code:"), "{system}");
+    }
+
+    #[test]
     fn snapshot_is_frozen_until_compaction_and_updates_are_announced_once() {
         let store = store();
         let a = cfg("Fixer", "Fix bugs");
@@ -387,6 +386,23 @@ mod tests {
         assert!(folded.system.contains("Description: Fix bugs and write tests"));
         // A new session starts over at epoch 0.
         assert_eq!(epoch(&store, &a.id, "s2"), 0);
+    }
+
+    #[test]
+    fn a_rewritten_skill_is_announced() {
+        let store = store();
+        let skill = |description: &str| {
+            let list = serde_json::json!([{"id": "release", "name": "Release", "description": description}]);
+            store.kv_set("skills", &list.to_string()).expect("save skills");
+        };
+        skill("When shipping");
+        let mut a = cfg("Fixer", "Fix bugs");
+        a.skills = vec!["release".into()];
+        let first = adopt(&store, &a, "s1", "SYSTEM v1".into(), String::new()).expect("adopt");
+        assert!(profile_update(&store, &first, &a).is_none());
+        skill("When shipping a release or a hotfix");
+        let (text, _) = profile_update(&store, &first, &a).expect("the description changed");
+        assert!(text.contains("- Release: When shipping a release or a hotfix"), "{text}");
     }
 
     #[test]

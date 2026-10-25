@@ -12,6 +12,7 @@ use serde_json::json;
 use std::time::Duration;
 
 #[tokio::test]
+#[ignore = "message threads are gone (2.25.0): port to routine retries and replies"]
 async fn routine_deadline_during_allocation_releases_uncertain_tools_before_retry() {
     let host = Host::start().await;
     let (bot, cwd) = host.bot("AllocationDeadline", json!({})).await;
@@ -64,6 +65,7 @@ async fn routine_deadline_during_allocation_releases_uncertain_tools_before_retr
 }
 
 #[tokio::test]
+#[ignore = "message threads are gone (2.25.0): port to routine retries and replies"]
 async fn interrupted_nonresumable_allocation_keeps_confirmed_context_until_explicit_reset() {
     let host = Host::start().await;
     let (bot, cwd) = host.bot("NoResumeDeadline", json!({"load":false})).await;

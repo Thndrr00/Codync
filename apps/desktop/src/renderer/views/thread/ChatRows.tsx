@@ -1,13 +1,15 @@
 import { FileDownloadCard } from './FileDownloadCard'
 import { memo, useEffect, useRef, useState } from 'react'
-import { isGroup, isWorking, needsInput, type Bot, type Entry, type ThreadSummary } from '@shared/models'
+import { groupBotReactions, isGroup, isReplyable, isWorking, needsInput, type Bot, type Entry, type ReplyQuote } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
-import { Button, Hairline, IconButton } from '../../components/Controls'
+import { Button, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { AnchoredMenu, useContextMenu, type MenuItem, type ReactionPick } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { ThinkingOrb } from '../../components/ThinkingOrb'
+import { messagePreview } from '../../lib/message-preview'
+import { useTr } from '../../lib/use-language'
 import { avatarColor } from '../../lib/theme'
 import { useStore as useLiveStore, useStoreRef as useStore } from '../../store/context'
 import { QUICK_REACTIONS, type BotStore } from '../../store/bot-store'
@@ -17,7 +19,7 @@ import { MarkdownText } from './Markdown'
 import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
-import { HandoffNotice } from './HandoffNotice'
+import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
 import { VoiceReceipt } from './VoiceReceipt'
 
 export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
@@ -28,30 +30,29 @@ export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
 export function quoteEntry(store: BotStore, entry: Entry) {
   const text = entry.data.text ?? ''
   if (!text) return
-  const thread = entry.threadId ?? null
-  const current = store.composerDrafts.get(entry.botId, thread)
+  const current = store.composerDrafts.get(entry.botId)
   const quoted = quoteText(text)
-  store.composerDrafts.set(entry.botId, thread, current ? `${current}\n${quoted}\n\n` : `${quoted}\n\n`)
+  store.composerDrafts.set(entry.botId, current ? `${current}\n${quoted}\n\n` : `${quoted}\n\n`)
 }
 
-/** One chat-visible entry in a chat or a thread, with what can be done to it. */
-export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrace, openThread }: {
+/** One chat-visible entry, with what can be done to it. */
+export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrace, onReply, openAgent }: {
   entry: Entry
   groupStart: boolean
   chat: Bot | null
   openTrace: () => void
-  /** Main chat only: start (or open) the thread on this message. */
-  openThread?: (e: Entry) => void
+  /** Quotes this message in the composer; absent where the computer can't take replies. */
+  onReply?: (e: Entry) => void
+  /** Opens a bot's Agent settings (a failure notice's "Add a fallback"). */
+  openAgent?: (botId: string) => void
 }) {
-  const reply = openThread ? () => openThread(entry) : undefined
-  const chip = entry.data.thread && entry.data.thread.count > 0 && openThread ? <ThreadChip summary={entry.data.thread} open={() => openThread(entry)} /> : null
+  const reply = onReply && isReplyable(entry) ? () => onReply(entry) : undefined
   switch (entry.kind) {
     case 'user':
       return (
         <VStack align="flex-end" gap={4} className={groupStart ? 'chat-row group-start' : 'chat-row'}>
           <UserBubble entry={entry} botWorking={!!chat && isWorking(chat)} reply={reply} />
           <ReactionsRow entry={entry} />
-          {chip}
         </VStack>
       )
     case 'agent':
@@ -61,7 +62,6 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
           <AgentBubble entry={entry} openTrace={openTrace} reply={reply} />
           <VStack gap={4} className={chat && isGroup(chat) ? 'chat-row-indent' : undefined}>
             <ReactionsRow entry={entry} />
-            {chip}
           </VStack>
         </VStack>
       )
@@ -77,7 +77,8 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
       if (entry.data.handoff) return <div className="chat-row notice"><HandoffNotice entry={entry} card={entry.data.handoff} /></div>
       if (entry.data.passkeyWall) return <div className="chat-row group-start"><PasskeyWallNotice entry={entry} /></div>
       if (entry.data.chiefIncident) return <div className="chat-row group-start"><ChiefIncidentNotice entry={entry} /></div>
-      return <div className="chat-row notice"><NoticeRow entry={entry} /></div>
+      if (entry.data.agentSwitch) return <div className="chat-row notice"><AgentSwitchNotice entry={entry} carried={entry.data.agentSwitch.carried} /></div>
+      return <div className="chat-row notice"><NoticeRow entry={entry} addFallback={entry.data.addFallback && openAgent ? () => openAgent(entry.data.author ?? entry.botId) : undefined} /></div>
   }
 })
 
@@ -98,7 +99,7 @@ function PasskeyWallNotice({ entry }: { entry: Entry }) {
       <Text size="footnote" tone="secondary">{wall.reason} · {wall.url}</Text>
       {!resolved ? (
         <HStack gap={8}>
-          <Button kind="primary" onClick={() => store.send('I have completed the authentication in the browser. Please continue.', entry.botId, entry.threadId ?? null)}>
+          <Button kind="primary" onClick={() => store.send('I have completed the authentication in the browser. Please continue.', entry.botId, { thread: entry.threadId ?? null })}>
             Continue
           </Button>
           <Button kind="secondary" onClick={() => store.stop(entry.botId)}>
@@ -136,7 +137,7 @@ function ChiefIncidentNotice({ entry }: { entry: Entry }) {
       <Text size="footnote">{incident.summary}</Text>
       {isEscalated ? (
         <HStack gap={8}>
-          <Button kind="secondary" onClick={() => store.send(`Retry assignment for ${store.authorName(incident.workerBotId)}`, entry.botId, entry.threadId ?? null)}>
+          <Button kind="secondary" onClick={() => store.send(`Retry assignment for ${store.authorName(incident.workerBotId)}`, entry.botId, { thread: entry.threadId ?? null })}>
             Retry manually
           </Button>
           <Button kind="secondary" onClick={() => store.stop(incident.workerBotId)}>
@@ -166,35 +167,13 @@ export function AuthorLabel({ botId }: { botId?: string | null }) {
   )
 }
 
-/** Under a message with a thread (Slack's): who replied, how many, how recently. */
-export function ThreadChip({ summary, open }: { summary: ThreadSummary; open: () => void }) {
-  const store = useStore()
-  const authors = summary.authors.map((id) => store.bots.get(id)).filter((b): b is Bot => !!b).slice(0, 3)
-  const unread = summary.unread ?? 0
+/** The message a reply quotes, as its first line without Markdown markers: at the top of its bubble, and in the composer while replying. */
+export function QuoteRow({ quote, className }: { quote: ReplyQuote; className?: string }) {
   return (
-    <button
-      className="press thread-chip"
-      onClick={open}
-      title="View thread"
-      aria-label={`View thread, ${summary.count} ${summary.count === 1 ? 'reply' : 'replies'}${unread > 0 ? `, ${unread} new` : ''}`}
-    >
-      {authors.length ? (
-        <HStack as="span" align="stretch" className="thread-chip-authors">
-          {authors.map((b) => (
-            <span key={b.id}>
-              <BotAvatar bot={b} size={18} animated={false} />
-            </span>
-          ))}
-        </HStack>
-      ) : null}
-      <Text size="footnote" weight="semibold" tone="accent">{summary.count === 1 ? '1 reply' : `${summary.count} replies`}</Text>
-      {unread > 0 ? (
-        <Text size="footnote" weight="semibold" tone="text">{unread} new</Text>
-      ) : (
-        <Text size="footnote" tone="tertiary">{relativeTime.day(summary.lastAt)}</Text>
-      )}
-      <Icon name="chevron.right" size={10} color="var(--tertiary)" />
-    </button>
+    <HStack gap={6} className={className ?? 'bubble-quote'}>
+      <Icon name="text.bubble" size={12} color="var(--secondary)" />
+      <Text size="footnote" tone="secondary" truncate grow>{`“${messagePreview(quote.text)}”`}</Text>
+    </HStack>
   )
 }
 
@@ -213,7 +192,8 @@ export function Bubble({ className, items, reactions, children }: { className: s
 
 /** The centered time label between runs of messages. */
 export function TimeSeparator({ date }: { date: number }) {
-  return <Text as="div" size="footnote" tone="tertiary" className="time-separator">{relativeTime.separator(date)}</Text>
+  const tr = useTr()
+  return <Text as="div" size="footnote" tone="tertiary" className="time-separator">{relativeTime.separator(date, tr)}</Text>
 }
 
 const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -227,16 +207,17 @@ export function UserBubble({ entry, botWorking, reply }: { entry: Entry; botWork
     <div className="message user" title={fullDate.format(entry.createdAt)} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
       <div className="message-body">
         {entry.data.attachments?.length ? <AttachmentList attachments={entry.data.attachments} botId={entry.botId} /> : null}
-        {entry.data.text ? (
+        {entry.data.text || entry.data.replyTo ? (
           <Bubble
             className="bubble user selectable"
             reactions={reactionPick(store, entry)}
             items={() => [
               { title: 'Copy', icon: 'square.on.square', action: copy },
               { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
-              ...(reply ? [{ title: 'Reply in thread', icon: 'arrowshape.turn.up.left', action: reply }] : []),
+              ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
             ]}
           >
+            {entry.data.replyTo ? <QuoteRow quote={entry.data.replyTo} /> : null}
             {entry.data.text}
           </Bubble>
         ) : null}
@@ -249,22 +230,23 @@ export function UserBubble({ entry, botWorking, reply }: { entry: Entry; botWork
 }
 
 function UserStatus({ entry, botWorking, hovering }: { entry: Entry; botWorking: boolean; hovering: boolean }) {
+  const tr = useTr()
   const store = useStore()
   switch (entry.data.status) {
     case 'sending':
-      return <Text size="caption2" tone="tertiary">Sending…</Text>
+      return <Text size="caption2" tone="tertiary">{tr(`Sending…`)}</Text>
     case 'queued':
-      return <Text size="caption2" tone="tertiary">{botWorking ? 'Queued until this response finishes' : 'Queued'}</Text>
+      return <Text size="caption2" tone="tertiary">{botWorking ? tr(`Queued until this response finishes`) : tr(`Queued`)}</Text>
     case 'failed':
       return (
         <HStack as="span" gap={2}>
-          <Text size="caption2" weight="semibold" tone="danger" className="user-status-error">Failed to send</Text>
+          <Text size="caption2" weight="semibold" tone="danger" className="user-status-error">{tr(`Failed to send`)}</Text>
           <IconButton title="Resend" icon="arrow.clockwise" size={24} onClick={() => store.retry(entry)} />
           <IconButton title="Delete" icon="trash" size={24} onClick={() => store.discard(entry)} />
         </HStack>
       )
     case 'cancelled':
-      return <Text size="caption2" tone="tertiary">Not sent — stopped</Text>
+      return <Text size="caption2" tone="tertiary">{tr(`Not sent — stopped`)}</Text>
     default:
       return <Text size="caption" tone="tertiary" className={hovering ? 'user-status-time shown' : 'user-status-time'}>{relativeTime.time(entry.createdAt)}</Text>
   }
@@ -282,8 +264,8 @@ export function AgentBubble({ entry, openTrace, reply }: { entry: Entry; openTra
           reactions={reactionPick(store, entry)}
           items={() => [
             { title: 'Copy', icon: 'square.on.square', action: copy },
-            { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
-            ...(reply ? [{ title: 'Reply in thread', icon: 'arrowshape.turn.up.left', action: reply }] : []),
+              { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+              ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
             { title: 'Show what it did', icon: 'list.bullet', action: openTrace },
           ]}
         >
@@ -295,7 +277,7 @@ export function AgentBubble({ entry, openTrace, reply }: { entry: Entry; openTra
   )
 }
 
-export function NoticeRow({ entry }: { entry: Entry }) {
+export function NoticeRow({ entry, addFallback }: { entry: Entry; addFallback?: () => void }) {
   if (window.codync.platform === 'win32' && entry.data.source === 'voice_receipt') return <VoiceReceipt entry={entry} />
   const text = entry.data.text ?? ''
   if (entry.data.callSeconds !== undefined) {
@@ -308,19 +290,14 @@ export function NoticeRow({ entry }: { entry: Entry }) {
     )
   }
   switch (entry.data.style) {
-    case 'divider':
-      return (
-        <HStack gap={10} className="chat-notice-divider">
-          <Hairline grow />
-          <Text size="caption2" tone="tertiary" className="chat-notice-divider-text">{text}</Text>
-          <Hairline grow />
-        </HStack>
-      )
     case 'error':
       return (
         <HStack align="flex-start" gap={8} className="chat-notice-error">
           <Icon name="exclamationmark.triangle.fill" size={10} color="var(--danger)" />
-          <Text size="footnote" tone="text" className="selectable">{text}</Text>
+          <VStack gap={10} align="flex-start">
+            <Text size="footnote" tone="text" className="selectable">{text}</Text>
+            {addFallback ? <Button kind="secondary" onClick={addFallback}>Add a fallback</Button> : null}
+          </VStack>
         </HStack>
       )
     default:
@@ -328,35 +305,20 @@ export function NoticeRow({ entry }: { entry: Entry }) {
   }
 }
 
-/**
- * The bot's live activity line: a turning orb, what it's doing and for how long. Clicking it
- * unfolds what the bot is thinking right now.
- */
-export function WorkingIndicator({ bot, thinking }: { bot: Bot; thinking: string | null }) {
-  const [expanded, setExpanded] = useState(false)
+/** The bot's current activity and elapsed time. */
+export function WorkingIndicator({ bot }: { bot: Bot }) {
+  const tr = useTr()
   const waiting = needsInput(bot)
   return (
-    <HStack gap={10} className="agent-inset">
-      <button className="working" disabled={!thinking} onClick={() => setExpanded((e) => !e)} aria-expanded={thinking ? expanded : undefined}>
+    <VStack align="flex-start" className="agent-inset">
+      <div className="working">
         <HStack as="span" gap={8}>
           <ThinkingOrb state={waiting ? 'listening' : 'working'} size={16} color={waiting ? 'var(--warning)' : 'var(--secondary)'} />
-          <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate>{bot.activity || 'Working…'}</Text>
+          <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate>{tr(bot.activity || 'Working…')}</Text>
           {bot.startedAt ? <Timer since={bot.startedAt} /> : null}
-          {thinking ? (
-            <HStack as="span" align="stretch" className={expanded ? 'working-chevron expanded' : 'working-chevron'}>
-              <Icon name="chevron.down" size={10} weight="semibold" color="var(--tertiary)" />
-            </HStack>
-          ) : null}
         </HStack>
-        {expanded && thinking ? (
-          <div className="selectable thinking" ref={(el) => {
-            if (el) el.scrollTop = el.scrollHeight
-          }}>
-            {thinking}
-          </div>
-        ) : null}
-      </button>
-    </HStack>
+      </div>
+    </VStack>
   )
 }
 
@@ -374,23 +336,42 @@ function Timer({ since }: { since: number }) {
   return <Text size="footnote" tone="tertiary" tabular>{h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`}</Text>
 }
 
-/** The user's reactions under a message; clicking one takes it back. */
+/** A message's reactions: the user's (clicking one takes it back), then the bots', each emoji with the avatars of the
+ * bots that chose it. */
 export function ReactionsRow({ entry }: { entry: Entry }) {
   const store = useStore()
-  const reactions = entry.data.reactions
-  if (!reactions?.length) return null
+  const mine = entry.data.reactions ?? []
+  const theirs = groupBotReactions(entry.data.botReactions ?? [])
+    .map(({ emoji, bots }) => ({ emoji, bots: bots.map((id) => store.bots.get(id)).filter((b): b is Bot => !!b) }))
+    .filter((g) => g.bots.length)
+  if (!mine.length && !theirs.length) return null
   return (
     <HStack align="stretch" gap={4}>
-      {reactions.map((emoji) => (
+      {mine.map((emoji) => (
         <button key={emoji} className="press reaction-chip" title={`Remove ${emoji}`} aria-label={`Remove reaction ${emoji}`} onClick={() => store.react(entry, emoji)}>
           <Text size="body">{emoji}</Text>
         </button>
       ))}
+      {theirs.map(({ emoji, bots }) => {
+        const label = `${bots.map((b) => b.name).join(', ')} reacted ${emoji}`
+        return (
+          <HStack key={`bots-${emoji}`} gap={4} className="reaction-chip" title={label} aria-label={label} role="img">
+            <Text size="body">{emoji}</Text>
+            <HStack as="span" className="reaction-chip-bots">
+              {bots.slice(0, 3).map((b) => (
+                <span key={b.id}>
+                  <BotAvatar bot={b} size={16} animated={false} />
+                </span>
+              ))}
+            </HStack>
+          </HStack>
+        )
+      })}
     </HStack>
   )
 }
 
-/** Compact actions beside the bubble: a reaction strip, reply in thread, and more (copy, what it did). */
+/** Compact actions beside the bubble: a reaction strip, reply, and more (copy, what it did). */
 function MessageActions({ visible, className, reactions, reply, trace, copy }: {
   visible: boolean
   className: string
@@ -408,7 +389,7 @@ function MessageActions({ visible, className, reactions, reply, trace, copy }: {
       <button ref={smile} className="message-action" title="Add reaction" aria-label="Add reaction" onClick={() => setMenu('reactions')}>
         <Icon name="face.smiling" size={14} />
       </button>
-      {reply ? <IconButton title="Reply in thread" icon="arrowshape.turn.up.left" size={26} onClick={reply} /> : null}
+      {reply ? <IconButton title="Reply" icon="arrowshape.turn.up.left" size={26} onClick={reply} /> : null}
       <button ref={more} className="message-action" title="More message actions" aria-label="More message actions" onClick={() => setMenu('more')}>
         <Icon name="ellipsis" size={14} />
       </button>

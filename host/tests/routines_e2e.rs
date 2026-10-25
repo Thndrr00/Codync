@@ -45,7 +45,8 @@ impl Host {
             .post(format!("{}/api/{method}", self.base))
             .bearer_auth(&self.token)
             .json(&body)
-            .timeout(Duration::from_secs(10))
+            // As long as `common::host`'s: on a busy machine (parallel tests) `createBot` alone can take over 10 s.
+            .timeout(Duration::from_secs(120))
             .send()
             .await
             .unwrap();
@@ -174,11 +175,15 @@ async fn routines_execute_pause_deduplicate_and_reject_wrong_webhook_keys() {
         .await
         .unwrap();
     assert_eq!(first["run"]["id"], second["run"]["id"]);
+    let db = rusqlite::Connection::open(host.home.join("codync.db")).unwrap();
+    let run_sessions = || -> i64 {
+        db.query_row("SELECT COUNT(*) FROM kv WHERE k GLOB 'lane.session.*/routine-*'", [], |r| r.get(0)).unwrap()
+    };
     tokio::time::timeout(Duration::from_secs(20), async {
         loop {
             let listing = host.call("routines", json!({"botId":bot})).await;
-            if listing["runs"][0]["status"] == "succeeded" {
-                assert!(listing["runs"][0]["rootId"].is_string());
+            // A finished run's session is forgotten.
+            if listing["runs"][0]["status"] == "succeeded" && run_sessions() == 0 {
                 break;
             }
             assert_ne!(listing["runs"][0]["status"], "failed", "{listing}");
@@ -204,26 +209,6 @@ async fn routines_execute_pause_deduplicate_and_reject_wrong_webhook_keys() {
     };
     assert_eq!(unread(common::snapshot(&host.base, &host.token).await), 1);
     host.call("markRead", json!({"botId":bot})).await;
-    assert_eq!(unread(common::snapshot(&host.base, &host.token).await), 0);
-    let root = host.call("routines", json!({"botId":bot})).await["runs"][0]["rootId"].clone();
-    host.call("send", json!({"botId":bot,"threadId":root,"text":"FOLLOWUP"})).await;
-    tokio::time::timeout(Duration::from_secs(10), async {
-        loop {
-            let thread = host.call("thread", json!({"botId":bot,"rootId":root})).await;
-            if thread["entries"].as_array().unwrap().iter().any(|e| e["data"]["text"] == "reply: FOLLOWUP") {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(
-        unread(common::snapshot(&host.base, &host.token).await),
-        1,
-        "a normal follow-up in the run's thread is unread"
-    );
-    host.call("markRead", json!({"botId":bot,"threadId":root})).await;
     assert_eq!(unread(common::snapshot(&host.base, &host.token).await), 0);
     let servers: Value =
         serde_json::from_str(&std::fs::read_to_string(host.home.join("routine-bot/servers.json")).unwrap()).unwrap();
@@ -294,7 +279,8 @@ async fn crash_resumes_the_same_session_and_publishes_one_result() {
     let resumed = host.wait_event("resume", "resumed", "BLOCK[resume]").await;
     assert_eq!(started["session"], resumed["session"]);
     std::fs::write(host.home.join("resume/release-resume"), "").unwrap();
-    let run = host.wait_status(&bot, &id, "succeeded").await;
+    host.wait_status(&bot, &id, "succeeded").await;
+    // The run's reply is its result, in the chat once.
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let history = host.call("history", json!({"botId":bot})).await;
@@ -302,7 +288,7 @@ async fn crash_resumes_the_same_session_and_publishes_one_result() {
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter(|e| e["kind"] == "agent" && e["data"]["runId"] == run["id"])
+                .filter(|e| e["kind"] == "agent" && e["data"]["final"] == true)
                 .collect();
             if !results.is_empty() {
                 assert_eq!(results.len(), 1);
@@ -326,12 +312,45 @@ async fn crash_resumes_the_same_session_and_publishes_one_result() {
 }
 
 #[tokio::test]
+async fn a_message_sent_during_a_run_gets_a_turn_of_its_own() {
+    let host = Host::start().await;
+    let bot = host.stable_bot("turns").await;
+    let id = host.save(&bot, "slow", "BLOCK[run]", json!([{"type":"webhook"}]), 30).await;
+    host.call("runRoutine", json!({"botId":bot,"id":id})).await;
+    // Nothing of the run is in the chat yet but its notice.
+    host.wait_event("turns", "started", "BLOCK[run]").await;
+    host.send(&bot, "MEANWHILE").await;
+    std::fs::write(host.home.join("turns/release-run"), "").unwrap();
+    let entries = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let history = host.call("history", json!({"botId":bot})).await;
+            let entries = history["entries"].as_array().unwrap().clone();
+            if entries.iter().filter(|e| e["kind"] == "agent" && e["data"]["final"] == true).count() == 2 {
+                return entries;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let turn =
+        |f: &dyn Fn(&Value) -> bool| entries.iter().filter(|e| f(e)).map(|e| e["turn"].clone()).collect::<Vec<_>>();
+    let notice = turn(&|e| e["kind"] == "notice" && e["data"]["runId"].is_string());
+    let user = turn(&|e| e["kind"] == "user");
+    assert_ne!(notice, user);
+    let finals = turn(&|e| e["kind"] == "agent" && e["data"]["final"] == true);
+    assert_eq!(finals, [notice[0].clone(), user[0].clone()], "each reply stays in its own turn");
+}
+
+#[tokio::test]
 async fn an_agent_started_for_a_run_stops_when_the_run_ends() {
     let host = Host::start().await;
     let bot = host.stable_bot("only-runs").await;
     let id = host.save(&bot, "one-off", "ONE_OFF", json!([{"type":"webhook"}]), 30).await;
     host.call("runRoutine", json!({"botId":bot,"id":id})).await;
-    host.wait_event("only-runs", "finished", "ONE_OFF").await;
+    // The run's outcome, not the agent's own "finished": a message sent before the host took the reply would wait in
+    // the queue and keep the agent running.
+    host.wait_status(&bot, &id, "succeeded").await;
     host.send(&bot, "LATER").await;
     host.wait_event("only-runs", "finished", "LATER").await;
     let events = host.agent_events("only-runs");
@@ -356,12 +375,6 @@ async fn a_finished_run_closes_its_session_and_the_main_one_stays() {
     host.send(&bot, "MAIN_AGAIN").await;
     assert_eq!(host.wait_event("spent", "finished", "MAIN_AGAIN").await["session"], main["session"]);
     assert_eq!(host.agent_events("spent").iter().filter(|e| e["event"] == "closed").count(), 1);
-    // The run's thread carries on in the run's session.
-    let run_id = host.call("routines", json!({"botId":bot})).await["runs"][0]["id"].as_str().unwrap().to_owned();
-    let thread = format!("routine-{run_id}");
-    host.call("send", json!({"botId":bot,"text":"IN_THREAD","threadId":thread,"clientNonce":"thread"})).await;
-    assert_eq!(host.wait_event("spent", "finished", "IN_THREAD").await["session"], run["session"]);
-    assert_eq!(host.wait_event("spent", "loaded", "").await["session"], run["session"]);
 }
 
 #[tokio::test]

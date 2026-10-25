@@ -57,6 +57,11 @@ def prompt(request, stop):
     fail = re.search(r"FAIL_ONCE\[([^]]+)\]", text)
     if fail and not pathlib.Path("failed-" + fail[1]).exists():
         pathlib.Path("failed-" + fail[1]).touch()
+        if "ACT_FIRST" in text:
+            # Changes something before failing, so the run may have done part of its work.
+            send({"method": "session/update", "params": {"sessionId": sid, "update": {
+                "sessionUpdate": "tool_call", "toolCallId": "act", "title": "Send the report",
+                "kind": "edit", "status": "completed"}}})
         log("failed", sid, text)
         send({"id": request["id"], "error": {"code": -32000, "message": "transient fixture failure"}})
         return
@@ -131,7 +136,8 @@ for line in sys.stdin:
         send({"id": request["id"], "result": {"agentCapabilities": capabilities}})
     elif method == "session/new":
         servers = request["params"]["mcpServers"]
-        send({"id": request["id"], "result": {"sessionId": str(uuid.uuid4())}})
+        if "--hang-new" not in sys.argv:  # an agent stuck starting never answers
+            send({"id": request["id"], "result": {"sessionId": str(uuid.uuid4())}})
     elif method == "session/load":
         sid = request["params"]["sessionId"]
         if sid in sessions:

@@ -30,6 +30,14 @@ export interface Bot {
   fastModeSupport: string
   fastModeIssue: string | null
   account?: string | null
+  /** Agents that carry on, in order, when the bot's own can't answer. */
+  fallbacks: Fallback[]
+  /** The bot may set its own fallbacks; null from an older host (no fallbacks there). */
+  selfFallbacks: boolean | null
+  /** The fallback the bot is on right now; null on its own agent. */
+  agentStep: AgentStep | null
+  /** Agents of its chain (its own included) resting now; one whose `until` passed isn't. */
+  resting: Resting[]
   pinned: boolean
   /** Where the user dragged it, lowest first (after pinned bots); ties sort by recent activity. */
   position: number
@@ -39,10 +47,10 @@ export interface Bot {
   skills: string[]
   /** The bot can see and operate the computer's desktop. */
   computer: boolean
-  /** The bot may create and organize bots and groups (fleet tools); absent from hosts before it. */
-  fleetManagement?: boolean
-  /** The bot that created this one with its fleet tools. */
-  createdBy?: string | null
+  /** The bot can create bots (which can too) and change its own setup and the bots it created (the built-in `manage` tools); null from an older host. */
+  manageTeam: boolean | null
+  /** The bot that created this one; null when the user did. */
+  createdBy: string | null
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   /** Uses the memory all the user's bots share ("About you"). */
   sharedMemory: boolean
@@ -59,7 +67,6 @@ export interface Bot {
   activity: string
   startedAt?: number | null
   workingChat?: string | null
-  workingThread?: string | null
   unread: number
   lastMessage?: string | null
   lastAt: number
@@ -87,6 +94,10 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     fastModeSupport: raw.fastModeSupport ?? 'unknown',
     fastModeIssue: raw.fastModeIssue ?? null,
     account: raw.account ?? null,
+    fallbacks: raw.fallbacks ?? [],
+    selfFallbacks: raw.selfFallbacks ?? null,
+    agentStep: raw.agentStep ?? null,
+    resting: raw.resting ?? [],
     pinned: raw.pinned ?? false,
     position: raw.position ?? 0,
     hidden: raw.hidden ?? false,
@@ -94,8 +105,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     connectors: raw.connectors ?? [],
     skills: raw.skills ?? [],
     computer: raw.computer ?? false,
-    // Kept undefined from an older host, which has no fleet tools.
-    fleetManagement: raw.fleetManagement,
+    manageTeam: raw.manageTeam ?? null,
     createdBy: raw.createdBy ?? null,
     computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
@@ -110,19 +120,45 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     activity: raw.activity ?? '',
     startedAt: raw.startedAt ?? null,
     workingChat: raw.workingChat ?? null,
-    workingThread: raw.workingThread ?? null,
     unread: raw.unread ?? 0,
     lastMessage: raw.lastMessage ?? null,
     lastAt: raw.lastAt ?? createdAt,
   }
 }
 
+/** One step of a bot's fallback chain: another agent and the model to use on it. */
+export interface Fallback {
+  backend: string
+  /** A custom command, only from the bot itself (the apps don't offer one). */
+  command?: string
+  model: string | null
+  modelOptions: Record<string, string>
+}
+
+/** Why an agent can't answer: usageLimit · outOfCredits · rateLimited · overloaded · signedOut · notStarting · modelMissing */
+export type FallbackReason = string
+
+/** The fallback a bot runs on: which step, its agent and model, since when, and why it left the one before. */
+export interface AgentStep {
+  step: number
+  agent: string
+  model: string | null
+  since: number
+  reason: FallbackReason | null
+}
+
+/** An agent that can't answer until `until`. */
+export interface Resting {
+  agent: string
+  until: number
+  reason: FallbackReason
+}
+
 export const isGroup = (b: Bot) => b.kind === 'group'
 export const isWorking = (b: Bot) => b.status === 'working' || b.status === 'needsInput'
 export const needsInput = (b: Bot) => b.status === 'needsInput'
-/** Working right now in this chat's main conversation (`thread == null`) or in that thread. */
-export const isWorkingIn = (b: Bot, chat: string, thread: string | null | undefined) =>
-  isWorking(b) && (b.workingChat ?? b.id) === chat && (b.workingThread ?? null) === (thread ?? null)
+/** Working right now in this chat (its own, or a group it's in). */
+export const isWorkingIn = (b: Bot, chat: string) => isWorking(b) && (b.workingChat ?? b.id) === chat
 export const folderName = (b: Bot) =>
   b.managedWorkspace ? 'Personal workspace' : (b.cwd.split(/[\\/]/).filter(Boolean).pop() ?? b.cwd)
 
@@ -148,12 +184,30 @@ export interface PlanItem {
   priority?: string
 }
 
-export interface ThreadSummary {
-  count: number
-  lastAt: number
-  /** Who replied, first reply first: bot ids, and `user`. */
-  authors: string[]
-  unread?: number
+/** One bot's emoji on a message. */
+export interface BotReaction {
+  bot: string
+  emoji: string
+}
+
+/** The bots' reactions on one message, by emoji in the order each first appeared. */
+export function groupBotReactions(reactions: BotReaction[]): { emoji: string; bots: string[] }[] {
+  const groups: { emoji: string; bots: string[] }[] = []
+  for (const r of reactions) {
+    const group = groups.find((g) => g.emoji === r.emoji)
+    if (group) group.bots.push(r.bot)
+    else groups.push({ emoji: r.emoji, bots: [r.bot] })
+  }
+  return groups
+}
+
+/** The message a user message replies to, as the host quoted it. */
+export interface ReplyQuote {
+  id: string
+  /** `user`, or the bot that wrote it. */
+  author: string
+  /** Its text (or file names), at most 500 characters. */
+  text: string
 }
 
 export interface Attachment {
@@ -226,6 +280,17 @@ export interface SentinelReport {
   issues: SentinelIssue[]
 }
 
+/** notice: another agent of the bot's chain carried on, or (`back`) the bot's own is back. */
+export interface AgentSwitch {
+  from: string
+  to: string
+  back: boolean
+  reason: FallbackReason | null
+  resetsAt: number | null
+  /** What the new agent was told, unfolded under the line. */
+  carried: string | null
+}
+
 export interface EntryData {
   source?: string
   /** Structured conversation data added to the existing team-tool notice. */
@@ -238,6 +303,9 @@ export interface EntryData {
   passkeyWall?: PasskeyWallCard
   /** Chief of Staff incident intervention card (INIC-04). */
   chiefIncident?: ChiefIncidentCard
+  agentSwitch?: AgentSwitch
+  /** notice (error): the bot has no fallbacks and its agent ran out; offers to add one. */
+  addFallback?: boolean
   heading?: string
   delegationId?: string
   sourceBotId?: string
@@ -248,6 +316,8 @@ export interface EntryData {
   memoryFile?: unknown
   routineId?: string
   runId?: string
+  /** notice: a failed routine run the user can run again (`retryRoutineRun`). */
+  retry?: boolean
   text?: string
   final?: boolean
   /** user: queued | sent | cancelled | failed · tool: pending | in_progress | completed | failed · permission: pending | answered | cancelled | expired */
@@ -264,11 +334,14 @@ export interface EntryData {
   detail?: string
   cwd?: string
   entries?: PlanItem[]
-  /** notice: info | error | divider */
+  /** notice: info | error */
   style?: string
   author?: string
-  thread?: ThreadSummary
+  /** user: the message this one replies to. */
+  replyTo?: ReplyQuote
   reactions?: string[]
+  /** The bots' reactions, one per bot, oldest first. */
+  botReactions?: BotReaction[]
   attachments?: Attachment[]
   files?: SharedFile[]
   callSeconds?: number
@@ -279,7 +352,6 @@ export interface Entry {
   id: string
   seq: number
   botId: string
-  threadId?: string | null
   rev: number
   /** user | agent | thought | tool | plan | permission | notice */
   kind: string
@@ -287,6 +359,8 @@ export interface Entry {
   data: EntryData
   createdAt: number
   updatedAt: number
+  /** The side conversation it's in (a document's `doc:<id>`); absent in the chat itself. */
+  threadId?: string | null
 }
 
 /** Chat-visible (Grok Bot model): user messages, final replies, approval cards, notices. */
@@ -304,6 +378,17 @@ export function isChat(e: Entry): boolean {
     default:
       return false
   }
+}
+
+/** Messages a reply can quote: the user's and the bots' final replies, once the computer has them. */
+export function isReplyable(e: Entry): boolean {
+  return !e.id.startsWith('local-') && (e.kind === 'user' || (e.kind === 'agent' && e.data.final === true))
+}
+
+/** The quote a sending reply shows until the computer's own replaces it. */
+export function quoteOf(e: Entry): ReplyQuote {
+  const names = [...(e.data.attachments ?? []), ...(e.data.files ?? [])].map((f) => f.name).join(', ')
+  return { id: e.id, author: e.kind === 'user' ? 'user' : (e.data.author ?? e.botId), text: (e.data.text || names).slice(0, 500) }
 }
 
 export interface UsageWindow {
@@ -339,7 +424,7 @@ export interface Backend {
   signedIn?: boolean
   canInstall?: boolean
   /** Only for an agent that runs on Node.js, on a computer without its own: Codync's copy is missing or added. */
-  node?: 'missing' | 'added'
+  node?: 'missing' | 'added' | null
 }
 
 export interface ScreenDisplay {
@@ -402,9 +487,6 @@ export interface Hello {
   /** Product analytics on this computer: on unless its owner turned it off. */
   analytics?: boolean
 }
-
-/** Events only the desktop app knows about; the host records everything else from API calls. */
-export type AnalyticsEvent = 'app_opened' | 'onboarding_completed' | 'signed_in' | 'signed_out'
 
 export interface PairingInfo {
   pairingUrl: string
@@ -508,13 +590,15 @@ export interface BotDraft {
   modelOptions?: Record<string, string>
   fastMode?: boolean
   account?: string | null
+  fallbacks?: Fallback[]
+  selfFallbacks?: boolean
   pinned?: boolean
   hidden?: boolean
   notify?: boolean | null
   connectors?: string[]
   skills?: string[]
   computer?: boolean
-  fleetManagement?: boolean
+  manageTeam?: boolean
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   sharedMemory?: boolean
   harnessMemory?: boolean
@@ -537,14 +621,15 @@ export function draftOf(bot: Bot): BotDraft {
     modelOptions: bot.modelOptions,
     fastMode: bot.fastMode,
     account: bot.account ?? null,
+    fallbacks: bot.fallbacks,
+    selfFallbacks: bot.selfFallbacks ?? undefined,
     pinned: bot.pinned,
     hidden: bot.hidden,
     notify: bot.notify ?? null,
     connectors: bot.connectors,
     skills: bot.skills,
     computer: bot.computer,
-    // Undefined from a host without fleet tools: the editor then hides the switch.
-    fleetManagement: bot.fleetManagement,
+    manageTeam: bot.manageTeam ?? undefined,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },

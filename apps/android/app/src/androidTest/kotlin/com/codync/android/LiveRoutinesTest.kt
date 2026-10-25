@@ -115,7 +115,6 @@ class LiveRoutinesTest {
             compose.waitUntil(30_000) { store.state.value.routines.getValue(bot.id).runs.any { it.routineId == webhookRoutine.id && it.finishedAt != null } }
             val run = store.state.value.routines.getValue(bot.id).runs.first { it.routineId == webhookRoutine.id }
             assertEquals("succeeded", run.status)
-            assertNotNull(run.rootId)
             compose.onNodeWithContentDescription("Delete routine").performClick()
             compose.onNodeWithText("Delete routine?").assertIsDisplayed()
             compose.onNodeWithText("Delete routine").performClick()

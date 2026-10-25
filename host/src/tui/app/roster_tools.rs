@@ -194,7 +194,6 @@ impl App {
                 {
                     self.roster_tools.context_anchor = hit["id"].as_str().map(str::to_owned);
                     self.selected = hit["botId"].as_str().map(str::to_owned);
-                    self.thread = hit["threadId"].as_str().map(str::to_owned);
                     self.roster_read(
                         "messageContext",
                         json!({"botId":hit["botId"],"entryId":hit["id"]}),

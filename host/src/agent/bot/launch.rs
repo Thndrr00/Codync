@@ -4,9 +4,9 @@
 use super::{Adapter, Conn, SessionCaps};
 use crate::agent::acp::{self, Acp};
 use crate::store::BotConfig;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
 /// ACP's `systemPrompt`: the bot's instructions added to the agent's own.
@@ -16,7 +16,7 @@ pub(crate) fn system_prompt(system: &str) -> Value {
 
 /// Claude's `_meta`: the bot's instructions appended to Claude Code's own system prompt, and its options. The
 /// per-session parts of Claude Code's prompt (working directory, git status) move to the first message, so a
-/// bot's chat, threads and routines share one cached system prompt.
+/// bot's chat, groups and routines share one cached system prompt.
 pub(super) fn claude_meta(cfg: &BotConfig, system: &str) -> Value {
     json!({"systemPrompt": {"append": system, "excludeDynamicSections": true}, "claudeCode": claude_options(cfg)})
 }
@@ -24,9 +24,10 @@ pub(super) fn claude_meta(cfg: &BotConfig, system: &str) -> Value {
 /// Claude Code's own memory and its auto-dream stay off, so Codync's is the bot's one memory, unless the user kept
 /// them on; then Claude Code sets both itself ([design](../../../../docs/design/bot-memory.md#claude-codes-own-memory)).
 fn claude_options(cfg: &BotConfig) -> Value {
-    // The bot's replies and memory are Codync's own tools, which follow the bot's permission inside Codync: the
-    // user's Claude Code auto-mode classifier mustn't refuse them (it blocked a reply naming the user's daughter).
-    let mut settings = json!({"permissions": {"allow": ["mcp__chat", "mcp__memory"]}});
+    // The bot's replies, memory and team management are Codync's own tools, which follow the bot's permission inside
+    // Codync: the user's Claude Code auto-mode classifier mustn't refuse them (it blocked a reply naming the user's
+    // daughter), and a team change asks on Codync's own card.
+    let mut settings = json!({"permissions": {"allow": ["mcp__chat", "mcp__memory", "mcp__manage"]}});
     if !crate::agent::own_memory::kept(cfg) {
         settings["autoMemoryEnabled"] = false.into();
         settings["autoDreamEnabled"] = false.into();
@@ -56,8 +57,7 @@ pub(crate) async fn select_model(acp: &Acp, res: &Value, sid: &str, cfg: &BotCon
         let r = acp.request("session/set_model", json!({"sessionId": sid, "modelId": model})).await;
         return r.map(|_| res.clone()).map_err(|e| model_error(model, &e));
     };
-    let (model, mut options) = split_variant(res, model);
-    options.extend(cfg.model_options.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    let (model, options) = model_choice(res, model, &cfg.model_options);
     let set = |id: &str, value: &str| {
         acp.request("session/set_config_option", json!({"sessionId": sid, "configId": id, "value": value}))
     };
@@ -71,9 +71,23 @@ pub(crate) async fn select_model(acp: &Acp, res: &Value, sid: &str, cfg: &BotCon
     Ok(if current["configOptions"].is_array() { current } else { res.clone() })
 }
 
+/// The model to select and the options to set on it: the model id's variant, then the bot's own. How the agent
+/// approves tools is the bot's Approvals, never a model option (`opus[mode=acceptEdits]`).
+fn model_choice<'a>(
+    res: &Value,
+    model: &'a str,
+    own: &'a BTreeMap<String, String>,
+) -> (&'a str, Vec<(&'a str, &'a str)>) {
+    let (model, mut options) = split_variant(res, model);
+    options.extend(own.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    let mode = res["configOptions"].as_array().into_iter().flatten().find(|o| o["category"] == "mode");
+    options.retain(|(id, _)| mode.is_none_or(|m| m["id"] != *id));
+    (model, options)
+}
+
 fn model_error(model: &str, e: &anyhow::Error) -> anyhow::Error {
     tracing::warn!(model, error = format!("{e:#}"), "couldn't set model");
-    anyhow!("Couldn't select model {model}: {e:#}")
+    acp::Failure::error(acp::FailureKind::NoModel, format!("Couldn't select model {model}: {e:#}"))
 }
 
 /// Cursor names a model variant `grok-4.7[reasoning_effort=high,fast=true]`. When the agent
@@ -128,7 +142,6 @@ pub(crate) async fn start_agent(command: &str, cwd: &str, env: &[(String, String
     };
     let sessions = SessionCaps {
         load: init["agentCapabilities"]["loadSession"].as_bool().unwrap_or(false),
-        fork: init["agentCapabilities"]["sessionCapabilities"]["fork"].is_object(),
         close: init["agentCapabilities"]["sessionCapabilities"]["close"].is_object(),
         system_prompt: init["agentCapabilities"]["sessionCapabilities"]["systemPrompt"].is_object(),
         additional_directories: init["agentCapabilities"]["sessionCapabilities"]["additionalDirectories"].is_object(),
@@ -181,6 +194,16 @@ mod tests {
         // Cursor's Auto: `default[]` with variants, `default` without.
         let auto = json!({"models": {"availableModels": [{"modelId": "default"}]}});
         assert_eq!(split_variant(&auto, "default[]"), ("default", vec![]));
+    }
+
+    #[test]
+    fn no_model_option_sets_how_the_agent_approves_tools() {
+        let res = json!({"configOptions": [
+            {"id": "model", "category": "model", "type": "select", "options": [{"value": "opus"}]},
+            {"id": "mode", "category": "mode", "type": "select", "options": [{"value": "default"}, {"value": "auto"}]},
+        ]});
+        let own = [("mode", "auto"), ("effort", "high")].map(|(k, v)| (k.to_owned(), v.to_owned())).into();
+        assert_eq!(model_choice(&res, "opus[mode=acceptEdits]", &own), ("opus", vec![("effort", "high")]));
     }
 
     #[test]

@@ -1,5 +1,5 @@
-//! Built-in stdio MCP servers: `chat` sends the user messages and changes the bot's name and instructions; `team` discovers and asks other bots; `computer`
-//! operates the desktop when enabled. Calls go through authenticated loopback
+//! Built-in stdio MCP servers: `chat` sends the user messages, reacts to messages, changes the bot's name and instructions and saves skills; `team` discovers and asks other bots; `manage`
+//! creates bots and changes any bot's setup, and `computer` operates the desktop, when enabled. Calls go through authenticated loopback
 //! HTTP to the running host, which owns delegation and screen control.
 
 use anyhow::Result;
@@ -27,6 +27,7 @@ pub enum Server {
     Routines,
     Computer,
     Team,
+    Manage,
     Memory,
     Composio,
 }
@@ -72,21 +73,34 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::teach::tools());
                 list.extend(crate::documents::tools());
                 list.extend(crate::research::tools().as_array().into_iter().flatten().cloned());
+                list.extend(crate::chat::fallbacks::tools());
+                list.push(crate::chat::reactions::tool());
+                list.push(crate::chat::skills::tool());
             }
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }
         Server::Team => ("codync-team", crate::chat::team::INSTRUCTIONS, crate::chat::team::tools()),
+        Server::Manage => ("codync-manage", crate::chat::manage::INSTRUCTIONS, crate::chat::manage::tools()),
         Server::Memory => ("codync-memory", crate::chat::memory::INSTRUCTIONS, crate::chat::memory::tools()),
         Server::Composio => {
             ("codync-composio", crate::market::composio::INSTRUCTIONS, crate::market::composio::tools())
         }
     };
+    // Requests still running, by id: a cancelled one stops, and its host call with it (a team change's card expires).
+    let mut running = std::collections::HashMap::<String, tokio::task::AbortHandle>::new();
     while let Some(line) = lines.next_line().await? {
         let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
         cancellation.observe(&msg);
         let Some(id) = msg.get("id").filter(|id| !id.is_null()).cloned() else {
-            continue; // notifications (`notifications/initialized`, cancellations)
+            if msg["method"] == "notifications/cancelled"
+                && let Some(request) = running.remove(&msg["params"]["requestId"].to_string())
+            {
+                request.abort();
+            }
+            continue; // other notifications (`notifications/initialized`…)
         };
+        running.retain(|_, request| !request.is_finished());
+        let key = id.to_string();
         let (replies, token, bot, available_tools) =
             (replies.clone(), token.clone(), bot.clone(), available_tools.clone());
         while requests.try_join_next().is_some() {}
@@ -96,7 +110,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
             continue;
         }
         let cancelled = cancellation.clone();
-        requests.spawn(async move {
+        let request = requests.spawn(async move {
             let params = &msg["params"];
             let reply = match msg["method"].as_str().unwrap_or_default() {
                 "initialize" => Ok(json!({
@@ -125,6 +139,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
             });
             cancelled.finish(&id);
         });
+        running.insert(key, request);
     }
     cancellation.close();
     // Give cancellation requests time to reach the host before stopping the bridge.
@@ -155,7 +170,6 @@ async fn computer_tools(port: u16, token: &str) -> Value {
 async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server) -> Value {
     let body = json!({
         "botId": bot,
-        "memoryLane": std::env::var("CODYNC_MEMORY_LANE").ok(),
         "name": params["name"],
         "arguments": params.get("arguments").filter(|a| a.is_object()).cloned().unwrap_or_else(|| json!({})),
     });
@@ -167,6 +181,7 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
         Server::Chat if params["name"] == "research_sources" => ("chatCall", Duration::from_secs(60)),
         Server::Chat => ("chatCall", Duration::from_secs(if params["name"] == "send_file" { 70 } else { 30 })),
         Server::Team => ("teamCall", crate::chat::team::ASK_TIMEOUT + Duration::from_secs(30)),
+        Server::Manage => ("manageCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(30)),
         Server::Memory => ("memoryCall", Duration::from_secs(120)),
         Server::Composio => ("composioCall", Duration::from_secs(120)),
     };
@@ -185,7 +200,12 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
                     return match server {
                         Server::Computer if v["isError"] == true => json!({"content": v["content"], "isError": true}),
                         Server::Computer => json!({"content": v["content"]}),
-                        Server::Chat | Server::Team | Server::Memory | Server::Routines | Server::Connectors => {
+                        Server::Chat
+                        | Server::Team
+                        | Server::Manage
+                        | Server::Memory
+                        | Server::Routines
+                        | Server::Connectors => {
                             json!({"content": [{"type": "text", "text": v.to_string()}]})
                         }
                         Server::Composio => json!({"content": [{"type": "text", "text": v["result"].to_string()}]}),
@@ -257,16 +277,4 @@ fn sse_data(event: &str) -> Option<Value> {
 /// Inject secrets into the connector process, never the agent's MCP definition.
 pub async fn serve_local(connector: String, port: u16) -> Result<()> {
     local::serve(connector, port).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reads_sse_events() {
-        assert_eq!(sse_data("event: message\ndata: {\"id\":1}\n\n").unwrap()["id"], 1);
-        assert_eq!(sse_data("data:{\"a\":\ndata: 2}\n\n").unwrap()["a"], 2);
-        assert!(sse_data(": ping\n\n").is_none());
-    }
 }

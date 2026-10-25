@@ -89,7 +89,7 @@ fun AppStore.loadHistory() {
 fun AppStore.send(text: String, files: List<OutgoingFile> = emptyList()) {
     val id = state.value.selectedBot ?: return
     if (text.isBlank() && files.isEmpty()) return
-    val send = PendingSend(UUID.randomUUID().toString(), id, state.value.thread, text.trim(), System.currentTimeMillis(), files = files)
+    val send = PendingSend(UUID.randomUUID().toString(), id, text.trim(), System.currentTimeMillis(), files = files, threadId = state.value.thread)
     action("save:" + send.nonce) { savePending(send); deliver(send) }
 }
 
@@ -136,11 +136,7 @@ internal suspend fun AppStore.deliver(send: PendingSend) {
             ids.add(id)
             withContext(Dispatchers.IO) { attachments.cache(id, file) }
         }
-        val result = connection.call("send", buildJsonObject {
-            put("botId", send.botId); put("text", send.text); put("clientNonce", send.nonce)
-            send.threadId?.let { put("threadId", it) }
-            if (ids.isNotEmpty()) put("attachments", JsonArray(ids.map(::JsonPrimitive)))
-        })
+        val result = connection.call("send", send.body(ids))
         val entry = Entry.decode(result.jsonObject.getValue("entry").jsonObject)
         withContext(Dispatchers.IO) { requireNotNull(database).receive(listOf(entry)) }
         refresh()

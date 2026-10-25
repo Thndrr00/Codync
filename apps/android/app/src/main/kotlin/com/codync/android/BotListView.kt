@@ -376,7 +376,7 @@ import kotlinx.serialization.json.putJsonArray
                 MessageSearchHitsSection(
                     searchState = searchState,
                     bots = state.bots,
-                    onOpenHit = { hit -> store.openBot(hit.botId, hit.threadId) },
+                    onOpenHit = { hit -> store.openBot(hit.botId, hit.threadId?.takeIf { it.startsWith("doc:") }) },
                 )
             }
         }

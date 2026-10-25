@@ -162,10 +162,10 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         contextScope = CoroutineScope(contextJob + Dispatchers.Main.immediate)
     }
 
-    /** One session change at a time; `queue` runs after the current one instead of being dropped (a switch asked for mid-change). */
-    internal fun sessionAction(queue: Boolean = false, operation: suspend () -> Unit) {
+    /** One session change at a time; `wait` runs after the current one instead of being dropped (a switch asked for mid-change). */
+    internal fun sessionAction(wait: Boolean = false, operation: suspend () -> Unit) {
         val previous = sessionJob?.takeIf { it.isActive }
-        if (previous != null && !queue) return
+        if (previous != null && !wait) return
         sessionJob = viewModelScope.launch {
             previous?.join()
             mutableState.update { it.copy(busy = it.busy + "session", error = null) }

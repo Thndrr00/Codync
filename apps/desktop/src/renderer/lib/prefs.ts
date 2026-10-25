@@ -1,3 +1,4 @@
+import type { AppLanguage } from './l10n'
 import { useSyncExternalStore } from 'react'
 import type { StarAsk } from './star-ask'
 
@@ -57,7 +58,6 @@ export const prefs = {
   sidebarCompact: pref('sidebarCompact', false),
   sidebarWidth: pref('desktopSidebarWidth', 266),
   detailsPanelWidth: pref('detailsPanelWidth', 292),
-  repliesPanelWidth: pref('repliesPanelWidth', 420),
   hiddenComputers: pref('hiddenComputers', ''),
   computerOrder: pref<string[]>('computerOrder', []),
   collapsedComputers: pref<string[]>('collapsedComputerSections', []),
@@ -66,6 +66,7 @@ export const prefs = {
   onboardingDone: pref('macAccountOnboardingCompleted', false),
   computerAccessSetup: pref<'ready' | 'later' | null>('computerAccessSetup', null),
   starAsk: pref<StarAsk>('githubStarAsk', { kind: 'never' }),
+  appLanguage: pref<AppLanguage>('appLanguage', 'system'),
 }
 
 /** The Mac preference supplies one scale for conversation text and app chrome. */

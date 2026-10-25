@@ -41,7 +41,7 @@ The existing host already runs without Electron or an Android client. Use:
 node tools/run-headless.mjs --token-file PATH --port PORT --bot ID --prompt-file PATH
 ```
 
-Optional: `--thread ROOT_ID`, `--timeout SECONDS` (600 by default). Credentials
+Optional: `--reply-to ENTRY_ID` (the message it answers, quoted), `--timeout SECONDS` (600 by default). Credentials
 come from a file. The runner sends once and polls read-only; send errors report
 the nonce and an unknown outcome. It never automatically resends, cancels a task,
 follows redirects, installs or compiles a host.

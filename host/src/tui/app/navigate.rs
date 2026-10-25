@@ -136,16 +136,21 @@ impl App {
         }
     }
 
-    /// `r`: moves the pick through the main chat's messages (none picked: the newest).
+    /// `r`: moves the pick through the chat's messages (none picked: the newest).
     pub(super) fn step_pick(&mut self, d: isize) {
         let Some(id) = self.selected.clone() else { return };
         // A run of exchanges with one peer is one pick: its first entry.
         let lane = self.lane(&id);
-        let picks: Vec<(String, bool)> = group(&id, &lane, self.thread.is_none())
+        let picks: Vec<(String, bool)> = group(&id, &lane)
             .into_iter()
             .filter_map(|item| match item {
                 Item::Entry(e)
-                    if e.is_message() || e.is_bot_message() || e.unfolds() || e.data["source"] == "voice_receipt" =>
+                    if e.is_message()
+                        || e.is_bot_message()
+                        || e.unfolds()
+                        || e.retries()
+                        || e.adds_fallback()
+                        || e.data["source"] == "voice_receipt" =>
                 {
                     Some((e.id.clone(), e.is_message()))
                 }
@@ -173,6 +178,12 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.step_pick(1),
             KeyCode::Char('k') | KeyCode::Up => self.step_pick(-1),
             KeyCode::Char('C') => self.open_connection(),
+            KeyCode::Char('F') => self.retry_failed_run(),
+            KeyCode::Char('A') if picked.as_ref().is_some_and(|e| self.fallback_owner(&id, e).is_some()) => {
+                if let Some(e) = picked {
+                    self.add_fallback(&id, &e);
+                }
+            }
             KeyCode::Enter if picked.as_ref().is_some_and(super::Entry::is_bot_message) => {
                 if let Some(e) = picked {
                     self.open_bot_chat(&e.id);
@@ -181,9 +192,7 @@ impl App {
             KeyCode::Char('c') if picked.as_ref().is_some_and(super::Entry::is_bot_message) => {
                 if let Some(e) = picked {
                     let lane = self.lane(&id);
-                    let grouped = group(&id, &lane, self.thread.is_none())
-                        .iter()
-                        .any(|i| matches!(i, Item::Group(g) if g.first.id == e.id));
+                    let grouped = group(&id, &lane).iter().any(|i| matches!(i, Item::Group(g) if g.first.id == e.id));
                     if grouped {
                         self.flash("Bot conversations are read-only");
                     } else {
@@ -221,16 +230,15 @@ impl App {
                     self.call("keepConversation", json!({"entryId": e.id}), After::Answered(e.id.clone()));
                 }
             }
-            KeyCode::Enter | KeyCode::Char('r') if self.thread.is_some() => {
-                self.pick = None;
-                self.start_typing();
-            }
-            KeyCode::Enter | KeyCode::Char('r') => {
-                if let Some(root) = self.pick.take() {
-                    self.open_thread(root);
+            KeyCode::Enter | KeyCode::Char('r') => match picked {
+                Some(e) if !e.takes_reply() => self.flash("Only messages take replies"),
+                Some(e) => {
+                    self.reply = Some(e.id);
+                    self.pick = None;
                     self.start_typing();
                 }
-            }
+                None => self.pick = None,
+            },
             KeyCode::Char(c @ '1'..='6') => {
                 if let Some(e) = picked {
                     self.react(&e.id, (c as usize) - ('1' as usize));
@@ -251,21 +259,6 @@ impl App {
             _ => return false,
         }
         true
-    }
-
-    pub(in crate::tui) fn open_thread(&mut self, root: String) {
-        let Some(id) = self.selected.clone() else { return };
-        self.pick = None;
-        self.chat_scroll = 0;
-        self.trace_turn = None;
-        self.trace_scroll = 0;
-        self.chat_page = true;
-        self.focus = Focus::Chat;
-        if self.trace == TraceMode::Full {
-            self.trace = TraceMode::Off;
-        }
-        self.call("thread", json!({"botId": id, "rootId": root}), After::Thread);
-        self.thread = Some(root);
     }
 
     /// Moves the selected bot one place up (-1) or down (+1), staying among bots with its pin

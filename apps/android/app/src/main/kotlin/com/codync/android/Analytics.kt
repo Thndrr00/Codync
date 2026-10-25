@@ -3,9 +3,12 @@ package com.codync.android
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.UriHandler
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
@@ -22,18 +25,18 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.JsonArray
-import com.codync.android.core.WireJson
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** What the phone reports (iOS `AnalyticsEvent`). Bot and message events come from the computer's host instead. */
-internal enum class AnalyticsEvent(val wire: String) {
-    AppOpened("app_opened"), OnboardingCompleted("onboarding_completed"), ComputerPaired("computer_paired"),
-    SignedIn("signed_in"), SignedOut("signed_out"), VoiceCallStarted("voice_call_started"),
-    OnboardingStepViewed("onboarding_step_viewed"), OnboardingAbandoned("onboarding_abandoned"),
+/** Reports a screen, sheet or onboarding step each time it appears. */
+@Composable internal fun AnalyticsOnAppear(event: AnalyticsEvent) = LaunchedEffect(event) { Analytics.capture(event) }
+
+/** Opens an outbound link, counted by what it leads to (desktop `openLink`). */
+internal fun UriHandler.open(url: String, link: OutboundLink) {
+    openUri(url)
+    Analytics.capture(AnalyticsEvent.LinkOpened(link))
 }
 
 /**
@@ -54,50 +57,30 @@ internal object Analytics {
     val enabled: Boolean get() = sharing
     private var prefs: SharedPreferences? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val http by lazy { OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).callTimeout(15, java.util.concurrent.TimeUnit.SECONDS).build() }
+    private val http by lazy { OkHttpClient() }
     private val pending = mutableListOf<JsonObject>()
     private var timer: Job? = null
     private var sending = false
     private var foreground = false
-    private val consentLock = Any()
-    @Volatile private var consentGeneration = 0
-    private var consentAllowed = true
-    private var activeCall: okhttp3.Call? = null
+    private val session = AnalyticsSession()
 
     fun start(context: Context) {
         if (prefs != null) return
         val stored = context.getSharedPreferences("codync-analytics", Context.MODE_PRIVATE)
         prefs = stored
         sharing = stored.getBoolean("enabled", true)
-        synchronized(consentLock) { consentAllowed = sharing }
-        if (sharing) {
-            val recovered = runCatching { WireJson.parseToJsonElement(stored.getString("pending", "[]").orEmpty()) as? JsonArray }.getOrNull()
-            pending.addAll(recovered.orEmpty().filterIsInstance<JsonObject>().takeLast(MAX_PENDING))
-            if (pending.isNotEmpty()) scheduleFlush()
-        } else stored.edit().remove("pending").commit()
-        OnboardingTelemetry.start(stored)
         CrashReports.start(context)
     }
 
     /** Turning it off drops everything not yet sent. */
     fun setEnabled(on: Boolean) {
-        synchronized(consentLock) {
-            consentGeneration++
-            consentAllowed = on
-            activeCall?.cancel()
-            activeCall = null
-        }
         sharing = on
         prefs?.edit()?.putBoolean("enabled", on)?.apply()
         if (on) return flush()
         pending.clear(); timer?.cancel(); timer = null
-        persist()
-        OnboardingTelemetry.clear()
     }
 
-    /** `properties` are public names, never content. */
-    fun capture(event: AnalyticsEvent, properties: Map<String, String> = emptyMap()) =
-        record(event.wire, properties.mapValues { JsonPrimitive(it.value) })
+    fun capture(event: AnalyticsEvent) = record(event.name, event.properties)
 
     /** One event for the signed-in account (merging the install ID into it once), else the install ID. */
     fun record(name: String, extra: Map<String, JsonElement>) {
@@ -114,34 +97,45 @@ internal object Analytics {
         } else enqueue(name, installId(stored), extra)
     }
 
-    /** `app_opened` once per trip to the foreground. */
-    fun becameActive() { if (!foreground) { foreground = true; capture(AnalyticsEvent.AppOpened); OnboardingTelemetry.foreground() } }
+    /** `onboarding_completed`, once per phone until Start over (iOS: its `onboardingCompleted` default), whichever account. */
+    fun completeOnboarding(via: OnboardingVia) {
+        val stored = prefs ?: return
+        if (stored.getBoolean("onboarded", false)) return
+        stored.edit().putBoolean("onboarded", true).apply()
+        capture(AnalyticsEvent.OnboardingCompleted(via))
+    }
 
-    fun enteredBackground() { if (!foreground) return; foreground = false; OnboardingTelemetry.abandon(); flush() }
+    /** Start over: the next setup is onboarding again. */
+    fun forgetOnboarding() { prefs?.edit()?.remove("onboarded")?.apply() }
+
+    /** `app_opened` once per trip to the foreground. */
+    fun becameActive(context: Context) { if (!foreground) { foreground = true; capture(AnalyticsEvent.AppOpened.of(context)) } }
+
+    fun enteredBackground() { foreground = false; flush() }
 
     fun flush() {
         timer?.cancel(); timer = null
         if (sending || pending.isEmpty() || !enabled) return
-        if (!persist()) return
-        val batch = pending.take(BATCH_SIZE)
-        val generation = consentGeneration
+        val batch = pending.toList()
         val body = buildJsonObject { put("api_key", API_KEY); put("batch", buildJsonArray { batch.forEach { add(it) } }) }.toString()
         sending = true
         scope.launch {
-            val ok = withContext(Dispatchers.IO) { post(body, generation) }
+            val ok = withContext(Dispatchers.IO) { post(body) }
             sending = false
-            if (ok && generation == consentGeneration && enabled) { pending.removeAll(batch.toSet()); persist() }
-            if (enabled && pending.isNotEmpty()) scheduleFlush()
+            if (ok) pending.removeAll(batch.toSet())
+            if (pending.isNotEmpty()) scheduleFlush()
         }
     }
 
     private fun installId(stored: SharedPreferences): String = stored.getString("install", null)
         ?: UUID.randomUUID().toString().also { stored.edit().putString("install", it).apply() }
 
+    /** The current `$session_id`; a crash written down on another thread takes it along to the next launch. */
+    fun sessionId(): String = session.id(System.currentTimeMillis())
+
     private fun enqueue(name: String, distinctId: String, extra: Map<String, JsonElement>) {
-        pending += event(name, distinctId, Instant.now().toString(), extra)
+        pending += event(name, distinctId, Instant.now().toString(), mapOf("\$session_id" to JsonPrimitive(sessionId())) + extra)
         if (pending.size > MAX_PENDING) repeat(pending.size - MAX_PENDING) { pending.removeAt(0) }
-        if (!persist()) return
         if (pending.size >= BATCH_SIZE) flush() else scheduleFlush()
     }
 
@@ -150,24 +144,11 @@ internal object Analytics {
         timer = scope.launch { delay(FLUSH_DELAY); timer = null; flush() }
     }
 
-    private fun persist(): Boolean {
-        val saved = prefs?.edit()?.putString("pending", JsonArray(pending).toString())?.commit() == true
-        if (!saved) android.util.Log.w("CodyncAnalytics", "Could not persist analytics queue")
-        return saved
-    }
-
     /** Sent (or rejected for good) → true; network errors, 429 and 5xx → false, retried next flush. */
-    private fun post(body: String, generation: Int): Boolean {
-        val call = http.newCall(Request.Builder().url(ENDPOINT).post(body.toRequestBody("application/json".toMediaType())).build())
-        synchronized(consentLock) {
-            if (!consentAllowed || generation != consentGeneration) return false
-            activeCall = call
-        }
-        return try {
-            call.execute().use { it.code in 200..299 || (it.code in 400..499 && it.code != 408 && it.code != 429) }
-        } catch (_: java.io.IOException) { false }
-        finally { synchronized(consentLock) { if (activeCall === call) activeCall = null } }
-    }
+    private fun post(body: String): Boolean = try {
+        http.newCall(Request.Builder().url(ENDPOINT).post(body.toRequestBody("application/json".toMediaType())).build()).execute()
+            .use { it.code < 500 && it.code != 429 }
+    } catch (_: java.io.IOException) { false }
 
     /** One event in PostHog's `/batch/` body, with the properties every event carries. */
     internal fun event(name: String, distinctId: String, timestamp: String, extra: Map<String, JsonElement>): JsonObject = buildJsonObject {

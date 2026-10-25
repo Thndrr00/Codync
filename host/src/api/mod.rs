@@ -69,8 +69,8 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
     if method == "setSlackChannel" && result.is_err() {
         crate::analytics::setup::failed(hub, true);
     }
-    if result.is_ok()
-        && let Some((event, properties)) = observed
+    if let (Ok(answer), Some((event, properties))) = (&result, observed)
+        && let Some(properties) = crate::analytics::answered(event, properties, answer)
     {
         crate::analytics::capture(hub, event, properties);
     }

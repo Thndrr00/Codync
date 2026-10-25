@@ -1,7 +1,7 @@
-//! Bot memory ([design](../../../../docs/design/bot-memory.md)): it records the person, not the work. The rules
-//! (store, checks, opening, dreaming) live in the `codync_mem` crate; this module runs them in the host: the
-//! session opening, the bot's memory tools, the client API, the chat lines that show and undo a bot's writes,
-//! dreaming, and the one-time move from the old Engram memory.
+//! Bot memory ([design](../../../../docs/design/bot-memory.md)): it records the person, not the work, in Markdown
+//! files the bot keeps itself. The rules (checks, who wrote what, the opening, dreaming) live in the `codync_mem`
+//! crate; this module runs them in the host: the files on disk, the session opening, the bot's memory tools, the
+//! apps' read-only view, dreaming, and the one-time moves from the memory Codync kept before.
 
 mod api;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
@@ -9,12 +9,11 @@ pub mod budget;
 mod dates;
 mod dream;
 mod file_api;
-mod file_notices;
 mod file_tools;
 pub mod files;
 mod import;
-mod notices;
 mod tools;
+pub mod turns;
 
 pub use api::call;
 pub use dates::ymd;
@@ -31,16 +30,16 @@ pub fn shared(cfg: &BotConfig) -> bool {
     cfg.shared_memory.unwrap_or_else(|| crate::agent::workspace::is_managed(cfg))
 }
 
-/// The memory section of a bot's instructions: its entries, then the index of its long-form files.
+/// The memory section of a bot's instructions: each `MEMORY.md` it sees, then the index of its notes.
 pub fn opening(store: &Store, cfg: &BotConfig) -> String {
-    let entries = match store.memory_read(|c| codync_mem::opening::load(c, &cfg.id, shared(cfg))) {
-        Ok(opening) => opening.render(),
+    let memory = match store.memory_read(|c| codync_mem::opening::load(c, &cfg.id, shared(cfg))) {
+        Ok(opening) => opening.render(|bot| files::folder(bot).display().to_string()),
         Err(error) => {
             tracing::warn!(bot = %cfg.id, error = format!("{error:#}"), "couldn't read memory");
             String::new()
         }
     };
-    format!("{entries}\n\n{}", files::index(store, cfg))
+    format!("{memory}\n\n{}", files::index(store, cfg))
 }
 
 /// After memory changed in `bot`'s own layer, or in the shared one (`None`): the apps fetch it again, and every
@@ -96,18 +95,50 @@ fn opening_key(bot: &str, session: &str) -> String {
     format!("memory.opening.{bot}.{session}")
 }
 
-/// When memory changed since this session last heard: the whole memory as it is now, to put before the next
-/// message, and the revision to acknowledge once it was delivered.
+/// The changes a session made that were put back, and why: its next message hears them.
+fn put_back_key(bot: &str, session: &str) -> String {
+    format!("memory.putback.{bot}.{session}")
+}
+
+/// A bot's change to a memory file, made in `session`, was put back (it broke a rule, and no tool call was there to
+/// refuse it): that session hears why on its next message, so it can do it right. A routine run's session, never
+/// resumed once the run ends, hears nothing; another session didn't make the change, so it isn't told.
+pub fn put_back(store: &Store, bot: &str, session: &str, file: &str, why: &str) {
+    let key = put_back_key(bot, session);
+    let mut notes = put_backs(store, &key);
+    notes.push(format!("Your change to {file} was put back: {why}"));
+    let value = serde_json::to_string(&notes).expect("notes are plain strings");
+    if let Err(error) = store.kv_set(&key, &value) {
+        tracing::warn!(bot, error = format!("{error:#}"), "couldn't keep a put-back note for the bot");
+    }
+}
+
+fn put_backs(store: &Store, key: &str) -> Vec<String> {
+    store.kv_get(key).and_then(|v| serde_json::from_str(&v).ok()).unwrap_or_default()
+}
+
+/// Before the session's next message: its changes that were put back, and, when memory changed since the session
+/// last heard, the whole memory as it is now. The revision is the one to acknowledge once delivered.
 pub fn change_notice(store: &Store, cfg: &BotConfig, session: &str) -> Option<(String, String)> {
     let revision = current_revision(store, &cfg.id);
-    if revision.is_empty() || store.kv_get(&announced_key(&cfg.id, session)).unwrap_or_default() == revision {
+    let changed =
+        !revision.is_empty() && store.kv_get(&announced_key(&cfg.id, session)).unwrap_or_default() != revision;
+    let key = put_back_key(&cfg.id, session);
+    let put_back = put_backs(store, &key);
+    if !changed && put_back.is_empty() {
         return None;
     }
-    let notice = format!(
-        "<memory_update>\nYour memory changed. This is all of it now and replaces any earlier memory in this conversation.\n{}\n</memory_update>",
-        opening(store, cfg)
-    );
-    Some((notice, revision))
+    if !put_back.is_empty() {
+        let _ = store.kv_delete(&key);
+    }
+    let mut parts = put_back;
+    if changed {
+        parts.push(format!(
+            "Your memory changed. This is all of it now and replaces any earlier memory in this conversation.\n{}",
+            opening(store, cfg)
+        ));
+    }
+    Some((format!("<memory_update>\n{}\n</memory_update>", parts.join("\n\n")), revision))
 }
 
 /// The session heard memory up to `revision`, from a notice.
@@ -178,5 +209,20 @@ mod tests {
         changes("10");
         heard_own_write(&store, &cfg.id, "s1", "9").unwrap();
         assert!(change_notice(&store, &cfg, "s1").is_some());
+    }
+
+    #[test]
+    fn a_put_back_is_told_to_the_session_that_made_the_change() {
+        let store =
+            Store::open(&std::env::temp_dir().join(format!("codync-memory-{}.db", uuid::Uuid::new_v4()))).unwrap();
+        let cfg: BotConfig = serde_json::from_value(serde_json::json!({
+            "id": "5f0c7a52-0000-4000-8000-000000000003", "name": "Fixer", "backend": "claude", "cwd": "/tmp",
+        }))
+        .unwrap();
+        put_back(&store, &cfg.id, "routine", "MEMORY.md", "only the user may take a line out");
+        assert!(change_notice(&store, &cfg, "chat").is_none(), "another session didn't make it");
+        let (notice, _) = change_notice(&store, &cfg, "routine").expect("the routine's session hears it");
+        assert!(notice.contains("Your change to MEMORY.md was put back"), "{notice}");
+        assert!(change_notice(&store, &cfg, "routine").is_none(), "told once");
     }
 }

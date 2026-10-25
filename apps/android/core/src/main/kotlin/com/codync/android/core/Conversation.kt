@@ -2,8 +2,12 @@ package com.codync.android.core
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -17,13 +21,14 @@ data class Entry(
     val id: String,
     val seq: Long,
     val botId: String,
-    val threadId: String? = null,
     val rev: Long,
     val kind: String,
     val turn: Long = 0,
     val data: JsonObject = JsonObject(emptyMap()),
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
+    /** A document's side conversation (`doc:<id>`) it's in; null in the chat itself. */
+    val threadId: String? = null,
 ) {
     val text: String get() = data.text("text").orEmpty()
     val clientNonce: String? get() = data.text("clientNonce")
@@ -36,6 +41,16 @@ data class Entry(
         kind == "notice" && "memory" !in data && "memoryFile" !in data && "compaction" !in data &&
             (data["handoff"] as? JsonObject)?.text("status") != "kept" ||
         kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true
+    /** A message the user can quote in a reply: theirs, or a final reply (a group member's too). */
+    val isReplyable: Boolean get() = kind == "user" || kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true
+    /** The message this one replies to, as the computer quoted it. */
+    val replyTo: ReplyQuote? get() = (data["replyTo"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ReplyQuote>(it) }.getOrNull() }
+    /** What the composer shows of the message it replies to: its text, or the names of its files. */
+    val quotePreview: String get() = text.ifEmpty {
+        (files.map { it.name } + (data["attachments"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.text("name") }).joinToString(", ")
+    }
+    /** How a reply quotes this message until the computer's own quote arrives. */
+    val replyQuote: ReplyQuote get() = ReplyQuote(id, if (kind == "user") "user" else data.text("author") ?: botId, quotePreview.take(500))
 
     companion object {
         fun decode(value: JsonObject): Entry {
@@ -45,7 +60,6 @@ data class Entry(
             }
             // Validate the fields used by rendering before the mirror can checkpoint them.
             val fields = WireJson.decodeFromJsonElement<EntryFields>(entry.data)
-            require(fields.thread == null || fields.thread.count >= 0)
             require(fields.callSeconds == null || fields.callSeconds >= 0)
             require(fields.options.orEmpty().all { it.optionId.isNotBlank() })
             require(fields.attachments.orEmpty().all { it.size in 0..MAX_FILE_BYTES && it.name.isNotBlank() })
@@ -62,11 +76,13 @@ private data class EntryFields(
     val final: Boolean? = null, val title: String? = null, val command: String? = null,
     val detail: String? = null, val output: String? = null, val author: String? = null,
     val options: List<PermissionChoice>? = null, val reactions: List<String>? = null,
-    val thread: ReplySummary? = null, val attachments: List<Attachment>? = null, val files: List<SharedFile>? = null,
+    val attachments: List<Attachment>? = null, val files: List<SharedFile>? = null,
     val callSeconds: Long? = null,
 )
 @Serializable private data class PermissionChoice(val optionId: String, val name: String, val kind: String)
-@Serializable private data class ReplySummary(val count: Int)
+/** A quoted message: its entry, who wrote it (`user` or a bot id) and its text, cut short by the computer. */
+@Serializable data class ReplyQuote(val id: String = "", val author: String = "", val text: String = "")
+
 @Serializable data class Attachment(val id: String, val name: String, val size: Long) {
     val isImage: Boolean get() = name.substringAfterLast('.', "").lowercase() in listOf("png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp")
 }
@@ -91,13 +107,24 @@ enum class SendStatus { Sending, Waiting, Delivering, Failed }
 data class PendingSend(
     val nonce: String,
     val botId: String,
-    val threadId: String? = null,
     val text: String,
     val createdAt: Long,
     val status: SendStatus = SendStatus.Sending,
     val error: String? = null,
     val files: List<OutgoingFile> = emptyList(),
-)
+    /** The message it quotes (`send`'s `replyTo` is its id), shown on the bubble until the computer has it. */
+    val replyTo: ReplyQuote? = null,
+    /** A document's side conversation (`doc:<id>`) it goes to, instead of the chat. */
+    val threadId: String? = null,
+) {
+    /** The `send` request for it, with the ids of its uploaded files. */
+    fun body(attachments: List<String> = emptyList()): JsonObject = buildJsonObject {
+        put("botId", botId); put("text", text); put("clientNonce", nonce)
+        replyTo?.let { put("replyTo", it.id) }
+        threadId?.let { put("threadId", it) }
+        if (attachments.isNotEmpty()) put("attachments", JsonArray(attachments.map(::JsonPrimitive)))
+    }
+}
 
 @Serializable
 data class OutgoingFile(val path: String, val name: String, val size: Long)

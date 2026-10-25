@@ -237,9 +237,10 @@ impl App {
             } else {
                 sheet.items.get(sheet.cursor).and_then(|doc| doc["id"].as_str()).map(str::to_owned)
             };
-            if let Some(id) = id {
-                self.open_thread(format!("doc:{id}"));
-                return None;
+            if id.is_some() {
+                // ponytail: the terminal has no side-conversation view since threads left the chat.
+                sheet.status = "Discuss a document from the desktop or phone app.".into();
+                return Some(Overlay::Documents(sheet));
             }
         }
         if key.code == KeyCode::Char('s') && ctrl(key) {

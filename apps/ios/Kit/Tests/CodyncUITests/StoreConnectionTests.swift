@@ -8,7 +8,7 @@ import Testing
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.ready(.direct))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     store.setActive(true)
     defer { store.setActive(false) }
     #expect(await until { await fake.subscribed })
@@ -17,57 +17,31 @@ import Testing
     await fake.emit(botEvent("b1", name: "Bot", rev: 1))
     #expect(await until { store.bots["b1"] != nil })
     let token = UUID()
-    store.setReading(token, botId: "b1", thread: nil, active: true)
+    store.setReading(token, botId: "b1", active: true)
     #expect(await until { await fake.readReceipts.count == 1 })
     // Streaming and final content have the same ID. The final update must be read
     // even though the roster has not yet reported any unread messages.
     await fake.emit(#"{"type":"entry","entry":{"id":"answer","seq":1,"botId":"b1","rev":2,"kind":"agent","turn":1,"data":{"text":"draft","final":false},"createdAt":1,"updatedAt":1}}"#)
-    #expect(await until { store.allEntries("b1").last?.rev == 2 })
+    #expect(await until { store.entries["b1"]?.last?.rev == 2 })
     await fake.emit(#"{"type":"entry","entry":{"id":"answer","seq":1,"botId":"b1","rev":3,"kind":"agent","turn":1,"data":{"text":"done","final":true},"createdAt":1,"updatedAt":2}}"#)
     #expect(await until { await fake.readReceipts.count == 2 })
     await fake.emit(#"{"type":"bot","bot":{"id":"b1","name":"Bot","rev":4,"unread":1}}"#)
     #expect(await until { await fake.readReceipts.count == 3 })
-    store.setReading(token, botId: "b1", thread: nil, active: false)
+    store.setReading(token, botId: "b1", active: false)
     await fake.emit(#"{"type":"bot","bot":{"id":"b1","name":"Bot","rev":5,"unread":2}}"#)
     #expect(await until { store.bots["b1"]?.rev == 5 })
     try await Task.sleep(for: .milliseconds(50))
     #expect(await fake.readReceipts.count == 3)
     // Returning to the foreground acknowledges without needing navigation.
-    store.setReading(token, botId: "b1", thread: nil, active: true)
+    store.setReading(token, botId: "b1", active: true)
     #expect(await until { await fake.readReceipts.count == 4 })
-}
-
-@MainActor @Test func readingOneThreadDoesNotAcknowledgeOtherThreads() async throws {
-    let (storage, suite) = context()
-    defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-    let fake = FakeRemote(.ready(.direct))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
-    store.setActive(true)
-    defer { store.setActive(false) }
-    #expect(await until { await fake.subscribed })
-    await fake.emit(botEvent("b1", name: "Bot", rev: 1))
-    #expect(await until { store.connection == .online })
-    let token = UUID()
-    store.setReading(token, botId: "b1", thread: "root-a", active: true)
-    #expect(await until { await fake.readReceipts.count == 1 })
-    await fake.emit(#"{"type":"entry","entry":{"id":"other","seq":1,"botId":"b1","threadId":"root-b","rev":2,"kind":"agent","turn":1,"data":{"text":"done","final":true},"createdAt":1,"updatedAt":1}}"#)
-    #expect(await until { store.allEntries("b1").last?.id == "other" })
-    try await Task.sleep(for: .milliseconds(50))
-    #expect(await fake.readReceipts.count == 1)
-    await fake.emit(#"{"type":"entry","entry":{"id":"own","seq":2,"botId":"b1","threadId":"root-a","rev":3,"kind":"agent","turn":1,"data":{"text":"done","final":true},"createdAt":1,"updatedAt":1}}"#)
-    #expect(await until { await fake.readReceipts.count == 2 })
-    for receipt in await fake.readReceipts {
-        let body = try #require(JSONSerialization.jsonObject(with: receipt) as? [String: Any])
-        #expect(body["threadId"] as? String == "root-a")
-        #expect(body["all"] as? Bool == false)
-    }
 }
 
 @MainActor @Test func initialOfflineReportWaitsForReconnect() async throws {
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.hostOffline(lastSeen: nil))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     defer { store.retire() }
     store.setActive(true)
     try await Task.sleep(for: .milliseconds(200))
@@ -85,7 +59,7 @@ import Testing
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.failed("Can't reach"))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     defer { store.retire() }
     store.setActive(true)
     try await Task.sleep(for: .milliseconds(200))
@@ -98,14 +72,14 @@ import Testing
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.ready(.direct))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     defer { store.retire() }
     store.setActive(true)
     #expect(await until { await fake.subscribed })
     await fake.emit(botEvent("b1", name: "Bot", rev: 1))
     #expect(await until { store.connection == .online })
     await fake.setReadFailure(true)
-    store.setReading(UUID(), botId: "b1", thread: nil, active: true)
+    store.setReading(UUID(), botId: "b1", active: true)
     #expect(await until { await fake.readAttempts == 1 })
     try await Task.sleep(for: .milliseconds(50))
     #expect(store.lastError == nil)
@@ -126,7 +100,7 @@ import Testing
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.ready(.direct))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     defer { store.retire() }
     store.setActive(true)
     #expect(await until { await fake.subscribed })
@@ -150,7 +124,7 @@ import Testing
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.ready(.direct))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     defer { store.retire() }
     store.setActive(true)
     #expect(await until { await fake.subscribed })
@@ -174,7 +148,7 @@ import Testing
     let down = FakeRemote(.failed("Can't reach"))
     let up = FakeRemote(.ready(.relay))
     var made = 0
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) {
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in
         made += 1
         return made == 1 ? down : up
     }
@@ -205,7 +179,7 @@ import Testing
     let release = AsyncStream<Void>.makeStream()
     defer { release.continuation.finish(); requested.continuation.finish() }
     var made = 0
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) {
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in
         made += 1
         if made == 1 { return down }
         requested.continuation.yield(true)
@@ -247,13 +221,13 @@ import Testing
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.ready(.direct))
-    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { fake }
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
     defer { store.retire() }
     store.setActive(true)
     #expect(await until { await fake.subscribed })
     await fake.emit(botEvent("b1", name: "Bot", rev: 1))
     #expect(await until { store.connection == .online })
-    let card = Entry(id: "p1", seq: 1, botId: "b1", threadId: nil, rev: 1, kind: "permission", turn: 1,
+    let card = Entry(id: "p1", seq: 1, botId: "b1", rev: 1, kind: "permission", turn: 1,
                      data: EntryData(status: "pending"), createdAt: 1, updatedAt: 1)
     store.respond(card, option: "allow")
     store.respond(card, option: "deny")

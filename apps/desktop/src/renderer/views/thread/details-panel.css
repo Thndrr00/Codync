@@ -4,6 +4,8 @@
   position: relative;
   height: 100%;
   background: var(--background);
+  /* Its size sets how much of a long memory shows (memory.css). */
+  container: details / size;
 }
 
 /* The top band moves the window, like the chat's top chrome; the corner buttons stay clickable. */

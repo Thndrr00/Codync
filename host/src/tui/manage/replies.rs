@@ -34,9 +34,6 @@ impl App {
                     if let Overlay::Memory(m) = o
                         && m.bot == bot
                     {
-                        if let MemoryMode::Edit { .. } = m.mode {
-                            m.mode = MemoryMode::Browse;
-                        }
                         m.busy = false;
                     }
                 }
@@ -48,9 +45,7 @@ impl App {
                         && m.bot == bot
                         && let MemoryMode::File { detail, .. } = &mut m.mode
                     {
-                        let versions = v["versions"].as_array().map_or(0, Vec::len);
                         *detail = Some(v.clone());
-                        m.cursor = m.cursor.min(versions.saturating_sub(1));
                         m.busy = false;
                     }
                 }
@@ -85,6 +80,7 @@ impl App {
                             let items = v["routines"].as_array().cloned().unwrap_or_default();
                             l.cursor = l.cursor.min(items.len().saturating_sub(1));
                             l.items = Some(items);
+                            l.runs = v["runs"].as_array().cloned().unwrap_or_default();
                         }
                     }
                 } else {

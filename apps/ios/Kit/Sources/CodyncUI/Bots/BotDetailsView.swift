@@ -12,6 +12,8 @@ struct DetailsRequest: Identifiable {
     var tab: DetailsTab = .details
     /// A routine to open in its editor (Details page).
     var routineId: String?
+    /// Another bot's details than the chat's: a group member's, from its notice.
+    var botId: String?
 }
 
 /// A bot's details (Grok Bot's): who it is, then its details, memory and settings. Settings save
@@ -51,7 +53,12 @@ struct BotDetailsView: View {
         .scrollDismissesKeyboard(.interactively)
         .background(Palette.background)
         .overlay(alignment: .topTrailing) { actions }
+        .tracked(.screenViewed(.botDetails))
         .task(id: botId) { draft = bot.map(BotDraft.init) }
+        // A change made elsewhere (a bot that manages the team, another device) replaces each field not edited here.
+        .onChange(of: bot.map(BotDraft.init)) { base, fresh in
+            if let base, let fresh, base.id == fresh.id { draft = draft?.rebased(from: base, onto: fresh) }
+        }
         .onChange(of: draft) { _, draft in autosave(draft) }
         .codyncSheet(item: $template) { BotTemplateView(draft: $0.draft) }
     }
@@ -93,7 +100,7 @@ struct BotDetailsView: View {
                 .foregroundStyle(Palette.text)
                 .multilineTextAlignment(.center)
             HStack(spacing: 5) {
-                AgentIcon(registry: model.hello?.backends.first { $0.id == bot.backend }?.registry ?? bot.backend, size: 13)
+                AgentIcon(registry: model.agentRegistry(bot.backend), size: 13)
                 Text(bot.model.map { "\(model.backendName(bot.backend)) · \($0)" } ?? model.backendName(bot.backend))
             }
             .font(.footnote)
@@ -112,7 +119,7 @@ struct BotDetailsView: View {
                 }
                 if let screen = model.screen, let bot {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Computer")
+                        Text(L10n.tr("Computer"))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Palette.text)
                             .padding(.leading, 2)

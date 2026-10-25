@@ -11,6 +11,8 @@ pub mod config;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod coordinator;
 pub mod envelope;
+pub mod fallback;
+pub mod new_bot;
 pub mod node;
 pub mod own_memory;
 pub mod registry;

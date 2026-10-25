@@ -3,16 +3,21 @@ import { ChoicePicker, IconButton, Pill, Spinner } from '../../components/Contro
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import type { AgentModelsState } from './agent-models'
+import { useTr } from '../../lib/use-language'
+
 
 /** The bot's model and its options, from the list `useAgentModels` loaded for its agent. */
-export function AgentModelPicker({ backend, models, selection, onChange, options: chosen, onOptionsChange }: {
+export function AgentModelPicker({ backend, models, selection, onChange, options: chosen, onOptionsChange, sessionNote = true }: {
   backend: string
   models: AgentModelsState
   selection: string | null | undefined
   onChange: (model: string | null) => void
   options: Record<string, string>
   onOptionsChange: (options: Record<string, string>) => void
+  /** Says that a change starts a new session: true for a bot's own model, not for one it hasn't used yet. */
+  sessionNote?: boolean
 }) {
+  const tr = useTr()
   const { catalog, loading, failure } = models
   const custom = backend === 'custom'
   const [search, setSearch] = useState('')
@@ -50,7 +55,7 @@ export function AgentModelPicker({ backend, models, selection, onChange, options
   return (
     <VStack gap={6}>
       <HStack gap={8}>
-        <Text tone="text" className="model-picker-label">Model</Text>
+        <Text tone="text" className="model-picker-label">{tr(`Model`)}</Text>
         <Spacer />
         <HStack gap={4} shrink>
           {custom ? null : (
@@ -91,9 +96,9 @@ export function AgentModelPicker({ backend, models, selection, onChange, options
       {!custom && !loading && failure ? (
         <Text size="caption" tone="attention">{failure}</Text>
       ) : !custom && !loading && empty ? (
-        <Text size="caption" tone="secondary">This agent doesn't advertise a model list. Leave Default or enter a model ID.</Text>
+        <Text size="caption" tone="secondary">{tr(`This agent doesn't advertise a model list. Leave Default or enter a model ID.`)}</Text>
       ) : null}
-      <Text size="caption" tone="secondary">Changing the model starts a new agent session. Chat history is kept.</Text>
+      {sessionNote ? <Text size="caption" tone="secondary">{tr(`Changing the model starts a new agent session. Chat history is kept.`)}</Text> : null}
     </VStack>
   )
 }

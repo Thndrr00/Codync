@@ -29,11 +29,14 @@
   text-align: center;
 }
 
-/* Installed ⇄ page: slides like `.move(edge:)` + opacity. */
+/* Installed ⇄ page: slides like `.move(edge:)` + opacity. The base page sizes the stack (so a
+   card that fits its content fits it) and the page on top takes the same box. */
 .market-stack {
   position: relative;
   height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--background);
 }
 .market-layer {
@@ -42,6 +45,11 @@
   display: flex;
   flex-direction: column;
   transition: transform var(--layout), opacity var(--layout);
+}
+.market-layer:first-child {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .market-layer.off-leading {
   transform: translateX(-100%);
@@ -343,15 +351,6 @@
   color: var(--danger);
 }
 
-.composio-settings {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  font-size: var(--text-caption);
-  font-weight: 400;
-  color: var(--tertiary);
-}
 .composio-connected {
   color: var(--added);
 }
@@ -468,4 +467,8 @@ textarea.market-field {
   .market-page-content { padding: 28px 18px; }
   .item-grid { grid-template-columns: minmax(0, 1fr); }
   .agent-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* An agent's logo in a sheet's title row, on the same tile as a symbol. */
+.modal-header > .agent-tile {
+  background: var(--field);
 }

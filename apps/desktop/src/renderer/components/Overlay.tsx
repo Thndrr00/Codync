@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { reduceMotion } from '../lib/theme'
+import { afterExit } from '../lib/exit-delay'
+import { useTr } from '../lib/use-language'
 import { Icon } from './Icon'
 import { HStack, VStack } from './Stack'
 import { Text } from './Text'
@@ -26,8 +28,7 @@ export function usePresence(open: boolean, exitMs = 300, animateOnMount = true) 
       }
     }
     setShown(false)
-    const timer = setTimeout(() => setMounted(false), reduceMotion() ? 0 : exitMs)
-    return () => clearTimeout(timer)
+    return afterExit(exitMs, () => setMounted(false))
   }, [open, exitMs])
   return { mounted, shown }
 }
@@ -101,13 +102,15 @@ function useModalFocus(open: boolean, mounted: boolean, layer: RefObject<HTMLEle
 }
 
 /** The Mac modal (`.codyncSheet`): a centered card over a dim; the content sizes it. */
-export function Sheet({ open, onClose, width, height, dismissOnDim = false, children }: {
+export function Sheet({ open, onClose, width, height, maxHeight, dismissOnDim = false, children }: {
   open: boolean
   onClose: () => void
   /** A click outside the card closes it (transient pickers, not forms). */
   dismissOnDim?: boolean
   width?: number | string
   height?: number | string
+  /** Without `height` the card fits its content, up to this (and the window). */
+  maxHeight?: number | string
   children: ReactNode
 }) {
   const { mounted, shown } = usePresence(open)
@@ -123,7 +126,7 @@ export function Sheet({ open, onClose, width, height, dismissOnDim = false, chil
       <ModalTitleContext.Provider value={titleId}>
         <div ref={layer} className={`modal-card ${shown ? 'shown' : ''}`} role="dialog" aria-modal aria-labelledby={titleId}>
           <div className="modal-dim" onClick={dismissOnDim ? onClose : undefined} />
-          <div className="modal-content" data-modal-card tabIndex={-1} style={{ width, height }}>
+          <div className="modal-content" data-modal-card tabIndex={-1} style={{ width, height, maxHeight }}>
             {open ? children : last.current}
           </div>
         </div>
@@ -149,6 +152,7 @@ export function Dialog({ open, title, message, actions, cancel = 'Cancel', onClo
   onClose: () => void
 }) {
   const { mounted, shown } = usePresence(open, 120)
+  const tr = useTr()
   const last = useRef({ title, message, actions })
   const layer = useRef<HTMLDivElement>(null)
   const id = useId()
@@ -162,10 +166,16 @@ export function Dialog({ open, title, message, actions, cancel = 'Cancel', onClo
       <div className="dialog-dim" onClick={() => cancel !== null && onClose()} />
       <div className="dialog-card" data-modal-card tabIndex={-1}>
         <div className="dialog-text">
-          <Text as="h2" id={`${id}-title`} size="headline">{shownContent.title}</Text>
-          {shownContent.message ? <Text as="div" id={`${id}-message`} size="compactSecondary" tone="secondary">{shownContent.message}</Text> : null}
+          {/* Callers translate the sentence, then insert names. A second pass would also translate a device named "Done". */}
+          <Text as="h2" id={`${id}-title`} size="title3" weight="semibold">{shownContent.title}</Text>
+          {shownContent.message ? <Text as="div" id={`${id}-message`} size="body" tone="secondary">{shownContent.message}</Text> : null}
         </div>
         <div className="dialog-buttons">
+          {cancel !== null ? (
+            <button className="dialog-button" data-autofocus onClick={onClose}>
+              {tr(cancel)}
+            </button>
+          ) : null}
           {shownContent.actions.map((a) => (
             <button
               key={a.title}
@@ -175,14 +185,9 @@ export function Dialog({ open, title, message, actions, cancel = 'Cancel', onClo
                 a.action()
               }}
             >
-              {a.title}
+              {tr(a.title)}
             </button>
           ))}
-          {cancel !== null ? (
-            <button className="dialog-button" data-autofocus onClick={onClose}>
-              {cancel}
-            </button>
-          ) : null}
         </div>
       </div>
     </div>,
@@ -236,6 +241,7 @@ export function ReactionStrip({ pick, dismiss, size = 26 }: { pick: ReactionPick
 
 /** The floating panel of menu rows. */
 export function MenuPanel({ items, reactions, dismiss, maxHeight, search }: { items: MenuItem[]; reactions?: ReactionPick; dismiss: () => void; maxHeight?: number; search?: { value: string; onChange: (v: string) => void; placeholder?: string } }) {
+  const tr = useTr()
   const [highlight, setHighlight] = useState(-1)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -268,7 +274,7 @@ export function MenuPanel({ items, reactions, dismiss, maxHeight, search }: { it
             className={`menu-row ${item.destructive ? 'destructive' : ''} ${highlight === i ? 'highlight' : ''}`}
             role={item.selected === undefined ? 'menuitem' : 'menuitemradio'}
             aria-checked={item.selected}
-            title={item.title}
+            title={tr(item.title)}
             onMouseEnter={() => setHighlight(i)}
             onClick={() => {
               dismiss()
@@ -280,7 +286,7 @@ export function MenuPanel({ items, reactions, dismiss, maxHeight, search }: { it
                 {item.leading ?? (item.icon ? <Icon name={item.icon} size={12} /> : null)}
               </span>
             ) : null}
-            <span className="menu-title">{item.title}</span>
+            <span className="menu-title">{tr(item.title)}</span>
             {item.selected !== undefined ? (
               <span className={`check-slot${item.selected ? ' on' : ''}`}>
                 <Icon name="checkmark" size={10} weight="semibold" />
@@ -371,22 +377,32 @@ export function SheetPage({ className, children }: { className?: string; childre
 }
 
 /**
- * A modal's title row: title (and a line under it), optional trailing actions, and a close
- * button that dismisses the modal, or calls `onClose` for a panel that isn't one.
+ * A modal's title row: an optional icon, the title (and a line under it), optional trailing
+ * actions, and a close button that dismisses the modal, or calls `onClose` for a panel that
+ * isn't one.
  */
-export function ModalHeader({ title, subtitle, trailing, onClose, closeTitle = 'Close' }: { title: ReactNode; subtitle?: ReactNode; trailing?: ReactNode; onClose?: () => void; closeTitle?: string }) {
+export function ModalHeader({ title, subtitle, icon, trailing, onClose, closeTitle = 'Close' }: {
+  title: ReactNode
+  subtitle?: ReactNode
+  /** An SF Symbol name (shown on a tile), or a picture of its own (an agent's logo). */
+  icon?: string | ReactElement
+  trailing?: ReactNode
+  onClose?: () => void
+  closeTitle?: string
+}) {
   const dismiss = useDismiss()
   const titleId = useContext(ModalTitleContext)
   return (
     <div className="modal-header">
-      {subtitle !== undefined ? (
-        <VStack grow>
-          <Text as="h2" id={titleId} size="compactBody" weight="semibold" tone="text">{title}</Text>
-          <Text size="caption" tone="tertiary" truncate>{subtitle}</Text>
-        </VStack>
-      ) : (
-        <Text as="h2" id={titleId} size="compactBody" weight="semibold" truncate className="modal-title">{title}</Text>
-      )}
+      {typeof icon === 'string' ? (
+        <span className="modal-header-icon" aria-hidden>
+          <Icon name={icon} size={15} />
+        </span>
+      ) : icon}
+      <VStack gap={1} className="modal-title">
+        <Text as="h2" id={titleId} size="title3" weight="semibold" tone="text" lines={2}>{title}</Text>
+        {subtitle !== undefined ? <Text size="callout" tone="secondary" lines={2} title={typeof subtitle === 'string' ? subtitle : undefined}>{subtitle}</Text> : null}
+      </VStack>
       {trailing}
       <IconButtonBase title={closeTitle} icon="xmark" onClick={onClose ?? dismiss} />
     </div>
@@ -406,13 +422,15 @@ export function IconButtonBase({ title, icon, onClick, selected = false, size = 
   /** Set when the button opens a menu: whether that menu is open. */
   menuOpen?: boolean
 }) {
+  const tr = useTr()
+  const label = tr(title)
   return (
     <button
       ref={buttonRef}
       className={`icon-button ${selected ? 'selected' : ''} ${className ?? ''}`}
       style={{ width: size, height: size, borderRadius: size * 0.28 }}
-      title={title}
-      aria-label={title}
+      title={label}
+      aria-label={label}
       aria-haspopup={menuOpen === undefined ? undefined : 'menu'}
       aria-expanded={menuOpen}
       disabled={disabled}

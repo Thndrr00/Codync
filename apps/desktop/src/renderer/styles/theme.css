@@ -32,7 +32,10 @@
   --chat-user: #e2e2e2;
   /* Floating transcript controls (chevrons, Jump to latest, inspector actions). */
   --chat-button: #eeeeee;
-  --composer-fill: #f3f3f3;
+  /* Light: the message box is the page color; dark: a lighter fill. */
+  --composer-fill: var(--background);
+  /* The 1px outline on floating layers: the message box, sheets, dialogs and menus. */
+  --outline: color-mix(in srgb, var(--text) 18%, transparent);
   --chrome-fill: #f3f3f3;
   --chrome-stroke: rgba(0, 0, 0, 0.09);
   --stroke-strong: rgba(0, 0, 0, 0.14);
@@ -41,6 +44,14 @@
   --frosted: rgba(244, 244, 244, 0.82);
   /* The dim behind sheets and dialogs. */
   --scrim: rgba(0, 0, 0, 0.4);
+  /* Sheets and dialogs: a card a step above the page, groups of rows and text fields as quiet
+     tints over it (they stack, so a field inside a group reads a step stronger). */
+  --sheet: #ffffff;
+  --group: rgba(var(--text-rgb), 0.04);
+  --field: rgba(var(--text-rgb), 0.06);
+  /* The chosen option in segmented choices and chips. */
+  --chip-on: #ffffff;
+  --chip-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 
   /* Corner radii and shadows: one scale for every surface. */
   --radius-xs: 6px;
@@ -120,6 +131,12 @@
     --stroke-strong: rgba(255, 255, 255, 0.17);
     --roster-selected: #292929;
     --frosted: rgba(35, 35, 35, 0.82);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --sheet: #161616;
+    --group: rgba(var(--text-rgb), 0.045);
+    --field: rgba(var(--text-rgb), 0.075);
+    --chip-on: rgba(var(--text-rgb), 0.15);
+    --chip-shadow: none;
   }
 }
 

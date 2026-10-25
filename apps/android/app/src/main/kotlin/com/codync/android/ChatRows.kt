@@ -227,7 +227,7 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Message", entry.text))
     })
     if (quote != null) add(MenuItem("Quote", icon = "text.bubble", action = quote))
-    if (reply != null) add(MenuItem("Reply in thread", icon = "arrowshape.turn.up.left", action = reply))
+    if (reply != null) add(MenuItem("Reply", icon = "arrowshape.turn.up.left", action = reply))
     if (trace != null) add(MenuItem("Show what it did", icon = "list.bullet", action = trace))
 }
 
@@ -263,6 +263,10 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     val attachments = entry.data["attachments"]?.jsonArray?.map { WireJson.decodeFromJsonElement<Attachment>(it) }.orEmpty()
     Column(Modifier.fillMaxWidth().padding(start = 56.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (attachments.isNotEmpty()) AttachmentList(attachments, entry.botId, state, store)
+        entry.replyTo?.let { quote ->
+            val author = if (quote.author == "user") "You" else state.bots.firstOrNull { it.id == quote.author }?.name ?: "Bot"
+            Text("↩ $author: ${quote.text}", style = Type.caption, color = Palette.tertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
         if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser).swipeToReply(reply)
             .contextActions(reactions = reactionPick(entry, store), preview = { SelectionContainer { UserText(entry.text) } }) {
                 messageMenu(context, entry, reply, null) { store.quoteMessage(entry, thread) }
