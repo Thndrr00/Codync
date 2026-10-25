@@ -46,7 +46,10 @@ jobs:
     needs: check
     # Fork PRs get no signing secrets, so they stop at check, Windows and Linux; the release PR into main
     # builds the Mac app before the tag.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # A repository without the Apple signing secrets (this fork) sets no `MAC_SIGNING` variable and skips it.
+    if: >-
+      vars.MAC_SIGNING == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4

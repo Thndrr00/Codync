@@ -38,7 +38,7 @@ async fn activity_is_private_durable_and_scoped_to_the_bot() {
     host.restart(|_| {}).await;
     assert_eq!(host.call("listComputerActivity", json!({"botId": bot})).await, response);
     assert_eq!(host.call("exportComputerActivity", json!({"botId": bot})).await, export);
-    host.call("deleteBot", json!({"id": bot})).await;
+    host.call("deleteBot", json!({"botId": bot})).await;
     assert!(host.refused("listComputerActivity", json!({"botId": bot})).await.contains("unknown bot"));
     assert!(host.refused("exportComputerActivity", json!({"botId": bot})).await.contains("unknown bot"));
 }
