@@ -148,7 +148,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
             ChiefIncidentCard(entry, state, store)
         } else if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ConnectionRequestCard(entry, state, store, connect.openApp, connect.install)
-        } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry, store) }
+        } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry, state, store) }
     }
 }
 
@@ -404,7 +404,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     }
 }
 
-@Composable private fun NoticeRow(entry: Entry, store: AppStore) {
+@Composable private fun NoticeRow(entry: Entry, state: AppState, store: AppStore) {
     val text = entry.text
     val seconds = entry.data["callSeconds"]?.jsonPrimitive?.longOrNull
     when {
@@ -420,11 +420,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             Text(text, Modifier.widthIn(max = 260.dp), style = Type.caption2, color = Palette.tertiary, textAlign = TextAlign.Center)
             Box(Modifier.weight(1f).height(1.dp).background(Palette.border))
         }
-        entry.data.text("style") == "error" -> Row(Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp))
-            .background(Palette.danger.copy(alpha = 0.12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Symbol("exclamationmark.triangle.fill", size = 16.dp, tint = Palette.danger)
-            SelectionContainer { Text(text, style = Type.chatFootnote, color = Palette.text) }
-        }
+        entry.data.text("style") == "error" -> ErrorNotice(entry, state, store)
         // A fresh conversation starts at the left, as on the iPhone.
         "handoff" in entry.data -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
