@@ -405,6 +405,7 @@ export interface UsageProvider {
   windows: UsageWindow[]
   source: string
   updatedAt: number
+  status?: 'unsupported' | 'unavailable' | string
 }
 
 export interface Usage {

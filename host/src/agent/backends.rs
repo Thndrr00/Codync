@@ -468,6 +468,7 @@ fn well_known_dirs_for(home: &Path, data_local: Option<&Path>) -> Vec<PathBuf> {
         // Hermes Agent's Windows launchers, including older source installs.
         dirs.extend(data_local.map(|d| d.join("hermes/bin")));
         dirs.extend(data_local.map(|d| d.join("hermes/hermes-agent/.hermes/bin")));
+        dirs.extend(data_local.map(|d| d.join("Microsoft/WinGet/Links")));
     }
     for rel in [
         // Hermes Agent's Unix installer also puts its launcher here.
@@ -482,6 +483,7 @@ fn well_known_dirs_for(home: &Path, data_local: Option<&Path>) -> Vec<PathBuf> {
         "Library/pnpm",
         ".npm-global/bin",
         ".opencode/bin",
+        ".grok/bin",
         ".deno/bin",
         "go/bin",
     ] {
@@ -746,6 +748,17 @@ mod tests {
         if cfg!(windows) {
             assert!(dirs.contains(&data_local.join("hermes/bin")));
             assert!(dirs.contains(&data_local.join("hermes/hermes-agent/.hermes/bin")));
+        }
+    }
+
+    #[test]
+    fn grok_install_dirs_are_searched_without_shell_path() {
+        let home = PathBuf::from("user-home");
+        let local = PathBuf::from("local-data");
+        let dirs = well_known_dirs_for(&home, Some(&local));
+        assert!(dirs.contains(&home.join(".grok/bin")));
+        if cfg!(windows) {
+            assert!(dirs.contains(&local.join("Microsoft/WinGet/Links")));
         }
     }
 }

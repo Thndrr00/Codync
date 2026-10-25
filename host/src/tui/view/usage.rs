@@ -14,7 +14,10 @@ use super::time::{DAYS, MONTHS, clock, local, month_day, now_ms};
 pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App) {
     let t = theme();
     let providers = app.usage["providers"].as_array().cloned().unwrap_or_default();
-    let rows: usize = providers.iter().map(|p| 2 + p["windows"].as_array().map_or(0, Vec::len)).sum();
+    let rows: usize = providers
+        .iter()
+        .map(|p| 2 + usize::from(p["status"].is_string()) + p["windows"].as_array().map_or(0, Vec::len))
+        .sum();
     let r = centered(area, 78, u(rows + 5).max(8));
     let inner = frame_box(buf, r, t.text, t.panel, Some((tr("Usage").as_ref(), t.text)));
     let mut y = inner.y + 1;
@@ -24,6 +27,15 @@ pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App) {
     for p in &providers {
         put(buf, inner.x, y, inner.width, p["name"].as_str().unwrap_or_default(), t.bold.patch(t.panel));
         y += 1;
+        if let Some(status) = p["status"].as_str() {
+            let message = if status == "unsupported" {
+                "Update this agent to read its plan limits."
+            } else {
+                "Plan limits are unavailable for this account."
+            };
+            put(buf, inner.x + 2, y, inner.width.saturating_sub(2), &tr(message), t.secondary.patch(t.panel));
+            y += 1;
+        }
         for win in p["windows"].as_array().into_iter().flatten() {
             let pct = win["percent"].as_f64().unwrap_or(0.0).clamp(0.0, 100.0);
             let on = filled(pct, 16);

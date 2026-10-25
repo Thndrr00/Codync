@@ -185,6 +185,7 @@ public struct UsageProvider: Codable, Hashable, Sendable, Identifiable {
     public var windows: [UsageWindow]
     public var source: String
     public var updatedAt: Int64
+    public var status: String? = nil
 }
 
 public struct UsageWindow: Codable, Hashable, Sendable, Identifiable {

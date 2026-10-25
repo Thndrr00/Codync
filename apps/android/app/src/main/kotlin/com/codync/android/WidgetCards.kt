@@ -51,7 +51,10 @@ enum class ProviderLayout { Small, Medium, Large }
 
 /** Claude keeps its orange; everyone else is ink, like the rest of the app. */
 /** ACP registry id of the provider's agent, for its logo: Claude and Codex run through ACP adapters. */
-internal val UsageProvider.registry: String get() = if (id in listOf("claude", "codex")) "$id-acp" else id
+internal val UsageProvider.registry: String get() {
+    val backend = id.substringBefore(':')
+    return if (backend in listOf("claude", "codex", "antigravity")) "$backend-acp" else backend
+}
 
 @Composable internal fun UsageProvider.tint(): Color = if (id == "claude") Color(0xFFD97757) else Palette.accent
 
@@ -62,7 +65,7 @@ internal val UsageProvider.registry: String get() = if (id in listOf("claude", "
 /** "Session" for the 5-hour window, "Opus" for "Weekly · Opus", else the label. */
 internal val UsageWindow.title: String get() = when {
     label == "5-hour" -> "Session"
-    " · " in label -> label.substringAfter(" · ")
+    label.startsWith("Weekly · ") -> label.removePrefix("Weekly · ")
     else -> label
 }
 

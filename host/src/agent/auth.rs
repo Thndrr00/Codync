@@ -76,7 +76,7 @@ pub struct Status {
 static CHECKED: Mutex<BTreeMap<String, Status>> = Mutex::new(BTreeMap::new());
 
 /// Where probe sessions live, away from the user's projects.
-fn probe_dir() -> PathBuf {
+pub(crate) fn probe_dir() -> PathBuf {
     crate::service::data_dir().join("probe")
 }
 
