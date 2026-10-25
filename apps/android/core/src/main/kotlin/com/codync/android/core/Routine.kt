@@ -63,36 +63,22 @@ fun RoutineListing?.canEdit(id: String): Boolean = id.isEmpty() || this?.routine
     val monthDay: Int = 1, val minuteStep: Int = 15, val hour: Int = 9, val minute: Int = 0,
     val at: Long = 0, val expression: String = "", val zone: String = "", val original: List<JsonObject> = emptyList(),
 ) {
-    /** The phone edits the `routineRepeats` styles; the host's others open as Custom (the expression already holds their cron). */
-    fun forMobileEditor(): RoutineScheduleDraft = copy(calendarStyle = calendarStyle.takeIf { style -> routineRepeats.any { it.first == style } } ?: "custom",
-        kind = if (kind in listOf("cron", "webhook")) kind else "keep")
-
     /**
-     * Switches the repeat style; Custom starts from `compiled`, the cron the host made of the current choice,
-     * empty while that check is still out (never the cron the routine opened with).
+     * What the editor shows: the host's own reading of the trigger. Kinds the editor can't edit (`once`, events,
+     * several triggers) keep the original triggers; the visual style the host detected is retained, never forced to `custom`.
      */
-    fun repeating(style: String, compiled: String?): RoutineScheduleDraft = when {
-        style == calendarStyle -> this
-        style == "custom" -> copy(calendarStyle = style, expression = compiled.orEmpty())
-        else -> copy(calendarStyle = style)
-    }
+    fun forMobileEditor(): RoutineScheduleDraft = copy(kind = if (kind in RoutineSchedule.editableKinds) kind else "keep")
+
 
     /** Toggle one weekday (0 Sunday ... 6 Saturday) of the `days` style; the host rejects an empty set. */
     fun toggleDay(day: Int): RoutineScheduleDraft =
         copy(selectedDays = (if (day in selectedDays) selectedDays - day else selectedDays + day).sorted())
 }
 
-/** The repeat styles the phone offers for a schedule, in menu order. */
-val routineRepeats = listOf("hourly" to "Hourly", "daily" to "Daily", "weekdays" to "Weekdays", "weekly" to "Weekly", "custom" to "Custom")
-
 @Serializable data class RoutineSchedulePreview(
     val draft: RoutineScheduleDraft, val triggers: List<JsonObject>, val summary: String,
     val nextRunAt: Long? = null, val nextRuns: List<Long>? = null, val warning: String? = null,
-) {
-    /** The cron the host compiled, when the schedule is one. */
-    val cronExpression: String? get() = triggers.firstOrNull()?.takeIf { it["type"]?.jsonPrimitive?.content == "cron" }
-        ?.get("expression")?.jsonPrimitive?.content
-}
+)
 
 @Serializable data class RoutineWebhook(val url: String? = null, val localUrl: String, val key: String, val connected: Boolean)
 

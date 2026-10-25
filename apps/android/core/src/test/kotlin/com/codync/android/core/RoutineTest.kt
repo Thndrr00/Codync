@@ -45,24 +45,6 @@ class RoutineTest {
         assertFalse(RoutineSchedule.usesTime("minutes"))
     }
 
-    @Test fun `the phone keeps its five repeat styles and opens the rest as custom`() {
-        for ((style) in routineRepeats) assertEquals(style, RoutineScheduleDraft(calendarStyle = style).forMobileEditor().calendarStyle)
-        for (style in listOf("minutes", "days", "monthly")) assertEquals("custom", RoutineScheduleDraft(calendarStyle = style).forMobileEditor().calendarStyle)
-    }
-
-    @Test fun `switching to custom starts from the cron the host compiled`() {
-        val weekdays = RoutineScheduleDraft(calendarStyle = "weekdays", expression = "0 9 * * *")
-        assertEquals("0 9 * * 1-5", weekdays.repeating("custom", "0 9 * * 1-5").expression)
-        // While the host is still checking the last change, Custom starts empty, not from the cron the routine opened with.
-        assertEquals("", weekdays.repeating("custom", null).expression)
-        assertEquals("0 9 * * *", weekdays.repeating("hourly", "0 9 * * 1-5").expression)
-        val custom = RoutineScheduleDraft(calendarStyle = "custom", expression = "7 9 * * 5")
-        assertEquals(custom, custom.repeating("custom", null))
-        val cron = WireJson.parseToJsonElement("""{"type":"cron","expression":"0 9 * * 1-5","timeZone":"Asia/Taipei"}""").jsonObject
-        assertEquals("0 9 * * 1-5", RoutineSchedulePreview(weekdays, listOf(cron), "").cronExpression)
-        assertNull(RoutineSchedulePreview(weekdays, listOf(buildJsonObject { put("type", "webhook") }), "").cronExpression)
-    }
-
     @Test fun `a routine's editor waits for the routine to be listed`() {
         val listing = RoutineListing(listOf(Routine("r", "bot", "Check CI", "Check", emptyList(), false)), emptyList())
         assertFalse(null.canEdit("r"))
