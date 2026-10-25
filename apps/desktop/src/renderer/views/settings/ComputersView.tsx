@@ -188,7 +188,7 @@ function ManagedComputerCard({ store, ssh: overSSH }: { store: BotStore; ssh: bo
               // This computer's voice settings are their own Settings page.
               <IconButton title="Voice chat" icon="waveform" selected={showVoice} disabled={!online} onClick={() => setShowVoice((s) => !s)} />
             ) : null}
-            <IconButton title="Pair iPhone" icon="qrcode" selected={showPairing} disabled={!online} onClick={() => setShowPairing((s) => !s)} />
+            <IconButton title="Pair phone" icon="qrcode" selected={showPairing} disabled={!online} onClick={() => setShowPairing((s) => !s)} />
           </div>,
           // Until the host gives its cloud status, there's no way to tell its relay or account.
           ...(cloud
@@ -230,7 +230,7 @@ function ManagedComputerCard({ store, ssh: overSSH }: { store: BotStore; ssh: bo
         </StoreContext.Provider>
       </Sheet>
       <Sheet open={showPairing} onClose={() => setShowPairing(false)} width={340}>
-        <ModalHeader icon="qrcode" title={tr('Pair iPhone with {name}').replaceAll('{name}', name)} />
+        <ModalHeader icon="qrcode" title={tr('Pair phone with {name}').replaceAll('{name}', name)} />
         <PairingPanel store={store} />
       </Sheet>
       <Dialog
@@ -277,7 +277,7 @@ function accountComputerStatus(computer: CloudComputer, olderCopy: boolean) {
   return computer.lastSeenAt ? `Older copy · last seen ${relativeDay(new Date(computer.lastSeenAt))}` : 'Older copy'
 }
 
-/** "Pair iPhone" for a computer this app manages, through its store. */
+/** "Pair phone" for a computer this app manages, through its store. */
 function PairingPanel({ store }: { store: BotStore }) {
   useModel(store)
   const requestCode = useCallback(async () => {

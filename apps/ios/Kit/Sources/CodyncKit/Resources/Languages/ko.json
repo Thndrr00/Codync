@@ -1,4 +1,10 @@
 {
+  "Antigravity quota report": "Antigravity 할당량 보고서",
+  "Update this agent to read its plan limits.": "요금제 한도를 읽으려면 이 에이전트를 업데이트하세요.",
+  "Plan limits are unavailable for this account.": "이 계정에서는 요금제 한도를 사용할 수 없습니다.",
+  "Plan limits appear when a connected agent reports them.": "연결된 에이전트가 보고하면 요금제 한도가 표시됩니다.",
+  "Previous usage providers": "이전 사용량 제공자",
+  "Next usage providers": "다음 사용량 제공자",
   "About usage analytics": "사용량 분석 정보",
   "Access": "접근",
   "Account": "계정",

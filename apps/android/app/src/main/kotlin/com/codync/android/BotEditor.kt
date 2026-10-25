@@ -36,7 +36,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Create or edit a bot in a sheet, as iOS `BotEditorView`: the settings form plus Close and Save. */
 @Composable fun BotEditor(state: AppState, initial: BotDraft, store: AppStore) {
-    var draft by remember(state.generation, initial.id) { mutableStateOf(initial) }
+    val base = remember(state.generation, initial.id) { initial }
+    var draft by remember(state.generation, initial.id) { mutableStateOf(base) }
     var folders by remember { mutableStateOf(false) }
     var viewingSkill by remember { mutableStateOf<SkillRef?>(null) }
     var tab by remember { mutableStateOf(InspectorTab.Settings) }
@@ -53,7 +54,8 @@ import kotlinx.serialization.json.jsonPrimitive
             if (tab == InspectorTab.Settings) {
                 if (saving) Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Spinner() }
                 else IconButton(if (isNew) "Create" else "Save", "checkmark", enabled = draft.isValid && online) {
-                    store.saveBot(draft) { dismiss() }
+                    val saved = bot?.let { draft.rebased(base, BotDraft.from(it)) } ?: draft
+                    store.saveBot(saved) { dismiss() }
                 }
             }
         }
@@ -99,6 +101,8 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
     chooseFolder: () -> Unit) {
     val online = state.actualConnection is LinkState.Ready
     val screen = state.screen
+    val bot = state.bots.firstOrNull { it.id == draft.id }
+    var addingFallback by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Box(Modifier.clip(RoundedRectangle(24.dp)).background(Palette.bubbleAgent).padding(18.dp)) {
@@ -116,6 +120,7 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
             }
         }
         CardSection("Agent") {
+            bot?.agentStep?.let { step -> row { FallbackBanner(state, store, bot, step) } }
             row {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ValueRow("Computer", state.computer?.name ?: "Your computer")
@@ -130,7 +135,7 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
                         id to ((info.text("name") ?: id) + if (!info.available) " (not installed)" else "")
                     } + ("custom" to "Custom command")
                     ValueRow("Agent") {
-                        ChoicePicker(draft.backend, agents, { if (it != draft.backend) change(draft.copy(backend = it, account = null, model = null, modelOptions = emptyMap())) },
+                        ChoicePicker(draft.backend, agents, { if (it != draft.backend) change(draft.withAgent(it).copy(account = null)) },
                             label = "Agent")
                     }
                     backends(state).firstOrNull { it.text("id") == draft.backend && !it.available }?.text("installHint")?.takeIf(String::isNotBlank)?.let {
@@ -148,10 +153,16 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
                 }
             }
             row {
-                val bot = state.bots.firstOrNull { it.id == draft.id }
                 key(state.generation, state.computer?.id, draft.backend, draft.account) {
                     AgentModelPicker(state, { backend -> store.agentModels(backend, draft.account) }, draft.backend, draft.model, draft.modelOptions, draft.fastMode ?: false, bot,
                         { model, options -> change(draft.copy(model = model, modelOptions = options)) }, { change(draft.copy(fastMode = it)) })
+                }
+            }
+            if (draft.fallbacks != null) {
+                row { FallbackList(state, draft.backend, draft.fallbacks.orEmpty(), bot, { change(draft.copy(fallbacks = it)) }, { addingFallback = true }) }
+                if (draft.selfFallbacks != null) row {
+                    SwitchRow("Let the bot change its fallbacks", "It can set this list itself, for example when you ask it to.",
+                        draft.selfFallbacks ?: true, { change(draft.copy(selfFallbacks = it)) })
                 }
             }
             row {
@@ -214,5 +225,11 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
         draft.id?.let { DocumentsCard(it, state, store) }
         draft.id?.let { ComputerPanelCard(it, state, store) { enabled, permissions -> change(draft.copy(computer = enabled, computerPermissions = permissions)) } }
         state.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
+    }
+    CodyncSheet(addingFallback, { addingFallback = false }) {
+        AddFallbackSheet(state, store, draft.backend, draft.fallbacks.orEmpty()) {
+            change(draft.copy(fallbacks = draft.fallbacks.orEmpty() + it))
+            addingFallback = false
+        }
     }
 }

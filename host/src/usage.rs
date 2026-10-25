@@ -13,7 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+mod antigravity;
+
 const POLL_EVERY: Duration = Duration::from_secs(5 * 60);
+static REFRESH: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Everything the apps show about limits (wire shape of the `usage` event).
 #[derive(Serialize, Clone, Debug, Default, PartialEq)]
@@ -24,12 +27,14 @@ pub struct Usage {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Provider {
-    pub id: &'static str,
-    pub name: &'static str,
+    pub id: String,
+    pub name: String,
     pub windows: Vec<Window>,
     /// Where the numbers came from: `claude` (CLI), `statusline`, `agent`, `sessions`.
     pub source: &'static str,
     pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<&'static str>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -59,8 +64,15 @@ impl Usage {
         windows.extend(new);
         windows.sort_by(|a, b| a.id.cmp(&b.id));
         self.providers.retain(|p| p.id != id);
-        self.providers.push(Provider { id, name, windows, source, updated_at: crate::store::now_ms() });
-        self.providers.sort_by_key(|p| p.id);
+        self.providers.push(Provider {
+            id: id.into(),
+            name: name.into(),
+            windows,
+            source,
+            updated_at: crate::store::now_ms(),
+            status: None,
+        });
+        self.providers.sort_by(|a, b| a.id.cmp(&b.id));
     }
 }
 
@@ -78,12 +90,16 @@ pub async fn poll(hub: Arc<Hub>) {
 }
 
 pub async fn refresh(hub: &Hub) {
+    // The timer and several clients can request a refresh together. One probe owns
+    // the work; every caller still receives the most recently observed report.
+    let Ok(_refresh) = REFRESH.try_lock() else { return };
     if let Some(windows) = tokio::task::spawn_blocking(codex_usage).await.ok().flatten() {
         merge(hub, "codex", "Codex", "sessions", windows);
     }
     if let Some(windows) = claude_cli_usage().await {
         merge(hub, "claude", "Claude", "claude", windows);
     }
+    antigravity::refresh(hub).await;
 }
 
 /// `claude -p /usage`: Claude Code's own local usage report, no model call.

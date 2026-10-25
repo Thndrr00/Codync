@@ -136,3 +136,9 @@ All additive (no `minApp` change):
 - Method: `switchBack {botId}`.
 - Notices: `agentSwitch: {from, to, back, reason, resetsAt, carried}`; failure notices' `addFallback: true`.
 - Analytics: `agent_fell_back {agent, reason}`; `turn_finished` once per agent the turn ran on.
+
+## Android settings
+
+Open a saved bot’s Settings → Agent → Fallbacks to add up to three other agents, choose their models, reorder or remove them, and allow the bot to change its list. While a fallback is active, the Agent card shows it and offers Switch back. These controls appear only when the host sends the fallback settings; older hosts keep their existing editor.
+
+The Android editor’s read-only UI fixtures can run on an explicitly authorized USB device with `adb shell am instrument -w -e inspectBotEditor true -e class com.codync.android.BotEditorTest com.pokai.Codync.android.dev.test/androidx.test.runner.AndroidJUnitRunner`. Without that flag, `BotEditorTest` remains emulator-only. These fixtures never tap Save or Create.

@@ -60,7 +60,7 @@ which backend the app will use.
 
 Run `codync-host pair` on the computer and scan its code or paste the resulting
 `codync://pair` link (`codync-dev://pair` for Codync Dev, which pairs only with a
-development host). Setup shows the Mac and Linux install paths, as on iOS. Pairing links
+development host). Setup shows Mac, Windows and Linux install paths, as on iOS. The desktop tray action **Pair phone…** and the QR button in Computers work with Android and iPhone; see [Windows pairing](../../docs/guides/android-windows-pairing.md). Pairing links
 and one-time codes remain in memory. Account login discovers computers; each
 host must still approve access.
 

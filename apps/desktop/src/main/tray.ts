@@ -85,7 +85,7 @@ export class Tray {
     items.push({ label: this.tr(status), enabled: false })
     items.push({ label: this.tr('Open {name}').replaceAll('{name}', app.getName()), accelerator: 'CmdOrCtrl+O', click: () => this.deps.openChat() })
     if (state.kind === 'running') {
-      items.push({ label: this.tr('Pair iPhone…'), enabled: s?.canPair ?? false, click: () => this.deps.openPairing() })
+      items.push({ label: this.tr('Pair phone…'), enabled: s?.canPair ?? false, click: () => this.deps.openPairing() })
     }
     items.push({ type: 'separator' })
 

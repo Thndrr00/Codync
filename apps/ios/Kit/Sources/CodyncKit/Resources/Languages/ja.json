@@ -1,4 +1,10 @@
 {
+  "Antigravity quota report": "Antigravity のクォータレポート",
+  "Update this agent to read its plan limits.": "プランの上限を読み取るには、このエージェントを更新してください。",
+  "Plan limits are unavailable for this account.": "このアカウントではプランの上限を利用できません。",
+  "Plan limits appear when a connected agent reports them.": "接続済みのエージェントが報告すると、プランの上限が表示されます。",
+  "Previous usage providers": "前の使用量プロバイダ",
+  "Next usage providers": "次の使用量プロバイダ",
   "About usage analytics": "使用状況分析について",
   "Access": "アクセス",
   "Account": "アカウント",

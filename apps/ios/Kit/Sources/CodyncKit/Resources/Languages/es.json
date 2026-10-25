@@ -1,4 +1,10 @@
 {
+  "Antigravity quota report": "Informe de cuota de Antigravity",
+  "Update this agent to read its plan limits.": "Actualiza este agente para consultar los límites de su plan.",
+  "Plan limits are unavailable for this account.": "Los límites del plan no están disponibles para esta cuenta.",
+  "Plan limits appear when a connected agent reports them.": "Los límites del plan aparecen cuando un agente conectado los informa.",
+  "Previous usage providers": "Proveedores de uso anteriores",
+  "Next usage providers": "Siguientes proveedores de uso",
   "About usage analytics": "Acerca del análisis de uso",
   "Access": "Acceso",
   "Account": "Cuenta",

@@ -1,4 +1,10 @@
 {
+  "Antigravity quota report": "Antigravity 配額報告",
+  "Update this agent to read its plan limits.": "更新此代理程式以讀取其方案限額。",
+  "Plan limits are unavailable for this account.": "此帳號無法取得方案限額。",
+  "Plan limits appear when a connected agent reports them.": "已連線的代理程式回報後，就會顯示方案限額。",
+  "Previous usage providers": "上一組用量提供者",
+  "Next usage providers": "下一組用量提供者",
   "About usage analytics": "關於用量分析",
   "Access": "訪問",
   "Account": "賬戶",

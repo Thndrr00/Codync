@@ -6,6 +6,20 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.26.0
+
+### zh-Hant
+
+- 配對電腦時可選擇 Windows，並查看安裝與掃描配對碼的步驟。
+- 配對指引更清楚說明如何在兩台裝置使用相同的 Codync 或 Codync Dev 版本。
+- 支援的 Antigravity 代理程式可回報各帳號與模型群組的方案用量。
+
+### en-US
+
+- Choose Windows when pairing a computer and follow the installation and QR scanning steps.
+- Clearer instructions for using matching Codync or Codync Dev apps on both devices when pairing.
+- Supported Antigravity adapters report plan usage separately for each account and model group.
+
 ## 2.25.0
 
 ### zh-Hant

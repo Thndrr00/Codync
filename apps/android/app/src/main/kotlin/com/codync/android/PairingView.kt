@@ -69,7 +69,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 
 private enum class Step { Install, Scan }
-private enum class ComputerOS { Mac, Linux }
+private enum class ComputerOS { Mac, Windows, Linux }
 
 /**
  * Pair with a computer running codync-host, one thing per page: install it, then scan its code
@@ -122,7 +122,7 @@ private enum class ComputerOS { Mac, Linux }
                 Text("Install Codync\non your computer", style = PAGE_TITLE, color = Palette.text)
                 Text("Your bots run there. This phone is how you talk to them.", style = Type.body, color = Palette.secondary)
             }
-            SegmentedChoice(os, listOf(ComputerOS.Mac to "Mac", ComputerOS.Linux to "Linux"), choose)
+            SegmentedChoice(os, listOf(ComputerOS.Mac to "Mac", ComputerOS.Windows to "Windows", ComputerOS.Linux to "Linux"), choose)
             // Copied here, pasted on the computer (a message to yourself, a shared clipboard).
             Crossfade(os, animationSpec = Motion.fade(), label = "Install steps") { shown ->
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -131,13 +131,16 @@ private enum class ComputerOS { Mac, Linux }
                         CommandBlock("brew install --cask leepokai/codync/codync")
                         Hint("or download the Mac app")
                         CommandBlock("https://github.com/leepokai/Codync/releases/latest/download/codync-macos.dmg")
+                    } else if (shown == ComputerOS.Windows) {
+                        Hint("Download the Windows app")
+                        CommandBlock("https://github.com/Thndrr00/Codync/releases/latest/download/codync-windows-x64.exe")
                     } else {
                         Hint("Run the installer")
                         CommandBlock("curl -fsSL https://raw.githubusercontent.com/leepokai/Codync/main/packaging/install.sh | sh\ncodync-host install")
                         Hint("or install with Homebrew")
                         CommandBlock("brew install leepokai/codync/codync-host\ncodync-host install")
                     }
-                    Text(if (shown == ComputerOS.Mac) "Open Codync and it sets up the host on its own."
+                    Text(if (shown != ComputerOS.Linux) "Open Codync and it sets up the host on its own."
                         else "codync-host install keeps it running in the background.", style = Type.subheadline, color = Palette.secondary)
                     Hint("Every install option")
                     CommandBlock("https://www.codync.dev/#install")
@@ -216,9 +219,14 @@ private enum class ComputerOS { Mac, Linux }
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Scan the pairing code", style = PAGE_TITLE, color = Palette.text)
-            Text(if (os == ComputerOS.Mac) "On your Mac, click Codync in the menu bar, then Pair iPhone. The same code pairs this phone."
-                else "On your computer, run this in a terminal:", style = Type.body, color = Palette.secondary)
+            Text(when (os) {
+                ComputerOS.Mac -> "On your Mac, click Codync in the menu bar, then Pair phone."
+                ComputerOS.Windows -> "On Windows, right-click Codync in the system tray, then choose Pair phone. You can also open Settings → Computers and click the QR code button."
+                ComputerOS.Linux -> "On your computer, run this in a terminal:"
+            }, style = Type.body, color = Palette.secondary)
             if (os == ComputerOS.Linux) CommandBlock("codync-host pair")
+            Text("Use Codync on both devices, or Codync Dev on both devices. Scan with the Codync app on Android or iPhone.",
+                style = Type.footnote, color = Palette.secondary)
         }
         // The camera, right on the page: no extra sheet between the instruction and the scan.
         Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedRectangle(24.dp))) {
