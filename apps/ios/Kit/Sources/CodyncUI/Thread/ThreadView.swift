@@ -66,9 +66,8 @@ public struct ThreadView: View {
     var conversation: some View {
         chrome(chat)
             .onChange(of: model.rosterThreadRequest, initial: true) { _, request in
-                guard let request, request.botId == botId, let root = request.threadId else { return }
+                guard let request, request.botId == botId else { return }
                 model.rosterThreadRequest = nil
-                withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { openThread = ThreadTarget(id: root) }
             }
             .readingConversation(botId)
             .codyncSheet(item: Binding<FileDownloads.Export?>(get: {

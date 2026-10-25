@@ -42,7 +42,7 @@ class LiveRoutinesTest {
             compose.chatAction("Routines")
             compose.onNodeWithContentDescription("Ask the bot for a routine").performClick()
             compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction() and hasText("I want a routine that ")).fetchSemanticsNodes().size == 1 }
-            compose.runOnUiThread { store.editDraft(bot.id, "") }
+            compose.runOnUiThread { store.editDraft(bot.id, null, "") }
             compose.chatAction("Routines")
             compose.waitUntil(10_000) { "routines:${bot.id}" !in store.state.value.busy && store.state.value.routines[bot.id] != null }
             compose.onNodeWithText("No routines yet. Ask the bot for one, or set it up yourself with +.").assertIsDisplayed()

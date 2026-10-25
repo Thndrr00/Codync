@@ -246,9 +246,8 @@ mod tests {
             Store::open(&db).unwrap();
             c.execute_batch(
                 "UPDATE kv SET v = '4' WHERE k = 'schema';
-                 ALTER TABLE entries ADD COLUMN thread_id TEXT;
                  INSERT INTO kv(k, v) VALUES('rev', '10'), ('read.root', '9'), ('lane.session.b@b/root', 's1'),
-                   ('lane.session.b@b/routine-r1', 's2');
+                   ('lane.session.b@b/routine-r1', 's2'), ('lane.session.b@b/doc:d1', 's3');
                  INSERT INTO entries(id, bot_id, thread_id, rev, kind, turn, data, created_at, updated_at) VALUES
                    ('root', 'b', NULL, 1, 'agent', 1, '{\"text\":\"Plan ready\",\"final\":true,\"author\":\"b\",\"thread\":{\"count\":2}}', 0, 0),
                    ('q', 'b', 'root', 2, 'user', 2, '{\"text\":\"why?\"}', 0, 0),
@@ -258,7 +257,8 @@ mod tests {
                    ('routine-result-r1', 'b', NULL, 6, 'agent', 0, '{\"text\":\"Today…\",\"final\":true}', 0, 0),
                    ('tool', 'b', 'routine-r1', 7, 'tool', 3, '{\"title\":\"Read\"}', 0, 0),
                    ('shot', 'b', NULL, 8, 'user', 4, '{\"text\":\"\",\"attachments\":[{\"name\":\"a.png\"}],\"thread\":{\"count\":1}}', 0, 0),
-                   ('see', 'b', 'shot', 9, 'user', 5, '{\"text\":\"see?\"}', 0, 0);",
+                   ('see', 'b', 'shot', 9, 'user', 5, '{\"text\":\"see?\"}', 0, 0),
+                   ('ask', 'b', 'doc:d1', 10, 'user', 6, '{\"text\":\"about this page\"}', 0, 0);",
             )
             .unwrap();
         }
@@ -281,5 +281,9 @@ mod tests {
         assert_eq!(s.kv_get("read.root"), None);
         assert_eq!(s.kv_get("lane.session.b@b/root"), None);
         assert_eq!(s.kv_get("lane.session.b@b/routine-r1").as_deref(), Some("s2"), "a run's session stays");
+        // A document's conversation stays its own: out of the chat, with its session.
+        assert_eq!(s.entry("ask").unwrap().thread_id.as_deref(), Some("doc:d1"));
+        assert_eq!(s.thread("b", "doc:d1", 10).unwrap().len(), 1);
+        assert_eq!(s.kv_get("lane.session.b@b/doc:d1").as_deref(), Some("s3"));
     }
 }

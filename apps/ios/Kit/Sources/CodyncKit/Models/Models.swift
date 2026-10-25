@@ -103,6 +103,8 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
     public var data: EntryData
     public var createdAt: Int64
     public var updatedAt: Int64
+    /// A document's or Slack thread's side conversation it's in; nil in the chat itself.
+    public var threadId: String? = nil
 
     public init(id: String, seq: Int64, botId: String, rev: Int64, kind: String, turn: Int64, data: EntryData, createdAt: Int64, updatedAt: Int64) {
         self.id = id
