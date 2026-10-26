@@ -36,13 +36,18 @@ try {
   if (actionPath) {
     const action = JSON.parse(readFileSync(actionPath, 'utf8'))
     if (action.type === 'click') {
-      await evaluate(`(() => {
+      await call('Page.bringToFront')
+      const point = await evaluate(`(() => {
         const label = ${JSON.stringify(action.label)};
         const nodes = [...document.querySelectorAll('button, [role="button"]')].filter(node => node.getClientRects().length);
         const matches = nodes.filter(node => [node.getAttribute('aria-label'), node.title, node.textContent.trim()].includes(label));
         if (matches.length !== 1) throw Error('Expected one visible control: '+label+'; found '+matches.length);
-        matches[0].click();
+        matches[0].scrollIntoView({block:'center'});
+        const rect = matches[0].getBoundingClientRect();
+        return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
       })()`)
+      await call('Input.dispatchMouseEvent', {type:'mousePressed',x:point.x,y:point.y,button:'left',clickCount:1})
+      await call('Input.dispatchMouseEvent', {type:'mouseReleased',x:point.x,y:point.y,button:'left',clickCount:1})
     } else if (action.type === 'input') {
       await evaluate(`(() => {
         const matches = [...document.querySelectorAll('input,textarea')].filter(node => node.getClientRects().length && [node.getAttribute('aria-label'),node.placeholder].includes(${JSON.stringify(action.label)}));

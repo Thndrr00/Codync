@@ -24,10 +24,14 @@ export function BotAppPanel({
   const [shareLabel, setShareLabel] = useState('Team link')
   const [shareMode, setShareMode] = useState<'view' | 'edit'>('view')
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [creatingLink, setCreatingLink] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
 
   useEffect(() => {
     setRuntimeError(null)
+    setCopiedUrl(null)
+    setShareError(null)
     const onMessage = (ev: MessageEvent) => {
       if (
         ev.data &&
@@ -133,16 +137,27 @@ export function BotAppPanel({
                   />
                   <Button
                     kind="primary"
+                    disabled={!onCreateShareLink || creatingLink}
                     onClick={async () => {
                       if (!onCreateShareLink) return
-                      const res = await onCreateShareLink(latched.slug, shareLabel, shareMode)
-                      await navigator.clipboard?.writeText(res.url)
-                      setCopiedUrl(res.url)
+                      setCreatingLink(true)
+                      setCopiedUrl(null)
+                      setShareError(null)
+                      try {
+                        const res = await onCreateShareLink(latched.slug, shareLabel, shareMode)
+                        window.codync.app.copy(res.url)
+                        setCopiedUrl(res.url)
+                      } catch (error) {
+                        setShareError(error instanceof Error ? error.message : 'Could not create the share link.')
+                      } finally {
+                        setCreatingLink(false)
+                      }
                     }}
                   >
-                    Create & Copy Link
+                    {creatingLink ? 'Creating…' : 'Create & Copy Link'}
                   </Button>
                 </HStack>
+                {shareError ? <Text size="caption" tone="danger">{shareError}</Text> : null}
                 {copiedUrl ? (
                   <Text size="caption" tone="secondary">
                     Copied capability URL: {copiedUrl}

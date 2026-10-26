@@ -227,8 +227,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         app={activeApp}
         onClose={() => setActiveApp(null)}
         onCreateShareLink={async (slug, label, mode) => {
-          const link = await store.createAppLink(botId, slug, mode, label)
-          return { link, url: link.url ?? `/apps/${botId}/${slug}/${link.token}/` }
+          const shared = await store.createAppLink(botId, slug, mode, label)
+          return shared
         }}
         onRevokeShareLink={async (slug, token) => {
           await store.revokeAppLink(botId, slug, token)

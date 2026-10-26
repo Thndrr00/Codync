@@ -2,7 +2,7 @@ import {
   isWorking,
   needsInput,
   type AgentAccount,
-  type AppLink,
+  type CreatedAppLink,
   type AppLinkMode,
   type BotApp,
   normalizeBot,
@@ -25,6 +25,7 @@ import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'
 import { DocumentsStore } from './documents-store'
 import type { VoiceTranscript } from '../lib/voice-transcript'
+import { createAppShareLink } from '../lib/app-links'
 
 export { builtInBackendName, type Connection } from './bot-mirror'
 
@@ -430,9 +431,8 @@ export class BotStore extends BotSync {
     return res.apps ?? []
   }
 
-  async createAppLink(botId: string, slug: string, mode: AppLinkMode, label = ''): Promise<AppLink> {
-    const res = await (await this.ready()).call<{ link: AppLink }>('createAppLink', { botId, slug, mode, label })
-    return res.link
+  async createAppLink(botId: string, slug: string, mode: AppLinkMode, label = ''): Promise<CreatedAppLink> {
+    return createAppShareLink(await this.ready(), botId, slug, mode, label)
   }
 
   async revokeAppLink(botId: string, slug: string, token: string): Promise<void> {

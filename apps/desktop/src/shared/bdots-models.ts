@@ -98,6 +98,12 @@ export interface AppLink {
   opens: number
 }
 
+/** A newly issued capability and its complete host-provided URL. */
+export interface CreatedAppLink {
+  link: AppLink
+  url: string
+}
+
 export interface BotApp {
   slug: string
   botId: string

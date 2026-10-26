@@ -324,12 +324,8 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
         <ProactivePolicySection
           avatarColorId={draft.avatarColor}
           avatarLook={draft.avatarLook ?? undefined}
-          actionRules={draft.actionRules}
-          proactive={draft.proactive}
           onChangeLook={(look) => set('avatarLook', look ?? null)}
-          onChangeRule={(cls, policy) => set('actionRules', { ...(draft.actionRules ?? {}), [cls]: policy })}
-          onChangeProactive={(next) => set('proactive', next)}
-          onApplyRoleTemplate={(tpl) => onChange((d) => ({ ...d, description: draft.description?.trim() ? draft.description : tpl.standingInstructions, avatarLook: tpl.avatarLook, avatarColor: tpl.avatarColor, actionRules: { ...(d.actionRules ?? {}), ...tpl.actionRules } }))}
+          onApplyRoleTemplate={(tpl) => onChange((d) => ({ ...d, description: draft.description?.trim() ? draft.description : tpl.standingInstructions, avatarLook: tpl.avatarLook, avatarColor: tpl.avatarColor }))}
         />
 
         <PluginToggles
