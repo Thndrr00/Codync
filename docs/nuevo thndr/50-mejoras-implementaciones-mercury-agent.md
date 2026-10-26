@@ -305,9 +305,9 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 | 7 | Parcial | `chat/team.rs` y `chat/team/requests.rs` (delegación y grafo de espera). Faltan tareas tipadas con criterios de aceptación. |
 | 8 | Parcial | `team/requests.rs` gestiona admisión; falta despertar único tras N tareas. |
 | 9, 10 | Nuevo | Sin digest ni pipelines. Las rutinas (`routines/`) son la base natural de pipelines. |
-| 11 | Parcial | `agent/bot/stall.rs`, `watchdog.rs` y `turn.rs` detectan bucles; no clasifican resultado ni "dijo que lo hizo sin hacer". |
-| 12 | Parcial | `routines/retry.rs` y `agent/coordinator.rs` (tope de reintentos); falta pausa por racha sin resultado. |
-| 13 | Nuevo | Sin locks por ruta. |
+| 11 | Implementado (sin compilar): `agent/bot/outcome.rs` + `watchdog.rs` | `agent/bot/stall.rs`, `watchdog.rs` y `turn.rs` detectan bucles; no clasifican resultado ni "dijo que lo hizo sin hacer". |
+| 12 | Implementado (sin compilar): `routines/idle.rs`, pausa tras 3 runs sin trabajo | `routines/retry.rs` y `agent/coordinator.rs` (tope de reintentos); falta pausa por racha sin resultado. |
+| 13 | No aplica: los agentes escriben sus archivos directamente; el host no los intermedia | Sin locks por ruta. |
 | 14, 15 | Parcial | `service/mod.rs` ya tolera lock files viejos tras un crash; `store/inflight.rs` guarda trabajo en vuelo. Falta bandera de caída y reanudación explícita. |
 | 16-19 | Nuevo | No hay Kanban en ningún cliente (es un feature completo ×4 clientes; ver `docs/plans`). |
 | 20 | Nuevo | Sin grafo de memoria. |
@@ -328,17 +328,17 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 | 36 | Por verificar | `screen/snapshots.rs`: comprobar si persisten capturas. |
 | 37 | Parcial | `stall.rs` y `watchdog.rs` cortan bucles; no hay tiempo máximo por herramienta colgada. |
 | 38 | Existe | `agent/bot/compaction.rs` + `codync_mem::compaction` + `chat/handoff.rs`. Descartar. |
-| 39 | Nuevo | `chat/memory/budget.rs` limita `MEMORY.md`, no carpetas compartidas. Límites por verificar (ver arriba). |
+| 39 | No aplica: Codync no tiene carpeta `_shared/` entre bots | `chat/memory/budget.rs` limita `MEMORY.md`, no carpetas compartidas. Límites por verificar (ver arriba). |
 | 40 | Parcial | Aquí "plugins" son conectores MCP (`market/`); falta circuit breaker por conector. |
 | 41 | Parcial | `chat/skills.rs`: el bot guarda skills con `save_skill`; falta la síntesis automática. |
 | 42 | Nuevo | Sin higiene/caducidad de skills. |
 | 43 | Nuevo | `market/` instala, no exporta bots/equipos. |
-| 44 | Nuevo | No existe `doctor` (`host/src/cli/`). |
+| 44 | Implementado (sin compilar): `doctor.rs`, `codync-host doctor`, API `doctor` | No existe `doctor` (`host/src/cli/`). |
 | 45 | Nuevo | Sin asistente de equipos. |
 | 46 | Nuevo | Sin modo ahorro. `usage.rs` da base de datos de uso. |
-| 47 | Parcial | `usage.rs` mide uso local; faltan topes diarios y auto-pausa. |
-| 48 | Nuevo | Sin "parar todo". Pequeño y de alto valor: `api/bots.rs` + botón en los 4 clientes. |
-| 49 | Nuevo | No hay DLQ; el equivalente son las ejecuciones fallidas de `routines/`. |
+| 47 | Implementado (sin compilar): `budget.rs`, `agent/bot/spend.rs`, API `tokenBudgets`/`setTokenBudget` (sin UI aún) | `usage.rs` mide uso local; faltan topes diarios y auto-pausa. |
+| 48 | Implementado y probado en host, escritorio y Android (`hub/stop.rs`) | Sin "parar todo". Pequeño y de alto valor: `api/bots.rs` + botón en los 4 clientes. |
+| 49 | Implementado (sin compilar): `routines/failed.rs`, API `clearFailedRuns` (sin UI aún) | No hay DLQ; el equivalente son las ejecuciones fallidas de `routines/`. |
 | 50 | Nuevo | Sin carpeta estándar de entregables. |
 
 ### Candidatos recomendados para implementar primero
@@ -348,3 +348,11 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 3. **11 Veredicto de turno sin resultado + 12 pausa de rutinas**: extienden `stall.rs`/`routines/`.
 4. **32 Parada por movimiento del ratón**: seguridad de computer use, un solo módulo de host.
 5. **47 Presupuesto diario de tokens**: base en `usage.rs`.
+
+### Avance de implementación (2026-10-25)
+
+Alcance acordado: host, Android y escritorio Windows. iOS y la TUI no se han tocado.
+
+- **Compilado y probado:** 48 (prueba del host, `fmt`, `clippy -D warnings`, typecheck y `npm test` del escritorio, compilación de Android).
+- **Escrito sin compilar ni probar:** 44, 11, 12, 47 y 49. Necesitan `cargo test -j 2 --bin codync-host` (filtros `doctor`, `outcome`, `idle`, `budget`, `failed`) y `clippy` antes de darse por buenas. 47 y 49 aún no tienen UI en ningún cliente.
+- **No aplican:** 13 y 39 (ver tabla). La 32 queda sin hacer: el ratón lo maneja un driver externo y no se puede conectar con seguridad sin probarlo en Windows.

@@ -387,6 +387,21 @@ impl Actor {
         }
     }
 
+    /// Tells the routine how its run went: a run that ran no tool and said nothing counts toward pausing it
+    /// (`routines::idle`), and one that reports work it didn't do is logged.
+    pub(super) fn note_routine_outcome(&self, text: Option<&str>) {
+        let Some(run) = &self.active_routine else { return };
+        let outcome = self.watchdog.outcome();
+        let said = text.is_some_and(|t| !t.trim().is_empty() && !crate::chat::group::is_pass(t));
+        if super::outcome::claimed_without_action(outcome, text.unwrap_or_default()) {
+            tracing::warn!(bot = %self.cfg.id, run = %run, "routine run reported finished work but ran no tool");
+        }
+        let worked = outcome != super::outcome::Outcome::Nothing || said;
+        if let Err(error) = self.hub.routines.note_outcome(&self.hub, run, worked) {
+            tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't note the routine run's outcome");
+        }
+    }
+
     pub(super) fn finish_routine(
         &mut self,
         status: crate::routines::Status,

@@ -22,12 +22,17 @@ impl Hub {
         let mut stopped = 0;
         for row in self.store.bots()? {
             let config = &row.config;
-            if config.is_group() || crate::external::is_external(config) || self.runtime(&config.id).status == BotStatus::Idle {
+            if config.is_group()
+                || crate::external::is_external(config)
+                || self.runtime(&config.id).status == BotStatus::Idle
+            {
                 continue;
             }
             match self.stop_bot(&config.id) {
                 Ok(()) => stopped += 1,
-                Err(error) => tracing::warn!(bot = %config.id, error = format!("{error:#}"), "stop all: bot didn't stop"),
+                Err(error) => {
+                    tracing::warn!(bot = %config.id, error = format!("{error:#}"), "stop all: bot didn't stop")
+                }
             }
         }
         Ok(stopped)

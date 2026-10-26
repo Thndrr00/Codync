@@ -9,7 +9,10 @@
 //!
 //! Ideas from rakazo's `tool-loop.ts` and `stuck-work.ts` (Apache-2.0); no code copied.
 
-use super::Actor;
+use super::{
+    Actor,
+    outcome::{Outcome, Trace},
+};
 use crate::store::EntryKind;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -37,6 +40,8 @@ pub(super) struct Watchdog {
     last_update: Instant,
     running: HashMap<String, Call>,
     warned: bool,
+    /// What the turn's finished tool calls did (`outcome`).
+    trace: Trace,
 }
 
 impl Default for Watchdog {
@@ -48,6 +53,7 @@ impl Default for Watchdog {
             last_update: Instant::now(),
             running: HashMap::new(),
             warned: false,
+            trace: Trace::default(),
         }
     }
 }
@@ -89,6 +95,7 @@ impl Watchdog {
         if matches!(update["status"].as_str(), Some("completed" | "failed"))
             && let Some(call) = self.running.remove(&id)
         {
+            self.trace.finished(call.kind.as_deref(), update["status"] == "failed");
             self.count(&call, &update["content"]);
         }
     }
@@ -108,6 +115,11 @@ impl Watchdog {
                 "Stopped: the agent called {title} with the same input and got the same result {LOOP_LIMIT} times in a row. Send a message to continue differently."
             ));
         }
+    }
+
+    /// What the turn did so far, by the tools it ran.
+    pub(super) fn outcome(&self) -> Outcome {
+        self.trace.outcome()
     }
 
     /// Why the turn must stop for a loop, once.

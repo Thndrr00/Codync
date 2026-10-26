@@ -262,6 +262,17 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
         }
+        "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
+        "setTokenBudget" => {
+            let limit = b["limit"].as_u64();
+            hub.budget.set_limit(&hub.store, str_arg(&b, "botId")?, limit)?;
+            hub.budget.status(crate::store::now_ms())
+        }
+        "clearFailedRuns" => {
+            let cleared = hub.routines.clear_failed(&hub.store, b["botId"].as_str())?;
+            json!({"cleared": cleared})
+        }
+        "doctor" => crate::doctor::report(hub)?,
         "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {
             hub.send_cmd(str_arg(&b, "botId")?, Cmd::SwitchBack)?;
