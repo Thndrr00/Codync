@@ -153,3 +153,44 @@ suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean =
     val response = hostQuery("routineWebhook", buildJsonObject { put("botId", botId); put("id", id); put("rotate", rotate) })
     return WireJson.decodeFromJsonElement(response)
 }
+
+suspend fun AppStore.listBotApps(botId: String): List<BotApp> {
+    val response = hostQuery("listBotApps", body("botId" to botId))
+    return response.jsonObject["apps"]?.let { WireJson.decodeFromJsonElement(it) } ?: emptyList()
+}
+
+suspend fun AppStore.createAppLink(botId: String, slug: String, mode: String, label: String = ""): AppLink {
+    val response = hostQuery("createAppLink", body("botId" to botId, "slug" to slug, "mode" to mode, "label" to label))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("link"))
+}
+
+suspend fun AppStore.revokeAppLink(botId: String, slug: String, token: String) {
+    hostQuery("revokeAppLink", body("botId" to botId, "slug" to slug, "token" to token))
+}
+
+suspend fun AppStore.deleteBotApp(botId: String, slug: String) {
+    hostQuery("deleteBotApp", body("botId" to botId, "slug" to slug))
+}
+
+suspend fun AppStore.listOpenItems(botId: String): List<OpenItem> {
+    val response = hostQuery("listOpenItems", body("botId" to botId))
+    return response.jsonObject["items"]?.let { WireJson.decodeFromJsonElement(it) } ?: emptyList()
+}
+
+suspend fun AppStore.dismissOpenItem(botId: String, id: String) {
+    hostQuery("dismissOpenItem", body("botId" to botId, "id" to id))
+}
+
+suspend fun AppStore.listBookmarks(botId: String): List<MessageBookmark> {
+    val response = hostQuery("listBookmarks", body("botId" to botId))
+    return response.jsonObject["bookmarks"]?.let { WireJson.decodeFromJsonElement(it) } ?: emptyList()
+}
+
+suspend fun AppStore.saveBookmark(botId: String, entryId: String, preview: String, note: String = "", author: String = "", threadId: String? = null): MessageBookmark {
+    val response = hostQuery("saveBookmark", body("botId" to botId, "entryId" to entryId, "preview" to preview, "note" to note, "author" to author, "threadId" to threadId))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("bookmark"))
+}
+
+suspend fun AppStore.deleteBookmark(botId: String, entryId: String) {
+    hostQuery("deleteBookmark", body("botId" to botId, "entryId" to entryId))
+}

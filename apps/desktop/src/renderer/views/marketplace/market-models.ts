@@ -1,4 +1,4 @@
-import type { AgentAccount } from '@shared/models'
+import type { AgentAccount, ConnectorFailure } from '@shared/models'
 import type { HostClient } from '../../client/host-client'
 
 // Marketplace wire types (host/src/market/): connectors are MCP servers,
@@ -19,6 +19,8 @@ export interface InstalledConnector {
   logo?: string | null
   /** Remote servers: `none`, `signedOut` (waits for sign-in; bots don't get it yet) or `signedIn`. */
   auth?: string | null
+  /** Last MCP connection/tool failure classified by the host (Idea 50). */
+  lastFailure?: ConnectorFailure | null
 }
 
 export const needsSignIn = (c: InstalledConnector) => c.auth === 'signedOut'

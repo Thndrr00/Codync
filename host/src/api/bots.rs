@@ -40,6 +40,12 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         "memoryCall" => {
             crate::chat::memory::tool_call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?
         }
+        "listBotApps" | "createAppLink" | "revokeAppLink" | "deleteBotApp" => {
+            crate::chat::apps::api_call(hub, method, &b)?
+        }
+        "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
+            crate::chat::open_items::api_call(hub, method, &b)?
+        }
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
             if name == "research_sources" {
@@ -52,7 +58,11 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             } else if crate::chat::scratchpad::TOOLS.contains(&name) {
                 crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::teach::TOOLS.contains(&name) {
-                crate::chat::teach::call(hub, bot, name)?
+                crate::chat::teach::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::apps::TOOLS.contains(&name) {
+                crate::chat::apps::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::open_items::TOOLS.contains(&name) {
+                crate::chat::open_items::call(hub, bot, name, &b["arguments"]).await?
             } else if name == crate::chat::skills::TOOL {
                 crate::chat::skills::call(hub, bot, &b["arguments"]).await?
             } else if crate::chat::fallbacks::TOOLS.contains(&name) {

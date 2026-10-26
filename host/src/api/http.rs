@@ -1,5 +1,5 @@
 //! HTTP routes: bearer-token checks for this computer's apps, SSE streams, the channel
-//! upgrade, OAuth callbacks and local routine webhooks.
+//! upgrade, OAuth callbacks, local routine webhooks and sandboxed bot mini-apps.
 
 use super::devices::Caller;
 use super::{dispatch, error_status, events_stream, term_events};
@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub fn router(hub: Arc<Hub>) -> Router {
-    Router::new()
+    let main = Router::new()
         .route("/health", get(health))
         .route("/hooks/routines/{id}", post(routine_hook))
         .route("/hooks/slack", post(crate::slack::ingress::receive))
@@ -35,7 +35,10 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/channel", get(channel))
         .route("/oauth/callback", get(oauth_callback))
         .layer(axum::middleware::from_fn(super::rebinding::guard))
-        .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard))
+        .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard));
+    Router::new()
+        .merge(main)
+        .merge(super::apps_runtime::router().layer(axum::middleware::from_fn(super::rebinding::guard)))
         .with_state(hub)
 }
 

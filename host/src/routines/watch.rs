@@ -1,10 +1,10 @@
 //! `watch` triggers: a routine wakes only when what it watches changes. When one is due, the
 //! host fingerprints its target without the model (a file or folder: names, sizes and
-//! modification times; a URL: status and body) and queues a run only when the fingerprint
-//! differs from the last one. The first check only records a baseline. Repeated failures pause
-//! the routine and say why.
+//! modification times; a URL: status and body; a command: stdout/stderr SHA-256) and queues a
+//! run only when the fingerprint differs from the last one. The first check only records a
+//! baseline. Repeated failures pause the routine and say why.
 //!
-//! Idea from rakazo's `packages/adapters/src/routine-watch.ts` (Apache-2.0); no code copied.
+//! Idea from rakazo's `packages/adapters/src/routine-watch.ts` (Apache-2.0) and `bdots` (Idea 42).
 
 use super::{EntryKind, Hub, Lane, Result, Routines, Status, Store, Trigger, bail, json, new_run};
 use crate::egress::Policy;
@@ -12,6 +12,7 @@ use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tokio::io::AsyncReadExt as _;
 
 /// Entries a folder fingerprint may cover.
 const MAX_ENTRIES: usize = 2000;
@@ -20,8 +21,11 @@ const SKIPPED: [&str; 2] = [".git", "node_modules"];
 /// Failed checks in a row before the routine pauses.
 const FAILURES_BEFORE_PAUSE: u32 = 3;
 const URL_TIMEOUT: Duration = Duration::from_secs(30);
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 /// Largest page a URL fingerprint reads.
 const MAX_PAGE: usize = 4 * 1024 * 1024;
+/// Largest output a command watch reads.
+const MAX_COMMAND_OUTPUT: u64 = 512 * 1024;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +34,8 @@ pub enum WatchKind {
     Files,
     /// A public HTTPS page or API answer.
     Url,
+    /// A lightweight shell command whose output is fingerprinted before waking the LLM (Idea 42).
+    Command,
 }
 
 /// What a watch trigger last saw.
@@ -56,7 +62,7 @@ pub fn validate(kind: WatchKind, target: &str, every_minutes: i64) -> Result<()>
         bail!("a watch is checked every 1 minute to 7 days (everyMinutes 1-10080)");
     }
     if target.trim().is_empty() || target.len() > 2048 || target.contains('\0') {
-        bail!("a watch needs a target: a path, or an https URL");
+        bail!("a watch needs a target: a path, an https URL, or a shell command");
     }
     if kind == WatchKind::Url {
         let url = reqwest::Url::parse(target).context("a url watch needs an https URL")?;
@@ -67,7 +73,7 @@ pub fn validate(kind: WatchKind, target: &str, every_minutes: i64) -> Result<()>
     Ok(())
 }
 
-/// The fingerprint of what `kind`/`target` names; relative paths are under `cwd`.
+/// The fingerprint of what `kind`/`target` names; relative paths and commands run under `cwd`.
 pub async fn fingerprint(kind: WatchKind, target: &str, cwd: &Path) -> Result<String> {
     match kind {
         WatchKind::Files => {
@@ -75,6 +81,7 @@ pub async fn fingerprint(kind: WatchKind, target: &str, cwd: &Path) -> Result<St
             tokio::task::spawn_blocking(move || files(&path)).await.context("the file check stopped")?
         }
         WatchKind::Url => page(target).await,
+        WatchKind::Command => command_output(target, cwd).await,
     }
 }
 
@@ -128,6 +135,33 @@ async fn page(url: &str) -> Result<String> {
     }
     let body = crate::egress::body(res, MAX_PAGE).await?;
     Ok(crate::agent::registry::sha256_hex(&body))
+}
+
+/// Runs a lightweight shell command in `cwd` and hashes its trimmed stdout/stderr (Idea 42).
+async fn command_output(command: &str, cwd: &Path) -> Result<String> {
+    let (shell, _script) = crate::shell::expanding(command, &[]).await.context("couldn't prepare watch command")?;
+    let mut cmd = shell.tokio();
+    cmd.current_dir(cwd)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    crate::agent::process::Process::prepare(&mut cmd);
+    let mut child = cmd.spawn().context("couldn't start watch command")?;
+    let mut stdout = child.stdout.take();
+    let status = tokio::time::timeout(COMMAND_TIMEOUT, child.wait())
+        .await
+        .map_err(|_| anyhow!("watch command timed out"))?
+        .context("watch command failed")?;
+    if !status.success() {
+        bail!("watch command exited with {:?}", status.code());
+    }
+    let mut bytes = Vec::new();
+    if let Some(ref mut out) = stdout {
+        out.take(MAX_COMMAND_OUTPUT).read_to_end(&mut bytes).await?;
+    }
+    let trimmed = String::from_utf8_lossy(&bytes).trim().to_owned();
+    Ok(crate::agent::registry::sha256_hex(trimmed.as_bytes()))
 }
 
 impl Routines {
@@ -277,5 +311,6 @@ mod tests {
         assert!(validate(WatchKind::Files, "notes", 0).is_err());
         assert!(validate(WatchKind::Url, "http://example.com", 5).is_err());
         assert!(validate(WatchKind::Url, "https://example.com/status", 60).is_ok());
+        assert!(validate(WatchKind::Command, "git status --porcelain", 15).is_ok());
     }
 }

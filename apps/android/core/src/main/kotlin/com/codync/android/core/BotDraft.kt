@@ -14,6 +14,9 @@ data class BotDraft(
     val description: String = "",
     val avatarColor: String = AVATAR_COLORS.random(),
     val avatarShape: String = AVATAR_SHAPES.random(),
+    val avatarLook: String? = null,
+    val actionRules: Map<String, String> = emptyMap(),
+    val proactive: ProactiveSettings? = null,
     val backend: String = "claude",
     val command: String? = null,
     val cwd: String = "",
@@ -64,10 +67,11 @@ data class BotDraft(
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive")
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
+            bot.avatarLook, bot.actionRules, bot.proactive,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
             bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks)

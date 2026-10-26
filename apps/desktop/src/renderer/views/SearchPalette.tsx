@@ -3,11 +3,11 @@ import { isGroup, type Bot } from '@shared/models'
 import { AvatarWithStatus } from '../components/Avatar'
 import { Icon } from '../components/Icon'
 import { Sheet } from '../components/Overlay'
-import { VStack } from '../components/Stack'
+import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
 import { refKey, type BotRef, type RosterItem } from '../store/app-model'
 import './search-palette.css'
-import { matchesRoster } from '../lib/roster-query'
+import { matchesRoster, rosterFilters, type RosterFilter } from '../lib/roster-query'
 import { RosterHistory } from './RosterControls'
 import { ChoicePicker } from '../components/Controls'
 
@@ -15,10 +15,10 @@ const isMac = window.codync.platform === 'darwin'
 const modifier = isMac ? '⌘' : 'Ctrl+'
 
 /** Bots matching the query by name, description or last message; all bots for an empty query. */
-export function matchBots(items: RosterItem[], query: string): RosterItem[] {
+export function matchBots(items: RosterItem[], query: string, filter: RosterFilter = 'all'): RosterItem[] {
   const q = query.trim().toLowerCase()
-  if (!q) return items
-  return items.filter(({ bot }) => matchesRoster(bot, q, 'all'))
+  if (!q && filter === 'all') return items
+  return items.filter(({ bot }) => matchesRoster(bot, q, filter))
 }
 
 /** Grok Bot's bot search: a floating list over the window, arrows/Enter or ⌘1-9 to open a bot. */
@@ -33,16 +33,17 @@ export function SearchPalette({ open, items, onPick, onClose }: { open: boolean;
 function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [mode, setMode] = useState<'bots' | 'history'>('bots')
+  const [filter, setFilter] = useState<RosterFilter>('all')
   const [active, setActive] = useState(0)
   const list = useRef<HTMLDivElement>(null)
-  const results = matchBots(items, query)
+  const results = matchBots(items, query, filter)
   const pick = (item: RosterItem | undefined) => {
     if (!item) return
     onPick(item.ref)
     onClose()
   }
 
-  useEffect(() => setActive(0), [query])
+  useEffect(() => setActive(0), [query, filter])
   useEffect(() => {
     list.current?.children[active]?.scrollIntoView({ block: 'nearest' })
   }, [active])
@@ -65,7 +66,10 @@ function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: 
 
   return (
     <div className="palette" onKeyDown={mode === 'bots' ? onKey : undefined}>
-      <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, { id: 'history', label: 'History' }]} onChange={setMode} />
+      <HStack gap={8} justify="space-between">
+        <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, { id: 'history', label: 'History' }]} onChange={setMode} />
+        {mode === 'bots' ? <ChoicePicker selection={filter} options={rosterFilters} onChange={setFilter} /> : null}
+      </HStack>
       {mode === 'history' ? <RosterHistory items={items} onPick={(item) => onPick(item.ref)} onClose={onClose} /> : <>
       <div className="palette-field">
         <Icon name="magnifyingglass" size={15} color="var(--secondary)" />

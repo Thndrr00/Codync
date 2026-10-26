@@ -12,6 +12,7 @@ pub mod config;
 pub mod coordinator;
 pub mod envelope;
 pub mod fallback;
+pub mod loop_guard;
 pub mod new_bot;
 pub mod node;
 pub mod own_memory;
