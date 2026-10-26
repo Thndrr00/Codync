@@ -154,6 +154,11 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('stop', { botId }), true)
   }
 
+  /** Interrupts every bot on this computer that is working or waiting on the user. */
+  stopAll() {
+    this.perform((c) => c.call('stopAll', {}), true)
+  }
+
   openMessageContext(entries: Entry[], hit: { botId: string; id: string; threadId: string | null }) {
     this.messageContext = { ...hit, entries }
     this.changed()

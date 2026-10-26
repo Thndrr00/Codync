@@ -653,3 +653,29 @@ export interface GroupDraft {
   chiefBotId?: string | null
   pinned?: boolean
 }
+
+/** One thing `doctor` found wrong with a bot's setup. */
+export interface DoctorFinding {
+  botId: string
+  botName: string
+  severity: 'error' | 'warning'
+  problem: string
+  message: string
+}
+
+export interface DoctorReport {
+  checked: number
+  errors: number
+  findings: DoctorFinding[]
+}
+
+/** A daily token limit and today's use; `botId` is `*` for all bots together. */
+export interface TokenBudget {
+  botId: string
+  limit: number
+  used: number
+  level: 'within' | 'warning' | 'exceeded'
+}
+
+/** A bot (or bots) as one portable JSON file: the host makes and reads it. */
+export type BotBundle = Record<string, unknown>

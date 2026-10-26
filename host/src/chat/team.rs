@@ -12,6 +12,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
+mod batch;
+mod pipeline;
 mod requests;
 pub use requests::Requests;
 
@@ -26,6 +28,8 @@ and the recipient reports the outcome to the user in its own chat. Stopping you 
 Provide a self-contained request: the recipient has its own conversation, working directory, \
 tools and permissions, not your context. ask_bot returns its final reply to you. \
 Coordinate file ownership before asking for edits in a shared project. \
+Use delegate_batch to give several bots one task each at once and get a single digest when all are done. \
+Use run_pipeline to chain bots, each stage getting the previous stage's reply. \
 Do not ask a bot that is waiting for you. Native subagents are managed by your own harness; \
 these tools are for collaborating with the user's existing bots.";
 
@@ -62,7 +66,9 @@ pub fn tools() -> Value {
                 "required": ["botId", "message"],
             },
             "annotations": {"readOnlyHint": false, "idempotentHint": false},
-        }
+        },
+        batch::tool(),
+        pipeline::tool(),
     ])
 }
 
@@ -247,6 +253,8 @@ pub async fn call(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Resul
             let message = args["message"].as_str().unwrap_or_default().trim();
             ask(hub, &source, to, message, ASK_TIMEOUT).await
         }
+        "delegate_batch" => batch::run(hub, &source, args).await,
+        "run_pipeline" => pipeline::run(hub, &source, args).await,
         "message_bot" => {
             let to = args["botId"].as_str().ok_or_else(|| anyhow!("botId is required"))?;
             let message = args["message"].as_str().unwrap_or_default().trim();

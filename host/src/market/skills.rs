@@ -211,6 +211,21 @@ pub async fn install_skill(store: &crate::store::Store, source: &str) -> Result<
     })
 }
 
+/// Skills one bot may keep. Past this it rewrites one of its own or the user clears some, so a bot can't pile up
+/// instructions without end.
+pub const MAX_WRITTEN_PER_BOT: usize = 40;
+
+/// Whether `bot` can save one more skill.
+fn room_for(all: &[Skill], bot: &str) -> Result<()> {
+    let written = all.iter().filter(|s| s.written_by.as_deref() == Some(bot)).count();
+    if written >= MAX_WRITTEN_PER_BOT {
+        bail!(
+            "You've already saved {written} skills, the most a bot keeps. Rewrite one of them (pass its id) or ask the user to remove some."
+        );
+    }
+    Ok(())
+}
+
 /// A skill written in Codync (by the user, or by the bot `written_by`): a name, when to use it, and the instructions.
 pub fn add_custom_skill(
     store: &crate::store::Store,
@@ -224,6 +239,9 @@ pub fn add_custom_skill(
         bail!("`name` is required");
     }
     update_skills(store, |all| {
+        if let Some(bot) = written_by {
+            room_for(all, bot)?;
+        }
         // A folder the list doesn't have yet (a download in progress) is taken too.
         let folders = std::fs::read_dir(skills_dir()).into_iter().flatten().flatten();
         let taken: Vec<String> =
@@ -308,6 +326,7 @@ pub fn expand_command(store: &crate::store::Store, enabled: &[String], text: &st
         return None;
     }
     let s = skills(store).into_iter().find(|s| s.id == id)?;
+    super::skill_usage::note_use(store, &s.id, crate::store::now_ms());
     let note = format!(
         "[Codync: the user picked the \"{}\" skill for this message. Read {} first and follow it.]",
         s.name,
@@ -365,6 +384,24 @@ mod tests {
         assert_eq!(front_matter("# no front matter"), (None, None));
         let folded = "---\nname: guide\ndescription: >\n  Walks you\n  through it.\nlicense: MIT\n---\n";
         assert_eq!(front_matter(folded), (Some("guide".into()), Some("Walks you through it.".into())));
+    }
+
+    fn written(id: usize, by: Option<&str>) -> Skill {
+        serde_json::from_value(json!({"id": format!("s{id}"), "name": "S", "source": "custom", "writtenBy": by}))
+            .expect("skill")
+    }
+
+    #[test]
+    fn a_bot_keeps_a_limited_number_of_skills_of_its_own() {
+        let mut all: Vec<Skill> = (0..MAX_WRITTEN_PER_BOT - 1).map(|n| written(n, Some("a"))).collect();
+        all.extend((100..110).map(|n| written(n, Some("b"))));
+        all.extend((200..210).map(|n| written(n, None)));
+        assert!(room_for(&all, "a").is_ok(), "one below the limit still has room");
+        all.push(written(300, Some("a")));
+        let refused = room_for(&all, "a").unwrap_err().to_string();
+        assert!(refused.contains("40") && refused.contains("id"), "{refused}");
+        assert!(room_for(&all, "b").is_ok(), "other bots' and the user's skills don't count");
+        assert!(room_for(&all, "c").is_ok());
     }
 
     #[test]

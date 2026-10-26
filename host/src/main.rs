@@ -6,10 +6,13 @@ mod api;
 mod background;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 mod browser;
+mod budget;
+mod bundle;
 mod chat;
 mod cli;
 mod compat;
 mod computer;
+mod doctor;
 mod documents;
 mod egress;
 mod environment;
@@ -162,6 +165,13 @@ enum Sub {
     /// downloaded update.
     #[command(hide = true)]
     Compat,
+    /// Check every bot's setup (folder, agent, fallbacks, group members); exits 1 if any can't run.
+    Doctor {
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+        #[arg(long)]
+        json: bool,
+    },
     /// Show whether the host is installed and running.
     Status {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
@@ -411,6 +421,7 @@ async fn main() -> Result<()> {
                 Ok(())
             }
         },
+        Sub::Doctor { port, json } => doctor(port, json).await,
         Sub::Access { port, action } => access(port, action.unwrap_or(AccessAction::List)).await,
         Sub::Cloud { port, enable, disable, approval } => {
             if let Some(approval) = approval {
@@ -672,6 +683,23 @@ async fn shutdown_signal() {
 }
 
 /// Calls the running host's local API (`~/.codync/token` over loopback).
+async fn doctor(port: u16, json: bool) -> Result<()> {
+    let report = local_call(port, "doctor", json!({})).await?;
+    if json {
+        println!("{report}");
+    } else {
+        for f in report["findings"].as_array().into_iter().flatten() {
+            let label = if f["severity"] == "error" { "error  " } else { "warning" };
+            println!("{label}  {}", f["message"].as_str().unwrap_or_default());
+        }
+        println!("Checked {} bots: {} with errors.", report["checked"], report["errors"]);
+    }
+    if report["errors"].as_u64().unwrap_or(0) > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 async fn local_call(port: u16, method: &str, body: serde_json::Value) -> Result<serde_json::Value> {
     let not_running =
         || anyhow::anyhow!("codync-host isn't running here. Start it with `codync-host install` (or `serve`).");

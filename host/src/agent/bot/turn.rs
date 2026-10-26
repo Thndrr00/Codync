@@ -389,6 +389,9 @@ impl Actor {
                 (crate::routines::Status::Succeeded, None)
             };
             let text = (status == crate::routines::Status::Succeeded).then(|| final_text.clone()).flatten();
+            if status == crate::routines::Status::Succeeded {
+                self.note_routine_outcome(final_text.as_deref());
+            }
             self.finish_routine(status, detail, text);
         }
         let message_failed =
@@ -399,6 +402,9 @@ impl Actor {
         } else {
             Ok(final_text.clone())
         });
+        if !grouped && !delegated && !stopped && !failed && stop_reason == "end_turn" {
+            self.offer_skill();
+        }
         self.turn = None;
         if self.routine_completion.is_none() {
             self.set_inflight(false);

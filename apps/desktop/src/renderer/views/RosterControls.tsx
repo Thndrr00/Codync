@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChoicePicker, Button } from '../components/Controls'
+import { ChoicePicker, Button, IconButton } from '../components/Controls'
 import { ModalHeader, Sheet } from '../components/Overlay'
 import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
@@ -9,15 +9,18 @@ import type { RosterItem } from '../store/app-model'
 import { RosterQuery, openRosterHit } from '../store/roster-query'
 import './roster-controls.css'
 
-export function RosterControls({ query, setQuery, filter, setFilter, grouping, setGrouping, attention }: {
+export function RosterControls({ query, setQuery, filter, setFilter, grouping, setGrouping, attention, active, stopAll }: {
   query: string; setQuery: (value: string) => void; filter: RosterFilter; setFilter: (value: RosterFilter) => void
   grouping: RosterGrouping; setGrouping: (value: RosterGrouping) => void; attention: number
+  /** Bots working or waiting on the user, across the computers shown. */
+  active: number; stopAll: () => void
 }) {
   return <VStack gap={8} className="roster-controls">
     <input className="roster-search" aria-label="Filter bots by name, project or agent" placeholder="Name, project or agent" value={query} onChange={(event) => setQuery(event.target.value)} />
     <HStack gap={8}>
       <ChoicePicker selection={filter} options={rosterFilters.map((f) => ({ ...f, label: f.id === 'attention' ? `${f.label} (${attention})` : f.label }))} onChange={setFilter} />
       <ChoicePicker selection={grouping} options={[{ id: 'manual', label: 'Manual order' }, { id: 'project', label: 'By project' }]} onChange={setGrouping} />
+      {active ? <IconButton title={`Stop all (${active})`} icon="stop.fill" onClick={stopAll} /> : null}
     </HStack>
   </VStack>
 }

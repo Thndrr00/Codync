@@ -43,6 +43,7 @@ impl Actor {
                     && self.turn.is_some()
                 {
                     self.watchdog.seen(&params["update"]);
+                    self.note_skill_use(&params["update"]);
                     self.on_update(&params["update"]);
                     if let Some(reason) = self.watchdog.tripped() {
                         tracing::warn!(bot = %self.cfg.id, "stopping a turn stuck in a tool loop");

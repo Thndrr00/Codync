@@ -31,6 +31,11 @@ internal fun AppStore.stopBot(bot: Bot) {
     command("stop", body("botId" to bot.id), "stop:" + bot.id)
 }
 
+/** Stops every bot on this computer that is working or waiting on you; keeps `"stopAll"` in `busy` until the host confirms. */
+internal fun AppStore.stopAllBots() {
+    command("stopAll", body(), "stopAll")
+}
+
 /**
  * Revalidates that `entryId` is still `"pending"` in the active state before sending `respondPermission`.
  * If another client already answered or expired it, opens the bot's chat instead.
