@@ -277,6 +277,13 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             crate::bundle::export(&[row.config])?
         }
         "importBots" => crate::bundle::import(hub, &b["bundle"], str_arg(&b, "cwd")?).await?,
+        "retireDormantSkills" => {
+            let hub = hub.clone();
+            let turned_off =
+                tokio::task::spawn_blocking(move || crate::market::retire_dormant_skills(&hub, crate::store::now_ms()))
+                    .await??;
+            json!({"turnedOff": turned_off})
+        }
         "doctor" => crate::doctor::report(hub)?,
         "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {

@@ -25,6 +25,7 @@ mod outcome;
 mod queue;
 mod results;
 mod session;
+mod skill_use;
 mod spend;
 mod stall;
 mod turn;

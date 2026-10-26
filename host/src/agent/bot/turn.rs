@@ -402,6 +402,9 @@ impl Actor {
         } else {
             Ok(final_text.clone())
         });
+        if !grouped && !delegated && !stopped && !failed && stop_reason == "end_turn" {
+            self.offer_skill();
+        }
         self.turn = None;
         if self.routine_completion.is_none() {
             self.set_inflight(false);

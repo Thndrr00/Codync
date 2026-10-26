@@ -326,6 +326,7 @@ pub fn expand_command(store: &crate::store::Store, enabled: &[String], text: &st
         return None;
     }
     let s = skills(store).into_iter().find(|s| s.id == id)?;
+    super::skill_usage::note_use(store, &s.id, crate::store::now_ms());
     let note = format!(
         "[Codync: the user picked the \"{}\" skill for this message. Read {} first and follow it.]",
         s.name,
@@ -386,7 +387,8 @@ mod tests {
     }
 
     fn written(id: usize, by: Option<&str>) -> Skill {
-        serde_json::from_value(json!({"id": format!("s{id}"), "name": "S", "source": "custom", "writtenBy": by})).expect("skill")
+        serde_json::from_value(json!({"id": format!("s{id}"), "name": "S", "source": "custom", "writtenBy": by}))
+            .expect("skill")
     }
 
     #[test]

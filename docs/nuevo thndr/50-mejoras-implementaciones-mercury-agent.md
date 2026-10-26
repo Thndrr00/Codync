@@ -330,8 +330,8 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 | 38 | Existe | `agent/bot/compaction.rs` + `codync_mem::compaction` + `chat/handoff.rs`. Descartar. |
 | 39 | No aplica: Codync no tiene carpeta `_shared/` entre bots | `chat/memory/budget.rs` limita `MEMORY.md`, no carpetas compartidas. Límites por verificar (ver arriba). |
 | 40 | Parcial | Aquí "plugins" son conectores MCP (`market/`); falta circuit breaker por conector. |
-| 41 | Parcial | `chat/skills.rs`: el bot guarda skills con `save_skill`; falta la síntesis automática. |
-| 42 | Parcial (sin compilar): tope de 40 skills guardadas por bot en `market/skills.rs`; la caducidad a 30 días no, porque Codync no registra cuándo se usa una skill | Sin higiene/caducidad de skills. |
+| 41 | Implementado en versión simple (sin compilar): tras un turno de 8 o más llamadas a herramientas, una vez al día por bot, el chat sugiere guardarlo como skill (`market/skill_usage.rs`, `agent/bot/skill_use.rs`); el bot lo escribe con `save_skill`. No genera la skill solo: Codync no llama a modelos por su cuenta | `chat/skills.rs`: el bot guarda skills con `save_skill`; falta la síntesis automática. |
+| 42 | Implementado (sin compilar): tope de 40 por bot y caducidad a 30 días sin uso (`market/skill_usage.rs`); "Turn off unused skills" las apaga en todos los bots sin borrarlas | Sin higiene/caducidad de skills. |
 | 43 | Implementado (sin compilar): `bundle.rs`, API `exportBot`/`importBots` (sin UI aún) | `market/` instala, no exporta bots/equipos. |
 | 44 | Implementado (sin compilar): `doctor.rs`, `codync-host doctor`, API `doctor` | No existe `doctor` (`host/src/cli/`). |
 | 45 | Nuevo | Sin asistente de equipos. |
@@ -364,4 +364,10 @@ Alcance acordado: host, Android y escritorio Windows. iOS y la TUI no se han toc
 - **10 Pipelines:** `run_pipeline` (hasta 8 etapas en orden; `{{previous}}` en el objetivo de una etapa recibe la respuesta de la anterior, o se añade al final; un bot puede repetirse; una etapa que falla detiene el resto; 30 minutos en total). Sin compilar; revisado a mano, con 8 pruebas puras en `chat/team/pipeline.rs`.
 - **Interfaz de 7–10 ("Team run"):** el usuario escribe las etapas (bot y objetivo), elige coordinador y modo (una tras otra o a la vez) y la app envía al coordinador un mensaje que nombra `run_pipeline` o `delegate_batch`; el resultado aparece en el chat del coordinador. Escritorio: `shared/team-run.ts` (7 pruebas pasan), `TeamRunSection.tsx`, typecheck limpio. Android: `TeamRun.kt`, `TeamRunSection.kt`, `TeamRunTest.kt`. Vive en Diagnósticos junto al resto del mantenimiento, no en el roster.
 
-- **42 (parte):** un bot no puede guardar más de 40 skills propias (`save_skill` se lo rechaza con el motivo y cómo seguir). No cuentan las del usuario ni las de otros bots. Falta la caducidad por 30 días sin uso: requiere registrar cuándo se usa una skill.
+- **42 (primera parte):** un bot no puede guardar más de 40 skills propias (`save_skill` se lo rechaza con el motivo y cómo seguir). No cuentan las del usuario ni las de otros bots. Falta la caducidad por 30 días sin uso: requiere registrar cuándo se usa una skill.
+
+- **41 y 42 completas, y enlace con `doctor` (44):**
+  - Uso de skills: se anota cuando el usuario invoca `/nombre` o cuando una llamada a herramienta toca un archivo dentro de la carpeta de la skill (`skill_touched`, como mucho una vez por hora). Una skill que un bot escribió y lleva 30 días sin uso es "dormant"; las instaladas y las del usuario nunca.
+  - `doctor` avisa (advertencia) de un bot con 40 skills guardadas y de un bot con skills dormant. Botón "Turn off unused skills" (API `retireDormantSkills`) en escritorio y Android: las quita de la lista de skills de cada bot, los archivos siguen, y se pueden volver a activar.
+  - La sugerencia de la 41 es un aviso en el chat; no crea la skill sin que el usuario lo pida.
+  - Sin compilar. Pruebas puras en `market/skill_usage.rs` (7), `doctor.rs` y `outcome.rs`.

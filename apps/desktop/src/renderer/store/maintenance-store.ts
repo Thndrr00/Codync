@@ -39,6 +39,16 @@ export class MaintenanceStore extends Observable {
     })
   }
 
+  /** Turns off, for every bot, the skills bots wrote that nobody has used for 30 days. They stay saved. */
+  async retireDormantSkills() {
+    await this.run(async (c) => {
+      const { turnedOff } = await c.call<{ turnedOff: number }>('retireDormantSkills', {})
+      this.notice = turnedOff
+        ? `Turned off ${turnedOff} unused skill ${turnedOff === 1 ? 'setting' : 'settings'}. The skills stay saved.`
+        : 'No unused skills to turn off.'
+    })
+  }
+
   /** The bot as bundle text, ready to copy. */
   async exportBot(botId: string): Promise<string | null> {
     let text: string | null = null

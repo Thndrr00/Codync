@@ -32,14 +32,19 @@ mod install;
 mod registry;
 mod runtime_identity;
 mod secret_tools;
+mod skill_usage;
 mod skills;
 mod updates;
 
 pub use install::{add_custom_connector, import_connectors, install_connector, list_connectors, remove_connector};
 pub use registry::{browse_connectors, connector_info, refresh_first_page};
+pub use skill_usage::{
+    note_use as note_skill_use, offer_skill, retire_dormant as retire_dormant_skills, skill_touched, skills_root,
+    written_skills,
+};
 pub use skills::{
-    add_custom_skill, browse_skills, expand_command, install_skill, list_skills, remove_skill, skill_details,
-    skills_brief, slash_command, turn_on_installed_once, update_custom_skill,
+    MAX_WRITTEN_PER_BOT, add_custom_skill, browse_skills, expand_command, install_skill, list_skills, remove_skill,
+    skill_details, skills_brief, slash_command, turn_on_installed_once, update_custom_skill,
 };
 
 pub use updates::{automatic_loop, refresh_connector};

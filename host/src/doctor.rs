@@ -28,6 +28,10 @@ pub enum Problem {
     MissingMember,
     SmallGroup,
     DuplicateName,
+    /// The bot saved as many skills as it may keep.
+    SkillLimit,
+    /// Skills the bot saved that nobody used for 30 days.
+    DormantSkills,
 }
 
 impl Problem {
@@ -36,7 +40,9 @@ impl Problem {
             Self::NoFolder | Self::MissingFolder | Self::NoAgent | Self::EmptyFallback | Self::MissingMember => {
                 Severity::Error
             }
-            Self::UnknownAgent | Self::SmallGroup | Self::DuplicateName => Severity::Warning,
+            Self::UnknownAgent | Self::SmallGroup | Self::DuplicateName | Self::SkillLimit | Self::DormantSkills => {
+                Severity::Warning
+            }
         }
     }
 
@@ -50,6 +56,8 @@ impl Problem {
             Self::MissingMember => "has a member that no longer exists",
             Self::SmallGroup => "has fewer than two members",
             Self::DuplicateName => "shares its name with another bot",
+            Self::SkillLimit => "has saved as many skills as a bot may keep",
+            Self::DormantSkills => "has skills it saved that nobody used for 30 days",
         }
     }
 }
@@ -68,6 +76,8 @@ pub struct Finding {
 pub struct Probe<'a> {
     pub folder_exists: &'a dyn Fn(&str) -> bool,
     pub agent_known: &'a dyn Fn(&str) -> bool,
+    /// How many skills a bot saved, and how many of those are dormant.
+    pub written_skills: &'a dyn Fn(&str) -> (usize, usize),
 }
 
 pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
@@ -113,6 +123,13 @@ pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
                 if bot.fallbacks.iter().any(|f| f.backend.is_empty() && f.command.is_none()) {
                     add(Problem::EmptyFallback);
                 }
+                let (saved, dormant) = (probe.written_skills)(&bot.id);
+                if saved >= crate::market::MAX_WRITTEN_PER_BOT {
+                    add(Problem::SkillLimit);
+                }
+                if dormant > 0 {
+                    add(Problem::DormantSkills);
+                }
             }
         }
     }
@@ -122,8 +139,11 @@ pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
 /// The `doctor` API answer: every finding, and how many are errors.
 pub fn report(hub: &Hub) -> anyhow::Result<Value> {
     let bots: Vec<BotConfig> = hub.store.bots()?.into_iter().filter(|r| !r.deleted).map(|r| r.config).collect();
-    let probe =
-        Probe { folder_exists: &|path| Path::new(path).is_dir(), agent_known: &crate::agent::backends::is_known };
+    let probe = Probe {
+        folder_exists: &|path| Path::new(path).is_dir(),
+        agent_known: &crate::agent::backends::is_known,
+        written_skills: &|bot| crate::market::written_skills(&hub.store, bot, crate::store::now_ms()),
+    };
     let findings = inspect(&bots, &probe);
     let errors = findings.iter().filter(|f| f.severity == Severity::Error).count();
     Ok(json!({"checked": bots.len(), "errors": errors, "findings": findings}))
@@ -140,8 +160,28 @@ mod tests {
     }
 
     fn problems(bots: &[BotConfig], folders: bool) -> Vec<Problem> {
-        let probe = Probe { folder_exists: &move |_| folders, agent_known: &|id| id == "claude" };
+        problems_with_skills(bots, folders, (0, 0))
+    }
+
+    fn problems_with_skills(bots: &[BotConfig], folders: bool, skills: (usize, usize)) -> Vec<Problem> {
+        let probe = Probe {
+            folder_exists: &move |_| folders,
+            agent_known: &|id| id == "claude",
+            written_skills: &move |_| skills,
+        };
         inspect(bots, &probe).into_iter().map(|f| f.problem).collect()
+    }
+
+    #[test]
+    fn skills_at_the_limit_or_unused_are_warnings() {
+        let one = [bot(json!({}))];
+        let limit = crate::market::MAX_WRITTEN_PER_BOT;
+        assert!(problems_with_skills(&one, true, (limit - 1, 0)).is_empty());
+        assert_eq!(problems_with_skills(&one, true, (limit, 0)), [Problem::SkillLimit]);
+        assert_eq!(problems_with_skills(&one, true, (3, 2)), [Problem::DormantSkills]);
+        assert_eq!(problems_with_skills(&one, true, (limit, 5)), [Problem::SkillLimit, Problem::DormantSkills]);
+        assert_eq!(Problem::SkillLimit.severity(), Severity::Warning);
+        assert_eq!(Problem::DormantSkills.severity(), Severity::Warning);
     }
 
     #[test]

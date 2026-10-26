@@ -49,6 +49,10 @@ private fun budgetsOf(answer: kotlinx.serialization.json.JsonElement): List<Toke
 internal suspend fun AppStore.clearFailedRuns(): Int =
     hostCall("clearFailedRuns", buildJsonObject {}).jsonObject["cleared"]?.jsonPrimitive?.int ?: 0
 
+/** Turns off, for every bot, the skills bots wrote that nobody has used for 30 days; answers how many switches. */
+internal suspend fun AppStore.retireDormantSkills(): Int =
+    hostCall("retireDormantSkills", buildJsonObject {}).jsonObject["turnedOff"]?.jsonPrimitive?.int ?: 0
+
 /** The bot as bundle text, ready to copy. */
 internal suspend fun AppStore.exportBot(botId: String): String = hostCall("exportBot", body("botId" to botId)).toString()
 

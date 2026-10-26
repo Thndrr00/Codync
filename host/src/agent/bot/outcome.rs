@@ -21,6 +21,7 @@ pub enum Outcome {
 #[derive(Default)]
 pub(super) struct Trace {
     outcome: Outcome,
+    calls: u32,
 }
 
 impl Trace {
@@ -29,6 +30,7 @@ impl Trace {
         if failed {
             return;
         }
+        self.calls += 1;
         let this = match kind {
             Some("edit" | "delete" | "move" | "execute") => Outcome::Acted,
             // An unlabeled tool might do anything, but this only counts what the agent says it is.
@@ -39,6 +41,11 @@ impl Trace {
 
     pub(super) fn outcome(&self) -> Outcome {
         self.outcome
+    }
+
+    /// Tool calls that finished without failing.
+    pub(super) fn calls(&self) -> u32 {
+        self.calls
     }
 }
 
@@ -87,6 +94,10 @@ mod tests {
         let mut trace = Trace::default();
         trace.finished(Some("edit"), true);
         assert_eq!(trace.outcome(), Outcome::Nothing);
+        assert_eq!(trace.calls(), 0);
+        trace.finished(Some("read"), false);
+        trace.finished(None, false);
+        assert_eq!(trace.calls(), 2);
     }
 
     #[test]

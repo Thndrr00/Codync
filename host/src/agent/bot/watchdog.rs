@@ -135,6 +135,11 @@ impl Watchdog {
         self.trace.outcome()
     }
 
+    /// Tool calls the turn finished without failing.
+    pub(super) fn tool_calls(&self) -> u32 {
+        self.trace.calls()
+    }
+
     /// Why the turn must stop for a loop, once.
     pub(super) fn tripped(&mut self) -> Option<String> {
         self.tripped.take()

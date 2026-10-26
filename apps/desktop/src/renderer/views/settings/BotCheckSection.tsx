@@ -11,16 +11,17 @@ export function BotCheckSection({ store, online }: { store: MaintenanceStore; on
   const [confirmClear, setConfirmClear] = useState(false)
   const report = store.report
   return (
-    <CardSection title="Bot check" footer="Finds bots that can't run as set up: a missing folder, no agent, a group member that was deleted.">
+    <CardSection title="Bot check" footer="Finds bots that can't run as set up: a missing folder, no agent, a group member that was deleted. Unused skills are ones a bot saved that nobody has used for 30 days.">
       <HStack gap={8}>
         <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.check()}>
           {store.busy ? <Spinner size={12} /> : null}Check bots
         </Button>
         <Button kind="secondary" disabled={!online || store.busy} onClick={() => setConfirmClear(true)}>Clear failed routine runs</Button>
+        <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.retireDormantSkills()}>Turn off unused skills</Button>
       </HStack>
       {report ? (
         <Text tone={report.errors ? 'attention' : 'secondary'}>
-          {report.errors ? `${report.errors} of ${report.checked} bots can't run as set up.` : `${report.checked} bots checked. Nothing to fix.`}
+          {report.errors ? `${report.errors} of ${report.checked} bots can't run as set up.` : report.findings.length ? `${report.checked} bots checked. Worth a look:` : `${report.checked} bots checked. Nothing to fix.`}
         </Text>
       ) : null}
       {report?.findings.map((f) => (

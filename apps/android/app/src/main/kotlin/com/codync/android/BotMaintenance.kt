@@ -62,12 +62,22 @@ private class MaintenanceState {
     }
     LaunchedEffect(online) { if (online) run { ui.budgets = store.tokenBudgets() } }
 
-    CardSection("Bot check", "Finds bots that can't run as set up: a missing folder, no agent, a group member that was deleted.") {
+    CardSection("Bot check", "Finds bots that can't run as set up: a missing folder, no agent, a group member that was deleted. Unused skills are ones a bot saved that nobody has used for 30 days.") {
         row { ActionRow("checkmark.shield", "Check bots", online && !ui.busy) { run { ui.report = store.doctor() } } }
         row { ActionRow("trash", "Clear failed routine runs", online && !ui.busy) { confirmClear = true } }
+        row {
+            ActionRow("sparkles", "Turn off unused skills", online && !ui.busy) {
+                run {
+                    val off = store.retireDormantSkills()
+                    ui.notice = if (off > 0) "Turned off $off unused skill ${if (off == 1) "setting" else "settings"}. The skills stay saved."
+                        else "No unused skills to turn off."
+                }
+            }
+        }
         ui.report?.let { report ->
             row {
                 Text(if (report.errors > 0) "${report.errors} of ${report.checked} bots can't run as set up."
+                    else if (report.findings.isNotEmpty()) "${report.checked} bots checked. Worth a look:"
                     else "${report.checked} bots checked. Nothing to fix.", style = Type.subheadline,
                     color = if (report.errors > 0) Palette.warning else Palette.secondary)
             }
