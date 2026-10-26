@@ -304,7 +304,7 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 | 6 | Parcial | `chat/instruction_history.rs` y `chat/memory/api.rs` (olvidar). El aviso con "deshacer" iría como notice de chat (`chat/handoff.rs` es el patrón), no en `agent/delivery.rs` (no existe). |
 | 7 | Implementado (sin compilar): herramienta `delegate_batch` con tareas tipadas (meta + criterios de aceptación) en `chat/team/batch.rs` | `chat/team.rs` y `chat/team/requests.rs` (delegación y grafo de espera). Faltan tareas tipadas con criterios de aceptación. |
 | 8 | Implementado (sin compilar): `delegate_batch` espera a todos y devuelve una sola respuesta (un solo despertar) | `team/requests.rs` gestiona admisión; falta despertar único tras N tareas. |
-| 9, 10 | Implementado (sin compilar): `render_digest` en `chat/team/batch.rs` | Sin digest ni pipelines. Las rutinas (`routines/`) son la base natural de pipelines. |
+| 9, 10 | 9 implementado (sin compilar): `render_digest` en `chat/team/batch.rs`. 10 (pipelines) sin hacer | Sin digest ni pipelines. Las rutinas (`routines/`) son la base natural de pipelines. |
 | 11 | Implementado (sin compilar): `agent/bot/outcome.rs` + `watchdog.rs` | `agent/bot/stall.rs`, `watchdog.rs` y `turn.rs` detectan bucles; no clasifican resultado ni "dijo que lo hizo sin hacer". |
 | 12 | Implementado (sin compilar): `routines/idle.rs`, pausa tras 3 runs sin trabajo | `routines/retry.rs` y `agent/coordinator.rs` (tope de reintentos); falta pausa por racha sin resultado. |
 | 13 | No aplica: los agentes escriben sus archivos directamente; el host no los intermedia | Sin locks por ruta. |
