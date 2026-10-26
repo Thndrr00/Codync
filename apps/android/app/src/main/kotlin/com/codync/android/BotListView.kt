@@ -177,6 +177,11 @@ import kotlinx.serialization.json.putJsonArray
                         Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                     )
                 }
+                RosterQuickActions(
+                    query = searchQuery, online = online, account = account, manage = manage,
+                    newBot = newBot, newGroup = newGroup,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                )
                 state.mismatch?.let { UpdateNeededCard(state, it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 Crossfade(
                     preferences.presentation,

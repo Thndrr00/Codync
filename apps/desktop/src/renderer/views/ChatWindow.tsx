@@ -427,7 +427,15 @@ function ChatSplitView() {
         </div>
       ) : null}
 
-      <SearchPalette open={searching} items={visibleRoster} onPick={(ref) => app.select(ref)} onClose={() => setSearching(false)} />
+      <SearchPalette open={searching} items={visibleRoster} onPick={(ref) => app.select(ref)} onClose={() => setSearching(false)} actions={[
+        ...(onlineStores.length ? [
+          { id: 'new-bot', title: 'New bot', icon: 'plus', run: () => { setSearching(false); create('bot') } },
+          { id: 'new-group', title: 'New group', icon: 'person.2', run: () => { setSearching(false); create('group') } },
+        ] : []),
+        { id: 'settings', title: 'Settings', icon: 'gearshape', run: () => { setSearching(false); setSettings('general') } },
+        { id: 'computers', title: 'Computers', icon: 'desktopcomputer', run: () => { setSearching(false); setSettings('computers') } },
+        { id: 'account', title: 'Account', icon: 'person.crop.circle', run: () => { setSearching(false); setShowAccount(true) } },
+      ]} />
       <Sheet open={editing !== null} onClose={() => setEditing(null)} width={520} height={Math.min(680, sheetHeight)}>
         {editing ? (
           <StoreContext.Provider value={editing.store}>

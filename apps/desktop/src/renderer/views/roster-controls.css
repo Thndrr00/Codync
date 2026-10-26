@@ -11,3 +11,5 @@
 .roster-row-actions button { padding: 6px 10px; color: var(--secondary); border-radius: 8px; background: var(--surface); min-height: 32px; }
 .roster-row-actions button:disabled { opacity: .5; }
 .roster-row-actions button:focus-visible { outline: 2px solid var(--accent); }
+.saved-history-searches { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow: auto; }
+.saved-history-searches .styled-button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }

@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-10-24T06:54:39.495Z",
         "reason": "Agent reviewed: existing width/padding transitions remain for other platforms; Windows-specific overrides use no width transition and only opacity/transform on the header. Production CSS verified in Chrome by tools/verify-sidebar-motion.mjs. User excludes macOS changes, so preserve its existing behavior."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "files": [
+          "apps/desktop/src/renderer/views/chat-window.css"
+        ],
+        "createdAt": "2026-10-26T07:42:53.701Z",
+        "reason": "Agent decision: existing host-recovery mascot entrance uses character motion (commit ba76a4733); reduced-motion disables the animation. Preserve the intentional mascot animation."
       }
     ]
   }
