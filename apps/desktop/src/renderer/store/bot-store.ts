@@ -2,6 +2,9 @@ import {
   isWorking,
   needsInput,
   type AgentAccount,
+  type AppLink,
+  type AppLinkMode,
+  type BotApp,
   normalizeBot,
   type Bot,
   type BotDraft,
@@ -9,6 +12,8 @@ import {
   type Entry,
   type GroupDraft,
   type Hello,
+  type MessageBookmark,
+  type OpenItem,
   type ReplyQuote,
   type ScreenState,
   type SentinelReport,
@@ -398,6 +403,47 @@ export class BotStore extends BotSync {
     return (await this.ready()).call<SentinelReport>('sentinelHealth', {})
   }
 
+  async listBotApps(botId: string): Promise<BotApp[]> {
+    const res = await (await this.ready()).call<{ apps: BotApp[] }>('listBotApps', { botId })
+    return res.apps ?? []
+  }
+
+  async createAppLink(botId: string, slug: string, mode: AppLinkMode, label = ''): Promise<AppLink> {
+    const res = await (await this.ready()).call<{ link: AppLink }>('createAppLink', { botId, slug, mode, label })
+    return res.link
+  }
+
+  async revokeAppLink(botId: string, slug: string, token: string): Promise<void> {
+    await (await this.ready()).call('revokeAppLink', { botId, slug, token })
+  }
+
+  async deleteBotApp(botId: string, slug: string): Promise<void> {
+    await (await this.ready()).call('deleteBotApp', { botId, slug })
+  }
+
+  async listOpenItems(botId: string): Promise<OpenItem[]> {
+    const res = await (await this.ready()).call<{ items: OpenItem[] }>('listOpenItems', { botId })
+    return res.items ?? []
+  }
+
+  async dismissOpenItem(botId: string, id: string): Promise<void> {
+    await (await this.ready()).call('dismissOpenItem', { botId, id })
+  }
+
+  async listBookmarks(botId: string): Promise<MessageBookmark[]> {
+    const res = await (await this.ready()).call<{ bookmarks: MessageBookmark[] }>('listBookmarks', { botId })
+    return res.bookmarks ?? []
+  }
+
+  async saveBookmark(botId: string, entryId: string, preview: string, note = '', author = '', threadId?: string | null): Promise<MessageBookmark> {
+    const res = await (await this.ready()).call<{ bookmark: MessageBookmark }>('saveBookmark', { botId, entryId, preview, note, author, threadId: threadId ?? null })
+    return res.bookmark
+  }
+
+  async deleteBookmark(botId: string, entryId: string): Promise<void> {
+    await (await this.ready()).call('deleteBookmark', { botId, entryId })
+  }
+
   async listDirs(path: string | null) {
     return (await this.ready()).call<DirListing>('listDirs', { path })
   }
@@ -455,6 +501,7 @@ export class BotStore extends BotSync {
 function updatePayload(bot: Bot): BotDraft {
   return {
     id: bot.id, name: bot.name, description: bot.description, avatarColor: bot.avatarColor, avatarShape: bot.avatarShape,
+    avatarLook: bot.avatarLook ?? null, actionRules: bot.actionRules ?? {}, proactive: bot.proactive,
     backend: bot.backend, command: bot.command ?? null, cwd: bot.managedWorkspace ? '' : bot.cwd, permission: bot.permission,
     model: bot.model ?? null, pinned: bot.pinned, hidden: bot.hidden, notify: bot.notify ?? null,
     connectors: bot.connectors, skills: bot.skills, computer: bot.computer, computerPermissions: bot.computerPermissions, fastMode: bot.fastMode,

@@ -1,7 +1,8 @@
 import { FileDownloadCard } from './FileDownloadCard'
 import { memo, useEffect, useRef, useState } from 'react'
-import { groupBotReactions, isGroup, isReplyable, isWorking, needsInput, type Bot, type Entry, type ReplyQuote } from '@shared/models'
+import { groupBotReactions, isGroup, isReplyable, isWorking, needsInput, type Bot, type BotApp, type Entry, type ReplyQuote } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
+import { ComputerCard } from '../../components/ComputerCard'
 import { Button, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { AnchoredMenu, useContextMenu, type MenuItem, type ReactionPick } from '../../components/Overlay'
@@ -36,7 +37,7 @@ export function quoteEntry(store: BotStore, entry: Entry) {
 }
 
 /** One chat-visible entry, with what can be done to it. */
-export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrace, onReply, openAgent }: {
+export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrace, onReply, openAgent, openApp }: {
   entry: Entry
   groupStart: boolean
   chat: Bot | null
@@ -45,6 +46,8 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
   onReply?: (e: Entry) => void
   /** Opens a bot's Agent settings (a failure notice's "Add a fallback"). */
   openAgent?: (botId: string) => void
+  /** Opens a sandboxed mini-app from its chat card. */
+  openApp?: (app: BotApp) => void
 }) {
   const reply = onReply && isReplyable(entry) ? () => onReply(entry) : undefined
   switch (entry.kind) {
@@ -75,12 +78,65 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
     default:
       if (entry.data.connectionRequest) return <div className="chat-row group-start"><ConnectionRequestCard entry={entry} /></div>
       if (entry.data.handoff) return <div className="chat-row notice"><HandoffNotice entry={entry} card={entry.data.handoff} /></div>
+      if (entry.data.takeoverRequest) return <div className="chat-row group-start"><TakeoverRequestNotice entry={entry} /></div>
       if (entry.data.passkeyWall) return <div className="chat-row group-start"><PasskeyWallNotice entry={entry} /></div>
       if (entry.data.chiefIncident) return <div className="chat-row group-start"><ChiefIncidentNotice entry={entry} /></div>
+      if (entry.data.botApp) return <div className="chat-row group-start"><BotAppNotice entry={entry} openApp={openApp} /></div>
       if (entry.data.agentSwitch) return <div className="chat-row notice"><AgentSwitchNotice entry={entry} carried={entry.data.agentSwitch.carried} /></div>
       return <div className="chat-row notice"><NoticeRow entry={entry} addFallback={entry.data.addFallback && openAgent ? () => openAgent(entry.data.author ?? entry.botId) : undefined} /></div>
   }
 })
+
+/** Sandboxed mini-app card published by the bot (Ideas 1–7). */
+function BotAppNotice({ entry, openApp }: { entry: Entry; openApp?: (app: BotApp) => void }) {
+  const app = entry.data.botApp
+  if (!app) return null
+  return (
+    <VStack gap={8} className="bubble agent">
+      <HStack gap={8} align="center">
+        <Icon name="macwindow" size={14} color="var(--accent)" />
+        <Text weight="semibold">{app.title}</Text>
+        <span className="t-tab-badge">v{app.version}</span>
+      </HStack>
+      {app.description ? <Text size="footnote" tone="secondary">{app.description}</Text> : null}
+      <HStack gap={8}>
+        {openApp ? (
+          <Button kind="primary" onClick={() => openApp(app)}>
+            Open App
+          </Button>
+        ) : null}
+        {app.url ? (
+          <Button kind="secondary" onClick={() => window.codync.app.copy(app.url!)}>
+            Copy Link
+          </Button>
+        ) : null}
+      </HStack>
+    </VStack>
+  )
+}
+
+/** Ideas 13, 19 & 20: Human takeover request rendered with ComputerCard and TakeoverModal. */
+function TakeoverRequestNotice({ entry }: { entry: Entry }) {
+  const store = useLiveStore()
+  const req = entry.data.takeoverRequest
+  if (!req) return null
+  const resolved = req.status === 'resolved' || req.status === 'cancelled'
+  return (
+    <ComputerCard
+      frame={{
+        url: req.url ?? undefined,
+        title: req.reason,
+        action: resolved ? 'Completed' : 'Action needed',
+        active: !resolved,
+      }}
+      onFinishTakeover={() =>
+        store.send('I have completed the requested step in the browser. Please continue.', entry.botId, {
+          thread: entry.threadId ?? null,
+        })
+      }
+    />
+  )
+}
 
 /** Interactive Passkey / 2FA / Captcha assistance card from CDP browser detector (INIC-02). */
 function PasskeyWallNotice({ entry }: { entry: Entry }) {
@@ -213,7 +269,9 @@ export function UserBubble({ entry, botWorking, reply }: { entry: Entry; botWork
             reactions={reactionPick(store, entry)}
             items={() => [
               { title: 'Copy', icon: 'square.on.square', action: copy },
-              { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+            { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+            { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? entry.botId, entry.threadId ?? null) },
+              { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? 'user', entry.threadId ?? null) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
             ]}
           >
@@ -308,15 +366,40 @@ export function NoticeRow({ entry, addFallback }: { entry: Entry; addFallback?: 
 /** The bot's current activity and elapsed time. */
 export function WorkingIndicator({ bot }: { bot: Bot }) {
   const tr = useTr()
+  const store = useLiveStore()
+  const [open, setOpen] = useState(false)
   const waiting = needsInput(bot)
+  const entries = store.allEntries(bot.id)
+  let latestThought: string | null = null
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i]!
+    if (e.kind === 'user' || (e.kind === 'agent' && e.data.final)) break
+    if (e.kind === 'thought' && e.data.text) {
+      latestThought = e.data.text
+      break
+    }
+  }
   return (
     <VStack align="flex-start" className="agent-inset">
-      <div className="working">
-        <HStack as="span" gap={8}>
+      <div className={`working t-reason ${open && latestThought ? 'is-open' : ''}`}>
+        <HStack
+          as="span"
+          gap={8}
+          onClick={() => latestThought && setOpen((v) => !v)}
+          style={latestThought ? { cursor: 'pointer' } : undefined}
+        >
           <ThinkingOrb state={waiting ? 'listening' : 'working'} size={16} color={waiting ? 'var(--warning)' : 'var(--secondary)'} />
-          <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} truncate>{tr(bot.activity || 'Working…')}</Text>
+          <Text size="subheadline" tone={waiting ? 'attention' : 'secondary'} className={waiting ? undefined : 't-shimmer is-active'} truncate>{tr(bot.activity || 'Working…')}</Text>
           {bot.startedAt ? <Timer since={bot.startedAt} /> : null}
+          {latestThought ? <Icon name="chevron.right" size={10} color="var(--tertiary)" className="t-reason-chevron" /> : null}
         </HStack>
+        {latestThought ? (
+          <div className="t-reason-body">
+            <div className="t-reason-inner" style={{ paddingTop: open ? 6 : 0 }}>
+              <Text size="footnote" tone="secondary">{latestThought}</Text>
+            </div>
+          </div>
+        ) : null}
       </div>
     </VStack>
   )

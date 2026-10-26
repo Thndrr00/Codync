@@ -78,6 +78,12 @@ impl Store {
         c.execute("DELETE FROM document_reviews WHERE bot_id = ?1", [id])?;
         c.execute("DELETE FROM document_creations WHERE bot_id = ?1", [id])?;
         c.execute("DELETE FROM documents WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM bot_app_data WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM bot_app_links WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM bot_apps WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM open_items WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM reported_items WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM message_bookmarks WHERE bot_id = ?1", [id])?;
         codync_mem::store::drop_bot(&c, id)?;
         // Its dreaming bookmark, notices' revisions and the record of its moved memory.
         c.execute("DELETE FROM kv WHERE k GLOB ?1", [format!("memory.*{id}*")])?;
@@ -159,7 +165,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::model::{BotKind, EntryKind, Lane, Permission};
+    use crate::store::model::{BotKind, EntryKind, Lane, Permission, ProactiveSettings};
     use crate::store::tests::temp_store;
 
     #[test]
@@ -173,10 +179,13 @@ mod tests {
             description: String::new(),
             avatar_color: "blue".into(),
             avatar_shape: "blob".into(),
+            avatar_look: None,
             backend: "claude".into(),
             command: None,
             cwd: "/tmp".into(),
             permission: Permission::Ask,
+            action_rules: std::collections::BTreeMap::new(),
+            proactive: ProactiveSettings::default(),
             model: None,
             model_options: std::collections::BTreeMap::new(),
             fast_mode: false,

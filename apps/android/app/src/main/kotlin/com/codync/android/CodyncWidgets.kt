@@ -423,6 +423,7 @@ class ProviderWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWi
 class UsageWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = UsageWidget() }
 class BotsWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = BotsWidget() }
 class TeamWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = TeamWidget() }
+class LockSummaryWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = BotsWidget() }
 
 abstract class CodyncWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -435,7 +436,7 @@ abstract class CodyncWidgetReceiver : GlanceAppWidgetReceiver() {
 
 internal object CodyncWidgets {
     val receivers = listOf(ProviderWidgetReceiver::class.java, UsageWidgetReceiver::class.java, BotsWidgetReceiver::class.java,
-        TeamWidgetReceiver::class.java)
+        TeamWidgetReceiver::class.java, LockSummaryWidgetReceiver::class.java)
     fun installed(context: Context): Int = receivers.sumOf { AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, it)).size }
     suspend fun update(context: Context) {
         LeadBotTile.refresh(context)

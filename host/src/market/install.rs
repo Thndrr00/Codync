@@ -336,10 +336,20 @@ async fn custom(name: &str, b: &Value, all: &[Connector]) -> Result<Connector> {
 
 /// Installed MCP servers, then the apps connected through Composio.
 pub fn list_connectors(store: &crate::store::Store) -> Result<Value> {
-    let mut items: Vec<Value> = connectors(store)?.iter().map(Connector::public).collect();
+    let mut items: Vec<Value> = connectors(store)?
+        .iter()
+        .map(|c| {
+            let mut pub_val = c.public();
+            if let Some(failure) = super::verify::last_failure(store, &c.id) {
+                pub_val["lastFailure"] = failure;
+            }
+            pub_val
+        })
+        .collect();
     items.extend(composio::connections(store)?.iter().filter(|c| c.active()).map(|c| {
-        json!({
-            "id": format!("{}{}", composio::PREFIX, c.toolkit),
+        let id = format!("{}{}", composio::PREFIX, c.toolkit);
+        let mut val = json!({
+            "id": id,
             "name": c.name,
             "description": format!("{} through Composio", c.name),
             "registryName": null,
@@ -348,12 +358,17 @@ pub fn list_connectors(store: &crate::store::Store) -> Result<Value> {
             "url": null,
             "keys": [],
             "logo": c.logo,
-        })
+        });
+        if let Some(failure) = super::verify::last_failure(store, &id) {
+            val["lastFailure"] = failure;
+        }
+        val
     }));
     Ok(json!({"items": items}))
 }
 
 pub fn remove_connector(store: &crate::store::Store, id: &str) -> Result<()> {
+    super::verify::clear_failure(store, id);
     update_connectors(store, |all| {
         all.retain(|c| c.id != id);
         Ok(())

@@ -2,6 +2,7 @@
 //! apps and helpers (loopback + `Authorization: Bearer <token>`), and `GET /channel`, the
 //! direct end-to-end encrypted channel phones use (see `channel`).
 
+pub mod apps_runtime;
 mod bots;
 mod computer_activity;
 pub mod devices;

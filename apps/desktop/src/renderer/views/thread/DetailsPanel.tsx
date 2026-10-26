@@ -10,6 +10,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { useScreenViewed } from '../../store/analytics'
 import { BotSettingsPanel } from '../bots/BotEditorView'
+import { BotAppsCard } from '../bots/BotAppsView'
 import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ComputerPanel } from '../bots/ComputerPanel'
@@ -21,10 +22,11 @@ import '../bots/documents.css'
 import { useTr } from '../../lib/use-language'
 
 
-export type DetailsTab = 'details' | 'memory' | 'documents' | 'computer' | 'settings'
+export type DetailsTab = 'details' | 'apps' | 'memory' | 'documents' | 'computer' | 'settings'
 
 const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'details', label: 'Details' },
+  { id: 'apps', label: 'Apps' },
   { id: 'memory', label: 'Memory' },
   { id: 'documents', label: 'Documents' },
   { id: 'computer', label: 'Computer' },
@@ -66,6 +68,8 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, share, 
                   {bot ? <ComputerUse bot={bot} /> : null}
                   <RoutinesView botId={botId} initialId={routineId} />
                 </>
+              ) : tab === 'apps' ? (
+                <BotAppsCard botId={botId} />
               ) : tab === 'memory' ? (
                 <MemoryCard botId={botId} />
               ) : tab === 'computer' ? (

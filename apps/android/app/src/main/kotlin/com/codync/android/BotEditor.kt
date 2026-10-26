@@ -62,6 +62,9 @@ import kotlinx.serialization.json.jsonPrimitive
             Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp))
         when (tab) {
             InspectorTab.Settings -> BotSettingsForm(state, store, draft, { draft = it }, { viewingSkill = it }) { folders = true }
+            InspectorTab.Apps -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+                draft.id?.let { BotAppsCard(it, state, store) }
+            }
             InspectorTab.Memory -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                 draft.id?.let { MemoryCard(it, state, store) }
             }
@@ -76,7 +79,7 @@ import kotlinx.serialization.json.jsonPrimitive
     CodyncSheet(viewingSkill, { viewingSkill = null }) { SkillSheet(it, state, store) }
 }
 
-private enum class InspectorTab(val label: String) { Settings("Settings"), Memory("Memory"), Routines("Routines") }
+private enum class InspectorTab(val label: String) { Settings("Settings"), Apps("Apps"), Memory("Memory"), Routines("Routines") }
 
 /** Picks an installed agent we know; connectors and skills start on once the computer has listed them. */
 private fun fillDefaults(draft: BotDraft, state: AppState): BotDraft {
@@ -102,7 +105,9 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Box(Modifier.clip(RoundedRectangle(24.dp)).background(Palette.bubbleAgent).padding(18.dp)) {
-                CharacterAvatar(draft.avatarShape, draft.avatarColor, 96.dp)
+                val look = draft.avatarLook ?: draft.avatarShape
+                if (isRobotLook(look)) RobotAvatar(look, draft.avatarColor, 96.dp)
+                else CharacterAvatar(draft.avatarShape, draft.avatarColor, 96.dp)
             }
             AvatarPicker(draft.avatarShape, draft.avatarColor, { change(draft.copy(avatarShape = it)) }, { change(draft.copy(avatarColor = it)) })
         }
@@ -202,9 +207,10 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
                     draft.manageTeam, { change(draft.copy(manageTeam = it)) })
             }
         }
+        ProactivePolicySection(draft, change)
         val plugins = state.plugins
         PluginToggles("Connectors", "No connectors yet. Add GitHub, Linear, Notion and more from Extensions.",
-            plugins?.connectors.orEmpty().map { Triple(it.id, it.name, it.command ?: it.url.orEmpty()) },
+            plugins?.connectors.orEmpty().map { Triple(it.id, it.name, it.lastFailure?.let { f -> "⚠ ${f.kind.uppercase()}: ${f.message}" } ?: (it.command ?: it.url.orEmpty())) },
             draft.connectors ?: plugins?.connectors.orEmpty().map { it.id }, { change(draft.copy(connectors = it)) })
         PluginToggles("Skills", "No skills yet. Get some from Extensions, or write your own.",
             plugins?.skills.orEmpty().map { Triple(it.id, it.name, it.description) }, draft.skills.orEmpty(), { change(draft.copy(skills = it)) }) { id ->
