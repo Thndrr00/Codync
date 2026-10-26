@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SentinelReport } from '@shared/models'
 import { Button, CardForm, CardSection, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -6,6 +6,10 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
 import { useApp } from '../../store/context'
+import { MaintenanceStore } from '../../store/maintenance-store'
+import { BotBundleSection } from './BotBundleSection'
+import { BotCheckSection } from './BotCheckSection'
+import { TokenBudgetSection } from './TokenBudgetSection'
 import { errorText } from './parts'
 
 /** Sentinel forensic diagnostics and health check (INIC-05). */
@@ -16,6 +20,13 @@ export function DiagnosticsView() {
   const [report, setReport] = useState<SentinelReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const maintenance = useModel(
+    useMemo(() => new MaintenanceStore(async () => {
+      if (!local) throw new Error('Start this computer’s host first.')
+      return local.ready()
+    }), [local]),
+  )
+  const bots = local ? [...local.bots.values()].filter((b) => b.kind !== 'group') : []
 
   const runScan = async () => {
     if (!local || !running) return
@@ -98,6 +109,9 @@ export function DiagnosticsView() {
           )}
         </CardSection>
       ) : null}
+      <BotCheckSection store={maintenance} online={running} />
+      <TokenBudgetSection store={maintenance} bots={bots} online={running} />
+      <BotBundleSection store={maintenance} bots={bots} online={running} />
     </CardForm>
   )
 }

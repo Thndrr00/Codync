@@ -212,7 +212,7 @@ import kotlinx.serialization.json.put
         }
     }
     CodyncSheet(voice, { voice = false }) { VoiceChatSettings(state, store) }
-    CodyncSheet(diagnostics, { diagnostics = false }) { SentinelDiagnosticsSheet(store) }
+    CodyncSheet(diagnostics, { diagnostics = false }) { SentinelDiagnosticsSheet(state, store) }
     SwatchPanel(coloring, paired?.color, { coloring = false }) { color -> paired?.let { store.setColor(it.id, color) } }
     CodyncDialog("Remove the older ${confirmRemoveCopy?.name ?: "computer"}?", confirmRemoveCopy != null, { confirmRemoveCopy = null },
         "It's this computer under an earlier identity and can't be reached anymore. Removing it only cleans up your account.") {
@@ -421,7 +421,7 @@ private val ConnectionRoute.icon get() = when (this) {
 }
 
 /** Sentinel forensic diagnostics sheet (INIC-05). */
-@Composable private fun SentinelDiagnosticsSheet(store: AppStore) {
+@Composable private fun SentinelDiagnosticsSheet(state: AppState, store: AppStore) {
     var loading by remember { mutableStateOf(true) }
     var healthy by remember { mutableStateOf(true) }
     var issues by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
@@ -470,6 +470,7 @@ private val ConnectionRoute.icon get() = when (this) {
                     }
                 }
             }
+            BotMaintenance(state, store)
         }
     }
 }
