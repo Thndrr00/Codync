@@ -8,6 +8,8 @@ import { rosterFilters, type RosterFilter, type RosterGrouping } from '../lib/ro
 import type { RosterItem } from '../store/app-model'
 import { RosterQuery, openRosterHit } from '../store/roster-query'
 import './roster-controls.css'
+import { SavedHistorySearches } from './SavedHistorySearches'
+import type { SearchScope } from '../store/search-shortcuts'
 
 export function RosterControls({ query, setQuery, filter, setFilter, grouping, setGrouping, attention, active, stopAll }: {
   query: string; setQuery: (value: string) => void; filter: RosterFilter; setFilter: (value: RosterFilter) => void
@@ -29,6 +31,9 @@ export function RosterHistory({ items, onPick, onClose }: { items: RosterItem[];
   const model = useMemo(() => new RosterQuery(), [])
   useModel(model)
   const [query, setQuery] = useState('')
+  const [scope, setScope] = useState<SearchScope>('all')
+  const windows = window.codync.platform === 'win32'
+  const stores = [...new Set(items.map((item) => item.store))]
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const key = JSON.stringify(items.map((i) => [i.store.contextId, i.ref.computerId, i.bot.id]))
@@ -36,18 +41,20 @@ export function RosterHistory({ items, onPick, onClose }: { items: RosterItem[];
   useEffect(() => {
     request.current++
     setOpening(false)
-    model.find(query, items)
+    model.find(query, items, false, scope)
     return () => { request.current++; model.dispose() }
-  }, [model, query, key])
+  }, [model, query, key, scope])
   const result = model.result
   return <VStack gap={12} className="roster-history">
     <input autoFocus className="roster-search" value={query} aria-label="Search full message history" placeholder="Search message history" onChange={(e) => setQuery(e.target.value)} />
+    {windows ? <SavedHistorySearches stores={stores} query={query} scope={scope} restore={(value, filter) => { setQuery(value); setScope(filter) }} /> : null}
     {items.some((i) => i.store.connection.kind !== 'online') ? <Text tone="attention">Connect to search the computer's full history.</Text> : null}
     {error ? <Text tone="danger">{error}</Text> : null}
     {result.kind === 'idle' ? <Text tone="secondary">Search messages, including threads.</Text> : null}
     {result.kind === 'loading' ? <Text tone="secondary">Searching…</Text> : null}
-    {result.kind === 'error' ? <Text tone="danger">{result.message}</Text> : null}
+    {result.kind === 'error' ? <HStack gap={8}><Text tone="danger">{result.message}</Text>{windows ? <Button kind="secondary" onClick={() => model.find(query, items, false, scope)}>Retry search</Button> : null}</HStack> : null}
     {result.kind === 'ready' ? <>
+      {windows && result.warning ? <HStack gap={8}><Text tone="attention">{result.warning}</Text><Button kind="secondary" onClick={() => model.find(query, items, false, scope)}>Retry search</Button></HStack> : null}
       {!result.hits.length ? <Text tone="secondary">No matching messages</Text> : null}
       {result.hits.map(({ hit, item }) => <button className="roster-hit" key={`${item.ref.computerId}:${hit.id}`} disabled={opening} onClick={() => {
         setOpening(true)
@@ -57,7 +64,7 @@ export function RosterHistory({ items, onPick, onClose }: { items: RosterItem[];
           setError(e instanceof Error ? e.message : String(e)); setOpening(false)
         })
       }}><Text as="div" weight="semibold">{item.bot.name} · {hit.threadId ? 'Thread' : 'Main chat'}</Text><Text as="div" tone="secondary">{hit.text}</Text></button>)}
-      {[...result.cursors.values()].some((v) => v !== null) ? <Button kind="secondary" onClick={() => model.find(query, items, true)}>More messages</Button> : null}
+      {[...result.cursors.values()].some((v) => v !== null) ? <Button kind="secondary" onClick={() => model.find(query, items, true, scope)}>More messages</Button> : null}
     </> : null}
   </VStack>
 }

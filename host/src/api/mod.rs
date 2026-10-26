@@ -17,6 +17,7 @@ mod origin;
 mod rebinding;
 mod remote;
 mod roster;
+mod saved_searches;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
@@ -80,6 +81,9 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 }
 
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+    if matches!(method, "savedSearches" | "saveSearch" | "deleteSavedSearch") {
+        return saved_searches::call(hub, caller, method, &b);
+    }
     if crate::research::METHODS.contains(&method) {
         if method == "setResearchKey" && !matches!(caller, Caller::Local) {
             return Err(Forbidden.into());

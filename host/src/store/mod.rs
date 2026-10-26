@@ -19,6 +19,8 @@ mod model;
 pub mod open_items;
 mod research;
 mod roster;
+mod saved_searches;
+pub use saved_searches::{SearchScope, search_terms};
 pub mod runtime;
 mod schema;
 mod setup;

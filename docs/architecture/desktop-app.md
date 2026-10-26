@@ -4,6 +4,10 @@ Codync's computer-side app is one Electron app in `apps/desktop/` for macOS, Lin
 replaced the SwiftUI Mac app (`apps/macos/`) and the GTK 4 Linux app (`apps/linux/`) in 2.7.0.
 The iPhone app stays native SwiftUI; its package moved from `kit/` into `apps/ios/Kit/`.
 
+Windows saved message searches, searchable navigation actions and routine run inspection are
+documented in [search and run history](../features/search-and-run-history.md), including the
+corresponding Android behavior and host-owned storage.
+
 The desktop, iPhone and terminal clients page a conversation's history on their own;
 reaching the end of a history response determines when there are no earlier messages.
 

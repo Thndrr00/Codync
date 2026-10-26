@@ -72,6 +72,7 @@ import kotlinx.coroutines.launch
     val busy = "routines:${bot.id}" in state.busy
     // The open editor: on a routine (its id), or "" setting up a new one.
     var editing by remember(bot.id) { mutableStateOf(initialId) }
+    var runHistory by remember(bot.id) { mutableStateOf<Map<String, RoutineHistorySelection>>(emptyMap()) }
     LaunchedEffect(bot.id, online) { if (online) while (true) { store.loadRoutines(bot.id); delay(3_000) } }
     Column(Modifier.fillMaxSize().background(Palette.background).verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -97,6 +98,10 @@ import kotlinx.coroutines.launch
                     }
                     CodyncSwitch(routine.enabled, { store.routineAction(bot.id, routine.id, "setRoutineEnabled", it) },
                         Modifier.width(34.dp).semantics { contentDescription = routine.name }, enabled = online && !busy) {}
+                }
+                RoutineRunHistory(routine.name, listing?.runs.orEmpty().filter { it.routineId == routine.id },
+                    runHistory[routine.id] ?: RoutineHistorySelection()) { selection ->
+                    runHistory = runHistory + (routine.id to selection)
                 }
             }
         }

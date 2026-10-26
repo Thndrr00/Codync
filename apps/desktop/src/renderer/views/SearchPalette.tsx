@@ -10,6 +10,7 @@ import './search-palette.css'
 import { matchesRoster, rosterFilters, type RosterFilter } from '../lib/roster-query'
 import { RosterHistory } from './RosterControls'
 import { ChoicePicker } from '../components/Controls'
+import { SearchActions, type SearchAction } from './SearchActions'
 
 const isMac = window.codync.platform === 'darwin'
 const modifier = isMac ? '⌘' : 'Ctrl+'
@@ -22,17 +23,17 @@ export function matchBots(items: RosterItem[], query: string, filter: RosterFilt
 }
 
 /** Grok Bot's bot search: a floating list over the window, arrows/Enter or ⌘1-9 to open a bot. */
-export function SearchPalette({ open, items, onPick, onClose }: { open: boolean; items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void }) {
+export function SearchPalette({ open, items, onPick, onClose, actions = [] }: { open: boolean; items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions?: SearchAction[] }) {
   return (
     <Sheet open={open} onClose={onClose} width={640} dismissOnDim>
-      {open ? <PaletteBody items={items} onPick={onPick} onClose={onClose} /> : null}
+      {open ? <PaletteBody items={items} onPick={onPick} onClose={onClose} actions={actions} /> : null}
     </Sheet>
   )
 }
 
-function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void }) {
+function PaletteBody({ items, onPick, onClose, actions }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions: SearchAction[] }) {
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState<'bots' | 'history'>('bots')
+  const [mode, setMode] = useState<'bots' | 'history' | 'actions'>('bots')
   const [filter, setFilter] = useState<RosterFilter>('all')
   const [active, setActive] = useState(0)
   const list = useRef<HTMLDivElement>(null)
@@ -67,10 +68,10 @@ function PaletteBody({ items, onPick, onClose }: { items: RosterItem[]; onPick: 
   return (
     <div className="palette" onKeyDown={mode === 'bots' ? onKey : undefined}>
       <HStack gap={8} justify="space-between">
-        <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, { id: 'history', label: 'History' }]} onChange={setMode} />
+        <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, { id: 'history', label: 'History' }, ...(window.codync.platform === 'win32' ? [{ id: 'actions' as const, label: 'Actions' }] : [])]} onChange={setMode} />
         {mode === 'bots' ? <ChoicePicker selection={filter} options={rosterFilters} onChange={setFilter} /> : null}
       </HStack>
-      {mode === 'history' ? <RosterHistory items={items} onPick={(item) => onPick(item.ref)} onClose={onClose} /> : <>
+      {mode === 'actions' ? <SearchActions actions={[{ id: 'history', title: 'Search history', icon: 'magnifyingglass', run: () => setMode('history') }, ...actions]} /> : mode === 'history' ? <RosterHistory items={items} onPick={(item) => onPick(item.ref)} onClose={onClose} /> : <>
       <div className="palette-field">
         <Icon name="magnifyingglass" size={15} color="var(--secondary)" />
         <input autoFocus value={query} placeholder="Search" aria-label="Search bots" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
