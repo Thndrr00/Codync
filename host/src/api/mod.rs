@@ -3,6 +3,7 @@
 //! direct end-to-end encrypted channel phones use (see `channel`).
 
 mod bots;
+mod catalog;
 mod computer_activity;
 pub mod devices;
 mod documents;
@@ -147,6 +148,10 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Continue(b) => b,
     };
     let b = match marketplace::call(hub, caller, method, b).await? {
+        ControlFlow::Break(v) => return Ok(v),
+        ControlFlow::Continue(b) => b,
+    };
+    let b = match catalog::call(hub, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };

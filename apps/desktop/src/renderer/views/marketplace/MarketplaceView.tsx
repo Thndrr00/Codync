@@ -9,6 +9,7 @@ import { useStore } from '../../store/context'
 import { useScreenViewed } from '../../store/analytics'
 import { ComputerBadge } from '../ComputerBadge'
 import { AgentSheet, AgentTile, NodeNotice } from './AgentSheet'
+import { CatalogSections } from './CatalogSections'
 import { CredentialsView } from './CredentialsView'
 import { CustomConnectorSheet, InstallConnectorSheet, NewSkillSheet } from './ConnectorSheets'
 import { SetupTerminalView } from './SetupTerminal'
@@ -223,6 +224,7 @@ export function MarketplaceView({ computers, computer, onComputer }: { computers
         <div className="market-page-content">
           {header}
           {searchField}
+          <CatalogSections query={query} onError={setError} />
           {agents.length > 0 ? (
             <MarketSection title={query ? tr('Agents matching “{query}”').replaceAll('{query}', query) : 'Agents'}>
               {allAgents.some((b) => b.node === 'missing') ? <NodeNotice onAdd={() => setAddingNode(true)} /> : null}

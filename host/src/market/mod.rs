@@ -19,6 +19,7 @@
 
 pub mod agent_sign_in;
 pub mod bot_secrets;
+pub mod catalog;
 pub mod composio;
 pub mod logins;
 pub mod oauth;

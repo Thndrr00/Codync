@@ -119,14 +119,20 @@ pub struct Confirm {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NewBotField {
     Name,
+    Purpose,
+    Agent,
     Color,
     Shape,
 }
 
-/// A new bot: a name (optional: the host names it after its first conversations) and its looks.
-/// Everything else takes the defaults and is changed afterwards in Settings.
+/// A new bot: a name (optional: the host names it after its first conversations), what it should help with,
+/// its agent and its looks. Everything else takes the defaults and is changed afterwards in Settings.
 pub struct NewBot {
     pub name: Editor,
+    /// Its standing instructions.
+    pub purpose: Editor,
+    /// `None`: the host picks the agent.
+    pub backend: Option<String>,
     pub color: usize,
     pub shape: usize,
     pub field: NewBotField,

@@ -168,7 +168,9 @@ Evidence: references `src/main/agent-marketplace-service.ts`,
    Antigravity support; remove the island's two-provider omission through
    selection, not unbounded growth. Test unsupported adapter versions, absent
    quota, all windows, account isolation, stale data and reconnects.
-2. Simple profile creation and a Codync-owned bot catalog using existing host
+2. (Done for desktop, Android and terminal; iPhone deferred at the owner's request.
+   See [Ready-made bots and coordinator teams](../features/marketplace.md#ready-made-bots-and-coordinator-teams).)
+   Simple profile creation and a Codync-owned bot catalog using existing host
    creation APIs. Verify retries, unavailable models and partial installs.
 3. Global task agenda/calendar over the existing scheduler. Test time zones,
    missed occurrences, restart, cancellation and execution-result attribution.

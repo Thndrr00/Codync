@@ -14,6 +14,7 @@ import {
   type SentinelReport,
   type Usage,
 } from '@shared/models'
+import type { BotCatalog } from '@shared/catalog'
 import type { HostClient } from '../client/host-client'
 import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'
@@ -347,6 +348,22 @@ export class BotStore extends BotSync {
     const res = await (await this.ready()).call<{ bot: Bot }>('updateBot', draft)
     this.bots.set(res.bot.id, normalizeBot(res.bot))
     this.changed()
+  }
+
+  /** The host's ready-made bots and coordinator teams. */
+  async botCatalog(): Promise<BotCatalog> {
+    return (await this.ready()).call<BotCatalog>('botCatalog', {})
+  }
+
+  /** Creates a catalog team on the host (its coordinator, its teammates and their group) and opens the group. */
+  async installTeam(id: string) {
+    const res = await (await this.ready()).call<{ bot: Bot }>('installTeam', { id }, 60_000)
+    const group = normalizeBot(res.bot)
+    this.bots.set(group.id, group)
+    this.selection = group.id
+    this.onRosterChanged?.()
+    this.changed()
+    return group
   }
 
   /** Takes one bot out of a group; an automatic "Alice, Bob" name follows the new roster. */
