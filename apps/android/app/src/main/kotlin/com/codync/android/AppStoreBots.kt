@@ -156,12 +156,12 @@ suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean =
 
 suspend fun AppStore.listBotApps(botId: String): List<BotApp> {
     val response = hostQuery("listBotApps", body("botId" to botId))
-    return response.jsonObject["apps"]?.let { WireJson.decodeFromJsonElement(it) } ?: emptyList()
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("apps"))
 }
 
-suspend fun AppStore.createAppLink(botId: String, slug: String, mode: String, label: String = ""): AppLink {
+suspend fun AppStore.createAppLink(botId: String, slug: String, mode: String, label: String = ""): AppLinkResult {
     val response = hostQuery("createAppLink", body("botId" to botId, "slug" to slug, "mode" to mode, "label" to label))
-    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("link"))
+    return WireJson.decodeFromJsonElement(response)
 }
 
 suspend fun AppStore.revokeAppLink(botId: String, slug: String, token: String) {
@@ -174,7 +174,7 @@ suspend fun AppStore.deleteBotApp(botId: String, slug: String) {
 
 suspend fun AppStore.listOpenItems(botId: String): List<OpenItem> {
     val response = hostQuery("listOpenItems", body("botId" to botId))
-    return response.jsonObject["items"]?.let { WireJson.decodeFromJsonElement(it) } ?: emptyList()
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("items"))
 }
 
 suspend fun AppStore.dismissOpenItem(botId: String, id: String) {
@@ -183,7 +183,7 @@ suspend fun AppStore.dismissOpenItem(botId: String, id: String) {
 
 suspend fun AppStore.listBookmarks(botId: String): List<MessageBookmark> {
     val response = hostQuery("listBookmarks", body("botId" to botId))
-    return response.jsonObject["bookmarks"]?.let { WireJson.decodeFromJsonElement(it) } ?: emptyList()
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("bookmarks"))
 }
 
 suspend fun AppStore.saveBookmark(botId: String, entryId: String, preview: String, note: String = "", author: String = "", threadId: String? = null): MessageBookmark {

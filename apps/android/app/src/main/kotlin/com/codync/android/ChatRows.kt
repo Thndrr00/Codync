@@ -159,7 +159,11 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
 /** Sandboxed mini-app card published by the bot in chat (Ideas 1–7). */
 @Composable private fun BotAppNoticeCard(entry: Entry, store: AppStore) {
     val appJson = entry.data["botApp"] as? JsonObject ?: return
-    val app = remember(appJson) { runCatching { WireJson.decodeFromJsonElement<BotApp>(appJson) }.getOrNull() } ?: return
+    val app = remember(appJson, entry.botId) { runCatching { botAppFromNotice(entry.botId, appJson) }.getOrNull() }
+    if (app == null) {
+        Text("Mini-app details are unavailable. Open the bot's settings to try again.", style = Type.chatFootnote, color = Palette.danger)
+        return
+    }
     var open by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {

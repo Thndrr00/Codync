@@ -9,6 +9,6 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_loading"
-    android:description="@string/widget_bots_description"
+    android:description="@string/widget_lock_summary_description"
     android:previewLayout="@layout/widget_loading"
     android:widgetCategory="home_screen|keyguard" />

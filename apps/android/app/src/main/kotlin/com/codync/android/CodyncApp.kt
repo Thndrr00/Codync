@@ -87,6 +87,14 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
         onboarding -> Root.Pairing
         else -> Root.Tabs
     }
+    LaunchedEffect(root) {
+        Analytics.onboardingStep(when (root) {
+            Root.Welcome -> RootOnboardingStep.Welcome
+            Root.Pairing -> RootOnboardingStep.Pairing
+            Root.Tabs -> RootOnboardingStep.Ready
+            Root.Loading -> null
+        })
+    }
     BackHandler(root == Root.Pairing && !signedIn) { welcomed = false }
     val openMarketplace = { showAccount = false; accountSettings = false; showComputers = false; showMarketplace = true }
     Box(Modifier.fillMaxSize().background(Palette.background)) {
@@ -144,10 +152,14 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
     CodyncSheet(showUsage && !state.loading, { showUsage = false }) { UsageScreen(state, store::refreshUsage, store::reloadUsage) }
     CodyncSheet(showMarketplace && root == Root.Tabs, { showMarketplace = false }) { MarketplaceView(state, store) }
     CodyncSheet(groupEditor.takeIf { !state.loading }, { groupEditor = null }) { draft ->
-        key(state.contextId, state.generation, draft.id) { GroupEditor(state, draft, store) }
+        key(state.contextId, state.generation, draft.id) {
+            if (draft.id == null) NewGroupView(state, store) else GroupEditor(state, draft, store)
+        }
     }
     CodyncSheet(editor.takeIf { !state.loading }, { editor = null }) { draft ->
-        key(state.contextId, state.generation, draft.id) { BotEditor(state, draft, store) }
+        key(state.contextId, state.generation, draft.id) {
+            if (draft.id == null) NewBotView(state, store) else BotEditor(state, draft, store)
+        }
     }
     // Content shared from another app: pick the bot whose draft receives it.
     CodyncSheet(state.incomingShare.takeIf { !state.loading && root == Root.Tabs }, store::discardShare) { share -> ShareTargetView(state, share, store) }

@@ -47,16 +47,17 @@ import com.codync.android.design.*
  */
 @Composable fun NewBotView(state: AppState, store: AppStore) {
     var draft by remember { mutableStateOf(BotDraft()) }
+    val agentDefaults = remember { NewBotAgentDefaults() }
     val catalog = rememberCatalog(state, store)
     val online = state.actualConnection is LinkState.Ready
     val dismiss = LocalDismissModal.current
     // A new bot starts on an installed agent we know; the host turns on every connector and skill.
-    LaunchedEffect(state.hello) { draft = withKnownAgent(draft, state) }
+    LaunchedEffect(state.hello) { draft = agentDefaults.refreshed(draft, state) }
     CreateLayout(state, "New bot", draft.name, { draft = draft.copy(name = it) }, "Name your bot", online, { store.saveBot(draft) { dismiss() } },
         { CharacterAvatar(draft.avatarShape, draft.avatarColor, 96.dp) }) {
         AvatarPicker(draft.avatarShape, draft.avatarColor, { draft = draft.copy(avatarShape = it) }, { draft = draft.copy(avatarColor = it) })
         PurposeField(draft.description) { draft = draft.copy(description = it) }
-        AgentAndModel(state, store, draft) { draft = it }
+        AgentAndModel(state, store, draft) { draft = agentDefaults.edited(draft, it) }
         Suggestions(catalog?.bots.orEmpty().filter { it.featured }) { draft = draft.from(it) }
         if (!online) Text("Connect this computer to create the bot.", style = Type.caption, color = Palette.warning)
     }

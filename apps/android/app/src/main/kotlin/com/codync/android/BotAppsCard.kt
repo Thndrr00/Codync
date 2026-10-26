@@ -1,10 +1,6 @@
 package com.codync.android
 
-import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,10 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.codync.android.core.BotApp
 import com.codync.android.core.LinkState
 import com.codync.android.core.MessageBookmark
@@ -39,6 +33,7 @@ import com.codync.android.core.collectPendingDecisions
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -52,7 +47,11 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
     var openItems by remember(botId, state.generation) { mutableStateOf<List<OpenItem>>(emptyList()) }
     var bookmarks by remember(botId, state.generation) { mutableStateOf<List<MessageBookmark>>(emptyList()) }
     var loading by remember(botId) { mutableStateOf(true) }
+    var error by remember(botId) { mutableStateOf<String?>(null) }
     var activeApp by remember { mutableStateOf<BotApp?>(null) }
+    var editingNoteId by remember(botId) { mutableStateOf<String?>(null) }
+    var noteDraft by remember(botId) { mutableStateOf("") }
+    var savingNote by remember(botId) { mutableStateOf(false) }
 
     val entries = state.entries.filter { it.botId == botId }
     val pendingDecisions = remember(entries) { collectPendingDecisions(entries) }
@@ -60,22 +59,52 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
 
     suspend fun reload() {
         loading = true
-        apps = runCatching { store.listBotApps(botId) }.getOrDefault(emptyList())
-        openItems = runCatching { store.listOpenItems(botId) }.getOrDefault(emptyList())
-        bookmarks = runCatching { store.listBookmarks(botId) }.getOrDefault(emptyList())
-        val current = activeApp
-        if (current != null) activeApp = apps.firstOrNull { it.slug == current.slug } ?: current
-        loading = false
+        error = null
+        try {
+            apps = store.listBotApps(botId)
+            openItems = store.listOpenItems(botId)
+            bookmarks = store.listBookmarks(botId)
+            val current = activeApp
+            if (current != null) activeApp = apps.firstOrNull { it.slug == current.slug } ?: current
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            error = failure.message ?: "Could not load bot apps and saved items."
+        } finally {
+            loading = false
+        }
+    }
+
+    suspend fun change(work: suspend () -> Unit): Boolean {
+        try {
+            work()
+            reload()
+            return error == null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            error = failure.message ?: "Could not update this item."
+            return false
+        }
     }
 
     LaunchedEffect(botId, online, state.generation) {
-        if (online) reload() else loading = false
+        if (online) reload() else {
+            loading = false
+            error = "Connect this computer to load mini-apps and saved items."
+        }
     }
 
     CardSection("Mini-Apps") {
+        error?.let { message -> row {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(message, style = Type.footnote, color = Palette.danger)
+                SecondaryButton("Retry loading", enabled = !loading) { scope.launch { reload() } }
+            }
+        } }
         if (loading && apps.isEmpty()) {
             row { Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) { Spinner() } }
-        } else if (apps.isEmpty()) {
+        } else if (apps.isEmpty() && error == null) {
             row { Text(tr("No mini-apps yet. Ask the bot to build an interactive dashboard, tracker, or tool."), style = Type.body, color = Palette.secondary) }
         } else {
             for (app in apps) {
@@ -95,8 +124,7 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
                         SecondaryButton("Open") { activeApp = app }
                         IconButton("Delete app", "trash") {
                             scope.launch {
-                                runCatching { store.deleteBotApp(botId, app.slug) }
-                                reload()
+                                change { store.deleteBotApp(botId, app.slug) }
                             }
                         }
                     }
@@ -114,7 +142,7 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
                 SpinningCounter(value = openItems.size)
             }
         }
-        if (openItems.isEmpty()) {
+        if (openItems.isEmpty() && error == null && !loading) {
             row { Text(tr("No open items tracked right now."), style = Type.body, color = Palette.secondary) }
         } else {
             for (item in openItems) {
@@ -129,8 +157,7 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
                         }
                         IconButton("Mark resolved", "checkmark.circle") {
                             scope.launch {
-                                runCatching { store.dismissOpenItem(botId, item.id) }
-                                reload()
+                                change { store.dismissOpenItem(botId, item.id) }
                             }
                         }
                     }
@@ -183,8 +210,8 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
 
     Spacer(Modifier.height(16.dp))
 
-    CardSection("Bookmarks & Notes (${bookmarks.size})") {
-        if (bookmarks.isEmpty()) {
+    CardSection("Bookmarks & Notes (${bookmarks.size})", modifier = Modifier.animateContentSize(Motion.layoutSize)) {
+        if (bookmarks.isEmpty() && error == null && !loading) {
             row { Text(tr("Long-press any message in the chat to bookmark it here."), style = Type.body, color = Palette.secondary) }
         } else {
             for (bm in bookmarks) {
@@ -193,15 +220,42 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
                         Symbol("bookmark.fill", size = 15.dp, tint = Palette.accent)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(bm.preview.ifBlank { "(Message)" }, style = Type.body.medium, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (bm.note.isNotBlank()) {
+                            if (bm.note.isNotBlank() && editingNoteId != bm.entryId) {
                                 Text(bm.note, style = Type.caption, color = Palette.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        IconButton("Remove bookmark", "trash") {
+                        IconButton("Edit note", "pencil", enabled = !savingNote) {
+                            editingNoteId = bm.entryId
+                            noteDraft = bm.note
+                            error = null
+                        }
+                        IconButton("Remove bookmark", "trash", enabled = !savingNote) {
                             scope.launch {
-                                runCatching { store.deleteBookmark(botId, bm.entryId) }
-                                reload()
+                                change { store.deleteBookmark(botId, bm.entryId) }
                             }
+                        }
+                    }
+                }
+                if (editingNoteId == bm.entryId) row {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlainTextField(noteDraft, { noteDraft = it }, Modifier.fillMaxWidth(),
+                            prompt = "Add a personal note…", minLines = 2, maxLines = 5, enabled = !savingNote)
+                        error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SecondaryButton(if (savingNote) "Saving…" else "Save note", enabled = !savingNote) {
+                                savingNote = true
+                                scope.launch {
+                                    try {
+                                        if (change { store.saveBookmark(botId, bm.entryId, bm.preview, noteDraft, bm.author, bm.threadId) }) {
+                                            editingNoteId = null
+                                            noteDraft = ""
+                                        }
+                                    } finally {
+                                        savingNote = false
+                                    }
+                                }
+                            }
+                            SecondaryButton("Cancel", enabled = !savingNote) { editingNoteId = null; noteDraft = "" }
                         }
                     }
                 }
@@ -211,58 +265,5 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
 
     CodyncSheet(activeApp, { activeApp = null }) { app ->
         BotAppSheet(botId = botId, app = app, store = store, onChanged = { scope.launch { reload() } })
-    }
-}
-
-/** Sandboxed mini-app sheet with capability link sharing (`view` / `edit`). */
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-internal fun BotAppSheet(botId: String, app: BotApp, store: AppStore, onChanged: () -> Unit = {}) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var shareMode by remember { mutableStateOf("view") }
-    var shareStatus by remember { mutableStateOf<String?>(null) }
-
-    Column(Modifier.fillMaxSize()) {
-        ModalHeader("${app.title} · v${app.version}") {
-            ChoicePicker(shareMode, listOf("view" to "View", "edit" to "Edit"), { shareMode = it }, label = "Share mode")
-            IconButton("Share link", "square.and.arrow.up") {
-                scope.launch {
-                    val link = runCatching { store.createAppLink(botId, app.slug, shareMode, "Mobile $shareMode") }.getOrNull()
-                    if (link != null) {
-                        val url = app.url.ifBlank { "/apps/$botId/${app.slug}/${link.token}/" }
-                        context.getSystemService(ClipboardManager::class.java)
-                            ?.setPrimaryClip(ClipData.newPlainText("Mini-App Link", url))
-                        shareStatus = "Copied $shareMode link: $url"
-                        onChanged()
-                    }
-                }
-            }
-        }
-        shareStatus?.let { msg ->
-            Text(msg, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), style = Type.caption, color = Palette.accent)
-        }
-        if (app.url.isNotBlank()) {
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedRectangle(16.dp)),
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = false
-                        settings.allowFileAccess = false
-                        settings.allowContentAccess = false
-                        webViewClient = WebViewClient()
-                        loadUrl(app.url)
-                    }
-                },
-                update = { view ->
-                    if (view.url != app.url) view.loadUrl(app.url)
-                },
-            )
-        } else {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("Mini-app ready (${app.entry} · v${app.version})", style = Type.body, color = Palette.secondary)
-            }
-        }
     }
 }
