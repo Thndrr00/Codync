@@ -62,7 +62,7 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             } else if crate::chat::apps::TOOLS.contains(&name) {
                 crate::chat::apps::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::open_items::TOOLS.contains(&name) {
-                crate::chat::open_items::call(hub, bot, name, &b["arguments"]).await?
+                crate::chat::open_items::call(hub, bot, name, &b["arguments"])?
             } else if name == crate::chat::skills::TOOL {
                 crate::chat::skills::call(hub, bot, &b["arguments"]).await?
             } else if crate::chat::fallbacks::TOOLS.contains(&name) {

@@ -33,7 +33,7 @@ export function NewBotView({ computer }: { computer: ComputerChoice | null }) {
   const { catalog } = useCatalog(store)
 
   const create = async () => {
-    const bot = await store.save(fillDefaults(store, { ...draft, name: draft.name.trim() }))
+    const bot = await store.save({ ...draft, name: draft.name.trim() })
     store.setSelection(bot.id)
   }
 

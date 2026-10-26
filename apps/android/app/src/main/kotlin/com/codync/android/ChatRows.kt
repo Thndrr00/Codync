@@ -169,7 +169,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
             Text("v${app.version}", Modifier.clip(Capsule()).background(Palette.surface).padding(horizontal = 6.dp, vertical = 2.dp),
                 style = Type.caption2.semibold, color = Palette.secondary)
         }
-        if (!app.description.isNullOrBlank()) Text(app.description, style = Type.chatFootnote, color = Palette.secondary)
+        app.description?.takeIf { it.isNotBlank() }?.let { Text(it, style = Type.chatFootnote, color = Palette.secondary) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PrimaryButton("Open App") { open = true }
         }
@@ -280,7 +280,7 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
     })
     if (quote != null) add(MenuItem("Quote", icon = "text.bubble", action = quote))
     if (store != null) add(MenuItem("Bookmark", icon = "bookmark") {
-        store.command("saveBookmark", body("botId" to entry.botId, "entryId" to entry.id, "preview" to entry.text, "author" to (entry.author ?: entry.botId)), "bookmark:" + entry.id)
+        store.command("saveBookmark", body("botId" to entry.botId, "entryId" to entry.id, "preview" to entry.text, "author" to entry.replyQuote.author), "bookmark:" + entry.id)
     })
     if (reply != null) add(MenuItem("Reply", icon = "arrowshape.turn.up.left", action = reply))
     if (trace != null) add(MenuItem("Show what it did", icon = "list.bullet", action = trace))

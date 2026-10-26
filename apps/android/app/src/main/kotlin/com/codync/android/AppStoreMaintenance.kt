@@ -1,8 +1,11 @@
 package com.codync.android
 
+import com.codync.android.core.SentinelReport
+import com.codync.android.core.WireJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -19,6 +22,10 @@ internal data class DoctorReport(val checked: Int, val errors: Int, val findings
 internal data class TokenBudget(val botId: String, val limit: Long, val used: Long, val level: String)
 
 internal const val FLEET_BUDGET = "*"
+
+/** Sentinel scans recent runtime events on the connected computer. */
+internal suspend fun AppStore.sentinelReport(): SentinelReport =
+    WireJson.decodeFromJsonElement(hostCall("sentinelHealth", buildJsonObject {}))
 
 /** The host's upkeep calls the diagnostics sheet makes: bot check, daily token limits, failed runs, bot bundles. */
 internal suspend fun AppStore.doctor(): DoctorReport {

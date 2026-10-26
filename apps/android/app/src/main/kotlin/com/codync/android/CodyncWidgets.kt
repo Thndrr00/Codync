@@ -456,7 +456,8 @@ internal object CodyncWidgets {
         val manager = AppWidgetManager.getInstance(context)
         if (!manager.isRequestPinAppWidgetSupported) return false
         val receiver = when (kind) { WidgetKind.Provider -> ProviderWidgetReceiver::class.java; WidgetKind.Usage -> UsageWidgetReceiver::class.java
-            WidgetKind.Bots -> BotsWidgetReceiver::class.java; WidgetKind.Team -> TeamWidgetReceiver::class.java }
+            WidgetKind.Bots -> BotsWidgetReceiver::class.java; WidgetKind.Team -> TeamWidgetReceiver::class.java
+            WidgetKind.LockSummary -> LockSummaryWidgetReceiver::class.java }
         return manager.requestPinAppWidget(ComponentName(context, receiver), null, null)
     }
 }

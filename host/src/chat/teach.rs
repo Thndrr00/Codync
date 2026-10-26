@@ -198,7 +198,8 @@ pub fn format_dom_events(events: &[Value], nav_history: &[Value]) -> Vec<String>
     for nav in nav_history.iter().take(20) {
         if let Some(url) = nav["url"].as_str().filter(|u| !u.is_empty() && *u != "about:blank") {
             let title = nav["title"].as_str().unwrap_or_default();
-            let entry = format!("Visited {url}{}", if title.is_empty() { String::new() } else { format!(" ({title})") });
+            let entry =
+                format!("Visited {url}{}", if title.is_empty() { String::new() } else { format!(" ({title})") });
             if lines.last() != Some(&entry) {
                 lines.push(entry);
             }

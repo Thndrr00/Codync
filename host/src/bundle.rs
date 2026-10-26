@@ -6,7 +6,7 @@
 
 use crate::hub::Hub;
 use crate::store::{BotConfig, BotKind, Fallback, Permission};
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -65,6 +65,9 @@ impl Portable {
 
     /// The body `createBot` takes, for a bot working in `cwd`.
     fn draft(&self, cwd: &str) -> Result<Value> {
+        if self.fallbacks.iter().any(|fallback| fallback.command.is_some()) {
+            bail!("Bot bundles cannot contain fallback commands; configure custom commands on this computer");
+        }
         let mut body = serde_json::to_value(self)?;
         body["cwd"] = cwd.into();
         // Unset colours and shapes fall to the host's defaults.
@@ -107,13 +110,52 @@ fn drafts(bundle: &Value, cwd: &str) -> Result<Vec<Value>> {
 
 /// Makes the bots of `bundle` in `cwd`; answers the bots created.
 pub async fn import(hub: &Arc<Hub>, bundle: &Value, cwd: &str) -> Result<Value> {
-    let mut created = Vec::new();
+    let mut configs = Vec::new();
     for body in drafts(bundle, cwd)? {
-        let cfg = crate::agent::new_bot::with_defaults(hub, body).await?;
-        let hub = hub.clone();
-        created.push(tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??);
+        let mut cfg = crate::agent::new_bot::with_defaults(hub, body).await?;
+        crate::agent::fallback::tidy(&mut cfg);
+        // create_bot names an unnamed bot before validating it. Check the same shape without
+        // changing the saved draft's automatic naming behavior.
+        let mut checked = cfg.clone();
+        if checked.name.trim().is_empty() {
+            crate::chat::naming::PLACEHOLDER.clone_into(&mut checked.name);
+        }
+        crate::hub::validate(&checked)?;
+        configs.push(cfg);
     }
+    let hub = hub.clone();
+    let created = tokio::task::spawn_blocking(move || create_all(&hub, configs)).await??;
     Ok(json!({"bots": created}))
+}
+
+/// Keep creation and cleanup in one blocking task, including if the requesting client disconnects.
+fn create_all(hub: &Arc<Hub>, configs: Vec<BotConfig>) -> Result<Vec<Value>> {
+    let mut created: Vec<Value> = Vec::new();
+    for cfg in configs {
+        match hub.create_bot(cfg) {
+            Ok(bot) => created.push(bot),
+            Err(error) => {
+                let mut failures = Vec::new();
+                for bot in &created {
+                    let Some(id) = bot["id"].as_str() else {
+                        failures.push("a created bot returned no id".to_owned());
+                        continue;
+                    };
+                    if let Err(cleanup) = hub.delete_bot(id) {
+                        failures.push(format!("{id}: {cleanup:#}"));
+                    }
+                }
+                if !failures.is_empty() {
+                    return Err(anyhow!(
+                        "Import failed: {error:#}. Could not remove imported bots: {}",
+                        failures.join("; ")
+                    ));
+                }
+                return Err(error);
+            }
+        }
+    }
+    Ok(created)
 }
 
 #[cfg(test)]
@@ -127,7 +169,8 @@ mod tests {
             "connectors": ["mcp-1"], "skills": ["skill-1"], "permission": "ask",
             "fallbacks": [{"backend": "codex", "command": "C:/bin/codex.exe"}],
         });
-        base.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let Value::Object(extra) = extra else { panic!("expected test bot fields") };
+        base.as_object_mut().unwrap().extend(extra);
         serde_json::from_value(base).unwrap()
     }
 
@@ -167,4 +210,16 @@ mod tests {
         assert!(drafts(&json!({"format": FORMAT, "version": 1, "bots": []}), "D:/w").is_err());
         assert!(drafts(&good, "  ").is_err());
     }
+
+    #[test]
+    fn incoming_fallback_commands_are_refused() {
+        let mut bundle = export(&[bot(json!({}))]).unwrap();
+        bundle["bots"][0]["fallbacks"][0]["command"] = "untrusted executable".into();
+        let error = drafts(&bundle, "D:/work").unwrap_err().to_string();
+        assert!(error.contains("cannot contain fallback commands"));
+    }
 }
+
+#[cfg(test)]
+#[path = "bundle_tests.rs"]
+mod import_tests;

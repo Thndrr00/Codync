@@ -128,12 +128,8 @@ pub fn check_slug(raw: &str) -> Result<String> {
 }
 
 pub fn check_collection(raw: &str) -> Result<String> {
-    let s: String = raw
-        .trim()
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .take(48)
-        .collect();
+    let s: String =
+        raw.trim().chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(48).collect();
     if s.is_empty() {
         bail!("collection name is required");
     }
@@ -502,6 +498,6 @@ mod tests {
         assert_eq!(s.app_collections("bot1", "split-bill").unwrap().len(), 1);
         assert_eq!(s.app_data_delete("bot1", "split-bill", "expenses", Some("e1")).unwrap(), 1);
         assert!(s.delete_bot_app("bot1", "split-bill").unwrap());
-        assert!(s.list_bot_apps("bot1").unwrap().is_empty());
+        assert_eq!(s.list_bot_apps("bot1").unwrap().len(), 0);
     }
 }

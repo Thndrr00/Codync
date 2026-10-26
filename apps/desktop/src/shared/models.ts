@@ -282,16 +282,23 @@ export interface ChiefIncidentCard {
 }
 
 export interface SentinelIssue {
-  id: string
-  severity: 'info' | 'warning' | 'critical'
-  category: string
-  message: string
-  autoFixable: boolean
+  signature: string
+  kind: 'tool_error' | 'retry_loop' | 'turn_error' | 'queue_lag'
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  toolName?: string
+  botId: string
+  firstSeenAt: number
+  lastSeenAt: number
+  count: number
+  wastedTurns: number
+  evidenceEntryId: string
 }
 
 export interface SentinelReport {
-  timestamp: string
-  healthy: boolean
+  scannedAt: number
+  lookbackMs: number
+  entriesExamined: number
   issues: SentinelIssue[]
 }
 

@@ -11,7 +11,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 pub const TOOLS: [&str; 8] = [
     "track_item",
@@ -136,7 +136,7 @@ pub fn tools() -> [Value; 8] {
     ]
 }
 
-pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Result<Value> {
+pub fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "track_item" => {
             let title = args["title"].as_str().context("title is required")?;
@@ -148,7 +148,8 @@ pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Res
         }
         "update_item" => {
             let id = args["id"].as_str().context("id is required")?;
-            let item = hub.store.update_open_item(bot_id, id, args["note"].as_str(), args["checkAfterHours"].as_f64())?;
+            let item =
+                hub.store.update_open_item(bot_id, id, args["note"].as_str(), args["checkAfterHours"].as_f64())?;
             Ok(json!({"item": item}))
         }
         "resolve_item" => {
@@ -175,7 +176,7 @@ pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Res
                 .collect();
             hub.store.was_reported(bot_id, &keys, args["withinHours"].as_f64())
         }
-        "shell_job" => shell_job(hub, bot_id, args).await,
+        "shell_job" => shell_job(hub, bot_id, args),
         "request_handoff" => {
             let reason = args["reason"].as_str().context("reason is required")?.trim();
             if reason.is_empty() {
@@ -205,7 +206,7 @@ pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Res
     }
 }
 
-async fn shell_job(hub: &Hub, bot_id: &str, args: &Value) -> Result<Value> {
+fn shell_job(hub: &Hub, bot_id: &str, args: &Value) -> Result<Value> {
     let action = args["action"].as_str().unwrap_or("list");
     match action {
         "start" => {
@@ -226,27 +227,12 @@ async fn shell_job(hub: &Hub, bot_id: &str, args: &Value) -> Result<Value> {
                     return;
                 };
                 let mut cmd = shell.tokio();
-                cmd.current_dir(&cwd)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped())
-                    .kill_on_drop(true);
-                crate::agent::process::Process::prepare(&mut cmd);
-                let Ok(mut child) = cmd.spawn() else {
-                    *exit_clone.locked() = Some(-1);
-                    return;
+                cmd.current_dir(&cwd);
+                let (output, status) = match Box::pin(run_shell_command(cmd)).await {
+                    Ok(result) => result,
+                    Err(error) => (format!("Shell job failed: {error:#}"), -1),
                 };
-                let mut stdout = child.stdout.take();
-                let mut stderr = child.stderr.take();
-                let status = child.wait().await.ok().and_then(|s| s.code()).unwrap_or(-1);
-                let mut buf = Vec::new();
-                if let Some(ref mut out) = stdout {
-                    let _ = out.take(64 * 1024).read_to_end(&mut buf).await;
-                }
-                if let Some(ref mut err) = stderr {
-                    let _ = err.take(64 * 1024).read_to_end(&mut buf).await;
-                }
-                *out_clone.locked() = String::from_utf8_lossy(&buf).into_owned();
+                *out_clone.locked() = output;
                 *exit_clone.locked() = Some(status);
             });
 
@@ -309,6 +295,40 @@ async fn shell_job(hub: &Hub, bot_id: &str, args: &Value) -> Result<Value> {
     }
 }
 
+const SHELL_OUTPUT_LIMIT: usize = 64 * 1024;
+
+/// Retain a bounded prefix, but keep draining so a verbose command can still exit.
+async fn drain_shell_output(mut stream: impl AsyncRead + Unpin) -> Result<Vec<u8>> {
+    let mut retained = Vec::new();
+    let mut buffer = [0; 8192];
+    loop {
+        let count = stream.read(&mut buffer).await?;
+        if count == 0 {
+            return Ok(retained);
+        }
+        let keep = count.min(SHELL_OUTPUT_LIMIT - retained.len());
+        retained.extend_from_slice(&buffer[..keep]);
+    }
+}
+
+async fn run_shell_command(mut command: tokio::process::Command) -> Result<(String, i32)> {
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    crate::agent::process::Process::prepare(&mut command);
+    let mut child = command.spawn()?;
+    let stdout = child.stdout.take().context("shell stdout is unavailable")?;
+    let stderr = child.stderr.take().context("shell stderr is unavailable")?;
+    // This also resumes the suspended Windows process; dropping it kills owned descendants.
+    let mut owned = crate::agent::process::Process::new(child)?;
+    let (mut out, err, status) =
+        tokio::try_join!(drain_shell_output(stdout), drain_shell_output(stderr), owned.wait_owned())?;
+    out.extend(err);
+    Ok((String::from_utf8_lossy(&out).into_owned(), status.code().unwrap_or(-1)))
+}
+
 /// Host API methods for UI clients (`listOpenItems`, `dismissOpenItem`, `listBookmarks`, `saveBookmark`, `deleteBookmark`).
 pub fn api_call(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
     let bot_id = b["botId"].as_str().context("`botId` is required")?;
@@ -339,5 +359,34 @@ pub fn api_call(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
             Ok(json!({"deleted": deleted}))
         }
         _ => bail!("unknown open item api method: {method}"),
+    }
+}
+
+#[cfg(test)]
+mod shell_job_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn verbose_shell_job_finishes_with_bounded_stdout_and_stderr() {
+        let python = if cfg!(windows) { "python" } else { "python3" };
+        let lookup = tokio::process::Command::new(python)
+            .args(["-c", "import sys; print(sys.executable)"])
+            .output()
+            .await
+            .unwrap();
+        assert!(lookup.status.success());
+        let executable = String::from_utf8(lookup.stdout).unwrap();
+        let mut command = tokio::process::Command::new(executable.trim());
+        command.args([
+            "-c",
+            "import sys; sys.stdout.write('a' * 262144); sys.stdout.flush(); sys.stderr.write('b' * 262144); sys.stderr.flush()",
+        ]);
+        let (output, status) =
+            tokio::time::timeout(std::time::Duration::from_secs(30), Box::pin(run_shell_command(command)))
+                .await
+                .expect("verbose commands must not deadlock on their output pipes")
+                .unwrap();
+        assert_eq!(status, 0);
+        assert_eq!(output, format!("{}{}", "a".repeat(SHELL_OUTPUT_LIMIT), "b".repeat(SHELL_OUTPUT_LIMIT)));
     }
 }

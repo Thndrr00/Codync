@@ -1,70 +1,16 @@
-//! Turn-level safeguards and context pruning (Ideas 31–34 from `bdots`):
-//! - Idea 31: `LoopGuard` with deterministic `stable_json` and `MAX_IDENTICAL_CALLS = 5`.
+//! Tool output limits and context pruning.
+//! Repeated failures are handled by the per-turn guard in `bot::stall`.
 //! - Idea 32: Adaptive page snapshot pruning (`KEEP_PAGE_RESULTS = 3`).
 //! - Idea 33: Screenshot / image payload pruning (`KEEP_IMAGES = 2`).
 //! - Idea 34: Tool output cap (`MAX_TOOL_RESULT_CHARS = 12_000`).
 
 use serde_json::{Value, json};
-use std::collections::HashMap;
 
-pub const MAX_IDENTICAL_CALLS: usize = 5;
 pub const MAX_TOOL_RESULT_CHARS: usize = 12_000;
 #[allow(dead_code)]
 pub const KEEP_PAGE_RESULTS: usize = 3;
 #[allow(dead_code)]
 pub const KEEP_IMAGES: usize = 2;
-
-/// Serializes JSON with object keys sorted recursively so semantically identical tool arguments
-/// produce the exact same fingerprint regardless of key insertion order.
-pub fn stable_json(value: &Value) -> String {
-    match value {
-        Value::Array(items) => {
-            let parts: Vec<String> = items.iter().map(stable_json).collect();
-            format!("[{}]", parts.join(","))
-        }
-        Value::Object(map) => {
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            let parts: Vec<String> = keys
-                .into_iter()
-                .map(|k| {
-                    let k_json = serde_json::to_string(k).unwrap_or_default();
-                    format!("{k_json}:{}", stable_json(&map[k]))
-                })
-                .collect();
-            format!("{{{}}}", parts.join(","))
-        }
-        _ => serde_json::to_string(value).unwrap_or_default(),
-    }
-}
-
-/// Detects when a model gets stuck calling the exact same tool with the exact same arguments
-/// repeatedly within a single turn (`MAX_IDENTICAL_CALLS = 5`).
-#[derive(Default, Debug, Clone)]
-pub struct LoopGuard {
-    counts: HashMap<String, usize>,
-}
-
-impl LoopGuard {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Records a tool call and returns `Some(warning)` once the identical `(tool_name, args)` pair
-    /// reaches `MAX_IDENTICAL_CALLS`.
-    pub fn check(&mut self, tool_name: &str, args: &Value) -> Option<String> {
-        let key = format!("{tool_name}:{}", stable_json(args));
-        let count = self.counts.entry(key).and_modify(|n| *n += 1).or_insert(1);
-        if *count >= MAX_IDENTICAL_CALLS {
-            Some(format!(
-                "Stopped: {tool_name} was called {count} times with identical arguments. \
-Summarize what worked and what failed instead of retrying the same call."
-            ))
-        } else {
-            None
-        }
-    }
-}
 
 /// Caps a tool output string to `MAX_TOOL_RESULT_CHARS` (`12_000`), preserving char boundaries.
 pub fn cap_tool_output(text: &str) -> String {
@@ -130,21 +76,6 @@ pub fn shape_tool_results(entries: &mut [Value]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn stable_json_sorts_keys_and_loop_guard_trips_at_five() {
-        let a = json!({"b": 1, "a": {"y": 2, "x": 3}});
-        let b = json!({"a": {"x": 3, "y": 2}, "b": 1});
-        assert_eq!(stable_json(&a), stable_json(&b));
-
-        let mut guard = LoopGuard::new();
-        for _ in 0..4 {
-            assert!(guard.check("read_file", &a).is_none());
-        }
-        let fifth = guard.check("read_file", &b);
-        assert!(fifth.is_some());
-        assert!(fifth.unwrap().contains("called 5 times"));
-    }
 
     #[test]
     fn shape_tool_results_prunes_old_pages_images_and_long_text() {

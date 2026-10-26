@@ -11,6 +11,7 @@ use crate::store::BotConfig;
 use anyhow::{Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::sync::Arc;
 
 /// Tasks in one batch: more than a coordinator can read back is a job for a routine, not a call.
@@ -145,7 +146,7 @@ pub(super) fn render_digest(results: &[TaskResult]) -> String {
             Ok(reply) => ("replied", truncate(reply.trim(), DIGEST_REPLY_BYTES)),
             Err(error) => ("failed", error.clone()),
         };
-        text.push_str(&format!("\n\n{}. [{label}] {} — {}\n{body}", i + 1, r.bot_name, truncate(&r.goal, 120)));
+        let _ = write!(text, "\n\n{}. [{label}] {} — {}\n{body}", i + 1, r.bot_name, truncate(&r.goal, 120));
     }
     text
 }
@@ -207,7 +208,7 @@ mod tests {
                 acceptance: vec!["no TODOs".into(), "tests pass".into()]
             }
         );
-        assert!(tasks[1].acceptance.is_empty());
+        assert_eq!(tasks[1].acceptance, Vec::<String>::new());
     }
 
     #[test]

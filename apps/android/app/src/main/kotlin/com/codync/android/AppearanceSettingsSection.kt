@@ -27,6 +27,7 @@ import com.codync.android.design.ThemeMode
 import com.codync.android.design.UiDensity
 import com.codync.android.design.ValueRow
 import com.codync.android.design.rememberAppearancePreferences
+import com.codync.android.design.semibold
 
 /**
  * Device-scoped appearance and ergonomics settings: theme mode, dynamic/curated accent,

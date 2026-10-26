@@ -172,7 +172,7 @@ mod tests {
         let mine = skill("mine", Some("a"));
         let installed = skill("installed", None);
         assert!(usage.seed(&[mine.clone(), installed.clone()], 0));
-        assert!(!usage.seed(&[mine.clone()], 5), "a skill already seen keeps its time");
+        assert!(!usage.seed(std::slice::from_ref(&mine), 5), "a skill already seen keeps its time");
         assert!(!usage.is_dormant(&mine, DORMANT_AFTER_MS - 1));
         assert!(usage.is_dormant(&mine, DORMANT_AFTER_MS));
         assert!(!usage.is_dormant(&installed, DORMANT_AFTER_MS * 5), "only skills bots wrote lapse");

@@ -8,6 +8,10 @@ use serde_json::{Value, json};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
+#[cfg(test)]
+#[path = "catalog_tests.rs"]
+mod tests;
+
 pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<ControlFlow<Value, Value>> {
     Ok(ControlFlow::Break(match method {
         "botCatalog" => json!(catalog::catalog()),

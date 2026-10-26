@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { SentinelReport } from '@shared/models'
+import type { SentinelIssue, SentinelReport } from '@shared/models'
 import { Button, CardForm, CardSection, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
@@ -12,6 +12,16 @@ import { BotCheckSection } from './BotCheckSection'
 import { TeamRunSection } from './TeamRunSection'
 import { TokenBudgetSection } from './TokenBudgetSection'
 import { errorText } from './parts'
+
+const issueKinds: Record<SentinelIssue['kind'], string> = {
+  tool_error: 'Tool error', retry_loop: 'Retry loop', turn_error: 'Failed turn', queue_lag: 'Queue wait',
+}
+
+function scanTime(timestamp: number): string | null {
+  if (!Number.isFinite(timestamp)) return null
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString()
+}
 
 /** Sentinel forensic diagnostics and health check (INIC-05). */
 export function DiagnosticsView() {
@@ -28,6 +38,8 @@ export function DiagnosticsView() {
     }), [local]),
   )
   const bots = local ? [...local.bots.values()].filter((b) => b.kind !== 'group') : []
+  const healthy = report?.issues.length === 0
+  const scanned = report ? scanTime(report.scannedAt) : null
 
   const runScan = async () => {
     if (!local || !running) return
@@ -51,13 +63,13 @@ export function DiagnosticsView() {
     <CardForm>
       <CardSection
         title="Sentinel Watchdog"
-        footer="Scans SQLite integrity, orphaned browser locks, stale job assignments, and process health."
+        footer="Reviews recent tool errors, failed turns, retry loops, and queue waits."
       >
         <ValueRow
           label="Status"
           detail={
             report
-              ? `Last scanned ${new Date(report.timestamp).toLocaleTimeString()}`
+              ? scanned ? `Last scanned ${scanned}` : 'Scan time unavailable'
               : running
                 ? 'Ready to scan'
                 : 'Host is offline'
@@ -67,12 +79,12 @@ export function DiagnosticsView() {
             {report ? (
               <HStack gap={4}>
                 <Icon
-                  name={report.healthy ? 'checkmark.shield.fill' : 'exclamationmark.triangle.fill'}
+                  name={healthy ? 'checkmark.shield.fill' : 'exclamationmark.triangle.fill'}
                   size={13}
-                  color={report.healthy ? 'var(--success, #30d158)' : 'var(--warning, #ff9f0a)'}
+                  color={healthy ? 'var(--success, #30d158)' : 'var(--warning, #ff9f0a)'}
                 />
-                <Text tone={report.healthy ? 'text' : 'attention'}>
-                  {report.healthy ? 'Healthy' : `${report.issues.length} issue(s)`}
+                <Text tone={healthy ? 'text' : 'attention'}>
+                  {healthy ? 'No issues found' : `${report.issues.length} ${report.issues.length === 1 ? 'issue' : 'issues'}`}
                 </Text>
               </HStack>
             ) : null}
@@ -87,24 +99,33 @@ export function DiagnosticsView() {
 
       {report ? (
         <CardSection title="Diagnostic Findings">
+          <Text size="footnote" tone="secondary">{report.entriesExamined} entries examined.</Text>
           {report.issues.length === 0 ? (
             <HStack gap={8}>
               <Icon name="checkmark.circle.fill" size={14} color="var(--success, #30d158)" />
-              <Text tone="secondary">No database, browser profile, or runtime anomalies detected.</Text>
+              <Text tone="secondary">No tool errors, failed turns, retry loops, or queue waits found.</Text>
             </HStack>
           ) : (
             report.issues.map((issue) => (
-              <VStack key={issue.id} gap={4} className="settings-row">
+              <VStack key={`${issue.signature}:${issue.botId}`} gap={4} className="settings-row">
                 <HStack gap={6}>
                   <Icon
-                    name={issue.severity === 'critical' ? 'xmark.octagon.fill' : issue.severity === 'warning' ? 'exclamationmark.triangle.fill' : 'info.circle'}
+                    name={issue.severity === 'high' ? 'xmark.octagon.fill' : issue.severity === 'medium' ? 'exclamationmark.triangle.fill' : 'info.circle'}
                     size={13}
-                    color={issue.severity === 'critical' ? 'var(--danger)' : issue.severity === 'warning' ? 'var(--warning)' : 'var(--secondary)'}
+                    color={issue.severity === 'high' ? 'var(--danger)' : issue.severity === 'medium' ? 'var(--warning)' : 'var(--secondary)'}
                   />
-                  <Text weight="semibold">{issue.category.toUpperCase()} · {issue.id}</Text>
-                  {issue.autoFixable ? <Text size="caption" tone="tertiary">(Auto-fixable via codync-host sentinel --fix)</Text> : null}
+                  <Text weight="semibold">{issue.title}</Text>
                 </HStack>
-                <Text size="footnote" tone="secondary">{issue.message}</Text>
+                <Text size="footnote" tone="secondary">
+                  {issueKinds[issue.kind]} · {issue.severity} · {issue.count} {issue.count === 1 ? 'occurrence' : 'occurrences'}
+                </Text>
+                <Text size="footnote" tone="secondary">
+                  Bot: {local?.bots.get(issue.botId)?.name ?? issue.botId}{issue.toolName ? ` · Tool: ${issue.toolName}` : ''}
+                </Text>
+                <Text size="caption" tone="tertiary">
+                  {issue.wastedTurns} wasted turns · First seen: {scanTime(issue.firstSeenAt) ?? 'Unknown'} · Last seen: {scanTime(issue.lastSeenAt) ?? 'Unknown'}
+                </Text>
+                <Text size="caption" tone="tertiary">Evidence entry: {issue.evidenceEntryId}</Text>
               </VStack>
             ))
           )}

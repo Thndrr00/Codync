@@ -94,6 +94,12 @@ fn row_item(r: &rusqlite::Row) -> rusqlite::Result<OpenItem> {
     })
 }
 
+fn hours_millis(hours: f64) -> Result<i64> {
+    let duration = std::time::Duration::try_from_secs_f64(hours * 3600.0)
+        .context("hours must be finite, nonnegative and within range")?;
+    i64::try_from(duration.as_millis()).context("hours exceed the supported timestamp range")
+}
+
 impl Store {
     pub fn list_open_items(&self, bot_id: &str) -> Result<Vec<OpenItem>> {
         let c = self.db.locked();
@@ -122,7 +128,10 @@ impl Store {
         let now = now_ms();
         let check_after = check_after_hours
             .filter(|h| *h > 0.0 && h.is_finite())
-            .map(|h| now + ((h * 3_600_000.0) as i64));
+            .map(|h| {
+                hours_millis(h).and_then(|millis| now.checked_add(millis).context("check time exceeds timestamp range"))
+            })
+            .transpose()?;
         let c = self.db.locked();
         if let Some(mut existing) = c
             .query_row(
@@ -190,7 +199,7 @@ impl Store {
             item.note = n.trim().chars().take(500).collect();
         }
         if let Some(h) = check_after_hours.filter(|h| *h > 0.0 && h.is_finite()) {
-            item.check_after = Some(now + ((h * 3_600_000.0) as i64));
+            item.check_after = Some(now.checked_add(hours_millis(h)?).context("check time exceeds timestamp range")?);
         }
         item.updated_at = now;
         c.execute(
@@ -236,7 +245,9 @@ impl Store {
 
     pub fn was_reported(&self, bot_id: &str, keys: &[String], within_hours: Option<f64>) -> Result<Value> {
         let now = now_ms();
-        let since = now - (within_hours.unwrap_or(24.0 * 14.0) * 3_600_000.0) as i64;
+        let since = now
+            .checked_sub(hours_millis(within_hours.unwrap_or(24.0 * 14.0))?)
+            .context("report window exceeds timestamp range")?;
         let c = self.db.locked();
         let mut reported = Vec::new();
         let mut fresh = Vec::new();
@@ -354,14 +365,16 @@ mod tests {
         assert_eq!(b.note, "Updated note");
         assert_eq!(s.list_open_items("b1").unwrap().len(), 1);
         assert!(s.close_open_item("b1", &a.id, "resolved", Some("CI green")).unwrap());
-        assert!(s.list_open_items("b1").unwrap().is_empty());
+        assert_eq!(s.list_open_items("b1").unwrap().len(), 0);
 
         s.mark_reported("b1", "issue:101", Some("Sent summary")).unwrap();
         let check = s.was_reported("b1", &["issue:101".into(), "issue:102".into()], Some(24.0)).unwrap();
         assert_eq!(check["reported"].as_array().unwrap().len(), 1);
         assert_eq!(check["fresh"], json!(["issue:102"]));
 
-        let bm = s.save_bookmark("b1", "entry-7", None, "b1", "Important architecture decision", "Review before release").unwrap();
+        let bm = s
+            .save_bookmark("b1", "entry-7", None, "b1", "Important architecture decision", "Review before release")
+            .unwrap();
         assert_eq!(bm.entry_id, "entry-7");
         assert_eq!(bm.note, "Review before release");
         let updated_bm = s.save_bookmark("b1", "entry-7", None, "b1", "", "Updated note").unwrap();
@@ -370,6 +383,6 @@ mod tests {
         assert_eq!(updated_bm.note, "Updated note");
         assert_eq!(s.list_bookmarks("b1").unwrap().len(), 1);
         assert!(s.delete_bookmark("b1", "entry-7").unwrap());
-        assert!(s.list_bookmarks("b1").unwrap().is_empty());
+        assert_eq!(s.list_bookmarks("b1").unwrap().len(), 0);
     }
 }

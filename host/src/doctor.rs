@@ -155,7 +155,8 @@ mod tests {
 
     fn bot(value: Value) -> BotConfig {
         let mut base = json!({"id": "x", "name": "X", "backend": "claude", "cwd": "/work", "permission": "ask"});
-        base.as_object_mut().unwrap().extend(value.as_object().unwrap().clone());
+        let Value::Object(extra) = value else { panic!("bot overrides must be an object") };
+        base.as_object_mut().unwrap().extend(extra);
         serde_json::from_value(base).unwrap()
     }
 
@@ -176,7 +177,7 @@ mod tests {
     fn skills_at_the_limit_or_unused_are_warnings() {
         let one = [bot(json!({}))];
         let limit = crate::market::MAX_WRITTEN_PER_BOT;
-        assert!(problems_with_skills(&one, true, (limit - 1, 0)).is_empty());
+        assert_eq!(problems_with_skills(&one, true, (limit - 1, 0)), Vec::<Problem>::new());
         assert_eq!(problems_with_skills(&one, true, (limit, 0)), [Problem::SkillLimit]);
         assert_eq!(problems_with_skills(&one, true, (3, 2)), [Problem::DormantSkills]);
         assert_eq!(problems_with_skills(&one, true, (limit, 5)), [Problem::SkillLimit, Problem::DormantSkills]);
@@ -186,7 +187,7 @@ mod tests {
 
     #[test]
     fn a_healthy_bot_has_no_findings() {
-        assert!(problems(&[bot(json!({}))], true).is_empty());
+        assert_eq!(problems(&[bot(json!({}))], true), Vec::<Problem>::new());
     }
 
     #[test]
@@ -200,7 +201,7 @@ mod tests {
 
     #[test]
     fn a_command_stands_in_for_a_known_agent() {
-        assert!(problems(&[bot(json!({"backend": "mine", "command": "run-it"}))], true).is_empty());
+        assert_eq!(problems(&[bot(json!({"backend": "mine", "command": "run-it"}))], true), Vec::<Problem>::new());
     }
 
     #[test]
@@ -210,7 +211,7 @@ mod tests {
         let group = |members: Value| {
             bot(json!({"id": "g", "name": "G", "kind": "group", "backend": "", "cwd": "", "members": members}))
         };
-        assert!(problems(&[a.clone(), b.clone(), group(json!(["a", "b"]))], true).is_empty());
+        assert_eq!(problems(&[a.clone(), b.clone(), group(json!(["a", "b"]))], true), Vec::<Problem>::new());
         assert_eq!(problems(&[a.clone(), b.clone(), group(json!(["a", "gone"]))], true), [Problem::MissingMember]);
         assert_eq!(problems(&[a, b, group(json!(["a"]))], true), [Problem::SmallGroup]);
     }

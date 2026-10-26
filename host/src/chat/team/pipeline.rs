@@ -11,6 +11,7 @@ use crate::hub::Hub;
 use crate::store::BotConfig;
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
+use std::fmt::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -110,7 +111,7 @@ pub(super) fn render_digest(results: &[StageResult]) -> String {
     let replied = results.iter().filter(|r| matches!(r.outcome, StageOutcome::Replied(_))).count();
     let mut text = format!("Pipeline finished: {replied} of {} stages replied.", results.len());
     if let Some(stage) = stopped_at(results) {
-        text.push_str(&format!(" Stopped at stage {stage}; the stages after it didn't run."));
+        let _ = write!(text, " Stopped at stage {stage}; the stages after it didn't run.");
     }
     let last = results.len();
     for (i, r) in results.iter().enumerate() {
@@ -122,7 +123,7 @@ pub(super) fn render_digest(results: &[StageResult]) -> String {
             StageOutcome::Failed(error) => ("failed", error.clone()),
             StageOutcome::Skipped => ("skipped", String::new()),
         };
-        text.push_str(&format!("\n\n{}. [{label}] {} — {}", i + 1, r.bot_name, truncate(&r.goal, 120)));
+        let _ = write!(text, "\n\n{}. [{label}] {} — {}", i + 1, r.bot_name, truncate(&r.goal, 120));
         if !body.is_empty() {
             text.push('\n');
             text.push_str(&body);
@@ -229,7 +230,10 @@ mod tests {
     #[test]
     fn a_stage_gets_what_is_left_of_the_pipelines_time() {
         assert_eq!(stage_budget(Duration::ZERO), Some(ASK_TIMEOUT));
-        assert_eq!(stage_budget(TOTAL_TIME - Duration::from_secs(60)), Some(Duration::from_secs(60)));
+        assert_eq!(
+            stage_budget(TOTAL_TIME.checked_sub(Duration::from_secs(60)).unwrap()),
+            Some(Duration::from_secs(60))
+        );
         assert_eq!(stage_budget(TOTAL_TIME), None);
         assert_eq!(stage_budget(TOTAL_TIME + Duration::from_secs(1)), None);
     }

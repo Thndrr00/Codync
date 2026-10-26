@@ -42,12 +42,13 @@ pub fn router() -> Router<Arc<Hub>> {
 
 /// Broadcasts an app live event (`change` or `reload`) to any open `_live` WebSocket and host event listeners.
 pub fn emit_app_live(hub: &Hub, bot_id: &str, slug: &str, payload: Value) {
-    let _ = hub.events.send(json!({
+    let mut event = json!({
         "type": "appLive",
         "botId": bot_id,
         "slug": slug,
-        "payload": payload,
-    }));
+    });
+    event["payload"] = payload;
+    let _ = hub.events.send(event);
 }
 
 async fn redirect_trailing_slash(Path((bot_id, slug, token)): Path<(String, String, String)>) -> Redirect {
@@ -57,9 +58,10 @@ async fn redirect_trailing_slash(Path((bot_id, slug, token)): Path<(String, Stri
 async fn serve_root(
     State(hub): State<Arc<Hub>>,
     Path((bot_id, slug, token)): Path<(String, String, String)>,
-    headers: HeaderMap,
 ) -> Response {
-    handle_request(hub, bot_id, slug, token, String::new(), Method::GET, headers, Bytes::new()).await
+    tokio::task::spawn_blocking(move || handle_request(&hub, &bot_id, &slug, &token, "", &Method::GET, &Bytes::new()))
+        .await
+        .unwrap_or_else(|error| json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": error.to_string()})))
 }
 
 async fn handle_live(
@@ -87,10 +89,11 @@ async fn handle_subpath(
     State(hub): State<Arc<Hub>>,
     Path((bot_id, slug, token, path)): Path<(String, String, String, String)>,
     method: Method,
-    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    handle_request(hub, bot_id, slug, token, path, method, headers, body).await
+    tokio::task::spawn_blocking(move || handle_request(&hub, &bot_id, &slug, &token, &path, &method, &body))
+        .await
+        .unwrap_or_else(|error| json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": error.to_string()})))
 }
 
 fn security_headers(content_type: &str) -> HeaderMap {
@@ -116,43 +119,42 @@ fn text_resp(status: StatusCode, content_type: &str, body: impl Into<Bytes>) -> 
     (status, security_headers(content_type), body.into()).into_response()
 }
 
-async fn handle_request(
-    hub: Arc<Hub>,
-    bot_id: String,
-    slug: String,
-    token: String,
-    rel: String,
-    method: Method,
-    _headers: HeaderMap,
-    body: Bytes,
+fn handle_request(
+    hub: &Hub,
+    bot_id: &str,
+    slug: &str,
+    token: &str,
+    rel: &str,
+    method: &Method,
+    body: &Bytes,
 ) -> Response {
-    if method == Method::OPTIONS {
+    if *method == Method::OPTIONS {
         return text_resp(StatusCode::NO_CONTENT, "text/plain; charset=utf-8", "");
     }
-    let touch = rel.is_empty() || rel.ends_with(".html");
-    let Ok(Some(link)) = hub.store.resolve_app_link(&bot_id, &slug, &token, touch) else {
+    let touch = rel.is_empty() || FsPath::new(rel).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("html"));
+    let Ok(Some(link)) = hub.store.resolve_app_link(bot_id, slug, token, touch) else {
         return text_resp(StatusCode::FORBIDDEN, "text/plain; charset=utf-8", "Link expired or revoked");
     };
-    let Ok(Some(app)) = hub.store.get_bot_app(&bot_id, &slug) else {
+    let Ok(Some(app)) = hub.store.get_bot_app(bot_id, slug) else {
         return text_resp(StatusCode::NOT_FOUND, "text/plain; charset=utf-8", "App not found");
     };
 
-    if (rel == "_bdots.js" || rel == "_codync.js") && method == Method::GET {
+    if (rel == "_bdots.js" || rel == "_codync.js") && *method == Method::GET {
         return text_resp(StatusCode::OK, "text/javascript; charset=utf-8", client_script(&app, &link));
     }
     if rel == "_data" || rel.starts_with("_data/") {
-        return handle_data(&hub, &bot_id, &slug, &link, &rel, method, &body);
+        return handle_data(hub, bot_id, slug, &link, rel, method, body);
     }
-    if rel == "_tell" && method == Method::POST {
-        return handle_tell(&hub, &bot_id, &app, &link, &body);
+    if rel == "_tell" && *method == Method::POST {
+        return handle_tell(hub, bot_id, &app, &link, body);
     }
-    if rel == "_error" && method == Method::POST {
-        return handle_error(&hub, &bot_id, &app, &body);
+    if rel == "_error" && *method == Method::POST {
+        return handle_error(hub, bot_id, &app, body);
     }
-    if method != Method::GET && method != Method::HEAD {
+    if *method != Method::GET && *method != Method::HEAD {
         return json_resp(StatusCode::METHOD_NOT_ALLOWED, json!({"error": "Method not allowed"}));
     }
-    serve_static(&hub, &bot_id, &app, &rel)
+    serve_static(hub, bot_id, &app, rel)
 }
 
 fn handle_data(
@@ -161,12 +163,12 @@ fn handle_data(
     slug: &str,
     link: &AppLink,
     rel: &str,
-    method: Method,
+    method: &Method,
     body: &Bytes,
 ) -> Response {
     let rest = rel.strip_prefix("_data").unwrap_or_default().trim_start_matches('/');
     let parts: Vec<&str> = rest.split('/').filter(|s| !s.is_empty()).collect();
-    if parts.is_empty() && method == Method::GET {
+    if parts.is_empty() && *method == Method::GET {
         return match hub.store.app_collections(bot_id, slug) {
             Ok(collections) => json_resp(StatusCode::OK, json!({"collections": collections, "mode": link.mode})),
             Err(e) => json_resp(StatusCode::BAD_REQUEST, json!({"error": e.to_string()})),
@@ -177,7 +179,7 @@ fn handle_data(
     };
     let item_id = parts.get(1).copied();
 
-    if method == Method::GET {
+    if *method == Method::GET {
         if let Some(id) = item_id {
             return match hub.store.app_data_get(bot_id, slug, collection, id) {
                 Ok(Some(item)) => json_resp(StatusCode::OK, json!({"item": item})),
@@ -195,7 +197,7 @@ fn handle_data(
         return json_resp(StatusCode::FORBIDDEN, json!({"error": "Read-only share link"}));
     }
 
-    if method == Method::DELETE {
+    if *method == Method::DELETE {
         return match hub.store.app_data_delete(bot_id, slug, collection, item_id) {
             Ok(removed) => {
                 emit_app_live(hub, bot_id, slug, json!({"type": "change", "collection": collection, "id": item_id}));
@@ -205,13 +207,13 @@ fn handle_data(
         };
     }
 
-    if matches!(method, Method::POST | Method::PUT | Method::PATCH) {
+    if matches!(*method, Method::POST | Method::PUT | Method::PATCH) {
         let Ok(payload) = serde_json::from_slice::<Value>(body) else {
             return json_resp(StatusCode::BAD_REQUEST, json!({"error": "Invalid JSON"}));
         };
         let mut next_val = payload.get("value").cloned().unwrap_or_else(|| payload.clone());
         let target_id = item_id.or_else(|| payload["id"].as_str());
-        if method == Method::PATCH {
+        if *method == Method::PATCH {
             let Some(id) = target_id else {
                 return json_resp(StatusCode::BAD_REQUEST, json!({"error": "PATCH requires item id"}));
             };
@@ -235,7 +237,7 @@ fn handle_data(
     json_resp(StatusCode::METHOD_NOT_ALLOWED, json!({"error": "Method not allowed"}))
 }
 
-fn dispatch_bot_turn(hub: &Hub, bot_id: &str, text: String) -> anyhow::Result<()> {
+fn dispatch_bot_turn(hub: &Hub, bot_id: &str, text: &str) -> anyhow::Result<()> {
     let row = hub.store.bot(bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow::anyhow!("unknown bot"))?;
     let lane = Lane::main(bot_id);
     let turn = hub.store.max_turn(bot_id) + 1;
@@ -261,7 +263,7 @@ fn handle_tell(hub: &Hub, bot_id: &str, app: &BotApp, link: &AppLink, body: &Byt
         return json_resp(StatusCode::BAD_REQUEST, json!({"error": "text required"}));
     }
     let msg = format!("[From mini-app \"{}\" ({})]: {text}", app.title, link.label);
-    match dispatch_bot_turn(hub, bot_id, msg) {
+    match dispatch_bot_turn(hub, bot_id, &msg) {
         Ok(()) => json_resp(StatusCode::OK, json!({"ok": true})),
         Err(e) => json_resp(StatusCode::BAD_REQUEST, json!({"error": e.to_string()})),
     }
@@ -290,7 +292,7 @@ Fix the bug in apps/{}/ and call save_app so the open app reloads cleanly.",
         if stack.is_empty() { String::new() } else { format!("\n{stack}") },
         app.slug
     );
-    let _ = dispatch_bot_turn(hub, bot_id, repair_prompt);
+    let _ = dispatch_bot_turn(hub, bot_id, &repair_prompt);
     json_resp(StatusCode::OK, json!({"ok": true}))
 }
 

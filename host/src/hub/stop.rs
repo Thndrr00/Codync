@@ -31,7 +31,7 @@ impl Hub {
             match self.stop_bot(&config.id) {
                 Ok(()) => stopped += 1,
                 Err(error) => {
-                    tracing::warn!(bot = %config.id, error = format!("{error:#}"), "stop all: bot didn't stop")
+                    tracing::warn!(bot = %config.id, error = format!("{error:#}"), "stop all: bot didn't stop");
                 }
             }
         }

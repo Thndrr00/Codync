@@ -9,14 +9,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
-pub const TOOLS: [&str; 6] = [
-    "save_app",
-    "list_apps",
-    "delete_app",
-    "app_data_list",
-    "app_data_put",
-    "app_data_delete",
-];
+pub const TOOLS: [&str; 6] =
+    ["save_app", "list_apps", "delete_app", "app_data_list", "app_data_put", "app_data_delete"];
 
 pub fn tools() -> [Value; 6] {
     [

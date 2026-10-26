@@ -374,7 +374,17 @@ mod tests {
     async fn descendant_agent() -> (Arc<Acp>, mpsc::UnboundedReceiver<Incoming>) {
         let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/process_agent.py");
         let python = if cfg!(windows) { "python" } else { "python3" };
-        let command = format!("{python} -u {}", crate::shell::quote(&script.display().to_string()));
+        // Windows App Execution Aliases can launch Python through a broker outside the shell's job.
+        // Use the interpreter itself so this fixture's descendants belong to the process tree under test.
+        let output = tokio::process::Command::new(python)
+            .args(["-c", "import sys; print(sys.executable)"])
+            .output()
+            .await
+            .expect("resolve the fixture's Python interpreter");
+        assert!(output.status.success(), "Python interpreter lookup failed");
+        let python = String::from_utf8(output.stdout).expect("Python executable path is UTF-8");
+        let command =
+            format!("{} -u {}", crate::shell::quote(python.trim()), crate::shell::quote(&script.display().to_string()));
         let (acp, mut rx) = Acp::spawn(&command, env!("CARGO_MANIFEST_DIR"), &[]).unwrap();
         let ready = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await;
         let ready = ready.unwrap();

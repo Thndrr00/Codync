@@ -54,7 +54,7 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
     var loading by remember(botId) { mutableStateOf(true) }
     var activeApp by remember { mutableStateOf<BotApp?>(null) }
 
-    val entries = state.entries[botId].orEmpty()
+    val entries = state.entries.filter { it.botId == botId }
     val pendingDecisions = remember(entries) { collectPendingDecisions(entries) }
     val deliverables = remember(entries) { collectDeliverables(entries) }
 
@@ -88,8 +88,8 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
                                 Text("v${app.version}", Modifier.clip(Capsule()).background(Palette.surface).padding(horizontal = 6.dp, vertical = 2.dp),
                                     style = Type.caption2.semibold, color = Palette.secondary)
                             }
-                            if (!app.description.isNullOrBlank()) {
-                                Text(app.description, style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            app.description?.takeIf { it.isNotBlank() }?.let { description ->
+                                Text(description, style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                         SecondaryButton("Open") { activeApp = app }

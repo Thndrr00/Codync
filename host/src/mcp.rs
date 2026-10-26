@@ -90,7 +90,6 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
     };
     // Requests still running, by id: a cancelled one stops, and its host call with it (a team change's card expires).
     let mut running = std::collections::HashMap::<String, tokio::task::AbortHandle>::new();
-    let loop_guard = Arc::new(std::sync::Mutex::new(crate::agent::loop_guard::LoopGuard::new()));
     while let Some(line) = lines.next_line().await? {
         let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
         cancellation.observe(&msg);
@@ -104,8 +103,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         };
         running.retain(|_, request| !request.is_finished());
         let key = id.to_string();
-        let (replies, token, bot, available_tools, loop_guard) =
-            (replies.clone(), token.clone(), bot.clone(), available_tools.clone(), loop_guard.clone());
+        let (replies, token, bot, available_tools) =
+            (replies.clone(), token.clone(), bot.clone(), available_tools.clone());
         while requests.try_join_next().is_some() {}
         if requests.len() >= 100 {
             let _ = replies
@@ -133,14 +132,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                         Err(error) => json!({"content":[{"type":"text","text":format!("{error:#}")}],"isError":true}),
                     })
                 }
-                "tools/call" => {
-                    let tool_name = params["name"].as_str().unwrap_or_default();
-                    if let Some(loop_err) = loop_guard.lock().ok().and_then(|mut g| g.check(tool_name, &params["arguments"])) {
-                        Ok(json!({"content": [{"type": "text", "text": loop_err}], "isError": true}))
-                    } else {
-                        Ok(call(port, &token, &bot, params, server).await)
-                    }
-                }
+                "tools/call" => Ok(call(port, &token, &bot, params, server).await),
                 method => Err(json!({"code": -32601, "message": format!("unknown method {method}")})),
             };
             let _ = replies.send(match reply {

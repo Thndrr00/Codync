@@ -31,8 +31,8 @@ pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use model::{
-    AVATAR_COLORS, AVATAR_SHAPES, BotConfig, BotKind, BotRow, Entry,
-    EntryKind, Fallback, Lane, Permission, lane_key, message_text, run_session_key,
+    AVATAR_COLORS, AVATAR_SHAPES, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane, Permission, lane_key,
+    message_text, run_session_key,
 };
 
 use crate::LockExt;
