@@ -302,9 +302,9 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 |---|---|---|
 | 1-5 | Nuevo | `host/crates/memory` guarda `memory_entries`, tombstones y dreams (`schema.rs`, `dream/`); no hay creencias, rasgos ni bitemporalidad. Extender `schema.rs`/`store.rs` con migración; `evidence.rs` ya define "palabras del usuario". |
 | 6 | Parcial | `chat/instruction_history.rs` y `chat/memory/api.rs` (olvidar). El aviso con "deshacer" iría como notice de chat (`chat/handoff.rs` es el patrón), no en `agent/delivery.rs` (no existe). |
-| 7 | Parcial | `chat/team.rs` y `chat/team/requests.rs` (delegación y grafo de espera). Faltan tareas tipadas con criterios de aceptación. |
-| 8 | Parcial | `team/requests.rs` gestiona admisión; falta despertar único tras N tareas. |
-| 9, 10 | Nuevo | Sin digest ni pipelines. Las rutinas (`routines/`) son la base natural de pipelines. |
+| 7 | Implementado (sin compilar): herramienta `delegate_batch` con tareas tipadas (meta + criterios de aceptación) en `chat/team/batch.rs` | `chat/team.rs` y `chat/team/requests.rs` (delegación y grafo de espera). Faltan tareas tipadas con criterios de aceptación. |
+| 8 | Implementado (sin compilar): `delegate_batch` espera a todos y devuelve una sola respuesta (un solo despertar) | `team/requests.rs` gestiona admisión; falta despertar único tras N tareas. |
+| 9, 10 | Implementado (sin compilar): `render_digest` en `chat/team/batch.rs` | Sin digest ni pipelines. Las rutinas (`routines/`) son la base natural de pipelines. |
 | 11 | Implementado (sin compilar): `agent/bot/outcome.rs` + `watchdog.rs` | `agent/bot/stall.rs`, `watchdog.rs` y `turn.rs` detectan bucles; no clasifican resultado ni "dijo que lo hizo sin hacer". |
 | 12 | Implementado (sin compilar): `routines/idle.rs`, pausa tras 3 runs sin trabajo | `routines/retry.rs` y `agent/coordinator.rs` (tope de reintentos); falta pausa por racha sin resultado. |
 | 13 | No aplica: los agentes escriben sus archivos directamente; el host no los intermedia | Sin locks por ruta. |
@@ -358,3 +358,5 @@ Alcance acordado: host, Android y escritorio Windows. iOS y la TUI no se han toc
 - **No aplican:** 13 y 39 (ver tabla). La 32 queda sin hacer: el ratón lo maneja un driver externo y no se puede conectar con seguridad sin probarlo en Windows.
 
 - **Interfaces (escritorio Windows y Android) de 44, 47, 49 y 43:** en la página/hoja de diagnósticos: "Bot check" (doctor y limpiar ejecuciones fallidas), "Daily token limits" y "Share a bot" (copiar y pegar un paquete). Escritorio: `maintenance-store.ts` y `views/settings/{BotCheck,TokenBudget,BotBundle}Section.tsx`; typecheck limpio. Android: `AppStoreMaintenance.kt` y `BotMaintenance.kt`; `:app:compileDebugKotlin` compila. No se han visto funcionando ni probado contra el host, que sigue sin compilar. iOS y la TUI quedan sin estas pantallas.
+
+- **7, 8 y 9:** `delegate_batch` (hasta 8 bots a la vez, un bot una vez por lote, criterios de aceptación opcionales). Reutiliza `ask`, así que hereda el grafo de espera, los ciclos y los límites de saltos. Sin compilar; revisado a mano y con 6 pruebas puras (`cargo test -j 2 --bin codync-host batch`). No hay pantalla: lo usa el bot coordinador por MCP. La idea original de "pipelines" (10) queda aparte.
