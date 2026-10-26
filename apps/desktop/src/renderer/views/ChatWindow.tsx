@@ -37,6 +37,7 @@ import { useIslandSummary } from './island-summary'
 import { useSSH, useSSHAttachments } from './settings/ssh-model'
 import './chat-window.css'
 import './sidebar-header.css'
+import { useOnboardingTelemetry } from './use-onboarding-telemetry'
 
 /** Native desktop chat: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
 export function ChatWindow() {
@@ -48,6 +49,7 @@ export function ChatWindow() {
   useSSHAttachments(app)
   const ssh = useSSH()
   const showsChat = shouldShowChat(app.host.state.kind, app.computers.length, ssh.state)
+  useOnboardingTelemetry(!onboarded ? 'welcome' : accessSetup === null ? 'computer_access' : showsChat ? 'ready' : 'pairing')
 
   useEffect(
     () =>

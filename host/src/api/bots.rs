@@ -43,7 +43,12 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         }
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
-            if crate::chat::profile::TOOLS.contains(&name) {
+            if name == "research_sources" {
+                crate::research::sources(hub, bot, str_arg(&b["arguments"], "objective")?, b["arguments"].get("urls"))
+                    .await?
+            } else if crate::documents::TOOLS.contains(&name) {
+                crate::documents::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::profile::TOOLS.contains(&name) {
                 crate::chat::profile::call(hub, bot, name, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
@@ -51,6 +56,16 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         }
         "teamCall" => {
             crate::chat::team::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?
+        }
+        "messageResult" => {
+            let bot = str_arg(&b, "botId")?;
+            hub.store.bot(bot)?.filter(|row| !row.deleted).context("Unknown bot.")?;
+            let entry = hub
+                .store
+                .entry(str_arg(&b, "id")?)
+                .filter(|entry| entry.bot_id == bot && entry.kind == EntryKind::User.as_str())
+                .context("Unknown user message.")?;
+            json!({"id":entry.id,"botId":entry.bot_id,"threadId":entry.thread_id,"status":entry.data["status"],"result":entry.data["turnResult"]})
         }
         "history" => {
             let bot = str_arg(&b, "botId")?;
@@ -159,11 +174,19 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             // `threadId`: reply in the thread on that message of the main chat (threads are flat).
             let thread = match b["threadId"].as_str().filter(|t| !t.is_empty()) {
                 Some(root) => {
-                    let r = hub.store.entry(root).ok_or_else(|| anyhow!("unknown message"))?;
-                    if r.bot_id != bot || r.thread_id.is_some() {
-                        bail!("threads start from a message in the main chat");
+                    if let Some(id) = root.strip_prefix("doc:") {
+                        hub.store
+                            .document(id)?
+                            .filter(|doc| doc.bot_id == bot)
+                            .context("unknown document conversation")?;
+                        Some(root.to_owned())
+                    } else {
+                        let r = hub.store.entry(root).ok_or_else(|| anyhow!("unknown message"))?;
+                        if r.bot_id != bot || r.thread_id.is_some() {
+                            bail!("threads start from a message in the main chat");
+                        }
+                        Some(root.to_owned())
                     }
-                    Some(root.to_owned())
                 }
                 None => None,
             };
@@ -209,14 +232,7 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             json!({"entry": e})
         }
         // A finished voice call, as a line in the chat ("Voice chat · 0:16").
-        "logCall" => {
-            let bot = str_arg(&b, "botId")?;
-            hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
-            let seconds = b["seconds"].as_u64().unwrap_or(0);
-            let data = json!({"text": "Voice chat", "callSeconds": seconds});
-            let e = hub.add_entry(&Lane::main(bot), EntryKind::Notice, hub.store.max_turn(bot), &data);
-            json!({"entry": e})
-        }
+        "logCall" => crate::voice::receipts::log(hub, &b)?,
         "stop" => {
             let bot = str_arg(&b, "botId")?;
             match hub.store.bot(bot)? {
@@ -240,7 +256,13 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.data["mcpToolCallId"].is_string() {
+                market::vault::unlock(hub.clone()).await?;
+            }
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            if crate::mcp::policy::respond(hub, entry_id, option_id.as_deref())? {
+                return Ok(ControlFlow::Break(json!({})));
+            }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;

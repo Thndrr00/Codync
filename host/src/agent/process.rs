@@ -5,10 +5,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::Child;
 use tokio::sync::Mutex;
+pub(crate) mod output;
 
 const REAP_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(super) struct Process {
+pub(crate) struct Process {
     // Drop the tree before Child can reap the leader and make its PID reusable.
     tree: Tree,
     child: Child,
@@ -16,12 +17,20 @@ pub(super) struct Process {
 }
 
 impl Process {
-    pub(super) fn new(child: Child) -> Result<Self> {
+    pub(crate) fn new(child: Child) -> Result<Self> {
         let tree = Tree::new(&child)?;
         let owned = Self { tree, child, stopping: false };
         #[cfg(windows)]
         super::process_windows::resume(&owned.child)?;
         Ok(owned)
+    }
+
+    pub(crate) async fn wait_owned(&mut self) -> Result<std::process::ExitStatus> {
+        while !self.exited()? {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        self.tree.terminate()?;
+        Ok(self.child.wait().await?)
     }
 
     pub(super) fn monitor(child: &Arc<Mutex<Self>>) {
@@ -53,7 +62,7 @@ impl Process {
     }
 
     #[cfg(unix)]
-    fn exited(&self) -> std::io::Result<bool> {
+    pub(crate) fn exited(&self) -> std::io::Result<bool> {
         let Some(pid) = self.child.id() else { return Ok(true) };
         // SAFETY: zero is a valid siginfo value; waitid writes only into this object.
         let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
@@ -77,7 +86,7 @@ impl Process {
     }
 
     #[cfg(windows)]
-    fn exited(&self) -> std::io::Result<bool> {
+    pub(crate) fn exited(&self) -> std::io::Result<bool> {
         use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0};
         let Some(handle) = self.child.raw_handle() else { return Ok(true) };
         // SAFETY: the child owns this valid process handle; a zero timeout cannot block.
@@ -104,6 +113,13 @@ impl Process {
             Ok(Err(error)) => tracing::warn!(%error, "couldn't reap agent process"),
             Err(error) => tracing::warn!(%error, "agent process did not exit before the cleanup deadline"),
         }
+    }
+
+    #[cfg(windows)]
+    pub(crate) async fn terminate_owned(&mut self) -> Result<()> {
+        self.tree.terminate()?;
+        tokio::time::timeout(REAP_TIMEOUT, self.child.wait()).await.context("Process cleanup timed out")??;
+        Ok(())
     }
 }
 

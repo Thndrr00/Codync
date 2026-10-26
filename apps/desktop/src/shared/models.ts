@@ -38,6 +38,7 @@ export interface Bot {
   skills: string[]
   /** The bot can see and operate the computer's desktop. */
   computer: boolean
+  computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   /** Uses the memory all the user's bots share ("About you"). */
   sharedMemory: boolean
   /** Keeps the harness's own memory (Claude Code's…) on beside Codync's; null where it has no switch. */
@@ -86,6 +87,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     connectors: raw.connectors ?? [],
     skills: raw.skills ?? [],
     computer: raw.computer ?? false,
+    computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
     harnessMemory: raw.harnessMemory ?? null,
     memoryRev: raw.memoryRev ?? 0,
@@ -182,6 +184,7 @@ export interface HandoffCard {
 }
 
 export interface EntryData {
+  source?: string
   /** Structured conversation data added to the existing team-tool notice. */
   botMessage?: BotMessage
   /** notice: the agent summarized its context; kept out of the chat. */
@@ -222,6 +225,7 @@ export interface EntryData {
   attachments?: Attachment[]
   files?: SharedFile[]
   callSeconds?: number
+  voiceTranscriptText?: string
 }
 
 export interface Entry {
@@ -463,6 +467,7 @@ export interface BotDraft {
   connectors?: string[]
   skills?: string[]
   computer?: boolean
+  computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   sharedMemory?: boolean
   harnessMemory?: boolean
 }
@@ -488,6 +493,7 @@ export function draftOf(bot: Bot): BotDraft {
     connectors: bot.connectors,
     skills: bot.skills,
     computer: bot.computer,
+    computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
   }
 }
 

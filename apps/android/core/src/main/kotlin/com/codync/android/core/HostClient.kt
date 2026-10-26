@@ -33,6 +33,7 @@ data class Bot(
     val connectors: List<String> = emptyList(),
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
+    val computerPermissions: ComputerPermissions = ComputerPermissions(),
     val autoName: Boolean = false,
     val createdAt: Long = 0,
     val startedAt: Long? = null,

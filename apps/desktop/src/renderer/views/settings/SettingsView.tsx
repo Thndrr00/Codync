@@ -18,6 +18,7 @@ import { VoiceChatSettingsView } from './VoiceChatSettingsView'
 import { ComputerAccessView } from '../computer-access/ComputerAccessView'
 import { FormSheet } from '../marketplace/pieces'
 import { AnalyticsSheet } from './AnalyticsSheet'
+import { ResearchSettingsSection } from './ResearchSettingsSection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'access' | 'voice' | 'usage' | 'updates'
@@ -171,6 +172,7 @@ function GeneralSettings() {
         </Switch>
       </CardSection>
       <PrivacySettings />
+      {window.codync.platform === 'win32' ? <ResearchSettingsSection /> : null}
     </CardForm>
   )
 }

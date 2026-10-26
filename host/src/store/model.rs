@@ -108,6 +108,8 @@ pub struct BotConfig {
     /// The bot gets the built-in `computer` MCP server (see `screen`).
     #[serde(default)]
     pub computer: bool,
+    #[serde(default)]
+    pub computer_permissions: crate::computer::Permissions,
     /// Uses the memory shared by all bots ("yours"). Unset: on for a bot in its own workspace, off for one in a
     /// project folder (see `chat::memory::shared`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

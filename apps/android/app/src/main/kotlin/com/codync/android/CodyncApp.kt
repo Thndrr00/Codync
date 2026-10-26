@@ -87,6 +87,14 @@ private enum class Root { Loading, Welcome, Pairing, Tabs }
         onboarding -> Root.Pairing
         else -> Root.Tabs
     }
+    LaunchedEffect(root) {
+        OnboardingTelemetry.step(when (root) {
+            Root.Welcome -> OnboardingTelemetry.Step.Welcome
+            Root.Pairing -> OnboardingTelemetry.Step.Pairing
+            Root.Tabs -> OnboardingTelemetry.Step.Ready
+            Root.Loading -> null
+        })
+    }
     BackHandler(root == Root.Pairing && !signedIn) { welcomed = false }
     val openMarketplace = { showAccount = false; accountSettings = false; showComputers = false; showMarketplace = true }
     Box(Modifier.fillMaxSize().background(Palette.background)) {

@@ -22,6 +22,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonArray
+import com.codync.android.core.WireJson
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,6 +33,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 internal enum class AnalyticsEvent(val wire: String) {
     AppOpened("app_opened"), OnboardingCompleted("onboarding_completed"), ComputerPaired("computer_paired"),
     SignedIn("signed_in"), SignedOut("signed_out"), VoiceCallStarted("voice_call_started"),
+    OnboardingStepViewed("onboarding_step_viewed"), OnboardingAbandoned("onboarding_abandoned"),
 }
 
 /**
@@ -51,26 +54,45 @@ internal object Analytics {
     val enabled: Boolean get() = sharing
     private var prefs: SharedPreferences? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val http by lazy { OkHttpClient() }
+    private val http by lazy { OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).callTimeout(15, java.util.concurrent.TimeUnit.SECONDS).build() }
     private val pending = mutableListOf<JsonObject>()
     private var timer: Job? = null
     private var sending = false
     private var foreground = false
+    private val consentLock = Any()
+    @Volatile private var consentGeneration = 0
+    private var consentAllowed = true
+    private var activeCall: okhttp3.Call? = null
 
     fun start(context: Context) {
         if (prefs != null) return
         val stored = context.getSharedPreferences("codync-analytics", Context.MODE_PRIVATE)
         prefs = stored
         sharing = stored.getBoolean("enabled", true)
+        synchronized(consentLock) { consentAllowed = sharing }
+        if (sharing) {
+            val recovered = runCatching { WireJson.parseToJsonElement(stored.getString("pending", "[]").orEmpty()) as? JsonArray }.getOrNull()
+            pending.addAll(recovered.orEmpty().filterIsInstance<JsonObject>().takeLast(MAX_PENDING))
+            if (pending.isNotEmpty()) scheduleFlush()
+        } else stored.edit().remove("pending").commit()
+        OnboardingTelemetry.start(stored)
         CrashReports.start(context)
     }
 
     /** Turning it off drops everything not yet sent. */
     fun setEnabled(on: Boolean) {
+        synchronized(consentLock) {
+            consentGeneration++
+            consentAllowed = on
+            activeCall?.cancel()
+            activeCall = null
+        }
         sharing = on
         prefs?.edit()?.putBoolean("enabled", on)?.apply()
         if (on) return flush()
         pending.clear(); timer?.cancel(); timer = null
+        persist()
+        OnboardingTelemetry.clear()
     }
 
     /** `properties` are public names, never content. */
@@ -93,21 +115,23 @@ internal object Analytics {
     }
 
     /** `app_opened` once per trip to the foreground. */
-    fun becameActive() { if (!foreground) { foreground = true; capture(AnalyticsEvent.AppOpened) } }
+    fun becameActive() { if (!foreground) { foreground = true; capture(AnalyticsEvent.AppOpened); OnboardingTelemetry.foreground() } }
 
-    fun enteredBackground() { foreground = false; flush() }
+    fun enteredBackground() { if (!foreground) return; foreground = false; OnboardingTelemetry.abandon(); flush() }
 
     fun flush() {
         timer?.cancel(); timer = null
         if (sending || pending.isEmpty() || !enabled) return
-        val batch = pending.toList()
+        if (!persist()) return
+        val batch = pending.take(BATCH_SIZE)
+        val generation = consentGeneration
         val body = buildJsonObject { put("api_key", API_KEY); put("batch", buildJsonArray { batch.forEach { add(it) } }) }.toString()
         sending = true
         scope.launch {
-            val ok = withContext(Dispatchers.IO) { post(body) }
+            val ok = withContext(Dispatchers.IO) { post(body, generation) }
             sending = false
-            if (ok) pending.removeAll(batch.toSet())
-            if (pending.isNotEmpty()) scheduleFlush()
+            if (ok && generation == consentGeneration && enabled) { pending.removeAll(batch.toSet()); persist() }
+            if (enabled && pending.isNotEmpty()) scheduleFlush()
         }
     }
 
@@ -117,6 +141,7 @@ internal object Analytics {
     private fun enqueue(name: String, distinctId: String, extra: Map<String, JsonElement>) {
         pending += event(name, distinctId, Instant.now().toString(), extra)
         if (pending.size > MAX_PENDING) repeat(pending.size - MAX_PENDING) { pending.removeAt(0) }
+        if (!persist()) return
         if (pending.size >= BATCH_SIZE) flush() else scheduleFlush()
     }
 
@@ -125,11 +150,24 @@ internal object Analytics {
         timer = scope.launch { delay(FLUSH_DELAY); timer = null; flush() }
     }
 
+    private fun persist(): Boolean {
+        val saved = prefs?.edit()?.putString("pending", JsonArray(pending).toString())?.commit() == true
+        if (!saved) android.util.Log.w("CodyncAnalytics", "Could not persist analytics queue")
+        return saved
+    }
+
     /** Sent (or rejected for good) → true; network errors, 429 and 5xx → false, retried next flush. */
-    private fun post(body: String): Boolean = try {
-        http.newCall(Request.Builder().url(ENDPOINT).post(body.toRequestBody("application/json".toMediaType())).build()).execute()
-            .use { it.code < 500 && it.code != 429 }
-    } catch (_: java.io.IOException) { false }
+    private fun post(body: String, generation: Int): Boolean {
+        val call = http.newCall(Request.Builder().url(ENDPOINT).post(body.toRequestBody("application/json".toMediaType())).build())
+        synchronized(consentLock) {
+            if (!consentAllowed || generation != consentGeneration) return false
+            activeCall = call
+        }
+        return try {
+            call.execute().use { it.code in 200..299 || (it.code in 400..499 && it.code != 408 && it.code != 429) }
+        } catch (_: java.io.IOException) { false }
+        finally { synchronized(consentLock) { if (activeCall === call) activeCall = null } }
+    }
 
     /** One event in PostHog's `/batch/` body, with the properties every event carries. */
     internal fun event(name: String, distinctId: String, timestamp: String, extra: Map<String, JsonElement>): JsonObject = buildJsonObject {

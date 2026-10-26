@@ -26,12 +26,14 @@ pub fn router(hub: Arc<Hub>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/hooks/routines/{id}", post(routine_hook))
+        .route("/hooks/slack", post(crate::slack::ingress::receive))
         .route("/events", get(events))
         .route("/api/{method}", post(command))
         .route("/term/{id}", get(term_stream))
         .route("/ingest/statusline", post(statusline))
         .route("/channel", get(channel))
         .route("/oauth/callback", get(oauth_callback))
+        .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard))
         .with_state(hub)
 }
 

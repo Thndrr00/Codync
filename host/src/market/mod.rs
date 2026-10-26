@@ -26,6 +26,7 @@ pub mod verify;
 
 mod install;
 mod registry;
+mod runtime_identity;
 mod skills;
 mod updates;
 
@@ -194,7 +195,16 @@ pub fn update_connectors<T>(
 ) -> Result<T> {
     let _guard = store.connector_lock.locked();
     let mut all = connectors(store)?;
+    let previous = all.clone();
     let result = change(&mut all)?;
+    for old in previous {
+        if !all.iter().any(|item| {
+            item.id == old.id
+                && item.runtime_identity() == old.runtime_identity()
+        }) {
+            store.revoke_mcp_connector(None, &old.id)?;
+        }
+    }
     save_connectors(store, &all)?;
     Ok(result)
 }

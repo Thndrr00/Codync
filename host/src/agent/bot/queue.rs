@@ -1,6 +1,6 @@
 //! Commands from clients and the queue of turns waiting for the bot.
 
-use super::{Actor, CANCEL_GRACE, Cmd, Done, NoticeStyle, Queued, RESUME_PROMPT, RoutineCompletion, inflight_key};
+use super::{Actor, CANCEL_GRACE, Cmd, Done, NoticeStyle, Queued, RESUME_PROMPT, RoutineCompletion};
 use crate::agent::own_memory;
 use crate::chat::memory;
 use crate::hub::BotStatus;
@@ -24,6 +24,13 @@ impl Actor {
                 }
             }
             Cmd::Send { lane, entry_id, text } => {
+                if self.hub.store.entry(&entry_id).is_some_and(|e| {
+                    e.data["source"] == "slack"
+                        && (e.data["status"] != "queued"
+                            || self.queue.iter().any(|q| matches!(q,Queued::User{entry_id:id,..} if id==&entry_id)))
+                }) {
+                    return true;
+                }
                 self.queue.push_back(Queued::User { lane, entry_id, text });
                 if self.turn.is_none() {
                     self.next_in_queue(done_tx).await;
@@ -243,10 +250,31 @@ impl Actor {
                 && *l == lane
             {
                 if let Some(Queued::User { entry_id, text, .. }) = self.queue.pop_front() {
+                    if self.hub.store.entry(&entry_id).is_some_and(|e| e.data["source"] == "slack") {
+                        match crate::slack::claim_prompt(&self.hub, &entry_id) {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                if let Some(mut entry) =
+                                    self.hub.store.entry(&entry_id).filter(|e| e.data["status"] == "queued")
+                                {
+                                    entry.data["status"] = "cancelled".into();
+                                    self.hub.set_entry(&entry_id, &entry.data);
+                                }
+                                continue;
+                            }
+                            Err(error) => {
+                                tracing::warn!(%error,"Slack prompt claim failed");
+                                continue;
+                            }
+                        }
+                    }
                     batch.push((entry_id, text));
                 }
             }
             let ids: Vec<String> = batch.iter().map(|(id, _)| id.clone()).collect();
+            if batch.is_empty() {
+                continue;
+            }
             let text = batch.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>().join("\n\n");
             // A handoff waiting in the chat starts a new conversation with this message.
             if lane == main {
@@ -265,10 +293,12 @@ impl Actor {
         self.finish_routine(crate::routines::Status::Failed, Some(format!("Could not start routine: {e:#}")), None);
         self.complete_request(Err(anyhow!("couldn't start recipient: {e:#}")), false);
         self.complete_group(Err(anyhow!("couldn't start: {e:#}")));
-        if !self.invite_sign_in(e) {
+        let invited = self.invite_sign_in(e);
+        if !invited {
             // `{:#}` keeps the reason ("starting `npx …`: EACCES"), not just "agent process exited".
             self.notice(&format!("Couldn't start the agent: {e:#}"), NoticeStyle::Error);
         }
+        self.record_user_result(if invited { "waitingForSignIn" } else { "failed" }, None, "start_failed");
         self.turn = None;
         if self.routine_completion.is_none() {
             self.set_inflight(false);
@@ -357,6 +387,10 @@ impl Actor {
     /// Grok Bot's upgrade resume: the previous host process stopped mid-turn, so
     /// the agent is told, in the same session, to finish without redoing steps.
     pub(super) async fn resume_interrupted(&mut self, lane: Lane, done_tx: &mpsc::UnboundedSender<Done>) {
+        if let Err(error) = self.interrupt_saved_results(&lane) {
+            tracing::error!(%error,"Interrupted message identities could not be recovered; refusing automatic resume");
+            return;
+        }
         self.set_inflight(false);
         if self.session_for(lane.thread.as_deref()).is_none() {
             self.finish_routine(
@@ -386,7 +420,9 @@ impl Actor {
             (Some(root), true) => format!("{}\t{root}", now_ms()),
             (None, true) => now_ms().to_string(),
         };
-        if let Err(error) = self.hub.store.kv_set(&inflight_key(&self.cfg.id), &value) {
+        let sources = (on && !self.turn_entries.is_empty())
+            .then(|| json!({"chat":self.lane.chat,"thread":self.lane.thread,"entries":self.turn_entries}));
+        if let Err(error) = self.hub.store.set_turn_marker(&self.cfg.id, &value, sources.as_ref()) {
             tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't record the running turn");
         }
     }

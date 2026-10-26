@@ -299,10 +299,15 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** A thread: the message it started on, its replies, and a box to continue there. */
-@Composable private fun RepliesView(bot: Bot, rootId: String, state: AppState, store: AppStore, connect: ConnectionRequestActions) {
+@Composable internal fun RepliesView(bot: Bot, rootId: String, state: AppState, store: AppStore, connect: ConnectionRequestActions,
+    documentTitle: String? = null,
+    openTrace: () -> Unit = { store.showTrace(true) }) {
     val root = state.entries.firstOrNull { it.botId == bot.id && it.id == rootId }
     val replies = state.entries.filter { it.botId == bot.id && it.threadId == rootId && it.isChat }
     val pending = state.pending.filter { it.botId == bot.id && it.threadId == rootId }
+    LaunchedEffect(rootId, replies.lastOrNull()?.rev) {
+        if (rootId.startsWith("doc:")) store.acknowledgeVisible(listOf(ReadingScope(bot.id, rootId)))
+    }
     val working = bot.isWorking(bot.id, rootId) && state.connection is LinkState.Ready
     var composerHeight by remember { mutableIntStateOf(0) }
     val scroll = rememberConversationScroll()
@@ -315,17 +320,17 @@ import com.kyant.shapes.RoundedRectangle
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Thread", style = Type.body.semibold, color = Palette.text)
-                    Text(bot.name, style = Type.caption, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (rootId.startsWith("doc:")) "Document conversation" else "Thread", style = Type.body.semibold, color = Palette.text)
+                    Text(if (rootId.startsWith("doc:")) listOfNotNull(documentTitle, bot.name).joinToString(" · ") else bot.name, style = Type.caption, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton("Close thread", "xmark", action = dismiss)
+                IconButton(if (rootId.startsWith("doc:")) "Close document conversation" else "Close thread", "xmark", action = dismiss)
             }
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
             val items = chatItems(replies, pending)
             Box(Modifier.weight(1f)) { ConversationList(scroll, items.lastOrNull()?.id, replies.lastOrNull()?.rev, working,
                 PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = with(density) { composerHeight.toDp() } + 8.dp)) {
                 if (root != null) {
-                    item("root") { ChatRow(root, true, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect) }
+                    item("root") { ChatRow(root, true, bot, state, store, openTrace = openTrace, reply = null, connect = connect) }
                     item("count") {
                         val count = (root.data["thread"] as? kotlinx.serialization.json.JsonObject)?.get("count")
                             ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() } ?: 0
@@ -335,9 +340,17 @@ import com.kyant.shapes.RoundedRectangle
                         }
                     }
                 }
+                if (rootId.startsWith("doc:") && items.isEmpty() && !working) item("document-intro") {
+                    Column(Modifier.padding(vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(if ("thread:$rootId" in state.busy) "Loading document conversation…" else
+                            "Ask this bot about the saved document. This page has its own conversation.", style = Type.body, color = Palette.secondary)
+                        state.error?.let { Text(it, style = Type.body, color = Palette.danger) }
+                        if (state.error != null) LinkButton("Retry loading conversation") { store.loadDocumentConversation(bot.id, rootId) }
+                    }
+                }
                 items(items.filter { it !is ChatItem.Separator }, key = { it.id }) { item ->
                     when (item) {
-                        is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = { store.showTrace(true) }, reply = null, connect = connect)
+                        is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = openTrace, reply = null, connect = connect)
                         is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, state, store)
                         is ChatItem.Separator, is ChatItem.Exchanges -> {}
                     }

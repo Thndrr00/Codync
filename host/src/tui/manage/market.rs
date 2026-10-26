@@ -83,6 +83,15 @@ impl App {
     pub(in crate::tui) fn market_key(&mut self, mut m: Box<Market>, k: KeyEvent) -> Option<Overlay> {
         let n = self.market_rows(&m).len();
         match k.code {
+            KeyCode::Char('t') if ctrl(k) => {
+                if let Some(Row::Installed(connector)) = self.market_rows(&m).get(m.cursor) {
+                    let id = s(connector, "id");
+                    let name = s(connector, "name");
+                    self.overlays.push(Overlay::Market(m));
+                    self.open_mcp_tools(id, name);
+                    return None;
+                }
+            }
             KeyCode::Esc => return None,
             KeyCode::Tab | KeyCode::BackTab => {
                 let i = TABS.iter().position(|(t, _)| *t == m.tab).unwrap_or(0);

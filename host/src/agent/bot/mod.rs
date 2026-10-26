@@ -21,11 +21,13 @@ mod files;
 mod launch;
 mod lifecycle;
 mod queue;
+mod results;
 mod session;
 mod turn;
 mod updates;
 
 pub(crate) use launch::{launch_commands, select_model, start_agent, system_prompt};
+pub(crate) use results::recover_results;
 
 use crate::agent::acp::{self, Acp, Incoming};
 use crate::agent::config::FastModeSupport;

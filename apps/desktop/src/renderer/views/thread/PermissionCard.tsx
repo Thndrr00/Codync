@@ -71,7 +71,7 @@ export function PermissionCard({ entry, hostName, answering, respond }: { entry:
           <Disclosure expanded={expanded} onToggle={() => setExpanded((e) => !e)} label={<Text size="caption" weight="medium" tone="secondary">Details</Text>}>
             <VStack gap={8} className="permission-card-details">
               {d.command ? <CodeBox text={d.command} /> : null}
-              {d.detail ? <CodeBox text={d.detail.slice(0, 2000)} /> : null}
+              {d.detail ? <CodeBox text={d.detail} /> : null}
               {(d.diffs ?? []).map((diff, i) => <DiffView key={i} diff={diff} />)}
             </VStack>
           </Disclosure>

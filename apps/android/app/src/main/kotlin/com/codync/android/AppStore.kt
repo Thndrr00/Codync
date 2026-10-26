@@ -46,6 +46,10 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     internal var foreground = false
     internal val foregroundState = MutableStateFlow(false)
     internal val setupTerminals = mutableMapOf<String, SetupTerminalSession>()
+    internal val documentModels = mutableMapOf<String, DocumentsModel>()
+    internal fun documentsFor(botId: String): DocumentsModel = documentModels.getOrPut(botId) {
+        DocumentsModel(botId, this, contextScope, state.value.generation)
+    }
     internal val appConnections = mutableMapOf<String, AppConnectionSession>()
     internal var oauthRequestId: String? = null
     internal var voiceBinding: VoiceBinding? = null
@@ -136,7 +140,9 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         }
         // Editing is disabled during retirement; let its last coalesced write finish.
         draftWriter?.join()
+        for (documents in documentModels.values.toList()) documents.flushDraft()
         contextJob.cancelAndJoin()
+        documentModels.clear()
         setupTerminals.clear()
         appConnections.clear()
         oauthRequestId = null
@@ -261,9 +267,15 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         val retiring = contextJob
         val book = draftBook
         val drafts = state.value.drafts.values.toList()
+        val documents = documentModels.values.toList()
         CoroutineScope(Dispatchers.IO).launch {
             retiring.cancelAndJoin()
-            try { book?.save(drafts) }
+            try {
+                withContext(Dispatchers.Main.immediate) {
+                    for (document in documents) document.flushDraft()
+                }
+                book?.save(drafts)
+            }
             catch (_: Exception) { /* An already closing activity cannot report a storage error. */ }
             finally { old?.close() }
         }

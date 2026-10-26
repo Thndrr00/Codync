@@ -21,6 +21,17 @@ fun AppStore.openBot(id: String?, thread: String? = null) {
         }
     }
 }
+
+/** Loads a document's replies without opening a second thread over the underlying chat. */
+internal fun AppStore.loadDocumentConversation(botId: String, rootId: String) {
+    require(rootId.startsWith("doc:"))
+    val generation = state.value.generation
+    action("thread:$rootId") {
+        val response = hostQuery("thread", body("botId" to botId, "rootId" to rootId), expectedGeneration = generation)
+        receiveEntries(response)
+        acknowledgeVisible(listOf(ReadingScope(botId, rootId)))
+    }
+}
 fun AppStore.showTrace(show: Boolean) { mutableState.update { it.copy(trace = show) } }
 
 /** A conversation on screen: a bot's main chat (`thread` null) or one of its threads. */

@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use super::super::manage::{
-    AgentSetup, AnalyticsSheet, BotChatSheet, Fields, Market, MemorySheet, RoutineForm, RoutineList, SkillSheet,
+    AgentSetup, AnalyticsSheet, BotChatSheet, DocumentSheet, Fields, Market, MemorySheet, RoutineForm, RoutineList,
+    SkillSheet,
 };
 use super::{Editor, Mark};
 
@@ -51,6 +52,8 @@ pub enum Action {
     Market,
     Memory,
     Details,
+    Documents,
+    Computer,
     RefreshAgents,
     Pair,
     Usage,
@@ -62,12 +65,14 @@ pub enum Action {
 
 pub const NEW_GROUP: &str = "New group chat";
 
-pub const ACTIONS: [(&str, &str, Action); 12] = [
+pub const ACTIONS: [(&str, &str, Action); 14] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
     ("Memory of this bot…", "M", Action::Memory),
     ("Details of this bot…", "R", Action::Details),
+    ("Documents, reviews and computer activity…", "", Action::Documents),
+    ("Computer: permissions, files, terminal and activity…", "", Action::Computer),
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
     ("Usage", "U", Action::Usage),
@@ -263,6 +268,8 @@ pub struct GroupForm {
 }
 
 pub enum Overlay {
+    Computer(Box<super::super::manage::computer::ComputerSheet>),
+    McpTools(Box<super::super::manage::mcp_tools::McpToolsSheet>),
     RosterTools,
     Goto(Goto),
     Help(Editor),
@@ -274,6 +281,7 @@ pub enum Overlay {
     Usage,
     Pair(Option<String>),
     Memory(MemorySheet),
+    Documents(Box<DocumentSheet>),
     /// A read-only conversation between two bots.
     BotChat(BotChatSheet),
     Routines(RoutineList),

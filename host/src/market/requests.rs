@@ -53,6 +53,18 @@ pub fn invite_agent_sign_in(
     entries: &[String],
 ) -> Result<()> {
     let _guard = SIGN_IN.locked();
+    // Publish a nonterminal outcome before the owner can see/complete the card.
+    for id in entries {
+        if let Some(mut entry) = hub.store.entry(id).filter(|entry| {
+            entry.bot_id == bot
+                && entry.kind == EntryKind::User.as_str()
+                && entry.data.get("turnResult").is_none_or(|result| result["state"] == "waitingForSignIn")
+        }) {
+            entry.data["turnResult"] =
+                json!({"version":1,"state":"waitingForSignIn","text":null,"stopReason":"sign_in"});
+            hub.set_entry(id, &entry.data).ok_or_else(|| anyhow!("Could not save the pending sign-in outcome"))?;
+        }
+    }
     if let Some(card) = hub.store.pending_sign_ins(backend)?.into_iter().find(|card| card.bot_id == bot) {
         let mut data = card.data;
         let mut ids = data["connectionRequest"]["entryIds"].as_array().cloned().unwrap_or_default();
@@ -93,6 +105,14 @@ pub fn agent_signed_in(hub: &Hub, backend: &str) -> Result<()> {
         }
         let ids = data["connectionRequest"]["entryIds"].as_array().cloned().unwrap_or_default();
         for mut entry in ids.iter().filter_map(Value::as_str).filter_map(|id| hub.store.entry(id)) {
+            if entry.data.get("turnResult").is_some_and(|result| result["state"] != "waitingForSignIn") {
+                continue;
+            }
+            if entry.data["source"] == "slack" && !hub.store.resume_slack_sign_in(&entry.id)? {
+                entry.data["status"] = "cancelled".into();
+                hub.set_entry(&entry.id, &entry.data);
+                continue;
+            }
             let attachments = entry.data["attachments"].as_array().cloned().unwrap_or_default();
             let text = entry.data["text"].as_str().unwrap_or_default();
             let prompt = crate::chat::prompt::of_message(&hub.store, &bot.config, text, &attachments);

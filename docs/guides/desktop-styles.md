@@ -9,6 +9,15 @@ How the desktop renderer (`apps/desktop/src/renderer/`) styles its views. Views 
 - **Radius**: `--radius-xs` 6, `--radius-s` 10, `--radius-m` 12, `--radius-l` 16, `--radius-xl` 22, `--radius-pill`. **Shadow**: `--shadow-s` (resting), `--shadow-m` (floating chrome), `--shadow-l` (menus, panels), `--shadow-xl` (sheets, dialogs).
 - **Motion**: `--hover`, `--fade`, `--press`, `--morph`, `--layout`, `--ease`, `--ease-out`, `--spring`. The island has its own (`--island-spring`, `--island-fold`) in `views/island/island.css`.
 
+On Windows, sidebar collapse commits its final width immediately and animates
+the header using transform and opacity. Dragging and releasing do not trigger
+roster entrance animations; reduced motion disables header transitions through
+the shared motion tokens. Other platform behavior is
+unchanged. `node tools/verify-sidebar-motion.mjs` compares the committed baseline
+and current production CSS in installed Chrome/Edge without compiling the app.
+The final Windows fixture measured 20 versus 1 layout passes for collapse; timings and
+counts vary by machine. This fixture does not replace native-app end-to-end QA.
+
 ## Primitives (`components/`)
 
 | Need | Use |

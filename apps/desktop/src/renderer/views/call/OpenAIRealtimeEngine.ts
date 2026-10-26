@@ -1,5 +1,5 @@
 import { OPERATOR_TOOLS, type CallOperator } from './call-operator'
-import { errorMessage, microphone, VoiceEngine } from './voice'
+import { errorMessage, microphone, VoiceEngine, VoiceSettings } from './voice'
 
 /**
  * OpenAI Realtime over WebRTC, this computer ↔ OpenAI directly: the microphone is a WebRTC audio
@@ -106,6 +106,7 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
 
   interrupt() {
     if (this.phase !== 'speaking') return
+    this.transcript?.interrupted()
     this.send({ type: 'response.cancel' })
     this.send({ type: 'output_audio_buffer.clear' })
     this.setPhase('listening')
@@ -134,7 +135,7 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
         type: 'realtime',
         instructions: this.op.instructions,
         tools: OPERATOR_TOOLS.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters })),
-        audio: { input: { turn_detection: { type: 'semantic_vad' } } },
+        audio: { input: { turn_detection: { type: 'semantic_vad' }, ...(this.transcript ? { transcription: { model: VoiceSettings.transcribeModel('openai') } } : {}) } },
       },
     })
     this.setPhase('listening')
@@ -150,6 +151,10 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
       return
     }
     switch (msg.type) {
+      case 'conversation.item.input_audio_transcription.completed':
+      case 'response.output_audio_transcript.done':
+        this.transcript?.openAI(msg)
+        break
       case 'input_audio_buffer.speech_started':
         this.level = this.muted ? 0 : 0.7
         break

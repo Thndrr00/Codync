@@ -10,16 +10,21 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { BotSettingsPanel } from '../bots/BotEditorView'
 import { MemoryCard } from '../bots/MemoryView'
+import { DocumentsCard } from '../bots/DocumentsView'
+import { ComputerPanel } from '../bots/ComputerPanel'
 import { RoutinesView } from '../routines/RoutinesView'
 import { MacChatButton } from './MacChatButton'
 import '../bots/bots.css'
 import './details-panel.css'
+import '../bots/documents.css'
 
-export type DetailsTab = 'details' | 'memory' | 'settings'
+export type DetailsTab = 'details' | 'memory' | 'documents' | 'computer' | 'settings'
 
 const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'details', label: 'Details' },
   { id: 'memory', label: 'Memory' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'computer', label: 'Computer' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -46,7 +51,7 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, share, 
       <div className="details-scroll">
         {bot ? <Identity bot={bot} /> : null}
         {bot && group ? (
-          <GroupMembersList group={bot} editGroup={editGroup} />
+          <><GroupMembersList group={bot} editGroup={editGroup} /><div className="details-tab"><DocumentsCard bot={bot} store={store} /></div></>
         ) : (
           <>
             <TabChoice label="Conversation details" selection={tab} options={TABS} onChange={setTab} />
@@ -59,6 +64,10 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, share, 
                 </>
               ) : tab === 'memory' ? (
                 <MemoryCard botId={botId} />
+              ) : tab === 'computer' ? (
+                <ComputerPanel key={`${store.contextId}:${store.computer.id}:${botId}`} botId={botId} />
+              ) : tab === 'documents' && bot ? (
+                <DocumentsCard bot={bot} store={store} />
               ) : (
                 <BotSettingsPanel botId={botId} part="rarely" />
               )}

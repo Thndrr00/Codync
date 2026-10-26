@@ -14,6 +14,8 @@ import {
 } from '@shared/models'
 import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'
+import { DocumentsStore } from './documents-store'
+import type { VoiceTranscript } from '../lib/voice-transcript'
 
 export { builtInBackendName, type Connection } from './bot-mirror'
 
@@ -34,9 +36,21 @@ export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅']
  * `rev`, then live). Port of kit's `BotStore`.
  */
 export class BotStore extends BotSync {
+  private documentStores = new Map<string, DocumentsStore>()
+  documentsFor(botId: string) {
+    let documents = this.documentStores.get(botId)
+    if (!documents) {
+      documents = new DocumentsStore(botId, () => this.ready(), JSON.stringify([this.contextId, this.computer.id]))
+      this.documentStores.set(botId, documents)
+    }
+    return documents
+  }
   readonly fileDownloads = new FileDownloads(() => this.changed())
 
-  override retire() { this.fileDownloads.retire(); super.retire() }
+  override retire() {
+    for (const documents of this.documentStores.values()) documents.retire()
+    this.documentStores.clear(); this.fileDownloads.retire(); super.retire()
+  }
 
   private outgoingFiles = new Map<string, OutgoingFile[]>()
 
@@ -139,8 +153,8 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('newSession', { botId }))
   }
 
-  logCall(botId: string, seconds: number) {
-    this.perform((c) => c.call('logCall', { botId, seconds }))
+  logCall(botId: string, seconds: number, callId: string = crypto.randomUUID(), transcript?: VoiceTranscript) {
+    this.perform((c) => c.call('logCall', { botId, seconds, callId, ...(transcript ? { transcript } : {}) }))
   }
 
   screenTakeover(on: boolean) {
@@ -329,11 +343,11 @@ export class BotStore extends BotSync {
   }
 
   async loadThread(botId: string, root: string) {
-    if (!this.client) return
-    try {
-      for (const e of await this.client.thread(botId, root)) this.upsert(e)
-      this.changed()
-    } catch {}
+    const client = await this.ready()
+    const entries = await client.thread(botId, root)
+    if (this.retired) return
+    for (const entry of entries) this.upsert(entry)
+    this.changed()
   }
 
   /** The history between a bot and one peer. Never upserted: old notices would break `loadOlder`'s paging. */
@@ -420,7 +434,7 @@ function updatePayload(bot: Bot): BotDraft {
     id: bot.id, name: bot.name, description: bot.description, avatarColor: bot.avatarColor, avatarShape: bot.avatarShape,
     backend: bot.backend, command: bot.command ?? null, cwd: bot.managedWorkspace ? '' : bot.cwd, permission: bot.permission,
     model: bot.model ?? null, pinned: bot.pinned, hidden: bot.hidden, notify: bot.notify ?? null,
-    connectors: bot.connectors, skills: bot.skills, computer: bot.computer, fastMode: bot.fastMode,
+    connectors: bot.connectors, skills: bot.skills, computer: bot.computer, computerPermissions: bot.computerPermissions, fastMode: bot.fastMode,
   }
 }
 
