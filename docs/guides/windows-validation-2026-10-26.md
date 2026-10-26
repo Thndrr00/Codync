@@ -46,9 +46,9 @@ Windows addition and was not ported in this validation.
   search modes/scopes, empty search, agent startup failure, diagnostics with a
   real issue and rescan, and saving a two-hour interval routine were exercised.
 - Final normal Dev profile opens with its existing bot and a healthy local host.
-- Android: 217 core tests (one skipped), 67 app tests, Kotlin compilation and
-  debug APK assembly pass. Lint did not complete; its live thread dump remained
-  in `JoinEffectDetector` fixed-point analysis. It is not counted as passed.
+- Android: 217 core tests (one skipped), 67 app tests, Kotlin compilation,
+  debug APK assembly and lint pass. Lint completed with zero errors, 91 warnings
+  and four hints; app checks took 17 minutes 11 seconds.
 
 ## Limits and follow-up
 
