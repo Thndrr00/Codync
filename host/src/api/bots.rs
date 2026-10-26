@@ -272,6 +272,11 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let cleared = hub.routines.clear_failed(&hub.store, b["botId"].as_str())?;
             json!({"cleared": cleared})
         }
+        "exportBot" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
+            crate::bundle::export(&[row.config])?
+        }
+        "importBots" => crate::bundle::import(hub, &b["bundle"], str_arg(&b, "cwd")?).await?,
         "doctor" => crate::doctor::report(hub)?,
         "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {

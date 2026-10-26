@@ -325,14 +325,14 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 | 33 | Existe | `screen/protected_entry.rs`, `protected_browser/`, `type_login` (`docs/features/computer-use.md`). |
 | 34 | Existe | `voice.rs` + `voice/endpoint.rs`: OpenAI Realtime y Gemini Live con claves del usuario. Descartar. |
 | 35 | Parcial | `apps/desktop/src/main/island.ts` ya usa atajos globales; falta push-to-talk con sonidos. |
-| 36 | Por verificar | `screen/snapshots.rs`: comprobar si persisten capturas. |
-| 37 | Parcial | `stall.rs` y `watchdog.rs` cortan bucles; no hay tiempo máximo por herramienta colgada. |
+| 36 | Existe en el host: `screen/snapshots.rs` guarda solo IDs de captura, nunca imágenes | `screen/snapshots.rs`: comprobar si persisten capturas. |
+| 37 | Implementado (sin compilar): aviso de herramienta colgada (30 min) en `agent/bot/watchdog.rs`; no la cancela | `stall.rs` y `watchdog.rs` cortan bucles; no hay tiempo máximo por herramienta colgada. |
 | 38 | Existe | `agent/bot/compaction.rs` + `codync_mem::compaction` + `chat/handoff.rs`. Descartar. |
 | 39 | No aplica: Codync no tiene carpeta `_shared/` entre bots | `chat/memory/budget.rs` limita `MEMORY.md`, no carpetas compartidas. Límites por verificar (ver arriba). |
 | 40 | Parcial | Aquí "plugins" son conectores MCP (`market/`); falta circuit breaker por conector. |
 | 41 | Parcial | `chat/skills.rs`: el bot guarda skills con `save_skill`; falta la síntesis automática. |
 | 42 | Nuevo | Sin higiene/caducidad de skills. |
-| 43 | Nuevo | `market/` instala, no exporta bots/equipos. |
+| 43 | Implementado (sin compilar): `bundle.rs`, API `exportBot`/`importBots` (sin UI aún) | `market/` instala, no exporta bots/equipos. |
 | 44 | Implementado (sin compilar): `doctor.rs`, `codync-host doctor`, API `doctor` | No existe `doctor` (`host/src/cli/`). |
 | 45 | Nuevo | Sin asistente de equipos. |
 | 46 | Nuevo | Sin modo ahorro. `usage.rs` da base de datos de uso. |
@@ -354,5 +354,5 @@ Estado: **Existe** (ya cubierto, no portar), **Parcial** (hay base; falta lo esp
 Alcance acordado: host, Android y escritorio Windows. iOS y la TUI no se han tocado.
 
 - **Compilado y probado:** 48 (prueba del host, `fmt`, `clippy -D warnings`, typecheck y `npm test` del escritorio, compilación de Android).
-- **Escrito sin compilar ni probar:** 44, 11, 12, 47 y 49. Necesitan `cargo test -j 2 --bin codync-host` (filtros `doctor`, `outcome`, `idle`, `budget`, `failed`) y `clippy` antes de darse por buenas. 47 y 49 aún no tienen UI en ningún cliente.
+- **Escrito sin compilar ni probar:** 44, 11, 12, 47, 49, 43 y 37. Necesitan `cargo test -j 2 --bin codync-host` (filtros `doctor`, `outcome`, `idle`, `budget`, `failed`, `bundle`, `watchdog`) y `clippy` antes de darse por buenas. 47, 49 y 43 aún no tienen UI en ningún cliente.
 - **No aplican:** 13 y 39 (ver tabla). La 32 queda sin hacer: el ratón lo maneja un driver externo y no se puede conectar con seguridad sin probarlo en Windows.

@@ -4,6 +4,8 @@
 //!   when it finishes, with the input its updates settled on; one whose input never arrived isn't
 //!   counted. Any other call in between resets the count, so retries, and polling whose result
 //!   changes, go on.
+//! - a tool call that's been running for `TOOL_HUNG_AFTER`: the chat says so once; the turn keeps running, since a
+//!   long build is a tool call too.
 //! - a stall: nothing from the agent for `STALL_AFTER`, with no tool running and no approval
 //!   waiting, usually means a hung connection. The chat says so once; the turn keeps running.
 //!
@@ -23,13 +25,21 @@ use std::time::{Duration, Instant};
 const LOOP_LIMIT: u32 = 10;
 /// Silence that's worth telling the user about.
 const STALL_AFTER: Duration = Duration::from_secs(10 * 60);
+/// A tool call that has run this long may be hung.
+const TOOL_HUNG_AFTER: Duration = Duration::from_secs(30 * 60);
 
 /// A tool call started and not finished: what it is so far.
-#[derive(Default)]
 struct Call {
     title: String,
     kind: Option<String>,
     input: Value,
+    started: Instant,
+}
+
+impl Default for Call {
+    fn default() -> Self {
+        Self { title: String::new(), kind: None, input: Value::Null, started: Instant::now() }
+    }
 }
 
 pub(super) struct Watchdog {
@@ -40,6 +50,8 @@ pub(super) struct Watchdog {
     last_update: Instant,
     running: HashMap<String, Call>,
     warned: bool,
+    /// A hung tool call was already reported this turn.
+    hung_warned: bool,
     /// What the turn's finished tool calls did (`outcome`).
     trace: Trace,
 }
@@ -53,6 +65,7 @@ impl Default for Watchdog {
             last_update: Instant::now(),
             running: HashMap::new(),
             warned: false,
+            hung_warned: false,
             trace: Trace::default(),
         }
     }
@@ -127,6 +140,20 @@ impl Watchdog {
         self.tripped.take()
     }
 
+    /// A note for the user, once per turn, when a tool call has been running far longer than calls usually do.
+    fn hung(&mut self, now: Instant) -> Option<String> {
+        if self.hung_warned {
+            return None;
+        }
+        let call = self.running.values().find(|c| now.saturating_duration_since(c.started) >= TOOL_HUNG_AFTER)?;
+        self.hung_warned = true;
+        let title = if call.title.is_empty() { "A tool" } else { call.title.as_str() };
+        Some(format!(
+            "{title} has been running for over {} minutes. It may be hung; stop the bot to end it, or keep waiting.",
+            TOOL_HUNG_AFTER.as_secs() / 60
+        ))
+    }
+
     /// A note for the user, once per turn, when the agent went silent with nothing to wait for.
     fn stalled(&mut self, now: Instant, waiting_on_user: bool) -> Option<String> {
         if self.warned || waiting_on_user || !self.running.is_empty() || now - self.last_update < STALL_AFTER {
@@ -146,6 +173,10 @@ impl Actor {
         let Some(turn) = self.turn else { return };
         if let Some(note) = self.watchdog.stalled(Instant::now(), !self.perms.is_empty()) {
             tracing::warn!(bot = %self.cfg.id, "a turn has gone silent");
+            self.hub.add_entry(&self.lane, EntryKind::Notice, turn, &json!({"text": note, "style": "info"}));
+        }
+        if let Some(note) = self.watchdog.hung(Instant::now()) {
+            tracing::warn!(bot = %self.cfg.id, "a tool call may be hung");
             self.hub.add_entry(&self.lane, EntryKind::Notice, turn, &json!({"text": note, "style": "info"}));
         }
     }
@@ -194,6 +225,19 @@ mod tests {
             dog.seen(&json!({"sessionUpdate":"tool_call","toolCallId":format!("blank-{n}"),"title":"Tool","status":"completed"}));
         }
         assert!(dog.tripped().is_none(), "calls whose input never arrived aren't counted");
+    }
+
+    #[test]
+    fn a_tool_running_far_too_long_is_reported_once() {
+        let mut dog = Watchdog::default();
+        dog.seen(&json!({"sessionUpdate":"tool_call","toolCallId":"t","title":"npm install","status":"in_progress"}));
+        assert!(dog.hung(Instant::now()).is_none());
+        let later = Instant::now() + TOOL_HUNG_AFTER + Duration::from_secs(1);
+        assert!(dog.hung(later).unwrap().contains("npm install"));
+        assert!(dog.hung(later).is_none(), "it's told once a turn");
+        let mut done = Watchdog::default();
+        done.seen(&json!({"sessionUpdate":"tool_call","toolCallId":"t","title":"ls","status":"completed"}));
+        assert!(done.hung(later).is_none(), "a finished call isn't hung");
     }
 
     #[test]

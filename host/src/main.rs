@@ -7,6 +7,7 @@ mod background;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 mod browser;
 mod budget;
+mod bundle;
 mod chat;
 mod cli;
 mod compat;
