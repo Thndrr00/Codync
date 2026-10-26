@@ -21,6 +21,7 @@ use tokio::sync::{broadcast, watch};
 mod documents;
 mod order;
 mod reactions;
+mod stop;
 mod sync;
 mod terminal;
 

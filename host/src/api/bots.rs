@@ -259,15 +259,10 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         // A finished voice call, as a line in the chat ("Voice chat · 0:16").
         "logCall" => crate::voice::receipts::log(hub, &b)?,
         "stop" => {
-            let bot = str_arg(&b, "botId")?;
-            match hub.store.bot(bot)? {
-                Some(row) if row.config.is_group() => hub.groups.stop(hub, bot),
-                // The terminal answers to its own interrupt, not to us.
-                Some(row) if crate::external::is_external(&row.config) => {}
-                _ => hub.send_cmd(bot, Cmd::Stop)?,
-            }
+            hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
         }
+        "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {
             hub.send_cmd(str_arg(&b, "botId")?, Cmd::SwitchBack)?;
             json!({})

@@ -234,6 +234,16 @@ export class FakeHost {
         this.settle(id)
         return {}
       }
+      case 'stopAll': {
+        let stopped = 0
+        for (const [id, bot] of this.bots) {
+          if (bot.status === 'idle') continue
+          this.turns.set(id, (this.turns.get(id) ?? 0) + 1)
+          this.settle(id)
+          stopped++
+        }
+        return { stopped }
+      }
       case 'newSession':
         return {}
       case 'createBot':

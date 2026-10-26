@@ -209,9 +209,11 @@ export function BotRoster({ roster, compact, onContext }: {
       </ComputerRosterSection>
     )
   })
+  const activeItems = roster.allItems.filter((i) => ['working', 'needsInput'].includes(i.bot.status) && i.store.connection.kind === 'online')
   return (
     <>
-      {!compact ? <RosterControls {...roster} attention={roster.allItems.filter((i) => ['needsInput', 'error'].includes(i.bot.status)).length} /> : null}
+      {!compact ? <RosterControls {...roster} attention={roster.allItems.filter((i) => ['needsInput', 'error'].includes(i.bot.status)).length}
+        active={activeItems.length} stopAll={() => new Set(activeItems.map((i) => i.store)).forEach((store) => store.stopAll())} /> : null}
       {!roster.items.length && roster.allItems.length ? <div className="roster-empty">No bots match these filters <button onClick={() => { roster.setQuery(''); roster.setFilter('all') }}>Clear filters</button></div> : null}
       {sections}
       {validPreview ? <RosterPreview item={validPreview} close={() => setPreview(null)} open={() => { app.select(validPreview.ref); setPreview(null) }} /> : null}
