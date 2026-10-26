@@ -130,6 +130,8 @@ private class MaintenanceState {
         }
     }
 
+    TeamRunSection(bots, online) { botId, text -> store.sendToBot(botId, text) }
+
     if (ui.error != null || ui.notice != null) CardSection {
         row { Text(ui.error ?: ui.notice.orEmpty(), style = Type.footnote, color = if (ui.error != null) Palette.danger else Palette.secondary) }
     }
@@ -146,7 +148,7 @@ private class MaintenanceState {
 }
 
 /** A tappable row with an icon, like the rows of the settings sheet. */
-@Composable private fun ActionRow(icon: String, title: String, enabled: Boolean, action: () -> Unit) {
+@Composable internal fun ActionRow(icon: String, title: String, enabled: Boolean, action: () -> Unit) {
     Row(Modifier.fillMaxWidth().plainButton(enabled = enabled, action = action), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Symbol(icon, size = 20.dp, tint = if (enabled) Palette.text else Palette.tertiary)

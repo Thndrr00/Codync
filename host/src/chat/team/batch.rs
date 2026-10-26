@@ -14,9 +14,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Tasks in one batch: more than a coordinator can read back is a job for a routine, not a call.
-const MAX_TASKS: usize = 8;
-const MAX_GOAL_BYTES: usize = 8_000;
-const MAX_CRITERIA: usize = 10;
+pub(super) const MAX_TASKS: usize = 8;
+pub(super) const MAX_GOAL_BYTES: usize = 8_000;
+pub(super) const MAX_CRITERIA: usize = 10;
 const MAX_CRITERION_BYTES: usize = 500;
 /// How much of each reply the digest keeps.
 const DIGEST_REPLY_BYTES: usize = 1_500;
@@ -71,7 +71,13 @@ pub(super) struct TaskResult {
 
 /// The tasks of a `delegate_batch` call by `own_id`. A batch with a bad task is refused whole, before any bot works.
 pub(super) fn parse(args: &Value, own_id: &str) -> Result<Vec<TaskSpec>> {
-    let list = args["tasks"].as_array().ok_or_else(|| anyhow!("tasks must be a list"))?;
+    parse_list(&args["tasks"], own_id, true)
+}
+
+/// The tasks in `list`: each bot at most once when `unique` (a batch runs them together), any bot any number of
+/// times otherwise (a pipeline runs them one after another).
+pub(super) fn parse_list(list: &Value, own_id: &str, unique: bool) -> Result<Vec<TaskSpec>> {
+    let list = list.as_array().ok_or_else(|| anyhow!("tasks must be a list"))?;
     if list.is_empty() || list.len() > MAX_TASKS {
         bail!("a batch holds 1 to {MAX_TASKS} tasks");
     }
@@ -85,7 +91,7 @@ pub(super) fn parse(args: &Value, own_id: &str) -> Result<Vec<TaskSpec>> {
             if bot_id == own_id {
                 bail!("task {n}: a bot cannot give itself a task");
             }
-            if !seen.insert(bot_id.to_owned()) {
+            if !seen.insert(bot_id.to_owned()) && unique {
                 bail!("task {n}: each bot can have one task per batch");
             }
             let goal = task["goal"].as_str().map(str::trim).unwrap_or_default();
