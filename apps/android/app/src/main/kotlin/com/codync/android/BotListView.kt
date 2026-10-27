@@ -183,7 +183,7 @@ import kotlinx.serialization.json.putJsonArray
                     newBot = newBot, newGroup = newGroup,
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                 )
-                state.mismatch?.let { UpdateNeededCard(state, it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                state.mismatch?.let { UpdateNeededCard(state, it, store::requestHostUpdate, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 Crossfade(
                     preferences.presentation,
                     Modifier.weight(1f),

@@ -90,7 +90,7 @@ import com.codync.android.design.*
         }
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { composerHeight = it.height }) {
             val mismatch = state.mismatch
-            if (mismatch != null) UpdateNeededCard(state, mismatch, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+            if (mismatch != null) UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             else MessageComposer(bot, rootId, state, store, onCall = null)
         }
     }

@@ -274,7 +274,7 @@ impl Actor {
         }
         let done_tx = done_tx.clone();
         tokio::spawn(async move {
-            let _ = done_tx.send(answer.response().await);
+            let _ = done_tx.send(answer.response().await.and_then(acp::codebuddy::prompt_result));
         });
         Ok(())
     }

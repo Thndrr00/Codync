@@ -52,6 +52,9 @@ git('merge-base', '--is-ancestor', baseline, 'HEAD');
 const moved = new Map([
   ['apps/android/core/src/main/kotlin/com/codync/android/core/CallTranscript.kt',
     'apps/android/core/src/main/kotlin/com/codync/android/core/CallReceiptTranscript.kt'],
+  // Upstream's rail/panel Extensions window: the catalog is one panel now, per section.
+  ['apps/desktop/src/renderer/views/marketplace/CatalogSections.tsx',
+    'apps/desktop/src/renderer/views/marketplace/CatalogPanel.tsx'],
 ]);
 const added = git('diff', '--name-only', '--diff-filter=A', '-z', 'e770dbd9', baseline).split('\0').filter(Boolean);
 for (const path of added) assert(existsSync(resolve(root, moved.get(path) ?? path)), `Lost fork-added file: ${path}`);

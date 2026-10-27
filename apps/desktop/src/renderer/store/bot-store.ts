@@ -18,11 +18,13 @@ import {
   type ReplyQuote,
   type ScreenState,
   type SentinelReport,
+  type SharedFile,
   type Usage,
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
 import type { HostClient } from '../client/host-client'
+import { readSharedFile } from '../../shared/files.ts'
 import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'
 import { DocumentsStore } from './documents-store'
@@ -120,6 +122,16 @@ export class BotStore extends BotSync {
     })()
   }
 
+  /** Asks this computer to update itself while it's behind this app (`installHostUpdate`). */
+  requestHostUpdate() {
+    this.hostUpdate = { kind: 'requested', at: Date.now() }
+    this.changed()
+    void this.withLink((c) => c.call('installHostUpdate', {})).catch((error: unknown) => {
+      this.hostUpdate = { kind: 'failed', message: error instanceof Error ? error.message : String(error) }
+      this.changed()
+    })
+  }
+
   retry(entry: Entry) {
     const files = (entry.data.clientNonce && this.outgoingFiles.get(entry.data.clientNonce)) || []
     const text = entry.data.text ?? ''
@@ -147,14 +159,23 @@ export class BotStore extends BotSync {
   }
 
   /** A sent file's bytes: cached after the first fetch (sent files never change). */
-  async attachmentData(fileId: string, botId: string): Promise<Uint8Array | null> {
-    const cached = attachmentCache.get(fileId)
+  attachmentData(fileId: string, botId: string): Promise<Uint8Array | null> {
+    return this.cachedFile(fileId, (client) => client.readUpload(botId, fileId))
+  }
+
+  /** A file a bot shared, read whole and checked: cached after the first fetch (shared files never change). */
+  sharedFileData(file: SharedFile, entryId: string): Promise<Uint8Array | null> {
+    return this.cachedFile(file.id, (client) => readSharedFile(file, (offset) => client.readFile(entryId, file.id, offset)))
+  }
+
+  private async cachedFile(id: string, fetch: (client: HostClient) => Promise<Uint8Array>): Promise<Uint8Array | null> {
+    const cached = attachmentCache.get(id)
     if (cached) return cached
     const client = this.live
     if (!client) return null
     try {
-      const data = await client.readUpload(botId, fileId)
-      cacheAttachment(fileId, data)
+      const data = await fetch(client)
+      cacheAttachment(id, data)
       return data
     } catch {
       return null

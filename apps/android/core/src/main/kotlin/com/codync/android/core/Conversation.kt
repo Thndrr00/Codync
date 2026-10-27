@@ -100,11 +100,16 @@ private data class EntryFields(
 @Serializable data class ReplyQuote(val id: String = "", val author: String = "", val text: String = "", val artifact: String? = null)
 
 @Serializable data class Attachment(val id: String, val name: String, val size: Long) {
-    val isImage: Boolean get() = name.substringAfterLast('.', "").lowercase() in listOf("png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp")
+    val isImage: Boolean get() = isImageName(name)
 }
+
+private fun isImageName(name: String) = name.substringAfterLast('.', "").lowercase() in listOf("png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp")
 
 /** A file a bot shared: immutable on the computer, checked against its SHA-256 once downloaded. */
 @Serializable data class SharedFile(val id: String, val name: String, val size: Long, val sha256: String) {
+    /** An image small enough to show in the chat (the phone fetches all of it). */
+    val showsAsImage: Boolean get() = isImageName(name) && size <= 20L * 1024 * 1024
+
     /** Before any of it is read: a name that can't leave its folder and a hash to check. */
     fun validate() {
         require(size in 0..MAX_FILE_BYTES && sha256.length == 64 && sha256.all { it in "0123456789abcdef" } &&

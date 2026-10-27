@@ -154,6 +154,18 @@ pub const TABS: [(Tab, &str); 5] = [
     (Tab::Skills, "Skills"),
 ];
 
+impl Tab {
+    pub(in crate::tui) fn index(self) -> usize {
+        match self {
+            Self::Bots => 0,
+            Self::Teams => 1,
+            Self::Agents => 2,
+            Self::Connectors => 3,
+            Self::Skills => 4,
+        }
+    }
+}
+
 pub struct Market {
     pub tab: Tab,
     pub query: Editor,
@@ -169,6 +181,9 @@ pub struct Market {
     pub loading: bool,
     pub cursor: usize,
     pub error: Option<String>,
+    /// Page index on Agents, Connectors, then Skills.
+    pub pages: [usize; 5],
+    pub page_size: usize,
 }
 
 pub enum Row<'a> {
@@ -178,13 +193,22 @@ pub enum Row<'a> {
     Installed(&'a Value),
     Custom,
     Registry(&'a Value),
-    More,
     OwnSkill(&'a Value),
     Skill(&'a Value),
     /// A ready-made bot from the catalog.
     Profile(&'a Value),
     /// A catalog team: a coordinator and the bots it hands work to.
     Team(&'a Value),
+}
+
+/// One page of the open marketplace tab.
+pub struct MarketPage<'a> {
+    /// The rows every page starts with (Add Node.js, what's installed, Custom connector), then this page's catalog rows.
+    pub rows: Vec<Row<'a>>,
+    /// Catalog rows on the tab, without the ones every page starts with.
+    pub count: usize,
+    pub page: usize,
+    pub pages: usize,
 }
 
 pub struct AgentSetup {
@@ -399,19 +423,7 @@ impl App {
 /// Opens `url` in this computer's browser, when the host is this computer.
 pub(super) fn open_browser(url: &str, host: &str) -> bool {
     let local = ["//127.0.0.1", "//localhost", "//[::1]"].iter().any(|h| host.contains(h));
-    local && !url.is_empty() && open_here(std::ffi::OsStr::new(url))
-}
-
-/// Opens a link or file with this computer's default app for it (a web page: the browser).
-pub(in crate::tui) fn open_here(target: &std::ffi::OsStr) -> bool {
-    let mut command = if cfg!(windows) {
-        let mut c = std::process::Command::new("rundll32");
-        c.arg("url.dll,FileProtocolHandler");
-        c
-    } else {
-        std::process::Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" })
-    };
-    command.arg(target).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().is_ok()
+    local && !url.is_empty() && crate::shell::open(std::ffi::OsStr::new(url))
 }
 
 /// Model catalogs belong to one host-local credential profile.

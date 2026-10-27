@@ -117,15 +117,24 @@ git config core.hooksPath .githooks
 ```
 
 It runs CI's checks for each part a commit touches, so a failure shows up before the push:
-host and the memory crate (`cargo fmt --all --check`, clippy and `cargo test` for the workspace), desktop, cloud
-and relay (`npm run typecheck`, `npm test`), the Android app (core and app unit tests, and a Kotlin compile of
+host and the memory crate (`cargo fmt --all --check`, clippy and `cargo test` for the workspace), desktop, cloud,
+relay, discord and private-relay (`npm run typecheck`, `npm test`), the Android app (core and app unit tests, and a Kotlin compile of
 the app and its instrumentation tests, with JDK 21), Linux screen helper formatting, a parse of the macOS
 screen helper's Swift sources (on macOS), and the website's user manual (`npm run check:docs` in `web/`: pages
 compile, links and anchors resolve). It checks the staged files only, in a copy under `.git/precommit-snapshot`,
 so other agents' uncommitted edits in the same checkout neither break nor rescue a commit; the
 host builds into `host/target/precommit`, and its tests are stopped after 5 minutes so a hung
 test fails the commit instead of holding it. The npm checks reuse each package's `node_modules`
-(run `npm ci` there first).
+(run `npm ci` there first). Each worker package is checked only when its own folder (or the
+shared relay vectors) changes. On a merge commit it checks only the files that differ from both
+sides (resolved conflicts, or both sides' changes put together); what the merge brings in was checked
+when it landed.
+
+CI on a pull request: the host runs `cargo nextest run` with retries (a test that passes only on a
+retry shows as FLAKY), iOS Kit retries a failing test up to twice, Android builds the minified release
+APK only after a change lands on `dev` or `main`, and the desktop installers are built only when a PR
+touches what they're made from (`src/main`, `src/preload`, `src/shared`, build config, tools,
+resources, dependencies, `apps/shared/Config`, `apps/screen-macos`, `packaging/`) or targets `main`; every desktop PR still typechecks, tests and builds.
 
 Left to CI: the iOS Kit tests (an iPhone simulator) and the platform builds (Linux screen
 helper: GStreamer development packages; macOS: the `Screen` Xcode target against WebRTC).

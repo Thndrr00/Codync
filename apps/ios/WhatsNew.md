@@ -6,6 +6,26 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.26.2
+
+### zh-Hant
+- Bot 傳來的圖片會直接顯示在聊天裡，點一下可以放大看，不用先下載。
+- 電腦上的 Codync 版本太舊時，更新提示多了「Update now」按鈕，直接從手機叫那台電腦更新。
+- 擴充套件一次顯示一個分類：智慧體、聯結器或技能，每個列表都分頁。點列表兩側的圓形按鈕或左右滑動就能翻頁，下方可選每頁 6、10、20 或 50 筆，並顯示目前在第幾頁。
+- 聯結器翻到還沒載入的頁面時，會從 MCP Registry 接著載入。
+- 「憑證」移到上方電腦名稱旁；「自定義聯結器」和「自己的技能」放在各自分類的列表上方。
+- 電腦使用自建中繼時，設定和連線狀態會顯示該中繼的地址，不再一律寫成 Cloudflare。
+- 可以建立使用 WorkBuddy 的 Bot：Codync 會使用 WorkBuddy 桌面 App 內附的 CLI，並在聊天裡請你登入。
+
+### en-US
+- Images a bot sends now show right in the chat; tap one to see it full size, no download needed.
+- When a computer's Codync is too old for this app, Update now on the notice updates that computer from your phone.
+- Extensions shows one section at a time: Agents, Connectors or Skills, each in pages. Tap the round buttons beside the list or swipe left or right to turn the page; under it, pick 6, 10, 20 or 50 per page and see which page you're on.
+- Connectors keep loading from the MCP Registry as you page past what's loaded.
+- Credentials sits beside the computer's name at the top, and Custom connector and Your own skill sit above their lists.
+- When a computer uses a private relay, Settings and connection status show that relay's address instead of always saying Cloudflare.
+- Create bots that run WorkBuddy: Codync uses the CLI inside the WorkBuddy desktop app and asks you to sign in from the chat.
+
 ## 2.26.1
 
 ### zh-Hant
@@ -114,56 +134,3 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - 點一下聊天訊息或空白區域即可收起鍵盤，保留正常捲動與按鈕操作
 - 聊天停在底部時，鍵盤開啟後仍保持最後一則訊息可見
 - 回到最新訊息按鈕改用系統 Liquid Glass
-
-### en-US
-- Tap a message or empty conversation space to dismiss the keyboard while preserving scrolling and button actions
-- Keep the latest message visible when opening the keyboard at the bottom of a chat
-- The jump-to-latest button now uses native Liquid Glass
-
-## 2.23.0
-
-### zh-Hant
-- 外觀可選擇跟隨系統、淺色或深色，並保留此裝置的偏好
-
-### en-US
-- Choose System, Light or Dark appearance and keep your preference on this device
-
-## 2.22.2
-
-### zh-Hant
-- 擴充功能移除 Apps 區段，Composio 統一從 Connectors 登入使用
-
-### en-US
-- Extensions removes the Apps section; connect Composio from Connectors
-
-## 2.22.1
-
-### zh-Hant
-- 已連線電腦的資訊與操作排列更緊湊，電腦名稱完整顯示
-- 手機連不上帳號內的電腦時，可直接要求存取權限；連線說明也更容易閱讀
-- 手機的裝置清單不再提供刪除同帳號電腦的操作，避免誤刪
-
-### en-US
-- Connected computer cards keep their full names visible with a more compact layout for connection details and actions
-- Ask for access directly when your phone cannot reach an account computer, with clearer connection details
-- Account computers can no longer be removed from the phone's device list, preventing accidental removal
-
-## 2.22.0
-
-### zh-Hant
-- 授權卡片在寬螢幕上更精簡，不再撐滿聊天區
-- 用麥克風聽寫時，麥克風按鈕會變成錄音膠囊：停止鍵、錄了多久，還有跟著你說話起伏的點點
-- Bot 工作中會顯示簡潔的動畫、目前動作與經過時間，詳細紀錄可從「完整對話」查看
-- 麥克風旁的向上箭頭可以選聽寫要用裝置內建語音，還是用你自己的 OpenAI 或 Gemini 金鑰
-- iPad 接實體鍵盤時，在輸入框按 Return 會換行，⌘↩ 送出
-- 群組裡被提及的 bot 若正在別的對話忙，群組會顯示它在忙，忙完就回來回答
-- 記憶不會再滿：快滿時，Dreaming 會把細節依主題整理進筆記資料夾，你要 bot 記住的事一定存得下
-
-### en-US
-- Approval cards stay compact on wide screens instead of stretching across the chat
-- While you dictate, the mic turns into a recording pill: a stop button, how long you've been talking, and dots that follow your voice
-- While a bot works, see its activity and elapsed time in a compact animated indicator; details remain in Full conversation
-- The arrow beside the mic picks how dictation hears you: on-device speech, or your own OpenAI or Gemini key
-- On iPad with a hardware keyboard, Return starts a new line in the message box and ⌘↩ sends
-- In a group, a bot you mention that's busy in another chat now says so, and answers once it's done
-- Memory no longer fills up: as it nears its limit, dreaming files the detail into notes by topic, so what you ask a bot to remember always fits

@@ -140,7 +140,7 @@ import com.kyant.shapes.RoundedRectangle
             }
             // Nothing sent now could be read on the other side.
             val mismatch = state.mismatch
-            if (mismatch != null) UpdateNeededCard(state, mismatch, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+            if (mismatch != null) UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             else if (viewing == null) MessageComposer(bot, null, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
                 replyingTo = replyingTo, cancelReply = { replyingTo = null },
                 onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null)

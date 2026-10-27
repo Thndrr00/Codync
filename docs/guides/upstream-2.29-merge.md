@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**In progress: PRs 216 and 219 are merged (`85ed396f`, then this merge), with the requested hardening committed after 216; no complete release stage is yet certified, and PRs 220, 221 and 226 remain for v2.27.0.** Validation below records observed commands, never an assumed pass.
+**In progress: PRs 216, 219, 220 and 221 are merged, with the requested hardening committed after 216; only PR 226 remains before the v2.27.0 gate.** Validation below records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -197,6 +197,39 @@ The fork baseline `af33eda4` has no iOS `CallTranscript`, `VoiceReceipt`, `voice
 - Desktop post-filter typecheck and tests exited 0: 348 passes, 19 platform skips, 0 failures.
 - Initial Android gate exited 1 at compileDebugKotlin: ScreenHeader's third argument had become Boolean, AppearancePreferences.initialize was obsolete, and canEdit lacked its extension import. Fixed as a named trailing slot, the current preference accessor and the import. The full gate then exited 0: `assembleDebug`, `:core:test`, `testDebugUnitTest` and `lintDebug` (109 tasks); a forced rerun of both test tasks on this tree executed 46 tasks and exited 0.
 - Host gates on the committed tree: `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo test -j 1 -- --test-threads=1` exit 0 over 22 targets (699 unit tests, plus the workspace, call, routine, team and turn end-to-end suites). The proactive ACP fixture now reads and writes UTF-8 explicitly, because the Windows console codepage turned its prompts into lone surrogates.
+
+## v2.27.0, substep PR 221 (`34af7b45`)
+
+This PR brings the Extensions redesign, the host update request, private-relay labels and the WorkBuddy agent.
+
+### Conflict decisions
+
+- `host/src/agent/acp.rs`: keeps the fork's `Answer` drop (a response is consumed once) and takes upstream's `rpc_error`, which the merged reader now calls.
+- `host/src/agent/auth.rs` (+ `auth/agent.rs`, `auth/models.rs`): upstream extracted the launch and the model discovery; the fork's account environment is re-applied inside them (`start_with_env`, exported for account sign-in and the Antigravity probe; `models(store, backend, account)`).
+- `host/src/agent/bot/session.rs`: starts with upstream's `launch_env` (the harness's own variables) plus the fork's account overrides.
+- `host/src/main.rs`: keeps `cli` and `sentinel` and adds upstream's `cloud_cli` and `secret_prompt`.
+- `host/src/market/skills.rs`: adopts upstream's public tree page and single-file reader (the contents API's 60-request quota). Both stay inside the fork's `GITHUB` egress policy, and the size limit is read through `read_limited`, so the loopback fixture still tests it.
+- `host/src/tui/manage/{market,mod}.rs`, `sheets.rs`, `sheets/market_view.rs`: upstream's rail/panel window with the fork's Bots and Teams tabs (`Tab::index` and `Market.pages` cover five tabs, catalog rows, `market_page` in the tools shortcut).
+- Android `MarketplaceView.kt`: upstream's paged tabs, error line and credentials header, with the fork's modal inset, reselect-to-top, "No computer paired" state, ready-made catalog block and the Composio Apps list. `MarketSection` is restored to `MarketRows.kt` for those blocks, and `ComposioViews.kt` pages with `CatalogPaging` now that upstream's `CatalogPage` holds only `items`.
+- Android `BotListView.kt`, `ChatScreen.kt`, `RepliesView.kt`: the fork's roster and composer stay, and all three pass `store::requestHostUpdate` into upstream's update card. `ConnectionPresentation.kt` keeps the fork's status comment and adds upstream's private-relay labels; `SettingsView.kt` keeps the fork's computer row and uses `routeTitle(route, computer.cloud)`; `UpdateNeededCard.kt` takes upstream's signature and the fork's host-name fallback.
+- Desktop `MarketplaceView.tsx`: upstream's rail/panel window with the fork's ready-made catalog as two more sections (`market-models.ts`, new `CatalogPanel.tsx`; `CatalogSections.tsx` removed, and the checklist records the move). The fork's `AgentCard` gives way to upstream's in `MarketplacePanel.tsx`.
+- Desktop `package.json` (test glob), `main/tray.ts` (the fork's "Pair phone." with upstream's QR icon) and `store/bot-store.ts` (both `SentinelReport` and `SharedFile`): union.
+- iOS `WhatsNew.md`: upstream's 2.26.2 in both languages, then 2.26.1, then the fork's older sections.
+- `docs/features/marketplace.md`: the fork's teach flow and ready-made catalog plus upstream's tree-page and WorkBuddy text.
+- `.github/workflows/kit.yml`: the fork's `build/dd` result bundle and summary plus upstream's retry-on-failure. `release-desktop.yml`: the fork's `MAC_SIGNING` gate plus upstream's `needs.check.outputs.package`.
+
+### Validation observed
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo test --bin codync-host -j 1 -- --test-threads=1` exit 0 (738 passed, 1 ignored).
+- `npm run typecheck` exit 0; `npm test` exit 0 (374 passed, 19 platform skips, 0 failures).
+- Android `assembleDebug :core:test :app:testDebugUnitTest lintDebug` exit 0.
+- Preservation checklist exit 0, including the recorded `CatalogSections`/`CatalogPanel` move.
+- iOS: static review only.
+
+### Fixed while merging
+
+- The watch fingerprint no longer hashes a skipped folder's own mtime (`.git` changes on every write), which made `a_folder_fingerprint_changes_with_its_files` fail or pass by timing.
+- `Tab::index` and `Market.pages` follow the five Extensions tabs.
 
 ## Resource and environment evidence
 

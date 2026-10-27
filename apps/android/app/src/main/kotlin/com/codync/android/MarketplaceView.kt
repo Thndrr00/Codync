@@ -9,16 +9,15 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
@@ -35,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -43,19 +41,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.AgentBackend
-import com.codync.android.core.CatalogPage
+import com.codync.android.core.CatalogPaging
 import com.codync.android.core.MarketConnector
 import com.codync.android.core.MarketSkill
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
-import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Extensions (iOS `MarketplaceView`): one page of agents, connectors, apps and skills for the bots on
- * this computer. Installing happens on the computer; each bot turns connectors and skills on in its settings.
+ * Extensions (iOS `MarketplaceView`): ready-made bots and coordinator teams, then Agents, Connectors and
+ * Skills one at a time, each paged. Installing happens on the computer; each bot turns connectors and
+ * skills on in its settings.
  */
 @Composable internal fun MarketplaceView(
     state: AppState,
@@ -100,13 +98,9 @@ import kotlinx.coroutines.launch
     var search by remember { mutableStateOf("") }
     // Bumped on each submitted search, so every section searches again.
     var searchToken by remember { mutableIntStateOf(0) }
-    var connectors by remember { mutableStateOf(CatalogPage<MarketConnector>()) }
-    var connectorRequest by remember { mutableStateOf("") }
-    var connectorQuery by remember { mutableStateOf("") }
-    // The registry page after the ones shown; null at the end.
-    var connectorCursor by remember { mutableStateOf<String?>(null) }
-    var loadingConnectors by remember { mutableStateOf(true) }
-    var loadingMore by remember { mutableStateOf(false) }
+    val connectors = remember(store) {
+        ConnectorCatalog<MarketConnector>({ it.name }) { search, cursor -> store.marketConnectors(search, cursor).let { it.items to it.nextCursor } }
+    }
     var skills by remember { mutableStateOf(emptyList<MarketSkill>()) }
     var loadingSkills by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -118,41 +112,26 @@ import kotlinx.coroutines.launch
     var agent by remember { mutableStateOf<AgentBackend?>(null) }
     var addingNode by remember { mutableStateOf(false) }
     var showCredentials by remember { mutableStateOf(false) }
-    // Agents shown before "Load more agents".
-    var agentLimit by remember { mutableIntStateOf(10) }
+    var section by remember { mutableStateOf(ExtensionSection.Agents) }
+    var agentPage by remember { mutableIntStateOf(0) }
+    var skillPage by remember { mutableIntStateOf(0) }
+    var pageSize by remember { mutableIntStateOf(CatalogPaging.phonePageSize) }
+    var pickedPageSize by remember { mutableStateOf(false) }
     val query = search.trim()
+    // Nothing loads until Extensions is on screen on a phone with a computer; a sheet is already on it.
     val canLoad = everActive && (inModal || state.computers.isNotEmpty())
-    suspend fun loadConnectors() {
-        val request = UUID.randomUUID().toString()
-        connectorRequest = request; connectorQuery = query; loadingConnectors = true; loadingMore = false
-        try {
-            val page = store.marketConnectors(query, null)
-            if (connectorRequest != request) return
-            connectors = CatalogPage<MarketConnector>().append(page.items) { it.name }; connectorCursor = page.nextCursor?.takeIf(String::isNotBlank); error = null
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Exception) {
-            if (connectorRequest != request) return
-            connectors = CatalogPage(); connectorCursor = null; error = failure.message ?: "Couldn't load connectors."
-        } finally { if (connectorRequest == request) loadingConnectors = false }
+    /**
+     * A size picked from the menu, or one that follows the layout, starts every list over in the same change as
+     * the size, so no pager is ever built for the new size at the old page.
+     */
+    fun resize(size: Int) { pageSize = size; agentPage = 0; skillPage = 0; connectors.show(0, size) }
+    fun changePageSize(size: Int) { pickedPageSize = true; resize(size) }
+    /** Turns the connector list to `page` at once; a page that isn't full then fills from the registry. */
+    fun showConnectorPage(page: Int) {
+        connectors.show(page, pageSize)
+        scope.launch { connectors.fill(pageSize) }
     }
-    fun loadMoreConnectors() {
-        if (loadingMore || loadingConnectors) return
-        if (connectors.hasHidden) { connectors = connectors.reveal(); return }
-        val cursor = connectorCursor ?: return
-        val request = connectorRequest
-        loadingMore = true
-        scope.launch {
-            try {
-                val page = store.marketConnectors(connectorQuery, cursor)
-                if (connectorRequest != request) return@launch
-                connectors = connectors.append(page.items) { it.name }.reveal()
-                connectorCursor = page.nextCursor?.takeIf { it.isNotBlank() && it != cursor }; error = null
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { if (connectorRequest == request) error = failure.message ?: "Couldn't load more connectors." }
-            finally { if (connectorRequest == request) loadingMore = false }
-        }
-    }
-    fun submit() { searchToken++; agentLimit = 10; if (canLoad) scope.launch { loadConnectors() } }
+    fun submit() { searchToken++; if (canLoad) scope.launch { connectors.load(query) } }
     LaunchedEffect(canLoad, state.contextId) {
         if (!canLoad) return@LaunchedEffect
         store.refreshPlugins()
@@ -160,7 +139,7 @@ import kotlinx.coroutines.launch
     }
     LaunchedEffect(canLoad, state.contextId) {
         if (!canLoad) return@LaunchedEffect
-        loadConnectors()
+        connectors.load(query)
     }
     LaunchedEffect(canLoad, state.contextId) {
         if (!canLoad) return@LaunchedEffect
@@ -175,92 +154,144 @@ import kotlinx.coroutines.launch
     val installedSkills = state.plugins?.skills.orEmpty()
     val shownSkills = if (query.isEmpty()) skills else skills.filter { it.name.contains(query, true) || it.description.contains(query, true) }
     val inset = Modifier.padding(horizontal = if (inModal) 44.dp else 24.dp)
+    fun changeSearch(next: String) { search = next; agentPage = 0; skillPage = 0 }
+    fun pagePad(count: Int, shown: Int) = if (count > pageSize) maxOf(0, pageSize - shown) else 0
+    /** Ready-made bots and coordinator teams: they create bots, so they sit above every section. */
+    @Composable fun ReadyMade() {
+        if (canLoad) CatalogSections(state, store, query, Modifier)
+    }
+    /** Apps through Composio under Connectors: connecting one adds it like any other connector. */
+    @Composable fun Apps() {
+        if (section == ExtensionSection.Connectors && canLoad) ComposioSection(query, searchToken, state, store)
+    }
+    @Composable fun Pins() {
+        if (section == ExtensionSection.Agents && backends.any { it.needsNode }) NodeNotice(state) { addingNode = true }
+        if (section == ExtensionSection.Connectors) MarketRow("Custom connector", "Any MCP server: a command or a URL", added = false, addLabel = "New",
+            icon = { TileIcon("point.3.connected.trianglepath.dotted") }) { addingConnector = true }
+        if (section == ExtensionSection.Skills) MarketRow("Your own skill", "Write instructions a bot can follow", added = false, addLabel = "New",
+            icon = { TileIcon("square.and.pencil") }) { writingSkill = true }
+    }
+    @Composable fun Lists() {
+        when (section) {
+            ExtensionSection.Agents -> if (agents.isEmpty()) Text(if (query.isEmpty()) tr("No agents yet.") else tr("No agents match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+            else {
+                FlankedPager(agentPage, agents.size, pageSize, settle = { agentPage = it }) { index ->
+                    val shown = CatalogPaging.slice(agents, index, pageSize)
+                    val slots = buildList<AgentBackend?> {
+                        addAll(shown)
+                        repeat(pagePad(agents.size, shown.size)) { add(null) }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        for (row in slots.chunked(2)) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            for (backend in row) if (backend != null) AgentCard(backend, Modifier.weight(1f)) { agent = backend }
+                            else AgentCardSpacer(Modifier.weight(1f))
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            ExtensionSection.Connectors -> when {
+                connectors.loading -> SkeletonRows()
+                connectors.items.items.isEmpty() -> Text(if (query.isEmpty()) tr("Couldn't load connectors.") else tr("No connectors match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                else -> {
+                    val rows = connectors.items.items
+                    FlankedPager(connectors.page, rows.size, pageSize, connectors.hasMore, connectors.loadingMore, ::showConnectorPage) { index ->
+                        val shown = CatalogPaging.slice(rows, index, pageSize)
+                        // The page past the loaded rows, while the registry fills it.
+                        if (shown.isEmpty()) SkeletonRows()
+                        else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (c in shown) MarketRow(c.title, c.description ?: c.name, c.installed,
+                                icon = { ServiceLogo(c.website, c.title, c.name) }) { installing = c }
+                            repeat(pagePad(rows.size, shown.size)) { MarketRowSpacer() }
+                        }
+                    }
+                }
+            }
+            ExtensionSection.Skills -> if (loadingSkills) SkeletonRows()
+            else if (query.isNotEmpty() && shownSkills.isEmpty()) Text(tr("No skills match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+            else {
+                FlankedPager(skillPage, shownSkills.size, pageSize, settle = { skillPage = it }) { index ->
+                    val shown = CatalogPaging.slice(shownSkills, index, pageSize)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (s in shown) {
+                            val added = s.installed || installedSkills.any { it.id == s.source.lowercase() }
+                            MarketRow(s.name, s.description, added, busy = busySkill == s.source,
+                                open = { viewingSkill = SkillRef("catalog/${s.source}", s.name, s.description, s.source, added) }, icon = { SkillGlyph() }) {
+                                busySkill = s.source
+                                scope.launch {
+                                    try { store.installSkill(s.source) }
+                                    catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (failure: Exception) { error = failure.message ?: "Couldn't add ${s.name}." }
+                                    finally { busySkill = null }
+                                }
+                            }
+                        }
+                        repeat(pagePad(shownSkills.size, shown.size)) { MarketRowSpacer() }
+                    }
+                }
+            }
+        }
+    }
+    @Composable fun Pagers() {
+        when (section) {
+            ExtensionSection.Agents -> CatalogPager(agentPage, agents.size, pageSize, go = { agentPage = CatalogPaging.clamp(it, agents.size, pageSize) }, onSize = ::changePageSize)
+            ExtensionSection.Connectors -> if (!connectors.loading) CatalogPager(connectors.page, connectors.items.items.size, pageSize, connectors.hasMore,
+                connectors.loadingMore, ::showConnectorPage, ::changePageSize)
+            ExtensionSection.Skills -> if (!loadingSkills) CatalogPager(skillPage, shownSkills.size, pageSize, go = { skillPage = CatalogPaging.clamp(it, shownSkills.size, pageSize) }, onSize = ::changePageSize)
+        }
+    }
+    @Composable fun SourceLine() {
+        Text(tr(section.source).replace("{name}", state.hostName), style = Type.footnote, color = Palette.tertiary)
+    }
+    @Composable fun Foot() {
+        (error ?: connectors.error)?.let { Text(tr(it), style = Type.footnote, color = Palette.danger) }
+    }
     Box(Modifier.fillMaxSize().background(Palette.background).then(if (inModal) Modifier else Modifier.statusBarsPadding())) {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(scroll).padding(top = 20.dp, bottom = 20.dp + bottomInset),
-            verticalArrangement = Arrangement.spacedBy(28.dp),
-        ) {
-            Header(state, inset, showInstalled)
-            if (!inModal && state.computers.isEmpty()) {
-                Box(inset) {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val wide = maxWidth >= 760.dp
+            LaunchedEffect(wide, pickedPageSize) {
+                val size = if (wide) CatalogPaging.pageSize else CatalogPaging.phonePageSize
+                if (!pickedPageSize && size != pageSize) resize(size)
+            }
+            Column(Modifier.fillMaxSize().padding(top = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Header(state, inset, showInstalled) { showCredentials = true }
+                if (!inModal && state.computers.isEmpty()) {
+                    Column(Modifier.weight(1f).verticalScroll(scroll).then(inset), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         MarketEmpty("desktopcomputer", "No computer paired", "Pair a computer to browse and install agents, connectors and skills.")
                         if (openComputers != null) SecondaryButton("Open computers", action = openComputers)
                     }
-                }
-            } else {
-                SearchBox(search, { search = it }, inset, ::submit) { search = ""; submit() }
-                CatalogSections(state, store, query, inset)
-                if (agents.isNotEmpty()) Box(inset) {
-                    MarketSection(if (query.isEmpty()) "Agents" else "Agents matching “$query”") {
-                        if (backends.any { it.needsNode }) NodeNotice(state) { addingNode = true }
-                        // The row runs edge to edge, past the page's margins.
-                        LazyRow(Modifier.bleed(24.dp), contentPadding = PaddingValues(horizontal = 24.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(agents.take(agentLimit), key = { it.id }) { backend -> AgentCard(backend) { agent = backend } }
-                        }
-                        if (agents.size > agentLimit) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            SecondaryButton("Load more agents") { agentLimit += 10 }
-                        }
-                    }
-                }
-                Box(inset) {
-                    MarketSection("Connectors") {
-                        when {
-                            loadingConnectors -> SkeletonRows()
-                            connectors.items.isEmpty() -> Text(if (query.isEmpty()) "Couldn't load connectors." else "No connectors match “$query”.", style = Type.body, color = Palette.secondary)
-                            else -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                for (c in connectors.visible) MarketRow(c.title, c.description ?: c.name, c.installed,
-                                    icon = { ServiceLogo(c.website, c.title, c.name) }) { installing = c }
-                                if (connectors.hasHidden || connectorCursor != null) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                    SecondaryButton(if (loadingMore) "Loading…" else "Load more connectors", enabled = !loadingMore, action = ::loadMoreConnectors)
-                                }
+                } else {
+                    SearchBox(search, ::changeSearch, inset, ::submit) { changeSearch(""); submit() }
+                    if (wide) Row(Modifier.weight(1f).padding(horizontal = 44.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        ExtensionRail(section) { section = it }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            SourceLine()
+                            Pins()
+                            Column(Modifier.weight(1f).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                ReadyMade()
+                                Lists()
+                                Pagers()
+                                Apps()
                             }
+                            Foot()
                         }
-                    }
-                }
-                if (canLoad) Box(inset) { ComposioSection(query, searchToken, state, store) }
-                Box(inset) {
-                    MarketSection("Skills") {
-                        if (loadingSkills) SkeletonRows()
-                        else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            for (s in shownSkills) {
-                                val added = s.installed || installedSkills.any { it.id == s.source.lowercase() }
-                                MarketRow(s.name, s.description, added, busy = busySkill == s.source,
-                                    open = { viewingSkill = SkillRef("catalog/${s.source}", s.name, s.description, s.source, added) }, icon = { SkillGlyph() }) {
-                                    busySkill = s.source
-                                    scope.launch {
-                                        try { store.installSkill(s.source) }
-                                        catch (cancelled: CancellationException) { throw cancelled }
-                                        catch (failure: Exception) { error = failure.message ?: "Couldn't add ${s.name}." }
-                                        finally { busySkill = null }
-                                    }
-                                }
-                            }
+                    } else Column(Modifier.weight(1f).verticalScroll(scroll).then(inset), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TabChoice(section, ExtensionSection.entries.map { it to it.title }, { section = it })
+                            SourceLine()
                         }
+                        Pins()
+                        ReadyMade()
+                        Lists()
+                        Pagers()
+                        Apps()
+                        Foot()
                     }
+                    error?.let { Text(it, inset, style = Type.footnote, color = Palette.danger) }
+                    Text("Connectors come from the official MCP Registry, apps through Composio, skills from Anthropic, agents from the ACP registry. Everything installs on ${state.hostName}.",
+                        inset, style = Type.footnote, color = Palette.tertiary)
                 }
-                Box(inset) {
-                    SecondaryButton({ showCredentials = true }) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Symbol("lock.shield", size = 18.dp, tint = Palette.text)
-                            Text("Credentials")
-                        }
-                    }
-                }
-                Box(inset) {
-                    MarketSection("Make your own") {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            MarketRow("Custom connector", "Any MCP server: a command or a URL", added = false, addLabel = "New",
-                                icon = { TileIcon("point.3.connected.trianglepath.dotted") }) { addingConnector = true }
-                            MarketRow("Your own skill", "Write instructions a bot can follow", added = false, addLabel = "New",
-                                icon = { TileIcon("square.and.pencil") }) { writingSkill = true }
-                        }
-                    }
-                }
-                error?.let { Text(it, inset, style = Type.footnote, color = Palette.danger) }
-                Text("Connectors come from the official MCP Registry, apps through Composio, skills from Anthropic, agents from the ACP registry. Everything installs on ${state.hostName}.",
-                    inset, style = Type.footnote, color = Palette.tertiary)
             }
         }
         // The sheet's own close, over the page when presented as a modal.
@@ -268,7 +299,7 @@ import kotlinx.coroutines.launch
             Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { IconButton("Close", "xmark", action = dismiss) }
         }
     }
-    CodyncSheet(installing, { installing = null }) { InstallConnectorSheet(it, state, store) { scope.launch { loadConnectors() } } }
+    CodyncSheet(installing, { installing = null }) { InstallConnectorSheet(it, state, store) { submit() } }
     CodyncSheet(showCredentials, { showCredentials = false }) { CredentialsView(state, store) }
     CodyncSheet(addingConnector, { addingConnector = false }) { CustomConnectorSheet(state, store) }
     CodyncSheet(viewingSkill, { viewingSkill = null }) { SkillSheet(it, state, store) }
@@ -277,24 +308,23 @@ import kotlinx.coroutines.launch
     CodyncSheet(addingNode, { addingNode = false }) { SetupTerminal(null, "node", null, state, store) { addingNode = false } }
 }
 
-/** Widens a child past its parent's margins by `amount` on each side. */
-private fun Modifier.bleed(amount: Dp) = layout { measurable, constraints ->
-    val extra = amount.roundToPx()
-    val width = constraints.maxWidth + 2 * extra
-    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
-    layout(constraints.maxWidth, placeable.height) { placeable.place(-extra, 0) }
-}
-
-/** The computer it all lives on, and the way to what's installed. */
-@Composable private fun Header(state: AppState, modifier: Modifier, showInstalled: () -> Unit) {
+/** The computer it all lives on, credentials beside the title, and the way to what's installed. */
+@Composable private fun Header(state: AppState, modifier: Modifier, showInstalled: () -> Unit, showCredentials: () -> Unit) {
     val connectors = state.plugins?.connectors.orEmpty()
     val count = connectors.size + state.plugins?.skills.orEmpty().size
     Column(modifier.padding(top = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ComputerBadge(state.hello?.text("device"), 32.dp, state.computer?.color)
-            Column {
-                Text("Extensions", style = Type.title2.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ComputerBadge(state.hello?.text("device"), 32.dp, state.computers.firstOrNull()?.color)
+            Column(Modifier.weight(1f)) {
+                Text(tr("Extensions"), style = Type.title2.semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(state.hostName, style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            // Beside the title, in the room left of Close, so the list can fill the screen.
+            SecondaryButton(showCredentials) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Symbol("lock.shield", size = 18.dp, tint = Palette.text)
+                    Text(tr("Credentials"), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
         if (count > 0) Row(Modifier.plainButton(action = showInstalled), verticalAlignment = Alignment.CenterVertically,

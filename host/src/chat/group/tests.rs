@@ -76,6 +76,10 @@ use crate::hub::BotStatus;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// How long a step may take before the test calls it stuck. Generous: fixture agents start as
+/// real processes, and a busy CI runner (Windows above all) can take seconds to start one.
+const WAIT: Duration = Duration::from_secs(30);
+
 /// A host with agent bots `a` and `b` (the scripted fixture agent) and a group of both.
 struct Room {
     hub: Arc<Hub>,
@@ -146,7 +150,7 @@ impl Room {
     }
 
     async fn settle(&self) {
-        tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::time::timeout(WAIT, async {
             loop {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 let idle = ["a", "b"].iter().all(|b| self.hub.runtime(b).status == BotStatus::Idle);
@@ -287,7 +291,7 @@ async fn stop_ends_the_room_turn_before_the_next_speaker() {
     let room = Room::new();
     room.send("BLOCK everyone look", None).await;
     let hub = room.hub.clone();
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(WAIT, async {
         while hub.runtime("a").status != BotStatus::Working {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
@@ -308,7 +312,7 @@ async fn ask_busy_a(room: &Room) -> Entry {
         .await
         .unwrap();
     let hub = room.hub.clone();
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(WAIT, async {
         while hub.runtime("a").status != BotStatus::Working {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
@@ -317,7 +321,7 @@ async fn ask_busy_a(room: &Room) -> Entry {
     .expect("a starts its own turn");
 
     room.send("@a are you there", None).await;
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(WAIT, async {
         loop {
             let entries = hub.store.history(&room.group, i64::MAX, 100).unwrap();
             if let Some(e) = entries.into_iter().find(|e| e.kind == "notice") {
@@ -353,7 +357,7 @@ async fn stopping_a_busy_member_in_its_own_chat_keeps_its_room_answer() {
     ask_busy_a(&room).await;
     // The user frees `a` from its own chat: the answer the room was promised still comes.
     crate::api::dispatch(&room.hub, &Caller::Local, "stop", json!({"botId": "a"})).await.unwrap();
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(WAIT, async {
         while room.replies(&main).is_empty() {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
@@ -370,7 +374,7 @@ async fn a_late_answer_survives_newer_messages_and_sees_them() {
     let main = Lane::main(&room.group);
     ask_busy_a(&room).await;
     room.send("@b meanwhile check CI", None).await;
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(WAIT, async {
         while room.replies(&main).is_empty() {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
