@@ -190,6 +190,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.fragment)
     implementation(libs.biometric)
+    implementation("androidx.webkit:webkit:1.18.0")
     implementation(libs.lifecycle.compose)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.coroutines.android)
