@@ -9,7 +9,7 @@ async fn a_synchronous_ask_returns_its_reply_without_waking_a_sender_turn() {
     let result = call_async(&f.hub, "a", "ask_bot", &json!({"botId": "b", "message": "review"})).await.unwrap();
     assert_eq!(result["reply"], "reply: review");
     f.until(|| f.idle("b")).await;
-    assert!(f.prompts_of("a").is_empty());
+    assert_eq!(f.prompts_of("a").len(), 0);
     assert!(f.finals("b").is_empty(), "a request's answer belongs to the sender");
     let assignment = f.hub.store.assignment(result["requestId"].as_str().unwrap()).unwrap().unwrap();
     assert_eq!(assignment.status, AssignmentStatus::Settled);
@@ -30,7 +30,7 @@ async fn a_sender_stop_cancels_its_running_synchronous_ask() {
     assert!(result.unwrap_err().to_string().contains("cancelled"));
     f.until(|| f.idle("b")).await;
     assert!(f.hub.team.0.locked().pending.is_empty());
-    assert!(f.prompts_of("a").is_empty());
+    assert_eq!(f.prompts_of("a").len(), 0);
     f.shutdown().await;
 }
 
