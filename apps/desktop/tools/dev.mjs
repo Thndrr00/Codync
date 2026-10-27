@@ -4,8 +4,9 @@
 // this run builds, starts and stops. Flags (`npm run dev -- --list`): --shared takes the default
 // Codync Dev from a worktree, --sandbox runs a sandbox from the main checkout, --name <name> runs
 // the sandbox of that name, --cloud lets the sandbox host use the dev cloud, --cdp opens the
-// DevTools protocol on the sandbox port + 10000, --list shows every sandbox, --prune deletes the
-// ones whose worktree is gone.
+// DevTools protocol on the sandbox port + 10000, --onboarding shows the welcome flow (a sandbox
+// starts past it), --list shows every sandbox, --prune deletes the ones whose worktree is gone
+// (and their Clerk test accounts).
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -14,6 +15,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { deleteTestAccount, mintTicket } from './dev-account.mjs'
 import { SANDBOX_PREFIX, sandboxName, sandboxPorts } from '../src/shared/dev-sandbox.ts'
 
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -22,7 +24,7 @@ const windows = process.platform === 'win32'
 const { values: flags } = parseArgs({
   options: {
     shared: { type: 'boolean' }, sandbox: { type: 'boolean' }, name: { type: 'string' },
-    cloud: { type: 'boolean' }, cdp: { type: 'boolean' }, list: { type: 'boolean' }, prune: { type: 'boolean' },
+    cloud: { type: 'boolean' }, onboarding: { type: 'boolean' }, cdp: { type: 'boolean' }, list: { type: 'boolean' }, prune: { type: 'boolean' },
   },
 })
 
@@ -90,8 +92,16 @@ async function listAndPrune() {
     const running = await answers(s.port)
     const gone = !existsSync(s.worktree)
     if (flags.prune && gone && !running) {
+      let account = false
+      try {
+        account = await deleteTestAccount(s.name)
+      } catch (e) {
+        // The sandbox folder is how a later --prune finds the account again.
+        console.error(`Kept the sandbox ${s.name}: its Clerk test account wasn't deleted (${e.message}). Run --prune again.`)
+        continue
+      }
       rmSync(s.home, { recursive: true, force: true })
-      console.log(`Deleted the sandbox ${s.name} (${s.home})`)
+      console.log(`Deleted the sandbox ${s.name} (${s.home})${account ? ' and its Clerk test account' : ''}`)
     } else if (flags.list) {
       console.log(`${s.name.padEnd(28)} ${String(s.port).padEnd(6)} ${(running ? 'running' : 'stopped').padEnd(8)} ${s.worktree}${gone ? ' (gone)' : ''}`)
     }
@@ -147,7 +157,19 @@ async function sandbox() {
   console.log(`  terminal UI                ${command} tui --port ${port}`)
   if (cdp) console.log(`  DevTools protocol          127.0.0.1:${cdp}`)
   console.log('')
-  const appEnv = { ...process.env, CODYNC_HOME: home, CODYNC_PORT: String(port), ...(cdp ? { CODYNC_REMOTE_DEBUG: String(cdp) } : {}) }
+  const appEnv = {
+    ...process.env, CODYNC_HOME: home, CODYNC_PORT: String(port),
+    ...(cdp ? { CODYNC_REMOTE_DEBUG: String(cdp) } : {}),
+    CODYNC_DEV_ONBOARDING: flags.onboarding ? 'reset' : 'skip',
+  }
+  // The saved session lives in desktop/account.bin; a token is only needed while it is missing.
+  if (!existsSync(join(home, 'desktop/account.bin'))) {
+    const account = await mintTicket(name).catch((e) => console.error(`Test account skipped: ${e.message}`))
+    if (account) {
+      appEnv.CODYNC_DEV_SIGN_IN_TICKET = account.token
+      console.log(`  test account               ${account.email}\n`)
+    }
+  }
   app = startApp(appEnv)
   app.child.on('exit', (code) => stop(code ?? 0))
   app.child.on('error', (e) => {

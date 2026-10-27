@@ -320,7 +320,8 @@ pub enum Overlay {
     Folder(FolderPicker),
     Form(Box<Form>),
     Group(GroupForm),
-    Usage,
+    /// How far its list is scrolled.
+    Usage(usize),
     Pair(PairCode),
     Memory(MemorySheet),
     Documents(Box<DocumentSheet>),

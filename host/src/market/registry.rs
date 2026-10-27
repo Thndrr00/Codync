@@ -120,8 +120,8 @@ fn listings(servers: &[Value], installed: &[Connector]) -> Vec<Value> {
         .collect()
 }
 
-/// Registry pages read past one with nothing Codync can install. An empty answer reads as the end
-/// of the list in every app, so a few more pages are tried while the cursor goes on.
+/// Registry pages read past one with nothing Codync can install, within `BROWSE_BUDGET`, so an app
+/// gets rows in fewer round trips. An app that still gets an empty page with a cursor reads on by itself.
 const EMPTY_PAGE_SKIPS: usize = 3;
 /// The apps wait 60 s for `marketConnectors`, and one registry page can take 45 s: skipping stops
 /// in time to answer, handing back the cursor it didn't get to.

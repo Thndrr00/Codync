@@ -131,7 +131,7 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
         }
         Overlay::Form(form) => form_view(buf, area, app, form),
         Overlay::Group(g) => group_view(buf, area, app, g),
-        Overlay::Usage => usage(buf, area, app),
+        Overlay::Usage(scroll) => usage(buf, area, app, *scroll),
         Overlay::Pair(code) => pair(buf, area, code),
         Overlay::Memory(m) => super::super::sheets::memory(buf, area, app, m),
         Overlay::Documents(sheet) => super::super::sheets::documents(buf, area, app, sheet),

@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import com.codync.android.core.CatalogPage
-import com.codync.android.core.CatalogPaging
 import com.codync.android.core.ComposioApp
 import com.codync.android.core.ComposioStatus
 import com.codync.android.design.*
@@ -48,10 +47,8 @@ import kotlinx.coroutines.launch
     var settingUp by remember { mutableStateOf(false) }
     var connecting by remember { mutableStateOf<ComposioApp?>(null) }
     var reload by remember { mutableIntStateOf(0) }
-    var shown by remember { mutableIntStateOf(CatalogPaging.pageSize) }
     LaunchedEffect(searchToken, reload) {
         loading = true
-        shown = CatalogPaging.pageSize
         try {
             val answer = store.composioStatus()
             val page = if (answer.configured) store.composioApps(query, null).items else emptyList()
@@ -68,12 +65,10 @@ import kotlinx.coroutines.launch
                 loading -> SkeletonRows()
                 apps.items.isEmpty() -> Text(if (query.isEmpty()) "Couldn't load apps." else "No apps match “$query”.", style = Type.body, color = Palette.secondary)
                 else -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (app in apps.items.take(shown)) MarketRow(app.name, app.description ?: app.slug, app.connected, addLabel = "Connect",
+                    for (app in apps.items) MarketRow(app.name, app.description ?: app.slug, app.connected, addLabel = "Connect",
                         icon = { AppLogo(app.logo, app.name) }) { connecting = app }
                 }
             }
-            if (!loading && apps.items.size > shown && status?.configured == true)
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { SecondaryButton("Load more apps") { shown += CatalogPaging.pageSize } }
             error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
             if (status?.configured == true) Row(Modifier.plainButton { settingUp = true }, verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {

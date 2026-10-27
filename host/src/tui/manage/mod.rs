@@ -65,8 +65,10 @@ pub enum Reply {
     },
     /// A voice call's own messages, by call id.
     CallEntries(String),
+    /// A registry page: the search it lists and the cursor it was asked at (`None`: the first page).
     Registry {
-        more: bool,
+        search: String,
+        cursor: Option<String>,
     },
     Skills,
     Catalog,
@@ -154,18 +156,6 @@ pub const TABS: [(Tab, &str); 5] = [
     (Tab::Skills, "Skills"),
 ];
 
-impl Tab {
-    pub(in crate::tui) fn index(self) -> usize {
-        match self {
-            Self::Bots => 0,
-            Self::Teams => 1,
-            Self::Agents => 2,
-            Self::Connectors => 3,
-            Self::Skills => 4,
-        }
-    }
-}
-
 pub struct Market {
     pub tab: Tab,
     pub query: Editor,
@@ -181,9 +171,6 @@ pub struct Market {
     pub loading: bool,
     pub cursor: usize,
     pub error: Option<String>,
-    /// Page index on Agents, Connectors, then Skills.
-    pub pages: [usize; 5],
-    pub page_size: usize,
 }
 
 pub enum Row<'a> {
@@ -199,16 +186,6 @@ pub enum Row<'a> {
     Profile(&'a Value),
     /// A catalog team: a coordinator and the bots it hands work to.
     Team(&'a Value),
-}
-
-/// One page of the open marketplace tab.
-pub struct MarketPage<'a> {
-    /// The rows every page starts with (Add Node.js, what's installed, Custom connector), then this page's catalog rows.
-    pub rows: Vec<Row<'a>>,
-    /// Catalog rows on the tab, without the ones every page starts with.
-    pub count: usize,
-    pub page: usize,
-    pub pages: usize,
 }
 
 pub struct AgentSetup {

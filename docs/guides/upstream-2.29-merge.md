@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**In progress: PRs 216, 219, 220 and 221 are merged, with the requested hardening committed after 216; only PR 226 remains before the v2.27.0 gate.** Validation below records observed commands, never an assumed pass.
+**In progress: all four v2.27.0 sub-merges (PRs 216, 219, 220 and 221, plus 226) are committed on top of the requested hardening; the v2.27.0 release gate is running.** Validation below records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -231,7 +231,27 @@ This PR brings the Extensions redesign, the host update request, private-relay l
 - The watch fingerprint no longer hashes a skipped folder's own mtime (`.git` changes on every write), which made `a_folder_fingerprint_changes_with_its_files` fail or pass by timing.
 - `Tab::index` and `Market.pages` follow the five Extensions tabs.
 
-## Resource and environment evidence
+## v2.27.0, substep PR 226 (`21de5613`)
+
+This PR finishes v2.27.0: usage notes on limits, the Extensions lists as lazy lists, and the add/open rules for connectors and agents.
+
+### Conflict decisions
+
+- `host/src/usage.rs` was split by upstream into `host/src/usage/` modules. The fork's account-aware `Provider` (`String` id/name plus `status`), its refresh lock and its Antigravity per-account probe are re-applied in `usage/mod.rs`; `Window` keeps upstream's new `text` notes.
+- `host/src/usage/antigravity.rs`: keeps both sources — the fork's adapter probe (`refresh`, per account, with `status`) and upstream's language-server reader (`collect`), whose `parse` is now `parse_quota`; the language server only fills a base reading the adapter didn't report.
+- Terminal Extensions (`tui/manage/{market,mod}.rs`, `tui/sheets/market_view.rs`): upstream dropped paging; the fork's Bots and Teams tabs stay as flat lists (`market_rows`, five `TABS`, `botCatalog` still requested, catalog and Apps reachable with the same keys).
+- `tui/view/usage.rs`: upstream's scrolling sheet with the fork's provider `status` line (`Line::Status`), so an agent that can't report says so.
+- Android `Usage.kt`: the fork's `status`/`statusLabel` plus upstream's `limits` (windows without a note) and `tightest`.
+- Android `MarketplaceView.kt`: upstream's lazy lists and tabs, with the fork's modal inset, reselect-to-top, "No computer paired" state, ready-made catalog above every section and the Composio Apps list under Connectors; the paging helpers upstream removed are gone.
+- Desktop `IslandUsage.tsx`, `UsageLimits.tsx`, `market-models.ts`, `MarketplaceView.tsx`: upstream's usage-note rendering (`windowReading`) with the fork's provider status lines, catalog sections and tooltips; the pager helpers upstream deleted are gone.
+- `docs/architecture/desktop-app.md`: Windows gaps keep the fork's implemented SSH tunnels and add upstream's "each agent's own report". `docs/features/marketplace.md`: the fork's teach flow plus upstream's rules for opening a skill, a connector and an agent sheet.
+
+### Validation observed
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo test --bin codync-host -j 1 -- --test-threads=1` exit 0 (765 passed, 1 ignored).
+- Desktop: `npm run typecheck` exit 0; `npm test` exit 0 (372 passed, 19 platform skips, 0 failures).
+- Android `assembleDebug :core:test :app:testDebugUnitTest lintDebug` exit 0 (104 tasks); the Composio Apps list follows upstream's paging removal (one list, no "Load more").
+- iOS: static review only.
 
 - Initial C: free space: 25.14 GiB. Checked again before each heavyweight compiler; no code/data deletion performed.
 - During serialized Android build, free space temporarily approached 21 GiB. Applied NTFS compression only to this worktree's regenerable host/target cache: 569,971,671 logical bytes stored in 285,120,934 bytes; compact exited 0. New artifacts inherit compression. No other checkout/cache was removed.

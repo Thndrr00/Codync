@@ -456,6 +456,8 @@ export interface UsageWindow {
   percent: number
   resetsAt?: number | null
   resetsText?: string | null
+  /** A reading that isn't a share of a cap. Shown instead of the percent, and never the tightest limit. */
+  text?: string | null
 }
 
 export interface UsageProvider {

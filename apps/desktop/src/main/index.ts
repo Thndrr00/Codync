@@ -160,6 +160,10 @@ function registerIPC(tray: Tray) {
   ipcMain.on('app:version', (e) => (e.returnValue = app.getVersion()))
   ipcMain.on('app:computerName', (e) => (e.returnValue = computerName()))
   ipcMain.on('app:openedAtLogin', (e) => (e.returnValue = openedAtLogin()))
+  ipcMain.on('app:devOnboarding', (e) => {
+    const mode = process.env.CODYNC_DEV_ONBOARDING
+    e.returnValue = !app.isPackaged && identity.environment === 'dev' && (mode === 'skip' || mode === 'reset') ? mode : null
+  })
   ipcMain.on('app:debugOpen', (e) => (e.returnValue = app.isPackaged ? null : (process.env.CODYNC_DEBUG_OPEN ?? null)))
   ipcMain.handle('host:snapshot', () => snapshot())
   ipcMain.on('host:install', () => void host.install())
