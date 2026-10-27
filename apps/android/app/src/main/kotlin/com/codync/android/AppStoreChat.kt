@@ -67,7 +67,7 @@ internal fun AppStore.acknowledgeVisible(scopes: List<ReadingScope> = state.valu
 
 /** The entries of a host reply (`callEntries`, `botConversation`). */
 internal fun entriesOf(response: JsonElement): List<Entry> =
-    response.jsonObject["entries"]?.jsonArray?.map { Entry.decode(it.jsonObject) }.orEmpty()
+    response.jsonObject["entries"]?.jsonArray?.map { Entry.decode(it.jsonObject) }.orEmpty().visibleEntries()
 
 /** What a voice call carried (iOS `BotStore.callEntries`): the chat this phone holds may not reach back to it. */
 internal suspend fun AppStore.callEntries(botId: String, call: String): List<Entry> =
@@ -81,7 +81,7 @@ fun AppStore.loadHistory() {
             mutableState.update { it.copy(historyComplete = it.historyComplete + id) }
             return@action
         }
-        val before = state.value.entries.filter { it.botId == id }.minOfOrNull(Entry::seq) ?: Long.MAX_VALUE
+        val before = withContext(Dispatchers.IO) { mirror.oldestEntrySeq(id) } ?: Long.MAX_VALUE
         val active = ready()
         val response = active.call("history", buildJsonObject { put("botId", id); put("beforeSeq", before); put("limit", 100) })
         val entries = response.jsonObject.getValue("entries").jsonArray.map { Entry.decode(it.jsonObject) }

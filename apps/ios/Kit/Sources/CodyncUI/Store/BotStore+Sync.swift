@@ -118,11 +118,13 @@ extension BotStore {
             }
             let known = entries[e.botId]?.first(where: { $0.id == e.id })
             upsert(e)
-            if let card = e.data.artifact { artifacts.announce(card) }
             bump(e.rev)
+            guard let current = entries[e.botId]?.first(where: { $0.id == e.id }),
+                  current.rev == e.rev, !current.isInternal else { break }
+            if let card = e.data.artifact { artifacts.announce(card) }
             acknowledgeVisibleConversations(e.botId, entry: e)
             let calls = Array(voiceCalls.values).filter { $0.botId == e.botId && e.rev > $0.startRev }
-            if e.kind == "agent", e.data.final == true, known?.data.final != true, let text = e.data.text {
+            if e.kind == "agent", e.data.final == true, (known?.data.final != true || known?.isInternal == true), let text = e.data.text {
                 calls.forEach { $0.speak(spokenReply(e, text)) }
             }
             // A group has no status of its own: its members' approvals arrive as cards.

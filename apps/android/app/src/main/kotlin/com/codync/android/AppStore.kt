@@ -201,10 +201,11 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         withContext(Dispatchers.IO) { retired.forEach(attachments::discard) }
         // Like iOS, a screen state this app can't read is a host without remote screen.
         val screen = snapshot.screen?.let { runCatching { ScreenState.decode(it) }.getOrNull() }
-        mutableState.update { current -> current.copy(bots = snapshot.bots, entries = snapshot.entries,
+        val visible = snapshot.entries.visibleEntries()
+        mutableState.update { current -> current.copy(bots = snapshot.bots, entries = visible,
             pending = snapshot.pending, usage = snapshot.usage, screen = screen, mirrorRevision = snapshot.rev,
             selectedBot = current.selectedBot?.takeIf { id -> snapshot.bots.any { it.id == id } }) }
-        speakToCall(snapshot.entries, snapshot.bots)
+        speakToCall(visible, snapshot.bots)
         if (PushPreferences.tasks(getApplication())) {
             val feed = TaskFeed(local.directory)
             val watched = withContext(Dispatchers.IO) { feed.all().filter { !it.finished }.map { it.botId }.toSet() }

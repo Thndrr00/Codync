@@ -223,10 +223,10 @@ public final class BotStore {
     public var hiddenBots: [Bot] { bots.values.filter(\.hidden).sorted { $0.name < $1.name } }
 
     /// Everything in a bot's or group's chat this device has, oldest first (trace included).
-    public func chat(_ botId: String) -> [Entry] { entries[botId] ?? [] }
+    public func chat(_ botId: String) -> [Entry] { (entries[botId] ?? []).visibleEntries() }
 
     public func canLoadOlder(_ botId: String) -> Bool {
-        !historyComplete.contains(botId) && chat(botId).contains { $0.seq > 0 && $0.seq != Int64.max }
+        !historyComplete.contains(botId) && (entries[botId] ?? []).contains { $0.seq > 0 && $0.seq != Int64.max }
     }
 
     /// A group's bots that still exist.

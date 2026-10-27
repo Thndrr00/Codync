@@ -41,7 +41,8 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
     /// only a fresh conversation gets a line: memory lives in the bot's memory settings, a summary keeps the same
     /// conversation going, and a kept handoff changed nothing.
     public var isChat: Bool {
-        switch kind {
+        guard !isInternal else { return false }
+        return switch kind {
         case "user", "permission": true
         case "notice": data.memory == nil && data.memoryFile == nil && data.compaction == nil && data.handoff?.status != "kept"
         case "agent": data.final == true
@@ -51,7 +52,7 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
 
     /// A message a reply can quote: the user's or a final bot reply, once the computer has it.
     public var isReplyable: Bool {
-        (kind == "user" || (kind == "agent" && data.final == true)) && !id.hasPrefix("local-")
+        !isInternal && (kind == "user" || (kind == "agent" && data.final == true)) && !id.hasPrefix("local-")
     }
 
     /// How a reply quotes this message until the computer's own quote arrives: who wrote it and its

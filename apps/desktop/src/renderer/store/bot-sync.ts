@@ -216,7 +216,9 @@ export class BotSync extends BotMirror {
         // Old entries re-stamped by the host (new rev) belong to history paging, not the live window.
         if (!this.isBelowFloor(event.entry)) this.upsert(event.entry)
         this.bump(event.entry.rev)
-        this.acknowledgeVisible(event.entry.botId, event.entry)
+        if (this.entries.get(event.entry.botId)?.some((e) => e.id === event.entry.id && e.rev === event.entry.rev)) {
+          this.acknowledgeVisible(event.entry.botId, event.entry)
+        }
         break
       case 'usage':
         this.usage = event.usage
@@ -278,7 +280,7 @@ export class BotSync extends BotMirror {
   }
 
   private isBelowFloor(e: Entry) {
-    const held = this.allEntries(e.botId).some((x) => x.id === e.id)
+    const held = this.entries.get(e.botId)?.some((x) => x.id === e.id) ?? false
     return isOutsideLoadedWindow(this.floors.get(e.botId), held, e)
   }
 

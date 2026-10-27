@@ -39,13 +39,13 @@ data class Entry(
     val artifact: ArtifactCard? get() = (data["artifact"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ArtifactCard>(it) }.getOrNull() }
     /** Of memory and context, only a fresh conversation gets a line: memory lives in the bot's memory settings, a
      *  summary keeps the same conversation going, and a kept handoff changed nothing. */
-    val isChat: Boolean get() = kind in listOf("user", "permission") ||
+    val isChat: Boolean get() = !isInternal && (kind in listOf("user", "permission") ||
         kind == "notice" && "memory" !in data && "memoryFile" !in data && "compaction" !in data &&
             (data["handoff"] as? JsonObject)?.text("status") != "kept" ||
-        kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true
+        kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true)
     /** A step the working indicator unfolds: thinking, narration, a tool call or a plan; never the bot's bookkeeping,
      *  nor a call the host didn't flag (one older than 2.25.0 flags none). */
-    val isWorkingStep: Boolean get() = when (kind) {
+    val isWorkingStep: Boolean get() = !isInternal && when (kind) {
         "thought" -> text.isNotBlank()
         "agent" -> data["final"]?.jsonPrimitive?.booleanOrNull != true && !isPass(text)
         "tool" -> data["bookkeeping"]?.jsonPrimitive?.booleanOrNull == false
@@ -53,7 +53,7 @@ data class Entry(
         else -> false
     }
     /** A message the user can quote in a reply: theirs, or a final reply (a group member's too). */
-    val isReplyable: Boolean get() = kind == "user" || kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true
+    val isReplyable: Boolean get() = !isInternal && (kind == "user" || kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true)
     /** The message this one replies to, as the computer quoted it. */
     val replyTo: ReplyQuote? get() = (data["replyTo"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ReplyQuote>(it) }.getOrNull() }
     /** What the composer shows of the message it replies to: its text, or the names of its files. */
@@ -92,7 +92,7 @@ private data class EntryFields(
     val detail: String? = null, val output: String? = null, val author: String? = null,
     val options: List<PermissionChoice>? = null, val reactions: List<String>? = null,
     val attachments: List<Attachment>? = null, val files: List<SharedFile>? = null,
-    val callSeconds: Long? = null,
+    val callSeconds: Long? = null, val `internal`: Boolean? = null,
 )
 @Serializable private data class PermissionChoice(val optionId: String, val name: String, val kind: String)
 /** A quoted message: its entry, who wrote it (`user` or a bot id) and its text, cut short by the computer; `artifact` when it

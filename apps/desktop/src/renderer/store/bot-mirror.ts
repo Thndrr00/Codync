@@ -1,5 +1,6 @@
 import { checkVersions, isBelow, type VersionMismatch } from '@shared/compat'
 import {
+  isInternalEntry,
   type AccessRequest,
   type Bot,
   type CloudStatus,
@@ -124,7 +125,7 @@ export class BotMirror extends Observable {
 
   /** A bot's or group's chat, trace entries included. */
   allEntries(botId: string) {
-    return this.entries.get(botId) ?? []
+    return (this.entries.get(botId) ?? []).filter((e) => !isInternalEntry(e))
   }
 
   /** The chat itself, without its documents' side conversations. */
@@ -133,7 +134,7 @@ export class BotMirror extends Observable {
   }
 
   canLoadOlder(botId: string) {
-    return canLoadHistory(this.allEntries(botId), this.historyComplete.has(botId))
+    return canLoadHistory(this.entries.get(botId) ?? [], this.historyComplete.has(botId))
   }
 
   members(group: Bot) {

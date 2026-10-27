@@ -54,18 +54,21 @@ class VoiceReplyGate(private val botId: String, private val startRev: Long, init
         val result = mutableListOf<VoiceCue>()
         val group = bots.firstOrNull { it.id == botId }?.kind == "group"
         for (entry in entries) {
-            if (entry.botId != botId || entry.rev <= startRev) continue
+            if (entry.isInternal || entry.botId != botId || entry.rev <= startRev) continue
             val before = previous[entry.id]
+            if (before != null && entry.rev < before.rev) continue
             val author = entry.data.text("author")?.let { id -> bots.firstOrNull { it.id == id }?.name }
             if (entry.kind == "agent" && entry.data["final"]?.jsonPrimitive?.booleanOrNull == true &&
-                before?.data?.get("final")?.jsonPrimitive?.booleanOrNull != true && entry.text.isNotBlank())
+                (before?.data?.get("final")?.jsonPrimitive?.booleanOrNull != true || before?.isInternal == true) && entry.text.isNotBlank())
                 result.add(VoiceCue(if (group && author != null) "$author: ${entry.text}" else entry.text))
             if (entry.kind == "permission" && entry.status == "pending" && before?.status != "pending") {
                 val name = author ?: bots.firstOrNull { it.id == botId && !group }?.name ?: "A bot"
                 result.add(VoiceCue("$name needs your approval in the chat.", notice = true))
             }
         }
-        previous = entries.associateBy(Entry::id)
+        previous = entries.associateBy(Entry::id).mapValues { (id, incoming) ->
+            previous[id]?.takeIf { it.rev > incoming.rev } ?: incoming
+        }
         return result
     }
 }

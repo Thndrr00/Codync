@@ -1,5 +1,7 @@
 import type { ArtifactCard } from './artifacts'
 import type { CallLine } from './calls'
+import { isInternalEntry } from './entry-visibility.ts'
+export { isInternalEntry } from './entry-visibility.ts'
 
 // Wire types for codync-host (see host/src/api/). Field names match the
 // host's camelCase JSON. Timestamps are epoch milliseconds.
@@ -325,6 +327,8 @@ export interface AgentSwitch {
 }
 
 export interface EntryData {
+  /** Internal scheduled input or provisional background output; never rendered. */
+  internal?: boolean
   source?: string
   /** Structured conversation data added to the existing team-tool notice. */
   botMessage?: BotMessage
@@ -414,6 +418,7 @@ export interface Entry {
 
 /** Chat-visible (Grok Bot model): user messages, final replies, approval cards, notices. */
 export function isChat(e: Entry): boolean {
+  if (isInternalEntry(e)) return false
   switch (e.kind) {
     case 'user':
     case 'permission':
@@ -431,7 +436,7 @@ export function isChat(e: Entry): boolean {
 
 /** Messages a reply can quote: the user's and the bots' final replies, once the computer has them. */
 export function isReplyable(e: Entry): boolean {
-  return !e.id.startsWith('local-') && (e.kind === 'user' || (e.kind === 'agent' && e.data.final === true))
+  return !isInternalEntry(e) && !e.id.startsWith('local-') && (e.kind === 'user' || (e.kind === 'agent' && e.data.final === true))
 }
 
 /** The quote a sending reply shows until the computer's own replaces it. */

@@ -1,5 +1,6 @@
 import {
   isWorking,
+  isInternalEntry,
   needsInput,
   type AgentAccount,
   type CreatedAppLink,
@@ -123,13 +124,13 @@ export class BotStore extends BotSync {
     const files = (entry.data.clientNonce && this.outgoingFiles.get(entry.data.clientNonce)) || []
     const text = entry.data.text ?? ''
     if (!text && !files.length) return
-    this.entries.set(entry.botId, this.allEntries(entry.botId).filter((e) => e.id !== entry.id))
+    this.entries.set(entry.botId, (this.entries.get(entry.botId) ?? []).filter((e) => e.id !== entry.id))
     this.send(text, entry.botId, { files, nonce: entry.data.clientNonce, replyTo: entry.data.replyTo })
   }
 
   discard(entry: Entry) {
     if (entry.data.clientNonce) this.outgoingFiles.delete(entry.data.clientNonce)
-    this.entries.set(entry.botId, this.allEntries(entry.botId).filter((e) => e.id !== entry.id))
+    this.entries.set(entry.botId, (this.entries.get(entry.botId) ?? []).filter((e) => e.id !== entry.id))
     this.changed()
     this.scheduleSave()
   }
@@ -170,7 +171,7 @@ export class BotStore extends BotSync {
   }
 
   openMessageContext(entries: Entry[], hit: { botId: string; id: string; threadId: string | null }) {
-    this.messageContext = { ...hit, entries }
+    this.messageContext = { ...hit, entries: entries.filter((e) => !isInternalEntry(e)) }
     this.changed()
   }
 
@@ -420,12 +421,12 @@ export class BotStore extends BotSync {
 
   /** What a voice call carried, from the computer: the loaded chat may not reach back to it. */
   async callEntries(botId: string, call: string): Promise<Entry[]> {
-    return (await (await this.ready()).call<{ entries: Entry[] }>('callEntries', { botId, callId: call })).entries
+    return (await (await this.ready()).call<{ entries: Entry[] }>('callEntries', { botId, callId: call })).entries.filter((e) => !isInternalEntry(e))
   }
 
   /** The history between a bot and one peer. Never upserted: old notices would break `loadOlder`'s paging. */
   async botConversation(botId: string, peerId: string): Promise<Entry[]> {
-    return (await this.ready()).botConversation(botId, peerId)
+    return (await (await this.ready()).botConversation(botId, peerId)).filter((e) => !isInternalEntry(e))
   }
 
   async save(draft: BotDraft) {
@@ -517,7 +518,7 @@ export class BotStore extends BotSync {
 
   async loadOlder(botId: string) {
     if (!this.client || this.historyComplete.has(botId)) return
-    const first = this.allEntries(botId).find((e) => e.seq > 0 && e.seq !== Number.MAX_SAFE_INTEGER)?.seq ?? Number.MAX_SAFE_INTEGER
+    const first = (this.entries.get(botId) ?? []).find((e) => e.seq > 0 && e.seq !== Number.MAX_SAFE_INTEGER)?.seq ?? Number.MAX_SAFE_INTEGER
     try {
       const older = await this.client.history(botId, first, 100)
       if (older.length < 100) this.historyComplete.add(botId)
