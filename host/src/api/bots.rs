@@ -83,7 +83,11 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let entry = hub
                 .store
                 .entry(str_arg(&b, "id")?)
-                .filter(|entry| entry.bot_id == bot && entry.kind == EntryKind::User.as_str())
+                .filter(|entry| {
+                    entry.bot_id == bot
+                        && entry.kind == EntryKind::User.as_str()
+                        && !crate::store::is_internal(&entry.data)
+                })
                 .context("Unknown user message.")?;
             json!({"id":entry.id,"botId":entry.bot_id,"threadId":entry.thread_id,"status":entry.data["status"],"result":entry.data["turnResult"]})
         }

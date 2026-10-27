@@ -253,7 +253,7 @@ impl App {
         // What a voice call carries shows behind its line (`o`), on whichever device the call is: the host writes the
         // line when the call ends, or when its app went away. A file or an artifact the bot sent stays, to be opened.
         let opens = |e: &Entry| e.artifact().is_some() || e.data["files"].as_array().is_some_and(|f| !f.is_empty());
-        v.retain(|e| e.kind == Kind::Notice || e.call().is_none() || opens(e));
+        v.retain(|e| !e.is_internal() && (e.kind == Kind::Notice || e.call().is_none() || opens(e)));
         // A message sent mid-turn belongs after that turn's reply.
         v.sort_by_key(|e| (e.turn, e.seq));
         v
@@ -267,7 +267,7 @@ impl App {
     /// The message the composer replies to, in the selected chat.
     pub fn replying_to(&self) -> Option<&Entry> {
         let (id, reply) = (self.selected.as_ref()?, self.reply.as_ref()?);
-        self.entries.get(id)?.values().find(|e| &e.id == reply)
+        self.entries.get(id)?.values().find(|e| &e.id == reply && !e.is_internal())
     }
 
     pub fn draft(&self) -> Editor {

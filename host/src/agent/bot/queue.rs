@@ -308,11 +308,14 @@ impl Actor {
             }
             // Messages sent while the agent worked go out together as its next turn
             // without crossing a bot request or reply or another lane: each gets its own reply.
-            let Some(Queued::User { lane, .. }) = self.queue.front() else { continue };
+            let Some(Queued::User { lane, entry_id, .. }) = self.queue.front() else { continue };
+            let proactive = self.proactive_input(entry_id);
             let lane = lane.clone();
             let mut batch = Vec::new();
-            while let Some(Queued::User { lane: l, .. }) = self.queue.front()
+            while let Some(Queued::User { lane: l, entry_id, .. }) = self.queue.front()
                 && *l == lane
+                && self.proactive_input(entry_id) == proactive
+                && (!proactive || batch.is_empty())
             {
                 if let Some(Queued::User { entry_id, text, .. }) = self.queue.pop_front() {
                     if self.hub.store.entry(&entry_id).is_some_and(|e| e.data["source"] == "slack") {
@@ -512,6 +515,8 @@ impl Actor {
 
     /// Marks a turn in the bot's own chat as running across host restarts (see [`Self::resume_interrupted`]).
     pub(super) fn set_inflight(&self, on: bool) {
+        // A background check-in is retried by its scheduler, never as a recovered user request.
+        let on = on && !self.proactive_turn;
         let value = match (&self.lane.thread, on) {
             (_, false) => String::new(),
             (Some(root), true) => format!("{}\t{root}", now_ms()),

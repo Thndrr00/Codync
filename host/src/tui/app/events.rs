@@ -71,7 +71,7 @@ impl App {
                 if let Some((bot, e)) = Entry::parse(&v["entry"])
                     && !self.outside_window(&bot, &e)
                 {
-                    if !self.entries.get(&bot).is_some_and(|m| m.contains_key(&e.seq)) {
+                    if !e.is_internal() && !self.entries.get(&bot).is_some_and(|m| m.contains_key(&e.seq)) {
                         self.entry_added(&bot, &e);
                     }
                     self.entries.entry(bot).or_default().insert(e.seq, e);
@@ -132,7 +132,7 @@ impl App {
         }
         if new.status == Status::NeedsInput && old.status != Status::NeedsInput {
             self.toast(format!("{} needs you", new.name), true);
-        } else if old.status == Status::Working && new.status == Status::Idle {
+        } else if old.status == Status::Working && new.status == Status::Idle && new.last_at > old.last_at {
             self.toast(format!("{} is done", new.name), false);
         } else if old.status != Status::Error && new.status == Status::Error {
             self.toast(format!("{} hit an error", new.name), true);

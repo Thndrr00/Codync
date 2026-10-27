@@ -96,6 +96,7 @@ impl Actor {
         hidden: bool,
         done_tx: &mpsc::UnboundedSender<Done>,
     ) -> Result<()> {
+        self.proactive_turn = self.proactive_batch(entry_ids);
         // A routine run keeps the turn its notice took when it began (`Routines::begin`).
         let run_turn = self
             .active_routine
@@ -115,6 +116,9 @@ impl Actor {
             // Bot-message notices belong to `chat::team`; writing them here would race its final status.
             if let Some(mut e) = self.hub.store.entry(id).filter(|e| e.kind == EntryKind::User.as_str()) {
                 e.data["status"] = json!(crate::chat::team::RequestStatus::Sent);
+                if super::proactive::is_proactive(&e.data) {
+                    e.data["internal"] = true.into();
+                }
                 self.hub.set_entry(id, &e.data);
             }
         }
@@ -308,7 +312,9 @@ impl Actor {
         {
             let text = e.data["text"].as_str().map(str::to_owned);
             // A pass stays in the trace: neither a room nor the user sees it (a bot request's reply goes back as it is).
-            if delegated || !text.as_deref().is_none_or(crate::chat::group::is_pass) {
+            if (delegated || !text.as_deref().is_none_or(crate::chat::group::is_pass))
+                && !(self.proactive_turn && text.as_deref().is_none_or(super::proactive::is_silent))
+            {
                 // A bot request's answer belongs to the bot that sent it and the exchange notice.
                 if !delegated {
                     e.data["final"] = true.into();
@@ -329,6 +335,8 @@ impl Actor {
             Ok(v) => v["stopReason"].as_str().unwrap_or("end_turn").to_owned(),
             Err(_) => "error".into(),
         };
+        self.publish_proactive_output(!stopped && done.is_ok() && stop_reason == "end_turn");
+        let silent_check_in = super::proactive::silent_update(self.proactive_turn, final_text.as_deref());
         let stalled = self.loop_guard.tripped().map(str::to_owned);
         let mut awaiting_sign_in = false;
         match (&done, stop_reason.as_str()) {
@@ -418,7 +426,7 @@ impl Actor {
         } else {
             Ok(final_text.clone())
         });
-        if !grouped && !delegated && !stopped && !failed && stop_reason == "end_turn" {
+        if !grouped && !delegated && !self.proactive_turn && !stopped && !failed && stop_reason == "end_turn" {
             self.offer_skill();
         }
         self.turn = None;
@@ -455,7 +463,7 @@ impl Actor {
             && !delegated
             && !grouped
             && !opening
-            && let Some(kind) = turn_alert(failed, &stop_reason, more || held_back)
+            && let Some(kind) = turn_alert(failed, &stop_reason, more || held_back || silent_check_in)
         {
             let body = final_text.unwrap_or_else(|| match (kind, reacted) {
                 (AlertKind::Done, Reacted::With(emoji)) => format!("Reacted {emoji} to your message"),
@@ -515,7 +523,7 @@ impl Actor {
             TurnSource::Group
         } else if self.active_request.is_some() || self.reply_hops.is_some() {
             TurnSource::Bot
-        } else if self.active_prompt {
+        } else if self.active_prompt || self.proactive_turn {
             TurnSource::Host
         } else {
             TurnSource::User

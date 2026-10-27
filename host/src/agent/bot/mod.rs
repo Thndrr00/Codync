@@ -24,6 +24,9 @@ mod files;
 mod launch;
 mod lifecycle;
 mod outcome;
+mod proactive;
+#[cfg(test)]
+mod proactive_tests;
 mod queue;
 mod results;
 mod session;
@@ -122,6 +125,7 @@ pub fn spawn(hub: Arc<Hub>, base: BotConfig) -> BotHandle {
         active_request: None,
         reply_hops: None,
         active_prompt: false,
+        proactive_turn: false,
         prompt_call: None,
         seg: Seg::None,
         tools: HashMap::new(),
@@ -292,6 +296,8 @@ struct Actor {
     reply_hops: Option<u8>,
     /// The running turn is one the host started, with no message of the user's (`Cmd::Prompt`).
     active_prompt: bool,
+    /// Scheduled output stays private until the turn finishes with useful news.
+    proactive_turn: bool,
     /// The call the next host-started turn opens (`Cmd::Prompt`), whose replies are that call's.
     prompt_call: Option<String>,
     seg: Seg,
@@ -429,6 +435,9 @@ impl Actor {
     /// Adds an entry to the current lane, signed by this bot (a group shows who said it).
     fn add(&self, kind: EntryKind, turn: i64, mut data: Value) -> Option<Entry> {
         data["author"] = self.cfg.id.clone().into();
+        if self.proactive_turn && proactive::internal_step(kind) {
+            data["internal"] = true.into();
+        }
         if matches!(kind, EntryKind::Agent) && data["final"] == true && self.lane.thread.is_some() {
             // Direct messages have no later finalization step to record their origin.
             data["routineRunId"] = json!(self.active_routine);

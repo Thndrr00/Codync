@@ -378,6 +378,9 @@ impl Actor {
         if self.active_group.is_some() || self.active_routine.is_some() {
             anyhow::bail!("send_message isn't available in this turn: write your answer as your reply");
         }
+        if self.proactive_turn && super::proactive::is_silent(&text) {
+            return Ok(());
+        }
         self.close_seg();
         self.add(EntryKind::Agent, turn, json!({"text": text, "final": true}))
             .ok_or_else(|| anyhow::anyhow!("couldn't save the message"))?;
@@ -443,14 +446,18 @@ impl Actor {
 
     /// Persists streamed text at most every 300 ms (or immediately with `force`).
     pub(super) fn flush(&mut self, force: bool) {
+        let internal = self.proactive_turn;
         if let Seg::Open { kind, entry_id, buf, flushed, dirty } = &mut self.seg
             && *dirty
             && (force || flushed.elapsed() >= Duration::from_millis(300))
         {
-            let data = match kind {
+            let mut data = match kind {
                 SegKind::Text => json!({"text": buf, "final": false, "author": self.cfg.id}),
                 SegKind::Thought => json!({"text": buf, "author": self.cfg.id}),
             };
+            if internal {
+                data["internal"] = true.into();
+            }
             self.hub.set_entry(entry_id, &data);
             *flushed = Instant::now();
             *dirty = false;

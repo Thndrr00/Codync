@@ -24,6 +24,8 @@ pub use saved_searches::{SearchScope, search_terms};
 pub mod runtime;
 mod schema;
 mod setup;
+mod visibility;
+pub use visibility::is_internal;
 pub(crate) mod slack;
 
 pub use apps::{AppLink, AppLinkMode, BotApp};

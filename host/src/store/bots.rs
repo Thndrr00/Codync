@@ -1,6 +1,7 @@
 //! The `bots` table: roster rows, sessions, read marks and unread counts.
 
 use super::model::{BotConfig, BotRow, EntryKind, LastMessage, message_text};
+use super::visibility::PUBLIC;
 use super::{Store, logged, next_rev};
 use crate::LockExt;
 use anyhow::Result;
@@ -128,11 +129,13 @@ impl Store {
     pub fn unread(&self, id: &str, read_rev: i64) -> i64 {
         let c = self.db.locked();
         let n = c.query_row(
-            "SELECT COUNT(*) FROM entries WHERE bot_id = ?1 AND thread_id IS NULL AND
+            &format!(
+                "SELECT COUNT(*) FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS NULL AND
                ((kind = 'agent' AND json_extract(data, '$.final') = 1 AND json_extract(data, '$.call') IS NULL) OR
                 (kind = 'permission' AND json_extract(data, '$.status') = 'pending')) AND
                json_extract(data, '$.reactions') IS NULL AND
-               COALESCE(json_extract(data, '$.contentRev'), rev) > ?2",
+               COALESCE(json_extract(data, '$.contentRev'), rev) > ?2"
+            ),
             params![id, read_rev],
             |r| r.get(0),
         );
@@ -145,10 +148,12 @@ impl Store {
     pub fn last_message(&self, id: &str) -> Option<LastMessage> {
         let c = self.db.locked();
         let row = c.query_row(
-            "SELECT kind, data, updated_at FROM entries WHERE bot_id = ?1 AND
+            &format!(
+                "SELECT kind, data, updated_at FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS NULL AND
                (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1)) AND
                json_extract(data, '$.call') IS NULL
-             ORDER BY seq DESC LIMIT 1",
+             ORDER BY seq DESC LIMIT 1"
+            ),
             [id],
             |r| {
                 let kind: String = r.get(0)?;
