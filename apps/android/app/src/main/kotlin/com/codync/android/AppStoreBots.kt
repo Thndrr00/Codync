@@ -194,3 +194,10 @@ suspend fun AppStore.saveBookmark(botId: String, entryId: String, preview: Strin
 suspend fun AppStore.deleteBookmark(botId: String, entryId: String) {
     hostQuery("deleteBookmark", body("botId" to botId, "entryId" to entryId))
 }
+
+/** One request of a mini-app, run by the host: this phone cannot reach the computer's loopback server. */
+suspend fun AppStore.appRequest(address: MiniAppAddress, method: String, path: String, payload: String = ""): MiniAppAnswer =
+    WireJson.decodeFromJsonElement(hostQuery("appRequest", body(
+        "botId" to address.botId, "slug" to address.slug, "token" to address.token,
+        "method" to method, "path" to path, "body" to payload,
+    )))

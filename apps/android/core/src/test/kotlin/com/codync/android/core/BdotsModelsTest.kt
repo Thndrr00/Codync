@@ -209,6 +209,7 @@ class BdotsModelsTest {
         val decisions = collectPendingDecisions(entries)
         assertEquals(1, decisions.size)
         assertEquals("p1", decisions.first().entryId)
+        assertEquals("permission", decisions.first().kind)
 
         val deliverables = collectDeliverables(entries)
         assertEquals(1, deliverables.size)
@@ -226,5 +227,27 @@ class BdotsModelsTest {
         val connector = WireJson.decodeFromJsonElement<InstalledConnector>(connectorJson)
         assertEquals("auth", connector.lastFailure?.kind)
         assertEquals("Token expired", connector.lastFailure?.message)
+    }
+
+    private fun entry(id: String, seq: Long, kind: String, data: String) =
+        Entry(id, seq, "b1", seq, kind, 1, WireJson.parseToJsonElement(data).jsonObject, createdAt = seq * 100, updatedAt = seq * 100)
+
+    @Test
+    fun `pending decisions use the entries the host really writes`() {
+        val entries = listOf(
+            entry("p", 1, "permission", """{"title":"Run","status":"pending","options":[
+                {"optionId":"yes","name":"Allow","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}"""),
+            entry("h", 2, "notice", """{"text":"Human takeover requested: log in","takeoverRequest":{"reason":"log in","status":"waiting"}}"""),
+            entry("hd", 3, "notice", """{"text":"x","takeoverRequest":{"reason":"done","status":"resolved"}}"""),
+            entry("e", 4, "notice", """{"text":"The agent stopped","style":"error"}"""),
+        )
+        val byId = collectPendingDecisions(entries).associateBy { it.entryId }
+        assertEquals(setOf("p", "h", "e"), byId.keys)
+        assertEquals("yes", byId.getValue("p").allowOptionId)
+        assertEquals("no", byId.getValue("p").denyOptionId)
+        assertEquals("log in", byId.getValue("h").detail)
+        // Once the bot or the person writes again, the error is behind them.
+        val moved = entries + entry("a", 5, "agent", """{"text":"Back on it"}""")
+        assertEquals(setOf("p", "h"), collectPendingDecisions(moved).map { it.entryId }.toSet())
     }
 }

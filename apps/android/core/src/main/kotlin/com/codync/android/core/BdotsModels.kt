@@ -2,6 +2,8 @@ package com.codync.android.core
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -127,6 +129,7 @@ data class MessageBookmark(
     val updatedAt: Long = 0L,
 )
 
+/** What a person still has to settle in a conversation; [kind] is `permission`, `handoff` or `incident`. */
 @Serializable
 data class PendingDecision(
     val entryId: String,
@@ -135,43 +138,40 @@ data class PendingDecision(
     val title: String,
     val detail: String,
     val createdAt: Long,
+    /** A permission's option that lets the tool run once, and the one that refuses it; null where the host sent none. */
+    val allowOptionId: String? = null,
+    val denyOptionId: String? = null,
 )
 
-/** Collects unresolved permissions, passkeys, and error incidents across chat entries (Ficha N12). */
+private fun Entry.permissionOption(vararg kinds: String): String? =
+    (data["options"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        .firstOrNull { it.text("kind") in kinds }?.text("optionId")
+
+/**
+ * The permission requests waiting for an answer, the human takeovers an agent asked for and the errors no later
+ * message has followed (the bot has not moved on from them), newest first. Shapes are those the host really writes.
+ */
 fun collectPendingDecisions(entries: List<Entry>): List<PendingDecision> {
+    val lastReply = entries.filter { it.kind == "user" || it.kind == "agent" }.groupBy { it.botId }
+        .mapValues { (_, list) -> list.maxOf { it.seq } }
     val out = mutableListOf<PendingDecision>()
     for (e in entries) {
-        val status = e.status ?: "pending"
-        val title = e.data["title"]?.jsonPrimitive?.contentOrNull
-        val domain = e.data["domain"]?.jsonPrimitive?.contentOrNull
-        val err = e.data["error"]?.jsonPrimitive?.contentOrNull
+        val handoff = e.data["takeoverRequest"] as? JsonObject
         when {
-            e.kind == "permission" && status == "pending" ->
+            e.kind == "permission" && e.status == "pending" -> out += PendingDecision(
+                entryId = e.id, botId = e.botId, kind = "permission",
+                title = e.data.text("title")?.takeIf { it.isNotBlank() } ?: "Tool permission required",
+                detail = e.data.text("command") ?: e.text, createdAt = e.createdAt,
+                allowOptionId = e.permissionOption("allow_once"), denyOptionId = e.permissionOption("reject_once"),
+            )
+            handoff != null && handoff.text("status") !in listOf("resolved", "cancelled") -> out += PendingDecision(
+                entryId = e.id, botId = e.botId, kind = "handoff", title = "Human takeover requested",
+                detail = handoff.text("reason").orEmpty(), createdAt = e.createdAt,
+            )
+            e.kind == "notice" && e.data.text("style") == "error" && e.seq > (lastReply[e.botId] ?: Long.MIN_VALUE) ->
                 out += PendingDecision(
-                    entryId = e.id,
-                    botId = e.botId,
-                    kind = "permission",
-                    title = title?.takeIf { it.isNotBlank() } ?: "Tool permission required",
-                    detail = e.text,
-                    createdAt = e.createdAt,
-                )
-            e.kind == "passkey" && status == "pending" ->
-                out += PendingDecision(
-                    entryId = e.id,
-                    botId = e.botId,
-                    kind = "passkey",
-                    title = domain?.takeIf { it.isNotBlank() }?.let { "Passkey for $it" } ?: "Passkey verification required",
-                    detail = e.text,
-                    createdAt = e.createdAt,
-                )
-            e.kind == "error" && (!err.isNullOrBlank() || e.text.isNotBlank()) ->
-                out += PendingDecision(
-                    entryId = e.id,
-                    botId = e.botId,
-                    kind = "incident",
-                    title = title?.takeIf { it.isNotBlank() } ?: "Agent incident",
-                    detail = err ?: e.text,
-                    createdAt = e.createdAt,
+                    entryId = e.id, botId = e.botId, kind = "incident", title = "Agent error",
+                    detail = e.text, createdAt = e.createdAt,
                 )
         }
     }

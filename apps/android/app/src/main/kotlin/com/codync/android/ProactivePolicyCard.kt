@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.BotDraft
+import com.codync.android.core.ProactiveSettings
 import com.codync.android.core.WORKER_ROLE_TEMPLATES
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
@@ -89,10 +90,44 @@ internal fun ProactivePolicySection(draft: BotDraft, change: (BotDraft) -> Unit)
         }
     }
 
-    CardSection("Action rules and proactive check-ins") {
-        row {
-            Text(tr("Action-class rules and proactive check-ins are not supported by this host. These settings are unavailable."),
-                style = Type.caption, color = Palette.secondary)
+    ProactiveCheckIns(draft, change)
+}
+
+private val INTERVALS = listOf(1, 2, 4, 8, 12, 24)
+private val DAILY_LIMITS = listOf(1, 2, 3, 5, 8)
+
+private fun hourOptions() = (0..23).map { it.toString() to "%02d:00".format(it) }
+
+/** How often the bot may wake on its own, when it stays quiet and how many times a day (the host runs them). */
+@Composable
+private fun ProactiveCheckIns(draft: BotDraft, change: (BotDraft) -> Unit) {
+    val settings = draft.proactive ?: ProactiveSettings()
+    fun update(next: ProactiveSettings) = change(draft.copy(proactive = next))
+    CardSection("Proactive check-ins", footer = "The bot wakes up on its own to review what is open and only writes to you when it has something to say.") {
+        row { SwitchRow("Proactive check-ins", "Let this bot check in without being asked", settings.enabled, { update(settings.copy(enabled = it)) }) }
+        if (settings.enabled) {
+            row {
+                ValueRow("Check in every") {
+                    ChoicePicker(settings.everyHours.toString(), INTERVALS.map { it.toString() to if (it == 1) "1 hour" else "$it hours" },
+                        { update(settings.copy(everyHours = it.toInt())) }, label = "Check-in interval")
+                }
+            }
+            row {
+                ValueRow("Quiet from") {
+                    ChoicePicker(settings.quietStart.toString(), hourOptions(), { update(settings.copy(quietStart = it.toInt())) }, label = "Quiet hours start")
+                }
+            }
+            row {
+                ValueRow("Quiet until") {
+                    ChoicePicker(settings.quietEnd.toString(), hourOptions(), { update(settings.copy(quietEnd = it.toInt())) }, label = "Quiet hours end")
+                }
+            }
+            row {
+                ValueRow("At most per day") {
+                    ChoicePicker(settings.maxPerDay.toString(), DAILY_LIMITS.map { it.toString() to it.toString() },
+                        { update(settings.copy(maxPerDay = it.toInt())) }, label = "Daily check-in limit")
+                }
+            }
         }
     }
 }

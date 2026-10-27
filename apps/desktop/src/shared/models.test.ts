@@ -109,7 +109,7 @@ test('sharedWorkspacePeers detects simultaneous active bots in the same project 
 
 test('collectPendingDecisions, collectDeliverables, WORKER_ROLE_TEMPLATES and polishVoiceDictation work as specified', () => {
   const entries = [
-    message('permission', { title: 'Run git push?', text: 'git push origin dev', status: 'pending' }, 'p1'),
+    message('permission', { title: 'Run git push?', text: 'git push origin dev', status: 'pending', options: [{ optionId: 'yes', name: 'Allow', kind: 'allow_once' }, { optionId: 'no', name: 'Reject', kind: 'reject_once' }] }, 'p1'),
     message('permission', { title: 'Old permission', status: 'approved' }, 'p2'),
     message('agent', {
       text: 'Generated report',
@@ -120,6 +120,8 @@ test('collectPendingDecisions, collectDeliverables, WORKER_ROLE_TEMPLATES and po
   assert.equal(decisions.length, 1)
   assert.equal(decisions[0]?.entryId, 'p1')
   assert.equal(decisions[0]?.kind, 'permission')
+  assert.equal(decisions[0]?.allowOptionId, 'yes')
+  assert.equal(decisions[0]?.denyOptionId, 'no')
 
   const deliverables = collectDeliverables(entries)
   assert.equal(deliverables.length, 1)
@@ -132,3 +134,12 @@ test('collectPendingDecisions, collectDeliverables, WORKER_ROLE_TEMPLATES and po
   )
 })
 
+test('collectPendingDecisions reads takeovers and unanswered errors from the entries the host writes', () => {
+  const handoff = message('notice', { text: 'Human takeover requested: log in', takeoverRequest: { reason: 'log in', status: 'waiting' } }, 'h')
+  const done = message('notice', { text: 'x', takeoverRequest: { reason: 'old', status: 'resolved' } }, 'hd')
+  const failure = message('notice', { text: 'The agent stopped', style: 'error' }, 'e')
+  const ids = (list: ReturnType<typeof collectPendingDecisions>) => list.map((d) => d.entryId).sort()
+  assert.deepEqual(ids(collectPendingDecisions([handoff, done, failure])), ['e', 'h'])
+  const reply = { ...message('agent', { text: 'Back on it' }, 'a'), seq: failure.seq + 1 }
+  assert.deepEqual(ids(collectPendingDecisions([handoff, done, failure, reply])), ['h'])
+})

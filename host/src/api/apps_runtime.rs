@@ -119,7 +119,7 @@ fn text_resp(status: StatusCode, content_type: &str, body: impl Into<Bytes>) -> 
     (status, security_headers(content_type), body.into()).into_response()
 }
 
-fn handle_request(
+pub(super) fn handle_request(
     hub: &Hub,
     bot_id: &str,
     slug: &str,
@@ -237,11 +237,11 @@ fn handle_data(
     json_resp(StatusCode::METHOD_NOT_ALLOWED, json!({"error": "Method not allowed"}))
 }
 
-fn dispatch_bot_turn(hub: &Hub, bot_id: &str, text: &str) -> anyhow::Result<()> {
+pub(crate) fn dispatch_bot_turn(hub: &Hub, bot_id: &str, text: &str, from: &str) -> anyhow::Result<()> {
     let row = hub.store.bot(bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow::anyhow!("unknown bot"))?;
     let lane = Lane::main(bot_id);
     let turn = hub.store.max_turn(bot_id) + 1;
-    let data = json!({"text": text, "status": "queued", "from": "app"});
+    let data = json!({"text": text, "status": "queued", "from": from});
     let entry =
         hub.add_entry(&lane, EntryKind::User, turn, &data).ok_or_else(|| anyhow::anyhow!("couldn't save message"))?;
     if !row.config.is_group() && !crate::external::is_external(&row.config) {
@@ -263,7 +263,7 @@ fn handle_tell(hub: &Hub, bot_id: &str, app: &BotApp, link: &AppLink, body: &Byt
         return json_resp(StatusCode::BAD_REQUEST, json!({"error": "text required"}));
     }
     let msg = format!("[From mini-app \"{}\" ({})]: {text}", app.title, link.label);
-    match dispatch_bot_turn(hub, bot_id, &msg) {
+    match dispatch_bot_turn(hub, bot_id, &msg, "app") {
         Ok(()) => json_resp(StatusCode::OK, json!({"ok": true})),
         Err(e) => json_resp(StatusCode::BAD_REQUEST, json!({"error": e.to_string()})),
     }
@@ -292,7 +292,7 @@ Fix the bug in apps/{}/ and call save_app so the open app reloads cleanly.",
         if stack.is_empty() { String::new() } else { format!("\n{stack}") },
         app.slug
     );
-    let _ = dispatch_bot_turn(hub, bot_id, &repair_prompt);
+    let _ = dispatch_bot_turn(hub, bot_id, &repair_prompt, "app");
     json_resp(StatusCode::OK, json!({"ok": true}))
 }
 

@@ -20,6 +20,7 @@ mod external;
 mod hub;
 mod market;
 mod mcp;
+mod proactive;
 mod remote;
 mod research;
 mod routines;

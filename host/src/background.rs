@@ -14,6 +14,7 @@ pub fn start(hub: &Arc<Hub>) {
         async move { market::agent_sign_in::refresh(&hub).await }
     });
     tokio::spawn(usage::poll(hub.clone()));
+    tokio::spawn(crate::proactive::run(hub.clone()));
     tokio::spawn(update::automatic_loop(hub.clone()));
     tokio::spawn(screen::serve_helpers(hub.screen.clone()));
     tokio::spawn(relay::run(hub.clone()));

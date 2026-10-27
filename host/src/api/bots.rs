@@ -43,6 +43,7 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         "listBotApps" | "createAppLink" | "revokeAppLink" | "deleteBotApp" => {
             crate::chat::apps::api_call(hub, method, &b)?
         }
+        "appRequest" => super::apps_bridge::request(hub, &b).await?,
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }

@@ -6,8 +6,6 @@ import {
 } from '@shared/models'
 import { avatarColor } from '../lib/theme'
 import { RobotAvatar } from './RobotAvatar'
-import { Text } from './Text'
-import { useTr } from '../lib/use-language'
 
 export interface ProactivePolicyProps {
   avatarColorId: string
@@ -23,7 +21,6 @@ export function ProactivePolicySection({
   onChangeLook,
   onApplyRoleTemplate,
 }: ProactivePolicyProps) {
-  const tr = useTr()
   const colorHex = avatarColor(avatarColorId)
 
   return (
@@ -82,13 +79,6 @@ export function ProactivePolicySection({
             )
           })}
         </div>
-      </div>
-
-      <div>
-        <Text weight="semibold">{tr('Action rules and proactive check-ins')}</Text>
-        <Text size="caption" tone="secondary">
-          {tr('Action-class rules and proactive check-ins are not supported by this host. These settings are unavailable.')}
-        </Text>
       </div>
     </div>
   )

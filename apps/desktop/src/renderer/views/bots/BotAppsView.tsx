@@ -173,7 +173,7 @@ export function BotAppsCard({ botId }: { botId: string }) {
 
         <CardSection
           title={tr('Pending Decisions')}
-          footer={tr('Permissions, passkeys, and incidents waiting on your confirmation (N12).')}
+          footer={tr('Permissions, takeovers, and errors waiting on you (N12).')}
         >
           <HStack align="center" gap={8}>
             <Text size="caption" tone="secondary">
@@ -190,7 +190,7 @@ export function BotAppsCard({ botId }: { botId: string }) {
               return (
                 <HStack key={dec.entryId} align="center" gap={10}>
                   <Icon
-                    name={dec.kind === 'permission' ? 'hand.raised.fill' : dec.kind === 'passkey' ? 'person.badge.key.fill' : 'exclamationmark.triangle.fill'}
+                    name={dec.kind === 'permission' || dec.kind === 'handoff' ? 'hand.raised.fill' : 'exclamationmark.triangle.fill'}
                     size={14}
                     color="var(--warning, #ff9f0a)"
                   />
@@ -205,9 +205,16 @@ export function BotAppsCard({ botId }: { botId: string }) {
                     ) : null}
                   </VStack>
                   {dec.kind === 'permission' && entry ? (
-                    <Button kind="primary" onClick={() => store.respond(entry, entry.data.options?.[0]?.optionId ?? 'allow')}>
-                      {tr('Approve')}
-                    </Button>
+                    <>
+                      {dec.denyOptionId ? (
+                        <Button onClick={() => store.respond(entry, dec.denyOptionId ?? null)}>{tr('Deny')}</Button>
+                      ) : null}
+                      {dec.allowOptionId ? (
+                        <Button kind="primary" onClick={() => store.respond(entry, dec.allowOptionId ?? null)}>
+                          {tr('Approve')}
+                        </Button>
+                      ) : null}
+                    </>
                   ) : null}
                 </HStack>
               )

@@ -5,6 +5,7 @@ import { draftOf, type Bot, type BotDraft, type DirListing } from '@shared/model
 import { AgentIcon } from '../../components/AgentIcon'
 import { CharacterAvatar } from '../../components/Avatar'
 import { ProactivePolicySection } from '../../components/ProactivePolicySection'
+import { ProactiveCheckIns } from './ProactiveCheckIns'
 import { RobotAvatar, isRobotLook } from '../../components/RobotAvatar'
 import { CardSection, ChoicePicker, DropdownMenu, IconButton, Pill, SearchField, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -327,6 +328,8 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
           onChangeLook={(look) => set('avatarLook', look ?? null)}
           onApplyRoleTemplate={(tpl) => onChange((d) => ({ ...d, description: draft.description?.trim() ? draft.description : tpl.standingInstructions, avatarLook: tpl.avatarLook, avatarColor: tpl.avatarColor }))}
         />
+
+        <ProactiveCheckIns settings={draft.proactive} onChange={(next) => set('proactive', next)} />
 
         <PluginToggles
           title="Connectors"

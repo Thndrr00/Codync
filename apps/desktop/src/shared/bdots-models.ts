@@ -185,7 +185,7 @@ export interface MessageBookmark {
   updatedAt: number
 }
 
-export type PendingDecisionKind = 'permission' | 'passkey' | 'incident'
+export type PendingDecisionKind = 'permission' | 'handoff' | 'incident'
 
 export interface PendingDecision {
   entryId: string
@@ -194,56 +194,60 @@ export interface PendingDecision {
   title: string
   detail: string
   createdAt: number
+  /** A permission's option that lets the tool run once, and the one that refuses it. */
+  allowOptionId?: string
+  denyOptionId?: string
 }
 
-/** Collects unresolved permissions, passkeys, and error incidents across chat entries (Ficha N12). */
-export function collectPendingDecisions(
-  entries: Iterable<{
-    id: string
-    botId: string
-    kind: string
-    createdAt: number
-    data: {
-      status?: string
-      title?: string
-      text?: string
-      domain?: string
-      error?: string
-    }
-  }>,
-): PendingDecision[] {
+interface DecisionEntry {
+  id: string
+  botId: string
+  kind: string
+  seq: number
+  createdAt: number
+  data: {
+    status?: string
+    title?: string
+    text?: string
+    command?: string
+    style?: string
+    options?: { optionId: string; kind: string }[]
+    takeoverRequest?: { reason?: string; status?: string }
+  }
+}
+
+/**
+ * The permission requests waiting for an answer, the human takeovers an agent asked for and the errors no later
+ * message has followed (the bot has not moved on from them), newest first. Shapes are those the host really writes.
+ */
+export function collectPendingDecisions(entries: Iterable<DecisionEntry>): PendingDecision[] {
+  const all = [...entries]
+  const lastReply = new Map<string, number>()
+  for (const e of all) {
+    if (e.kind === 'user' || e.kind === 'agent') lastReply.set(e.botId, Math.max(lastReply.get(e.botId) ?? -1, e.seq))
+  }
   const out: PendingDecision[] = []
-  for (const e of entries) {
-    if (e.kind === 'permission' && (e.data.status ?? 'pending') === 'pending') {
+  for (const e of all) {
+    const handoff = e.data.takeoverRequest
+    if (e.kind === 'permission' && e.data.status === 'pending') {
+      const option = (kind: string) => e.data.options?.find((o) => o.kind === kind)?.optionId
       out.push({
         entryId: e.id,
         botId: e.botId,
         kind: 'permission',
         title: e.data.title || 'Tool permission required',
-        detail: e.data.text || '',
+        detail: e.data.command || e.data.text || '',
         createdAt: e.createdAt,
+        allowOptionId: option('allow_once'),
+        denyOptionId: option('reject_once'),
       })
-    } else if (e.kind === 'passkey' && (e.data.status ?? 'pending') === 'pending') {
-      out.push({
-        entryId: e.id,
-        botId: e.botId,
-        kind: 'passkey',
-        title: e.data.domain ? `Passkey for ${e.data.domain}` : 'Passkey verification required',
-        detail: e.data.text || '',
-        createdAt: e.createdAt,
-      })
-    } else if (e.kind === 'error' && (e.data.error || e.data.text)) {
-      out.push({
-        entryId: e.id,
-        botId: e.botId,
-        kind: 'incident',
-        title: e.data.title || 'Agent incident',
-        detail: e.data.error || e.data.text || '',
-        createdAt: e.createdAt,
-      })
+    } else if (handoff && handoff.status !== 'resolved' && handoff.status !== 'cancelled') {
+      out.push({ entryId: e.id, botId: e.botId, kind: 'handoff', title: 'Human takeover requested', detail: handoff.reason ?? '', createdAt: e.createdAt })
+    } else if (e.kind === 'notice' && e.data.style === 'error' && e.seq > (lastReply.get(e.botId) ?? -1)) {
+      out.push({ entryId: e.id, botId: e.botId, kind: 'incident', title: 'Agent error', detail: e.data.text ?? '', createdAt: e.createdAt })
     }
   }
-  return out.sort((a, b) => b.createdAt - a.createdAt)
+  return out.sort((x, y) => y.createdAt - x.createdAt)
 }
 
 export interface DeliverableItem {

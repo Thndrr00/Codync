@@ -28,22 +28,28 @@ Additional cross-client defects found during acceptance preparation were fixed:
   found that these forms existed but the root still opened the old settings
   editor; the corrected routing is built, awaiting device installation.
 
+## Features added after the first validation round
+
+- Remote mini-apps: the host method `appRequest` (`host/src/api/apps_bridge.rs`) runs one
+  `/apps/{bot}/{slug}/{token}/...` request on the computer and returns status, content type and a
+  base64 body over the E2E channel, with the same link-token check as a browser request. The phone
+  shows the app under the virtual origin `https://codync-app.invalid`: its WebView answers page and
+  file requests through `shouldInterceptRequest`, and a bridge script relays `fetch` calls (data,
+  tells, errors) and replaces the `_live` socket with a poll of the app's collections
+  (`MiniAppWebClient.kt`, `MiniAppBridgeScript.kt`). Loopback URLs are no longer a dead end.
+- Proactive check-ins run in the host (`host/src/proactive.rs`): every minute it wakes each bot with
+  them on, once its interval has passed, outside its quiet hours and within its daily limit. A bot
+  just switched on waits one interval. Android and desktop edit the settings.
+- Pending decisions read the entries the host really writes (pending permissions with their allow and
+  deny options, `takeoverRequest` notices, error notices no later message followed) and Android and
+  desktop answer permissions from the card. The old `passkey` / `error` entry kinds never existed.
+
 ## Features still requiring implementation
 
-- Remote mini-app rendering: the current host supplies loopback browser URLs.
-  Android now identifies these as computer-only instead of opening the phone's
-  loopback address. USB reverse must not be used as evidence of remote support.
-- Action-class guardrails and proactive check-ins: the host stores these fields
-  but has no enforcement/scheduler consumers. The active controls were removed
-  from Android and desktop, with an explicit unsupported message. Existing role
-  templates still set their valid instructions and appearance.
-- Pending-decisions inspection still needs actual host notice aggregation and
-  corresponding Android actions; old synthetic `passkey`/`error` entry kinds
-  are not evidence that this works with real host entries.
-
-These items are not counted as working merely because their views compile.
-iOS and terminal have no corresponding mini-app/Sentinel/action-rule renderer
-affected by these specific fixes; Android lock widgets are platform-specific.
+- Action-class guardrails (`actionRules`): the host stores them but nothing enforces them yet, so
+  neither client shows controls for them.
+- `appsInBackground` of the proactive settings is stored but not yet consulted when a check-in runs.
+- iOS and the terminal UI have no mini-app, proactive or pending-decision views.
 
 ## Device and validation status
 

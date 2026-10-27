@@ -29,6 +29,8 @@ import com.codync.android.core.LinkState
 import com.codync.android.core.MessageBookmark
 import com.codync.android.core.OpenItem
 import com.codync.android.core.collectDeliverables
+import com.codync.android.core.Entry
+import com.codync.android.core.PendingDecision
 import com.codync.android.core.collectPendingDecisions
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
@@ -181,6 +183,7 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
                             if (dec.detail.isNotBlank()) {
                                 Text(dec.detail, style = Type.caption, color = Palette.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
+                            DecisionActions(dec, entries, store)
                         }
                     }
                 }
@@ -265,5 +268,15 @@ internal fun BotAppsCard(botId: String, state: AppState, store: AppStore) {
 
     CodyncSheet(activeApp, { activeApp = null }) { app ->
         BotAppSheet(botId = botId, app = app, store = store, onChanged = { scope.launch { reload() } })
+    }
+}
+
+/** A permission is answered right here; a takeover or an error is handled in this same conversation. */
+@Composable
+private fun DecisionActions(decision: PendingDecision, entries: List<Entry>, store: AppStore) {
+    val permission = entries.firstOrNull { it.id == decision.entryId && it.kind == "permission" } ?: return
+    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        decision.allowOptionId?.let { PrimaryButton("Allow") { store.respond(permission, it) } }
+        decision.denyOptionId?.let { SecondaryButton("Deny") { store.respond(permission, it) } }
     }
 }

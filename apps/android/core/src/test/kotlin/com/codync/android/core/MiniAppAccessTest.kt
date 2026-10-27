@@ -62,3 +62,25 @@ class MiniAppAccessTest {
         assertNull(summary.leadBotName)
     }
 }
+
+class MiniAppBridgeTest {
+    @Test fun `address comes from the owner URL whatever host it names`() {
+        val address = MiniAppAddress.parse("http://127.0.0.1:19222/apps/bot/tracker/owner/")
+        assertEquals(MiniAppAddress("bot", "tracker", "owner"), address)
+        assertEquals("https://codync-app.invalid/apps/bot/tracker/owner/", address?.pageUrl)
+        assertNull(MiniAppAddress.parse("http://127.0.0.1/health"))
+        assertNull(MiniAppAddress.parse("not a url"))
+    }
+
+    @Test fun `requests leaving the app are rejected`() {
+        val address = MiniAppAddress("bot", "tracker", "owner")
+        assertEquals("_data/notes", address.relativePath("/apps/bot/tracker/owner/_data/notes"))
+        assertEquals("", address.relativePath("/apps/bot/tracker/owner/"))
+        assertNull(address.relativePath("/apps/bot/other/owner/"))
+        assertNull(address.relativePath("/apps/bot/tracker/other-token/"))
+    }
+
+    @Test fun `policy drops the sandbox directive only`() {
+        assertEquals("default-src 'self'; img-src *", miniAppPolicy("sandbox allow-scripts; default-src 'self'; img-src *;"))
+    }
+}
