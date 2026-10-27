@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**In progress: no release stage is yet certified.** Validation below records observed commands, never an assumed pass.
+**In progress: the PR 216 merge is committed (`85ed396f`) and the requested hardening is committed on top of it; no complete release stage is yet certified, and PRs 219, 220, 221 and 226 remain for v2.27.0.** Validation below records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -161,10 +161,27 @@ The fork baseline `af33eda4` has no iOS `CallTranscript`, `VoiceReceipt`, `voice
 - Reviewed tab enum/switch completeness, context-menu return construction, optional account decoding and fixture actor isolation.
 - iOS: **not compiled**. `xcodebuild`, `xcodegen` and Swift are unavailable on this Windows machine. Xcode project regeneration and actual Swift 6/iOS Simulator checks must run on macOS. The auto-merged upstream generated project was not manually edited.
 
+## Requested hardening fixes (committed; gates recorded below)
+
+- Host proactive visibility uses a shared internal-entry flag in storage, actors and every client. An exact `NO_UPDATE` stays private during streaming or an explicit send; a useful final is published without its scheduled prompt. Scheduled turns do not coalesce with a person's queued messages or become recovered user requests. Host queries, mirrors, trace, speech, approvals, quotes, bookmarks and Library honour visibility. Regression tests cover real ACP fixtures, store queries, stale mirrors and client classification.
+- A scheduled turn's replacement of a published artifact no longer overwrites or hides it: the new HTML waits as `<id>.staged.html` beside its own metadata and lands only when the turn promotes a useful result. A silent, failed or stopped check-in leaves the user's version and title untouched, and routines, rooms and bot requests still publish straight into the Library, as before.
+- Android miniapp navigation authenticates the exact virtual HTTPS origin, the current capability and native main-frame metadata. External HTTP(S) opens through the system browser; unsafe navigation is blocked. Unsupported WebViews show a clear update instruction instead of installing an unsafe fallback. The other clients do not expose this Android JavaScript interface; this hardening is platform-specific.
+- Android bridge bodies reject FormData, Blob, streams, typed arrays and Request bodies explicitly rather than silently submitting empty content, and a GET/HEAD body is refused. The secure listener uses [Android's WebMessageListener API](https://developer.android.com/reference/androidx/webkit/WebViewCompat.WebMessageListener), with the [stable WebKit dependency](https://developer.android.com/jetpack/androidx/releases/webkit) selected against the app's SDK. Nine JavaScript-template tests pass, including socket polling and foreign Request handling.
+- Scheduler redundant borrows were removed, and storage deletion/list errors are logged with tracing. A new appRequest regression publishes a page and checks page/data, bad capability (403), and invalid paths (400).
+- Desktop post-filter typecheck and tests exited 0: 348 passes, 19 platform skips, 0 failures.
+- Initial Android gate exited 1 at compileDebugKotlin: ScreenHeader's third argument had become Boolean, AppearancePreferences.initialize was obsolete, and canEdit lacked its extension import. Fixed as a named trailing slot, the current preference accessor and the import. The full gate then exited 0: `assembleDebug`, `:core:test`, `testDebugUnitTest` and `lintDebug` (109 tasks); a forced rerun of both test tasks on this tree executed 46 tasks and exited 0.
+- Host gates on the committed tree: `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo test -j 1 -- --test-threads=1` exit 0 over 22 targets (699 unit tests, plus the workspace, call, routine, team and turn end-to-end suites). The proactive ACP fixture now reads and writes UTF-8 explicitly, because the Windows console codepage turned its prompts into lone surrogates.
+
+## Resource and environment evidence
+
+- Initial C: free space: 25.14 GiB. Checked again before each heavyweight compiler; no code/data deletion performed.
+- During serialized Android build, free space temporarily approached 21 GiB. Applied NTFS compression only to this worktree's regenerable host/target cache: 569,971,671 logical bytes stored in 285,120,934 bytes; compact exited 0. New artifacts inherit compression. No other checkout/cache was removed.
+- Installed Codync Dev already owns port 19223: PID 22996, executable under LocalAppData/Programs/codync-desktop-dev/resources/codync-host.exe. It was left running. Functional harness will first record this conflict and may use explicit isolated port 19224; it accepts only a binary inside this worktree and fresh task-owned data.
+- adb devices returned an empty device list. No signing key was read and no phone installation performed.
+
 ## Remaining release stages and functional verification
 
-v2.27.0 completion, v2.28.0 and v2.29.0 gates/pushes are pending. Known proactive visibility/NO_UPDATE and miniapp WebView/fetch fixes remain pending their separate fix commits.
-End-to-end host on isolated data and port 19223, miniapp HTTP statuses/data, proactive ledger/visibility, signed Android USB installation and MIUI acknowledgement are pending.
+v2.27.0 completion, v2.28.0 and v2.29.0 gates/pushes remain pending. End-to-end new-host miniapp/scheduler validation is prepared but has not run. iOS/Xcode and real Android WebView/device checks remain unavailable here.
 
 ## Fork commit inventory
 

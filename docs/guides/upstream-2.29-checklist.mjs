@@ -49,4 +49,10 @@ for (const path of docs) {
   assert.equal(git('hash-object', '--', path), git('rev-parse', `${baseline}:${path}`), `Changed original document: ${path}`);
 }
 git('merge-base', '--is-ancestor', baseline, 'HEAD');
-console.log(`PASS: fork feature assertions; ${docs.length} original research documents unchanged; fork history retained`);
+const moved = new Map([
+  ['apps/android/core/src/main/kotlin/com/codync/android/core/CallTranscript.kt',
+    'apps/android/core/src/main/kotlin/com/codync/android/core/CallReceiptTranscript.kt'],
+]);
+const added = git('diff', '--name-only', '--diff-filter=A', '-z', 'e770dbd9', baseline).split('\0').filter(Boolean);
+for (const path of added) assert(existsSync(resolve(root, moved.get(path) ?? path)), `Lost fork-added file: ${path}`);
+console.log(`PASS: fork feature assertions; ${docs.length} research documents unchanged; ${added.length} fork-added files retained or explicitly moved; fork history retained`);
