@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**In progress: the PR 216 merge is committed (`85ed396f`) and the requested hardening is committed on top of it; no complete release stage is yet certified, and PRs 219, 220, 221 and 226 remain for v2.27.0.** Validation below records observed commands, never an assumed pass.
+**In progress: PRs 216 and 219 are merged (`85ed396f`, then this merge), with the requested hardening committed after 216; no complete release stage is yet certified, and PRs 220, 221 and 226 remain for v2.27.0.** Validation below records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -161,7 +161,33 @@ The fork baseline `af33eda4` has no iOS `CallTranscript`, `VoiceReceipt`, `voice
 - Reviewed tab enum/switch completeness, context-menu return construction, optional account decoding and fixture actor isolation.
 - iOS: **not compiled**. `xcodebuild`, `xcodegen` and Swift are unavailable on this Windows machine. Xcode project regeneration and actual Swift 6/iOS Simulator checks must run on macOS. The auto-merged upstream generated project was not manually edited.
 
-## Requested hardening fixes (committed; gates recorded below)
+## v2.27.0, substep PR 219 (`9876308b`)
+
+### Conflict decisions
+
+- `host/src/api/mod.rs`: dispatch keeps the fork's `catalog` lane and adopts upstream's caller argument for `bots::call`.
+- `host/src/api/bots.rs`: `logCall` keeps the fork's receipt-enriching handler; `startCall` adopts the device owner upstream needs to route its voice cues.
+- `host/src/analytics/reported.rs`: the reported-event table keeps the fork's onboarding events and adds upstream's `voice_call_quality`.
+- `apps/android/.../AppStore.kt`: a call still ends when its bot is deleted, and the fork's visible-entry filter feeds the state; upstream's event cues now drive speech, so the client reply gate goes.
+- `apps/android/.../AppStoreConnection.kt`: keeps the fork's per-scope read acknowledgements and adds upstream's `hearCalls(batch)`.
+- `apps/android/.../AppStoreVoice.kt`: the binding keeps the fork's optional receipt transcript; its constructor drops the reply gate (the host decides what a call hears).
+- `apps/android/core/.../Voice.kt`: adopts upstream's rewritten audio phases and cue-driven speech; the fork's reply gate is removed because the host announces only public results.
+- `apps/android/.../VoiceControls.kt`: the connecting state reads `phase.connecting` with the fork's `callStatusText`.
+- `apps/desktop/.../CallView.tsx`: unmount keeps the fork's receipt log after the host session ends, then reports quality; the unused `watchVoiceCall` import is gone.
+- `apps/ios/.../BotStore+Sync.swift`: adopts upstream's `.call(cue)` case; entry-based speech is the host's job now.
+- `apps/ios/Kit/Tests/CodyncUITests/StoreTests.swift`: starts from upstream and re-applies the fork's extraction (fixtures and seven connection tests live in `StoreTestFixtures.swift` and `StoreConnectionTests.swift`); upstream's `startCall` fixture, `hear:` API and new cue test stay.
+- `apps/ios/WhatsNew.md`: one 2.26.0 section with both sides' notes.
+- `docs/architecture/file-structure.md`: the voice row carries upstream's `announce`/`speech`, the Live Activity and the Android call notification, keeping the fork's profile, management, approval and watchdog rows.
+- `apps/android/core/src/test/.../EntryVisibilityTest.kt`: the two client reply-gate tests are replaced by the mirror contract they now rely on.
+
+### Validation observed
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo test --bin codync-host -j 1 -- --test-threads=1` exit 0 (711 passed, 1 ignored).
+- `npm run typecheck` exit 0; `npm test` exit 0 (362 passed, 19 platform skips, 0 failures).
+- Android `assembleDebug :core:test :app:testDebugUnitTest lintDebug` exit 0 (104 tasks).
+- iOS: not compiled here; only static review.
+
+## Requested hardening fixes (committed before the sub-merge)
 
 - Host proactive visibility uses a shared internal-entry flag in storage, actors and every client. An exact `NO_UPDATE` stays private during streaming or an explicit send; a useful final is published without its scheduled prompt. Scheduled turns do not coalesce with a person's queued messages or become recovered user requests. Host queries, mirrors, trace, speech, approvals, quotes, bookmarks and Library honour visibility. Regression tests cover real ACP fixtures, store queries, stale mirrors and client classification.
 - A scheduled turn's replacement of a published artifact no longer overwrites or hides it: the new HTML waits as `<id>.staged.html` beside its own metadata and lands only when the turn promotes a useful result. A silent, failed or stopped check-in leaves the user's version and title untouched, and routines, rooms and bot requests still publish straight into the Library, as before.

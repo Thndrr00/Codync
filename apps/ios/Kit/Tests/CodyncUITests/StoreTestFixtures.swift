@@ -95,6 +95,10 @@ actor FakeRemote: RemoteTransport {
             replyTos.append(b["replyTo"])
             let entry = #"{"id":"e\#(sent.count)","seq":\#(sent.count),"botId":"\#(b["botId"] ?? "")","rev":\#(sent.count),"kind":"user","turn":1,"data":{"text":"\#(b["text"] ?? "")","clientNonce":"\#(b["clientNonce"] ?? "")"},"createdAt":1,"updatedAt":1}"#
             return Data(#"{"entry":\#(entry)}"#.utf8)
+        case "startCall":
+            // A fresh credential per provider session, so a test can tell a replaced session from the first.
+            let n = calls.filter { $0 == "startCall" }.count
+            return Data(#"{"instructions":"Be the relay.","tools":[],"credential":"token-\#(n)"}"#.utf8)
         default:
             return Data("{}".utf8)
         }

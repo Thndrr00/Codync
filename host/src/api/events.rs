@@ -81,14 +81,20 @@ pub fn events_stream(
         "screen": hub.screen.state(),
     });
     catch_up.insert(0, hello);
+    // What the voice of a call this device holds should have heard while it was away.
+    catch_up.extend(crate::chat::calls::replay(caller.device_key()));
 
     let local = matches!(caller, Caller::Local);
+    let key = caller.device_key().to_owned();
     let guard = Arc::new(matches!(client, Some("ios" | "android")).then(|| PhoneClientGuard::new(hub.clone())));
     let tail = live.filter_map(move |msg| {
         let _keep = guard.clone();
+        let key = key.clone();
         async move {
             match msg {
                 Ok(v) if !local && v["type"].as_str().is_some_and(|t| LOCAL_EVENTS.contains(&t)) => None,
+                // What a call's voice should say goes to the device holding that call only.
+                Ok(v) if v["type"] == "call" && v["owner"] != key.as_str() => None,
                 Ok(v) => Some(v),
                 // Lagged: tell the client to resync from its last rev.
                 Err(_) => Some(json!({"type": "resync"})),

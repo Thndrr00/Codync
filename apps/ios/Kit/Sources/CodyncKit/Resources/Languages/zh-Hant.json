@@ -715,7 +715,7 @@
   "Compact": "緊湊",
   "Minimal": "最小",
   "The Dynamic Island shows the same Live Activity as the Lock Screen, so this switch turns off both.": "靈動島和鎖定螢幕用的是同一個實時活動，所以這個開關會同時關掉兩邊。",
-  "Starts when you send a task from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "從這臺 iPhone 發出任務時開始。可以看進度，Bot 需要你時再開啟對話。",
+  "Starts when you send a task or call a bot from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "從這臺 iPhone 發出任務或和 Bot 通話時開始。可以看進度，Bot 需要你時再開啟對話。",
   "The bot in its mood, its current step in the state's color, the running time, a thinking orb and its progress. When the bot needs you, Review opens the request.": "顯示 Bot 的狀態、當前步驟（顏色跟著狀態走）、已執行時間、一個思考球和進度。需要你時，點「檢視」開啟請求。",
   "The bot and a thinking orb beside the camera, outlined in the state's color. The orb becomes a check or warning when the task ends.": "攝像頭旁邊是 Bot 和一個思考球，描邊顏色跟著狀態走。任務結束時，球會變成對勾或警告。",
   "Just the orb when iOS displays multiple Live Activities.": "iOS 同時顯示多個實時活動時，只留下這個球。",
@@ -1228,5 +1228,9 @@
   "Open the call": "打開這通電話",
   "Opens the call": "打開這通電話",
   "Loading the call": "正在載入這通電話",
-  "Couldn't load the call.": "無法載入這通電話。"
+  "Couldn't load the call.": "無法載入這通電話。",
+  "Connecting the call": "正在連接通話",
+  "On a call · Listening": "通話中 · 聆聽",
+  "On a call · Speaking": "通話中 · 說話",
+  "Call paused": "通話已暫停"
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callConversation, hidingCalls, withCallEntries } from './calls.ts'
+import { callConversation, hidingCalls, parseCallCue, withCallEntries } from './calls.ts'
 import type { Entry } from './models.ts'
 
 const entry = (id: string, kind: string, at: number, data: Entry['data']): Entry => ({
@@ -45,4 +45,12 @@ test("a call's own entries fill in what the loaded chat doesn't hold", () => {
   const merged = withCallEntries(live, fetched)
   assert.deepEqual(callConversation(merged, line).map((m) => `${m.speaker}: ${m.text}`), ['user: from before the loaded chat', 'bot: its reply'])
   assert.equal(withCallEntries(merged, fetched).length, merged.length, 'each entry once')
+})
+
+test("the computer's cues for a call's voice parse by kind; a new kind is passed over", () => {
+  assert.deepEqual(parseCallCue({ type: 'call', call: 'c', kind: 'progress', text: 'Mika: Running tests', owner: 'local', seq: 7 }), {
+    call: 'c', kind: 'progress', text: 'Mika: Running tests', seq: 7,
+  })
+  assert.equal(parseCallCue({ type: 'call', call: 'c', kind: 'whisper', text: '?', seq: 8 }), null)
+  assert.equal(parseCallCue({ type: 'call', kind: 'reply', text: 'no call', seq: 9 }), null)
 })

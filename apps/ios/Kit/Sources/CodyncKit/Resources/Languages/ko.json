@@ -715,7 +715,7 @@
   "Compact": "축소형",
   "Minimal": "최소형",
   "The Dynamic Island shows the same Live Activity as the Lock Screen, so this switch turns off both.": "Dynamic Island는 잠금 화면과 같은 실시간 현황을 표시하므로 이 스위치를 끄면 둘 다 꺼집니다.",
-  "Starts when you send a task from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "이 iPhone에서 작업을 보내면 시작됩니다. 진행 상황을 확인하고 봇이 나를 필요로 할 때 대화를 여세요.",
+  "Starts when you send a task or call a bot from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "이 iPhone에서 작업을 보내거나 봇에게 전화를 걸면 시작됩니다. 진행 상황을 확인하고 봇이 나를 필요로 할 때 대화를 여세요.",
   "The bot in its mood, its current step in the state's color, the running time, a thinking orb and its progress. When the bot needs you, Review opens the request.": "봇의 표정, 상태 색상의 현재 단계, 실행 시간, 생각 중인 구체와 진행 상황을 표시합니다. 도움이 필요하면 검토를 눌러 요청을 엽니다.",
   "The bot and a thinking orb beside the camera, outlined in the state's color. The orb becomes a check or warning when the task ends.": "카메라 옆에 봇과 생각 중인 구체가 상태 색상의 테두리로 표시됩니다. 작업이 끝나면 구체가 체크 표시나 경고로 바뀝니다.",
   "Just the orb when iOS displays multiple Live Activities.": "iOS가 여러 실시간 현황을 표시할 때는 구체만 표시됩니다.",
@@ -1228,5 +1228,9 @@
   "Open the call": "통화 열기",
   "Opens the call": "통화를 엽니다",
   "Loading the call": "통화를 불러오는 중",
-  "Couldn't load the call.": "통화를 불러올 수 없습니다."
+  "Couldn't load the call.": "통화를 불러올 수 없습니다.",
+  "Connecting the call": "통화 연결 중",
+  "On a call · Listening": "통화 중 · 듣는 중",
+  "On a call · Speaking": "통화 중 · 말하는 중",
+  "Call paused": "통화 일시정지됨"
 }

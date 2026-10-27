@@ -3,13 +3,17 @@
 //! voice's tool calls (`callTool`, [`tools`]), keeps the transcript as it is spoken (`callLines`, and whatever lines
 //! the app still holds ride along with `callTool` and `endCall`) and writes the call's line when it ends (`endCall`).
 //! What a call sends the bot carries its id (`call`), and so do the bot's replies while it lasts: the apps show those
-//! only in the call's conversation, which its line opens.
+//! only in the call's conversation, which its line opens. While it lasts, the bot's replies, approvals, failures
+//! and progress reach the voice from here ([`announce`]).
 
+mod announce;
 pub mod context;
 mod project;
+mod speech;
 mod sweep;
 pub mod tools;
 
+pub use announce::replay;
 pub use sweep::sweep_loop;
 
 use crate::LockExt;
@@ -66,19 +70,34 @@ struct CallState {
     /// When the call last heard from its app.
     #[serde(default)]
     last: i64,
+    /// The device that holds the call (`Caller::device_key`): only it hears what the voice should say.
+    #[serde(default)]
+    owner: String,
+    /// What carries its voice now: how what it hears is worded ([`announce`]).
+    #[serde(default)]
+    mode: CallMode,
 }
 
 impl CallState {
     fn new(bot: &str) -> Self {
         let now = now_ms();
-        Self { bot: bot.to_owned(), lines: Vec::new(), handoff: 0, started: now, last: now }
+        Self {
+            bot: bot.to_owned(),
+            lines: Vec::new(),
+            handoff: 0,
+            started: now,
+            last: now,
+            owner: String::new(),
+            mode: CallMode::default(),
+        }
     }
 }
 
 /// What carries a call's voice: a realtime provider, speech to text and back, or the device's own speech.
-#[derive(Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum CallMode {
+    #[default]
     Realtime,
     Speech,
     Device,
@@ -120,13 +139,36 @@ fn begun(store: &Store, bot: &str, call: &str) -> Result<Option<CallState>> {
     Ok(Some(CallState::new(bot)))
 }
 
-/// A message said on call `call` reached `bot`'s chat (`send`): the call is alive, and the host knows of it even
-/// if its `startCall` never came.
-pub fn heard(store: &Store, bot: &str, call: &str) -> Result<()> {
-    let _one = STATE.locked();
-    match begun(store, bot, call)? {
-        Some(s) if s.bot == bot => save(store, call, &s),
-        _ => Ok(()),
+/// A message said on call `call` reached `bot`'s chat (`send`) from device `owner`: the call is alive, and the host
+/// knows of it even if its `startCall` never came (then it's an on-device or speech call: only those send
+/// messages), and its voice keeps hearing the bot's work.
+pub fn heard(hub: &Arc<Hub>, bot: &str, call: &str, owner: &str) -> Result<()> {
+    {
+        let _one = STATE.locked();
+        let known = state(&hub.store, call).is_some();
+        match begun(&hub.store, bot, call)? {
+            Some(mut s) if s.bot == bot => {
+                if !known {
+                    s.mode = CallMode::Device;
+                }
+                if s.owner.is_empty() {
+                    owner.clone_into(&mut s.owner);
+                }
+                save(&hub.store, call, &s)?;
+            }
+            _ => return Ok(()),
+        }
+    }
+    announce::watch(hub, call, bot);
+    Ok(())
+}
+
+/// As the host starts: the calls still on hear the bot's work again (the sweep ends abandoned ones).
+pub fn rewatch(hub: &Arc<Hub>) {
+    for call in sweep::open_calls(&hub.store) {
+        if let Some(s) = state(&hub.store, &call) {
+            announce::watch(hub, &call, &s.bot);
+        }
     }
 }
 
@@ -191,24 +233,30 @@ fn append(s: &mut CallState, lines: Vec<CallLine>) {
     s.handoff = s.handoff.saturating_sub(over);
 }
 
-/// `startCall`: the call is on (again, for a session the provider replaced: its transcript stays). Hands back what
-/// the client needs: the voice's instructions and tools, and a realtime provider's credential.
-pub async fn start(hub: &Arc<Hub>, b: &Value) -> Result<Value> {
+/// `startCall` from device `owner`: the call is on (again, for a session the provider replaced: its transcript
+/// stays). Hands back what the client needs: the voice's instructions and tools, and a realtime provider's credential.
+pub async fn start(hub: &Arc<Hub>, b: &Value, owner: &str) -> Result<Value> {
     let bot = b["botId"].as_str().ok_or_else(|| anyhow!("`botId` is required"))?;
     let call = checked(b["callId"].as_str().unwrap_or_default())?;
     let mode = if b["mode"].is_null() { CallMode::Realtime } else { CallMode::deserialize(&b["mode"])? };
     let cfg = hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?.config;
-    {
+    let so_far = {
         let _one = STATE.locked();
         match begun(&hub.store, bot, call)? {
             Some(s) if s.bot != bot => bail!("that call belongs to another bot"),
-            Some(s) => save(&hub.store, call, &s)?,
+            // A session the provider replaced, maybe on another device or in another mode now.
+            Some(s) => {
+                let s = CallState { owner: owner.to_owned(), mode, ..s };
+                save(&hub.store, call, &s)?;
+                s.lines
+            }
             None => bail!("that call has ended"),
         }
-    }
+    };
+    announce::watch(hub, call, bot);
     let provider = b["provider"].as_str().map(crate::voice::Provider::parse).transpose()?;
     let mut out = json!({
-        "instructions": context::instructions(hub, &cfg, provider, b["language"].as_str()).await,
+        "instructions": context::instructions(hub, &cfg, provider, b["language"].as_str(), &so_far).await,
         "tools": tools::declarations(),
     });
     if let (Some(p), CallMode::Realtime) = (provider, mode) {
@@ -220,17 +268,21 @@ pub async fn start(hub: &Arc<Hub>, b: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// `callLines`: what was just said on the call (`raw`, see [`transcript`]).
-pub fn add_lines(store: &Store, call: &str, raw: &Value) -> Result<()> {
+/// `callLines`: what was just said on the call (`raw`, see [`transcript`]). Its voice keeps hearing the bot's work
+/// (again, after a host restart).
+pub fn add_lines(hub: &Arc<Hub>, call: &str, raw: &Value) -> Result<()> {
     let lines = transcript(raw);
+    let _one = STATE.locked();
+    let Some(mut s) = state(&hub.store, call) else {
+        return if lines.is_empty() { Ok(()) } else { Err(anyhow!("no such call")) };
+    };
+    announce::watch(hub, call, &s.bot);
     if lines.is_empty() {
         return Ok(());
     }
-    let _one = STATE.locked();
-    let mut s = state(store, call).ok_or_else(|| anyhow!("no such call"))?;
     s.last = now_ms();
     append(&mut s, lines);
-    save(store, call, &s)
+    save(&hub.store, call, &s)
 }
 
 /// What the user said since the bot last heard from the call, word for word; the bot hears it now.
@@ -432,11 +484,15 @@ mod tests {
         // No agent to run: the title writer gives up at once.
         let cfg = BotConfig { backend: "none".into(), ..context::tests::bot(&id, "Mika", "/tmp") };
         hub.store.save_bot(&cfg).unwrap();
-        let started = start(&hub, &json!({"botId": id, "callId": "c1", "mode": "device"})).await.unwrap();
+        let started = start(&hub, &json!({"botId": id, "callId": "c1", "mode": "device"}), "phone").await.unwrap();
         assert!(started["instructions"].as_str().unwrap().contains("voice relay for Mika"));
         assert!(started["tools"].as_array().unwrap().iter().any(|t| t["name"] == "search_memory"));
         assert!(started.get("credential").is_none(), "an on-device call has no provider");
-        add_lines(&hub.store, "c1", &json!([{"from": "user", "text": "首頁", "at": 1}])).unwrap();
+        add_lines(&hub, "c1", &json!([{"from": "user", "text": "首頁", "at": 1}])).unwrap();
+        // A provider session that replaces a dropped one picks up from what was said.
+        let again = start(&hub, &json!({"botId": id, "callId": "c1", "mode": "device"}), "phone").await.unwrap();
+        let instructions = again["instructions"].as_str().unwrap();
+        assert!(instructions.contains("This call so far") && instructions.contains("User: 首頁"), "{instructions}");
 
         // The rest of what the user said comes with the tool call that hands it on.
         let unsent = json!([{"from": "user", "text": "改成藍色", "at": 2}, {"from": "voice", "text": "好"}]);
@@ -456,21 +512,27 @@ mod tests {
         assert_eq!(line.data["transcript"].as_array().map(Vec::len), Some(4), "with the lines the app still held");
         assert!(end(&hub, &id, "c1", 31, &last).unwrap().is_none(), "an app trying again ends it once");
         assert!(bot_of(&hub.store, "c1").is_none(), "an ended call takes no more lines");
-        assert!(start(&hub, &json!({"botId": id, "callId": "c1", "mode": "device"})).await.is_err());
+        assert!(start(&hub, &json!({"botId": id, "callId": "c1", "mode": "device"}), "phone").await.is_err());
         assert!(of_turn(&hub.store, &[relayed[0].id.clone()]).is_none(), "its replies show again");
         assert!(tools::call(&hub, "c1", "bot_status", &json!({}), &Value::Null).await["error"].is_string());
     }
 
-    #[test]
-    fn a_line_sent_again_is_kept_once() {
-        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        heard(&store, "b", "c1").unwrap();
+    #[tokio::test]
+    async fn a_line_sent_again_is_kept_once() {
+        let hub = context::tests::hub();
+        heard(&hub, "b", "c1", "phone").unwrap();
         let batch = json!([{"from": "user", "text": "hi", "at": 1, "id": "l1"}, {"from": "voice", "text": "Hello.", "id": "l2"}]);
-        add_lines(&store, "c1", &batch).unwrap();
+        add_lines(&hub, "c1", &batch).unwrap();
         // The answer to the first send was lost, so the app sends the batch again, and one more line.
-        add_lines(&store, "c1", &batch).unwrap();
-        add_lines(&store, "c1", &json!([{"from": "user", "text": "hi", "id": "l3"}])).unwrap();
-        let lines: Vec<String> = state(&store, "c1").unwrap().lines.iter().map(|l| l.text.clone()).collect();
+        add_lines(&hub, "c1", &batch).unwrap();
+        add_lines(&hub, "c1", &json!([{"from": "user", "text": "hi", "id": "l3"}])).unwrap();
+        let s = state(&hub.store, "c1").unwrap();
+        assert_eq!(
+            (s.owner.as_str(), s.mode),
+            ("phone", CallMode::Device),
+            "a call first heard by a message is on-device"
+        );
+        let lines: Vec<String> = s.lines.iter().map(|l| l.text.clone()).collect();
         assert_eq!(lines, ["hi", "Hello.", "hi"], "repeats skipped, a new line with the same words kept");
     }
 

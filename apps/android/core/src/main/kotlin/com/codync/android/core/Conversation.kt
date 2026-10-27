@@ -156,6 +156,8 @@ sealed interface MirrorEvent {
     data class Screen(val value: JsonObject) : MirrorEvent
     /** An artifact was published, updated or renamed (the catch-up replays it too), never a checkpoint. */
     data class ArtifactChanged(val artifact: Artifact) : MirrorEvent
+    /** For the voice of a call on this device: live only, never a checkpoint. */
+    data class Call(val cue: CallCue) : MirrorEvent
     data object Resync : MirrorEvent
     data object Ignored : MirrorEvent
 
@@ -170,6 +172,7 @@ sealed interface MirrorEvent {
             "screen" -> Screen(value.getValue("screen").jsonObject)
             // One this app can't read is passed over rather than fetching everything again: a card or the Library reads it again.
             "artifact" -> runCatching { ArtifactChanged(Artifact.decode(value.getValue("artifact"))) }.getOrDefault(Ignored)
+            "call" -> CallCue.decode(value)?.let(::Call) ?: Ignored
             "resync" -> Resync
             // Match the existing clients: unknown events do not advance the cursor.
             else -> Ignored

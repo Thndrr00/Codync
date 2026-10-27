@@ -80,18 +80,11 @@ class EntryVisibilityTest {
     }
 
     @Test fun `a call says only a promoted public result`() {
-        val gate = VoiceReplyGate("bot", 0, emptyList())
+        // The computer decides what a call hears (chat::calls::announce); the mirror still hides internal rows, so a
+        // scheduled reply never reaches the call's entries before the host promotes it.
         val hidden = entry("agent")
-        assertTrue(gate.observe(listOf(hidden), listOf(Bot("bot", "Bot"))).isEmpty())
+        assertTrue(listOf(hidden).visibleEntries().isEmpty())
         val promoted = hidden.copy(rev = 2, data = JsonObject(hidden.data + ("internal" to JsonPrimitive(false))))
-        assertEquals(listOf(VoiceCue("Scheduled work")), gate.observe(listOf(promoted), listOf(Bot("bot", "Bot"))))
-    }
-
-    @Test fun `a late older visible copy cannot make a private reply speak`() {
-        val hidden = entry("agent").copy(rev = 4)
-        val gate = VoiceReplyGate("bot", 0, listOf(hidden))
-        val stale = hidden.copy(rev = 3, data = JsonObject(hidden.data + ("internal" to JsonPrimitive(false))))
-        assertTrue(gate.observe(listOf(stale), listOf(Bot("bot", "Bot"))).isEmpty())
-        assertTrue(gate.observe(listOf(stale), listOf(Bot("bot", "Bot"))).isEmpty())
+        assertEquals(listOf(promoted), listOf(promoted).visibleEntries())
     }
 }

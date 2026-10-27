@@ -95,6 +95,11 @@ final class CallLink {
 
     func notice(_ text: String) -> String { "[Notice] \(text)" }
 
+    static let progressTag = "[Progress]"
+
+    /// What the bot is doing, as the voice's instructions name it.
+    func progress(_ text: String) -> String { "\(Self.progressTag) \(text)" }
+
     /// The call is over: its line in the chat, with what's left of the transcript.
     func end(seconds: Int) {
         serial { [self] in await model.endCall(botId, seconds: seconds, call: call, lines: drain(withOpen: true)) }

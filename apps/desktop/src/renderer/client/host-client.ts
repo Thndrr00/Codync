@@ -11,6 +11,7 @@ import {
   type Usage,
 } from '@shared/models'
 import type { Artifact, ArtifactChunk, LibraryItem } from '@shared/artifacts'
+import { parseCallCue, type CallCue } from '@shared/calls'
 
 /** How a client reaches a host API. Only loopback today: the computer's own host or an SSH tunnel. */
 export type HostRoute = 'loopback' | 'direct' | 'relay'
@@ -72,6 +73,8 @@ export type HostEvent =
   | { type: 'screen'; screen: ScreenState }
   | { type: 'accessRequests'; requests: AccessRequest[] }
   | { type: 'cloud'; cloud: CloudStatus }
+  /** For the voice of a call in this app (only the computer's own apps receive this computer's calls' cues). */
+  | { type: 'call'; cue: CallCue }
   | { type: 'resync' }
   /** An event this app version couldn't read (host newer/older than the app). */
   | { type: 'undecodable'; kind: string }
@@ -118,6 +121,10 @@ export function parseEvent(line: string): HostEvent | null {
       return { type, requests: (raw.requests as AccessRequest[]) ?? [] }
     case 'cloud':
       return raw.cloud ? { type, cloud: raw.cloud as CloudStatus } : null
+    case 'call': {
+      const cue = parseCallCue(raw)
+      return cue ? { type, cue } : null
+    }
     case 'resync':
       return { type }
     default:

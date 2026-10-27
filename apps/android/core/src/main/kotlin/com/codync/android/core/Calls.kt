@@ -38,6 +38,30 @@ interface CallLink {
     /** How a final reply of the bot reaches the voice. */
     fun reply(text: String): String
     fun notice(text: String): String = "[Notice] $text"
+    /** What the bot is doing, as the voice's instructions name it. */
+    fun progress(text: String): String = "$PROGRESS_TAG $text"
+}
+
+const val PROGRESS_TAG = "[Progress]"
+
+/**
+ * Something the computer tells a call's voice while the call lasts: the bot's reply, a notice (an approval waiting, a
+ * failure) or what the bot is doing. Ready to say: worded for the call's voice, in a group with who said it. `seq`
+ * rises with each cue of the call: one heard already (replayed after a reconnect) is skipped.
+ */
+data class CallCue(val call: String, val kind: Kind, val text: String, val seq: Long) {
+    enum class Kind { Reply, Notice, Progress }
+
+    companion object {
+        /** A `call` event, or null for one this app can't use (a newer host's new kind is passed over). */
+        fun decode(value: JsonObject): CallCue? {
+            val kind = Kind.entries.firstOrNull { it.name.lowercase() == value["kind"]?.jsonPrimitive?.contentOrNull } ?: return null
+            val call = value["call"]?.jsonPrimitive?.contentOrNull ?: return null
+            val text = value["text"]?.jsonPrimitive?.contentOrNull ?: return null
+            val seq = value["seq"]?.jsonPrimitive?.longOrNull ?: return null
+            return CallCue(call, kind, text, seq)
+        }
+    }
 }
 
 /** One function the voice can call, in JSON Schema form; each provider spells it its own way. */

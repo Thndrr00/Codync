@@ -9,6 +9,8 @@ public enum HostEvent: Sendable {
     case screen(ScreenState)
     /// An artifact published or renamed (the catch-up replays it too).
     case artifact(Artifact)
+    /// For the voice of a call on this device (only the device holding the call receives it).
+    case call(CallCue)
     case resync
     /// An event this app version couldn't decode (host newer/older than the app).
     case undecodable(type: String)
@@ -124,6 +126,8 @@ public struct HostClient: Sendable {
         case "artifact":
             // Not worth a rewind: a card or the Library reads the artifact again.
             return (try? d.decode(ArtifactWrap.self, from: data)).map { .artifact($0.artifact) }
+        case "call":
+            return (try? d.decode(CallCue.self, from: data)).map { .call($0) }
         case "resync":
             return .resync
         default:

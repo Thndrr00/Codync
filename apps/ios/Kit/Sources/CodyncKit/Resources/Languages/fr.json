@@ -715,7 +715,7 @@
   "Compact": "Compact",
   "Minimal": "Minimal",
   "The Dynamic Island shows the same Live Activity as the Lock Screen, so this switch turns off both.": "La Dynamic Island affiche la même activité en direct que l’écran verrouillé ; ce commutateur désactive donc les deux.",
-  "Starts when you send a task from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "Démarre lorsque vous envoyez une tâche depuis cet iPhone. Suivez sa progression, puis ouvrez la conversation lorsque le bot a besoin de vous.",
+  "Starts when you send a task or call a bot from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "Démarre lorsque vous envoyez une tâche ou appelez un bot depuis cet iPhone. Suivez sa progression, puis ouvrez la conversation lorsque le bot a besoin de vous.",
   "The bot in its mood, its current step in the state's color, the running time, a thinking orb and its progress. When the bot needs you, Review opens the request.": "Le bot et son humeur, l’étape en cours dans la couleur de l’état, la durée, une sphère de réflexion et sa progression. Lorsque le bot a besoin de vous, Examiner ouvre la demande.",
   "The bot and a thinking orb beside the camera, outlined in the state's color. The orb becomes a check or warning when the task ends.": "Le bot et une sphère de réflexion près de la caméra, entourés de la couleur de l’état. La sphère devient une coche ou un avertissement à la fin de la tâche.",
   "Just the orb when iOS displays multiple Live Activities.": "Uniquement la sphère lorsque iOS affiche plusieurs activités en direct.",
@@ -1228,5 +1228,9 @@
   "Open the call": "Ouvrir l'appel",
   "Opens the call": "Ouvre l'appel",
   "Loading the call": "Chargement de l'appel",
-  "Couldn't load the call.": "Impossible de charger l'appel."
+  "Couldn't load the call.": "Impossible de charger l'appel.",
+  "Connecting the call": "Connexion de l’appel",
+  "On a call · Listening": "En appel · À l’écoute",
+  "On a call · Speaking": "En appel · Parle",
+  "Call paused": "Appel en pause"
 }

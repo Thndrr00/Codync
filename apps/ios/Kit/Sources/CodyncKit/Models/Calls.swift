@@ -23,6 +23,19 @@ public struct CallSession: Sendable {
     }
 }
 
+/// Something the computer tells a call's voice while the call lasts: the bot's reply, a notice (an approval
+/// waiting, a failure) or what the bot is doing.
+public struct CallCue: Decodable, Sendable, Equatable {
+    public enum Kind: String, Decodable, Sendable { case reply, notice, progress }
+    /// The call's id.
+    public var call: String
+    public var kind: Kind
+    /// Ready to say: worded for the call's voice, and in a group with who said it.
+    public var text: String
+    /// Rises with each cue of the call: one heard already (replayed after a reconnect) is skipped.
+    public var seq: Int64
+}
+
 /// One message of a call's conversation.
 public struct CallMessage: Hashable, Sendable {
     public enum Speaker: Sendable { case user, voice, voiceToBot, bot }

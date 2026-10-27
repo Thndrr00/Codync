@@ -169,6 +169,7 @@ impl Hub {
                 self.spawn_bot(row.config);
             }
         }
+        crate::chat::calls::rewatch(self);
         crate::routines::start(self);
         crate::analytics::start(self);
         Ok(())

@@ -170,3 +170,22 @@ async fn renaming_an_artifact_keeps_the_reactions_its_card_gets_meanwhile() {
     assert_eq!(reactions, all, "no rename wrote over a reaction");
     assert_eq!(card.data["artifact"]["title"], "Title 39");
 }
+
+#[tokio::test]
+async fn what_a_calls_voice_should_say_reaches_only_the_device_holding_it() {
+    let f = Fixture::new();
+    let phone = Caller::Device { key: "phone".into(), scopes: vec![] };
+    let other = Caller::Device { key: "tablet".into(), scopes: vec![] };
+    let streams = [&phone, &other, &Caller::Local].map(|c| Box::pin(events_stream(&f.hub, 0, None, c).unwrap()));
+    let _ =
+        f.hub.events.send(json!({"type": "call", "call": "c1", "owner": "phone", "kind": "reply", "text": "Done."}));
+    let mut heard = Vec::new();
+    for mut stream in streams {
+        let mut got = false;
+        while let Ok(Some(event)) = tokio::time::timeout(std::time::Duration::from_millis(50), stream.next()).await {
+            got |= event["type"] == "call";
+        }
+        heard.push(got);
+    }
+    assert_eq!(heard, [true, false, false]);
+}

@@ -102,7 +102,7 @@ mod tests {
     async fn an_abandoned_call_gets_its_line() {
         let (hub, id) = hub_with_bot();
         // A message said on a call whose app then went away (its startCall never reached the host).
-        heard(&hub.store, &id, "gone").unwrap();
+        heard(&hub, &id, "gone", "phone").unwrap();
         assert!(is_live(&hub.store, "gone"));
         sweep(&hub, now_ms());
         assert!(is_live(&hub.store, "gone"), "a call heard from just now stays open");
@@ -116,7 +116,7 @@ mod tests {
     #[tokio::test]
     async fn a_call_resumed_before_the_sweep_ends_it_stays_open() {
         let (hub, id) = hub_with_bot();
-        heard(&hub.store, &id, "back").unwrap();
+        heard(&hub, &id, "back", "phone").unwrap();
         let later = now_ms() + ABANDONED_MS + 1;
         // What the sweep read first: quiet for long enough.
         let read = state(&hub.store, "back").unwrap();
@@ -132,7 +132,7 @@ mod tests {
     #[tokio::test]
     async fn a_call_its_bot_works_on_stays_open() {
         let (hub, id) = hub_with_bot();
-        heard(&hub.store, &id, "long").unwrap();
+        heard(&hub, &id, "long", "phone").unwrap();
         // The app last spoke long ago: the user asked for a long job and stayed quiet.
         let mut s = state(&hub.store, "long").unwrap();
         (s.started, s.last) = (0, 0);

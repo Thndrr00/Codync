@@ -715,7 +715,7 @@
   "Compact": "Kompakt",
   "Minimal": "Minimal",
   "The Dynamic Island shows the same Live Activity as the Lock Screen, so this switch turns off both.": "Die Dynamic Island zeigt dieselbe Live-Aktivität wie der Sperrbildschirm. Dieser Schalter deaktiviert daher beide.",
-  "Starts when you send a task from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "Beginnt, wenn du von diesem iPhone eine Aufgabe sendest. Verfolge den Fortschritt und öffne das Gespräch, wenn dein Bot dich braucht.",
+  "Starts when you send a task or call a bot from this iPhone. Follow its progress, then open the conversation when your bot needs you.": "Beginnt, wenn du von diesem iPhone eine Aufgabe sendest oder einen Bot anrufst. Verfolge den Fortschritt und öffne das Gespräch, wenn dein Bot dich braucht.",
   "The bot in its mood, its current step in the state's color, the running time, a thinking orb and its progress. When the bot needs you, Review opens the request.": "Der Bot mit seiner Stimmung, sein aktueller Schritt in der Statusfarbe, die Laufzeit, eine Denkkugel und sein Fortschritt. Wenn der Bot dich braucht, öffnet „Prüfen“ die Anfrage.",
   "The bot and a thinking orb beside the camera, outlined in the state's color. The orb becomes a check or warning when the task ends.": "Der Bot und eine Denkkugel neben der Kamera, mit einer Umrandung in der Statusfarbe. Die Kugel wird am Aufgabenende zu einem Häkchen oder Warnzeichen.",
   "Just the orb when iOS displays multiple Live Activities.": "Nur die Kugel, wenn iOS mehrere Live-Aktivitäten anzeigt.",
@@ -1228,5 +1228,9 @@
   "Open the call": "Anruf öffnen",
   "Opens the call": "Öffnet den Anruf",
   "Loading the call": "Anruf wird geladen",
-  "Couldn't load the call.": "Der Anruf konnte nicht geladen werden."
+  "Couldn't load the call.": "Der Anruf konnte nicht geladen werden.",
+  "Connecting the call": "Anruf wird verbunden",
+  "On a call · Listening": "Im Anruf · Hört zu",
+  "On a call · Speaking": "Im Anruf · Spricht",
+  "Call paused": "Anruf pausiert"
 }

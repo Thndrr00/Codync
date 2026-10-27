@@ -132,7 +132,7 @@ async fn the_lead_speaks_first_on_a_call() {
     let lead = make(&f.hub, f.cfg(NAME)).unwrap();
     let other = f.hub.create_bot(f.cfg("Other")).unwrap()["id"].as_str().unwrap().to_owned();
     call_started(&f.hub, &other, None).unwrap();
-    crate::chat::calls::heard(&f.hub.store, &lead, "c1").unwrap();
+    crate::chat::calls::heard(&f.hub, &lead, "c1", "local").unwrap();
     call_started(&f.hub, &lead, Some("c1")).unwrap();
     until(|| f.hub.runtime(&lead).status == BotStatus::Idle && !f.agent_texts(&lead).is_empty(), "the lead opens")
         .await;

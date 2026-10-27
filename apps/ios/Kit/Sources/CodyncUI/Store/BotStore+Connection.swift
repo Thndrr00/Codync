@@ -46,10 +46,9 @@ extension BotStore {
     }
 
     /// Audio owns this subscription, so background calls don't depend on SwiftUI updates.
-    func beginVoiceCall(_ id: UUID, botId: String, speak: @escaping @MainActor (String) -> Void,
-                        announce: (@MainActor (String) -> Void)? = nil, end: @escaping @MainActor () -> Void) {
+    func beginVoiceCall(_ id: UUID, hear: @escaping @MainActor (CallCue) -> Void, end: @escaping @MainActor () -> Void) {
         guard !retired, voiceCalls[id] == nil else { return }
-        voiceCalls[id] = VoiceCall(botId: botId, startRev: rev, speak: speak, announce: announce ?? speak, end: end)
+        voiceCalls[id] = VoiceCall(hear: hear, end: end)
         if streamTask == nil { restartStream() }
     }
 

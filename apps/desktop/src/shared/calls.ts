@@ -12,6 +12,26 @@ export interface CallLine {
   id?: string
 }
 
+/** Something the computer tells a call's voice while the call lasts: the bot's reply, a notice (an approval waiting,
+ * a failure) or what the bot is doing. Ready to say: worded for the call's voice, in a group with who said it. */
+export interface CallCue {
+  call: string
+  kind: 'reply' | 'notice' | 'progress'
+  text: string
+  /** Rises with each cue of the call: one heard already (replayed after a reconnect) is skipped. */
+  seq: number
+}
+
+const CUE_KINDS: ReadonlySet<string> = new Set(['reply', 'notice', 'progress'])
+
+/** A `call` event, or null for one this app can't use (a newer host's new kind is passed over). */
+export function parseCallCue(raw: Record<string, unknown>): CallCue | null {
+  const { call, kind, text, seq } = raw
+  return typeof call === 'string' && typeof kind === 'string' && CUE_KINDS.has(kind) && typeof text === 'string' && typeof seq === 'number'
+    ? { call, kind: kind as CallCue['kind'], text, seq }
+    : null
+}
+
 /** One message of a call's conversation. */
 export interface CallMessage {
   speaker: 'user' | 'voice' | 'voiceToBot' | 'bot'

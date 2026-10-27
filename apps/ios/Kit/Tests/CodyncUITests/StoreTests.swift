@@ -4,6 +4,11 @@ import Testing
 @testable import CodyncKit
 @testable import CodyncUI
 
+/// A scripted transport: tests set its link state and push events; it records what the store asked.
+
+
+
+
 @MainActor @Test func voiceCallSendsAndReceivesInBackgroundWithoutViewUpdates() async throws {
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
@@ -17,7 +22,7 @@ import Testing
 
     let call = UUID()
     var spoken: [String] = []
-    store.beginVoiceCall(call, botId: "b1", speak: { spoken.append($0) }, end: {})
+    store.beginVoiceCall(call, hear: { spoken.append($0.text) }, end: {})
     store.setActive(false)
     // Allow shutdown to run if backgrounding incorrectly scheduled one.
     try await Task.sleep(for: .milliseconds(30))
@@ -26,13 +31,10 @@ import Testing
     #expect(await fake.sent == ["spoken while backgrounded"])
     #expect(await fake.shutdownCount == 0)
 
-    let reply = #"{"type":"entry","entry":{"id":"reply","seq":2,"botId":"b1","rev":2,"kind":"agent","turn":1,"data":{"text":"The answer","final":true},"createdAt":1,"updatedAt":1}}"#
-    await fake.emit(reply)
+    // The computer tells the call what to say; another call's cue isn't this one's.
+    await fake.emit(#"{"type":"call","call":"\#(UUID().uuidString)","kind":"reply","text":"Another call","seq":1}"#)
+    await fake.emit(#"{"type":"call","call":"\#(call.uuidString)","kind":"reply","text":"The answer","seq":1}"#)
     #expect(await until { spoken == ["The answer"] })
-    await fake.emit(reply) // Event replays must not read the same reply twice.
-    await fake.emit(#"{"type":"entry","entry":{"id":"other","seq":4,"botId":"b2","rev":4,"kind":"agent","turn":1,"data":{"text":"Other bot","final":true},"createdAt":1,"updatedAt":1}}"#)
-    #expect(await until { store.chat("b2").last?.id == "other" })
-    #expect(spoken == ["The answer"])
 
     store.setActive(true)
     #expect(await fake.shutdownCount == 0)
@@ -53,8 +55,8 @@ import Testing
     await fake.emit(botEvent("b1", name: "Bot", rev: 1))
     #expect(await until { store.connection == .online })
     let first = UUID(), second = UUID()
-    store.beginVoiceCall(first, botId: "b1", speak: { _ in }, end: {})
-    store.beginVoiceCall(second, botId: "b1", speak: { _ in }, end: {})
+    store.beginVoiceCall(first, hear: { _ in }, end: {})
+    store.beginVoiceCall(second, hear: { _ in }, end: {})
     store.setActive(false)
     store.endVoiceCall(first)
     try await Task.sleep(for: .milliseconds(30))
@@ -74,13 +76,13 @@ import Testing
     #expect(await until { store.connection == .online })
     let call = UUID()
     var ended = false
-    store.beginVoiceCall(call, botId: "b1", speak: { _ in Issue.record("Retired call received speech") }, end: { ended = true })
+    store.beginVoiceCall(call, hear: { _ in Issue.record("Retired call received speech") }, end: { ended = true })
     store.setActive(false)
     store.retire()
     #expect(ended)
     #expect(await until { await fake.shutdownCount == 1 })
     store.send("must not send", to: "b1")
-    store.beginVoiceCall(UUID(), botId: "b1", speak: { _ in }, end: {})
+    store.beginVoiceCall(UUID(), hear: { _ in }, end: {})
     #expect(store.chat("b1").isEmpty)
     #expect(await fake.sent.isEmpty)
 }
@@ -204,8 +206,65 @@ import Testing
     account.retire()
 }
 
-/// Approvals reach a call as notices, replies as replies (a realtime operator words them differently).
-@MainActor @Test func voiceCallGetsApprovalsAsNotices() async throws {
+
+
+
+@MainActor @Test func readingOneChatDoesNotAcknowledgeAnother() async throws {
+    let (storage, suite) = context()
+    defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+    let fake = FakeRemote(.ready(.direct))
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
+    store.setActive(true)
+    defer { store.setActive(false) }
+    #expect(await until { await fake.subscribed })
+    await fake.emit(botEvent("b1", name: "Bot", rev: 1))
+    #expect(await until { store.connection == .online })
+    let token = UUID()
+    store.setReading(token, botId: "b1", active: true)
+    #expect(await until { await fake.readReceipts.count == 1 })
+    await fake.emit(#"{"type":"entry","entry":{"id":"other","seq":1,"botId":"b2","rev":2,"kind":"agent","turn":1,"data":{"text":"done","final":true},"createdAt":1,"updatedAt":1}}"#)
+    #expect(await until { store.chat("b2").last?.id == "other" })
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(await fake.readReceipts.count == 1)
+    await fake.emit(#"{"type":"entry","entry":{"id":"own","seq":2,"botId":"b1","rev":3,"kind":"agent","turn":1,"data":{"text":"done","final":true},"createdAt":1,"updatedAt":1}}"#)
+    #expect(await until { await fake.readReceipts.count == 2 })
+    for receipt in await fake.readReceipts {
+        let body = try #require(JSONSerialization.jsonObject(with: receipt) as? [String: Any])
+        #expect(body.keys.sorted() == ["botId"])
+        #expect(body["botId"] as? String == "b1")
+    }
+}
+
+
+
+
+
+
+@MainActor @Test func offlineTapReconnectsBeforeGivingUp() async throws {
+    let (storage, suite) = context()
+    defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+    // The first link can't reach the computer; a fresh attempt would.
+    let down = FakeRemote(.failed("Can't reach"))
+    let up = FakeRemote(.ready(.relay))
+    var made = 0
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in
+        made += 1
+        return made == 1 ? down : up
+    }
+    defer { store.retire() }
+    store.setActive(true)
+    #expect(await until { store.connection == .offline("Can't reach") })
+    store.stop("b1")
+    #expect(await until { await up.subscribed })
+    await up.emit(botEvent("b1", name: "Bot", rev: 1))
+    #expect(await until { await up.calls.contains("stop") })
+    #expect(store.lastError == nil)
+}
+
+
+/// The computer's cues reach a call once each: one replayed after a reconnect isn't said again, even after an engine
+/// switch.
+@MainActor @Test func voiceCallHearsEachOfTheComputersCuesOnce() async throws {
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
     let fake = FakeRemote(.ready(.direct))
@@ -215,12 +274,27 @@ import Testing
     #expect(await until { await fake.subscribed })
     await fake.emit(#"{"type":"bot","bot":{"id":"b1","name":"Ada","rev":1,"lastAt":1}}"#)
     #expect(await until { store.connection == .online })
-    var replies: [String] = []
-    var notices: [String] = []
-    store.beginVoiceCall(UUID(), botId: "b1", speak: { replies.append($0) }, announce: { notices.append($0) }, end: {})
-    await fake.emit(#"{"type":"bot","bot":{"id":"b1","name":"Ada","rev":2,"lastAt":2,"status":"needsInput"}}"#)
-    #expect(await until { notices == ["Ada needs your approval in the chat."] })
-    #expect(replies.isEmpty)
+    var heard: [CallCue] = []
+    let call = UUID()
+    store.beginVoiceCall(call, hear: { heard.append($0) }, end: {})
+    let cues = [("notice", "Ada needs the user's approval: Edit a.txt", 1), ("progress", "Ada: Running tests", 2), ("reply", "Done.", 3)]
+    func emit(_ kind: String, _ text: String, _ seq: Int) async {
+        await fake.emit(#"{"type":"call","call":"\#(call.uuidString)","kind":"\#(kind)","text":"\#(text)","seq":\#(seq)}"#)
+    }
+    for (kind, text, seq) in cues { await emit(kind, text, seq) }
+    #expect(await until { heard.count == 3 })
+    #expect(heard.map(\.kind) == [.notice, .progress, .reply])
+    // The engine switches; the reconnect's catch-up replays what the computer kept.
+    store.endVoiceCall(call)
+    store.beginVoiceCall(call, hear: { heard.append($0) }, end: {})
+    await emit("reply", "Done.", 3)
+    await emit("reply", "Missed while away.", 4)
+    #expect(await until { heard.last?.text == "Missed while away." })
+    #expect(heard.map(\.text) == cues.map(\.1) + ["Missed while away."])
+    // A newer host's new cue kind is passed over, not a reason to rewind.
+    await fake.emit(#"{"type":"call","call":"\#(call.uuidString)","kind":"whisper","text":"?","seq":5}"#)
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(store.unreadable == false)
 }
 
 // MARK: - Version compatibility (docs/reference/compatibility.md)
