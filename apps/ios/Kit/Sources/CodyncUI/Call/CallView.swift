@@ -63,12 +63,13 @@ struct CallView: View {
             begin(cloud: VoiceSettings.provider)
         }
         .onDisappear {
+            // First, so the connection outlives the engine: the end is sent after the engine's last lines.
+            link?.end(seconds: Int(Date.now.timeIntervalSince(startedAt)))
             session?.end()
             countCloudMinutes()
             isSpeaking = false
             interrupt = nil
             model.endVoiceCall(callID)
-            link?.end(seconds: Int(Date.now.timeIntervalSince(startedAt)))
             quality.report()
             activity?.end()
         }

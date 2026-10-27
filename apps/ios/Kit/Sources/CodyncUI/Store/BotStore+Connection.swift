@@ -69,7 +69,19 @@ extension BotStore {
         if !retired { stopIfIdle() }
     }
 
-    private var hasBackgroundWork: Bool { !voiceCalls.isEmpty || shortcutSends > 0 }
+    /// A call's end on its way to the computer keeps the connection the call kept: a call ended in the background
+    /// (from its Live Activity) would otherwise drop it before the computer writes the call's line.
+    func beginCallEnd() {
+        callEnds += 1
+        if streamTask == nil { restartStream() }
+    }
+
+    func finishCallEnd() {
+        callEnds -= 1
+        if !retired { stopIfIdle() }
+    }
+
+    private var hasBackgroundWork: Bool { !voiceCalls.isEmpty || shortcutSends > 0 || callEnds > 0 }
 
     private func stopIfIdle() {
         if !isActive && !hasBackgroundWork {

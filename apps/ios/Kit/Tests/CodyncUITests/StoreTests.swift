@@ -65,6 +65,26 @@ import Testing
     #expect(await until { await fake.shutdownCount == 1 })
 }
 
+@MainActor @Test func aCallsEndKeepsTheConnectionUntilItReachesTheComputer() async throws {
+    let (storage, suite) = context()
+    defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+    let fake = FakeRemote(.ready(.relay))
+    let store = BotStore(computer: randomComputer("Mac"), storage: storage) { _ in fake }
+    defer { store.retire() }
+    store.setActive(true)
+    #expect(await until { await fake.subscribed })
+    let call = UUID()
+    store.beginVoiceCall(call, hear: { _ in }, end: {})
+    store.setActive(false)
+    // Hung up from the Live Activity, with the app in the background.
+    store.beginCallEnd()
+    store.endVoiceCall(call)
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(await fake.shutdownCount == 0, "the call's end still has to reach the computer")
+    store.finishCallEnd()
+    #expect(await until { await fake.shutdownCount == 1 })
+}
+
 @MainActor @Test func retiringStoreEndsVoiceCallAndPreventsLaterSends() async throws {
     let (storage, suite) = context()
     defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }

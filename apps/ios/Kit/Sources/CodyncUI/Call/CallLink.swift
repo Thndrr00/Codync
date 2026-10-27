@@ -102,7 +102,11 @@ final class CallLink {
 
     /// The call is over: its line in the chat, with what's left of the transcript.
     func end(seconds: Int) {
-        serial { [self] in await model.endCall(botId, seconds: seconds, call: call, lines: drain(withOpen: true)) }
+        model.beginCallEnd()
+        serial { [self] in
+            await model.endCall(botId, seconds: seconds, call: call, lines: drain(withOpen: true))
+            model.finishCallEnd()
+        }
     }
 
     /// The lines finished so far (`withOpen`: and the one still being said), out of the buffer: trimmed, Chinese in

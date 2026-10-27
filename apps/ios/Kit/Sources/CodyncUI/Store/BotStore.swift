@@ -120,6 +120,8 @@ public final class BotStore {
     /// The newest cue each call heard (`CallCue.seq`), kept across engine switches: a replayed one isn't said again.
     @ObservationIgnored var heardCues: [UUID: Int64] = [:]
     @ObservationIgnored var shortcutSends = 0
+    /// Calls whose end is still on its way to the computer.
+    @ObservationIgnored var callEnds = 0
     var saveTask: Task<Void, Never>?
     var rewound = false
     /// Events stayed undecodable after the rewind.
