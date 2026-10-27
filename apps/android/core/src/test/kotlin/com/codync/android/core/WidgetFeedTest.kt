@@ -28,17 +28,17 @@ class WidgetFeedTest {
         assertTrue(usageLimits(UsageReport()).isEmpty())
     }
 
-    @Test fun `the lead bot is the first at work and nobody when all are quiet`() {
+    @Test fun `the most urgent bot is the first at work and nobody when all are quiet`() {
         val bots = listOf(WidgetBot("a", "A", "needsInput"), WidgetBot("b", "B", "working"), WidgetBot("c", "C", "error"))
-        assertEquals("a", leadBot(bots)?.id)
-        assertEquals("b", leadBot(bots.drop(1))?.id)
-        assertNull(leadBot(bots.drop(2)))
+        assertEquals("a", mostUrgentBot(bots)?.id)
+        assertEquals("b", mostUrgentBot(bots.drop(1))?.id)
+        assertNull(mostUrgentBot(bots.drop(2)))
     }
 
     @Test fun `between bots that need you equally the lead is the most recent, as on the iPhone`() {
         val bots = listOf(WidgetBot("pinned", "P", "needsInput", lastAt = 10), WidgetBot("recent", "R", "needsInput", lastAt = 20),
             WidgetBot("busy", "B", "working", lastAt = 30))
-        assertEquals("recent", leadBot(bots)?.id)
-        assertEquals("busy", leadBot(bots.map { it.copy(status = "working") })?.id)
+        assertEquals("recent", mostUrgentBot(bots)?.id)
+        assertEquals("busy", mostUrgentBot(bots.map { it.copy(status = "working") })?.id)
     }
 }

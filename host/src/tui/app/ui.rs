@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use super::super::manage::{
-    AgentSetup, AnalyticsSheet, BotChatSheet, DocumentSheet, Fields, Market, MemorySheet, RoutineForm, RoutineList,
-    SkillSheet,
+    AgentSetup, AnalyticsSheet, BotChatSheet, DocumentSheet, Fields, Library, Market, MemorySheet, RoutineForm,
+    RoutineList, SkillSheet,
 };
 use super::{Editor, Mark};
 
@@ -54,6 +54,7 @@ pub enum Action {
     Details,
     Documents,
     Computer,
+    Library,
     RefreshAgents,
     Pair,
     Usage,
@@ -61,6 +62,7 @@ pub enum Action {
     Analytics,
     AboutAnalytics,
     Language,
+    ThinkingDetails,
     Keys,
     Appearance(super::super::appearance::Appearance),
 }
@@ -73,6 +75,7 @@ pub const ACTIONS: [(&str, &str, Action); 18] = [
     ("Details of this bot…", "R", Action::Details),
     ("Documents, reviews and computer activity…", "", Action::Documents),
     ("Computer: permissions, files, terminal and activity…", "", Action::Computer),
+    ("Library of this bot: artifacts and files…", "L", Action::Library),
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
     ("Usage", "U", Action::Usage),
@@ -83,12 +86,15 @@ pub const ACTIONS: [(&str, &str, Action); 18] = [
     ("Appearance: Light", "", Action::Appearance(super::super::appearance::Appearance::Light)),
     ("Appearance: Dark", "", Action::Appearance(super::super::appearance::Appearance::Dark)),
     ("App language…", "", Action::Language),
+    ("Show thinking details", "", Action::ThinkingDetails),
     ("Keys", "?", Action::Keys),
 ];
 
 pub enum GotoItem {
     Bot(String),
     Action(Action),
+    /// Shows a hidden bot in the roster again.
+    Unhide(String),
 }
 
 pub struct Goto {
@@ -322,6 +328,7 @@ pub enum Overlay {
     BotChat(BotChatSheet),
     Routines(RoutineList),
     Routine(Box<RoutineForm>),
+    Library(Library),
     Market(Box<Market>),
     Agent(AgentSetup),
     Fields(Box<Fields>),
@@ -344,6 +351,8 @@ pub enum Click {
     },
     Filter(usize),
     Composer,
+    /// The working line: unfolds or folds the turn's steps.
+    Steps,
     /// A bot-message row (entry id): opens the conversation.
     BotChat(String),
 }

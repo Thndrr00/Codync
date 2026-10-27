@@ -65,7 +65,7 @@ fun lockScreenSummary(
     val freshness = if (elapsedMs > staleThresholdMillis) WidgetFreshness.Stale else WidgetFreshness.Fresh
     val working = feed.bots.count { it.status == "working" }
     val attention = feed.bots.count { it.status == "needsInput" || it.status == "error" }
-    val lead = if (includeDetails) leadBot(feed.bots)?.name else null
+    val lead = if (includeDetails) mostUrgentBot(feed.bots)?.name else null
     return LockScreenSummary(
         freshness = freshness,
         workingCount = working,
@@ -89,7 +89,7 @@ fun usageLimits(report: UsageReport): List<ProviderLimit> {
 }
 
 /** The Bots tile's bot, as the iPhone's control picks it: one that needs you, else one working; the most recent of those. */
-fun leadBot(bots: List<WidgetBot>): WidgetBot? = bots.filter { it.status == "needsInput" || it.status == "working" }
+fun mostUrgentBot(bots: List<WidgetBot>): WidgetBot? = bots.filter { it.status == "needsInput" || it.status == "working" }
     .minWithOrNull(compareBy<WidgetBot> { if (it.status == "needsInput") 0 else 1 }.thenByDescending { it.lastAt })
 
 /** The Team widget's four spots: the picked bots first (a deleted pick falls back), then the feed's order (who needs you). */

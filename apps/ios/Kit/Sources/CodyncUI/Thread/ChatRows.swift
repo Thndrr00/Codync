@@ -14,6 +14,10 @@ struct ChatRow: View {
     var reply: (() -> Void)?
     /// A failure notice's "Add a fallback": the bot's details.
     var addFallback: (() -> Void)?
+    /// An artifact card's artifact, full size.
+    var openArtifact: ((ArtifactRef) -> Void)?
+    /// A voice call's line: the call's conversation.
+    var openCall: (() -> Void)?
     @Environment(BotStore.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -30,7 +34,7 @@ struct ChatRow: View {
         case "agent":
             VStack(alignment: .leading, spacing: 4) {
                 if chat?.isGroup == true, groupStart { AuthorLabel(botId: entry.data.author) }
-                AgentBubble(entry: entry, openTrace: openTrace, reply: reply)
+                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, openArtifact: openArtifact)
                 ReactionsRow(entry: entry)
                     .padding(.leading, chat?.isGroup == true ? 34 : 0)
             }
@@ -52,6 +56,8 @@ struct ChatRow: View {
                 HandoffCardRow(entry: entry, card: card).padding(.top, 10)
             } else if let change = entry.data.agentSwitch {
                 AgentSwitchRow(entry: entry, change: change).padding(.top, 10)
+            } else if entry.data.call != nil, let openCall {
+                CallLineRow(entry: entry, open: openCall).padding(.top, 6)
             } else {
                 NoticeRow(entry: entry, addFallback: addFallback).padding(.top, 10)
             }
@@ -184,12 +190,15 @@ struct AgentBubble: View {
     let entry: Entry
     let openTrace: () -> Void
     var reply: (() -> Void)?
+    var openArtifact: ((ArtifactRef) -> Void)?
     @Environment(BotStore.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Group {
-                if let files = entry.data.files, !files.isEmpty {
+                if let artifact = entry.data.artifact {
+                    ArtifactCard(botId: entry.botId, ref: artifact) { openArtifact?(artifact) }
+                } else if let files = entry.data.files, !files.isEmpty {
                     ForEach(files) { file in FileDownloadCard(entry: entry, file: file) }
                 } else {
                     MarkdownText(entry.data.text ?? "").equatable()
@@ -219,8 +228,9 @@ struct NoticeRow: View {
 
     var body: some View {
         let text = entry.data.text ?? ""
+        // A call an older app logged, with no conversation to open.
         if let seconds = entry.data.callSeconds {
-            Label("\(text) · \(String(format: "%02d:%02d", seconds / 60, seconds % 60))", systemImage: "waveform")
+            Label("\(L10n.tr(text)) · \(String(format: "%02d:%02d", seconds / 60, seconds % 60))", systemImage: "waveform")
                 .font(.footnote.monospacedDigit())
                 .foregroundStyle(Palette.secondary)
                 .frame(maxWidth: .infinity)
@@ -255,28 +265,89 @@ struct NoticeRow: View {
     }
 }
 
-/// The bot's current activity and elapsed time.
+/// The bot's current activity and elapsed time; with thinking details on (Settings), a tap unfolds the turn's steps.
 struct WorkingIndicator: View {
     let bot: Bot
+    let steps: [Entry]
+    @AppStorage(ThinkingDetails.storageKey) private var details = false
+    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var open: Bool { details && expanded }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            if details {
+                Button {
+                    withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { expanded.toggle() }
+                } label: {
+                    status.contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.tr(open ? "Hide steps" : "Show steps"))
+                .accessibilityValue(open ? "Expanded" : "Collapsed")
+            } else {
+                status
+            }
+            if open {
+                WorkingSteps(steps: steps)
+                    .padding(.top, 12)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: open ? .infinity : nil, alignment: .leading)
+        .background(Palette.bubbleAgent, in: shape)
+        // Folding steps never cross the pill's edge.
+        .clipShape(shape)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 40)
+    }
+
+    private var status: some View {
         HStack(spacing: 8) {
             ThinkingOrb(state: bot.needsInput ? .listening : .working, size: 16, color: bot.needsInput ? Palette.warning : Palette.secondary)
             Text(L10n.tr(bot.activity.isEmpty ? "Working…" : bot.activity))
                 .font(.subheadline)
                 .foregroundStyle(bot.needsInput ? Palette.warning : Palette.secondary)
                 .lineLimit(1)
+                .frame(maxWidth: open ? .infinity : nil, alignment: .leading)
             if let started = bot.startedAt {
                 Text(Date(milliseconds: started), style: .timer)
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(Palette.tertiary)
             }
+            if details {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Palette.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Palette.bubbleAgent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, 40)
+    }
+}
+
+/// The turn's thinking, narration, tool calls and plan: hugs them, scrolls once they're taller than
+/// 280 points, and keeps the newest in view. One scroll view, so what the reader unfolds stays unfolded.
+/// A turn can have none yet: Claude's thinking text arrives as its thinking ends.
+private struct WorkingSteps: View {
+    let steps: [Entry]
+
+    var body: some View {
+        CappedHeight(max: 280) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if steps.isEmpty { Text(L10n.tr("Nothing yet.")).foregroundStyle(Palette.tertiary) }
+                    ForEach(steps) { TraceRow(entry: $0, unfolded: true) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .defaultScrollAnchor(.bottom)
+        }
     }
 }
 

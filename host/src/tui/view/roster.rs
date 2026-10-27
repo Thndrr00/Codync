@@ -70,7 +70,7 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
                 continue;
             }
         }
-        if any_pinned && (i == 0 || (bots[i - 1].pinned && !b.pinned)) {
+        if any_pinned && !b.lead && (i == 0 || bots[i - 1].band() != b.band()) {
             rows.push((y, Some(if b.pinned { "PINNED" } else { "BOTS" }.to_owned()), None));
             y += 1;
         }
@@ -111,7 +111,9 @@ pub(super) fn roster(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         let tx = rput(buf, r.right() - 1, yy, &time, if b.unread > 0 { t.bold } else { t.dim });
         let gx = tx.saturating_sub(2);
         put(buf, gx, yy, 1, g, gs);
-        put(buf, x0 + 5, yy, gx.saturating_sub(x0 + 6), &b.name, t.bold);
+        // The lead's star, where the apps show it.
+        let name_x = if b.lead { put(buf, x0 + 5, yy, 2, "★", t.dim) + 1 } else { x0 + 5 };
+        put(buf, name_x, yy, gx.saturating_sub(name_x + 1), &b.name, t.bold);
         let (pv, ps) = if let Some((_, at)) = app
             .roster_tools
             .stopping

@@ -1,4 +1,4 @@
-//! Starting a turn and wrapping it up: final reply, notices, replies to waiters, alerts and memory.
+//! Starting a turn and wrapping it up: final reply, notices, the reply to a requesting bot or room, alerts and memory.
 
 use super::{Actor, Conn, Done, Instructions, NoticeStyle, Queued, Reacted, Seg};
 use crate::agent::acp::{self, Incoming};
@@ -31,6 +31,7 @@ impl Actor {
         let mut snapshot = initial.clone();
         let fresh = matches!(snapshot.prelude, Some(context::Prelude::New | context::Prelude::UnpromptedFork));
         let remind_files = !snapshot.system.contains("send_file");
+        let remind_artifacts = !snapshot.system.contains("publish_artifact");
         let mut prompt = text.to_owned();
         if let Some(document) = crate::documents::context(&self.hub, &self.lane.chat, self.lane.thread.as_deref())? {
             prompt = format!("{document}\n\n{prompt}");
@@ -76,9 +77,12 @@ impl Actor {
             prompt = format!("{prompt}\n\n{update}");
             self.announce = Some((snapshot, identity));
         }
-        if remind_files && self.active_group.is_none() && self.active_request.is_none() && self.active_routine.is_none()
-        {
+        let own_chat = self.active_group.is_none() && self.active_request.is_none() && self.active_routine.is_none();
+        if remind_files && own_chat {
             prompt.push_str("\n\n[Codync: send_file(path, name?) shares any regular file up to 100 MiB as a downloadable card. Use it instead of sending a local path.]");
+        }
+        if remind_artifacts && own_chat {
+            prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. To change it, edit a copy of its HTML (list_artifacts) and publish_artifact(path, artifact: its id).]");
         }
         Ok(prompt)
     }
@@ -102,8 +106,7 @@ impl Actor {
         let turn = entry_ids.last().and_then(|id| self.hub.store.entry(id)).map_or_else(
             || {
                 run_turn.unwrap_or_else(|| {
-                    self.hub.store.max_turn(&lane.chat)
-                        + i64::from(self.active_group.is_some() || self.active_routine.is_some())
+                    self.hub.store.max_turn(&lane.chat) + i64::from(self.source() != TurnSource::User)
                 })
             },
             |e| e.turn,
@@ -118,15 +121,27 @@ impl Actor {
         self.lane = lane.clone();
         self.turn = Some(turn);
         // Only the user's own words feed memory: not another bot's, a room's or a routine's.
-        let from_user =
-            !hidden && self.active_request.is_none() && self.active_group.is_none() && self.active_routine.is_none();
+        let from_user = !hidden && self.source() == TurnSource::User;
         self.turn_text = from_user.then(|| text.to_owned());
         self.turn_entries = if from_user { entry_ids.to_vec() } else { Vec::new() };
+        // A room turn answers the user's message in the room; another turn, the messages it was given.
+        let answered = self.active_group.as_ref().map_or(self.turn_entries.as_slice(), |g| g.answers.as_slice());
+        let opens = self.prompt_call.take().filter(|call| crate::chat::calls::is_live(&self.hub.store, call));
+        self.turn_call = crate::chat::calls::of_turn(&self.hub.store, answered).or(opens);
         self.turn_memory_revision.clear();
         self.announce = None;
         self.stop_requested = false;
         self.cancel_deadline = None;
-        self.hub.team.start_turn(&self.cfg.id, self.active_request.as_ref());
+        let team_turn = if let Some(request) = &self.active_request {
+            if request.expects_reply() {
+                crate::chat::team::Turn::SynchronousRequest(request.hops())
+            } else {
+                crate::chat::team::Turn::Request
+            }
+        } else {
+            crate::chat::team::Turn::Chat(self.reply_hops.unwrap_or(0))
+        };
+        self.hub.team.start_turn(&self.cfg.id, team_turn);
         self.exit_tail = None;
         self.seg = Seg::None;
         self.tools.clear();
@@ -143,10 +158,14 @@ impl Actor {
         } else {
             self.relay_turn(&lane, entry_ids, text).await;
         }
-        // A delegated or group turn has no live waiter after a host restart. Its persisted
-        // notices are marked interrupted instead of silently repeating work.
+        // A bot request or room turn isn't resumed after a host restart (the room that waited is gone): a request's
+        // persisted notices are marked interrupted instead of silently repeating work. Nor is a call's opening (the
+        // call is over). A reply turn is resumed.
         self.set_inflight(
-            self.active_request.is_none() && self.active_group.is_none() && self.active_routine.is_none(),
+            self.active_request.is_none()
+                && self.active_group.is_none()
+                && self.active_routine.is_none()
+                && !self.active_prompt,
         );
         // A message the host wrote in the user's place (`from: host`) isn't the user asking.
         let typed = |id: &&String| self.hub.store.entry(id).is_some_and(|e| e.data["from"] != "host");
@@ -199,7 +218,7 @@ impl Actor {
             if self.routine_completion.is_none() {
                 self.set_inflight(false);
             }
-            self.hub.team.cancel_from(&self.cfg.id);
+            self.hub.team.end_turn(&self.cfg.id);
             self.hub.set_runtime(&self.id(), |r| {
                 r.status = BotStatus::Idle;
                 r.activity = String::new();
@@ -273,7 +292,7 @@ impl Actor {
         let mut final_text = None;
         let routine = self.active_routine.is_some();
         let grouped = self.active_group.is_some() || routine;
-        let delegated = self.active_request.as_ref().is_some_and(crate::chat::team::BotRequest::expects_reply);
+        let delegated = self.active_request.is_some();
         let sent = std::mem::take(&mut self.sent);
         let reacted = std::mem::take(&mut self.reacted);
         if !sent.is_empty() {
@@ -288,10 +307,9 @@ impl Actor {
             && let Some(mut e) = self.hub.store.entry(&id)
         {
             let text = e.data["text"].as_str().map(str::to_owned);
-            // A pass stays in the trace: neither a room nor the user sees it (an ask's reply goes back as it is).
+            // A pass stays in the trace: neither a room nor the user sees it (a bot request's reply goes back as it is).
             if delegated || !text.as_deref().is_none_or(crate::chat::group::is_pass) {
-                // An ask's answer belongs to its requesting bot and exchange notice.
-                // Independent messages still report to the user in this chat.
+                // A bot request's answer belongs to the bot that sent it and the exchange notice.
                 if !delegated {
                     e.data["final"] = true.into();
                     if self.lane.thread.is_some() {
@@ -394,8 +412,6 @@ impl Actor {
             }
             self.finish_routine(status, detail, text);
         }
-        let message_failed =
-            !stopped && reply.is_err() && self.active_request.as_ref().is_some_and(|r| !r.expects_reply());
         self.complete_request(reply, stopped);
         self.complete_group(if stopped || failed || stop_reason != "end_turn" {
             Err(anyhow!("turn did not complete ({stop_reason})"))
@@ -406,6 +422,9 @@ impl Actor {
             self.offer_skill();
         }
         self.turn = None;
+        self.reply_hops = None;
+        // A call's opening is heard on the call: no alert.
+        let opening = std::mem::take(&mut self.active_prompt);
         if self.routine_completion.is_none() {
             self.set_inflight(false);
         }
@@ -427,7 +446,7 @@ impl Actor {
             r.message = None;
             r.session = None;
         });
-        self.hub.team.cancel_from(&self.cfg.id);
+        self.hub.team.end_turn(&self.cfg.id);
         // A room turn's news comes from the group once the room is done (see `group`).
         let more = self.queue.iter().any(|q| matches!(q, Queued::User { .. }));
         // It held back its only answer, a reaction: it said nothing, so there is nothing to tell either.
@@ -435,7 +454,8 @@ impl Actor {
         if !self.stop_requested
             && !delegated
             && !grouped
-            && let Some(kind) = turn_alert(failed || message_failed, &stop_reason, more || held_back)
+            && !opening
+            && let Some(kind) = turn_alert(failed, &stop_reason, more || held_back)
         {
             let body = final_text.unwrap_or_else(|| match (kind, reacted) {
                 (AlertKind::Done, Reacted::With(emoji)) => format!("Reacted {emoji} to your message"),
@@ -482,18 +502,24 @@ impl Actor {
         } else {
             TurnOutcome::Incomplete
         };
-        let source = if self.active_routine.is_some() {
+        let started = self.hub.runtime(&self.id()).started_at.unwrap_or_else(now_ms);
+        let ms = now_ms() - started;
+        analytics::turn_finished(&self.hub, &self.cfg.backend, outcome, stop_reason, failure, self.source(), ms);
+    }
+
+    /// What started the turn that is starting or running.
+    fn source(&self) -> TurnSource {
+        if self.active_routine.is_some() {
             TurnSource::Routine
         } else if self.active_group.is_some() {
             TurnSource::Group
-        } else if self.active_request.is_some() {
+        } else if self.active_request.is_some() || self.reply_hops.is_some() {
             TurnSource::Bot
+        } else if self.active_prompt {
+            TurnSource::Host
         } else {
             TurnSource::User
-        };
-        let started = self.hub.runtime(&self.id()).started_at.unwrap_or_else(now_ms);
-        let ms = now_ms() - started;
-        analytics::turn_finished(&self.hub, &self.cfg.backend, outcome, stop_reason, failure, source, ms);
+        }
     }
 }
 

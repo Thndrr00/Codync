@@ -2,7 +2,7 @@
 
 Clients (iPhone, desktop app on macOS, Linux and Windows, terminal client) and the host update on
 different schedules: the iPhone app waits for App Review, the desktop app and standalone hosts
-update when their owner (or the opt-in automatic updater) installs a release. Any client can
+update when their owner (or the automatic updater, on by default for hosts that update themselves) installs a release. Any client can
 meet an older or a newer host.
 
 ## Rule
@@ -51,8 +51,9 @@ couldn't get the matching side yet.
 - **Additive changes need no floor change**: new fields (clients decode leniently; new
   Swift fields are optional), new methods, new enum values (kept as strings).
 - **Renaming, removing or changing the meaning** of anything an older client reads or sends:
-  change it, set `MIN_APP` to this release (its iPhone part ships with it: the change
-  touches `apps/ios/Kit/`, so `Submit iOS` includes it), add a row to the floor history, and re-record
+  change it, set `MIN_APP` to this release (the phone apps ship with it: `Submit iOS` and
+  `Submit Android` ship any release whose `MIN_APP` is above their store's version, even
+  without app changes), add a row to the floor history, and re-record
   the wire shape snapshot. That release isn't offered (downloads, updaters, Homebrew) until
   the App Store has the iPhone app (next section), so nobody is asked for an update that
   isn't there yet.
@@ -146,6 +147,7 @@ Update this table in the release that changes a floor, with the reason.
 
 | Release | Host `minApp` | Client `minHost` | Why |
 |---|---|---|---|
+| 2.25.0 | 2.21.0 | 2.25.0 (iPhone, Android, desktop) | Voice calls run on the host: the apps start a call, run the voice's tools and end it through `startCall`, `callTool`, `callLines` and `endCall`, which older hosts lack (a Linux desktop or an SSH computer can run one). `logCall` stays for older apps. |
 | 2.21.0 | 2.21.0 | 2.20.1 | Memory is files the bot keeps, and the apps only read it: the edit methods (`saveMemory`, `pinMemory`, `archiveMemory`, `forgetMemory`, `clearMemory`, `undoDream`, `answerMemory`, `undoMemory`, `saveMemoryFile`, `deleteMemoryFile`, `restoreMemoryFile`) are gone, so older apps' memory buttons would fail. `memory` keeps its shape, so new apps still read an older host's memory. |
 | 2.20.1 | 2.20.1 | 2.20.1 | Reply threads gave way to quote replies: the `thread` method, `send.threadId`, `markRead.threadId`, entry `threadId`, `data.thread` and bot `workingThread` are gone, and old thread replies sit in the main chat. Older apps would open empty threads. The clients no longer leave thread replies out of the chat or read threads, so an older host would show them inline, routine results twice and thread unread counts that never clear. |
 | 2.18.0 | 2.18.0 | 2.12.0 | Memory moved from Engram into the host: the memory methods take and return the new two layers, and the Engram ones (`memoryDetail`, `reviewMemory`, `exportMemory`, `importMemory`) are gone. Clients still talk to older hosts; only their memory screen shows an error there. |

@@ -17,12 +17,7 @@ impl Actor {
             Cmd::RefreshTools => {
                 self.tools_changed = true;
             }
-            Cmd::Routine(id) => {
-                self.queue.push_back(Queued::Routine(id));
-                if self.turn.is_none() {
-                    self.next_in_queue(done_tx).await;
-                }
-            }
+            Cmd::Routine(id) => self.enqueue(Queued::Routine(id), done_tx).await,
             Cmd::Send { lane, entry_id, text } => {
                 if self.hub.store.entry(&entry_id).is_some_and(|e| {
                     e.data["source"] == "slack"
@@ -31,18 +26,12 @@ impl Actor {
                 }) {
                     return true;
                 }
-                self.queue.push_back(Queued::User { lane, entry_id, text });
-                if self.turn.is_none() {
-                    self.next_in_queue(done_tx).await;
-                }
+                self.enqueue(Queued::User { lane, entry_id, text }, done_tx).await;
             }
             Cmd::Group(turn) => {
                 // The room asks again: this turn answers for any still waiting there.
                 self.queue.retain(|q| !matches!(q, Queued::Group(g) if g.lane == turn.lane));
-                self.queue.push_back(Queued::Group(turn));
-                if self.turn.is_none() {
-                    self.next_in_queue(done_tx).await;
-                }
+                self.enqueue(Queued::Group(turn), done_tx).await;
             }
             Cmd::CancelGroup { chat } => {
                 // Dropping a queued turn's reply tells the room it won't come.
@@ -51,24 +40,22 @@ impl Actor {
                     self.cancel_turn().await;
                 }
             }
-            Cmd::BotRequest(ask) => {
-                self.queue.push_back(Queued::BotRequest(ask));
-                if self.turn.is_none() {
-                    self.next_in_queue(done_tx).await;
-                }
-            }
+            Cmd::BotRequest(request) => self.enqueue(Queued::BotRequest(request), done_tx).await,
             Cmd::CancelAsk { id } => {
-                self.queue.retain(|q| !matches!(q, Queued::BotRequest(a) if a.expects_reply() && a.id == id));
-                if self.active_request.as_ref().is_some_and(|a| a.expects_reply() && a.id == id) {
+                self.queue.retain(
+                    |q| !matches!(q, Queued::BotRequest(request) if request.expects_reply() && request.id() == id),
+                );
+                if self.active_request.as_ref().is_some_and(|request| request.expects_reply() && request.id() == id) {
                     self.hub.team.cancel_from(&self.cfg.id);
                     self.stop_requested = true;
-                    // The request has expired. Kill only its process so a harness
-                    // ignoring cooperative cancellation cannot block the queue.
-                    if let Some(c) = self.conn.take() {
-                        c.acp.kill().await;
+                    // An expired ask cannot keep the queue blocked even if its harness ignores cancellation.
+                    if let Some(connection) = self.conn.take() {
+                        connection.acp.kill().await;
                     }
                 }
             }
+            Cmd::BotReply(reply) => self.enqueue(Queued::BotReply(reply), done_tx).await,
+            Cmd::Prompt { text, call } => self.enqueue(Queued::Prompt { text, call }, done_tx).await,
             Cmd::SendToUser { text, reply } => {
                 let _ = reply.send(self.send_to_user(text));
             }
@@ -76,6 +63,9 @@ impl Actor {
                 let _ = reply.send(self.react(&emoji, to.as_deref()));
             }
             Cmd::SendFile { path, name, cancelled, reply } => self.begin_file(path, name, cancelled, reply),
+            Cmd::PostArtifact { data, reply } => {
+                let _ = reply.send(self.post_artifact(data));
+            }
             Cmd::Stop => self.stop().await,
             Cmd::Permission { entry_id, option_id } => self.answer_permission(&entry_id, option_id).await,
             Cmd::Approve { title, detail, reply } => self.ask_approval(&title, &detail, reply),
@@ -90,6 +80,12 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::SwitchBack => self.switch_back().await,
+            Cmd::CallEnded { call } => {
+                if self.turn_call.as_ref() == Some(&call) {
+                    self.turn_call = None;
+                }
+                let _ = self.dreamer.send(memory::DreamEvent::Flush);
+            }
             Cmd::Reconfigure(base) => {
                 let old = std::mem::replace(&mut self.base, *base);
                 // On its own agent the bot takes the new one; on a fallback it keeps that agent (its step may have
@@ -140,8 +136,16 @@ impl Actor {
         true
     }
 
+    /// Queues `item`, and starts it right away when the bot is free.
+    async fn enqueue(&mut self, item: Queued, done_tx: &mpsc::UnboundedSender<Done>) {
+        self.queue.push_back(item);
+        if self.turn.is_none() {
+            self.next_in_queue(done_tx).await;
+        }
+    }
+
     pub(super) async fn stop(&mut self) {
-        self.hub.team.cancel_from(&self.cfg.id);
+        self.hub.team.end_turn(&self.cfg.id);
         if let Err(error) = self.hub.routines.cancel_queued(&self.hub.store, &self.cfg.id) {
             tracing::error!(error = format!("{error:#}"), "couldn't cancel queued routines");
         }
@@ -228,18 +232,44 @@ impl Actor {
                     continue;
                 }
                 Some(Queued::BotRequest(_)) => {
-                    let Some(Queued::BotRequest(mut ask)) = self.queue.pop_front() else {
-                        unreachable!("front is an ask")
+                    let Some(Queued::BotRequest(mut request)) = self.queue.pop_front() else {
+                        unreachable!("front is a bot request")
                     };
-                    if ask.reply_closed() {
+                    if request.reply_closed() {
                         continue;
                     }
-                    let ids = [ask.entry_id.clone()];
-                    let prompt = ask.prompt.clone();
-                    ask.mark_started();
-                    self.active_request = Some(ask);
+                    let ids = [request.entry_id.clone()];
+                    let prompt = request.prompt.clone();
+                    request.mark_started();
+                    self.active_request = Some(request);
                     let result = self.start_turn(main.clone(), &ids, &prompt, false, done_tx).await;
                     if let Err(e) = result {
+                        self.start_error(e, done_tx).await;
+                    }
+                    continue;
+                }
+                Some(Queued::BotReply(_)) => {
+                    // Replies that came in while the bot worked are one turn, as the user's messages are.
+                    let mut replies = Vec::new();
+                    while let Some(Queued::BotReply(_)) = self.queue.front() {
+                        if let Some(Queued::BotReply(reply)) = self.queue.pop_front() {
+                            replies.push(reply);
+                        }
+                    }
+                    self.reply_hops = replies.iter().map(crate::chat::team::BotReply::hops).max();
+                    let prompt = crate::chat::team::reply_prompt(&replies);
+                    if let Err(e) = self.start_turn(main.clone(), &[], &prompt, false, done_tx).await {
+                        self.start_error(e, done_tx).await;
+                    }
+                    continue;
+                }
+                Some(Queued::Prompt { .. }) => {
+                    let Some(Queued::Prompt { text, call }) = self.queue.pop_front() else {
+                        unreachable!("front is a prompt")
+                    };
+                    self.active_prompt = true;
+                    self.prompt_call = call;
+                    if let Err(e) = self.start_turn(main.clone(), &[], &text, false, done_tx).await {
                         self.start_error(e, done_tx).await;
                     }
                     continue;
@@ -277,7 +307,7 @@ impl Actor {
                 _ => {}
             }
             // Messages sent while the agent worked go out together as its next turn
-            // without crossing a bot request or another lane: each gets its own reply.
+            // without crossing a bot request or reply or another lane: each gets its own reply.
             let Some(Queued::User { lane, .. }) = self.queue.front() else { continue };
             let lane = lane.clone();
             let mut batch = Vec::new();
@@ -338,6 +368,8 @@ impl Actor {
         // What the chain carried in (a recap, a takeover) was this turn's; the user's handoff waits for the next.
         self.relay.carried = None;
         self.turn = None;
+        self.reply_hops = None;
+        self.active_prompt = false;
         memory::turns::drop_turn(&self.cfg.id);
         if self.routine_completion.is_none() {
             self.set_inflight(false);
@@ -350,7 +382,7 @@ impl Actor {
             r.message = None;
             r.session = None;
         });
-        self.hub.team.cancel_from(&self.cfg.id);
+        self.hub.team.end_turn(&self.cfg.id);
     }
 
     /// When `e` asks for signing in: marks the harness signed out and puts a sign-in card in the
@@ -376,8 +408,8 @@ impl Actor {
     }
 
     pub(super) fn complete_request(&mut self, result: Result<String>, cancelled: bool) {
-        if let Some(ask) = self.active_request.take() {
-            ask.complete(result, cancelled);
+        if let Some(request) = self.active_request.take() {
+            request.complete(result, cancelled);
         }
     }
 

@@ -119,6 +119,32 @@ impl Store {
         logged("entry by nonce", row.optional()).flatten()
     }
 
+    /// What a voice call carried in `bot_id`'s chat (`chat::calls`), oldest first: its messages and final replies.
+    /// The newest `limit` of them.
+    pub fn call_entries(&self, bot_id: &str, call: &str, limit: i64) -> Result<Vec<Entry>> {
+        let c = self.db.locked();
+        let mut st = c.prepare(&format!(
+            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND json_extract(data, '$.call') = ?2 AND
+               (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1))
+             ORDER BY seq DESC LIMIT ?3"
+        ))?;
+        let mut rows: Vec<Entry> =
+            st.query_map(params![bot_id, call, limit], row_entry)?.collect::<rusqlite::Result<_>>()?;
+        rows.reverse();
+        Ok(rows)
+    }
+
+    /// The host-owned call receipt, which is outside the call's user/agent conversation.
+    pub fn call_notice(&self, bot_id: &str, call: &str) -> Result<Option<Entry>> {
+        let c = self.db.locked();
+        Ok(c.query_row(
+            &format!("SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND kind = 'notice'
+                AND json_extract(data, '$.call') = ?2 AND json_type(data, '$.callSeconds') = 'integer'
+                ORDER BY seq DESC LIMIT 1"),
+            params![bot_id, call], row_entry,
+        ).optional()?)
+    }
+
     pub fn max_turn(&self, bot_id: &str) -> i64 {
         let c = self.db.locked();
         let n = c.query_row("SELECT COALESCE(MAX(turn), 0) FROM entries WHERE bot_id = ?1", [bot_id], |r| r.get(0));
@@ -178,6 +204,18 @@ impl Store {
         Ok(rows)
     }
 
+    /// A chat's messages with files (shared by a bot, attached by the user), newest first: its Library.
+    // ponytail: scans the chat's entries without an index; add one if a long chat's Library gets slow.
+    pub fn file_messages(&self, bot_id: &str, limit: i64) -> Result<Vec<Entry>> {
+        let c = self.db.locked();
+        let mut st = c.prepare(&format!(
+            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1
+               AND (json_array_length(data, '$.files') > 0 OR json_array_length(data, '$.attachments') > 0)
+             ORDER BY seq DESC LIMIT ?2"
+        ))?;
+        Ok(st.query_map(params![bot_id, limit], row_entry)?.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Cards still waiting for the user to sign in to agent `backend`, oldest first.
     // ponytail: scans notices without an index; sign-ins are rare, add one if it shows up in profiles.
     pub fn pending_sign_ins(&self, backend: &str) -> Result<Vec<Entry>> {
@@ -233,12 +271,13 @@ impl Store {
     }
 
     /// Messages in `bot_id`'s chat after `after_seq`, oldest first: the
-    /// user's, and final replies. Dreaming reads these.
+    /// user's, final replies and voice calls' transcripts. Dreaming reads these.
     pub fn conversation_since(&self, bot_id: &str, after_seq: i64, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
             "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND seq > ?2 AND
-               (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1))
+               (kind = 'user' OR (kind = 'agent' AND json_extract(data, '$.final') = 1)
+                OR (kind = 'notice' AND json_extract(data, '$.transcript') IS NOT NULL))
              ORDER BY seq LIMIT ?3"
         ))?;
         Ok(st.query_map(params![bot_id, after_seq, limit], row_entry)?.collect::<rusqlite::Result<_>>()?)

@@ -56,6 +56,8 @@ class MainActivity : FragmentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         applyWindowOrientation(resources.configuration)
+        AppearancePreferences.initialize(applicationContext)
+        ThinkingDetails.initialize(applicationContext)
         NativeAccounts.initialize(this)
         Analytics.start(applicationContext)
         Analytics.userId = { store.state.value.account.userId }

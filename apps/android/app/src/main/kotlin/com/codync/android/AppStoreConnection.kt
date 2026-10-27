@@ -176,6 +176,7 @@ private suspend fun AppStore.consumeEvents(active: EncryptedChannel, cursor: Lon
             }
             withContext(Dispatchers.IO) { requireNotNull(database).apply(batch) }
             refresh()
+            receiveArtifacts(batch)
             acknowledgeVisible(readAfter(batch, state.value.readingScopes))
             if (resync) throw Resync()
         }

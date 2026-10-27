@@ -15,8 +15,10 @@ mod documents;
 pub use computer::draw as computer;
 mod mcp_tools;
 pub use mcp_tools::draw as mcp_tools;
+mod library_view;
 mod memory_view;
 pub use documents::draw as documents;
+pub use library_view::draw as library;
 pub use memory_view::draw as memory;
 
 use super::app::{App, Editor};
@@ -216,7 +218,7 @@ pub fn routine(buf: &mut Buffer, area: Rect, f: &RoutineForm) {
     put(buf, vx, inner.y + 9, vw, "every = from now on · webhook = when called", t.dim.patch(t.panel));
     let (zone_hint, zone_style) = match super::manage::complete_zone(&f.when.text, crate::store::now_ms()) {
         Some(done) => (format!("tab → {done}"), t.secondary),
-        None => (format!("times in {}; end with a zone to change it", super::manage::local_zone()), t.dim),
+        None => (format!("times in {}; end with a zone to change it", crate::routines::local_zone()), t.dim),
     };
     put(buf, vx, inner.y + 10, vw, &zone_hint, zone_style.patch(t.panel));
     let by = inner.bottom() - 1;

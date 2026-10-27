@@ -1,6 +1,7 @@
 package com.codync.android.core
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -62,12 +63,14 @@ data class BotDraft(
         return WireJson.decodeFromJsonElement(JsonObject(mine.mapValues { (key, value) -> if (value == old[key]) new.getValue(key) else value }))
     }
     /** A template carries the bot's setup, not this computer's specifics (its account, team management, fallbacks). */
-    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks") }).toString()
+    fun template(): String = TemplateJson.encodeToString(JsonObject.serializer(),
+        JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks") }.toSortedMap()))
 
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
         private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive")
+        private val TemplateJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,

@@ -20,6 +20,7 @@ import {
   type Usage,
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
+import type { CallLine } from '@shared/calls'
 import type { HostClient } from '../client/host-client'
 import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'
@@ -44,6 +45,8 @@ export interface SendOptions {
   replyTo?: ReplyQuote | null
   /** A document's side conversation (`doc:<id>`) instead of the chat. */
   thread?: string | null
+  /** The voice call it was said in. */
+  call?: string | null
 }
 
 /** Anything larger is refused by the computer. */
@@ -74,10 +77,11 @@ export class BotStore extends BotSync {
 
   private outgoingFiles = new Map<string, OutgoingFile[]>()
 
-  send(text: string, botId: string, { files = [], nonce = crypto.randomUUID(), pasted = [], replyTo = null, thread = null }: SendOptions = {}) {
+  send(text: string, botId: string, { files = [], nonce = crypto.randomUUID(), pasted = [], replyTo = null, thread = null, call = null }: SendOptions = {}) {
     const trimmed = text.trim()
     if ((!trimmed && !files.length) || this.retired) return
     const data: Entry['data'] = { text: trimmed, status: 'sending', clientNonce: nonce }
+    if (call) data.call = call
     if (replyTo) data.replyTo = replyTo
     if (files.length) {
       data.attachments = files.map((f) => ({ id: f.id, name: f.name, size: f.data.length }))
@@ -103,7 +107,7 @@ export class BotStore extends BotSync {
               ids.push(id)
             }
           }
-          return client.send(botId, trimmed, nonce, ids, pasted, replyTo?.id ?? null, thread)
+          return client.send(botId, trimmed, nonce, ids, pasted, replyTo?.id ?? null, thread, call)
         }, true)
         this.outgoingFiles.delete(nonce)
         this.upsert(e)
@@ -186,6 +190,24 @@ export class BotStore extends BotSync {
 
   logCall(botId: string, seconds: number, callId: string = crypto.randomUUID(), transcript?: VoiceTranscript) {
     this.perform((c) => c.call('logCall', { botId, seconds, callId, ...(transcript ? { transcript } : {}) }))
+  }
+
+  /** A finished call's line, with the rest of its transcript; the chat then shows the call's messages behind it. */
+  async endCall(botId: string, call: string, seconds: number, lines: CallLine[]) {
+    try {
+      // Safe to repeat: the computer ends a call once.
+      const { entry } = await this.withLink((c) => c.call<{ entry: Entry | null }>('endCall', { botId, callId: call, seconds, lines }), true)
+      if (entry) this.upsert(entry)
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  /** A call's audio is live: the lead speaks first (only a host with leads marks one, so an older host never gets this). */
+  callStarted(botId: string, call: string) {
+    if (!this.bots.get(botId)?.lead) return
+    // Its opening is the call's, like everything said on it.
+    this.perform((c) => c.call('callStarted', { botId, callId: call }))
   }
 
   screenTakeover(on: boolean) {
@@ -394,6 +416,11 @@ export class BotStore extends BotSync {
     if (this.retired) return
     for (const entry of entries) this.upsert(entry)
     this.changed()
+  }
+
+  /** What a voice call carried, from the computer: the loaded chat may not reach back to it. */
+  async callEntries(botId: string, call: string): Promise<Entry[]> {
+    return (await (await this.ready()).call<{ entries: Entry[] }>('callEntries', { botId, callId: call })).entries
   }
 
   /** The history between a bot and one peer. Never upserted: old notices would break `loadOlder`'s paging. */

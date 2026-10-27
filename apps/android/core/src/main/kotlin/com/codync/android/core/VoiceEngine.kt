@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.*
  * The call bar and the voice service only talk to this.
  */
 interface VoiceEngine {
-    var transcript: CallTranscript?
+    var transcript: CallReceiptTranscript?
         get() = null
         set(@Suppress("UNUSED_PARAMETER") value) { }
     val state: StateFlow<VoiceState>
@@ -51,7 +51,7 @@ fun interface ClipPlayer { suspend fun play(audio: ByteArray, format: String) }
  * touched there. Ports are released once, on `end()` or a failure.
  */
 abstract class ProviderEngine(parent: CoroutineScope, val provider: VoiceProvider, settings: VoiceSettings, label: String) : VoiceEngine {
-    override var transcript: CallTranscript? = null
+    override var transcript: CallReceiptTranscript? = null
     private val job = SupervisorJob(parent.coroutineContext[Job])
     protected val scope = CoroutineScope(parent.coroutineContext + job)
     protected val mutable = MutableStateFlow(VoiceState(engine = label, settings = settings, provider = provider))

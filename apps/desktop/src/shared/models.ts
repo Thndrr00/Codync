@@ -1,3 +1,6 @@
+import type { ArtifactCard } from './artifacts'
+import type { CallLine } from './calls'
+
 // Wire types for codync-host (see host/src/api/). Field names match the
 // host's camelCase JSON. Timestamps are epoch milliseconds.
 
@@ -51,7 +54,9 @@ export interface Bot {
   /** Agents of its chain (its own included) resting now; one whose `until` passed isn't. */
   resting: Resting[]
   pinned: boolean
-  /** Where the user dragged it, lowest first (after pinned bots); ties sort by recent activity. */
+  /** The computer's lead bot, which the host makes: first in the roster, never deleted, hidden or pinned. */
+  lead: boolean
+  /** Where the user dragged it, lowest first within its band (`rosterBand`); ties sort by recent activity. */
   position: number
   hidden: boolean
   notify?: boolean | null
@@ -68,6 +73,8 @@ export interface Bot {
   sharedMemory: boolean
   /** Keeps the harness's own memory (Claude Code's…) on beside Codync's; null where it has no switch. */
   harnessMemory: boolean | null
+  /** The harness keeps one memory for all its sessions that Codync can't turn off (Hermes Agent, Gemini CLI): every bot on it shares it. */
+  harnessMemoryShared: boolean
   /** Moves whenever memory changes, so an open memory screen fetches it again. */
   memoryRev: number
   /** Chief of Staff coordinator role (INIC-04). */
@@ -114,6 +121,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     agentStep: raw.agentStep ?? null,
     resting: raw.resting ?? [],
     pinned: raw.pinned ?? false,
+    lead: raw.lead ?? false,
     position: raw.position ?? 0,
     hidden: raw.hidden ?? false,
     notify: raw.notify ?? null,
@@ -125,6 +133,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
     harnessMemory: raw.harnessMemory ?? null,
+    harnessMemoryShared: raw.harnessMemoryShared ?? false,
     memoryRev: raw.memoryRev ?? 0,
     isChief: raw.isChief ?? false,
     chiefBotId: raw.chiefBotId ?? null,
@@ -223,6 +232,8 @@ export interface ReplyQuote {
   author: string
   /** Its text (or file names), at most 500 characters. */
   text: string
+  /** The artifact, when it quotes an artifact card: the message is about that artifact. */
+  artifact?: string
 }
 
 export interface Attachment {
@@ -351,6 +362,9 @@ export interface EntryData {
   clientNonce?: string
   title?: string
   toolKind?: string
+  /** tool: whether it's the bot's own bookkeeping (composing its message, keeping its memory), left out of the
+   * working steps; a host older than 2.25.0 leaves it out, and the steps then leave out the call too. */
+  bookkeeping?: boolean
   output?: string
   diffs?: FileDiff[]
   locations?: { path: string; line?: number }[]
@@ -370,8 +384,17 @@ export interface EntryData {
   botReactions?: BotReaction[]
   attachments?: Attachment[]
   files?: SharedFile[]
+  /** agent: an artifact the bot published (or updated) in this turn. */
+  artifact?: ArtifactCard
   callSeconds?: number
   voiceTranscriptText?: string
+  /** The voice call it was said in (user), answered during (agent), or that it ends (notice): the chat shows those
+   * messages only in the call's conversation. */
+  call?: string
+  /** user: `voice` when a call's voice wrote it for the user (`send_to_bot`). */
+  from?: string
+  /** notice: what was said on a realtime call, oldest first. */
+  transcript?: CallLine[]
 }
 
 export interface Entry {
@@ -414,7 +437,9 @@ export function isReplyable(e: Entry): boolean {
 /** The quote a sending reply shows until the computer's own replaces it. */
 export function quoteOf(e: Entry): ReplyQuote {
   const names = [...(e.data.attachments ?? []), ...(e.data.files ?? [])].map((f) => f.name).join(', ')
-  return { id: e.id, author: e.kind === 'user' ? 'user' : (e.data.author ?? e.botId), text: (e.data.text || names).slice(0, 500) }
+  const quote: ReplyQuote = { id: e.id, author: e.kind === 'user' ? 'user' : (e.data.author ?? e.botId), text: (e.data.text || names).slice(0, 500) }
+  if (e.data.artifact) quote.artifact = e.data.artifact.id
+  return quote
 }
 
 export interface UsageWindow {

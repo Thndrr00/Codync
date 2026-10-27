@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { AccountApproval, PairingInfo } from '@shared/models'
 import { newSSHProfile, type SSHProfile } from '@shared/ssh'
-import { Button, CardSection, IconButton, Switch } from '../../components/Controls'
+import { Button, CardSection, IconButton, Reveal, Switch } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, Sheet, useDismiss } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
@@ -15,8 +15,9 @@ import { ComputerBadge } from '../ComputerBadge'
 import { PairingCode } from '../PairingCode'
 import { AuthorizedDevicesSection } from './AuthorizedDevicesSection'
 import { useTr } from '../../lib/use-language'
-import { errorText, liveClient, relativeDay, Reveal, SectionHeader, statusText, thisMac } from './parts'
+import { errorText, liveClient, relativeDay, SectionHeader, statusText, thisMac } from './parts'
 import { useSSH } from './ssh-model'
+import { SSHConfigSuggestions } from './SSHConfigSuggestions'
 import { SSHRow } from './SSHRow'
 import { VoiceChatSettingsView } from './VoiceChatSettingsView'
 import { openComputerScreen } from '../screen/open'
@@ -36,6 +37,7 @@ export function ComputersView() {
   const managed = app.managedStores
   const managedIds = new Set(managed.map((s) => s.computer.id))
   const others = cloud.computers.filter((c) => !managedIds.has(c.computerId))
+  const addSSH = (host: string) => setEditing({ profile: { ...newSSHProfile(window.codync.hostPort), host }, isNew: true })
 
   return (
     <div className="settings-computers">
@@ -44,9 +46,12 @@ export function ComputersView() {
           <ManagedComputerCard key={store.computer.id} store={store} ssh={sshState.isSSH(store.computer.id)} />
         ))}
 
-        <div>
+        <div className="settings-ssh">
           <SectionHeader title="Over SSH">
-            <IconButton title="Add SSH computer" icon="plus" onClick={() => setEditing({ profile: newSSHProfile(window.codync.hostPort), isNew: true })} />
+            {sshState.config?.access === 'denied' ? (
+              <IconButton title="Find computers in your SSH config" icon="magnifyingglass" onClick={() => void sshState.answerConfig('allowed')} />
+            ) : null}
+            <IconButton title="Add SSH computer" icon="plus" onClick={() => addSSH('')} />
           </SectionHeader>
           <Reveal show={sshState.state.profiles.length === 0}>
             <Text as="div" size="callout" tone="secondary">
@@ -56,6 +61,7 @@ export function ComputersView() {
           {sshState.state.profiles.map((profile) => (
             <SSHRow key={profile.id} profile={profile} status={sshState.status(profile.id)} edit={() => setEditing({ profile, isNew: false })} />
           ))}
+          <SSHConfigSuggestions add={addSSH} />
         </div>
 
         <div>

@@ -26,6 +26,7 @@ import { FormSheet } from '../marketplace/pieces'
 import { AnalyticsSheet } from './AnalyticsSheet'
 import { DiagnosticsView } from './DiagnosticsView'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
+import { HiddenBotsSection } from './HiddenBotsSection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics'
@@ -132,6 +133,7 @@ function GeneralSettings() {
   const systemLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language
   const [usageIconStyle, setUsageIconStyle] = usePref(prefs.usageIconStyle)
   const [compact, setCompact] = usePref(prefs.sidebarCompact)
+  const [thinkingDetails, setThinkingDetails] = usePref(prefs.thinkingDetails)
   const [showInDock, setShowInDock] = useState(true)
   useEffect(() => void window.codync.app.showInDock().then(setShowInDock), [])
   const [launchAtLogin, setLaunchAtLogin] = useState(false)
@@ -204,6 +206,11 @@ function GeneralSettings() {
           />
         </ValueRow>
       </CardSection>
+      <CardSection title="Chat" footer="Lets you unfold a working bot's thinking and steps from its status in the chat. Only changes this device.">
+        <Switch on={thinkingDetails} onChange={setThinkingDetails}>
+          Show thinking details
+        </Switch>
+      </CardSection>
       <CardSection title="System">
         {window.codync.platform === 'darwin' ? <Switch on={showInDock} onChange={(on) => void window.codync.app.setShowInDock(on).then(setShowInDock)}>Show in Dock</Switch> : null}
         {window.codync.island.supported ? (
@@ -223,6 +230,7 @@ function GeneralSettings() {
       </CardSection>
       <PrivacySettings />
       {window.codync.platform === 'win32' ? <ResearchSettingsSection /> : null}
+      <HiddenBotsSection />
     </CardForm>
   )
 }

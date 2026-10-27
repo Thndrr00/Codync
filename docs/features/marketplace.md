@@ -1,6 +1,6 @@
 # Extensions and agent setup
 
-The Extensions screen configures capabilities installed on the selected computer. Account membership does not install the same capability on every computer.
+The Extensions screen configures capabilities installed on one computer. Account membership does not install the same capability on every computer, so each computer has its own Extensions, opened from that computer and never switched inside: with several computers, from the Extensions button on its heading in the bot list (desktop and iPhone); on the desktop with one computer, from the sidebar footer; on the iPhone, also from its row in Computers & settings.
 
 The desktop and iPhone installed count is labeled **Connectors & skills**, and opens a library with that same title. It includes connected apps (stored as connectors), but excludes agents; agents show their own installation status in the Agents section. The terminal already separates these categories and does not show a combined installed count.
 
@@ -33,6 +33,8 @@ Registry package installs use pinned package references: npm, PyPI and NuGet req
 A custom connector is a command line (split like a shell), a URL (https, or plain http on this computer or its local network), or a pasted MCP config (`importConnectors {config}`: the `mcpServers` / `servers` JSON from READMEs, Claude, Cursor or VS Code, or one server's entry); every server in a config is added.
 
 A connector installed on the computer (or an app connected through Composio) is turned on for every existing bot, and a new bot starts with all of them on; each bot can turn one off in its settings. An enabled connector is passed to the agent as an MCP server when its session starts or resumes. Local connectors are spawned by the agent; remote ones always go through the host's stdio proxy (`codync-host mcp remote`, `host/src/mcp.rs`), so they work with agents that only speak stdio and always carry a fresh token. The proxy speaks streamable HTTP and falls back to the older HTTP+SSE transport when the first POST fails with 400/404/405, as the MCP spec suggests.
+
+Every `codync-host mcp` server Codync gives an agent, connectors and built-in tools alike, carries the host's data directory as `CODYNC_HOME` in its ACP `env` (`mcp::acp_server`): some agents start MCP servers with only a few environment variables (Hermes keeps PATH, HOME and the like), and without it a host with a custom `CODYNC_HOME` (a sandbox, a server) would leave those tools reading the wrong token.
 
 Skills follow the same rule: an installed or hand-written skill is turned on for every existing bot, a new bot starts with all of them on, and each bot can turn one off. An enabled skill reaches the agent as a line in its profile (name, description, path to `SKILL.md`). Skills installed before this rule were turned on for every bot once, at host start (kv `skillsOnForEveryBot`).
 
@@ -74,6 +76,8 @@ catalog (additive host methods).
 Hermes Agent is a built-in agent that runs its installed CLI with `hermes acp`, without an ACP registry adapter. Install it using the [official installation guide](https://hermes-agent.nousresearch.com/docs/getting-started/installation), then run `hermes acp --setup` to choose a provider and model. In Codync, refresh the agents and select **Hermes Agent** when creating a bot; leave the custom command empty.
 
 The Unix installer puts its launcher at `~/.local/bin/hermes`, which Codync already searches. On Windows, Codync also searches `%LOCALAPPDATA%\hermes\bin` (the current installer) and `%LOCALAPPDATA%\hermes\hermes-agent\.hermes\bin` (older source installs), so Hermes can be detected without adding it to PATH. For a custom install location, add its launcher directory to PATH before refreshing agents.
+
+Hermes keeps its own memory, on by default: `MEMORY.md` and `USER.md` in `~/.hermes/memories`, loaded by every Hermes session (other Hermes bots and the `hermes` CLI too). Codync can't turn it off per bot, its memory screen doesn't show it, and forgetting something in Codync doesn't reach it. For one memory, set `memory.memory_enabled` and `memory.user_profile_enabled` to `false` in `~/.hermes/config.yaml`; that applies to every Hermes session.
 
 ## Commands
 

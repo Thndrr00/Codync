@@ -24,6 +24,12 @@ impl App {
         });
         let mut items: Vec<GotoItem> = bots.into_iter().map(|b| GotoItem::Bot(b.id.clone())).collect();
         if want.is_none() {
+            // First among the actions, so they show without scrolling past the long list.
+            let unhide = super::super::l10n::tr("Unhide");
+            let mut hidden: Vec<&Bot> =
+                self.bots.values().filter(|b| b.hidden && fuzzy(q, &[&b.name, "Unhide", unhide.as_ref()])).collect();
+            hidden.sort_by(|a, b| a.name.cmp(&b.name));
+            items.extend(hidden.into_iter().map(|b| GotoItem::Unhide(b.id.clone())));
             items.extend(
                 ACTIONS
                     .iter()
@@ -46,6 +52,7 @@ impl App {
             Action::Details => self.open_routines(),
             Action::Documents => self.open_documents(),
             Action::Computer => self.open_computer_panel(),
+            Action::Library => self.open_library(),
             Action::RefreshAgents => self.call("refreshBackends", json!({}), After::Backends),
             Action::Pair => self.open_pair(),
             Action::Usage => self.overlays.push(Overlay::Usage),
@@ -60,6 +67,11 @@ impl App {
                 let title = super::super::l10n::cycle_language();
                 self.flash(title.as_ref());
             }
+            Action::ThinkingDetails => self.flash(if super::super::details::toggle() {
+                "Thinking details on: > unfolds a working bot's steps"
+            } else {
+                "Thinking details off"
+            }),
             Action::Keys => self.overlays.push(Overlay::Help(Editor::default())),
         }
     }
@@ -116,6 +128,7 @@ impl App {
             Overlay::BotChat(c) => Self::bot_chat_key(c, k),
             Overlay::Routines(l) => self.routines_key(l, k),
             Overlay::Routine(f) => self.routine_key(f, k),
+            Overlay::Library(l) => self.library_key(l, k),
             Overlay::Market(m) => self.market_key(m, k),
             Overlay::Agent(a) => self.agent_key(a, k),
             Overlay::Fields(f) => self.fields_key(f, k),
@@ -167,6 +180,9 @@ impl App {
                         self.start_typing();
                     }
                     Some(GotoItem::Action(a)) => self.run_action(*a),
+                    Some(GotoItem::Unhide(id)) => {
+                        self.call("updateBot", json!({"id": id, "hidden": false}), After::Nothing);
+                    }
                     None => {}
                 }
                 return None;
@@ -242,5 +258,30 @@ impl App {
         if let Some(Overlay::Form(f)) = self.overlays.last_mut() {
             f.cwd = path;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{Bot, Editor, Goto, GotoItem, test_app};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn the_palette_offers_to_unhide_hidden_bots() {
+        let mut app = test_app();
+        for (id, hidden) in [("shown", false), ("hidden", true)] {
+            let bot = Bot::parse(&json!({"id": id, "name": id, "hidden": hidden})).expect("a bot with an id parses");
+            app.bots.insert(id.into(), bot);
+        }
+        let g = Goto { query: Editor::default(), filter: 0, cursor: 0 };
+        let unhide: Vec<String> = app
+            .goto_items(&g)
+            .into_iter()
+            .filter_map(|i| match i {
+                GotoItem::Unhide(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(unhide, ["hidden"]);
     }
 }

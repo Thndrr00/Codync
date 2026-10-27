@@ -62,11 +62,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * A bot's routines, in a sheet over its chat (iOS `RoutinesView`); a row opens its editor.
- * `initialId`: open on that routine's editor (a run's notice in the chat was tapped).
+ * A bot's routines, on its details' Details page (iOS `RoutinesView`); a row opens its editor.
+ * `initialId`: open on that routine's editor (a run's notice in the chat was tapped). `leave` goes back to the chat once a
+ * request to the bot is in the composer.
  */
-@Composable fun RoutinesScreen(bot: Bot, state: AppState, store: AppStore, initialId: String?, embedded: Boolean = false) {
-    val dismiss = LocalDismissModal.current
+@Composable fun RoutinesView(bot: Bot, state: AppState, store: AppStore, initialId: String?, leave: () -> Unit) {
     val online = state.actualConnection is LinkState.Ready
     val listing = state.routines[bot.id]
     val busy = "routines:${bot.id}" in state.busy
@@ -74,24 +74,18 @@ import kotlinx.coroutines.launch
     var editing by remember(bot.id) { mutableStateOf(initialId) }
     var runHistory by remember(bot.id) { mutableStateOf<Map<String, RoutineHistorySelection>>(emptyMap()) }
     LaunchedEffect(bot.id, online) { if (online) while (true) { store.loadRoutines(bot.id); delay(3_000) } }
-    Column(Modifier.fillMaxSize().background(Palette.background).verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Embedded in the inspector (idea 33): the tab already names it and closes it, so no title or close here.
-            if (embedded) Spacer(Modifier.weight(1f))
-            else Text("Routines", Modifier.weight(1f).padding(start = 2.dp), style = Type.system(13f).semibold, color = Palette.text)
-            IconButton("Ask the bot for a routine", "text.bubble", enabled = online) { store.editDraft(bot.id, null, "I want a routine that "); dismiss() }
+            SectionHeading("Routines", Modifier.weight(1f).padding(start = 2.dp))
+            IconButton("Ask the bot for a routine", "text.bubble", enabled = online) { store.editDraft(bot.id, null, "I want a routine that "); leave() }
             IconButton("Set up a routine", "plus", enabled = online) { editing = "" }
-            if (!embedded) IconButton("Close routines", "xmark", action = dismiss)
         }
         val routines = listing?.routines.orEmpty()
-        if (routines.isEmpty()) Text(if (listing != null) "No routines yet. Ask the bot for one, or set it up yourself with +." else "Loading routines…",
-            Modifier.fillMaxWidth().clip(RoundedRectangle(16.dp)).background(Palette.surface).padding(14.dp),
-            style = Type.system(12f).copy(lineHeight = Type.system(12f).lineHeight * 1.25f), color = Palette.secondary)
-        else Column(Modifier.fillMaxWidth().clip(RoundedRectangle(16.dp)).background(Palette.surface).padding(horizontal = 14.dp)) {
-            for ((index, routine) in routines.withIndex()) {
-                if (index > 0) Hairline()
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (routines.isEmpty()) Text(tr(if (listing != null) "No routines yet. Ask the bot for one, or set it up yourself with +." else "Loading routines…"),
+            Modifier.outlinedCard(vertical = 14.dp), style = Type.system(12f).copy(lineHeight = Type.system(12f).lineHeight * 1.25f), color = Palette.secondary)
+        else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (routine in routines) {
+                Row(Modifier.outlinedCard(vertical = 0.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f).plainButton { editing = routine.id }.padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(routine.name, style = Type.system(13f), color = Palette.text)
                         Text(listing?.summary(routine).orEmpty(), style = Type.caption, color = if (routine.lastError == null) Palette.secondary else Palette.danger)
@@ -106,8 +100,10 @@ import kotlinx.coroutines.launch
             }
         }
     }
-    // Item-based, so the editor always gets the routine it was opened on.
-    CodyncSheet(editing, { editing = null }) { id ->
+    // Item-based, so the editor always gets the routine it was opened on; it opens once that routine is listed.
+    CodyncSheet(editing?.takeIf { listing.canEdit(it) }, { editing = null }) { id ->
+        // The list is part of the bot's details; a routine's editor is the routines screen, as on the iPhone.
+        AnalyticsOnAppear(AnalyticsEvent.ScreenViewed(AnalyticsScreen.Routines))
         RoutineEditor(bot.id, listing?.routines?.firstOrNull { it.id == id }, state, store) { saved ->
             // A new webhook routine stays open: its URL and key exist only now.
             editing = if (id.isEmpty() && saved?.hasWebhook == true) saved.id else null
@@ -303,5 +299,14 @@ import kotlinx.coroutines.launch
             SelectionContainer { Text(text, style = Type.callout.monospaced, color = Palette.text, maxLines = 2, overflow = TextOverflow.MiddleEllipsis) }
         }
         buttons()
+    }
+}
+
+/** Existing document and inspector entry points share the details sheet's routine list. */
+@Composable fun RoutinesScreen(bot: Bot, state: AppState, store: AppStore, initialId: String?, embedded: Boolean = false) {
+    val dismiss = LocalDismissModal.current
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        if (!embedded) ModalHeader("Routines")
+        RoutinesView(bot, state, store, initialId, leave = dismiss)
     }
 }

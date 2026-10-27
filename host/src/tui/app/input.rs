@@ -279,6 +279,7 @@ impl App {
             }
             KeyCode::Char('{') => self.step_turn(-1),
             KeyCode::Char('}') => self.step_turn(1),
+            KeyCode::Char('>') => self.toggle_steps(),
             KeyCode::Char('t') => {
                 self.trace = if self.trace == TraceMode::Pane { TraceMode::Off } else { TraceMode::Pane };
                 if self.trace == TraceMode::Off && self.focus == Focus::Trace {
@@ -315,6 +316,7 @@ impl App {
             KeyCode::Char('U') => self.overlays.push(Overlay::Usage),
             KeyCode::Char('M') => self.open_memory(),
             KeyCode::Char('R') => self.open_routines(),
+            KeyCode::Char('L') => self.open_library(),
             KeyCode::Char('A') => self.open_market(),
             KeyCode::Char('r' | 'v') if !roster_page && self.selected.is_some() => {
                 self.chat_page = true;
@@ -347,7 +349,9 @@ impl App {
                 }
             }
             KeyCode::Char('x') => {
-                if let Some(b) = self.bot() {
+                if self.bot().is_some_and(|b| b.lead) {
+                    self.flash("The lead bot can't be deleted");
+                } else if let Some(b) = self.bot() {
                     let (detail, note) = if b.group {
                         ("Its conversation goes away.".into(), "Its bots stay.".into())
                     } else {
@@ -368,7 +372,9 @@ impl App {
             }
             KeyCode::Char('e') => self.edit_bot(),
             KeyCode::Char('p') => {
-                if let Some(b) = self.bot() {
+                if self.bot().is_some_and(|b| b.lead) {
+                    self.flash("The lead bot always stays on top");
+                } else if let Some(b) = self.bot() {
                     let (id, pinned) = (b.id.clone(), !b.pinned);
                     self.call("updateBot", json!({"id": id, "pinned": pinned}), After::Nothing);
                 }
@@ -415,6 +421,7 @@ impl App {
                         }
                     }
                     Some(Click::Composer) => self.start_typing(),
+                    Some(Click::Steps) => self.toggle_steps(),
                     Some(Click::BotChat(entry)) => self.open_bot_chat(&entry),
                     None => {
                         if self.overlays.is_empty() {

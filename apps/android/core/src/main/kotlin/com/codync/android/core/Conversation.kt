@@ -35,12 +35,23 @@ data class Entry(
     val status: String? get() = data.text("status")
     /** Files the bot shared in this message. */
     val files: List<SharedFile> get() = data["files"]?.let { WireJson.decodeFromJsonElement<List<SharedFile>>(it) }.orEmpty()
+    /** The artifact a bot published in this message (an artifact card), read leniently: its text stands in for it. */
+    val artifact: ArtifactCard? get() = (data["artifact"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ArtifactCard>(it) }.getOrNull() }
     /** Of memory and context, only a fresh conversation gets a line: memory lives in the bot's memory settings, a
      *  summary keeps the same conversation going, and a kept handoff changed nothing. */
     val isChat: Boolean get() = kind in listOf("user", "permission") ||
         kind == "notice" && "memory" !in data && "memoryFile" !in data && "compaction" !in data &&
             (data["handoff"] as? JsonObject)?.text("status") != "kept" ||
         kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true
+    /** A step the working indicator unfolds: thinking, narration, a tool call or a plan; never the bot's bookkeeping,
+     *  nor a call the host didn't flag (one older than 2.25.0 flags none). */
+    val isWorkingStep: Boolean get() = when (kind) {
+        "thought" -> text.isNotBlank()
+        "agent" -> data["final"]?.jsonPrimitive?.booleanOrNull != true && !isPass(text)
+        "tool" -> data["bookkeeping"]?.jsonPrimitive?.booleanOrNull == false
+        "plan" -> true
+        else -> false
+    }
     /** A message the user can quote in a reply: theirs, or a final reply (a group member's too). */
     val isReplyable: Boolean get() = kind == "user" || kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true
     /** The message this one replies to, as the computer quoted it. */
@@ -53,6 +64,10 @@ data class Entry(
     val replyQuote: ReplyQuote get() = ReplyQuote(id, if (kind == "user") "user" else data.text("author") ?: botId, quotePreview.take(500))
 
     companion object {
+        /** No text, or a pass the host keeps out of the chat (`is_pass` in host/src/chat/group.rs). */
+        private fun isPass(text: String) =
+            text.trim().trim('"', '.', '*').lowercase().let { it.isEmpty() || it == "(pass)" || it == "pass" }
+
         fun decode(value: JsonObject): Entry {
             val entry = WireJson.decodeFromJsonElement<Entry>(value)
             require(entry.id.isNotBlank() && entry.botId.isNotBlank() && entry.kind.isNotBlank() && entry.seq >= 0 && entry.rev >= 0) {
@@ -80,8 +95,9 @@ private data class EntryFields(
     val callSeconds: Long? = null,
 )
 @Serializable private data class PermissionChoice(val optionId: String, val name: String, val kind: String)
-/** A quoted message: its entry, who wrote it (`user` or a bot id) and its text, cut short by the computer. */
-@Serializable data class ReplyQuote(val id: String = "", val author: String = "", val text: String = "")
+/** A quoted message: its entry, who wrote it (`user` or a bot id) and its text, cut short by the computer; `artifact` when it
+ *  quotes an artifact card (the message is about that artifact). */
+@Serializable data class ReplyQuote(val id: String = "", val author: String = "", val text: String = "", val artifact: String? = null)
 
 @Serializable data class Attachment(val id: String, val name: String, val size: Long) {
     val isImage: Boolean get() = name.substringAfterLast('.', "").lowercase() in listOf("png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp")
@@ -116,12 +132,15 @@ data class PendingSend(
     val replyTo: ReplyQuote? = null,
     /** A document's side conversation (`doc:<id>`) it goes to, instead of the chat. */
     val threadId: String? = null,
+    /** The voice call it was said in (on-device or speech to text). */
+    val call: String? = null,
 ) {
     /** The `send` request for it, with the ids of its uploaded files. */
     fun body(attachments: List<String> = emptyList()): JsonObject = buildJsonObject {
         put("botId", botId); put("text", text); put("clientNonce", nonce)
         replyTo?.let { put("replyTo", it.id) }
         threadId?.let { put("threadId", it) }
+        call?.let { put("call", it) }
         if (attachments.isNotEmpty()) put("attachments", JsonArray(attachments.map(::JsonPrimitive)))
     }
 }
@@ -135,6 +154,8 @@ sealed interface MirrorEvent {
     data class EntryChanged(val entry: Entry) : MirrorEvent
     data class Usage(val value: JsonObject) : MirrorEvent
     data class Screen(val value: JsonObject) : MirrorEvent
+    /** An artifact was published, updated or renamed (the catch-up replays it too), never a checkpoint. */
+    data class ArtifactChanged(val artifact: Artifact) : MirrorEvent
     data object Resync : MirrorEvent
     data object Ignored : MirrorEvent
 
@@ -147,6 +168,8 @@ sealed interface MirrorEvent {
             "entry" -> EntryChanged(Entry.decode(value.getValue("entry").jsonObject))
             "usage" -> Usage(value.getValue("usage").jsonObject)
             "screen" -> Screen(value.getValue("screen").jsonObject)
+            // One this app can't read is passed over rather than fetching everything again: a card or the Library reads it again.
+            "artifact" -> runCatching { ArtifactChanged(Artifact.decode(value.getValue("artifact"))) }.getOrDefault(Ignored)
             "resync" -> Resync
             // Match the existing clients: unknown events do not advance the cursor.
             else -> Ignored

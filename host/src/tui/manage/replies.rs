@@ -59,9 +59,11 @@ impl App {
                     }
                 }
             }
+            Reply::CallEntries(call) => {
+                self.call_entries.insert(call, entries_of(&v));
+            }
             Reply::BotChat { bot, peer } => {
-                let entries: Vec<Entry> =
-                    v["entries"].as_array().into_iter().flatten().filter_map(Entry::parse).map(|(_, e)| e).collect();
+                let entries = entries_of(&v);
                 for o in &mut self.overlays {
                     if let Overlay::BotChat(c) = o
                         && c.bot == bot
@@ -88,6 +90,7 @@ impl App {
                     self.sheet("routines", json!({"botId": bot}), Reply::Routines(bot.clone()));
                 }
             }
+            Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);
@@ -270,6 +273,18 @@ impl App {
                     m.error = Some(e);
                 }
             }
+            Reply::CallEntries(call) => {
+                // The call's line folds again with nothing kept, so the next `o` asks again.
+                let lines: Vec<String> = self
+                    .entries
+                    .values()
+                    .flat_map(|m| m.values())
+                    .filter(|l| l.unfolds() && l.call() == Some(call.as_str()))
+                    .map(|l| l.id.clone())
+                    .collect();
+                self.unfolded.retain(|id| !lines.contains(id));
+                self.flash(&e);
+            }
             Reply::BotChat { bot, peer } => {
                 for o in &mut self.overlays {
                     if let Overlay::BotChat(c) = o
@@ -289,6 +304,16 @@ impl App {
                         s.error = Some(e.clone());
                     }
                 }
+            }
+            Reply::Library(bot) => {
+                for o in &mut self.overlays {
+                    if let Overlay::Library(l) = o
+                        && l.bot == *bot
+                    {
+                        l.items.get_or_insert_with(Vec::new);
+                    }
+                }
+                self.flash(&e);
             }
             Reply::Memory(_) | Reply::MemorySaved(_) | Reply::MemoryFile(_) | Reply::Routines(_) => {
                 for o in &mut self.overlays {
@@ -323,6 +348,9 @@ impl App {
                 Overlay::Routines(l) => {
                     calls.push(("routines", json!({"botId": l.bot}), After::Sheet(Reply::Routines(l.bot.clone()))));
                 }
+                Overlay::Library(l) => {
+                    calls.push(("library", json!({"botId": l.bot}), After::Sheet(Reply::Library(l.bot.clone()))));
+                }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));
                     calls.push(("skills", json!({}), After::Skills));
@@ -353,4 +381,9 @@ impl App {
         }
         list
     }
+}
+
+/// The entries in a host reply (`callEntries`, `botConversation`).
+fn entries_of(v: &Value) -> Vec<Entry> {
+    v["entries"].as_array().into_iter().flatten().filter_map(Entry::parse).map(|(_, e)| e).collect()
 }

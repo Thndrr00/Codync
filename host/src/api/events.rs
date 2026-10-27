@@ -66,6 +66,7 @@ pub fn events_stream(
     for e in hub.store.entries_since(since, CATCH_UP_PER_BOT)? {
         catch_up.push(json!({"type": "entry", "rev": e.rev, "entry": e}));
     }
+    catch_up.extend(crate::chat::artifacts::since(&hub.store, since));
     catch_up.sort_by_key(|v| v["rev"].as_i64().unwrap_or(0));
     // `rev` counts every mutation, but the catch-up replays only bots and entries: the
     // last rev it sends is where a client's initial load ends.

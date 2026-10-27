@@ -75,11 +75,16 @@ public final class BotStore {
     @ObservationIgnored var composerPasted: [String: [String]] = [:]
     public var routineDrafts: [String: String] = [:]
     public let fileDownloads = FileDownloads()
+    var artifacts = ArtifactCache()
     public var lastError: String?
     /// The open conversation (navigation path).
     public var selection: String?
     /// The remote screen viewer (iPhone); `codync://screen` opens it.
     public var screenRequest: ScreenRequest?
+
+    /// A Shortcuts request, consumed by the matching conversation.
+    public internal(set) var voiceCallRequest: String?
+    @ObservationIgnored var preparingVoiceCall: UUID?
 
     // Platform hooks (push registration, Live Activities, widgets).
     /// Each time the channel becomes ready.
@@ -115,6 +120,7 @@ public final class BotStore {
         let end: @MainActor () -> Void
     }
     @ObservationIgnored var voiceCalls: [UUID: VoiceCall] = [:]
+    @ObservationIgnored var shortcutSends = 0
     var saveTask: Task<Void, Never>?
     var rewound = false
     /// Events stayed undecodable after the rewind.
@@ -190,10 +196,10 @@ public final class BotStore {
         return nil
     }
 
-    /// Roster order: pinned first, then where the user dragged them, then most recent activity.
+    /// Roster order: the lead, pinned bots, then where the user dragged them, then most recent activity.
     public var roster: [Bot] {
         bots.values.filter { !$0.hidden }.sorted {
-            if $0.pinned != $1.pinned { return $0.pinned }
+            if $0.band != $1.band { return $0.band < $1.band }
             if $0.position != $1.position { return $0.position < $1.position }
             return $0.lastAt > $1.lastAt
         }

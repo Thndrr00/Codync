@@ -3,7 +3,7 @@ package com.codync.android.core
 import kotlinx.serialization.json.*
 
 /** Bounded text observed during a call; no claim that audio played or decisions were approved. */
-class CallTranscript {
+class CallReceiptTranscript {
     private data class Segment(val role: String, val source: String, val text: String)
     private val rows = linkedMapOf<String, Segment>()
     private var characters = 0
