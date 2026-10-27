@@ -39,7 +39,7 @@ pub use cmd::Cmd;
 use cmd::Queued;
 pub(crate) use launch::{launch_commands, select_model, start_agent, system_prompt};
 pub(crate) use results::recover_results;
-pub(crate) use updates::diff_summary;
+pub(crate) use tool_entry::diff_summary;
 
 use crate::agent::acp::{self, Acp, Incoming};
 use crate::agent::config::FastModeSupport;

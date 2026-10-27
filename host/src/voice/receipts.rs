@@ -68,10 +68,22 @@ mod tests {
         let store = Store::open(&dir.join("test.db")).unwrap();
         let cfg: BotConfig = serde_json::from_value(json!({"id":"bot","name":"Bot","backend":"claude"})).unwrap();
         store.save_bot(&cfg).unwrap();
-        let hub = Hub::new(store, "test".into(), crate::remote::identity::Identity::load_or_create(&dir).unwrap(), "token".into(), 19223);
+        let hub = Hub::new(
+            store,
+            "test".into(),
+            crate::remote::identity::Identity::load_or_create(&dir).unwrap(),
+            "token".into(),
+            19223,
+        );
         let call = uuid::Uuid::new_v4().to_string();
-        let original = hub.add_entry(&Lane::main("bot"), EntryKind::Notice, 0,
-            &json!({"call":call,"callSeconds":10,"text":"A useful title","transcript":[]})).unwrap();
+        let original = hub
+            .add_entry(
+                &Lane::main("bot"),
+                EntryKind::Notice,
+                0,
+                &json!({"call":call,"callSeconds":10,"text":"A useful title","transcript":[]}),
+            )
+            .unwrap();
         let body = json!({"botId":"bot","callId":call,"seconds":10});
         let first = log(&hub, &body).unwrap();
         let repeated = log(&hub, &body).unwrap();
