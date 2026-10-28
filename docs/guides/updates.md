@@ -1,5 +1,11 @@
 # App and host updates
 
+> **This fork's builds take no updates from a release server.** The desktop build ships no publish feed
+> (`publish: null` in `apps/desktop/electron-builder.yml`), and `update::release::latest()` in the host refuses
+> instead of asking the original repository for a release, so neither the app nor a bundled host can be replaced
+> by the upstream build. A newer build is installed by hand. The rest of this guide describes a build that opts
+> back into updates.
+
 A client and a host on versions that can't work together say which one to update:
 [Client and host compatibility](../reference/compatibility.md).
 
