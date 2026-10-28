@@ -761,7 +761,7 @@ dependencies = [
 
 [[package]]
 name = "codync-mem"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "rusqlite",
  "serde",
@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "codync-network"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
