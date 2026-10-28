@@ -285,6 +285,29 @@ A single merge for the release: codync-network, cross-computer bot messages, clo
 - Android and desktop gates were not re-run after this merge (their files are the label and author changes above); the v2.27.0 results stand for the code they covered.
 - iOS: not compiled.
 
+## v2.29.0 merge (PR 232)
+
+The release merge: network rules, address names and menu entries, one agent-and-model picker on both clients, a per-computer push switch and settings as its own Android screen.
+
+### Conflict decisions
+
+- `host/src/agent/acp.rs`, `process.rs`, `agent/mod.rs`: upstream's newer process ownership (monitor, graceful `stop_within`, suspended start) with the fork's per-account environment isolation at spawn.
+- `host/src/agent/bot/{launch,session,turn}.rs`, `chat/context.rs`: upstream's unprompted-snapshot flow, session-opening timeout and `drop_unanswered`, plus the fork's allocation guard, `finish_session_model`, resumable replacement, side-conversation opening and derived `unprompted` mirror.
+- `host/src/chat/calls/context.rs`, `tui/app/{forms,ui}.rs`, `tests/fixtures/wire-shape.json`: the fork's JSON fixture, account test and network-opened lists; the action and field tables now hold 21 and 20 entries.
+- Android: upstream's slim Settings page and `ComputersView` over the fork's four-destination shell (rail, split view, reselect, per-computer push), the fork's catalog/proactive/account fields inside upstream's combined picker, and the fork's multi-computer pairing on the merged store API.
+- Desktop: upstream's compact picker and Settings page with the fork's account picker, robot preview, coordinator and proactive sections; one bot template now (`@shared/bot-template`, omitting account, team management and network reach).
+- iPhone: upstream's picker and settings with the fork's account support; `WhatsNew.md` regains its eaten 2.28.0 section.
+- Docs: the fork's studies and Android plan plus upstream's network plan and ownership row.
+
+### Validation observed
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo check --all-targets` exit 0.
+- `cargo test --bin codync-host`: 796 passed, 4 failed, 1 ignored. The four failures are the fork's process-tree regressions in `agent::acp::tests` (they time out waiting for the descendants' pipes to close after a drop); they passed at v2.27.0, and the fixture and `Tree` are unchanged by the merge, so the merged ACP reader keeps the owned process alive after `Acp` is dropped. This needs a fix before the release; everything else passes.
+- Android `assembleDebug :app:assembleDebugAndroidTest :core:test :app:testDebugUnitTest lintDebug` exit 0.
+- Desktop `npm run typecheck` exit 0; `npm test` exit 0 (385 passed, 19 platform skips, 0 failures).
+- Preservation checklist exit 0.
+- iOS: not compiled.
+
 ## Resource and environment evidence
 
 - Initial C: free space: 25.14 GiB. Checked again before each heavyweight compiler.
