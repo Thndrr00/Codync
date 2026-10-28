@@ -465,7 +465,7 @@ async fn main() -> Result<()> {
             } else if status {
                 update::status()?
             } else if check {
-                update::check().await?
+                update::check()?
             } else if !worker && service::installed() {
                 tokio::task::spawn_blocking(move || update::spawn_worker(port, force)).await??;
                 update::status()?

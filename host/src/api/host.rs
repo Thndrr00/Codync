@@ -16,7 +16,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
     Ok(ControlFlow::Break(match method {
         "hostUpdateStatus" => crate::update::status()?,
         "sentinelHealth" => crate::sentinel::health_json(&hub.store, b["lookbackMs"].as_i64())?,
-        "checkHostUpdate" => crate::update::check().await?,
+        "checkHostUpdate" => crate::update::check()?,
         "setHostAutomaticUpdates" => {
             crate::update::set_automatic(b["enabled"].as_bool().context("enabled must be a boolean")?)?
         }
