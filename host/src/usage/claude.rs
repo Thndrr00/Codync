@@ -9,7 +9,7 @@ use super::Window;
 pub(super) async fn collect() -> Option<Vec<Window>> {
     let bin = super::command::program("claude")?;
     let out = tokio::time::timeout(
-        std::time::Duration::from_secs(60),
+        std::time::Duration::from_mins(1),
         tokio::process::Command::new(bin)
             .args(["-p", "/usage", "--output-format", "json", "--no-session-persistence"])
             .current_dir(dirs::home_dir()?)

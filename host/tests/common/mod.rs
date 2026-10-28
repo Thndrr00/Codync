@@ -12,6 +12,9 @@ use std::time::{Duration, Instant};
 /// home's token: another test's public health response is not our child becoming ready.
 pub async fn serve(home: &Path) -> (Child, String) {
     let deadline = Instant::now() + Duration::from_secs(30);
+    let _ = std::fs::create_dir_all(home);
+    let log = home.join("host-stderr.log");
+    let mut last = String::new();
     loop {
         let port = std::net::TcpListener::bind("127.0.0.1:0").expect("free port").local_addr().expect("port").port();
         let base = format!("http://127.0.0.1:{port}");
@@ -20,10 +23,14 @@ pub async fn serve(home: &Path) -> (Child, String) {
             .env("CODYNC_HOME", home)
             .env("CODYNC_CLOUD", "off")
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(std::fs::File::create(&log).map_or_else(|_| Stdio::null(), Stdio::from))
             .spawn()
             .expect("start the host");
         while child.try_wait().expect("host state").is_none() {
+            match reqwest::get(format!("{base}/health")).await {
+                Ok(_) => last.clear(),
+                Err(e) => last = format!("{e:?}"),
+            }
             if ready(&base, home).await {
                 return (child, base);
             }
@@ -31,12 +38,20 @@ pub async fn serve(home: &Path) -> (Child, String) {
                 // A panicking startup fixture must not leave an unowned host behind.
                 let _ = child.kill();
                 let _ = child.wait();
-                panic!("host didn't start");
+                panic!("{}", not_started(&log, &last));
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        assert!(Instant::now() < deadline, "host didn't start");
+        assert!(Instant::now() < deadline, "{}", not_started(&log, &last));
     }
+}
+
+/// Why a test host didn't answer: the last health check's error and the end of the host's log.
+fn not_started(log: &Path, last: &str) -> String {
+    let text = std::fs::read_to_string(log).unwrap_or_default();
+    let lines: Vec<&str> = text.lines().collect();
+    let tail = lines[lines.len().saturating_sub(30)..].join("\n");
+    format!("host didn't start; last health check: {last}\n--- host log ---\n{tail}")
 }
 
 pub async fn ready(base: &str, home: &Path) -> bool {

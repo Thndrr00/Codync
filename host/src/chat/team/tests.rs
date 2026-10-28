@@ -8,13 +8,13 @@ use std::time::Duration;
 #[path = "blocking_tests.rs"]
 mod blocking_tests;
 
-struct Fixture {
-    hub: Arc<Hub>,
+pub(super) struct Fixture {
+    pub(super) hub: Arc<Hub>,
     dir: PathBuf,
 }
 
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("codync-team-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let store = Store::open(&dir.join("test.db")).unwrap();
@@ -77,7 +77,7 @@ impl Fixture {
         sent.unwrap()
     }
 
-    async fn until(&self, condition: impl Fn() -> bool) {
+    pub(super) async fn until(&self, condition: impl Fn() -> bool) {
         // Generous: Windows runners need several seconds to run 16 queued turns.
         tokio::time::timeout(Duration::from_secs(30), async {
             while !condition() {
@@ -121,7 +121,7 @@ impl Fixture {
             .collect()
     }
 
-    async fn shutdown(self) {
+    pub(super) async fn shutdown(self) {
         self.hub.shutdown().await;
         // Windows may still hold files of an agent that just exited.
         let _ = std::fs::remove_dir_all(self.dir);
@@ -471,7 +471,7 @@ async fn invalid_messages_never_start_and_stopped_senders_cannot_admit_more() {
 #[tokio::test]
 async fn a_member_in_a_room_turn_mentions_instead_of_messaging() {
     let f = Fixture::new();
-    f.hub.set_runtime("a", |r| r.lane = Some(crate::store::Lane::main("crew")));
+    f.hub.set_runtime("a", |r| r.lane = Some(Lane::main("crew")));
     let result = f.message("work");
     assert!(result.unwrap_err().to_string().contains("@-mention the room's members"));
     assert_eq!(f.hub.team.0.locked().messages, 0);
@@ -536,7 +536,7 @@ fn restart_marks_requests_interrupted_without_replaying_them() {
     let store = Store::open(std::path::Path::new(":memory:")).unwrap();
     let pending = store
         .insert_entry(
-            &crate::store::Lane::main("b"),
+            &Lane::main("b"),
             EntryKind::Notice,
             1,
             &json!({
@@ -547,7 +547,7 @@ fn restart_marks_requests_interrupted_without_replaying_them() {
         .unwrap();
     let complete = store
         .insert_entry(
-            &crate::store::Lane::main("a"),
+            &Lane::main("a"),
             EntryKind::Notice,
             1,
             &json!({

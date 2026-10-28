@@ -137,7 +137,7 @@ export class AccountService extends EventEmitter {
   /** An unpackaged Codync Dev run with a test account's one-time sign-in token (tools/dev-account.mjs): signs in without a browser. */
   private async signInWithDevTicket() {
     const ticket = process.env.CODYNC_DEV_SIGN_IN_TICKET
-    if (!ticket || app.isPackaged || identity.environment !== 'dev' || this.activeSession) return
+    if (!ticket || app.isPackaged || identity.environment !== 'dev' || !this.config.clerkPublishableKey?.startsWith('pk_test_') || this.activeSession) return
     try {
       await this.request<SignInResource>('POST', '/v1/client/sign_ins', { strategy: 'ticket', ticket })
       await this.refreshClient()

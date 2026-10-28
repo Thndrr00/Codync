@@ -12,7 +12,7 @@ use std::time::Duration;
 pub async fn models(store: &Store, backend: &str, account: Option<&str>) -> Result<Value> {
     let extra_env = account.map(|id| crate::agent::account::env(id, backend)).transpose()?.unwrap_or_default();
     let (acp, mut inbox, _, _) = start_with_env(store, backend, &extra_env).await?;
-    let result = tokio::time::timeout(Duration::from_secs(60), async {
+    let result = tokio::time::timeout(Duration::from_mins(1), async {
         let request = acp.request("session/new", json!({"cwd": probe_dir(), "mcpServers": []}));
         tokio::pin!(request);
         let session = loop {

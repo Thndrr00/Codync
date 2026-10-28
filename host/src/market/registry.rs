@@ -157,7 +157,7 @@ type Page = (Vec<Value>, Option<String>);
 /// The unfiltered first page (featured servers, then the registry's first page), kept in memory
 /// because the registry often takes 15-45 s to answer.
 static FIRST_PAGE: Mutex<Option<(Instant, Page)>> = Mutex::new(None);
-const FIRST_PAGE_FRESH: Duration = Duration::from_secs(600);
+const FIRST_PAGE_FRESH: Duration = Duration::from_mins(10);
 
 /// Serves the cached first page at once (refreshing it in the background when stale).
 async fn first_page() -> Result<Page> {
@@ -235,7 +235,7 @@ mod tests {
                 _ => (vec![], Some(cursor)),
             })
         };
-        let later = Instant::now() + Duration::from_secs(60);
+        let later = Instant::now() + Duration::from_mins(1);
         let (items, next) = past_empty_pages((vec![], Some("b".into())), "", later, pages).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(next.as_deref(), Some("d"));

@@ -315,6 +315,7 @@ pub enum Overlay {
     RosterTools,
     Goto(Goto),
     Help(Editor),
+    LeadAgent(usize),
     Confirm(Confirm),
     NewBot(NewBot),
     Folder(FolderPicker),
@@ -345,6 +346,7 @@ pub struct Toast {
 
 #[derive(Clone)]
 pub enum Click {
+    LeadAgent,
     Bot(String),
     Option {
         entry: String,

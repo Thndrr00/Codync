@@ -262,6 +262,8 @@ export interface BotMessage {
   text: string
   reply?: string
   detail?: string
+  /** The peer's name when it is on another of the user's computers (its id is `name@computer`). */
+  peerName?: string
 }
 
 /** "Earlier context was summarized": the harness's summary, when it gave one. */

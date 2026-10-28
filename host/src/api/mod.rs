@@ -14,6 +14,7 @@ mod files;
 mod host;
 mod http;
 mod marketplace;
+mod network;
 mod origin;
 mod rebinding;
 mod remote;
@@ -158,6 +159,10 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Continue(b) => b,
     };
     let b = match catalog::call(hub, method, b).await? {
+        ControlFlow::Break(v) => return Ok(v),
+        ControlFlow::Continue(b) => b,
+    };
+    let b = match network::call(hub, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };

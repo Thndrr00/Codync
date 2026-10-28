@@ -1,23 +1,22 @@
 // A Clerk test account for `npm run dev` sandboxes: finds or creates `sandbox-<name>+clerk_test@example.com`
 // in the Clerk *development* instance and mints a one-time sign-in token the app trades for a session
-// (account.ts, `CODYNC_DEV_SIGN_IN_TICKET`). The secret key comes from CLERK_SECRET_KEY or the git-ignored
-// `.env` in the main checkout's root (every worktree reads that one file); only `sk_test_` keys are used,
+// (account.ts, `CODYNC_DEV_SIGN_IN_TICKET`). The secret key comes from CODYNC_CLERK_SECRET_KEY or the git-ignored
+// `.env.development` in the main checkout's root (every worktree reads that one file); only `sk_test_` keys are used,
 // so production is never touched.
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { devClerkSecretKey } from '../src/shared/dev-sandbox.ts'
 
 const API = 'https://api.clerk.com/v1'
 
 export function secretKey() {
-  // A linked worktree's git common dir is the main checkout's `.git`, so its parent holds the shared `.env`.
-  const common = spawnSync('git', ['rev-parse', '--git-common-dir'], { cwd: dirname(fileURLToPath(import.meta.url)), encoding: 'utf8' }).stdout.trim()
-  const file = resolve(dirname(fileURLToPath(import.meta.url)), common, '..', '.env')
-  const fromFile = existsSync(file) ? /^CLERK_SECRET_KEY=(.+)$/m.exec(readFileSync(file, 'utf8'))?.[1] : undefined
-  const key = (process.env.CLERK_SECRET_KEY ?? fromFile ?? '').trim().replace(/^["']|["']$/g, '')
-  if (key && !key.startsWith('sk_test_')) throw new Error('CLERK_SECRET_KEY must be the development instance key (sk_test_...).')
-  return key || null
+  // A linked worktree's git common dir is the main checkout's `.git`, so its parent holds the shared `.env.development`.
+  const here = dirname(fileURLToPath(import.meta.url))
+  const git = spawnSync('git', ['rev-parse', '--git-common-dir'], { cwd: here, encoding: 'utf8' })
+  const file = git.status === 0 ? resolve(here, git.stdout.trim(), '..', '.env.development') : null
+  return devClerkSecretKey(process.env.CODYNC_CLERK_SECRET_KEY, file && existsSync(file) ? readFileSync(file, 'utf8') : undefined)
 }
 
 async function clerk(key, method, path, body) {

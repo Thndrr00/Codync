@@ -1,7 +1,7 @@
 //! Bounded synchronous asks for batches, pipelines and existing callers.
 
 use super::{
-    BotRequest, MAX_MESSAGE_BYTES, MessageLifetime, REQUEST_QUOTE_BYTES, RequestStatus, assignments, visible_bot,
+    Back, BotRequest, MAX_MESSAGE_BYTES, MessageLifetime, REQUEST_QUOTE_BYTES, RequestStatus, assignments, visible_bot,
 };
 use crate::LockExt;
 use crate::agent::bot::Cmd;
@@ -62,7 +62,7 @@ pub(super) async fn ask(
         hub: hub.clone(),
         request_id: id.clone(),
         quote: crate::agent::acp::truncate(message, REQUEST_QUOTE_BYTES),
-        sender: source.id.clone(),
+        back: Back::Local { sender: source.id.clone() },
         entries: vec![],
         target_name: target.name.clone(),
         started: false,

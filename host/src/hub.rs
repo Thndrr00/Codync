@@ -80,6 +80,12 @@ pub struct Hub {
     pub budget: crate::budget::Budgets,
     pub team: crate::chat::team::Requests,
     pub groups: crate::chat::group::Rooms,
+    /// The user's other computers (codync-network), once this one is in a network.
+    pub network: crate::network::Network,
+    /// Requests this computer's bots sent to bots on the other computers, until they're answered.
+    pub waiting: crate::chat::team::remote::Waiting,
+    /// The user's cloud assistant: its requests to this computer's bots and their replies.
+    pub assistant: crate::chat::team::assistant::Replies,
     pub store: Store,
     pub host_id: String,
     pub identity: Identity,
@@ -128,6 +134,9 @@ impl Hub {
             budget: crate::budget::Budgets::load(&store),
             team: crate::chat::team::Requests::default(),
             groups: crate::chat::group::Rooms::default(),
+            network: crate::network::Network::default(),
+            waiting: crate::chat::team::remote::Waiting::default(),
+            assistant: crate::chat::team::assistant::Replies::default(),
             store,
             host_id,
             identity,
@@ -253,6 +262,7 @@ impl Hub {
             let _g = self.emit_lock.locked();
             self.store.save_bot(&cfg)?;
         }
+        crate::network::publish(self);
         if !cfg.is_group() {
             self.spawn_bot(cfg.clone());
             crate::market::agent_sign_in::ask_before_first_message(self, &cfg);
@@ -312,6 +322,7 @@ impl Hub {
             }
             return Err(error);
         }
+        crate::network::publish(self);
         if !cfg.is_group() {
             if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&row.config) {
                 crate::chat::memory::changed(self, Some(&id));
@@ -367,6 +378,7 @@ impl Hub {
             let _ =
                 self.events.send(json!({"type": "bot", "rev": rev, "bot": {"id": id, "deleted": true, "rev": rev}}));
         }
+        crate::network::publish(self);
         // Its shared files and artifacts are unreachable once the bot is deleted.
         let folders = [crate::chat::files::root(id), crate::chat::artifacts::root(id)];
         let bot = id.to_owned();

@@ -11,9 +11,9 @@ use std::time::{Duration, Instant};
 
 /// Coming back costs a relaunch plus `session/load` (seconds), so ordinary pauses in a chat
 /// stay warm.
-const IDLE: Duration = Duration::from_secs(30 * 60);
+const IDLE: Duration = Duration::from_mins(30);
 /// How often an idle bot looks for something to give back.
-const CHECK_EVERY: Duration = Duration::from_secs(60);
+const CHECK_EVERY: Duration = Duration::from_mins(1);
 
 #[derive(Debug, PartialEq)]
 enum Release {

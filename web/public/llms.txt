@@ -33,6 +33,7 @@ Key facts:
 - [Bots](https://www.codync.dev/docs/bots) and [agents](https://www.codync.dev/docs/agents)
 - [Group chats](https://www.codync.dev/docs/groups)
 - [Teamwork](https://www.codync.dev/docs/teamwork)
+- [Cloud assistants](https://www.codync.dev/docs/cloud-assistants): the Codync connector for ChatGPT, Claude and other MCP clients
 - [Routines](https://www.codync.dev/docs/routines)
 - [Memory](https://www.codync.dev/docs/memory)
 - [Connectors and skills](https://www.codync.dev/docs/connectors-and-skills)
