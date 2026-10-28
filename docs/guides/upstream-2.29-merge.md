@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**v2.27.0 is fully merged (PRs 216, 219, 220, 221 and 226) and its gate is recorded below; v2.28.0 and v2.29.0 remain.** Validation records observed commands, never an assumed pass.
+**v2.27.0 is merged and gated; v2.28.0 is merged and type-checks (its unit binary cannot be generated on this 8 GB machine: LLVM runs out of memory); v2.29.0 remains.** Validation records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -261,6 +261,29 @@ This PR finishes v2.27.0: usage notes on limits, the Extensions lists as lazy li
 - Desktop `npm run typecheck` exit 0; `npm test` exit 0 (372 passed, 19 platform skips, 0 failures).
 - Preservation checklist exit 0.
 - iOS: not compiled here; Swift changes are reviewed, not built.
+
+## v2.28.0 merge (PR 228)
+
+A single merge for the release: codync-network, cross-computer bot messages, cloud-assistant tasks and lead badges.
+
+### Conflict decisions
+
+- `host/Cargo.toml`: the fork's `rusqlite` `functions` feature plus upstream's `rustls`; the workspace gains `crates/network`.
+- `host/src/main.rs`, `host/src/api/mod.rs`: the fork's `proactive`, `origin`, `rebinding` and `catalog` lane stay and upstream's `network`/`network_cli` modules and `network::call` lane are added.
+- `host/src/api/bots.rs`: upstream's async `teamCall` with the fork's `messageResult`.
+- `host/src/chat/team.rs` (9 blocks) and `tests.rs`: both flows survive — the fork's `ask_bot`/`delegate_batch`/`run_pipeline`, wait graph, reply oneshot and reserved sender slot, and upstream's `Back::Local/Remote/Assistant`, `remote::answer`/`cancelled`, `assistant.started/answered`, `delegationId`-tagged notices and the network route. Blocking asks build a local back; `Drop` releases a slot only when the message reserved one and stayed local; envelope escaping and the consent rule live in the shared prompt builder.
+- `host/src/chat/team/blocking.rs`: builds `Back::Local { sender }` now that `MessageLifetime` keeps the back instead of a sender field.
+- `host/src/agent/auth/models.rs`, `agent/registry.rs`, `mcp.rs`, `usage/mod.rs`: the fork's account environment, egress policy, tool timeouts, usage refresh lock and status lines, with upstream's `Duration::from_mins/from_hours`.
+- `host/tests/common/mod.rs`: the fork's authenticated readiness plus upstream's start diagnostic (`not_started`) and unowned-host cleanup.
+- Android `BotListView.kt` drops upstream's duplicate `BotRowItem` (the fork's `RosterBotListEntry` in `BotRow.kt` is the row); `ChatRows.kt` keeps the fork's `Type.chatSubheadline` with `state.authorName`.
+- `CLAUDE.md` and `docs/architecture/file-structure.md`: the fork's pointers and rows plus upstream's cloud connector, `codync-network` and local-secrets notes, with one row per responsibility.
+
+### Validation observed
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0 after the fork's six duration constants moved to `from_mins`/`from_hours`; `cargo check --all-targets` exit 0.
+- `cargo test --bin codync-host` **could not run on this machine**: rustc aborts while generating the test binary with `Allocation failed` / `STATUS_STACK_BUFFER_OVERRUN` (LLVM out of memory on 8 GB shared with other work). The type check and clippy cover the same code; the release's runtime gate needs a machine with more memory.
+- Android and desktop gates were not re-run after this merge (their files are the label and author changes above); the v2.27.0 results stand for the code they covered.
+- iOS: not compiled.
 
 ## Resource and environment evidence
 
