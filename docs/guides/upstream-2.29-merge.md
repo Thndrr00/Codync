@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**v2.27.0 is merged and gated; v2.28.0 is merged and type-checks (its unit binary cannot be generated on this 8 GB machine: LLVM runs out of memory); v2.29.0 remains.** Validation records observed commands, never an assumed pass.
+**v2.27.0 and v2.28.0 are merged; v2.29.0 is merged with every gate green (the four process-tree regressions were fixed afterwards).** Validation records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -302,7 +302,7 @@ The release merge: network rules, address names and menu entries, one agent-and-
 ### Validation observed
 
 - `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0; `cargo check --all-targets` exit 0.
-- `cargo test --bin codync-host`: 796 passed, 4 failed, 1 ignored. The four failures are the fork's process-tree regressions in `agent::acp::tests` (they time out waiting for the descendants' pipes to close after a drop); they passed at v2.27.0, and the fixture and `Tree` are unchanged by the merge, so the merged ACP reader keeps the owned process alive after `Acp` is dropped. This needs a fix before the release; everything else passes.
+- `cargo test --bin codync-host`: 800 passed, 0 failed, 1 ignored. The four process-tree regressions that failed after the merge (`agent::acp::tests`) are fixed in `fix(host): release an agent's process tree when its leader exits`: the owned tree is dropped before the stdin pipe, the leader starts suspended so its children join the job, Windows walks the leader's tree with Toolhelp, and the reader stops when the leader is gone.
 - Android `assembleDebug :app:assembleDebugAndroidTest :core:test :app:testDebugUnitTest lintDebug` exit 0.
 - Desktop `npm run typecheck` exit 0; `npm test` exit 0 (385 passed, 19 platform skips, 0 failures).
 - Preservation checklist exit 0.
