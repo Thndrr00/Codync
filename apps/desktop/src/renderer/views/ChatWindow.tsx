@@ -33,6 +33,7 @@ import { ComputerAccessView } from './computer-access/ComputerAccessView'
 import { HostStateView } from './HostStateView'
 import { StartupRecovery } from './StartupRecovery'
 export { EmptyState } from './HostStateView'
+import { RefreshIndicator } from './RefreshIndicator'
 import { StarPrompt } from './StarPrompt'
 import { OpenVoiceSettings } from './call/CallView'
 import { AccountPanelLayer, DesktopActionMenu, ProfileAvatar } from './PanelMenus'
@@ -92,7 +93,7 @@ export function ChatWindow() {
             return
           }
           case 'refresh':
-            return app.refresh()
+            return void app.refresh()
           case 'setRemoteScreen':
             void app.setRemoteScreen(c.on)
             return
@@ -128,6 +129,7 @@ export function ChatWindow() {
   return (
     <div className="chat-window">
       <Summaries />
+      <RefreshIndicator />
       {onboarded ? (
         accessSetup === null ? (
           <ComputerAccessView onContinue={(ready) => finishAccess(ready, true)} />
@@ -256,6 +258,7 @@ function ChatSplitView() {
       window.codync.app.onCommand((c) => {
         if (c.kind === 'newBot' && onlineStores.length) create('bot')
         if (c.kind === 'search') setSearching(true)
+        if (c.kind === 'networkSettings') setSettings('network')
         if (c.kind === 'toggleSidebar') setCompact(!prefs.sidebarCompact.get())
         if (c.kind === 'voiceKey') {
           // No chat open: talk to the top bot in the sidebar.
@@ -480,7 +483,7 @@ function ChatSplitView() {
         ) : null}
       </Sheet>
       <Sheet open={settings !== null} onClose={() => setSettings(null)} width={Math.min(800, windowSize.width - 80)} height={Math.min(620, sheetHeight)}>
-        {settings ? <SettingsView page={settings} /> : null}
+        {settings ? <SettingsView page={settings} setPage={setSettings} /> : null}
       </Sheet>
       <Dialog
         open={newSessionBot !== null}

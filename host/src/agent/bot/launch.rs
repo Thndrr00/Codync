@@ -50,23 +50,31 @@ pub(crate) fn launch_commands(cfg: &BotConfig) -> Result<Vec<Candidate>> {
 /// chosen model, then sets that model's options (effort, fast…). Returns the answer holding
 /// the session's config options now: a model can change them.
 pub(crate) async fn select_model(acp: &Acp, res: &Value, sid: &str, cfg: &BotConfig) -> Result<Value> {
-    let Some(model) = cfg.model.as_deref().filter(|m| !m.is_empty()) else { return Ok(res.clone()) };
-    let Some(config_id) = crate::agent::auth::model_config(res).and_then(|c| c["id"].as_str()) else {
-        let r = acp.request("session/set_model", json!({"sessionId": sid, "modelId": model})).await;
-        return r.map(|_| res.clone()).map_err(|e| model_error(model, &e));
-    };
-    let (model, options) = model_choice(res, model, &cfg.model_options);
+    let selected = cfg.model.as_deref().filter(|m| !m.is_empty());
+    let (model, options) = model_choice(res, selected.unwrap_or("Default"), &cfg.model_options);
     let set = |id: &str, value: &str| {
         acp.request("session/set_config_option", json!({"sessionId": sid, "configId": id, "value": value}))
     };
-    let mut current = set(config_id, model).await.map_err(|e| model_error(model, &e))?;
+    let mut current = res.clone();
+    if selected.is_some() {
+        if let Some(config_id) = crate::agent::auth::model_config(res).and_then(|c| c["id"].as_str()) {
+            let answer = set(config_id, model).await.map_err(|e| model_error(model, &e))?;
+            if answer["configOptions"].is_array() {
+                current = answer;
+            }
+        } else {
+            acp.request("session/set_model", json!({"sessionId": sid, "modelId": model}))
+                .await
+                .map_err(|e| model_error(model, &e))?;
+        }
+    }
     for (id, value) in options {
         let answer = set(id, value).await.map_err(|e| model_error(&format!("{model} with {id}={value}"), &e))?;
         if answer["configOptions"].is_array() {
             current = answer;
         }
     }
-    Ok(if current["configOptions"].is_array() { current } else { res.clone() })
+    Ok(current)
 }
 
 /// The model to select and the options to set on it: the model id's variant, then the bot's own. How the agent
@@ -153,6 +161,7 @@ pub(crate) async fn start_agent(command: &str, cwd: &str, env: &[(String, String
         started: Instant::now(),
         allocation_uncertain: false,
         pending_models: HashMap::new(),
+        opening: false,
         fast_options: HashMap::new(),
         reports_compaction: false,
         usage: HashMap::new(),

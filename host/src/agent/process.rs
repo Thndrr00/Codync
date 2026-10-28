@@ -112,6 +112,16 @@ impl Process {
         self.child.wait().await
     }
 
+    /// Gives the leader and everything it started until `grace` runs out to finish by themselves,
+    /// then kills what is left.
+    pub(super) async fn stop_within(&mut self, grace: Duration) {
+        let deadline = tokio::time::Instant::now() + grace;
+        while !self.exited().unwrap_or(true) && tokio::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        self.kill().await;
+    }
+
     /// The graceful-shutdown task keeps ownership until its deadline.
     pub(super) fn begin_stop(&mut self) -> bool {
         !std::mem::replace(&mut self.stopping, true)

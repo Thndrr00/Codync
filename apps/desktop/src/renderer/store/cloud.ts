@@ -302,6 +302,15 @@ export class CloudModel extends Observable {
     }
   }
 
+  /** Whether the user's cloud assistant may message this computer's bots (the host's `cloud` event follows). */
+  async setAssistants(store: BotStore, enabled: boolean) {
+    try {
+      await (await store.ready()).call<CloudStatus>('setAssistants', { enabled })
+    } catch (error) {
+      this.fail(error)
+    }
+  }
+
   /** The host's cloud comes with its build; this only turns it on. */
   private async enableCloud(store: BotStore) {
     return (await store.ready()).call<CloudStatus>('setCloud', { enabled: true }, 30_000)

@@ -325,6 +325,7 @@ impl App {
                 self.step_pick(0);
             }
             KeyCode::Char('P') => self.open_pair(),
+            KeyCode::Char('N') => self.open_network(),
             KeyCode::Char('s') => {
                 if let Some(b) = self.bot() {
                     if matches!(b.status, Status::Working | Status::NeedsInput) {

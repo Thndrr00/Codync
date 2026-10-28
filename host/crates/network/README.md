@@ -45,6 +45,12 @@ standalone crate, and it reaches Claude Code and Codex sessions too.
   minutes are refused. A sender's retry of a letter already taken is acknowledged, not delivered again.
 - **Letters wait.** A letter for a computer that is asleep waits in the sender's outbox for up to a day and goes
   out when that computer answers again.
+- **The receiver decides who writes.** Each computer keeps ordered rules of who on the others may write to which of
+  its agents (`deny *@laptop → *`), the first match deciding; with none, every member may. The answer to a request
+  this computer sent still gets in, from the computer it asked and to the agent that asked, so a rule added
+  meanwhile doesn't strand it.
+- **A computer that moves says so.** When its addresses change (a laptop on another Wi-Fi), it signs where it is
+  now into the roster and tells the others, so they find it without a restart.
 
 ## Layers
 
@@ -56,6 +62,7 @@ New ways of working together don't change the layers below them:
 | Letters (`Letter`, `Message`) | text from agent to agent, `wake` or notice; `reply_to` links letters, `meta` carries an app's own structure untouched |
 | Reach (`Reach`) | how a letter gets into the agent: the app, Claude Code, Codex |
 | Budgets (`guard`) | chain length, bursts, repeats |
+| Rules (`rules`) | who on the other computers may write to which agents here |
 
 Requests and replies, rooms or shared task boards are patterns of letters, built by the app above the network.
 
@@ -84,7 +91,7 @@ It builds iroh on rustls with ring. An app that already uses rustls with aws-lc-
 aren't built in together (rustls then can't pick a provider by itself):
 
 ```toml
-codync-network = { version = "0.1", default-features = false, features = ["tls-aws-lc-rs"] }
+codync-network = { version = "0.2", default-features = false, features = ["tls-aws-lc-rs"] }
 ```
 
 ## Try it
@@ -105,6 +112,10 @@ codync-network send terminal@desk hello          # delivered to terminal@desk
 codync-network send terminal@desk --notice "tests are green"
 codync-network promote laptop                    # the owner makes laptop an admin
 codync-network remove laptop [--cascade]         # out for good (--cascade: and whom it admitted)
+codync-network rules deny '*@laptop' reviewer    # laptop's agents can't write to reviewer here
+codync-network rules allow lead@laptop reviewer --first   # except lead (the first match decides)
+codync-network rules                             # the rules, numbered
+codync-network rules remove 2                    # take out rule 2
 ```
 
 To put a Claude Code session or a Codex thread on the network, run this in it (or have the agent run it):
@@ -119,17 +130,18 @@ skips permission prompts holds messages from outside it for your approval, unles
 is `accept`.
 
 `--connector public|private|https://your-relay` picks the connector (default `public`), `--dir` the state folder
-(default `~/.codync-network`: the key in `secret.key`, the roster in `network.json`, the agents in `agents.json`).
-A Codync host keeps its own node in `~/.codync/network`; never point two nodes at one folder.
+(default `~/.codync-network`: the key in `secret.key`, the roster in `network.json`, the agents in `agents.json`,
+the rules in `rules.json`). A Codync host keeps a node per network in `~/.codync` (`network`, `network-…`); never
+point two nodes at one folder.
 
 ## Use
 
 ```rust
-use codync_network::{Address, Agent, Connector, Letter, Node, Reach};
+use codync_network::{Address, Agent, AgentKind, Connector, Letter, Node, Reach};
 
 let (node, mut inbox) = Node::start(dir, &Connector::Public).await?;
 node.join(invite, "laptop").await?;
-let coder = Agent { id: "coder".into(), name: "Coder".into(), about: "Writes the code".into() };
+let coder = Agent { id: "coder".into(), name: "Coder".into(), about: "Writes the code".into(), kind: AgentKind::Codync };
 node.set_agents([(coder, Reach::App)]);
 
 let to: Address = "reviewer@desk".parse()?;
@@ -139,6 +151,19 @@ while let Some(message) = inbox.recv().await {
     println!("{} → {}: {}", message.from, message.to, message.body);
 }
 ```
+
+An agent's `kind` (`AgentKind`: Codync, ClaudeCode, Codex, Terminal, Other) says what it is, so others can pick one
+kind; `set_agents` sets it to ClaudeCode or Codex for a `Reach::ClaudeCode` or `Reach::Codex` agent.
+
+`node.changes()` ticks whenever `node.directory()` would show something new (a computer joins or leaves, a role,
+name or presence changes, another computer offers different agents), for an app that shows the network live.
+
+- `node.set_rules(rules)` sets who may write to this computer's agents (`Rule::new(Access::Deny, "*@laptop", "*")`).
+- `node.set_senders(names)` lets the app send as agents it doesn't offer (a hosted assistant that asks agents
+  elsewhere but can't be asked itself); the answers to its letters still come back.
+- `node.set_network_name(Some("home"))` names the network in the invites this computer makes, and
+  `read_invite(invite)` reads the network's id and name before joining, for an app in several networks: one
+  `Node`, with its own folder, per network.
 
 ## Build
 

@@ -1,5 +1,6 @@
 package com.codync.android
 
+import com.codync.android.core.AppVersion
 import com.codync.android.core.VersionMismatch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
@@ -28,18 +29,62 @@ internal data class HostUpdateNotice(val detail: String, val offersUpdate: Boole
 
 internal fun hostUpdateNotice(host: String, mismatch: VersionMismatch.UpdateHost, os: String?, canUpdate: Boolean,
     update: HostUpdate?, now: Long): HostUpdateNotice {
-    if (update.updating(now)) return HostUpdateNotice("Updating Codync on $host. This takes a few minutes.", false)
+    if (update.updating(now)) return HostUpdateNotice(updatingText(host), false)
     val needs = "$host runs Codync ${mismatch.version}; this app needs ${mismatch.minimum} or newer."
-    if (!canUpdate) return HostUpdateNotice("$needs " + when (os) {
-        "macos" -> "Open Codync on that Mac and choose Check for Updates."
-        "linux" -> "Run codync-host update there."
-        else -> "Update Codync on that computer."
-    }, false)
+    if (!canUpdate) return HostUpdateNotice("$needs ${howToUpdate(os)}", false)
     return HostUpdateNotice(when (update) {
         is HostUpdate.Failed -> "$needs ${update.message}"
-        is HostUpdate.Requested -> "$needs $host didn't finish updating. Try again, or update Codync on that computer."
+        is HostUpdate.Requested -> "$needs ${notUpdatedText(host)}"
         null -> needs
     }, true)
+}
+
+private fun updatingText(host: String) = "Updating Codync on $host. This takes a few minutes."
+private fun notUpdatedText(host: String) = "$host didn't finish updating. Try again, or update Codync on that computer."
+
+/** How to update Codync on a computer this app can't update (iOS `UpdateNeededText.how`). */
+private fun howToUpdate(os: String?) = when (os) {
+    "macos" -> "Open Codync on that Mac and choose Check for Updates."
+    "linux" -> "Run codync-host update there."
+    else -> "Update Codync on that computer."
+}
+
+/**
+ * The Codync row on the computer's card in Computer management: the version it runs, and an update when
+ * one is due, a newer release or a version too old for this app (iOS `HostVersionLine`). `detail` is
+ * sentences, each its own phrase to translate.
+ */
+internal data class HostVersionLine(val version: String, val detail: List<String>, val warns: Boolean = false,
+    val accessory: Accessory? = null) {
+    /** What the row ends with: a spinner while the computer updates, or the button that asks it to. */
+    sealed interface Accessory {
+        data object Updating : Accessory
+        data class Button(val title: String) : Accessory
+    }
+}
+
+/** `latest` is the latest release the computer found (null while it doesn't know: then no verdict). */
+internal fun hostVersionLine(version: String, latest: String?, mismatch: VersionMismatch?, canUpdate: Boolean,
+    update: HostUpdate?, host: String, os: String?, now: Long): HostVersionLine {
+    if (update.updating(now)) return HostVersionLine(version, listOf(updatingText(host)), accessory = HostVersionLine.Accessory.Updating)
+    val minimum = (mismatch as? VersionMismatch.UpdateHost)?.minimum
+    val available = latest?.takeIf { AppVersion.isBelow(version, it) }
+    val due = minimum?.let { "This app needs $it or newer." } ?: available?.let { "Version $it is available." }
+        ?: return HostVersionLine(version, if (latest == null) emptyList() else listOf("Up to date"))
+    if (!canUpdate) return HostVersionLine(version, listOf(due, howToUpdate(os)), warns = minimum != null)
+    val tryAgain = HostVersionLine.Accessory.Button("Try again")
+    return when (update) {
+        is HostUpdate.Failed -> HostVersionLine(version, listOf(update.message), warns = true, accessory = tryAgain)
+        is HostUpdate.Requested -> HostVersionLine(version, listOf(notUpdatedText(host)), warns = true, accessory = tryAgain)
+        null -> HostVersionLine(version, listOf(due), warns = minimum != null, accessory = HostVersionLine.Accessory.Button("Update"))
+    }
+}
+
+/** This computer's Codync row at `now`; null until its `hello` arrives. */
+internal fun AppState.hostVersionLine(now: Long): HostVersionLine? {
+    val hello = hello ?: return null
+    val version = hello.text("version") ?: return null
+    return hostVersionLine(version, hello.text("latestVersion"), mismatch, canUpdateHost, hostUpdate, hostName, hello.text("os"), now)
 }
 
 /** Asks a computer that's behind to install the latest release (the update card's Update now). */

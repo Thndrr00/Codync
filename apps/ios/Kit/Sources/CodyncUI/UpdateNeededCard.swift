@@ -107,13 +107,17 @@ public enum UpdateNeededText {
             let runs = hostVersion.map { "\(host) runs Codync \($0) and" } ?? host
             return "\(runs) needs this app to be \(minimum) or newer. Your chats are safe on the computer."
         case let .updateHost(version, minimum):
-            let how = switch os {
-            case "macos": "Open Codync on that Mac and choose Check for Updates."
-            case "linux": "Run codync-host update there."
-            default: "Update Codync on that computer."
-            }
             let needs = "\(host) runs Codync \(version); this app needs \(minimum) or newer."
-            return instructions ? "\(needs) \(how)" : needs
+            return instructions ? "\(needs) \(how(os: os))" : needs
+        }
+    }
+
+    /// How to update Codync on a computer this app can't update.
+    public static func how(os: String?) -> String {
+        switch os {
+        case "macos": "Open Codync on that Mac and choose Check for Updates."
+        case "linux": "Run codync-host update there."
+        default: "Update Codync on that computer."
         }
     }
 

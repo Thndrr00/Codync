@@ -178,6 +178,7 @@ pub enum Screen {
     Help,
     Library,
     Artifact,
+    Network,
     #[serde(other)]
     Other,
 }

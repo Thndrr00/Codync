@@ -194,7 +194,26 @@ impl App {
             }
             Reply::Accounts { scope, authenticate } => self.accounts_reply(&scope, authenticate, &v),
             Reply::Models(backend) => {
-                let list = v["models"].as_array().into_iter().flatten().filter_map(AgentModel::parse).collect();
+                let mut list: Vec<_> =
+                    v["models"].as_array().into_iter().flatten().filter_map(AgentModel::parse).collect();
+                if v["defaultModelOptions"] == true
+                    && let Some(default) = v["models"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .find(|m| m["id"] == v["currentModelId"])
+                        .and_then(AgentModel::parse)
+                {
+                    list.insert(
+                        0,
+                        AgentModel {
+                            id: String::new(),
+                            name: "Default".into(),
+                            options: default.options,
+                            options_error: default.options_error,
+                        },
+                    );
+                }
                 if v["fastMode"] == true {
                     self.fast_mode.insert(backend.clone());
                 }

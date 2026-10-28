@@ -212,6 +212,8 @@ mod tests {
             approval_rules: vec![],
             computer_permissions: crate::computer::Permissions::default(),
             manage_team: false,
+            offered_to_network: true,
+            reachable_by_assistants: true,
             created_by: None,
             shared_memory: None,
             harness_memory: false,

@@ -59,7 +59,9 @@ internal enum class FormPart { All, Often, Rarely }
                     fallbackBanner(state, store, bot); computerRow(state, online)
                     agentRows(state, store, draft, change, bot) { addingFallback = true }; placeRows(draft, change) { folders = true }
                 }
-                CardSection("Activity") { notifyRow(draft, change); computerUseRow(state, draft, change); manageTeamRow(state, draft, change) }
+                CardSection("Activity") {
+                    notifyRow(draft, change); computerUseRow(state, draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change)
+                }
                 Plugins(state, draft, change) { viewingSkill = it }
                 draft.id?.let { MemoryCard(it, state, store) }
                 state.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
@@ -79,7 +81,7 @@ internal enum class FormPart { All, Often, Rarely }
                 }
                 // The agent and its model are on the Details page; what's left is where it works.
                 CardSection("Workspace") { computerRow(state, online); placeRows(draft, change) { folders = true } }
-                CardSection("Activity") { notifyRow(draft, change); manageTeamRow(state, draft, change) }
+                CardSection("Activity") { notifyRow(draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change) }
                 Plugins(state, draft, change) { viewingSkill = it }
             }
         }
@@ -129,26 +131,22 @@ private fun CardRows.computerRow(state: AppState, online: Boolean) = row {
 /** The agent, its model and the fallbacks that carry on for it. */
 private fun CardRows.agentRows(state: AppState, store: AppStore, draft: BotDraft, change: (BotDraft) -> Unit, bot: Bot?, addFallback: () -> Unit) {
     row {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val rest = bot?.restOf(draft.backend)
-            ValueRow("Agent", detail = rest?.line(RelativeTime.clock(rest.until))) {
-                ChoicePicker(draft.backend, agentChoices(state) + ("custom" to "Custom command"),
-                    { if (it != draft.backend) change(draft.withAgent(it).copy(account = null)) }, label = "Agent")
+        androidx.compose.runtime.key(state.generation, state.computer?.id, draft.backend, draft.account) {
+            AgentModelPicker(state, { backend -> store.agentModels(backend, draft.account) }, draft.backend, draft.model, draft.modelOptions,
+                draft.fastMode ?: false, bot,
+                { model, options -> change(draft.copy(model = model, modelOptions = options)) }, { change(draft.copy(fastMode = it)) },
+                agents = agentChoices(state) + ("custom" to "Custom command"),
+                chooseAgent = { if (it != draft.backend) change(draft.withAgent(it).copy(account = null)) }) {
+                bot?.restOf(draft.backend)?.let { Text(it.line(RelativeTime.clock(it.until)), style = Type.caption, color = Palette.secondary) }
+                backends(state).firstOrNull { it.text("id") == draft.backend && !it.available }?.text("installHint")?.takeIf(String::isNotBlank)?.let {
+                    Text(it, style = Type.caption, color = Palette.warning)
+                }
+                if (draft.backend == "custom") FieldBox(draft.command.orEmpty(), { change(draft.copy(command = it.ifEmpty { null })) },
+                    "ACP command, e.g. my-agent --acp", style = Type.callout.monospaced, capitalize = false)
             }
-            backends(state).firstOrNull { it.text("id") == draft.backend && !it.available }?.text("installHint")?.takeIf(String::isNotBlank)?.let {
-                Text(it, style = Type.caption, color = Palette.warning)
-            }
-            if (draft.backend == "custom") FieldBox(draft.command.orEmpty(), { change(draft.copy(command = it.ifEmpty { null })) },
-                "ACP command, e.g. my-agent --acp", style = Type.callout.monospaced, capitalize = false)
         }
     }
     botAccountRow(state, store, draft, change)
-    row {
-        androidx.compose.runtime.key(state.generation, state.computer?.id, draft.backend, draft.account) {
-            AgentModelPicker(state, { backend -> store.agentModels(backend, draft.account) }, draft.backend, draft.model, draft.modelOptions, draft.fastMode ?: false, bot,
-                { model, options -> change(draft.copy(model = model, modelOptions = options)) }, { change(draft.copy(fastMode = it)) })
-        }
-    }
     // Only from a host that has fallbacks (its bots say).
     val list = draft.fallbacks ?: return
     row { FallbackList(state, draft.backend, list, bot, { change(draft.copy(fallbacks = it)) }, addFallback) }
@@ -208,6 +206,20 @@ private fun CardRows.manageTeamRow(state: AppState, draft: BotDraft, change: (Bo
     row {
         SwitchRow("Manage the team", "Let this bot create bots and change its own setup and the bots it created. The bots it creates can too.",
             draft.manageTeam, { change(draft.copy(manageTeam = it)) })
+    }
+}
+
+// Who else reaches this bot: shown only where it applies (in a network, cloud assistants on) and the host has the switch.
+private fun CardRows.reachRows(state: AppState, draft: BotDraft, change: (BotDraft) -> Unit) {
+    val network = state.network ?: return
+    draft.offeredToNetwork?.takeIf { network.joined }?.let { on ->
+        row { SwitchRow("Offered to the network", "Bots on your other computers can see and message this bot.", on, { change(draft.copy(offeredToNetwork = it)) }) }
+    }
+    draft.reachableByAssistants?.takeIf { network.assistants }?.let { on ->
+        row {
+            SwitchRow("Reachable by cloud assistants", "ChatGPT or Claude in your Codync account can see and message this bot.", on,
+                { change(draft.copy(reachableByAssistants = it)) })
+        }
     }
 }
 

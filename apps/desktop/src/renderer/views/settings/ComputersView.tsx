@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { AccountApproval, PairingInfo } from '@shared/models'
 import { newSSHProfile, type SSHProfile } from '@shared/ssh'
-import { Button, CardSection, IconButton, Reveal, Switch } from '../../components/Controls'
+import { Button, CardSection, IconButton, Reveal, Spinner, Switch } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, Sheet, useDismiss } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
@@ -14,6 +14,7 @@ import { StoreContext, useApp } from '../../store/context'
 import { ComputerBadge } from '../ComputerBadge'
 import { PairingCode } from '../PairingCode'
 import { AuthorizedDevicesSection } from './AuthorizedDevicesSection'
+import { ComputersUsedSection } from './ComputersUsedSection'
 import { cloudStatusLine } from '../../lib/relay-copy'
 import { useTr } from '../../lib/use-language'
 import { errorText, liveClient, relativeDay, SectionHeader, statusText, thisMac } from './parts'
@@ -37,14 +38,15 @@ export function ComputersView() {
   const [editing, setEditing] = useState<{ profile: SSHProfile; isNew: boolean } | null>(null)
   const [removingCopy, setRemovingCopy] = useState<CloudComputer | null>(null)
   const managed = app.managedStores
-  const managedIds = new Set(managed.map((s) => s.computer.id))
-  const others = cloud.computers.filter((c) => !managedIds.has(c.computerId))
+  // Every computer in the account but this one, the SSH computers too: their cards above are about managing them.
+  const others = cloud.computers.filter((c) => c.computerId !== app.local?.computer.id)
   const addSSH = (host: string) => setEditing({ profile: { ...newSSHProfile(window.codync.hostPort), host }, isNew: true })
 
   return (
     <div className="settings-computers">
-      <VStack gap={26} className="settings-computers-content">
-        {managed.map((store) => (
+      <VStack gap={44} className="settings-computers-content">
+        {/* With this computer present, the SSH computers sit in its "can use" section. */}
+        {managed.filter((store) => !app.local || store === app.local).map((store) => (
           <ManagedComputerCard key={store.computer.id} store={store} ssh={sshState.isSSH(store.computer.id)} />
         ))}
 
@@ -117,8 +119,8 @@ function RouteIcon({ store }: { store: BotStore }) {
 
 const isMacLabel = thisMac === 'this Mac' ? 'This Mac' : 'This computer'
 
-/** This computer or an SSH computer: relay, account membership, pairing and authorized devices. */
-function ManagedComputerCard({ store, ssh: overSSH }: { store: BotStore; ssh: boolean }) {
+/** This computer or an SSH computer: relay, account membership, the Codync it runs, pairing and authorized devices. */
+function ManagedComputerCard({ store, ssh: overSSH, nested = false }: { store: BotStore; ssh: boolean; /** Shown under another computer's "can use": its own users aren't listed there. */ nested?: boolean }) {
   const tr = useTr()
   const app = useApp()
   const account = useAccount()
@@ -180,7 +182,7 @@ function ManagedComputerCard({ store, ssh: overSSH }: { store: BotStore; ssh: bo
   )
 
   return (
-    <VStack gap={28}>
+    <VStack gap={16}>
       <CardSection>
         {[
           <div key="header" className="settings-row">
@@ -238,12 +240,35 @@ function ManagedComputerCard({ store, ssh: overSSH }: { store: BotStore; ssh: bo
                     </Text>
                   </span>
                 </Switch>,
+                // Hosts before 2.28.0 have no cloud assistants. The cloud reads these calls, so the computer decides.
+                ...(cloud?.assistants != null
+                  ? [
+                      <Switch key="assistants" on={cloud.assistants} disabled={busy || !manageable} onChange={(on) => run(() => app.cloud.setAssistants(store, on))}>
+                        <span className="settings-stack settings-appear">
+                          <Text>{tr(`Cloud assistants`)}</Text>
+                          <Text size="caption" tone={cloud.assistants ? 'attention' : 'secondary'}>
+                            {cloud.assistants
+                              ? tr(`ChatGPT or Claude in your Codync account can message this computer's bots. Codync's cloud can read these calls.`)
+                              : tr(`Let ChatGPT or Claude message this computer's bots through your Codync account.`)}
+                          </Text>
+                        </span>
+                      </Switch>,
+                    ]
+                  : []),
               ]
             : []),
+          // On macOS and Windows this computer's Codync is this app: its version and update are on the Updates page.
+          online && store.hello && !(store === app.local && window.codync.platform !== 'linux')
+            ? <CodyncVersionRow key="codync" store={store} />
+            : null,
         ]}
       </CardSection>
 
-      <AuthorizedDevicesSection store={store} />
+      {store === app.local ? (
+        <ComputersUsedSection store={store} details={(computer) => <ManagedComputerCard store={computer} ssh nested />} />
+      ) : null}
+
+      {nested ? null : <AuthorizedDevicesSection store={store} />}
 
       <Sheet open={showVoice} onClose={() => setShowVoice(false)}>
         <StoreContext.Provider value={store}>
@@ -269,6 +294,35 @@ function ManagedComputerCard({ store, ssh: overSSH }: { store: BotStore; ssh: bo
         onClose={() => setConfirmUnclaim(false)}
       />
     </VStack>
+  )
+}
+
+/** The Codync a computer runs, and its update when one is due (iOS `CodyncVersionRow`). */
+function CodyncVersionRow({ store }: { store: BotStore }) {
+  const tr = useTr()
+  // Moved on when an update asked from here runs out of time, so one that never finished is offered again.
+  const [now, setNow] = useState(Date.now)
+  const ends = store.hostUpdateWaitEnds
+  useEffect(() => {
+    if (ends === null) return
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, ends - Date.now()))
+    return () => clearTimeout(timer)
+  }, [ends])
+  const line = store.hostVersionLine(Math.max(now, Date.now()))
+  if (!line) return null
+  return (
+    <div className="settings-row settings-appear">
+      <Icon name="arrow.down.circle" size={13} color="var(--secondary)" />
+      <VStack grow className="settings-stack">
+        <Text>Codync <Text tone="secondary" tabular>{line.version}</Text></Text>
+        {line.detail.length > 0 ? (
+          <Text size="caption" tone={line.warns ? 'attention' : 'secondary'}>{line.detail.map((sentence) => tr(sentence)).join(' ')}</Text>
+        ) : null}
+      </VStack>
+      {line.accessory?.kind === 'updating' ? <Spinner />
+        : line.accessory ? <Button onClick={() => store.requestHostUpdate()}>{line.accessory.title}</Button>
+        : null}
+    </div>
   )
 }
 

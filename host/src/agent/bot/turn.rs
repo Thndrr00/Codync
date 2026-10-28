@@ -8,7 +8,7 @@ use crate::chat::memory;
 use crate::hub::BotStatus;
 use crate::remote::push::{self, AlertKind};
 use crate::store::{EntryKind, Lane, now_ms};
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use serde_json::json;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
@@ -29,7 +29,6 @@ impl Actor {
         let sid = &initial.session;
         let instructions = self.conn.as_ref().map_or(Instructions::FirstMessage, Conn::instructions);
         let mut snapshot = initial.clone();
-        let fresh = matches!(snapshot.prelude, Some(context::Prelude::New | context::Prelude::UnpromptedFork));
         let remind_files = !snapshot.system.contains("send_file");
         let remind_artifacts = !snapshot.system.contains("publish_artifact");
         let mut prompt = text.to_owned();
@@ -42,7 +41,7 @@ impl Actor {
         }
         // A compaction may have dropped the profile the session's first message carried.
         let resend = instructions == Instructions::FirstMessage && self.profile_resend.remove(sid);
-        if fresh || resend {
+        if snapshot.unprompted || resend {
             // The instructions reaching the agent now hold memory as it was when they were rendered.
             memory::opened(&self.hub.store, &self.cfg.id, sid, &snapshot.memory)?;
         }
@@ -50,6 +49,7 @@ impl Actor {
             prompt = format!("{notice}\n\n{prompt}");
             self.turn_memory_revision = revision;
         }
+        // A side conversation's first message says what the thread is.
         let intro = if let (Some(root), Some(_)) = (self.side_slot(&self.lane), snapshot.prelude) {
             // The persisted opening belongs to this session, even if another lane ran first.
             if self.thread_intro.as_ref().is_some_and(|(session, _)| session == sid) {
@@ -64,9 +64,12 @@ impl Actor {
         if let Some(intro) = intro {
             prompt = format!("{intro}\n\n{prompt}");
         }
-        // A new session (see `Actor::new_session`) or a fork reads the profile first.
-        let fresh = std::mem::take(&mut self.session_fresh) || fresh;
-        if fresh && instructions == Instructions::FirstMessage {
+        // A prompt that failed may never have reached the agent: the instructions stay owed until one succeeds.
+        self.session_fresh = false;
+        if snapshot.unprompted {
+            self.first_prompt = Some(snapshot.clone());
+        }
+        if snapshot.unprompted && instructions == Instructions::FirstMessage {
             prompt = format!("<bot-profile>\n{}\n</bot-profile>\n\n{prompt}", snapshot.system);
         } else if resend {
             context::mark_announced(&self.hub.store, &self.cfg.id, &snapshot, snapshot.system_identity.clone())?;
@@ -134,6 +137,7 @@ impl Actor {
         self.turn_call = crate::chat::calls::of_turn(&self.hub.store, answered).or(opens);
         self.turn_memory_revision.clear();
         self.announce = None;
+        self.first_prompt = None;
         self.stop_requested = false;
         self.cancel_deadline = None;
         let team_turn = if let Some(request) = &self.active_request {
@@ -191,13 +195,7 @@ impl Actor {
         let (hub, cfg) = (self.hub.clone(), self.cfg.clone());
         let _ = tokio::task::spawn_blocking(move || memory::files::scan(&hub, &cfg)).await;
         let slot = self.slot();
-        if let Some(deadline) = self.routine_deadline {
-            tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), self.ensure_session(slot.as_deref()))
-                .await
-                .context("routine session setup timed out")??;
-        } else {
-            self.ensure_session(slot.as_deref()).await?;
-        }
+        self.ensure_turn_session(slot.as_deref()).await?;
         if !hidden {
             self.carry_in();
         }
@@ -441,6 +439,11 @@ impl Actor {
             && let Err(error) = context::mark_announced(&self.hub.store, &self.cfg.id, &snapshot, identity)
         {
             tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't record the profile update");
+        }
+        if let (Ok(_), Some(sent)) = (&done, self.first_prompt.take())
+            && let Err(error) = context::mark_prompted(&self.hub.store, &self.cfg.id, &sent)
+        {
+            tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't record the delivered instructions");
         }
         if let (Some(user), Some(agent), "end_turn") = (self.turn_text.take(), &final_text, stop_reason.as_str()) {
             let turn = crate::chat::naming::Turn { user, agent: agent.clone() };

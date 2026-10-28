@@ -40,7 +40,7 @@ import './composer.css'
 import './chat-controls.css'
 import { MessageContext } from '../MessageContext'
 
-const WIDE = 680
+const WIDE = 740
 
 /**
  * One endless conversation with a bot or a group chat. Only deliberate messages show here; tool
@@ -103,9 +103,9 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   }, [])
 
   const panelOpen = wide && showSettings
-  squeezeBelow.current = panelOpen ? detailsWidth : 0
+  squeezeBelow.current = panelOpen ? Math.max(360, detailsWidth) : 0
   // The side panel's edge drags its width, leaving the conversation at least 380 wide.
-  const panelWidth = (w: number) => Math.min(Math.max(260, w), width.current - 380)
+  const panelWidth = (w: number) => Math.min(Math.max(360, w), width.current - 380)
   // A compact Details presentation dismisses once the window is wide enough for the inspector.
   useEffect(() => {
     if (wide) setCompactDetails(false)
@@ -215,14 +215,14 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       <ChatSidePanel
         open={panelOpen}
         width={panelWidth(detailsWidth)}
-        min={260}
+        min={360}
         max={width.current - 380}
         onResize={(w) => setDetailsWidth(panelWidth(w))}
       >
         {details}
       </ChatSidePanel>
 
-      <Sheet open={compactDetails} onClose={() => setCompactDetails(false)} width={340} height={600}>
+      <Sheet open={compactDetails} onClose={() => setCompactDetails(false)} width={400} height={600}>
         {details}
       </Sheet>
       <Sheet open={botChat !== null} onClose={() => setBotChat(null)} width={620} height={560}>

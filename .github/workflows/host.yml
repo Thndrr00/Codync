@@ -61,9 +61,12 @@ jobs:
       SIGNS_UPDATES: ${{ secrets.HOST_UPDATE_SIGNING_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust (rust-toolchain.toml)
-        run: rustup toolchain install
-      - run: rustup target add ${{ matrix.target }}
+      # rustup reads the pin from the folder it runs in (host/rust-toolchain.toml).
+      - name: Install Rust (host/rust-toolchain.toml)
+        working-directory: host
+        run: |
+          rustup toolchain install
+          rustup target add ${{ matrix.target }}
       - if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -80,7 +83,10 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
       - name: Build codync-screen
         if: runner.os == 'Linux'
-        run: cargo build --release --manifest-path apps/screen-linux/Cargo.toml
+        working-directory: apps/screen-linux
+        run: |
+          rustup toolchain install
+          cargo build --release
       - name: Package
         run: |
           NAME=codync-host-${{ matrix.name }}

@@ -64,6 +64,8 @@ pub struct App {
     pub entries: HashMap<String, BTreeMap<i64, Entry>>,
     pub usage: Value,
     pub screen: Value,
+    /// This computer's network (`networkView`'s shape); null on hosts without one.
+    pub network: Value,
     pub backends: Vec<Value>,
     pub selected: Option<String>,
     pub focus: Focus,
@@ -154,6 +156,7 @@ impl App {
             entries: HashMap::new(),
             usage: Value::Null,
             screen: Value::Null,
+            network: Value::Null,
             backends: vec![],
             selected: None,
             focus: Focus::Roster,
@@ -495,7 +498,7 @@ pub fn tilde(path: &str, home: &str) -> String {
 }
 
 #[cfg(test)]
-fn test_app() -> App {
+pub(in crate::tui) fn test_app() -> App {
     let (tx, _) = tokio::sync::mpsc::unbounded_channel();
     App::new(Client::new("http://127.0.0.1:1", None), tx, String::new())
 }

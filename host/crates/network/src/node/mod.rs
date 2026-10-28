@@ -1,33 +1,35 @@
 //! One computer on the network: its iroh endpoint, its roster and the agents it offers.
 
 mod directory;
+mod endpoint;
 mod inbound;
 mod outbox;
 
 use crate::guard::{self, Guard};
 use crate::reach::{Held, Reach};
 use crate::roster::{self, Change, Role, Roster};
+use crate::rules::{self, Rule};
 use crate::types::{Address, Connector, Letter, Message, Peer, Sent};
 use crate::wire::{self, ALPN, Agent, Request, Response, Ticket};
 use anyhow::{Context, Result, anyhow, bail};
-use iroh::endpoint::{Connection, presets};
+use iroh::endpoint::Connection;
 use iroh::protocol::Router;
-use iroh::{Endpoint, EndpointId, RelayMode, RelayUrl, SecretKey};
+use iroh::{Endpoint, EndpointAddr, EndpointId};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
 
-const KEY_FILE: &str = "secret.key";
-const INVITE_FOR: Duration = Duration::from_hours(1);
+/// How long an invite stays good.
+pub const INVITE_FOR: Duration = Duration::from_hours(1);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Long enough for the other computer to knock on its agent's harness.
 const CALL_TIMEOUT: Duration = Duration::from_secs(20);
 const INBOX_SIZE: usize = 256;
-/// Letters whose handoff count a reply may need, newest kept.
+/// Letters whose handoff count a reply may need, and requests an answer may come back to, newest kept.
 const HEARD_MAX: usize = 1000;
 
 pub struct Node {
@@ -40,6 +42,8 @@ struct Inner {
     dir: PathBuf,
     roster: Mutex<Option<Roster>>,
     agents: Mutex<Vec<(Agent, Reach)>>,
+    /// Names the app also sends as without offering them (`set_senders`).
+    senders: Mutex<Vec<String>>,
     /// The app offered its agents since the node started: until then, letters wait at the sender.
     ready: AtomicBool,
     /// The handoff count of letters taken here, by id, so a reply carries the chain on.
@@ -51,10 +55,20 @@ struct Inner {
     held: Mutex<Held>,
     /// Letters already taken, so a sender's retry isn't delivered twice.
     taken: Mutex<VecDeque<String>>,
+    /// Who may write to this computer's agents (`rules`).
+    rules: Mutex<Vec<Rule>>,
+    /// Requests this computer sent, newest kept: the letter's id, the computer it went to and
+    /// the agent here that sent it. That computer's answer to that agent passes the rules.
+    asked: Mutex<VecDeque<(String, EndpointId, String)>>,
     outbox: Mutex<Vec<outbox::Queued>>,
     inbox: mpsc::Sender<Message>,
     /// The command an agent the network knocks on runs to answer.
     reply_command: Mutex<String>,
+    /// What the app calls this network; invites carry it (`set_network_name`).
+    network_name: Mutex<Option<String>>,
+    /// Ticks when the members, their roles or names, or what the others offer or whether they
+    /// answer, change.
+    changed: watch::Sender<()>,
 }
 
 fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -66,14 +80,15 @@ impl Node {
     /// agents the app delivers to ([`Reach::App`]) come out of the returned inbox.
     pub async fn start(dir: &Path, connector: &Connector) -> Result<(Self, mpsc::Receiver<Message>)> {
         std::fs::create_dir_all(dir)?;
-        let key = load_key(dir)?;
-        let endpoint = bind(key, connector).await?;
+        let key = endpoint::load_key(dir)?;
+        let endpoint = endpoint::bind(key, connector).await?;
         let (tx, rx) = mpsc::channel(INBOX_SIZE);
         let inner = Arc::new(Inner {
             endpoint: endpoint.clone(),
             dir: dir.to_path_buf(),
             roster: Mutex::new(Roster::load(dir)?),
             agents: Mutex::default(),
+            senders: Mutex::default(),
             ready: AtomicBool::new(false),
             heard: Mutex::default(),
             seen: Mutex::default(),
@@ -81,16 +96,21 @@ impl Node {
             guard: Mutex::default(),
             held: Mutex::default(),
             taken: Mutex::default(),
+            rules: Mutex::default(),
+            asked: Mutex::default(),
             outbox: Mutex::default(),
             inbox: tx,
             reply_command: Mutex::new("codync-network".into()),
+            network_name: Mutex::default(),
+            changed: watch::Sender::new(()),
         });
         let router = Router::builder(endpoint).accept(ALPN, inbound::Handler(inner.clone())).spawn();
-        settle(&inner.endpoint, connector).await;
-        inner.refresh_my_addr()?;
+        endpoint::settle(&inner.endpoint, connector).await;
+        inner.locate(inner.endpoint.addr())?;
         // Catch up with the others: a computer that was off may have missed a removal.
         inner.clone().hello_all();
         tokio::spawn(outbox::retry_loop(Arc::downgrade(&inner)));
+        tokio::spawn(endpoint::follow_addr(Arc::downgrade(&inner), inner.endpoint.watch_addr()));
         Ok((Self { inner, router }, rx))
     }
 
@@ -101,6 +121,11 @@ impl Node {
     /// This computer's name, once it is in a network.
     pub fn name(&self) -> Option<String> {
         locked(&self.inner.roster).as_ref().map(|r| r.name(&self.id()))
+    }
+
+    /// The network's id (its root key), once this computer is in one.
+    pub fn network_id(&self) -> Option<String> {
+        locked(&self.inner.roster).as_ref().map(|r| r.network.to_string())
     }
 
     pub fn role(&self) -> Option<Role> {
@@ -116,7 +141,7 @@ impl Node {
         }
         let key = self.inner.endpoint.secret_key();
         let (new, root) = Roster::create(key, check_name(name)?, self.inner.endpoint.addr(), wire::now_ms());
-        new.save(&self.inner.dir)?;
+        self.inner.save(&new)?;
         *roster = Some(new);
         Ok(roster::recovery_code(&root))
     }
@@ -124,12 +149,13 @@ impl Node {
     /// A one-time invite for another computer, good for an hour while this one stays on.
     pub fn invite(&self) -> Result<String> {
         let roster = self.inner.roster()?;
-        if roster.role(&self.id()) < Some(Role::Admin) {
+        if !roster.role(&self.id()).is_some_and(Role::invites) {
             bail!("only the owner and admins can invite computers");
         }
         let secret = wire::random_hex(16);
         locked(&self.inner.invites).insert(secret.clone(), Instant::now() + INVITE_FOR);
-        Ticket { network: roster.network, secret, addr: self.inner.endpoint.addr() }.encode()
+        let name = locked(&self.inner.network_name).clone();
+        Ticket { network: roster.network, secret, addr: self.inner.endpoint.addr(), name }.encode()
     }
 
     pub async fn join(&self, ticket: &str, name: &str) -> Result<()> {
@@ -151,9 +177,16 @@ impl Node {
                 }
                 // Where this computer is; nothing to add when it knows no address yet.
                 let addr = self.inner.endpoint.addr();
-                let _ = roster.sign(self.inner.endpoint.secret_key(), wire::now_ms(), Change::Locate { addr });
-                roster.save(&self.inner.dir)?;
-                *locked(&self.inner.roster) = Some(roster);
+                let _ = roster.sign(
+                    self.inner.endpoint.secret_key(),
+                    wire::now_ms(),
+                    Change::Locate { addr: roster::bounded_addr(addr) },
+                );
+                // Held across saving and keeping it, so whoever `changes` wakes sees it.
+                let mut guard = locked(&self.inner.roster);
+                self.inner.save(&roster)?;
+                *guard = Some(roster);
+                drop(guard);
                 self.inner.clone().hello_all();
                 Ok(())
             }
@@ -189,21 +222,55 @@ impl Node {
         }
         let name = roster.name(&self.id());
         roster.sign(&root, wire::now_ms(), Change::Owner { id: self.id(), name })?;
-        roster.save(&self.inner.dir)?;
+        self.inner.save(roster)?;
         drop(guard);
         self.inner.clone().hello_all();
         Ok(())
     }
 
-    /// The agents this computer offers, and how each is reached. Others see them the next time
-    /// they ask.
     /// What this computer offers. The first call opens it to letters, and the others hear at once,
     /// so what waited for it while it started comes now.
     pub fn set_agents(&self, agents: impl IntoIterator<Item = (Agent, Reach)>) {
-        *locked(&self.inner.agents) = agents.into_iter().collect();
+        let before = self.inner.offered();
+        // A session the network knocks on is the kind its harness is, whatever the app said.
+        let agents = agents.into_iter().map(|(mut agent, reach)| {
+            if let Some(kind) = reach.kind() {
+                agent.kind = kind;
+            }
+            (agent, reach)
+        });
+        *locked(&self.inner.agents) = agents.collect();
+        if self.inner.offered() != before {
+            self.inner.changed.send_replace(());
+        }
         if !self.inner.ready.swap(true, Ordering::AcqRel) {
             self.inner.clone().hello_all();
         }
+    }
+
+    /// Names the app sends letters as without offering them to the network: a hosted assistant that
+    /// asks agents elsewhere but can't be asked itself. Answers to its letters still come back.
+    pub fn set_senders(&self, senders: impl IntoIterator<Item = String>) {
+        *locked(&self.inner.senders) = senders.into_iter().collect();
+    }
+
+    /// Who on the other computers may write to this computer's agents, the first match deciding.
+    /// Answers to this computer's own letters always pass, so a rule added while a request runs
+    /// doesn't strand it.
+    pub fn set_rules(&self, rules: Vec<Rule>) -> Result<()> {
+        rules::check_all(&rules)?;
+        *locked(&self.inner.rules) = rules;
+        Ok(())
+    }
+
+    pub fn rules(&self) -> Vec<Rule> {
+        locked(&self.inner.rules).clone()
+    }
+
+    /// What the app calls this network (`home`, `work`) when a computer is in several: the invites
+    /// it makes carry the name, so the computer that joins can call it the same ([`crate::read_invite`]).
+    pub fn set_network_name(&self, name: Option<String>) {
+        *locked(&self.inner.network_name) = name;
     }
 
     /// The command agents the network knocks on run to reply (default `codync-network`).
@@ -228,6 +295,13 @@ impl Node {
         self.inner.directory()
     }
 
+    /// Changes whenever what [`Node::directory`] shows does: a computer joins or leaves, a role
+    /// or name changes, another computer offers different agents, or it starts or stops
+    /// answering. Ticks only; read the directory for what changed.
+    pub fn changes(&self) -> watch::Receiver<()> {
+        self.inner.changed.subscribe()
+    }
+
     /// Where a bare agent name or a full `agent@computer` points: this computer first, then the
     /// directory. Refuses a name more than one computer has, naming them.
     pub fn resolve(&self, name: &str) -> Result<Address> {
@@ -237,7 +311,10 @@ impl Node {
     /// Sends a letter from one of the agents this computer offers. An answer (`reply_to`) may also
     /// come from one it no longer offers: renamed or gone while it worked, it still says how it ended.
     pub async fn send(&self, letter: Letter) -> Result<Sent> {
-        if letter.reply_to.is_none() && !self.inner.offered().iter().any(|a| a.id == letter.from) {
+        let sender = |from: &str| {
+            self.inner.offered().iter().any(|a| a.id == from) || locked(&self.inner.senders).iter().any(|s| s == from)
+        };
+        if letter.reply_to.is_none() && !sender(&letter.from) {
             bail!("{} isn't one of this computer's agents", letter.from);
         }
         // A reply carries on the chain of the letter it answers (one more handoff).
@@ -258,6 +335,10 @@ impl Node {
         let local = id == self.id();
         let envelope = letter.seal(wire::now_ms());
         wire::check(&envelope)?;
+        // A request, which an answer may come back to past the other computer's rules.
+        if !local && envelope.wake && envelope.reply_to.is_none() {
+            remember(&mut locked(&self.inner.asked), (envelope.id.clone(), id, envelope.from.clone()), HEARD_MAX);
+        }
         let name = |id: &EndpointId| roster.as_ref().map_or_else(|| "this computer".into(), |r| r.name(id));
         let answer = if local {
             Ok(self.inner.take(id, envelope.clone()).await)
@@ -282,7 +363,8 @@ impl Node {
         }
     }
 
-    pub async fn shutdown(self) {
+    /// Stops answering and closes the endpoint (leaving a network, or quitting).
+    pub async fn shutdown(&self) {
         let _ = self.router.shutdown().await;
     }
 }
@@ -296,16 +378,19 @@ impl Inner {
         self.endpoint.id()
     }
 
+    /// Whether a letter from `peer` answers a request this computer sent there, from the agent
+    /// the letter is for.
+    pub(super) fn answers(&self, peer: EndpointId, envelope: &wire::Envelope) -> bool {
+        let Some(id) = envelope.reply_to.as_deref() else { return false };
+        locked(&self.asked).iter().any(|(sent, to, by)| sent == id && *to == peer && *by == envelope.to)
+    }
+
     fn hops_of(&self, letter: &str) -> Option<u8> {
         locked(&self.heard).iter().rev().find(|(id, _)| id == letter).map(|(_, hops)| *hops)
     }
 
     fn heard(&self, letter: &str, hops: u8) {
-        let mut heard = locked(&self.heard);
-        if heard.len() >= HEARD_MAX {
-            heard.pop_front();
-        }
-        heard.push_back((letter.to_owned(), hops));
+        remember(&mut locked(&self.heard), (letter.to_owned(), hops), HEARD_MAX);
     }
 
     fn offered(&self) -> Vec<Agent> {
@@ -321,29 +406,25 @@ impl Inner {
         let mut guard = locked(&self.roster);
         let roster = guard.as_mut().ok_or_else(|| anyhow!("this computer isn't in a network"))?;
         roster.sign(self.endpoint.secret_key(), wire::now_ms(), change).map_err(|_| anyhow!("{refused}"))?;
-        roster.save(&self.dir)?;
+        self.save(roster)?;
         drop(guard);
         self.clone().hello_all();
         Ok(())
     }
 
-    /// Writes this computer's current address into the roster when it moved.
-    fn refresh_my_addr(&self) -> Result<()> {
-        let mut guard = locked(&self.roster);
-        let Some(roster) = guard.as_mut() else { return Ok(()) };
-        let addr = self.endpoint.addr();
-        if roster.members().get(&self.me()).is_none_or(|m| m.addr == addr) {
-            return Ok(());
-        }
-        roster.sign(self.endpoint.secret_key(), wire::now_ms(), Change::Locate { addr })?;
-        roster.save(&self.dir)
+    /// Keeps `roster` on disk and tells whoever watches [`Node::changes`]. Callers hold the roster
+    /// lock until `roster` is the one kept in memory, so a watcher woken here reads it.
+    fn save(&self, roster: &Roster) -> Result<()> {
+        roster.save(&self.dir)?;
+        self.changed.send_replace(());
+        Ok(())
     }
 
     async fn connect(&self, id: EndpointId) -> Result<Connection> {
         let addr = locked(&self.roster)
             .as_ref()
             .and_then(|r| r.members().get(&id).map(|m| m.addr.clone()))
-            .unwrap_or_else(|| iroh::EndpointAddr::new(id));
+            .unwrap_or_else(|| EndpointAddr::new(id));
         // ponytail: a new connection per call; keep them open when traffic makes setup cost show.
         Ok(tokio::time::timeout(CONNECT_TIMEOUT, self.endpoint.connect(addr, ALPN)).await??)
     }
@@ -397,68 +478,24 @@ impl Inner {
         let mut guard = locked(&self.roster);
         let Some(mine) = guard.as_mut() else { return Ok(()) };
         if mine.merge(theirs) {
-            mine.save(&self.dir)?;
+            self.save(mine)?;
         }
         Ok(())
     }
 }
 
-async fn bind(key: SecretKey, connector: &Connector) -> Result<Endpoint> {
-    let builder = match connector {
-        Connector::Public => Endpoint::builder(presets::N0),
-        Connector::Relay(url) => {
-            let url: RelayUrl = url.parse().context("not a relay URL")?;
-            Endpoint::builder(presets::Minimal).relay_mode(RelayMode::custom([url]))
-        }
-        Connector::Private => Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled),
-    };
-    Ok(builder.secret_key(key).bind().await?)
-}
-
-/// Waits briefly until the endpoint knows its own addresses, so invites and the roster carry them.
-async fn settle(endpoint: &Endpoint, connector: &Connector) {
-    if *connector != Connector::Private {
-        let _ = tokio::time::timeout(Duration::from_secs(5), endpoint.online()).await;
-    }
-    let until = Instant::now() + Duration::from_secs(3);
-    while endpoint.addr().ip_addrs().next().is_none() && Instant::now() < until {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
-fn load_key(dir: &Path) -> Result<SecretKey> {
-    let path = dir.join(KEY_FILE);
-    match std::fs::read(&path) {
-        Ok(bytes) => {
-            let bytes: [u8; 32] = bytes.try_into().map_err(|_| anyhow!("{} is damaged", path.display()))?;
-            Ok(SecretKey::from_bytes(&bytes))
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            let key = SecretKey::generate();
-            write_private(&path, &key.to_bytes())?;
-            Ok(key)
-        }
-        Err(e) => Err(e).context("couldn't read this computer's key"),
-    }
-}
-
-fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?;
-        file.write_all(bytes)?;
-    }
-    #[cfg(not(unix))]
-    std::fs::write(path, bytes)?;
-    Ok(())
-}
-
 fn check_name(name: &str) -> Result<String> {
     let name = name.trim();
-    if name.is_empty() || name.len() > 40 || name.contains(['/', ' ', '@', '.']) {
+    if name.is_empty() || name.len() > 40 || name.contains(roster::NOT_IN_NAMES) {
         bail!("a computer's name is 1–40 characters, without spaces, /, @ or .");
     }
     Ok(name.into())
+}
+
+/// Keeps `item` in a list of the newest `max`.
+fn remember<T>(list: &mut VecDeque<T>, item: T, max: usize) {
+    if list.len() >= max {
+        list.pop_front();
+    }
+    list.push_back(item);
 }

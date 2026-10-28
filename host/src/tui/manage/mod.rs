@@ -17,6 +17,9 @@ mod library;
 mod market;
 pub(in crate::tui) mod mcp_tools;
 mod memory;
+mod network;
+mod network_rules;
+mod network_setup;
 mod pages;
 mod replies;
 mod routines;
@@ -28,6 +31,9 @@ pub use documents::{DocumentReply, DocumentSheet};
 pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields};
 pub use library::{ArtifactTitles, LibraryItem};
 pub use memory::{MemoryMode, MemorySheet, Scroll, Section};
+pub use network::{NetReply, NetworkSheet, Recovery, Step};
+pub use network_rules::{RuleField, RuleForm};
+pub use network_setup::{CONNECTORS, Setup, SetupField};
 pub use pages::Page;
 pub use skill::SkillSheet;
 pub use when::complete_zone;
@@ -381,7 +387,7 @@ impl App {
     ) -> Option<String> {
         let list = self.models.get(&model_key(backend, account))?.as_ref()?;
         let mut ids = vec![String::new()];
-        ids.extend(list.iter().map(|m| m.id.clone()));
+        ids.extend(list.iter().filter(|m| !m.id.is_empty()).map(|m| m.id.clone()));
         let i = ids.iter().position(|x| x == current).unwrap_or(0);
         Some(ids[super::app::cycle(i, d, ids.len())].clone())
     }

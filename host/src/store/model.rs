@@ -209,6 +209,12 @@ pub struct BotConfig {
     /// created (see `chat::manage`). The user turns it on; the bots such a bot creates have it too.
     #[serde(default)]
     pub manage_team: bool,
+    /// Other computers in the user's network list this bot and may message it (`network::publish`).
+    #[serde(default = "yes")]
+    pub offered_to_network: bool,
+    /// The user's cloud assistant lists this bot and may message it (`chat::team::assistant`).
+    #[serde(default = "yes")]
+    pub reachable_by_assistants: bool,
     /// The bot that created this one with `create_bot`; none when the user did.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,

@@ -88,6 +88,14 @@ def prompt(request):
         update({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Message queued"}})
         send({"id": request["id"], "result": {"stopReason": "end_turn"}})
         return
+    if text.startswith("TRY "):
+        # TRY <target> <message>: a message that may be refused; the reply says which.
+        target, message = text.split("\n", 1)[0].split(" ", 2)[1:]
+        response = team_call(target, message)
+        reply = ("Refused: " if response.get("isError") else "Sent: ") + response["content"][0]["text"]
+        update({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": reply}})
+        send({"id": request["id"], "result": {"stopReason": "end_turn"}})
+        return
     if text.split("\n\n")[-1] == "REPORT":
         response = mcp_call("chat", "send_message", {"text": "Report for the user"})
         if "Your final reply goes back to" in text:

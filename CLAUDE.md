@@ -16,7 +16,7 @@ Bot-based remote for coding agents: persistent named bots on your computer, mess
 
 ## Clean code
 
-- Keep code modular and clean on every change: reuse before writing, one responsibility per file/type, no new code appended to files past ~500 lines (split first), views/components hold no I/O or logic, short single-purpose functions, enums over flags, no dead code, no swallowed errors. Full rules: [docs/guides/clean-code.md](docs/guides/clean-code.md).
+- Keep code modular and clean on every change: reuse before writing (existing code first, then a proven component/framework that already fits, see [prefer ready-made](docs/guides/clean-code.md#modules)), one responsibility per file/type, no new code appended to files past ~500 lines (split first), views/components hold no I/O or logic, short single-purpose functions, enums over flags, no dead code, no swallowed errors. Full rules: [docs/guides/clean-code.md](docs/guides/clean-code.md).
 - After every code change (tests green, before commit): review → fix, refactor and cleanup → end-to-end test, by running the `after-change` workflow from the change's worktree; then merge into `dev`, and only after the merge is pushed stop its `npm run dev` and delete the worktree: [after every change](docs/guides/clean-code.md#after-every-change-review-e2e-cleanup).
 
 ## Architecture
@@ -42,7 +42,7 @@ Bot-based remote for coding agents: persistent named bots on your computer, mess
 
 ## Cross-platform UI changes
 
-- Any UI change in any client must include the corresponding updates to the other clients in the same change: iOS (`apps/ios/`, `apps/ios/Kit/Sources/CodyncUI/`), Android (`apps/android/app/`), desktop (`apps/desktop/src/renderer/`, macOS, Linux and Windows), and terminal UI (`host/src/tui/`). This applies in every direction.
+- Any UI change in any client must include the corresponding updates to the other clients in the same change: iOS (`apps/ios/`, `apps/ios/Kit/Sources/CodyncUI/`), Android (`apps/android/app/`), desktop (`apps/desktop/src/renderer/`, macOS, Linux and Windows), and terminal UI (`host/src/tui/`). This applies in every direction. The iPhone and Android apps go further: every change to either one, not only UI (behavior, flows, copy, tests, docs), lands in the other in the same change and is checked on both (iOS Simulator and Android emulator) before it merges, contributor PRs included; only Apple-only or Android-only capabilities stay on one side.
 - Keep shared features, actions, terminology, displayed information, and loading, empty, error, and permission states consistent. Adapt layout, controls, and input to each platform, including terminal keyboard interaction, while preserving the same user-facing behavior.
 - Inspect every client's corresponding implementation before finishing a UI task. Implement applicable changes together; do not silently defer another client. For a platform-only change or an unsupported capability, document which clients are unaffected and the concrete reason in the change summary.
 - Validate each affected client with its relevant build/tests and UI checks. Report any checks that could not run and why.

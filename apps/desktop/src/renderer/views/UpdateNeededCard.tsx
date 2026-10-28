@@ -1,38 +1,10 @@
-import type { VersionMismatch } from '@shared/compat'
 import { Button } from '../components/Controls'
 import { Icon } from '../components/Icon'
 import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
-import type { HostUpdate } from '../lib/host-update'
+import { updateNeededText } from '../lib/host-update'
 import { useApp, useStore } from '../store/context'
 import { UpdateButton, useUpdates } from './UpdateButton'
-
-/** The words every client uses for a version mismatch (iOS, the TUI and this app). */
-export const updateNeededText = {
-  title(m: VersionMismatch, host: string) {
-    return m.kind === 'updateApp' ? 'Update this app' : `Update Codync on ${host}`
-  },
-  detail(m: VersionMismatch, host: string, hostVersion: string | null | undefined, os: string | null | undefined, instructions = true) {
-    if (m.kind === 'updateApp') {
-      const runs = hostVersion ? `${host} runs Codync ${hostVersion} and` : host
-      return `${runs} needs this app to be ${m.minimum} or newer. Your chats are safe on the computer.`
-    }
-    const how =
-      os === 'macos' ? 'Open Codync on that Mac and choose Check for Updates.'
-      : os === 'linux' ? 'Run codync-host update there.'
-      : 'Update Codync on that computer.'
-    const needs = `${host} runs Codync ${m.version}; this app needs ${m.minimum} or newer.`
-    return instructions ? `${needs} ${how}` : needs
-  },
-  /** A computer updating at this app's request. */
-  updating(host: string) {
-    return `Updating Codync on ${host}. This takes a few minutes.`
-  },
-  /** Why the last update asked of the computer didn't take. */
-  notUpdated(last: HostUpdate, host: string) {
-    return last.kind === 'failed' ? last.message : `${host} didn't finish updating. Try again, or update Codync on that computer.`
-  },
-}
 
 /**
  * Says which side has to update before this app and a computer can work together, and offers

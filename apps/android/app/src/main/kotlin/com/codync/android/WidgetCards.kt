@@ -80,9 +80,7 @@ internal fun UsageWindow.resetsShort(now: Long = System.currentTimeMillis()): St
 /** "resets 3h 20m" / "resets in 2d 6h". Compact times become "3小时20分后重置". */
 @Composable internal fun resetLine(raw: String): String {
     val language = LocalAppLanguage.current.resolved(LocalSystemTag.current)
-    val systemChinese = LocalSystemChinese.current
-    val phrases = LocalPhrases.current
-    return spokenReset(raw, language.usesChinese(systemChinese)) { translate(it, language, systemChinese, phrases) }
+    return spokenReset(raw, language.usesChinese(LocalSystemChinese.current), translator())
 }
 
 internal fun spokenReset(raw: String, chinese: Boolean, tr: (String) -> String): String {

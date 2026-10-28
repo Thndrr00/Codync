@@ -1,9 +1,10 @@
 //! What this computer answers: joins, hellos and letters for its agents.
 
-use super::{Inner, check_name, locked};
+use super::{Inner, check_name, locked, remember};
 use crate::guard::digest;
 use crate::reach::Reach;
 use crate::roster::Change;
+use crate::rules;
 use crate::types::Message;
 use crate::wire::{self, Envelope, Request, Response};
 use anyhow::{Result, anyhow, bail};
@@ -88,22 +89,31 @@ impl Inner {
         if !self.ready.load(Ordering::Acquire) {
             return Response::Later { reason: "this computer is still starting".into() };
         }
-        // Without a network, only this computer's own agents write here.
-        let roster = locked(&self.roster).clone();
-        let name = |id: &EndpointId| roster.as_ref().map_or_else(|| "local".into(), |r| r.name(id));
-        let reach = locked(&self.agents).iter().find(|(a, _)| a.id == envelope.to).map(|(_, r)| r.clone());
-        let reach = match reach {
-            Some(reach) => reach,
-            // An answer to an agent that has since been renamed or gone: the app knows its request
-            // by id and still takes it.
-            None if envelope.reply_to.is_some() => Reach::App,
-            None => return refuse(format!("{} has no agent called {}", name(&self.me()), envelope.to)),
-        };
         let key = format!("{peer}:{}", envelope.id);
         if locked(&self.taken).contains(&key) {
             // The sender didn't hear back the first time; it was already delivered.
             return Response::Stored;
         }
+        // Without a network, only this computer's own agents write here.
+        let roster = locked(&self.roster).clone();
+        let name = |id: &EndpointId| roster.as_ref().map_or_else(|| "local".into(), |r| r.name(id));
+        // This computer's rules, for letters from the others that don't answer one of its own.
+        let answers = self.answers(peer, &envelope);
+        if peer != self.me()
+            && !answers
+            && !rules::allows(&locked(&self.rules), &name(&peer), &envelope.from, &envelope.to)
+        {
+            return refuse(format!("{} doesn't take messages from {}@{}", envelope.to, envelope.from, name(&peer)));
+        }
+        let reach = locked(&self.agents).iter().find(|(a, _)| a.id == envelope.to).map(|(_, r)| r.clone());
+        let reach = match reach {
+            Some(reach) => reach,
+            // An answer to an agent that has since been renamed, gone or kept off the network: the
+            // app knows its request by id and still takes it. Only a real answer: one this
+            // computer asked for.
+            None if envelope.reply_to.is_some() && answers => Reach::App,
+            None => return refuse(format!("{} has no agent called {}", name(&self.me()), envelope.to)),
+        };
         let pair = format!("{peer}/{}>{}", envelope.from, envelope.to);
         let meta = envelope.meta.as_ref().map(ToString::to_string).unwrap_or_default();
         // Two answers to two different letters may well say the same thing ("Done.").
@@ -112,14 +122,15 @@ impl Inner {
             return refuse(reason);
         }
         let (id, hops) = (envelope.id.clone(), envelope.hops);
+        // An answer that says how the request ended (`meta`) is the last one past the rules.
+        let ended = envelope.reply_to.clone().filter(|_| answers && envelope.meta.is_some());
         match self.hand_over(&reach, envelope.open(name(&peer))).await {
             Ok(()) => {
                 self.heard(&id, hops);
-                let mut taken = locked(&self.taken);
-                if taken.len() >= TAKEN_MAX {
-                    taken.pop_front();
+                remember(&mut locked(&self.taken), key, TAKEN_MAX);
+                if let Some(request) = ended {
+                    locked(&self.asked).retain(|(sent, to, _)| *sent != request || *to != peer);
                 }
-                taken.push_back(key);
                 Response::Stored
             }
             Err(e) => {
@@ -167,7 +178,7 @@ impl Inner {
             .sign(key, wire::now_ms(), Change::Admit { id: peer, name })
             .map_err(|_| anyhow!("this computer can no longer invite: only the owner and admins can"))?;
         let welcome = Response::Welcome { roster: roster.clone() };
-        roster.save(&self.dir)?;
+        self.save(roster)?;
         drop(guard);
         self.saw(peer, Some(Vec::new()));
         tracing::info!(peer = %peer.fmt_short(), "a computer joined the network");

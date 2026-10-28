@@ -507,6 +507,9 @@ async fn catch_up(host: &Host) -> Vec<Value> {
             let line: String = buf.drain(..=i).collect();
             if let Some(data) = line.trim_end().strip_prefix("data:")
                 && let Ok(v) = serde_json::from_str::<Value>(data.trim_start())
+                // A live usage refresh lands whenever the agents' usage poll finishes (later on a
+                // busy machine); its shape is `hello.usage`'s.
+                && v["type"] != "usage"
             {
                 events.push(v);
             }

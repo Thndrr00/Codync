@@ -63,6 +63,7 @@ Source review, a passing build, local integration tests and production acceptanc
 - [Android parity and acceptance](plans/android-app.md)
 - [Viabilidad de compilación Android en la nube (expo.dev)](viabilidad-compilacion-android-expo.md) (estudio de viabilidad técnica y alternativas para reducir recursos locales)
 - [Guía de reutilización de Openstark](guia-paso-a-paso-reutilizacion-openstark.md) (hoja de ruta paso a paso por fases y contratos de alto impacto)
+- [codync-network and cloud assistants: what's left](plans/codync-network-next.md) (network screens in every app, access rules, Codync's own relays, and the rest, in build order)
 - [Harness memory](plans/harness-memory.md) (the switch that keeps a harness's own memory on; a choice of it instead of Codync's, planned)
 - [Error tracking detail](plans/error-tracking-detail.md) (symbolicated iPhone crashes and sessions, built; consented problem reports, proposed)
 

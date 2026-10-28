@@ -79,7 +79,7 @@ extension BotStore {
 
     private func apply(_ event: HostEvent) {
         switch event {
-        case let .hello(id, hostRev, newUsage, newScreen):
+        case let .hello(id, hostRev, newUsage, newScreen, newNetwork):
             if let hostId, hostId != id {
                 // Different host database: start over.
                 resetMirror()
@@ -87,6 +87,7 @@ extension BotStore {
             hostId = id
             setUsage(newUsage)
             screen = newScreen
+            network = newNetwork
             let hostRewound = hostRev < rev
             if hostRewound { rev = 0 }
             windowFloors = requestedSince > 0 && !hostRewound ? loadedFloors() : [:]
@@ -126,6 +127,8 @@ extension BotStore {
             setUsage(u)
         case let .screen(s):
             screen = s
+        case let .network(view):
+            network = view
         case let .artifact(artifact):
             artifacts.upsert(artifact)
         case .resync:

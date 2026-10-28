@@ -42,6 +42,8 @@ pub enum Server {
     Manage,
     Memory,
     Composio,
+    /// For agents on this computer that aren't Codync bots; `bot` is the agent's name.
+    Network,
 }
 
 const INSTRUCTIONS: &str = "Operate this computer's apps like a person would, in the background where you can: \
@@ -99,6 +101,9 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         Server::Memory => ("codync-memory", crate::chat::memory::INSTRUCTIONS, crate::chat::memory::tools()),
         Server::Composio => {
             ("codync-composio", crate::market::composio::INSTRUCTIONS, crate::market::composio::tools())
+        }
+        Server::Network => {
+            ("codync-network", crate::chat::team::assistant::INSTRUCTIONS, crate::chat::team::assistant::tools())
         }
     };
     // Requests still running, by id: a cancelled one stops, and its host call with it (a team change's card expires).
@@ -199,6 +204,8 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
         Server::Manage => ("manageCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(30)),
         Server::Memory => ("memoryCall", Duration::from_mins(2)),
         Server::Composio => ("composioCall", Duration::from_mins(2)),
+        // The first listing may wait for the other computers.
+        Server::Network => ("agentCall", Duration::from_secs(30)),
     };
     let res = crate::http()
         .post(format!("http://127.0.0.1:{port}/api/{method}"))
@@ -220,6 +227,7 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
                         | Server::Manage
                         | Server::Memory
                         | Server::Routines
+                        | Server::Network
                         | Server::Connectors => {
                             let text = crate::agent::loop_guard::cap_tool_output(&v.to_string());
                             json!({"content": [{"type": "text", "text": text}]})

@@ -14,6 +14,11 @@ use std::fmt::Write;
 pub const ALPN: &[u8] = b"codync-network/0";
 pub const MAX_BODY: usize = 64 * 1024;
 const MAX_META: usize = 16 * 1024;
+/// The longest `from`, `to` and `reply_to` in bytes: an agent's address name (40 characters of
+/// any script, a number, `agent-`), a letter id.
+pub const MAX_ADDRESS: usize = 256;
+/// The longest letter id (`random_hex(12)` makes 24).
+pub(crate) const MAX_ID: usize = 64;
 const MAX_FRAME: usize = 1024 * 1024;
 const TICKET_PREFIX: &str = "codync-network:";
 
@@ -25,6 +30,25 @@ pub struct Agent {
     /// What it is good at, so other agents pick the right one.
     #[serde(default)]
     pub about: String,
+    /// What it is, so others can pick one kind. Set from its [`Reach`](crate::Reach) for the
+    /// sessions the network knocks on itself.
+    #[serde(default)]
+    pub kind: AgentKind,
+}
+
+/// What kind of agent is offered: a Codync bot, a Claude Code session, a Codex thread, a person
+/// at a terminal.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentKind {
+    Codync,
+    ClaudeCode,
+    Codex,
+    Terminal,
+    /// Not said (a computer from before kinds), or one this version doesn't know.
+    #[default]
+    #[serde(other)]
+    Other,
 }
 
 /// A letter on the wire. The sending computer is whoever opened the connection (iroh proves
@@ -97,6 +121,9 @@ pub struct Ticket {
     pub network: EndpointId,
     pub secret: String,
     pub addr: EndpointAddr,
+    /// What the inviting computer calls the network, for a computer in several of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 impl Ticket {
@@ -109,6 +136,19 @@ impl Ticket {
         let bytes = URL_SAFE_NO_PAD.decode(body).context("the invite is cut off or mistyped")?;
         serde_json::from_slice(&bytes).context("the invite is cut off or mistyped")
     }
+}
+
+/// What an invite says about its network, before joining it.
+pub struct InviteInfo {
+    /// The network's id (its root key), as [`Node::network_id`](crate::Node::network_id) gives it.
+    pub network: String,
+    /// What the inviting computer calls the network, if it named it.
+    pub name: Option<String>,
+}
+
+pub fn read_invite(invite: &str) -> Result<InviteInfo> {
+    let ticket = Ticket::decode(invite)?;
+    Ok(InviteInfo { network: ticket.network.to_string(), name: ticket.name })
 }
 
 pub async fn call(conn: &Connection, request: &Request) -> Result<Response> {
@@ -158,6 +198,13 @@ pub fn check(envelope: &Envelope) -> Result<()> {
     if envelope.meta.as_ref().is_some_and(|m| m.to_string().len() > MAX_META) {
         bail!("a message's meta is at most {MAX_META} bytes");
     }
+    let addresses = [Some(&envelope.from), Some(&envelope.to), envelope.reply_to.as_ref()];
+    if envelope.id.is_empty()
+        || envelope.id.len() > MAX_ID
+        || addresses.into_iter().flatten().any(|a| a.len() > MAX_ADDRESS)
+    {
+        bail!("a message's id is 1–{MAX_ID} bytes and its addresses at most {MAX_ADDRESS}");
+    }
     Ok(())
 }
 
@@ -166,9 +213,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_letters_id_and_addresses_have_bounds() {
+        let letter = |id: &str, from: String| Envelope {
+            id: id.into(),
+            from,
+            to: "reviewer".into(),
+            body: "hi".into(),
+            wake: true,
+            reply_to: None,
+            hops: 0,
+            meta: None,
+            sent_at: 0,
+        };
+        assert!(check(&letter(&random_hex(12), "agent-lead".into())).is_ok());
+        assert!(check(&letter(&random_hex(12), "x".repeat(1 << 20))).is_err());
+        assert!(check(&letter(&random_hex(12), "審".repeat(40))).is_ok(), "any script's address names");
+        assert!(check(&letter(&"a".repeat(100), "lead".into())).is_err());
+        assert!(check(&letter("", "lead".into())).is_err());
+        let mut reply = letter(&random_hex(12), "lead".into());
+        reply.reply_to = Some("r".repeat(MAX_ADDRESS + 1));
+        assert!(check(&reply).is_err());
+    }
+
+    #[test]
     fn tickets_round_trip_and_reject_garbage() {
         let addr = EndpointAddr::new(iroh::SecretKey::generate().public());
-        let ticket = Ticket { network: addr.id, secret: random_hex(16), addr: addr.clone() };
+        let ticket = Ticket { network: addr.id, secret: random_hex(16), addr: addr.clone(), name: None };
         let text = ticket.encode().unwrap();
         let back = Ticket::decode(&format!("  {text}\n")).unwrap();
         assert_eq!((back.network, back.secret, back.addr), (ticket.network, ticket.secret, addr));

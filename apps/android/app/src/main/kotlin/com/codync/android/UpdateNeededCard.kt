@@ -31,16 +31,21 @@ internal val AppState.mismatch: VersionMismatch? get() {
         ?: if (unreadable && host != null && AppVersion.isBelow(BuildConfig.VERSION_NAME, host)) VersionMismatch.UpdateApp(host) else null
 }
 
-/** Says which side has to update, shown instead of the composer and above the computer's bots. */
-@Composable internal fun UpdateNeededCard(state: AppState, mismatch: VersionMismatch, requestUpdate: () -> Unit, modifier: Modifier = Modifier) {
-    val host = state.hello?.text("name") ?: state.computer?.name ?: "your computer"
-    // A requested update that never finishes offers the button again once its wait is over.
+/** The time to judge `update` by, read again when a requested update's wait is over, so one that never finished is offered again. */
+@Composable internal fun rememberHostUpdateNow(update: HostUpdate?): Long {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(state.hostUpdate) {
-        val requested = state.hostUpdate as? HostUpdate.Requested ?: return@LaunchedEffect
+    LaunchedEffect(update) {
+        val requested = update as? HostUpdate.Requested ?: return@LaunchedEffect
         delay(requested.at + HOST_UPDATE_WAIT_MS - System.currentTimeMillis())
         now = System.currentTimeMillis()
     }
+    return maxOf(now, System.currentTimeMillis())
+}
+
+/** Says which side has to update, shown instead of the composer and above the computer's bots. */
+@Composable internal fun UpdateNeededCard(state: AppState, mismatch: VersionMismatch, requestUpdate: () -> Unit, modifier: Modifier = Modifier) {
+    val host = state.hello?.text("name") ?: state.computers.firstOrNull()?.name ?: "your computer"
+    val now = rememberHostUpdateNow(state.hostUpdate)
     Row(modifier.fillMaxWidth().clip(RoundedRectangle(16.dp)).background(Palette.surface).padding(14.dp),
         verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Symbol("arrow.down.circle", size = 22.dp, tint = Palette.warning)
@@ -53,8 +58,7 @@ internal val AppState.mismatch: VersionMismatch? get() {
                 is VersionMismatch.UpdateApp -> Text("${state.hello?.text("version")?.let { "$host runs Codync $it and" } ?: host} needs this app to be " +
                     "${mismatch.minimum} or newer. Your chats are safe on the computer.", style = Type.footnote, color = Palette.secondary)
                 is VersionMismatch.UpdateHost -> {
-                    val notice = hostUpdateNotice(host, mismatch, state.hello?.text("os"), state.canUpdateHost, state.hostUpdate,
-                        maxOf(now, System.currentTimeMillis()))
+                    val notice = hostUpdateNotice(host, mismatch, state.hello?.text("os"), state.canUpdateHost, state.hostUpdate, now)
                     Text(notice.detail, style = Type.footnote, color = Palette.secondary)
                     if (notice.offersUpdate) PrimaryButton("Update now", Modifier.padding(top = 4.dp), action = requestUpdate)
                 }

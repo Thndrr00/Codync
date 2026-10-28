@@ -73,8 +73,9 @@ host must still approve access.
 
 A phone can pair with **several computers** (by code, or approved through the account). Each keeps
 its own mirror and composer drafts; the roster shows and connects to one at a time, and its header
-switches between them. Every paired computer still notifies this phone. Remove one in Computers &
-settings. Accounts have separate device keys, mirrors, files, image caches and composer drafts.
+switches between them. Every paired computer still notifies this phone; each one's push switch is on
+its card. Remove one in Computer management. Accounts have separate device keys, mirrors, files,
+image caches and composer drafts.
 
 The roster shows activity, previews, unread counts, groups and pin/hide actions;
 touch and hold a bot, then move it, to reorder (the order syncs through the host). Cached bots remain readable offline and are labeled as saved. An

@@ -42,12 +42,23 @@ const TOOLS = [
     name: "list_bots",
     title: "List bots",
     description:
-      "The user's Codync bots you can message, with their IDs, specialties and status. Narrow it with query; it " +
-      "returns at most limit at a time, with next for the rest. Without computer, every online computer answers.",
+      "The user's Codync bots you can message, with their IDs, kinds, specialties and status, also those on the user's " +
+      "other computers in that computer's network (IDs like reviewer@laptop), where Claude Code sessions and Codex " +
+      "threads can be offered too. Narrow it with query or kind; it returns at most limit at a time, with next for " +
+      "the rest. Without computer, every online computer answers. Rows without kind come from a computer whose " +
+      "Codync is older and doesn't filter by kind.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", description: "Words that must all appear in the bot's name or description." },
+        kind: {
+          type: "string",
+          enum: ["codync", "claude-code", "codex", "terminal", "other"],
+          description:
+            "Only this kind of agent: codync (Codync bots), claude-code (Claude Code sessions), codex (Codex threads), " +
+            "terminal (a person at a terminal on another computer) or other (on a computer whose Codync doesn't say " +
+            "its kind yet).",
+        },
         limit: { type: "integer", minimum: 1, maximum: 50, description: "At most this many (default 20)." },
         cursor: { type: "string", description: "next from the previous call, for the rest." },
         computer: COMPUTER,
@@ -65,7 +76,10 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        botId: { type: "string", description: "The bot's id from list_bots." },
+        botId: {
+          type: "string",
+          description: "The bot's id from list_bots; with computer set to the computer that listed it when several are online.",
+        },
         message: { type: "string", description: "The task, relevant context, file paths and the expected result." },
         computer: COMPUTER,
       },
@@ -278,7 +292,7 @@ async function ask(c: Ctx, computer: Computer, user: string, tool: string, args:
   if (a.code === "offline") throw new ToolError(`${computer.name} is offline: Codync isn't running there, or it can't reach the internet.`);
   if (a.code === "timeout") {
     throw new ToolError(
-      `${computer.name} didn't answer. Its Codync may be too old for cloud assistants: update it, then turn them on there (codync-host cloud --assistants on).`,
+      `${computer.name} didn't answer. Its Codync may be too old for cloud assistants: update it, then turn them on there (Cloud assistants in its Codync settings, or codync-host cloud --assistants on).`,
     );
   }
   throw new ToolError(a.error ?? "Refused");

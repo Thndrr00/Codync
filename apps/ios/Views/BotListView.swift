@@ -142,6 +142,8 @@ struct BotListView: View {
             .listRowBackground(Color.clear)
         }
         .id(accounts.accountId)
+        .reviewInvitation(blocked: creating != nil || editing != nil || editingGroup != nil
+                          || confirmDelete != nil || confirmNewSession != nil || lifted != nil)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 0)

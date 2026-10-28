@@ -21,6 +21,15 @@ pub fn handle(name: &str) -> String {
     if out.is_empty() { "bot".into() } else { out }
 }
 
+/// `base`, or the first of `base-2`, `base-3`… that is `free`, when at most `taken` names aren't.
+pub fn numbered(base: &str, taken: usize, free: impl Fn(&str) -> bool) -> String {
+    std::iter::once(base.to_owned())
+        // One more number than there are names taken: one of them is free.
+        .chain((2..=taken + 2).map(|n| format!("{base}-{n}")))
+        .find(|name| free(name))
+        .expect("a number is free")
+}
+
 /// Address names both ways, for the bots this computer offers.
 #[derive(Default)]
 pub struct Handles {
@@ -34,12 +43,7 @@ impl Handles {
     pub fn of(bots: impl IntoIterator<Item = (String, String)>, given: &mut HashMap<String, String>) -> Self {
         let mut handles = Self::default();
         for (id, name) in bots {
-            let base = handle(&name);
-            let free = std::iter::once(base.clone())
-                // One more number than there are names given: one of them is free.
-                .chain((2..=given.len() + 2).map(|n| format!("{base}-{n}")))
-                .find(|h| given.get(h).is_none_or(|bot| *bot == id))
-                .expect("a number is free");
+            let free = numbered(&handle(&name), given.len(), |h| given.get(h).is_none_or(|bot| *bot == id));
             given.insert(free.clone(), id.clone());
             handles.to_bot.insert(free.clone(), id.clone());
             handles.to_handle.insert(id, free);

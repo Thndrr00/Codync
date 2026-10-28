@@ -49,6 +49,7 @@ const LOCAL_ONLY: &[&str] = &[
     "computerTools",
     "chatCall",
     "teamCall",
+    "agentCall",
     "manageCall",
     "memoryCall",
     "routineCall",
@@ -72,11 +73,14 @@ const LOCAL_ONLY: &[&str] = &[
     "networkStatus",
     "networkCreate",
     "networkJoin",
+    "networkLeave",
     "networkInvite",
     "networkPeers",
     "networkRemove",
     "networkPromote",
     "networkRecover",
+    // Who may write to this computer's bots is decided at the computer, like who is in.
+    "setNetworkRules",
 ];
 const SCREEN: &[&str] =
     &["screenPrepare", "screenOffer", "screenClose", "screenTakeover", "screenCandidate", "screenCandidates"];
@@ -250,6 +254,7 @@ mod tests {
             assert!(permit(&both, m).is_err(), "{m} is loopback only");
         }
         assert!(permit(&both, "send").is_ok());
+        assert!(permit(&both, "networkView").is_ok(), "phones read the network");
         assert!(permit(&both, "screenOffer").is_ok());
         assert!(permit(&both, "screenPrepare").is_ok());
         assert!(permit(&control, "screenPrepare").is_err());

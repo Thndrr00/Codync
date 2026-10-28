@@ -316,6 +316,16 @@ enum McpServer {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
         port: u16,
     },
+    /// For a Claude Code, Codex or other agent session on this computer that isn't a Codync bot:
+    /// list the user's bots (here and on their other computers), message one, read its reply.
+    /// Add it to the agent, for example `claude mcp add codync -- codync-host mcp network --name "Claude Code"`.
+    Network {
+        /// How the bots' chats show this agent.
+        #[arg(long, default_value = "Agent")]
+        name: String,
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+    },
     /// Tools of the apps connected through Composio.
     Composio {
         #[arg(long)]
@@ -572,6 +582,7 @@ async fn main() -> Result<()> {
         Sub::Mcp { server: McpServer::Manage { bot, port } } => mcp::serve(bot, port, mcp::Server::Manage).await,
         Sub::Mcp { server: McpServer::Memory { bot, port } } => mcp::serve(bot, port, mcp::Server::Memory).await,
         Sub::Mcp { server: McpServer::Composio { bot, port } } => mcp::serve(bot, port, mcp::Server::Composio).await,
+        Sub::Mcp { server: McpServer::Network { name, port } } => mcp::serve(name, port, mcp::Server::Network).await,
         Sub::Mcp { server: McpServer::Local { connector, port } } => mcp::serve_local(connector, port).await,
         Sub::Mcp { server: McpServer::Remote { connector, port } } => mcp::serve_remote(connector, port).await,
         Sub::Tui { url, token, port } => {

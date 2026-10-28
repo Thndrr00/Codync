@@ -314,3 +314,35 @@ async fn a_session_that_ended_in_the_agent_is_closed_and_loaded_again() {
     host.call("send", json!({"botId": bot, "text": "still there?"})).await;
     host.wait_for(&bot, Duration::from_secs(30), |e| e["kind"] == "agent" && e["data"]["text"] == "still here").await;
 }
+
+#[tokio::test]
+async fn reasoning_is_per_bot_and_applies_with_default_and_legacy_models() {
+    if python_missing() {
+        return;
+    }
+    let mut host = Host::start().await;
+    let bot = host.bot("Reasoning", "tests/fixtures/reasoning_agent.py").await;
+    let other = host.bot("Other", "tests/fixtures/reasoning_agent.py").await;
+    host.call("updateBot", json!({"id": bot, "modelOptions": {"effort": "high"}})).await;
+    host.call("send", json!({"botId": bot, "text": "one"})).await;
+    host.wait_for(&bot, Duration::from_mins(1), speed_reply("default high", "one")).await;
+    host.call("send", json!({"botId": other, "text": "other"})).await;
+    host.wait_for(&other, Duration::from_mins(1), speed_reply("default medium", "other")).await;
+    host.wait_idle().await;
+
+    // The saved preference survives the host and agent process restarting.
+    common::stop(&mut host.child);
+    let (child, base) = common::serve(&host.home).await;
+    host.child = child;
+    host.base = base;
+    host.call("send", json!({"botId": bot, "text": "resumed"})).await;
+    host.wait_for(&bot, Duration::from_mins(1), speed_reply("default high", "resumed")).await;
+    host.wait_idle().await;
+    host.call("updateBot", json!({"id": bot, "model": "explicit", "modelOptions": {"effort": "low"}})).await;
+    host.call("send", json!({"botId": bot, "text": "explicit"})).await;
+    host.wait_for(&bot, Duration::from_mins(1), speed_reply("explicit low", "explicit")).await;
+    host.wait_idle().await;
+    host.call("updateBot", json!({"id": bot, "modelOptions": {}})).await;
+    host.call("send", json!({"botId": bot, "text": "reset"})).await;
+    host.wait_for(&bot, Duration::from_mins(1), speed_reply("explicit medium", "reset")).await;
+}

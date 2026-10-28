@@ -68,6 +68,10 @@ export interface Bot {
   computer: boolean
   /** The bot can create bots (which can too) and change its own setup and the bots it created (the built-in `manage` tools); null from an older host. */
   manageTeam: boolean | null
+  /** Other computers in the user's networks list this bot and may message it; null from an older host. */
+  offeredToNetwork: boolean | null
+  /** The user's cloud assistant lists this bot and may message it; null from an older host. */
+  reachableByAssistants: boolean | null
   /** The bot that created this one; null when the user did. */
   createdBy: string | null
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
@@ -131,6 +135,8 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     skills: raw.skills ?? [],
     computer: raw.computer ?? false,
     manageTeam: raw.manageTeam ?? null,
+    offeredToNetwork: raw.offeredToNetwork ?? null,
+    reachableByAssistants: raw.reachableByAssistants ?? null,
     createdBy: raw.createdBy ?? null,
     computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
@@ -549,6 +555,8 @@ export interface Hello {
   minApp?: string
   /** `installHostUpdate` can update this computer (absent before hosts could be updated from a client). */
   canUpdate?: boolean
+  /** The latest release the computer found; null while unknown (development builds, Homebrew, Windows; absent from older hosts). */
+  latestVersion?: string | null
   cloud?: string | null
   /** Product analytics on this computer: on unless its owner turned it off. */
   analytics?: boolean
@@ -620,6 +628,8 @@ export interface CloudStatus {
   approval?: AccountApproval | null
   /** Whose relay: a `private` one has no account, access requests or relayed screen. Absent from older hosts (always Codync's). */
   relay?: 'codync' | 'private' | null
+  /** The user's cloud assistant may message this computer's bots (`setAssistants`). */
+  assistants?: boolean | null
 }
 
 export interface ClaimSignature {
@@ -673,6 +683,8 @@ export interface BotDraft {
   computer?: boolean
   manageTeam?: boolean
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
+  offeredToNetwork?: boolean
+  reachableByAssistants?: boolean
   sharedMemory?: boolean
   harnessMemory?: boolean
   isChief?: boolean
@@ -706,9 +718,11 @@ export function draftOf(bot: Bot): BotDraft {
     skills: bot.skills,
     computer: bot.computer,
     manageTeam: bot.manageTeam ?? undefined,
+    computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
+    offeredToNetwork: bot.offeredToNetwork ?? undefined,
+    reachableByAssistants: bot.reachableByAssistants ?? undefined,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
-    computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
   }
 }
 

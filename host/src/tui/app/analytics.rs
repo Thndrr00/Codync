@@ -55,6 +55,7 @@ impl App {
         let overlay = self.overlays.iter().rev().find_map(|o| match o {
             Overlay::Usage(_) => Some(Screen::Usage),
             Overlay::Pair(_) => Some(Screen::Pairing),
+            Overlay::Network(_) => Some(Screen::Network),
             Overlay::Memory(_) => Some(Screen::Memory),
             Overlay::Library(_) => Some(Screen::Library),
             Overlay::Routines(_) => Some(Screen::Routines),

@@ -49,6 +49,10 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var computer: Bool
     /// The bot can create bots (which can too) and change any bot's setup (the built-in `manage` tools). Nil from an older host.
     public var manageTeam: Bool?
+    /// Other computers in the user's networks list this bot and may message it. Nil from an older host.
+    public var offeredToNetwork: Bool?
+    /// The user's cloud assistant lists this bot and may message it. Nil from an older host.
+    public var reachableByAssistants: Bool?
     /// The bot that created this one; nil when the user did.
     public var createdBy: String?
     /// Uses the memory all the user's bots share ("About you"). Nil from an older host.
@@ -126,6 +130,8 @@ extension Bot {
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
         computer = try c.decodeIfPresent(Bool.self, forKey: .computer) ?? false
         manageTeam = try c.decodeIfPresent(Bool.self, forKey: .manageTeam)
+        offeredToNetwork = try c.decodeIfPresent(Bool.self, forKey: .offeredToNetwork)
+        reachableByAssistants = try c.decodeIfPresent(Bool.self, forKey: .reachableByAssistants)
         createdBy = try c.decodeIfPresent(String.self, forKey: .createdBy)
         sharedMemory = try c.decodeIfPresent(Bool.self, forKey: .sharedMemory)
         harnessMemory = try c.decodeIfPresent(Bool.self, forKey: .harnessMemory)

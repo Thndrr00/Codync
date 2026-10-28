@@ -54,12 +54,13 @@ pub fn tools() -> Value {
     json!([
         {
             "name": "list_bots",
-            "description": "List the Codync bots you can message, with their IDs, specialties and status: this computer's first, then those on the user's other computers. Narrow it with query (words in a bot's name or description), computer, or online; it returns at most limit at a time, with next for the rest.",
+            "description": "List the Codync bots you can message, with their IDs, kinds, specialties and status: this computer's first, then those on the user's other computers (where Claude Code sessions and Codex threads can be offered too). Narrow it with query (words in a bot's name or description), computer, kind, or online; it returns at most limit at a time, with next for the rest.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Words that must all appear in the bot's name or description."},
                     "computer": {"type": "string", "description": "Only the bots on the computer with this name (`this`: the one you run on)."},
+                    "kind": directory::kind_property(),
                     "online": {"type": "boolean", "description": "Only bots whose computer can take a message now."},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "At most this many (default 20)."},
                     "cursor": {"type": "string", "description": "next from the previous call, for the rest."},
@@ -396,12 +397,12 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
         "list_bots" => {
             visible_bot(hub, from)?;
             let remote = hub.network.directory().await;
-            directory::list(hub, from, args, &remote)
+            directory::list(hub, from, args, &remote, |_| true)
         }
         "message_bot" => {
             let (to, message) = message_args(args)?;
             match hub.network.recipient(to)? {
-                Recipient::There(address) => remote::message(hub, &visible_bot(hub, from)?, &address, message).await,
+                Recipient::There(target) => remote::message(hub, &visible_bot(hub, from)?, &target, message).await,
                 Recipient::Here(_) => call(hub, from, name, args),
             }
         }
@@ -425,12 +426,12 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
 fn call(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Result<Value> {
     let source = visible_bot(hub, from)?;
     match name {
-        "list_bots" => directory::list(hub, from, args, &[]),
+        "list_bots" => directory::list(hub, from, args, &[], |_| true),
         "message_bot" => {
             let (to, message) = message_args(args)?;
             match hub.network.recipient(to)? {
                 Recipient::Here(to) => message_bot(hub, &source, &to, message),
-                Recipient::There(address) => bail!("{address} is on another computer"),
+                Recipient::There(target) => bail!("{} is on another computer", target.address),
             }
         }
         _ => bail!("unknown team tool: {name}"),

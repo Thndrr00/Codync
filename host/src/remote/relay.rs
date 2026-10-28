@@ -204,6 +204,7 @@ async fn session(hub: &Arc<Hub>, address: &cloud::Address) -> Result<Option<u16>
         links: HashMap::new(),
         outs: StreamMap::new(),
         pulls: JoinSet::new(),
+        assistant: JoinSet::new(),
         held: None,
         ready: false,
         retried: false,
@@ -263,6 +264,7 @@ async fn session(hub: &Arc<Hub>, address: &cloud::Address) -> Result<Option<u16>
             // Also without an owner: a claim whose `cloud.changed` never arrived is picked up here.
             _ = poll.tick() => s.pull(),
             Some(_) = s.pulls.join_next() => s.deliver_held().await?,
+            Some(Ok(result)) = s.assistant.join_next() => s.send(&result).await?,
         }
     }
 }
@@ -293,6 +295,9 @@ struct Session {
     outs: StreamMap<String, ReceiverStream<Out>>,
     /// State pulls in flight; dropped (aborted) with the connection.
     pulls: JoinSet<()>,
+    /// Cloud assistant calls being answered (a listing may wait for the other computers), so
+    /// they don't hold up the devices' messages; their `assistant.result` goes out when done.
+    assistant: JoinSet<Value>,
     /// An account device's queued send that arrived before this connection's state pull
     /// succeeded. The relay sends the next item only after an ack, so there is at most one.
     held: Option<Value>,
@@ -410,8 +415,8 @@ impl Session {
             }
             // A private relay has no accounts, so no cloud assistant (§7.9).
             "assistant.call" if self.address.kind == cloud::RelayKind::Codync => {
-                let result = crate::chat::team::assistant::answer(&self.hub, &v);
-                self.send(&result).await?;
+                let hub = self.hub.clone();
+                self.assistant.spawn(async move { crate::chat::team::assistant::answer(&hub, &v).await });
             }
             "cloud.changed" => self.pull(),
             "acl.ok" => {

@@ -53,7 +53,7 @@ Nothing from the iPhone app is missing beyond the upstream 2.21–2.24 additions
 
 | What | Code | What it needs |
 | --- | --- | --- |
-| Revoke this phone's access (also on Remove of a computer approved through the account); removing older copies of the computer from the account | `core/.../CloudClient.kt` (`revokeAccess`, `removeComputer`), `AppStoreAccount.kt`, `SettingsView.kt` | A signed-in account on the emulator or a phone; only request tests cover it |
+| Revoke this phone's access (also on Remove of a computer approved through the account); removing older copies of the computer from the account | `core/.../CloudClient.kt` (`revokeAccess`, `removeComputer`), `AppStoreAccount.kt`, `ComputersView.kt` | A signed-in account on the emulator or a phone; only request tests cover it |
 | Push delivery (alerts, background Live update refresh) | `PushService.kt`, `AppStoreNotifications.kt` | A device with Google Play services running the official build (Firebase and the relay's FCM secret are set up since 2026-10-24). The notification look is covered by `AlertNotificationTest` |
 | OpenAI Realtime, Gemini Live and Speech mode with a real key | `WebRtcPeer.kt`, `core/.../OpenAIRealtimeEngine.kt`, `GeminiLiveEngine.kt`, `CloudSpeechEngine.kt` | A provider key on the paired computer; the fallback to on-device voice is verified |
 | Remote screen: Chinese IME composition, a hardware keyboard, the TURN relay path and its credential renewal | `ScreenKeys.kt`, `ScreenSession.kt`, `ScreenView.kt` | A computer it's safe to type into, and a signed-in host for the relay; viewing, trackpad and pinch zoom are verified |
@@ -118,6 +118,11 @@ the Dynamic Island) with its feature graphic, per language.
 - [ ] Move the default push relay URL into `apps/shared/Config/{dev,main}.plist` (iOS reads
   them as `AccountConfig.plist`), so the Android build stops parsing the iOS kit's
   `SharedStore.swift` and iPhone-only edits there stop counting as Android changes.
+- [ ] *Rate on Google Play* and *Report an issue* in the Settings tab, as on the iPhone since
+  2.29.0 (`apps/ios/Views/SettingsView.swift`: Apple's write-review page and the GitHub issues
+  page, with the same analytics events). Android's Settings lacks both; rating needs the public
+  Play listing, so add them with the production release. The iPhone's rating invitation
+  ([iOS review invitation](../features/ios-review-invitation.md)) would map to Play's In-App Review API.
 - [ ] *Release to production* permission for `codync-play`, then `PLAY_TRACK=production`.
 
 ## Shared deployment

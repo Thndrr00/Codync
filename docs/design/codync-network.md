@@ -59,9 +59,11 @@ The connector picks the relay (`codync-host network create|join --connector …`
 
 Codync's Cloudflare relay isn't on this path: it carries the phone ↔ computer channel and the cloud assistant.
 
-Each computer signs where it is into the roster (`Locate`) when the host starts; the roster keeps only each
-computer's newest location. With a relay, a computer that moved is still found through its relay and iroh's
-address lookup.
+Each computer signs where it is into the roster (`Locate`) when the host starts and again whenever its addresses
+change (iroh's address watcher, 2 s after a burst settles), then says hello to everyone, so a laptop that moved to
+another network is found without a restart, even with the `private` connector. The roster keeps only each
+computer's newest location, so moving doesn't grow the log. With a relay, a computer that moved is also found
+through its relay and iroh's address lookup.
 
 The host builds iroh on aws-lc-rs, the TLS library reqwest and tokio-tungstenite use: with ring built in as well,
 rustls has no default provider and the relay connection panicked (found in end-to-end testing, 2026-10-26). `main`
@@ -95,9 +97,23 @@ optional.
 
 - `agent@computer`, like an email or SSH address. A bare name finds the nearest bot (this computer first); a taken
   computer name gets a number (`desk-2`); a bot's address name is never reused for another bot.
-- Several networks per computer come later with a `.network` suffix (`reviewer@desk.home`), the way a DNS search
-  domain resolves short names; until then a computer is in one network.
-- `list_bots` takes `query`, `computer` (`this` for this one), `online`, `limit` and `cursor`, and an unnarrowed
+- A computer can be in several networks; the `.network` suffix names one (`reviewer@desk.home`), the way a DNS
+  search domain resolves short names: a short address is taken where only one network has it.
+
+## Several networks: one node each
+
+A computer in several networks runs one node per network, each with its own key, roster, connector and rules
+(chosen over one node holding several rosters, which the plan first described):
+
+| | One node per network (chosen) | One node, several rosters |
+|---|---|---|
+| Privacy | a different key in each: one network's members can't tell the computer is also in another | one key everywhere links them |
+| Isolation | a stolen key or bad roster stays in its network | one endpoint and key shared by all |
+| Connectors | per network (private at home, relays for work) | one per computer |
+| Wire | unchanged: old peers keep working | every request names its network |
+| Cost | one endpoint (a socket, a relay connection) per network | one endpoint |
+- `list_bots` takes `query`, `computer` (`this` for this one), `online`, `kind` (`codync`, `claude-code`,
+  `codex`, `terminal`, `other`), `limit` and `cursor`, and an unnarrowed
   long list says how many bots each computer has, so a computer with many bots doesn't flood the agent. On one
   computer without a network it lists that computer's bots.
 
@@ -141,12 +157,15 @@ A VPS can be a member (the host or the standalone daemon, with its own bots or a
 
 ## Next, in order
 
+The build plan, with what each step touches and when it's done: [what's left](../plans/codync-network-next.md).
+
+Done: the network screens and the cloud assistants switch in every client (2.29.0): the desktop app and the
+terminal UI manage the network, phones show it, and a `network` event keeps them current. Per-bot offering, the
+cloud assistant scope and inbound rules, checked by the receiving computer. A computer that moves re-signs where it
+is. Cloud assistants and agents that aren't Codync bots (`codync-host mcp network`) reach the bots across the
+network. A computer can be in several networks.
+
 1. Codync-run iroh relays as the default connector.
-2. Re-sign a computer's location when its address changes: today a `private` network without Tailscale loses a
-   computer that changes networks until its host restarts.
-3. App switches for cloud assistants and a network screen, in every client.
-4. The cloud assistant reaching bots on the connected computer's network.
-5. A local MCP server for agents that aren't Codync bots; per-network lists of offered bots and inbound rules
-   (needed before networks shared with other people).
-6. Account networks; several networks per computer.
-7. A control channel for the standalone daemon on Windows (named pipe).
+2. Hellos that carry only what changed, lifting the roster's per-computer cap.
+3. Account networks; per-network lists of offered bots, for networks shared with other people.
+4. A control channel for the standalone daemon on Windows (named pipe).

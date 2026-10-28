@@ -128,10 +128,9 @@ export class Tray {
             items.push({ label: bot.name, icon: this.image(bot.avatar), submenu })
           }
         }
-        if (s?.screen) {
-          items.push({ type: 'separator' })
-          items.push({ label: this.tr('Remote screen'), icon: symbol('display'), submenu: this.screenMenu(s.screen) })
-        }
+        if (s?.screen || s?.networks) items.push({ type: 'separator' })
+        if (s?.screen) items.push({ label: this.tr('Remote screen'), icon: symbol('display'), submenu: this.screenMenu(s.screen) })
+        if (s?.networks) items.push({ label: this.tr('Network'), icon: symbol('point.3.connected.trianglepath.dotted'), submenu: this.networkMenu(s.networks) })
         if (s && s.usage.length) {
           items.push({ type: 'separator' })
           for (const provider of s.usage) {
@@ -164,6 +163,21 @@ export class Tray {
     ]
     items.push({ label: this.tr('Set up computer access…'), click: () => this.deps.send({ kind: 'computerAccess' }, true) })
     if (screen.error) items.push({ label: this.tr(screen.error), enabled: false })
+    return items
+  }
+
+  /** Each network's computers, as last heard; any row opens Settings → Network. */
+  private networkMenu(networks: NonNullable<TraySummary['networks']>): Electron.MenuItemConstructorOptions[] {
+    const open = () => this.deps.send({ kind: 'networkSettings' })
+    const items: Electron.MenuItemConstructorOptions[] = []
+    for (const net of networks) {
+      if (items.length) items.push({ type: 'separator' })
+      items.push({ label: net.title, enabled: false })
+      // Buttons, not text: the menu dims a disabled item's image.
+      for (const c of net.computers) items.push({ label: c.label, icon: this.image(c.dot), click: open })
+    }
+    if (!networks.length) items.push({ label: this.tr('Connect your computers so bots on one can message bots on another.'), enabled: false })
+    items.push({ type: 'separator' }, { label: this.tr('Network settings…'), click: open })
     return items
   }
 

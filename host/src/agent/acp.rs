@@ -131,6 +131,7 @@ impl Answer {
     }
 }
 
+/// An abandoned request (timed out, cancelled) no longer waits for its response.
 impl Drop for Answer {
     fn drop(&mut self) {
         self.pending.locked().remove(&self.id);
@@ -172,6 +173,7 @@ pub struct Acp {
     stdin: tokio::sync::Mutex<Option<ChildStdin>>,
     next_id: AtomicI64,
     pending: Pending,
+    /// Owns the agent's whole process tree: dropping it kills what the agent started.
     child: Arc<tokio::sync::Mutex<Process>>,
     /// The process (and, on Unix, process group) leader.
     pid: Option<u32>,
@@ -196,14 +198,17 @@ impl Acp {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         super::account::isolate_process_env(&mut process, env);
-        Process::prepare(&mut process);
+        // Its own group, so `kill` can stop everything it started.
+        #[cfg(unix)]
+        process.process_group(0);
+        #[cfg(windows)]
+        process.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
         let mut child = process.spawn().with_context(|| format!("starting `{command}`"))?;
         let stdin = child.stdin.take().expect("stdin is piped");
         let stdout = child.stdout.take().expect("stdout is piped");
         let stderr = child.stderr.take().expect("stderr is piped");
         let pid = child.id();
-        let child = Process::new(child)?;
-        let child = Arc::new(tokio::sync::Mutex::new(child));
+        let child = Arc::new(tokio::sync::Mutex::new(Process::new(child)?));
         Process::monitor(&child);
         // Deliberately unbounded: `session/load` replays a whole history as notifications
         // *before* its response, while the bot is still awaiting that response. A bounded
@@ -326,18 +331,14 @@ impl Acp {
     /// Closing stdin gives the agent time to persist OAuth refreshes before forced shutdown.
     pub async fn kill(&self) {
         let mut child = self.child.lock().await;
-        if child.begin_stop() {
-            let mut stdin = self.stdin.lock().await;
-            stdin.take();
-            let owned = self.child.clone();
-            let mut stopping = STOPPING.locked();
-            stopping.retain(|task| !task.is_finished());
-            stopping.push(tokio::spawn(async move {
-                tokio::time::sleep(EXIT_GRACE).await;
-                let mut process = owned.lock().await;
-                process.kill().await;
-            }));
+        if !child.begin_stop() {
+            return;
         }
+        self.stdin.lock().await.take();
+        let owned = self.child.clone();
+        let mut stopping = STOPPING.locked();
+        stopping.retain(|task| !task.is_finished());
+        stopping.push(tokio::spawn(async move { owned.lock().await.stop_within(EXIT_GRACE).await }));
     }
 }
 
@@ -382,17 +383,7 @@ mod tests {
     async fn descendant_agent() -> (Arc<Acp>, mpsc::UnboundedReceiver<Incoming>) {
         let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/process_agent.py");
         let python = if cfg!(windows) { "python" } else { "python3" };
-        // Windows App Execution Aliases can launch Python through a broker outside the shell's job.
-        // Use the interpreter itself so this fixture's descendants belong to the process tree under test.
-        let output = tokio::process::Command::new(python)
-            .args(["-c", "import sys; print(sys.executable)"])
-            .output()
-            .await
-            .expect("resolve the fixture's Python interpreter");
-        assert!(output.status.success(), "Python interpreter lookup failed");
-        let python = String::from_utf8(output.stdout).expect("Python executable path is UTF-8");
-        let command =
-            format!("{} -u {}", crate::shell::quote(python.trim()), crate::shell::quote(&script.display().to_string()));
+        let command = format!("{python} -u {}", crate::shell::quote(&script.display().to_string()));
         let (acp, mut rx) = Acp::spawn(&command, env!("CARGO_MANIFEST_DIR"), &[]).unwrap();
         let ready = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await;
         let ready = ready.unwrap();
@@ -446,6 +437,17 @@ mod tests {
         assert_descendant_pipes_close(rx).await;
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_stopped_agent_that_exits_cleanly_does_not_hold_the_host_for_the_grace_period() {
+        let (acp, mut rx) = Acp::spawn("cat", env!("CARGO_MANIFEST_DIR"), &[]).unwrap();
+        let started = tokio::time::Instant::now();
+        acp.kill().await;
+        stopped().await;
+        assert!(started.elapsed() < EXIT_GRACE / 2, "stopping waited out the grace period");
+        assert!(matches!(rx.recv().await, Some(Incoming::Closed { .. })));
+    }
+
     #[test]
     fn content_text_flattens_blocks() {
         let v = json!([
@@ -462,8 +464,10 @@ mod tests {
         let kind = |data: Value| async move {
             let (tx, rx) = oneshot::channel();
             let _ = tx.send(Err(json!({"code": -32603, "message": "Internal error", "data": data})));
-            let answer = Answer { id: 0, pending: Pending::default(), rx: Some(rx) };
-            let e = answer.response().await.expect_err("an error answer");
+            let e = Answer { id: 0, pending: Pending::default(), rx: Some(rx) }
+                .response()
+                .await
+                .expect_err("an error answer");
             e.downcast::<RpcError>().expect("an RpcError").kind
         };
         assert_eq!(kind(json!({"errorKind": "rate_limit"})).await.as_deref(), Some("rate_limit"));

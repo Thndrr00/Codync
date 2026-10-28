@@ -25,20 +25,34 @@ ChatGPT / Claude ──MCP over HTTPS──▶ mcp.codync.dev (cloud Worker)
 - **Protocol**: Streamable HTTP with JSON answers and no sessions. Stateless clients (2026-07-28: version in each
   request's `_meta`, `server/discover`) and `initialize` clients (2025-03-26 to 2025-11-25) both work.
 - **Tools**: `list_computers` (from the account, answered by the Worker), and `list_bots`, `message_bot`,
-  `read_replies`, answered by the host. With several computers online, a listing asks each; a message needs
+  `read_replies`, answered by the host (`list_bots` narrows by `query` and `kind`: `codync`, `claude-code`, `codex`,
+  `terminal`, `other`). With several computers online, a listing asks each; a message needs
   `computer` then. `message_bot` returns at once; the bot's reply waits on the host for `read_replies`, since
   nothing can wake a hosted assistant.
 - **Host** (`host/src/chat/team/assistant.rs`): the assistant messages bots like a bot does
   (`Back::Assistant`): the bot's chat shows "Message from Cloud assistant" and the reply is kept in memory (the
-  newest 50 requests, at most 16 running) until read. Only this computer's bots: bots on the user's other
-  computers in its network aren't reachable through the connector yet.
+  newest 50 requests, at most 16 running) until read. A bot with **Reachable by cloud assistants** off
+  (`reachableByAssistants`) is left out of `list_bots` and refused by `message_bot`; agents on this computer using
+  `codync-host mcp network` aren't held to it. `list_bots` also lists the bots the user's other
+  computers in this one's network offer (`reviewer@laptop`), and `message_bot` sends those a letter from
+  `cloud-assistant@<this computer>` (`Node::set_senders`: it may send but isn't offered, so nothing elsewhere can
+  ask it). That computer decides whether it takes it with its own rules, its Cloud assistants switch and the bot's
+  `reachableByAssistants` (`remote::take`); the outcome comes back into the same replies, and a refusal ends the
+  request as failed with that computer's reason. The receiving bot's chat shows "Message from Cloud assistant on
+  desk". The relay session answers each call in a task of its own, so a listing that waits for the other
+  computers doesn't hold up the phones on the same connection.
 
 ## Who can get in
 
 The cloud sees these calls in plain text, and a bot can run anything on its computer, so the computer decides:
 
-- **Off by default.** `codync-host cloud --assistants on` (local API `setAssistants`, loopback only) turns it on
-  for one computer; the setting is the `assistants` field of `cloudStatus`. There's no app switch yet.
+- **Off by default.** The **Cloud assistants** switch on the computer turns it on for that computer: the desktop
+  app (Settings → Computers, beside the account rows, shown while the computer is in the account) and the terminal
+  UI's network sheet (`N`, then `a`), or `codync-host cloud --assistants on`. All go through the local API
+  `setAssistants`, loopback only. The setting is the `assistants` field of `cloudStatus` and of `networkView`, which
+  phones read (they show it in the network sheet and can't change it); the `network` event carries a change. The
+  view's `assistantsAvailable` says whether the computer is in a Codync account: the terminal UI and the phones show
+  the switch only then, as the desktop app does.
 - **Only the computer's own account.** The Worker routes a call only to computers the token's account owns, and
   the host checks the call's account against its owner again.
 - **Not on a private relay**: it has no accounts, so the host ignores `assistant.call` there.
@@ -68,12 +82,12 @@ pass on both instances. A local check of a deployment:
 
 ## Current limits
 
+What lifts them, and in what order: [what's left](../plans/codync-network-next.md).
+
 | Limit | Why, and what lifts it |
 |---|---|
 | Hosts before 2.28.0 don't answer (`assistant.call` is ignored, the call times out after 10 s) | the host side ships in 2.28.0 |
-| Only `codync-host cloud --assistants on`; no app switch | an app switch in every client (desktop, iPhone, Android, TUI) is planned |
 | Only computers in the account that use the Codync relay; a private relay has no accounts | by design: the account is how the cloud knows whose computer it is |
-| Only the connected computer's bots, not bots elsewhere in its codync-network | the assistant isn't a network agent yet ([design](../design/codync-network.md#next-in-order)) |
 | No hidden bots or groups | the same visibility rule as `list_bots` for bots |
 | No callback when a reply is ready | MCP can't wake a hosted assistant; it calls `read_replies` |
 | Replies in host memory: newest 50, at most 16 running, gone on restart | kept small and unencrypted data off disk; persist if users need it |
