@@ -8,7 +8,7 @@ Target: `a30c8f611b1dd0265924f168eb7e808c68553f87` (upstream v2.29.0).
 No rebase, squash, force push, new tags, version bump, PR, branch/worktree deletion, production app or signing-key modification is authorized or performed.
 Intermediate manifests follow their upstream merge source; final manifests must follow v2.29.0, not a proposed future release.
 
-**In progress: all four v2.27.0 sub-merges (PRs 216, 219, 220 and 221, plus 226) are committed on top of the requested hardening; the v2.27.0 release gate is running.** Validation below records observed commands, never an assumed pass.
+**v2.27.0 is fully merged (PRs 216, 219, 220, 221 and 226) and its gate is recorded below; v2.28.0 and v2.29.0 remain.** Validation records observed commands, never an assumed pass.
 
 ## Strategy
 
@@ -253,8 +253,21 @@ This PR finishes v2.27.0: usage notes on limits, the Extensions lists as lazy li
 - Android `assembleDebug :core:test :app:testDebugUnitTest lintDebug` exit 0 (104 tasks); the Composio Apps list follows upstream's paging removal (one list, no "Load more").
 - iOS: static review only.
 
-- Initial C: free space: 25.14 GiB. Checked again before each heavyweight compiler; no code/data deletion performed.
-- During serialized Android build, free space temporarily approached 21 GiB. Applied NTFS compression only to this worktree's regenerable host/target cache: 569,971,671 logical bytes stored in 285,120,934 bytes; compact exited 0. New artifacts inherit compression. No other checkout/cache was removed.
+## v2.27.0 gate
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0.
+- `cargo test -j 1 -- --test-threads=1`: the unit suite (765 passed, 1 ignored) and every end-to-end target pass. Under the full-suite run on this loaded machine `routine_retry_e2e::a_run_that_hit_its_time_limit_waits_for_the_user` failed with "routine session setup timed out" (its 2 s deadline); the target alone passes 5/5 and the single test 3/3. Recorded as an environment flake, not as a code failure.
+- Android `assembleDebug :core:test :app:testDebugUnitTest lintDebug` exit 0 (104 tasks).
+- Desktop `npm run typecheck` exit 0; `npm test` exit 0 (372 passed, 19 platform skips, 0 failures).
+- Preservation checklist exit 0.
+- iOS: not compiled here; Swift changes are reviewed, not built.
+
+## Resource and environment evidence
+
+- Initial C: free space: 25.14 GiB. Checked again before each heavyweight compiler.
+- During the Android gate free space approached 21 GiB; NTFS compression was applied only to this worktree's regenerable host/target cache (569,971,671 logical bytes stored in 285,120,934), compact exit 0.
+- During the v2.27.0 gate the volume reached 0 bytes free twice, and end-to-end hosts then failed with `database or disk is full` (`SQLITE_FULL`), not with assertions. Freed space by deleting only regenerable build output: this worktree's `host/target` (6.4 GB) and the `host/target` of the two abandoned attempt worktrees `Codync-integration` (last written 19 Oct) and `Codync-integrate` (24 Oct), 20.8 GB. No source, data, branch or worktree was deleted, and `Codync-windows-validation`, `Codync-2.29-recovery` and the Deska worktrees were left untouched.
+- Host builds and tests ran with `CARGO_PROFILE_DEV_DEBUG=0` and `CARGO_PROFILE_TEST_DEBUG=0` to keep the target inside the free space; this changes only debug info, not behaviour.
 - Installed Codync Dev already owns port 19223: PID 22996, executable under LocalAppData/Programs/codync-desktop-dev/resources/codync-host.exe. It was left running. Functional harness will first record this conflict and may use explicit isolated port 19224; it accepts only a binary inside this worktree and fresh task-owned data.
 - adb devices returned an empty device list. No signing key was read and no phone installation performed.
 
