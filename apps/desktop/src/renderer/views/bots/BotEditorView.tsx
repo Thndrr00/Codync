@@ -134,9 +134,14 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const skills = plugins?.skills ?? []
 
   const instructions = (
-    <Field label="Standing instructions" detail="Rules that always apply. Put task-specific requests in the chat instead.">
-      <AutoTextArea className="field-box" value={draft.description} placeholder="e.g. Reviews PRs. Never pushes without asking." minRows={3} maxRows={8} onChange={(v) => set('description', v)} />
-    </Field>
+    <>
+      <Field label="Standing instructions" detail="Rules that always apply. Put task-specific requests in the chat instead.">
+        <AutoTextArea className="field-box" value={draft.description} placeholder="e.g. Reviews PRs. Never pushes without asking." minRows={3} maxRows={8} onChange={(v) => set('description', v)} />
+      </Field>
+      <Field label="Check before done" detail="A command run in the workspace after each turn. If it fails, the turn doesn't count as done.">
+        <AutoTextArea className="field-box" value={draft.verifyCommand ?? ''} placeholder="e.g. npm test" minRows={1} maxRows={3} onChange={(v) => set('verifyCommand', v)} />
+      </Field>
+    </>
   )
   const model = [
     <AgentAccountPicker key="account" backend={draft.backend} selection={draft.account} online={store.connection.kind === 'online'}

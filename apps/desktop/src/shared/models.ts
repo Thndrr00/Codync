@@ -49,6 +49,8 @@ export interface Bot {
   computer: boolean
   /** The bot can create bots (which can too) and change its own setup and the bots it created (the built-in `manage` tools); null from an older host. */
   manageTeam: boolean | null
+  /** A command run in the workspace after each turn: the turn counts as done only if it passes; null when none (or an older host). */
+  verifyCommand: string | null
   /** The bot that created this one; null when the user did. */
   createdBy: string | null
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
@@ -106,6 +108,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     skills: raw.skills ?? [],
     computer: raw.computer ?? false,
     manageTeam: raw.manageTeam ?? null,
+    verifyCommand: raw.verifyCommand ?? null,
     createdBy: raw.createdBy ?? null,
     computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
@@ -599,6 +602,7 @@ export interface BotDraft {
   skills?: string[]
   computer?: boolean
   manageTeam?: boolean
+  verifyCommand?: string | null
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   sharedMemory?: boolean
   harnessMemory?: boolean
@@ -630,6 +634,7 @@ export function draftOf(bot: Bot): BotDraft {
     skills: bot.skills,
     computer: bot.computer,
     manageTeam: bot.manageTeam ?? undefined,
+    verifyCommand: bot.verifyCommand,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
