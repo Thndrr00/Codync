@@ -207,8 +207,9 @@ impl Actor {
         let sid = self.turn_session.clone().ok_or_else(|| anyhow!("no session"))?;
         let snapshot = self.snapshot(&sid).await?;
         let fresh = matches!(snapshot.prelude, Some(context::Prelude::New | context::Prelude::UnpromptedFork));
-        if hidden && fresh {
-            // A new session must never silently repeat an interrupted routine, and has nothing to compact.
+        // A brand-new session (not one reloaded from the run's saved id) must never silently repeat an interrupted
+        // routine, and has nothing to compact.
+        if hidden && self.session_fresh {
             self.compacting = None;
             self.raw_prompt = false;
             self.finish_routine(
