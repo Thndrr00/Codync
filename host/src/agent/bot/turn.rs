@@ -259,12 +259,6 @@ impl Actor {
         memory::turns::begin_turn(&self.cfg.id, &sid, self.hub.runtime(&self.cfg.id).message);
         // Written before this returns, so a Stop right after is sent after the prompt.
         let answer = acp.send("session/prompt", params).await?;
-        if !raw
-            && snapshot.prelude.is_some()
-            && let Err(error) = context::mark_prompted(&self.hub.store, &self.cfg.id, &snapshot)
-        {
-            tracing::warn!(bot = %self.cfg.id, %error, "couldn't acknowledge initial session instructions");
-        }
         if !self.turn_memory_revision.is_empty()
             && let Err(error) = memory::mark_announced(&self.hub.store, &self.cfg.id, &sid, &self.turn_memory_revision)
         {

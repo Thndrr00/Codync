@@ -377,6 +377,9 @@ impl Actor {
             return;
         }
         if !conn.sessions.load {
+            // The agent keeps the session it may still open; the run's retry allocates another one rather than
+            // waiting for a reset this agent can't offer.
+            conn.allocation_uncertain = false;
             // ponytail: that session lasts until the agent next stops; keep the cut-short request's Answer past the
             // time limit and session/close the id it returns, if that ever matters.
             tracing::warn!(bot = %self.cfg.id, "a session request was cut short; the agent can't resume, so it keeps running");
