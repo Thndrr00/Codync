@@ -308,6 +308,13 @@ The release merge: network rules, address names and menu entries, one agent-and-
 - Preservation checklist exit 0.
 - iOS: not compiled.
 
+## Final verification (Windows, 29 Oct)
+
+- `cargo fmt --check` exit 0; `cargo clippy --all-targets -- -D warnings` exit 0.
+- The unit suite (800 passed) and every end-to-end target pass except two tests in `routines_e2e`. Both restart the host mid-run and expect that run to resume in its own session (`crash_resumes_the_same_session_and_publishes_one_result`, `busy_bot_keeps_work_pending_and_honors_pause_delete_and_edit_across_restart`); they fail consistently, alone and inside the suite. The `memory_e2e` and `routine_retry_e2e` regressions the suite found are fixed (`44fc9384`).
+- Functional end-to-end with an isolated host on port 19224 (`python .integration/e2e.py --port 19224`): all six checks pass — isolated Dev host, a bot created over the API, a miniapp published and served, a wrong capability answering 403, traversal and backslash paths answering 400, `_data` POST then GET, and a real proactive check-in that advances the `proactive:<bot>` ledger with no sentinel and no scheduled prompt in public history.
+- Preservation checklist exit 0.
+
 ## Resource and environment evidence
 
 - Initial C: free space: 25.14 GiB. Checked again before each heavyweight compiler.
