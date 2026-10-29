@@ -25,8 +25,9 @@ falta de verdad. La última parte es el trabajo pendiente ordenado.
 ## 2. Cómo se hizo y límites
 
 - **Fuentes:** el README de cada repo (leído hoy con `gh api`) y los datos públicos de GitHub
-  (estrellas, último push, licencia). **No abrí el código fuente de ninguno de los seis**, así que lo
-  que afirmo de su funcionamiento interno viene de sus README.
+  (estrellas, último push, licencia). **Esta primera versión no abrió el código fuente**; la segunda parte,
+  `ideas-30-por-repo-como-integrarlas-2026-10-28.md`, sí lo leyó (clones en `Documentsef-repos`) y corrige
+  lo de las licencias de abajo.
 - **Estado de Codync:** comprobado con `git grep` y lectura de archivos en la rama
   `integrate/windows-all-additions` (Rust del host, escritorio, Android, iOS y `docs/features`). Un
   «no existe» significa que no lo encontré en esas rutas, no que sea imposible que exista.
@@ -38,10 +39,10 @@ falta de verdad. La última parte es el trabajo pendiente ordenado.
 
 | # | Repo | Qué es | Pila | Licencia declarada | Estrellas · último push |
 |---|---|---|---|---|---|
-| 1 | `fayazara/bdots` = `fayazara/coworkers` | «Compañeros» de IA, cada uno con su computadora y navegador, todo sobre Cloudflare. Experimental. El README se titula *Coworkers*; la URL `bdots` es el nombre anterior (misma descripción y estrellas) | TypeScript, Workers, Durable Objects, SQLite por bot, Browser Run | No se declara en lo que leí; GitHub no detecta licencia | 319 · 2026-10-27 |
-| 2 | `CopilotKit/OpenDots` | Plantilla de agentes persistentes con espacios de documentos, llamadas y Slack. Alfa | TypeScript, CopilotKit, AG-UI, TanStack AI | MIT (insignia del README) | 6 162 · 2026-10-28 |
-| 3 | `elie222/rakazo` | Alternativa abierta a Grok Bot: bots persistentes con memoria y rutinas, computadoras privadas o compartidas, voz. Web, Electron, iPhone y Android. Beta | TypeScript, React 19, Electron, Expo, Hono, PostgreSQL | Apache-2.0 según el comentario de `host/src/egress.rs` de Codync; GitHub no la detecta, comprobar el `LICENSE` | 6 161 · 2026-10-29 |
-| 4 | `Louis-CFM/coucou` | Una mascota (Mochi) en la «isla» de la pantalla que vigila agentes de código y deja aprobar desde ahí o desde el teléfono; además dictado y notas de llamadas | Swift 6/SwiftUI, Tauri 2 (Windows/Linux), Android por un colaborador | Código MIT; el nombre, Mochi y los sonidos son © del autor | 6 685 · 2026-10-23 |
+| 1 | `fayazara/bdots` = `fayazara/coworkers` | «Compañeros» de IA, cada uno con su computadora y navegador, todo sobre Cloudflare. Experimental. El README se titula *Coworkers*; la URL `bdots` es el nombre anterior (misma descripción y estrellas) | TypeScript, Workers, Durable Objects, SQLite por bot, Browser Run | MIT (archivo `LICENSE`, Fayaz Ahmed) | 319 · 2026-10-27 |
+| 2 | `CopilotKit/OpenDots` | Plantilla de agentes persistentes con espacios de documentos, llamadas y Slack. Alfa | TypeScript, CopilotKit, AG-UI, TanStack AI | MIT (archivo `LICENSE`) | 6 162 · 2026-10-28 |
+| 3 | `elie222/rakazo` | Alternativa abierta a Grok Bot: bots persistentes con memoria y rutinas, computadoras privadas o compartidas, voz. Web, Electron, iPhone y Android. Beta | TypeScript, React 19, Electron, Expo, Hono, PostgreSQL | Apache-2.0 (archivo `LICENSE`) | 6 161 · 2026-10-29 |
+| 4 | `Louis-CFM/coucou` | Una mascota (Mochi) en la «isla» de la pantalla que vigila agentes de código y deja aprobar desde ahí o desde el teléfono; además dictado y notas de llamadas | Swift 6/SwiftUI, Tauri 2 (Windows/Linux), Android por un colaborador | Código MIT (archivo `LICENSE`); el nombre, Mochi y los sonidos son © del autor (`LICENSE-ASSETS.md`) | 6 685 · 2026-10-23 |
 | 5 | `cosmicstack-labs/mercury-agent` | Agente con personalidad editable, memoria local, permisos estrictos, presupuesto de tokens y bots especialistas. Terminal, Telegram, Discord, Slack, Signal y panel web | TypeScript, SQLite con FTS5 | MIT | 3 683 · 2026-10-28 |
 
 ## 4. Lo que Codync ya adoptó o tiene
@@ -189,13 +190,16 @@ Esto evita volver a proponer lo ya hecho.
 
 ## 8. Licencias y reglas de uso
 
-- **Usa las ideas, no copies código.** GitHub no detecta una licencia en ninguno de los seis. Por sus
-  README: OpenDots, el código de Coucou y Mercury se declaran MIT; Rakazo es Apache-2.0 según el
-  comentario de `egress.rs`; de Coworkers no vi licencia declarada.
-- **Ya aplicado:** `budget.rs` y `egress.rs` dicen «idea de…; sin copiar código». Mantén esa práctica y
-  deja el comentario de origen en cada archivo nuevo.
-- **Coucou:** el nombre, Mochi y los sonidos son del autor. No reutilizar el personaje ni sus audios.
+- **Corrección:** una versión anterior de este documento decía que no había licencia y que había que usar
+  solo las ideas. Los cinco repos tienen archivo `LICENSE`: **MIT** (Coworkers/bdots, OpenDots, Coucou y
+  Mercury) y **Apache-2.0** (Rakazo). El código se puede reutilizar con sus avisos.
+- **Qué exige cada una:** MIT, conservar el aviso de copyright y la licencia. Apache-2.0, además conservar
+  el `NOTICE` y marcar los archivos modificados.
+- **Reservado:** el nombre, Mochi, el arte y los sonidos de Coucou (`LICENSE-ASSETS.md`).
+- **Ya aplicado:** `budget.rs` y `egress.rs` dicen «idea de…; sin copiar código». Para código copiado, dejar el
+  origen en la cabecera y en un archivo de atribuciones de terceros.
 - **Rakazo y Treg:** Treg se cobra por uso y exige contrato escrito para reventa alojada.
+- Las reglas completas y el veredicto por repo están en `ideas-30-por-repo-como-integrarlas-2026-10-28.md`.
 
 ## 9. Relación con el trabajo en curso
 
