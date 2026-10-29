@@ -117,6 +117,9 @@ pub struct BotConfig {
     /// The user's rules for the agent's permission requests, first match wins (see `agent::approval_rules`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub approval_rules: Vec<crate::agent::approval_rules::ApprovalRule>,
+    /// A command (build, tests, typecheck) run in the workspace after each turn: the turn counts as done only if it passes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_command: Option<String>,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
     /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it

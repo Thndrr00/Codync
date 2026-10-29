@@ -191,6 +191,7 @@ mod tests {
             skills: vec![],
             computer: false,
             approval_rules: vec![],
+            verify_command: None,
             computer_permissions: crate::computer::Permissions::default(),
             manage_team: false,
             created_by: None,

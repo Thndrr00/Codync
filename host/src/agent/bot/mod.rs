@@ -28,6 +28,7 @@ mod session;
 mod stall;
 mod turn;
 mod updates;
+mod verify;
 mod watchdog;
 
 pub(crate) use launch::{launch_commands, select_model, start_agent, system_prompt};
@@ -417,6 +418,7 @@ impl Actor {
                     while let Some(inc) = self.conn.as_mut().and_then(|c| c.rx.try_recv().ok()) {
                         self.on_incoming(Some(inc)).await;
                     }
+                    let done = self.verified(done).await;
                     if let Err(error) = &done && self.fall_back(error, &done_tx).await {
                         continue;
                     }

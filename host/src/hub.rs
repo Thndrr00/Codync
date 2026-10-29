@@ -559,6 +559,9 @@ pub(crate) fn validate(cfg: &BotConfig) -> Result<()> {
         return Ok(());
     }
     crate::agent::approval_rules::validate(&cfg.approval_rules)?;
+    if cfg.verify_command.as_deref().is_some_and(|c| c.chars().count() > 500) {
+        bail!("The check command is at most 500 characters");
+    }
     if !cfg.cwd.is_empty() && !std::path::Path::new(&cfg.cwd).is_dir() {
         bail!("workspace folder does not exist: {}", cfg.cwd);
     }
