@@ -26,7 +26,8 @@ falta de verdad. La última parte es el trabajo pendiente ordenado.
 
 - **Fuentes:** el README de cada repo (leído hoy con `gh api`) y los datos públicos de GitHub
   (estrellas, último push, licencia). **Esta primera versión no abrió el código fuente**; la segunda parte,
-  `ideas-30-por-repo-como-integrarlas-2026-10-28.md`, sí lo leyó (clones en `Documentsef-repos`) y corrige
+  `ideas-nuevas-y-grandes-2026-10-28.md`, sí lo leyó (clones en `Documents
+ef-repos`) y corrige
   lo de las licencias de abajo.
 - **Estado de Codync:** comprobado con `git grep` y lectura de archivos en la rama
   `integrate/windows-all-additions` (Rust del host, escritorio, Android, iOS y `docs/features`). Un
@@ -199,7 +200,7 @@ Esto evita volver a proponer lo ya hecho.
 - **Ya aplicado:** `budget.rs` y `egress.rs` dicen «idea de…; sin copiar código». Para código copiado, dejar el
   origen en la cabecera y en un archivo de atribuciones de terceros.
 - **Rakazo y Treg:** Treg se cobra por uso y exige contrato escrito para reventa alojada.
-- Las reglas completas y el veredicto por repo están en `ideas-30-por-repo-como-integrarlas-2026-10-28.md`.
+- Las reglas completas y el veredicto por repo están en `ideas-nuevas-y-grandes-2026-10-28.md`.
 
 ## 9. Relación con el trabajo en curso
 
