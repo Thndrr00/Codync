@@ -114,6 +114,11 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
                     FieldBox(draft.description, { change(draft.copy(description = it)) }, "e.g. Reviews PRs. Never pushes without asking.", 3, 8)
                 }
             }
+            row {
+                Field("Check before done", "A command run in the workspace after each turn. If it fails, the turn doesn't count as done.") {
+                    FieldBox(draft.verifyCommand.orEmpty(), { change(draft.copy(verifyCommand = it)) }, "e.g. npm test", 1, 3)
+                }
+            }
         }
         CardSection("Agent") {
             row {

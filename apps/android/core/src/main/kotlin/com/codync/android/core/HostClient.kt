@@ -35,6 +35,8 @@ data class Bot(
     val computer: Boolean = false,
     /** The bot can create bots (which can too) and change its own setup and the bots it created (the built-in `manage` tools); null from an older host. */
     val manageTeam: Boolean? = null,
+    /** A command run in the workspace after each turn: the turn counts as done only if it passes; null when none. */
+    val verifyCommand: String? = null,
     /** The bot that created this one; null when the user did. */
     val createdBy: String? = null,
     val computerPermissions: ComputerPermissions = ComputerPermissions(),
