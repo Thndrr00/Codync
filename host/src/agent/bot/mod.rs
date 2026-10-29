@@ -15,6 +15,7 @@
 //! written to the group's transcript; see `group`). A routine run talks in its chat
 //! from a session of its own (see `session`).
 
+mod approval_age;
 mod compaction;
 mod fallback;
 mod fast_mode;
@@ -190,6 +191,7 @@ pub fn spawn(hub: Arc<Hub>, base: BotConfig) -> BotHandle {
         reacted: Reacted::No,
         files: files::FileShares::default(),
         perms: HashMap::new(),
+        waiting: approval_age::Waiting::default(),
         stop_requested: false,
         cancel_deadline: None,
         exit_tail: None,
@@ -357,6 +359,8 @@ struct Actor {
     files: files::FileShares,
     /// permission entry id -> who waits for the answer
     perms: HashMap<String, updates::Answer>,
+    /// How long each open approval card has waited.
+    waiting: approval_age::Waiting,
     stop_requested: bool,
     /// A cancelled turn still running past this stops its agent process.
     cancel_deadline: Option<Instant>,
@@ -429,6 +433,7 @@ impl Actor {
                 _ = flush_tick.tick() => {
                     self.flush(false);
                     self.expire_abandoned().await;
+                    self.age_approvals().await;
                     if self.routine_completion.is_some() && self.retry_routine_completion() {
                         self.set_inflight(false);
                         self.next_in_queue(&done_tx).await;

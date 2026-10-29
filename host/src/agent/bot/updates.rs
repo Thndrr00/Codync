@@ -1,5 +1,6 @@
 //! Agent → client: `session/update`s, permission requests and streamed text mapped onto entries.
 
+use super::approval_age;
 use super::fast_mode::Listing;
 use super::stall::ToolOutcome;
 use super::{Actor, Reacted, Seg, SegKind};
@@ -255,29 +256,13 @@ impl Actor {
         let created = self.add(EntryKind::Permission, turn, data);
         if let Some(e) = &created {
             self.perms.insert(e.id.clone(), answer);
+            self.waiting.asked(&e.id, Instant::now());
         }
         self.hub.set_runtime(&self.cfg.id, |r| {
             r.status = BotStatus::NeedsInput;
             r.activity = format!("Needs approval: {title}");
         });
-        // What a phone needs to answer the card without opening it: its id and the options the card itself
-        // shows, so a button can never offer something the card doesn't.
-        let approval = created.map(|e| {
-            let options = e.data["options"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .take(3)
-                .filter_map(|o| {
-                    Some(json!({
-                        "optionId": o["optionId"].as_str()?,
-                        "name": acp::truncate(o["name"].as_str()?, 60),
-                        "kind": o["kind"].as_str().unwrap_or(""),
-                    }))
-                })
-                .collect::<Vec<_>>();
-            json!({"entryId": e.id, "options": options})
-        });
+        let approval = created.map(|e| approval_age::approval_payload(&e.id, &e.data));
         // Tapping it opens where the card is: the group, for a room turn.
         let target = self.hub.store.bot(&self.lane.chat).ok().flatten().map_or_else(|| self.cfg.clone(), |r| r.config);
         push::notify_with(
@@ -318,6 +303,7 @@ impl Actor {
     }
 
     pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>) {
+        self.waiting.answered(entry_id);
         let Some(answer) = self.perms.remove(entry_id) else {
             // No agent waits on it any more (its process went away): close the card, so it
             // can't be answered as if it still mattered.
