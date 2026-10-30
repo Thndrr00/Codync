@@ -22,7 +22,7 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 | 4 | Honest end of turn | done | see `git log` (`feat(host,tui): an honest end of turn`) | no real agent run to a step limit; Paused push not sent for real; Android card compiled, not seen; iOS skipped by instruction; see `turn-verdict-report.md` |
 | 5 | Approval rules editor | done | see `git log` (`feat(host): one decision for an approval`) | seen on no screen; no real agent asked for a permission; iOS skipped by instruction; see `approval-rules-editor-report.md` |
 | 6 | "Always" as a rule and `actionRules` | done | see `git log` (`feat(host): 'always allow' keeps a rule`, `quick rules by kind of action`) | seen on no screen; no real agent offered allow_always; browser, apps, bots and routines classes left out on purpose; iOS skipped by instruction; see `always-and-quick-rules-report.md` |
-| 7 | Security profiles | pending | | |
+| 7 | Security profiles | done | see `git log` (`feat(host): security profiles`) | seen on no screen; no real agent ran under a profile; daily limits not exercised; path scopes do not apply over ACP; iOS skipped by instruction; see `security-profiles-report.md` |
 | 8 | Mini-app and check-in fixes | pending | | |
 | 9 | Questions and plans from external sessions | pending | | |
 | 10 | Messaging channels (3 phases) | pending | | |

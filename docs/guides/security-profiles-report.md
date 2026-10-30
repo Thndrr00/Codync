@@ -41,10 +41,10 @@ to Full approves `make` but still refuses `rm -rf /`; saving a rule of its own d
 
 | Gate | Result |
 |---|---|
-| `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | see `progress-branch.md` |
-| `cargo test -j 1 --bin codync-host -- --test-threads=1`, e2e tests | see `progress-branch.md` |
+| `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | pass |
+| `cargo test -j 1 --bin codync-host -- --test-threads=1`, and the e2e tests `security_profile_e2e`, `approval_rules_e2e`, `forbidden_e2e`, `pause_e2e` | 858 passed, 0 failed, 1 ignored; the e2e tests pass (2, 4, 2, 2) |
 | Desktop `npm run typecheck`, `npm test` | clean; 392 passed |
-| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | see `progress-branch.md` |
+| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | passes (exit 0, BUILD SUCCESSFUL in 4m 38s) |
 
 ## Not tested
 
