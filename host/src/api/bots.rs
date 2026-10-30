@@ -378,6 +378,17 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             )?;
             json!({})
         }
+        // The rule an "always allow" answer to this card means, to show (and let the person edit) before it is saved.
+        "proposeRule" => {
+            let e = hub.store.entry(str_arg(&b, "entryId")?).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.kind != EntryKind::Permission.as_str() {
+                bail!("That isn't an approval card");
+            }
+            match crate::agent::always_rule::propose(&e.data) {
+                Ok(rule) => json!({"rule": rule}),
+                Err(refusal) => json!({"rule": null, "refusal": refusal, "reason": refusal.reason()}),
+            }
+        }
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
@@ -394,6 +405,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 }
                 Some("answered") => bail!("This approval was already answered with another choice"),
                 _ => bail!("This approval is closed: its turn ended or was stopped"),
+            }
+            // "Always allow" with a rule: check it, and keep it for the bot before the answer goes out.
+            if let Some(rule) = b.get("rule").filter(|r| r.is_object()) {
+                save_always_rule(hub, &e, option_id.as_deref(), rule)?;
             }
             if e.data["mcpToolCallId"].is_string() {
                 crate::market::vault::unlock(hub.clone()).await?;
@@ -412,4 +427,23 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         _ => return Ok(ControlFlow::Continue(b)),
     }))
+}
+
+/// Adds the rule that goes with an "always allow" answer to the card's bot. Only `allow_always` carries one, and a rule
+/// that chains commands or allows what no bot may run is refused (`agent::always_rule`).
+fn save_always_rule(hub: &Hub, card: &crate::store::Entry, option_id: Option<&str>, rule: &Value) -> Result<()> {
+    let chosen_always = card.data["options"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|o| o["optionId"].as_str() == option_id && o["kind"] == "allow_always");
+    if !chosen_always {
+        bail!("A rule is saved only with \"always allow\"");
+    }
+    let rule: crate::agent::approval_rules::ApprovalRule = serde_json::from_value(rule.clone())?;
+    crate::agent::always_rule::check(&rule).map_err(|refusal| anyhow!(refusal.reason()))?;
+    let row = hub.store.bot(&card.bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+    let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
+    hub.update_bot(&json!({"id": card.bot_id, "approvalRules": rules}))?;
+    Ok(())
 }

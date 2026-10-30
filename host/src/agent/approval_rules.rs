@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 /// Rules one bot may have.
 const MAX_RULES: usize = 100;
 /// Longest pattern, in characters.
-const MAX_PATTERN: usize = 500;
+pub const MAX_PATTERN: usize = 500;
 /// What makes one command line run more than one command.
 const CHAINING: [&str; 9] = [";", "&&", "||", "|", "`", "$(", ">", "<", "\n"];
 

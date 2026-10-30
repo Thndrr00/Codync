@@ -21,6 +21,7 @@ def turn(rid, text):
         "sessionId": sid,
         "toolCall": {"toolCallId": "t1", "title": "Run " + command, "kind": "execute", "rawInput": {"command": command}},
         "options": [{"optionId": "yes", "name": "Allow", "kind": "allow_once"},
+                    {"optionId": "always", "name": "Always allow", "kind": "allow_always"},
                     {"optionId": "no", "name": "Reject", "kind": "reject_once"}]}})
     done.wait()
     answer = done.answer

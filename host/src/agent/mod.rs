@@ -3,6 +3,7 @@
 
 pub mod account;
 pub mod acp;
+pub mod always_rule;
 pub mod approval_rules;
 pub mod auth;
 pub mod backends;

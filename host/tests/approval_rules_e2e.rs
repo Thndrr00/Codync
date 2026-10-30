@@ -118,3 +118,65 @@ async fn a_rule_created_tested_and_deleted_changes_a_real_approval() {
     run(&host, &bot, "rm -rf /").await;
     assert!(next_reply(&host, &bot, 2).await.contains("\"no\""), "forbidden before the allow-everything rule");
 }
+
+#[tokio::test]
+async fn always_allow_keeps_a_rule_the_person_has_seen_and_may_edit() {
+    if Command::new(common::python()).arg("--version").output().is_err() {
+        eprintln!("skipping: Python not available");
+        return;
+    }
+    let host = Host::start().await;
+    let bot = bot(&host).await;
+
+    // A card for a plain command: the host proposes its own command and tool kind.
+    run(&host, &bot, "git status --short").await;
+    let card = pending_card(&host, &bot).await;
+    let proposal = host.call("proposeRule", json!({"entryId": card["id"]})).await;
+    assert_eq!(proposal["rule"]["pattern"], "git status --short", "{proposal}");
+    assert_eq!(proposal["rule"]["kind"], "execute");
+
+    // A rule that is not "always allow", or that chains commands, or that allows a forbidden one, is refused.
+    let rule = |pattern: &str| json!({"pattern": pattern, "kind": "execute", "decision": "allow"});
+    let no_rule = host
+        .refused("respondPermission", json!({"entryId": card["id"], "optionId": "yes", "rule": rule("git *")}))
+        .await;
+    assert!(no_rule.contains("always"), "{no_rule}");
+    let chained = host
+        .refused(
+            "respondPermission",
+            json!({"entryId": card["id"], "optionId": "always", "rule": rule("git status; ls")}),
+        )
+        .await;
+    assert!(chained.contains("several commands"), "{chained}");
+    let forbidden = host
+        .refused("respondPermission", json!({"entryId": card["id"], "optionId": "always", "rule": rule("rm -rf /*")}))
+        .await;
+    assert!(forbidden.contains("No bot may run"), "{forbidden}");
+    assert_eq!(
+        test_rule(&host, &bot, "git status").await["outcome"],
+        "setting",
+        "nothing was saved by the refused answers"
+    );
+
+    // The person widens the pattern before keeping it.
+    host.call("respondPermission", json!({"entryId": card["id"], "optionId": "always", "rule": rule("git status*")}))
+        .await;
+    assert!(next_reply(&host, &bot, 0).await.contains("\"always\""));
+    let evaluation = test_rule(&host, &bot, "git status -sb").await;
+    assert_eq!(
+        (evaluation["outcome"].as_str(), evaluation["decision"].as_str()),
+        (Some("rule"), Some("allow")),
+        "{evaluation}"
+    );
+
+    // The next request is approved without a card.
+    run(&host, &bot, "git status -sb").await;
+    assert!(next_reply(&host, &bot, 1).await.contains("\"yes\""), "the kept rule approves it");
+
+    // A chained command has no proposal at all.
+    run(&host, &bot, "make && make test").await;
+    let chained_card = pending_card(&host, &bot).await;
+    let refusal = host.call("proposeRule", json!({"entryId": chained_card["id"]})).await;
+    assert_eq!((refusal["rule"].is_null(), refusal["refusal"].as_str()), (true, Some("chained")), "{refusal}");
+    host.call("respondPermission", json!({"entryId": chained_card["id"], "optionId": "no"})).await;
+}
