@@ -26,6 +26,7 @@ pub mod reactions;
 pub mod replies;
 pub mod scratchpad;
 pub mod skills;
+pub mod takeover;
 pub mod teach;
 pub mod team;
 pub mod uploads;

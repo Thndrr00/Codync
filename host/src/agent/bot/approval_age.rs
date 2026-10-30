@@ -54,6 +54,11 @@ impl Waiting {
     }
 }
 
+/// Whether a card already sent its one reminder.
+fn reminded(data: &Value) -> bool {
+    data["reminded"] == true
+}
+
 /// What a phone needs to answer a card without opening it: its id and the options the card itself
 /// shows (at most three), so a button can never offer something the card doesn't.
 pub(super) fn approval_payload(entry_id: &str, data: &Value) -> Value {
@@ -89,7 +94,15 @@ impl Actor {
     }
 
     fn remind_approval(&self, entry_id: &str) {
-        let Some(entry) = self.hub.store.entry(entry_id).filter(|e| e.data["status"] == "pending") else { return };
+        let Some(entry) =
+            self.hub.store.entry(entry_id).filter(|e| e.data["status"] == "pending" && !reminded(&e.data))
+        else {
+            return;
+        };
+        // The flag is in the card itself, so a second reminder can't follow, whoever asks.
+        let mut data = entry.data.clone();
+        data["reminded"] = true.into();
+        self.hub.set_entry(entry_id, &data);
         let title = entry.data["title"].as_str().unwrap_or("A request");
         let target = self.hub.store.bot(&self.lane.chat).ok().flatten().map_or_else(|| self.cfg.clone(), |r| r.config);
         push::notify_with(
@@ -129,6 +142,12 @@ mod tests {
         waiting.asked("a", start);
         waiting.answered("a");
         assert_eq!(waiting.due(start + 30 * HOUR), Due::default());
+    }
+
+    #[test]
+    fn a_card_that_carries_the_flag_is_not_reminded_again() {
+        assert!(!reminded(&json!({"status": "pending"})));
+        assert!(reminded(&json!({"status": "pending", "reminded": true})));
     }
 
     #[test]

@@ -183,19 +183,11 @@ pub fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Result<Va
                 bail!("reason is required");
             }
             let url = args["url"].as_str().map(str::trim).filter(|s| !s.is_empty());
-            let data = json!({
-                "text": format!("Human takeover requested: {reason}"),
-                "style": "info",
-                "author": bot_id,
-                "takeoverRequest": {
-                    "reason": reason,
-                    "url": url,
-                    "status": "waiting"
-                }
-            });
+            let data = super::takeover::card(bot_id, reason, url, now_ms());
             let entry = hub
                 .add_entry(&Lane::main(bot_id), EntryKind::Notice, hub.store.max_turn(bot_id), &data)
                 .ok_or_else(|| anyhow!("couldn't post handoff card"))?;
+            super::takeover::notify(hub, bot_id, reason);
             Ok(json!({
                 "status": "waiting_for_user",
                 "entryId": entry.id,
