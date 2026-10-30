@@ -69,6 +69,8 @@ pub struct App {
     pub usage: Value,
     /// The last seven days (`weekSummary`), read when the usage sheet opens; null until then.
     pub week: Value,
+    /// The security profiles the host offers (`securityProfiles`), read when they are first needed.
+    pub profiles: Vec<Value>,
     pub screen: Value,
     /// This computer's network (`networkView`'s shape); null on hosts without one.
     pub network: Value,
@@ -162,6 +164,7 @@ impl App {
             entries: HashMap::new(),
             usage: Value::Null,
             week: Value::Null,
+            profiles: Vec::new(),
             screen: Value::Null,
             network: Value::Null,
             backends: vec![],

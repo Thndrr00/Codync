@@ -67,7 +67,8 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
             let agent = n.backend.as_deref().map(|id| {
                 app.backends.iter().find(|b| b["id"] == id).and_then(|b| b["name"].as_str()).unwrap_or(id).to_owned()
             });
-            new_bot_view(buf, area, n, agent.as_deref());
+            let profile = n.profile.as_deref().and_then(|id| app.profile_text(id));
+            new_bot_view(buf, area, n, agent.as_deref(), profile.as_ref());
         }
         Overlay::Folder(p) => {
             let t = theme();

@@ -31,6 +31,17 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
     );
     y += 1;
     put(buf, inner.x, y, inner.width, &truncate(&tr(WARNING), usize::from(inner.width)), t.dim.patch(t.panel));
+    y += 1;
+    let profile = s.profile.as_deref().map_or_else(|| tr("your own rules").into_owned(), str::to_owned);
+    let changed = if s.profile_changed { " (P replaced the rules; save to keep)" } else { "" };
+    put(
+        buf,
+        inner.x,
+        y,
+        inner.width,
+        &truncate(&format!("{}: {profile}{changed}", tr("Security profile")), usize::from(inner.width)),
+        t.secondary.patch(t.panel),
+    );
     y += 2;
     if s.rules.is_empty() {
         put(
@@ -104,9 +115,9 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
         Mode::Test => "↵ test · esc back",
         Mode::List if s.saving => "saving…",
         Mode::List if s.quick_on.is_some() => {
-            "a add · ↵ edit · d del · K J move · m t · Q quick on/off · 1 2 3 · T try · ^s save"
+            "a add · ↵ edit · d del · K J move · m t · P profile · Q quick · 1 2 3 · T try · ^s save"
         }
-        Mode::List => "a add · ↵ edit · d delete · K J move · m decision · t tool · T try · ^s save · esc close",
+        Mode::List => "a add · ↵ edit · d delete · K J move · m decision · t tool · P profile · T try · ^s save",
     };
     put(buf, inner.x, bottom - 1, inner.width, &truncate(&tr(footer), usize::from(inner.width)), t.dim.patch(t.panel));
 }

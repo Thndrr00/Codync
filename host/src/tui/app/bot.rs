@@ -62,6 +62,8 @@ pub struct Bot {
     /// host has none).
     pub action_rules: serde_json::Map<String, Value>,
     pub action_rules_on: Option<bool>,
+    /// The security profile the bot follows, until its rules are changed away from it.
+    pub security_profile: Option<String>,
     /// Saver: at 80 percent of its daily token budget, new sessions start on the background model; `None` from an
     /// older host.
     pub saver: Option<bool>,
@@ -212,6 +214,7 @@ impl Bot {
             approval_rules: v["approvalRules"].as_array().cloned().unwrap_or_default(),
             action_rules: v["actionRules"].as_object().cloned().unwrap_or_default(),
             action_rules_on: v["actionRulesOn"].as_bool(),
+            security_profile: v["securityProfile"].as_str().map(str::to_owned),
             saver: v["saver"].as_bool(),
             personality: ["soul", "persona", "heartbeat"]
                 .map(|layer| v["personality"][layer].as_str().unwrap_or_default().to_owned()),

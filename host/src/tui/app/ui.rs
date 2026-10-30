@@ -131,6 +131,7 @@ pub enum NewBotField {
     Name,
     Purpose,
     Agent,
+    Profile,
     Color,
     Shape,
 }
@@ -143,6 +144,8 @@ pub struct NewBot {
     pub purpose: Editor,
     /// `None`: the host picks the agent.
     pub backend: Option<String>,
+    /// The security profile (`None`: the host's default, which approves everything).
+    pub profile: Option<String>,
     pub color: usize,
     pub shape: usize,
     pub field: NewBotField,

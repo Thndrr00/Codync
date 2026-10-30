@@ -44,6 +44,9 @@ pub struct RulesSheet {
     pub quick_on: Option<bool>,
     /// Every class's policy as the bot has it; only the three in [`QUICK_CLASSES`] are edited here.
     pub policies: serde_json::Map<String, Value>,
+    /// The security profile the bot follows (`None`: its own rules), and whether `P` changed it in this sheet.
+    pub profile: Option<String>,
+    pub profile_changed: bool,
 }
 
 impl RulesSheet {
@@ -70,7 +73,30 @@ impl RulesSheet {
             error: None,
             quick_on: None,
             policies: serde_json::Map::new(),
+            profile: None,
+            profile_changed: false,
         }
+    }
+
+    /// The same sheet with the bot's security profile.
+    pub fn with_profile(mut self, profile: Option<String>) -> Self {
+        self.profile = profile;
+        self
+    }
+
+    /// What saving sends: the profile when `P` picked one (the host replaces the rules and the Approvals setting with
+    /// its own), else the rules as edited.
+    pub fn save_body(&self) -> Value {
+        let mut body = json!({"id": self.bot_id});
+        match (&self.profile, self.profile_changed) {
+            (Some(profile), true) => body["securityProfile"] = profile.clone().into(),
+            _ => body["approvalRules"] = self.body(),
+        }
+        if let Some(on) = self.quick_on {
+            body["actionRulesOn"] = on.into();
+            body["actionRules"] = Value::Object(self.policies.clone());
+        }
+        body
     }
 
     /// The same sheet with the bot's quick rules.
@@ -172,7 +198,11 @@ impl App {
             return;
         };
         let sheet = RulesSheet::new(&bot.id, &bot.name, &bot.approval_rules)
-            .with_quick(bot.action_rules_on, bot.action_rules.clone());
+            .with_quick(bot.action_rules_on, bot.action_rules.clone())
+            .with_profile(bot.security_profile.clone());
+        if self.profiles.is_empty() {
+            self.call("securityProfiles", json!({}), After::Profiles);
+        }
         self.overlays.push(Overlay::Rules(Box::new(sheet)));
     }
 
@@ -223,12 +253,7 @@ impl App {
                 KeyCode::Char('s') if k.modifiers.contains(KeyModifiers::CONTROL) => {
                     s.saving = true;
                     s.error = None;
-                    let mut body = json!({"id": s.bot_id, "approvalRules": s.body()});
-                    if let Some(on) = s.quick_on {
-                        body["actionRulesOn"] = on.into();
-                        body["actionRules"] = Value::Object(s.policies.clone());
-                    }
-                    self.call("updateBot", body, After::RulesSaved);
+                    self.call("updateBot", s.save_body(), After::RulesSaved);
                 }
                 KeyCode::Down | KeyCode::Char('j') => s.sel = (s.sel + 1).min(s.rules.len().saturating_sub(1)),
                 KeyCode::Up | KeyCode::Char('k') => s.sel = s.sel.saturating_sub(1),
@@ -247,6 +272,7 @@ impl App {
                     s.sel = s.sel.min(s.rules.len().saturating_sub(1));
                 }
                 KeyCode::Char('Q') => s.quick_on = s.quick_on.map(|on| !on),
+                KeyCode::Char('P') => self.next_sheet_profile(&mut s),
                 KeyCode::Char(digit @ '1'..='3') if s.quick_on.is_some() => {
                     s.cycle_quick(usize::from(digit as u8 - b'1'));
                 }
@@ -262,6 +288,31 @@ impl App {
             },
         }
         Some(Overlay::Rules(s))
+    }
+
+    /// `P`: the next security profile replaces the sheet's rules with that profile's, until it is saved or the sheet
+    /// is closed.
+    fn next_sheet_profile(&self, s: &mut RulesSheet) {
+        let ids: Vec<&str> = self.profiles.iter().filter_map(|p| p["id"].as_str()).collect();
+        if ids.is_empty() {
+            return;
+        }
+        let at = s.profile.as_deref().and_then(|id| ids.iter().position(|x| *x == id));
+        let next = ids[at.map_or(0, |i| (i + 1) % ids.len())];
+        let Some(profile) = self.profiles.iter().find(|p| p["id"] == next) else { return };
+        s.rules = profile["rules"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|r| RuleRow {
+                pattern: "*".into(),
+                kind: r["kind"].as_str().map(str::to_owned),
+                decision: r["decision"].as_str().unwrap_or("ask").to_owned(),
+            })
+            .collect();
+        s.sel = 0;
+        s.profile = Some(next.to_owned());
+        s.profile_changed = true;
     }
 
     /// The host's answer to a command tried in the sheet.
@@ -335,6 +386,16 @@ mod tests {
         assert_eq!(s.policies.get("browse"), Some(&json!("allow")));
         assert_eq!(s.policies.get("bots"), Some(&json!("block")), "a class the sheet doesn't edit is kept");
         s.cycle_quick(9);
+    }
+
+    #[test]
+    fn saving_sends_the_profile_when_one_was_picked_else_the_rules() {
+        let mut s = sheet().with_profile(Some("builder".into()));
+        assert!(s.save_body().get("approvalRules").is_some() && s.save_body().get("securityProfile").is_none());
+        s.profile_changed = true;
+        let body = s.save_body();
+        assert_eq!(body["securityProfile"], "builder");
+        assert!(body.get("approvalRules").is_none(), "the host replaces the rules with the profile's");
     }
 
     #[test]
