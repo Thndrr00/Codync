@@ -21,6 +21,7 @@ pub mod runtime;
 mod schema;
 mod setup;
 pub(crate) mod slack;
+mod week;
 
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};

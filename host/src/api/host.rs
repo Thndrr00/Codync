@@ -89,6 +89,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             serde_json::to_value(&*hub.usage.locked())?
         }
+        "weekSummary" => {
+            let days = b["days"].as_i64().unwrap_or(7).clamp(1, 31);
+            let since = crate::store::now_ms() - days * 24 * 60 * 60 * 1000;
+            serde_json::to_value(hub.store.week(since)?)?
+        }
         "listDirs" => {
             let path = b["path"].as_str().map(std::path::PathBuf::from);
             tokio::task::spawn_blocking(move || list_dirs(path)).await??
