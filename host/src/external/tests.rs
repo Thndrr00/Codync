@@ -107,7 +107,7 @@ async fn a_hook_that_goes_away_never_leaves_a_card_pending() {
     let (hub, dir) = hub();
     super::ingest(&hub, &prompt("run")).await;
     let request = event(&json!({"hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/w/p",
-        "tool_name": "Bash", "tool_input": {"command": "rm -rf /"}}));
+        "tool_name": "Bash", "tool_input": {"command": "cargo build"}}));
     let task = tokio::spawn({
         let hub = hub.clone();
         async move { super::ingest(&hub, &request).await }
@@ -204,5 +204,17 @@ async fn a_session_start_only_announces_the_bot() {
     super::ingest(&hub, &event(&start)).await;
     assert!(bot(&hub).is_some(), "the roster shows the session before its first prompt");
     assert_eq!(entries(&hub, "user").len(), 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_forbidden_command_from_a_terminal_agent_is_refused_without_a_card() {
+    let (hub, dir) = hub();
+    super::ingest(&hub, &prompt("run")).await;
+    let request = event(&json!({"hook_event_name": "PermissionRequest", "session_id": "s1", "cwd": "/w/p",
+        "tool_name": "Bash", "tool_input": {"command": "rm -rf /"}}));
+    let reply = super::ingest(&hub, &request).await;
+    assert!(entries(&hub, "permission").is_empty(), "no card asks about a command nobody may run");
+    assert!(reply.to_string().contains("deny"), "{reply}");
     let _ = std::fs::remove_dir_all(dir);
 }
