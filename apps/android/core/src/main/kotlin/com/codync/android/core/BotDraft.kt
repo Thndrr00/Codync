@@ -51,6 +51,8 @@ data class BotDraft(
     /** Null where the host has none, or on a new bot, so it isn't sent. */
     val offeredToNetwork: Boolean? = null,
     val reachableByAssistants: Boolean? = null,
+    /** The rules as the form has them; null on a new bot, which has none to send. */
+    val approvalRules: List<ApprovalRule>? = null,
 ) {
     /** A saved bot keeps a name; only a new one goes without (the host names it after its first conversations). */
     val isValid: Boolean get() = name.isNotBlank()
@@ -58,7 +60,8 @@ data class BotDraft(
     /** On agent [id]: its model starts over, and it leaves the fallbacks (each agent appears once in the chain). */
     fun withAgent(id: String): BotDraft = copy(backend = id, model = null, modelOptions = emptyMap(), fallbacks = fallbacks?.filter { it.backend != id })
     fun body(): JsonObject {
-        val normalized = copy(command = command.takeIf { backend == "custom" }, account = account.takeIf { backend == "antigravity" })
+        val normalized = copy(command = command.takeIf { backend == "custom" }, account = account.takeIf { backend == "antigravity" },
+            approvalRules = approvalRules?.let(ApprovalRules::clean))
         // updateBot merges a patch: null clears model, command or the connector choice, but an unset
         // switch or fallback list must stay out (the host's booleans and lists don't take null).
         return JsonObject(WireJson.encodeToJsonElement(normalized).jsonObject.filterNot { (key, value) -> value == JsonNull && key in UNSET })
@@ -95,6 +98,6 @@ data class BotDraft(
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
             bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks,
-            bot.verifyCommand, bot.backgroundModel, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants)
+            bot.verifyCommand, bot.backgroundModel, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants, bot.approvalRules)
     }
 }

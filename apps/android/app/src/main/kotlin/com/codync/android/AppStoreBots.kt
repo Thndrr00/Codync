@@ -128,6 +128,15 @@ suspend fun AppStore.authenticateAgentAccount(backend: String): AgentAccount {
 suspend fun AppStore.weekSummary(): WeekSummary? = runCatching {
     WireJson.decodeFromJsonElement<WeekSummary>(hostQuery("weekSummary", buildJsonObject { put("days", 7) }))
 }.getOrNull()
+/** What the bot would do with [command] under [rules]; null when the host can't say. */
+suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: List<ApprovalRule>): ApprovalEvaluation? = runCatching {
+    val payload = buildJsonObject {
+        put("botId", botId)
+        put("command", command)
+        put("rules", WireJson.encodeToJsonElement(rules))
+    }
+    ApprovalRules.decodeEvaluation(hostQuery("testApprovalRule", payload))
+}.getOrNull()
 /** A forced usage read that returns when it's done, for pull to refresh. */
 suspend fun AppStore.reloadUsage() { refreshUsage(true); actions["usage"]?.join() }
 fun AppStore.refreshUsage(force: Boolean = true) = action("usage") {

@@ -57,7 +57,7 @@ internal enum class FormPart { All, Often, Rarely }
                 CardSection("Profile") { nameRow(draft, change); instructionsRow(state, store, draft, change); createdByRow(state, bot) }
                 CardSection("Agent") {
                     fallbackBanner(state, store, bot); computerRow(state, online)
-                    agentRows(state, store, draft, change, bot) { addingFallback = true }; placeRows(draft, change) { folders = true }
+                    agentRows(state, store, draft, change, bot) { addingFallback = true }; placeRows(store, draft, change) { folders = true }
                 }
                 CardSection("Activity") {
                     notifyRow(draft, change); computerUseRow(state, draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change)
@@ -80,7 +80,7 @@ internal enum class FormPart { All, Often, Rarely }
                     nameRow(draft, change); createdByRow(state, bot)
                 }
                 // The agent and its model are on the Details page; what's left is where it works.
-                CardSection("Workspace") { computerRow(state, online); placeRows(draft, change) { folders = true } }
+                CardSection("Workspace") { computerRow(state, online); placeRows(store, draft, change) { folders = true } }
                 CardSection("Activity") { notifyRow(draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change) }
                 Plugins(state, draft, change) { viewingSkill = it }
             }
@@ -160,7 +160,7 @@ private fun CardRows.agentRows(state: AppState, store: AppStore, draft: BotDraft
 }
 
 /** Where the bot works and what it may do there without asking. */
-private fun CardRows.placeRows(draft: BotDraft, change: (BotDraft) -> Unit, chooseFolder: () -> Unit) {
+private fun CardRows.placeRows(store: AppStore, draft: BotDraft, change: (BotDraft) -> Unit, chooseFolder: () -> Unit) {
     row {
         ValueRow("Workspace", detail = if (draft.cwd.isEmpty()) "This bot has its own space for files. It can work in other folders when you ask."
             else "This project is the default starting folder. The bot can work elsewhere when you ask.") {
@@ -185,6 +185,7 @@ private fun CardRows.placeRows(draft: BotDraft, change: (BotDraft) -> Unit, choo
                 label = "Permissions")
         }
     }
+    approvalRulesRows(store, draft, change)
 }
 
 private fun CardRows.notifyRow(draft: BotDraft, change: (BotDraft) -> Unit) =
