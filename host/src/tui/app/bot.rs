@@ -56,6 +56,8 @@ pub struct Bot {
     pub verify_command: String,
     /// The model routine runs and check-ins use instead of its own (empty: its own).
     pub background_model: String,
+    /// The user's approval rules, first match first, as the host sends them.
+    pub approval_rules: Vec<Value>,
     /// Saver: at 80 percent of its daily token budget, new sessions start on the background model; `None` from an
     /// older host.
     pub saver: Option<bool>,
@@ -203,6 +205,7 @@ impl Bot {
             reachable_by_assistants: v["reachableByAssistants"].as_bool(),
             verify_command: s("verifyCommand"),
             background_model: s("backgroundModel"),
+            approval_rules: v["approvalRules"].as_array().cloned().unwrap_or_default(),
             saver: v["saver"].as_bool(),
             personality: ["soul", "persona", "heartbeat"]
                 .map(|layer| v["personality"][layer].as_str().unwrap_or_default().to_owned()),

@@ -35,6 +35,10 @@ pub enum After {
     Sent(String),
     Connection(String, super::super::connections::Step),
     Hello,
+    /// `testApprovalRule`: what the host says about a command tried in the rules sheet.
+    RuleTest,
+    /// The rules sheet's save (`updateBot`).
+    RulesSaved,
     /// `weekSummary`: the last seven days, for the usage sheet; a host without it says nothing.
     Week,
     /// `track`: fire and forget; analytics never surfaces an error.

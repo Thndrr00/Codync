@@ -58,6 +58,7 @@ pub enum Action {
     RefreshAgents,
     Pair,
     Network,
+    Rules,
     Usage,
     CheckUpdate,
     Analytics,
@@ -68,7 +69,7 @@ pub enum Action {
     Appearance(super::super::appearance::Appearance),
 }
 
-pub const ACTIONS: [(&str, &str, Action); 21] = [
+pub const ACTIONS: [(&str, &str, Action); 22] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -80,6 +81,7 @@ pub const ACTIONS: [(&str, &str, Action); 21] = [
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
     ("Network: your other computers…", "N", Action::Network),
+    ("Approval rules of this bot…", "", Action::Rules),
     ("Usage", "U", Action::Usage),
     ("Check for updates", "", Action::CheckUpdate),
     ("Share usage analytics", "", Action::Analytics),
@@ -392,6 +394,8 @@ pub enum Overlay {
     Skill(SkillSheet),
     Analytics(AnalyticsSheet),
     Network(Box<NetworkSheet>),
+    /// A bot's approval rules.
+    Rules(Box<super::rules::RulesSheet>),
 }
 
 pub struct Toast {

@@ -53,6 +53,7 @@ impl App {
                 f.editor_mut(field)
             }
             Overlay::Market(m) => Some(&mut m.query),
+            Overlay::Rules(s) => (s.mode != super::rules::Mode::List).then_some(&mut s.editor),
             Overlay::Fields(f) => f.current().map(|i| &mut i.ed),
             Overlay::Routine(f) => Some(match f.field {
                 super::super::manage::RoutineField::Name => &mut f.name,

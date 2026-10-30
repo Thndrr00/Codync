@@ -14,6 +14,7 @@ mod new_bot;
 mod overlay_keys;
 mod roster_preferences;
 pub mod roster_tools;
+mod rules;
 mod slash;
 mod steps;
 mod ui;
@@ -22,6 +23,7 @@ pub use bot::{AgentModel, Bot, ModelOption, OwnMemory};
 pub use editor::Editor;
 pub use exchange::{ConversationRow, Exchange, Item, Outcome, conversation, group, rows};
 pub use model::{After, Entry, Kind, Mark, Msg, Status};
+pub use rules::{Mode, RulesSheet};
 pub use slash::SlashAction;
 pub(super) use steps::{running_turn, working_steps};
 pub use ui::{

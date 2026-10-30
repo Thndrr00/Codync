@@ -27,8 +27,22 @@ An `allow` rule never approves a command that runs more than one (`;`, `&&`, `||
 command goes on to the next rules and then to the card. `deny` and `ask` rules still match it.
 
 Bots can't set their own rules: only `updateBot` changes them, and neither the bot's profile tools
-nor the fleet tools pass them on. No client edits them yet. Rakazo's automated review of
+nor the fleet tools pass them on. The desktop app, the Android app and the terminal edit them (section "Editing the
+rules"). Rakazo's automated review of
 low-risk requests isn't implemented: no model approves on the user's behalf.
+
+## Editing the rules
+
+The rules are in the bot's settings (desktop and Android: under Permissions; terminal: the palette's "Approval rules of
+this bot…"). Each rule has a decision (allow, ask, deny), an optional tool kind, and a pattern; the list is ordered
+(the first match decides) and can be added to, edited, reordered and deleted. Blank patterns are dropped when saved. The
+editor shows the warning that an allow rule never approves a chained command.
+
+**Try a command.** `testApprovalRule {botId, command, kind?, rules?}` returns `{evaluation}`: what the bot would do with
+the command, by the same `approval_rules::evaluate` a real request goes through, so the tester never copies the logic.
+`outcome` is `forbidden` (with the blocklist `pattern`), `rule` (`index`, `decision`, `pattern`) or `setting` (the
+bot's `permission`), plus `chained` and `allowPassedOver` (an allow rule that matched but was skipped because the
+command runs several). `rules` tests a list that is not saved yet; without it the bot's saved rules are used.
 
 ## Forbidden commands
 
