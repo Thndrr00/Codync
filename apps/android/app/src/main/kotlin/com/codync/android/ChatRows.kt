@@ -155,6 +155,8 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
         }
         else -> if (entry.data["takeoverRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             TakeoverRequestCard(entry, state, store)
+        } else if (entry.data["pausedTurn"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+            PausedTurnCard(entry, state, store)
         } else if (entry.data["passkeyWall"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             PasskeyWallCard(entry, state, store)
         } else if (entry.data["chiefIncident"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {

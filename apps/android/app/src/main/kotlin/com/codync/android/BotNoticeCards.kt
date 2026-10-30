@@ -22,6 +22,7 @@ import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -74,6 +75,26 @@ import kotlinx.serialization.json.jsonPrimitive
         } else {
             Text(when (status) { "resolved" -> "Completed"; "expired" -> "Expired"; else -> "Cancelled" }, style = Type.caption, color = Palette.tertiary)
         }
+    }
+}
+
+/** A turn that stopped half done: said so, with one tap to go on (a few times in a row, then it asks for words). */
+@Composable internal fun PausedTurnCard(entry: Entry, state: AppState, store: AppStore) {
+    val paused = entry.data["pausedTurn"] as? JsonObject ?: return
+    val open = paused.text("status") == "waiting"
+    val canContinue = paused["canContinue"]?.jsonPrimitive?.booleanOrNull == true
+    val title = tr(if (paused.text("verdict") == "truncated") "Answer cut short" else "Paused halfway")
+    val working = "continue:" + entry.id in state.busy
+    val remains = tr(if (open) "Say what remains in a message." else "Continued")
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Symbol("pause.circle.fill", size = 16.dp, tint = Palette.warning)
+            Text(title, style = Type.chatSubheadline.semibold, color = Palette.warning)
+        }
+        Text(entry.text, style = Type.chatFootnote, color = Palette.secondary)
+        if (open && canContinue) PrimaryButton(tr("Continue"), enabled = !working) { store.continueTurn(entry) }
+        else Text(remains, style = Type.caption, color = Palette.tertiary)
     }
 }
 
