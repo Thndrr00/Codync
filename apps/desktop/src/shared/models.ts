@@ -674,3 +674,16 @@ export interface GroupDraft {
   chiefBotId?: string | null
   pinned?: boolean
 }
+
+/** The last days at a glance, counted by the host from this computer's transcripts (`weekSummary`). */
+export interface WeekSummary {
+  messages: number
+  replies: number
+  tools: number
+  fileEdits: number
+  approvalsAsked: number
+  approvalsAnswered: number
+  approvalsWaiting: number
+  activeBots: number
+  topBots: { id: string; name: string; entries: number }[]
+}

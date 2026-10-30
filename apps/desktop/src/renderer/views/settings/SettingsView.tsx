@@ -20,6 +20,7 @@ import { UpdateButton, useUpdates } from '../UpdateButton'
 import { ComputersView } from './ComputersView'
 import { errorText, isMac, thisMac } from './parts'
 import { UsageLimits } from './UsageLimits'
+import { WeekSummaryView } from './WeekSummaryView'
 import { VoiceChatSettingsView } from './VoiceChatSettingsView'
 import { ComputerAccessView } from '../computer-access/ComputerAccessView'
 import { FormSheet } from '../marketplace/pieces'
@@ -268,6 +269,7 @@ function UsageLimitsList() {
           </HStack>
         ) : null,
         <UsageLimits key={store.computer.id} usage={store.usage} />,
+        <WeekSummaryView key={`${store.computer.id}-week`} store={store} />,
       ])}
     </>
   )

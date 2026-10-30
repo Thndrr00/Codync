@@ -13,6 +13,7 @@ import {
   type ScreenState,
   type SentinelReport,
   type Usage,
+  type WeekSummary,
 } from '@shared/models'
 import type { HostClient } from '../client/host-client'
 import { FileDownloads } from './file-downloads'
@@ -410,6 +411,16 @@ export class BotStore extends BotSync {
   async authenticateAgentAccount(backend: string): Promise<AgentAccount> {
     const result = await (await this.ready()).call<{ account: AgentAccount }>('accountAuthenticate', { backend }, 660_000)
     return result.account
+  }
+
+  /** The last seven days on this computer; null when the host can't say (an older one). */
+  async weekSummary(): Promise<WeekSummary | null> {
+    if (this.retired || !this.client) return null
+    try {
+      return await this.client.call<WeekSummary>('weekSummary', { days: 7 })
+    } catch {
+      return null
+    }
   }
 
   async refreshUsage() {

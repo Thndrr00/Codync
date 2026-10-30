@@ -120,6 +120,10 @@ suspend fun AppStore.authenticateAgentAccount(backend: String): AgentAccount {
     val response = hostQuery("accountAuthenticate", body("backend" to backend), timeoutMillis = 660_000)
     return WireJson.decodeFromJsonElement(response.jsonObject.getValue("account"))
 }
+/** The last seven days on the computer; null when the host can't say (an older one) or can't be reached. */
+suspend fun AppStore.weekSummary(): WeekSummary? = runCatching {
+    WireJson.decodeFromJsonElement<WeekSummary>(hostQuery("weekSummary", buildJsonObject { put("days", 7) }))
+}.getOrNull()
 /** A forced usage read that returns when it's done, for pull to refresh. */
 suspend fun AppStore.reloadUsage() { refreshUsage(true); actions["usage"]?.join() }
 fun AppStore.refreshUsage(force: Boolean = true) = action("usage") {
