@@ -1,0 +1,376 @@
+/* Transitions & micro-interactions ported from bdots / transitions.dev (Bloque 2, Ideas 16–30). */
+:root {
+  --t-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --t-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-spring-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Idea 16: Shimmer Text Sweep (.t-shimmer) */
+.t-shimmer {
+  position: relative;
+  display: inline-block;
+  color: var(--secondary);
+}
+.t-shimmer.is-active {
+  background-image: linear-gradient(
+    110deg,
+    var(--secondary) 35%,
+    var(--text) 50%,
+    var(--secondary) 65%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: t-shimmer-sweep 1.8s linear infinite;
+}
+@keyframes t-shimmer-sweep {
+  from {
+    background-position: 110% 0;
+  }
+  to {
+    background-position: -110% 0;
+  }
+}
+
+/* Idea 17: Sliding Tab Indicator (.t-tabs / .t-tabs-pill) */
+.t-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: var(--radius-s);
+  background: var(--group);
+}
+.t-tabs-pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--pill-w, 0px);
+  transform: translate3d(var(--pill-x, 0px), 0, 0);
+  border-radius: calc(var(--radius-s) - 2px);
+  background: var(--chip-on);
+  box-shadow: var(--chip-shadow);
+  opacity: 0;
+  pointer-events: none;
+}
+.t-tabs-pill.is-ready {
+  opacity: 1;
+  transition:
+    transform 320ms var(--t-spring-soft),
+    width 320ms var(--t-spring-soft),
+    opacity 150ms ease;
+}
+.t-tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: calc(var(--radius-s) - 2px);
+  font-size: var(--text-callout);
+  font-weight: 500;
+  color: var(--secondary);
+  transition: color 160ms var(--t-ease-out);
+}
+.t-tab.is-active {
+  color: var(--text);
+}
+.t-tab-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+}
+
+/* Idea 18: Slide-Over Panel (.t-slide-backdrop / .t-slide-panel) */
+.t-slide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: var(--scrim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms var(--t-ease-out);
+}
+.t-slide-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-slide-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 141;
+  width: min(560px, 92vw);
+  background: var(--sheet);
+  box-shadow: var(--shadow-xl);
+  transform: translate3d(100%, 0, 0);
+  transition: transform 320ms var(--t-spring-soft);
+  display: flex;
+  flex-direction: column;
+}
+.t-slide-panel.is-open {
+  transform: translate3d(0, 0, 0);
+}
+
+/* Idea 21 & 22: Geometric Robot Avatar & Working Spinner Crossfade */
+.bot-avatar-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.bot-avatar-face,
+.bot-avatar-spinner {
+  grid-area: 1 / 1;
+  transition:
+    opacity 220ms var(--t-ease-out),
+    transform 220ms var(--t-spring-soft);
+}
+.bot-avatar-spinner {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+.bot-avatar-wrap.is-working .bot-avatar-face {
+  opacity: 0.22;
+  transform: scale(0.86);
+}
+.bot-avatar-wrap.is-working .bot-avatar-spinner {
+  opacity: 1;
+  transform: scale(1);
+}
+.bot-avatar-spin-svg {
+  animation: t-avatar-spin 0.95s linear infinite;
+}
+@keyframes t-avatar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Idea 23: 3D Card Hover Tilt & Glare (.t-tilt / .t-tilt-card / .t-tilt-glare) */
+.t-tilt {
+  perspective: 900px;
+}
+.t-tilt-card {
+  position: relative;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 280ms var(--t-ease-out);
+  transform-style: preserve-3d;
+}
+.t-tilt-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--gx, 50%) var(--gy, 50%),
+    rgba(255, 255, 255, 0.14),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity 220ms var(--t-ease-out);
+}
+.t-tilt:hover .t-tilt-glare {
+  opacity: 1;
+}
+
+/* Idea 24: Dropdown Menu Bloom (.t-dropdown) */
+.t-dropdown {
+  transform-origin: var(--origin, top right);
+  opacity: 0;
+  transform: scale(0.93) translateY(-4px);
+  pointer-events: none;
+  transition:
+    opacity 120ms var(--t-ease-in),
+    transform 120ms var(--t-ease-in);
+}
+.t-dropdown.is-open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+  transition:
+    opacity 180ms var(--t-ease-out),
+    transform 240ms var(--t-spring);
+}
+
+/* Idea 25: Collapsible Reasoning Stream (.t-reason) */
+.t-reason-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 280ms var(--t-spring-soft),
+    opacity 200ms var(--t-ease-out);
+}
+.t-reason.is-open .t-reason-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.t-reason-inner {
+  overflow: hidden;
+}
+.t-reason-chevron {
+  transition: transform 240ms var(--t-spring-soft);
+}
+.t-reason.is-open .t-reason-chevron {
+  transform: rotate(90deg);
+}
+
+/* Idea 26: Spinning Number Counter (.t-reel) */
+.t-reel {
+  display: inline-grid;
+  height: 1.2em;
+  line-height: 1.2em;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.t-reel-col {
+  display: flex;
+  flex-direction: column;
+  transform: translate3d(0, calc(var(--digit, 0) * -1.2em), 0);
+  transition: transform 340ms var(--t-spring-soft);
+}
+
+/* Idea 27: Spring Card Resize (.t-resize) */
+.t-resize {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms var(--t-spring-soft);
+}
+.t-resize.is-open {
+  grid-template-rows: 1fr;
+}
+.t-resize > * {
+  overflow: hidden;
+}
+
+/* Idea 28: Input Clear Button Dissolve (.t-clear) */
+.t-clear {
+  opacity: 0;
+  transform: scale(0.5) rotate(-45deg);
+  pointer-events: none;
+  transition:
+    opacity 140ms var(--t-ease-in),
+    transform 140ms var(--t-ease-in);
+}
+.t-clear.is-visible {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  pointer-events: auto;
+  transition:
+    opacity 180ms var(--t-ease-out),
+    transform 220ms var(--t-spring);
+}
+
+/* Idea 29: Stackable Toast Notifications (.t-toast-stack / .t-toast) */
+.t-toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.t-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-m);
+  border: 1px solid var(--outline);
+  font-size: var(--text-callout);
+  animation: t-toast-in 260ms var(--t-spring) both;
+}
+.t-toast.is-leaving {
+  animation: t-toast-out 180ms var(--t-ease-in) both;
+}
+@keyframes t-toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes t-toast-out {
+  to {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.96);
+  }
+}
+
+/* Idea 30: Error State Shake (.t-input-shake / .is-invalid) */
+@keyframes t-shake {
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}
+.t-input-shake.is-invalid {
+  animation: t-shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  box-shadow: 0 0 0 1.5px var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-shimmer.is-active {
+    animation: none;
+    background: none;
+    color: var(--secondary);
+  }
+  .t-tabs-pill.is-ready,
+  .t-slide-backdrop,
+  .t-slide-panel,
+  .bot-avatar-face,
+  .bot-avatar-spinner,
+  .t-tilt-card,
+  .t-dropdown,
+  .t-reason-body,
+  .t-reel-col,
+  .t-resize,
+  .t-clear {
+    transition: none !important;
+  }
+  .t-toast,
+  .t-input-shake.is-invalid {
+    animation: none !important;
+  }
+}
+
+/* Ficha N02: Windows Forced-Colors & High-Contrast Accessibility Mode */
+@media (forced-colors: active), (prefers-contrast: more) {
+  .bubble,
+  .t-toast,
+  .t-slide-panel,
+  .t-tabs,
+  .field-box,
+  .btn {
+    border: 1.5px solid CanvasText;
+  }
+  .btn:focus-visible,
+  .t-tab:focus-visible,
+  .field-box:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+  }
+}
+

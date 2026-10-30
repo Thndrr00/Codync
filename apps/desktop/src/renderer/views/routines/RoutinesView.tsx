@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { IconButton, Switch } from '../../components/Controls'
+import { Button, IconButton, Switch } from '../../components/Controls'
 import { Sheet } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
@@ -9,6 +9,7 @@ import { errorText, isActiveRun, runLabel, type Routine, type RoutineListing, ty
 import { RoutineEditorView } from './RoutineEditorView'
 import './routines.css'
 import { useTr } from '../../lib/use-language'
+import { RoutineRunHistory } from './RoutineRunHistory'
 
 
 /** The open editor: on a routine, or (`routineId` null) setting up a new one. `id` is one per opening. */
@@ -118,7 +119,7 @@ export function RoutinesView({ botId, initialId, onClose }: { botId: string; ini
         <IconButton title="Set up a routine" icon="plus" disabled={store.isOffline} onClick={() => open(null)} />
         {onClose ? <IconButton title="Close routines" icon="xmark" onClick={onClose} /> : null}
       </HStack>
-      {loadError ? <Text size="caption" tone="danger">{loadError}</Text> : null}
+      {loadError ? <HStack gap={8}><Text size="caption" tone="danger">{loadError}</Text>{window.codync.platform === 'win32' ? <Button kind="secondary" onClick={() => void load()}>Retry loading routines</Button> : null}</HStack> : null}
       {error ? <Text size="caption" tone="danger" className="routines-error">{error}</Text> : null}
       {routines.length === 0 ? (
         <Text as="div" size="callout" tone="secondary" className="outlined-card routines-empty">
@@ -127,7 +128,8 @@ export function RoutinesView({ botId, initialId, onClose }: { botId: string; ini
       ) : (
         <VStack gap={8}>
           {routines.map((routine) => (
-            <HStack key={routine.id} gap={12} className="outlined-card routines-card">
+            <VStack key={routine.id} gap={8}>
+            <HStack gap={12} className="outlined-card routines-card">
               <button className="routine-row" onClick={() => open(routine.id)}>
                 <Text tone="text">{routine.name}</Text>
                 <Text size="caption" tone={routine.lastError ? 'danger' : 'secondary'}>{summary(routine)}</Text>
@@ -136,6 +138,8 @@ export function RoutinesView({ botId, initialId, onClose }: { botId: string; ini
                 <Switch on={routine.enabled} disabled={busy || store.isOffline} onChange={(on) => void action('setRoutineEnabled', routine, on)} />
               </HStack>
             </HStack>
+            {window.codync.platform === 'win32' ? <RoutineRunHistory name={routine.name} runs={runs.filter((run) => run.routineId === routine.id)} /> : null}
+            </VStack>
           ))}
         </VStack>
       )}

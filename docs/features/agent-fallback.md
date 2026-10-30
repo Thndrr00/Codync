@@ -57,12 +57,14 @@ Read from the ACP answer: the JSON-RPC code, the adapter's category (Claude's `d
 | `usageLimit` | Claude: `rate_limit`/`billing_error` with the Agent SDK's usage-limit text ("You've hit your…"). Codex: `usageLimitExceeded` | Until the reset the agent reported (`usage` windows at 100%); unknown: 1 h |
 | `outOfCredits` | Claude `billing_error`, `account_on_hold` | 6 h |
 | `rateLimited`, `overloaded` | Claude `rate_limit`, `overloaded`, `server_error`; codex-acp `rateLimitExceeded`, `serverOverloaded` | 1, 5, 25, then 60 min for failures in a row |
-| `signedOut` | ACP `-32000`, `authentication_failed` | Until it's signed in, looking again after 1 h; an agent Codync can't sign in to (no sign-in card): 10 min. The chat of each bot that moves past it gets the agent's sign-in card (holding no message: the fallback answers it), and signing in there brings the bot back |
+| `signedOut` | ACP `-32000`, `authentication_failed`, CodeBuddy's `auth` category | Until it's signed in, looking again after 1 h; an agent Codync can't sign in to (no sign-in card): 10 min. The chat of each bot that moves past it gets the agent's sign-in card (holding no message: the fallback answers it), and signing in there brings the bot back |
 | `notStarting` | `FailureKind::NotSetUp`, `Timeout`, `Exited` | 5 min |
 | `modelMissing` | `model_not_found`, or the agent refusing the step's model (`FailureKind::NoModel`) | None: it's the bot's setup, not the agent's. The bot skips that step until its settings change |
 
 Stop, refusal, output or step limits, a routine's time limit, compactions and uncategorized internal errors don't move
-on. codex-acp still sends its 429s and overloads as reply text ([codex-acp#647](https://github.com/agentclientprotocol/codex-acp/issues/647)),
+on. CodeBuddy's CLI (CodeBuddy Code, WorkBuddy) answers a failed prompt as a refusal with the error in
+`_meta["codebuddy.ai/errorMessage"]`: that one counts as the error it holds (`acp::codebuddy::prompt_result`), so a
+signed-out WorkBuddy moves on. codex-acp still sends its 429s and overloads as reply text ([codex-acp#647](https://github.com/agentclientprotocol/codex-acp/issues/647)),
 so only its usage limit moves a Codex bot on today.
 
 **Rests** (`fallback::rest`, `kv` `rest.<account>`: the agent, or a custom command's own) are the computer's: once one
@@ -136,3 +138,9 @@ All additive (no `minApp` change):
 - Method: `switchBack {botId}`.
 - Notices: `agentSwitch: {from, to, back, reason, resetsAt, carried}`; failure notices' `addFallback: true`.
 - Analytics: `agent_fell_back {agent, reason}`; `turn_finished` once per agent the turn ran on.
+
+## Android settings
+
+Open a saved bot’s Settings → Agent → Fallbacks to add up to three other agents, choose their models, reorder or remove them, and allow the bot to change its list. While a fallback is active, the Agent card shows it and offers Switch back. These controls appear only when the host sends the fallback settings; older hosts keep their existing editor.
+
+The Android editor’s read-only UI fixtures can run on an explicitly authorized USB device with `adb shell am instrument -w -e inspectBotEditor true -e class com.codync.android.BotEditorTest com.pokai.Codync.android.dev.test/androidx.test.runner.AndroidJUnitRunner`. Without that flag, `BotEditorTest` remains emulator-only. These fixtures never tap Save or Create.

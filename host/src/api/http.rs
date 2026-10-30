@@ -1,5 +1,5 @@
 //! HTTP routes: bearer-token checks for this computer's apps, SSE streams, the channel
-//! upgrade, OAuth callbacks and local routine webhooks.
+//! upgrade, OAuth callbacks, local routine webhooks and sandboxed bot mini-apps.
 
 use super::devices::Caller;
 use super::{dispatch, error_status, events_stream, term_events};
@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub fn router(hub: Arc<Hub>) -> Router {
-    Router::new()
+    let main = Router::new()
         .route("/health", get(health))
         .route("/hooks/routines/{id}", post(routine_hook))
         .route("/hooks/slack", post(crate::slack::ingress::receive))
@@ -35,7 +35,10 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/channel", get(channel))
         .route("/oauth/callback", get(oauth_callback))
         .layer(axum::middleware::from_fn(super::rebinding::guard))
-        .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard))
+        .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard));
+    Router::new()
+        .merge(main)
+        .merge(super::apps_runtime::router().layer(axum::middleware::from_fn(super::rebinding::guard)))
         .with_state(hub)
 }
 
@@ -66,17 +69,38 @@ impl IntoResponse for ApiError {
     }
 }
 
-async fn health(State(hub): State<Arc<Hub>>) -> Json<Value> {
-    Json(json!({
+#[derive(Default, Deserialize)]
+struct HealthQuery {
+    /// Sent by the desktop app's own poll: it's open to carry out an update request.
+    #[serde(default)]
+    app: bool,
+}
+
+/// `GET /health`, open to the network. Where the binary lives (a path with the user's name) and whether
+/// a turn is running are for this computer's updater and desktop app only.
+async fn health(
+    State(hub): State<Arc<Hub>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Query(q): Query<HealthQuery>,
+) -> Json<Value> {
+    let mut health = json!({
         "ok": true,
         "hostId": hub.host_id,
         "computerId": hub.identity.computer_id(),
         "version": env!("CARGO_PKG_VERSION"),
-        "binaryPath": crate::service::binary_identity().map(|(path, _)| path),
         "environment": crate::environment::Environment::current().name(),
-        "binaryHash": crate::service::binary_identity().map(|(_, hash)| hash),
-        "busy": hub.busy(),
-    }))
+    });
+    if is_loopback(peer.ip()) {
+        if q.app {
+            crate::update::note_app_poll();
+        }
+        let binary = crate::service::binary_identity();
+        health["binaryPath"] = json!(binary.map(|(path, _)| path));
+        health["binaryHash"] = json!(binary.map(|(_, hash)| hash));
+        health["busy"] = hub.busy().into();
+        health["updateRequested"] = crate::update::app_requested().into();
+    }
+    Json(health)
 }
 
 async fn statusline(
@@ -254,9 +278,9 @@ async fn routine_hook(
 mod tests {
     use super::*;
 
-    #[test]
-    fn phone_streams_hold_pushes_until_the_last_one_closes() {
-        let dir = std::env::temp_dir().join(format!("codync-phone-events-{}", uuid::Uuid::new_v4()));
+    /// A hub on an in-memory store, with its identity in a temp folder the test removes.
+    fn temp_hub() -> (Arc<Hub>, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("codync-http-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let hub = Hub::new(
             crate::store::Store::open(std::path::Path::new(":memory:")).expect("store"),
@@ -265,6 +289,12 @@ mod tests {
             "test".into(),
             19222,
         );
+        (hub, dir)
+    }
+
+    #[test]
+    fn phone_streams_hold_pushes_until_the_last_one_closes() {
+        let (hub, dir) = temp_hub();
         let desktop = events_stream(&hub, 0, Some("macos"), &Caller::Local).expect("desktop events");
         assert!(!hub.phone_connected());
         let android = events_stream(&hub, 0, Some("android"), &Caller::Local).expect("Android events");
@@ -275,6 +305,22 @@ mod tests {
         drop(ios);
         assert!(!hub.phone_connected(), "desktop streams do not hold phone alerts");
         drop(desktop);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn health_keeps_the_binary_and_busy_state_on_this_computer() {
+        let (hub, dir) = temp_hub();
+        let at = |addr: &str| ConnectInfo(addr.parse::<SocketAddr>().expect("address"));
+        let lan = health(State(hub.clone()), at("192.168.1.20:50000"), Query(HealthQuery::default())).await.0;
+        assert!(lan["computerId"].is_string());
+        for key in ["binaryPath", "binaryHash", "busy", "updateRequested"] {
+            assert!(lan.get(key).is_none(), "{key} reached the network");
+        }
+        let local = health(State(hub), at("[::ffff:127.0.0.1]:50000"), Query(HealthQuery::default())).await.0;
+        assert_eq!(local["busy"], false);
+        assert!(local["updateRequested"].is_null(), "nobody asked this computer to update");
+        assert!(local.get("binaryPath").is_some());
         let _ = std::fs::remove_dir_all(dir);
     }
 

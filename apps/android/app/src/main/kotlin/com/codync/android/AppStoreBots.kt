@@ -30,6 +30,9 @@ fun AppStore.saveBot(draft: BotDraft, onSaved: () -> Unit) = action("editor") {
     onSaved()
 }
 
+/** A saved bot's settings from its details, saved as they're edited: the chat stays where it is. */
+fun AppStore.saveSettings(draft: BotDraft) = command("updateBot", draft.body(), "settings:" + draft.id)
+
 fun AppStore.saveGroup(draft: GroupDraft, onSaved: () -> Unit) = action("editor") {
     val payload = draft.body(state.value.bots)
     val active = ready()
@@ -58,6 +61,7 @@ fun AppStore.deleteBot(bot: Bot, onDeleted: () -> Unit) = action("delete:" + bot
     val active = ready()
     active.call("deleteBot", body("botId" to bot.id))
     mutableState.update { it.copy(selectedBot = it.selectedBot.takeUnless { id -> id == bot.id },
+        // Its chat's draft and its artifacts' (`artifactDraftKey`).
         drafts = it.drafts.filterValues { draft -> draft.botId != bot.id }) }
     persistDrafts()
     onDeleted()
@@ -157,3 +161,51 @@ suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean =
     val response = hostQuery("routineWebhook", buildJsonObject { put("botId", botId); put("id", id); put("rotate", rotate) })
     return WireJson.decodeFromJsonElement(response)
 }
+
+suspend fun AppStore.listBotApps(botId: String): List<BotApp> {
+    val response = hostQuery("listBotApps", body("botId" to botId))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("apps"))
+}
+
+suspend fun AppStore.createAppLink(botId: String, slug: String, mode: String, label: String = ""): AppLinkResult {
+    val response = hostQuery("createAppLink", body("botId" to botId, "slug" to slug, "mode" to mode, "label" to label))
+    return WireJson.decodeFromJsonElement(response)
+}
+
+suspend fun AppStore.revokeAppLink(botId: String, slug: String, token: String) {
+    hostQuery("revokeAppLink", body("botId" to botId, "slug" to slug, "token" to token))
+}
+
+suspend fun AppStore.deleteBotApp(botId: String, slug: String) {
+    hostQuery("deleteBotApp", body("botId" to botId, "slug" to slug))
+}
+
+suspend fun AppStore.listOpenItems(botId: String): List<OpenItem> {
+    val response = hostQuery("listOpenItems", body("botId" to botId))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("items"))
+}
+
+suspend fun AppStore.dismissOpenItem(botId: String, id: String) {
+    hostQuery("dismissOpenItem", body("botId" to botId, "id" to id))
+}
+
+suspend fun AppStore.listBookmarks(botId: String): List<MessageBookmark> {
+    val response = hostQuery("listBookmarks", body("botId" to botId))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("bookmarks"))
+}
+
+suspend fun AppStore.saveBookmark(botId: String, entryId: String, preview: String, note: String = "", author: String = "", threadId: String? = null): MessageBookmark {
+    val response = hostQuery("saveBookmark", body("botId" to botId, "entryId" to entryId, "preview" to preview, "note" to note, "author" to author, "threadId" to threadId))
+    return WireJson.decodeFromJsonElement(response.jsonObject.getValue("bookmark"))
+}
+
+suspend fun AppStore.deleteBookmark(botId: String, entryId: String) {
+    hostQuery("deleteBookmark", body("botId" to botId, "entryId" to entryId))
+}
+
+/** One request of a mini-app, run by the host: this phone cannot reach the computer's loopback server. */
+suspend fun AppStore.appRequest(address: MiniAppAddress, method: String, path: String, payload: String = ""): MiniAppAnswer =
+    WireJson.decodeFromJsonElement(hostQuery("appRequest", body(
+        "botId" to address.botId, "slug" to address.slug, "token" to address.token,
+        "method" to method, "path" to path, "body" to payload,
+    )))

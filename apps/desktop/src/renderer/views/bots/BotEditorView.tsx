@@ -4,6 +4,8 @@ import { restLine, restOf, withBackend } from '@shared/fallbacks'
 import { draftOf, type Bot, type BotDraft, type DirListing, type Personality } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { CharacterAvatar } from '../../components/Avatar'
+import { ProactivePolicySection } from '../../components/ProactivePolicySection'
+import { RobotAvatar, isRobotLook } from '../../components/RobotAvatar'
 import { CardSection, ChoicePicker, DropdownMenu, IconButton, Pill, SearchField, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, Sheet, SheetPage, useDismiss } from '../../components/Overlay'
@@ -11,13 +13,15 @@ import { HStack, IconSlot, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { useAgentModels } from './agent-models'
-import { AgentModelPicker } from './AgentModelPicker'
 import { AgentAccountPicker } from './AgentAccountPicker'
+import { AgentModelPicker } from './AgentModelPicker'
 import { agentChoice, AgentStepBanner, FallbacksRow } from './Fallbacks'
 import { errorText, isValid, lastPathComponent, normalized, useFollowSaved, usePlugins, type Plugins } from './drafts'
 import { FormSheet } from '../marketplace/pieces'
 import { SkillSheet, type SkillRef } from '../marketplace/SkillSheet'
 import { AnchoredPanel, AutoTextArea, AvatarPicker, Field, SwitchRow } from './parts'
+import { NetworkSwitches } from './NetworkSwitches'
+import { ProactiveCheckIns } from './ProactiveCheckIns'
 import './bots.css'
 import { useTr } from '../../lib/use-language'
 
@@ -157,44 +161,27 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       </Field>
     </>
   )
-  const model = [
+  const ownRest = saved ? restOf(saved, draft.backend, Date.now()) : null
+  // An account (its own agent sign-in) belongs to one agent, so another agent starts on the default one.
+  const account = (
     <AgentAccountPicker key="account" backend={draft.backend} selection={draft.account} online={store.connection.kind === 'online'}
       contextKey={JSON.stringify([store.contextId, store.computer.id, draft.id ?? 'new'])} load={() => store.agentAccounts(draft.backend)}
-      authenticate={() => store.authenticateAgentAccount(draft.backend)} onChange={(account) => onChange((d) => ({ ...d, account, model: null, modelOptions: {} }))} />,
-    <AgentModelPicker key="model" backend={draft.backend} models={models} selection={draft.model} onChange={setModel} options={draft.modelOptions ?? {}} onOptionsChange={setModelOptions} />,
-    (draft.backend !== 'custom' && models.catalog?.fastMode) || draft.fastMode || (saved?.backend === draft.backend && fastModeShown(saved)) ? (
-      // Shown while the agent offers it (its model list, or the bot's own sessions), or while it's on.
-      <div key="fast" className="fade-in">
-        <SwitchRow
-          title="Fast mode"
-          detail={(saved && fastModeRefusal(saved)) ?? 'Faster replies for more usage, on models that offer it.'}
-          on={draft.fastMode ?? false}
-          onChange={(on) => set('fastMode', on)}
-        />
-      </div>
-    ) : null,
-  ]
-
-  const ownRest = saved ? restOf(saved, draft.backend, Date.now()) : null
+      authenticate={() => store.authenticateAgentAccount(draft.backend)}
+      onChange={(id) => onChange((d) => (d.account === id ? d : { ...d, account: id, model: null, modelOptions: {} }))} />
+  )
   const agent = (
     <VStack key="agent" gap={8}>
-      <ValueRow label="Agent" detail={ownRest ? restLine(ownRest, Date.now()) : null}>
-        <ChoicePicker
-          selection={draft.backend}
-          options={[...backends.map(agentChoice), { id: 'custom', label: 'Custom command', leading: <AgentIcon registry="custom" size={14} /> }]}
-          onChange={(id) => onChange((d) => d.backend === id ? d : { ...withBackend(d, id), account: null, model: null, modelOptions: {} })}
-        />
-      </ValueRow>
-      {backend && !backend.available ? <Text size="caption" tone="attention">{backend.installHint}</Text> : null}
-      {draft.backend === 'custom' ? (
-        <input
-          className="field-box fade-in bot-command"
-          value={draft.command ?? ''}
-          placeholder="ACP command, e.g. my-agent --acp"
-          spellCheck={false}
-          onChange={(e) => set('command', e.target.value || null)}
-        />
-      ) : null}
+      <AgentModelPicker backend={draft.backend} models={models} selection={draft.model}
+        onChange={setModel} options={draft.modelOptions ?? {}} onOptionsChange={setModelOptions}
+        agents={[...backends.map(agentChoice), { id: 'custom', label: 'Custom command', leading: <AgentIcon registry="custom" size={14} /> }]}
+        onAgentChange={(id) => onChange((d) => (d.backend === id ? d : { ...withBackend(d, id), account: null }))} fast={draft.fastMode ?? false}
+        fastControl={((draft.backend !== 'custom' && models.catalog?.fastMode) || draft.fastMode || (saved?.backend === draft.backend && fastModeShown(saved))) ?
+          <SwitchRow title="Fast mode" detail={saved ? fastModeRefusal(saved) : null} on={draft.fastMode ?? false} onChange={(on) => set('fastMode', on)} /> : null}>
+        {ownRest && <Text size="caption" tone="secondary">{restLine(ownRest, Date.now())}</Text>}
+        {backend && !backend.available && <Text size="caption" tone="attention">{backend.installHint}</Text>}
+        {draft.backend === 'custom' && <input className="field-box bot-command" value={draft.command ?? ''} placeholder="ACP command, e.g. my-agent --acp" spellCheck={false} onChange={(e) => set('command', e.target.value || null)} />}
+      </AgentModelPicker>
+      {account}
     </VStack>
   )
   // While the bot runs on a fallback, the Agent card starts with it.
@@ -219,7 +206,6 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
           <CardSection title="Agent">
             {step}
             {agent}
-            {model}
             {fallbacks}
           </CardSection>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
@@ -234,7 +220,11 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
         <CardSection title="Profile">
           <ValueRow label="Avatar">
             <button ref={avatarRef} className="avatar-button small" title="Edit Bot avatar" aria-label="Edit Bot avatar" onClick={() => setPickingAvatar((p) => !p)}>
-              <CharacterAvatar shape={draft.avatarShape} color={draft.avatarColor} size={24} />
+              {isRobotLook(draft.avatarLook) ? (
+                <RobotAvatar look={draft.avatarLook!} color={draft.avatarColor} size={24} />
+              ) : (
+                <CharacterAvatar shape={draft.avatarShape} color={draft.avatarColor} size={24} />
+              )}
             </button>
             <AnchoredPanel open={pickingAvatar} onClose={() => setPickingAvatar(false)} anchor={avatarRef}>
               <div className="avatar-picker-panel">
@@ -257,7 +247,6 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             <Text truncate>{store.hostName}</Text>
           </ValueRow>
           {part === 'all' ? agent : null}
-          {part === 'all' ? model : null}
           {part === 'all' ? fallbacks : null}
           <ValueRow
             label="Workspace"
@@ -324,15 +313,25 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             />
           ) : null}
           {/* Only from a host that has it (its bots say). */}
-          {part === 'all' && [...store.bots.values()].some((b) => b.manageTeam !== null) ? (
+          {[...store.bots.values()].some((b) => b.manageTeam !== null) ? (
             <SwitchRow
               title="Manage the team"
-              detail="Let this bot create bots and change its own setup and the bots it created. The bots it creates can too."
+              detail="Let this bot create bots and change any bot's setup, its own included. The bots it creates can too."
               on={draft.manageTeam ?? false}
               onChange={(on) => set('manageTeam', on)}
             />
           ) : null}
+          <NetworkSwitches draft={draft} set={set} />
         </CardSection>
+
+        <ProactivePolicySection
+          avatarColorId={draft.avatarColor}
+          avatarLook={draft.avatarLook ?? undefined}
+          onChangeLook={(look) => set('avatarLook', look ?? null)}
+          onApplyRoleTemplate={(tpl) => onChange((d) => ({ ...d, description: draft.description?.trim() ? draft.description : tpl.standingInstructions, avatarLook: tpl.avatarLook, avatarColor: tpl.avatarColor }))}
+        />
+
+        <ProactiveCheckIns settings={draft.proactive} onChange={(next) => set('proactive', next)} />
 
         <PluginToggles
           title="Connectors"

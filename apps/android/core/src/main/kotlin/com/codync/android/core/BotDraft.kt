@@ -1,6 +1,7 @@
 package com.codync.android.core
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -14,6 +15,9 @@ data class BotDraft(
     val description: String = "",
     val avatarColor: String = AVATAR_COLORS.random(),
     val avatarShape: String = AVATAR_SHAPES.random(),
+    val avatarLook: String? = null,
+    val actionRules: Map<String, String> = emptyMap(),
+    val proactive: ProactiveSettings? = null,
     val backend: String = "claude",
     val command: String? = null,
     val cwd: String = "",
@@ -42,6 +46,9 @@ data class BotDraft(
     val backgroundModel: String? = null,
     /** Null where the host has none, so it isn't sent. */
     val personality: Personality? = null,
+    /** Null where the host has none, or on a new bot, so it isn't sent. */
+    val offeredToNetwork: Boolean? = null,
+    val reachableByAssistants: Boolean? = null,
 ) {
     /** A saved bot keeps a name; only a new one goes without (the host names it after its first conversations). */
     val isValid: Boolean get() = name.isNotBlank()
@@ -64,18 +71,28 @@ data class BotDraft(
         val (mine, old, new) = listOf(this, base, fresh).map { WireJson.encodeToJsonElement(it).jsonObject }
         return WireJson.decodeFromJsonElement(JsonObject(mine.mapValues { (key, value) -> if (value == old[key]) new.getValue(key) else value }))
     }
-    /** A template carries the bot's setup, not this computer's specifics (its account, team management, fallbacks). */
-    fun template(): String = JsonObject(body().filterKeys { it !in setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks") }).toString()
+    /**
+     * A template carries the bot's setup, not this computer's specifics (its account, team management,
+     * fallbacks) or who reaches it on the network: readable JSON, keys sorted as on iOS.
+     */
+    fun template(): String = TemplateJson.encodeToString(JsonObject.serializer(),
+        JsonObject(body().filterKeys { it !in TEMPLATE_SKIPS }.toSortedMap()))
 
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "verifyCommand", "backgroundModel", "personality")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "personality")
+        /** Who reaches a bot belongs to its computer, not its setup, and neither do this computer's specifics. */
+        private val TEMPLATE_SKIPS =
+            setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks", "offeredToNetwork", "reachableByAssistants")
+        private val TemplateJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
+            bot.avatarLook, bot.actionRules, bot.proactive,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
-            bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks, bot.verifyCommand, bot.backgroundModel, bot.personality)
+            bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks,
+            bot.verifyCommand, bot.backgroundModel, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants)
     }
 }

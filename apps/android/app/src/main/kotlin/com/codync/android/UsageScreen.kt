@@ -36,6 +36,7 @@ import com.codync.android.core.LinkState
 import com.codync.android.core.UsageProvider
 import com.codync.android.core.UsageReport
 import com.codync.android.core.WeekSummary
+import com.codync.android.core.UsageWindow
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 import java.time.Instant
@@ -68,7 +69,7 @@ import kotlin.math.roundToInt
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 for (provider in report.providers) key(provider.id) { ProviderCard(provider) }
                 summary?.takeIf { it.activeBots > 0 }?.let { WeekCard(it) }
-                if (report.providers.isEmpty()) EmptyUsage("No usage yet", "Your computer reads the limits from Claude Code and Codex.")
+                if (report.providers.isEmpty()) EmptyUsage("No usage yet", "Your computer reads plan limits from the agents installed on it.")
             }
         }
     }
@@ -113,6 +114,7 @@ import kotlin.math.roundToInt
             Text(provider.name, Modifier.weight(1f), style = Type.subheadline.semibold, color = Palette.text)
             IconButton(if (collapsed) "Expand" else "Collapse", "chevron.up", Modifier.rotate(turn)) { collapsed = !collapsed }
         }
+        provider.statusLabel?.let { Text(tr(it), style = Type.caption, color = Palette.secondary) }
         provider.tightest?.let { top ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row {
@@ -128,7 +130,7 @@ import kotlin.math.roundToInt
             exit = fadeOut(Motion.fade()) + shrinkVertically(Motion.layoutSize)) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (window in provider.windows) {
-                    DetailRow(tr(window.title), percent(window.percent))
+                    DetailRow(tr(window.title), reading(window))
                     val reset = window.resetsShort()
                     if (reset != null) DetailRow(tr("Resets"), resetLine(reset))
                 }
@@ -138,6 +140,8 @@ import kotlin.math.roundToInt
         }
     }
 }
+
+private fun reading(window: UsageWindow) = window.text?.takeIf { it.isNotBlank() } ?: percent(window.percent)
 
 private fun percent(value: Double?) = value?.takeIf { it.isFinite() }?.let { "${it.roundToInt()}%" } ?: "—"
 

@@ -50,37 +50,6 @@ textarea.field-box {
   min-width: 0;
 }
 
-/* The model row and its options (AgentModelPicker). */
-.model-picker-label {
-  white-space: nowrap;
-}
-/* Loading and refresh share one fixed slot. */
-.model-picker-slot {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-}
-.model-picker-slot > * {
-  grid-area: 1 / 1;
-}
-.model-picker-refresh {
-  transition: opacity var(--fade);
-}
-.model-picker-refresh.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-.model-picker-input {
-  width: 142px;
-  max-width: 100%;
-  min-width: 0;
-  text-align: right;
-  color: var(--text);
-  user-select: text;
-}
-
 /* Fallbacks in the Agent card (Fallbacks.tsx). */
 .fallback-switch-back {
   flex: none;
@@ -177,7 +146,7 @@ textarea.field-box {
 
 /* New bot and new group chat (NewBotView): the face, a centered name, the choices, then the buttons. */
 .create-sheet {
-  width: 400px;
+  width: 440px;
 }
 .create-body {
   flex: 1 1 auto;
@@ -205,6 +174,27 @@ textarea.field-box {
 }
 .create-member-name {
   max-width: 100%;
+}
+.create-fields {
+  width: 100%;
+}
+.create-fields .field-box {
+  background: var(--field);
+}
+/* A ready-made starting point: its face, name and what it does. */
+.create-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-l);
+  background: var(--field);
+  text-align: left;
+  transition: background-color var(--hover);
+}
+.create-suggestion:hover {
+  background: rgba(var(--text-rgb), 0.1);
 }
 .create-footer {
   padding: 12px 20px 20px;
@@ -375,10 +365,6 @@ button.member-row:hover {
 .member-row.removable:hover > :last-child,
 .member-row.removable:focus-within > :last-child {
   opacity: 1;
-}
-.model-picker-pill {
-  min-width: 0;
-  max-width: 160px;
 }
 .workspace-pill {
   gap: 6px;

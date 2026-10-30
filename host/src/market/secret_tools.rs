@@ -9,6 +9,7 @@ use crate::egress::Policy;
 use crate::hub::Hub;
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 use std::time::Duration;
 
 const API_TIMEOUT: Duration = Duration::from_secs(30);
@@ -38,6 +39,13 @@ pub fn tools() -> Vec<Value> {
             "header":{"type":"string","description":"For auth=header, e.g. X-Api-Key."},
             "username":{"type":"string","description":"For auth=basic."},
             "reason":{"type":"string"}},"required":["name","origin","auth","reason"]}}),
+        json!({"name":"request_secret","description":"Alias for request_api_key: ask the user for an API key or token on a secure card without exposing the value to the model.","inputSchema":{"type":"object","properties":{
+            "name":{"type":"string"},
+            "origin":{"type":"string"},
+            "auth":{"type":"string","enum":["bearer","header","basic"]},
+            "header":{"type":"string"},
+            "username":{"type":"string"},
+            "reason":{"type":"string"}},"required":["name","origin","reason"]}}),
         json!({"name":"request_command_variable","description":variable,"inputSchema":{"type":"object","properties":{
             "name":{"type":"string","description":"Letters, digits, - or _ (e.g. netbird-setup-key)."},
             "reason":{"type":"string"}},"required":["name","reason"]}}),
@@ -47,13 +55,28 @@ pub fn tools() -> Vec<Value> {
             "url":{"type":"string"},
             "headers":{"type":"object","additionalProperties":{"type":"string"}},
             "body":{"description":"A string, or JSON sent as application/json."}},"required":["secret","url"]}}),
+        json!({"name":"secret_request","description":"Alias for api_request: proxy an HTTPS request attaching a saved secret out-of-band and redacting any leaked forms from the response.","inputSchema":{"type":"object","properties":{
+            "secret":{"type":"string"},
+            "method":{"type":"string","enum":["GET","POST","PUT","PATCH","DELETE","HEAD"]},
+            "url":{"type":"string"},
+            "headers":{"type":"object","additionalProperties":{"type":"string"}},
+            "body":{}},"required":["secret","url"]}}),
         json!({"name":"run_with_secrets","description":"Run a shell command in your working folder with your command variables in its environment (60 s limit). Secret values are blanked out of the output.","inputSchema":{"type":"object","properties":{
             "command":{"type":"string"}},"required":["command"]}}),
     ]
 }
 
 pub fn handles(name: &str) -> bool {
-    matches!(name, "list_secrets" | "request_api_key" | "request_command_variable" | "api_request" | "run_with_secrets")
+    matches!(
+        name,
+        "list_secrets"
+            | "request_api_key"
+            | "request_secret"
+            | "request_command_variable"
+            | "api_request"
+            | "secret_request"
+            | "run_with_secrets"
+    )
 }
 
 pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
@@ -62,11 +85,12 @@ pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Valu
             let items: Vec<Value> = bot_secrets::for_bot(&hub.store, bot)?.iter().map(BotSecret::public).collect();
             Ok(json!({"items": items}))
         }
-        "request_api_key" => {
+        "request_api_key" | "request_secret" => {
             let secret = text(args, "name")?;
             let origin = bot_secrets::origin(text(args, "origin")?)?;
             crate::egress::check(Policy::Public, &origin).await?;
-            let auth = match text(args, "auth")? {
+            let auth_kind = args["auth"].as_str().unwrap_or("bearer");
+            let auth = match auth_kind {
                 "bearer" => Auth::Bearer,
                 "header" => Auth::Header { header: text(args, "header")?.trim().to_owned() },
                 "basic" => Auth::Basic { username: text(args, "username")?.trim().to_owned() },
@@ -76,7 +100,7 @@ pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Valu
             ask(hub, bot, secret, &Usage::Http { origin, auth }, args)
         }
         "request_command_variable" => ask(hub, bot, text(args, "name")?, &Usage::Command, args),
-        "api_request" => api_request(hub, bot, args).await,
+        "api_request" | "secret_request" => api_request(hub, bot, args).await,
         "run_with_secrets" => run(hub, bot, args).await,
         _ => bail!("Unknown secret tool"),
     }
@@ -113,9 +137,22 @@ pub fn save_from_card(hub: &Hub, request: &Value, value: &str) -> Result<String>
     Ok(format!("[Secret `{}` saved securely; its value is never shown to you. {how}. Continue the task.]", saved.name))
 }
 
-/// The forms of `value` to blank out of what its use returns: as is, JSON-escaped, and for basic
-/// auth its base64 encoding.
+fn url_encode_component(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for b in value.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')') {
+            out.push(b as char);
+        } else {
+            let _ = write!(out, "%{b:02X}");
+        }
+    }
+    out
+}
+
+/// The forms of `value` to blank out of what its use returns (Idea 36):
+/// plain, JSON-escaped, URL-encoded (`encodeURIComponent`), Base64-encoded, and for basic auth `base64(user:pass)`.
 fn secret_forms(usage: &Usage, value: &str) -> Vec<String> {
+    use base64::Engine as _;
     let mut forms = vec![value.to_owned()];
     if let Ok(quoted) = serde_json::to_string(value) {
         let escaped = &quoted[1..quoted.len() - 1];
@@ -123,10 +160,18 @@ fn secret_forms(usage: &Usage, value: &str) -> Vec<String> {
             forms.push(escaped.to_owned());
         }
     }
+    let url_encoded = url_encode_component(value);
+    if url_encoded != value {
+        forms.push(url_encoded);
+    }
     if let Usage::Http { auth: Auth::Basic { username }, .. } = usage {
-        use base64::Engine as _;
         forms.push(base64::engine::general_purpose::STANDARD.encode(format!("{username}:{value}")));
     }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(value);
+    if b64.len() >= 4 {
+        forms.push(b64);
+    }
+    forms.sort_by_key(|s| std::cmp::Reverse(s.len()));
     forms
 }
 
@@ -263,11 +308,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn secrets_are_blanked_out_with_their_basic_encoding() {
+    fn secrets_are_blanked_out_in_plain_urlencoded_base64_and_basic_forms() {
         let usage = Usage::Http { origin: "https://a.example".into(), auth: Auth::Basic { username: "me".into() } };
-        let forms = secret_forms(&usage, "hunter2");
-        let out = redact("key=hunter2 auth=Basic bWU6aHVudGVyMg==", &forms);
-        assert_eq!(out, "key=[secret] auth=Basic [secret]");
+        let forms = secret_forms(&usage, "sec+ret/1");
+        let out = redact("plain=sec+ret/1 url=sec%2Bret%2F1 b64=c2VjK3JldC8x basic=bWU6c2VjK3JldC8x", &forms);
+        assert_eq!(out, "plain=[secret] url=[secret] b64=[secret] basic=[secret]");
         assert_eq!(redact("a b", &["a".into()]), "a b");
     }
 

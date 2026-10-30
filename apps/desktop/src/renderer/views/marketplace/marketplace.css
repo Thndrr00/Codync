@@ -433,15 +433,6 @@ textarea.market-field {
 .market-heading-titles {
   white-space: nowrap;
 }
-.market-computer-switch {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-size: var(--text-caption);
-  font-weight: 400;
-  color: var(--secondary);
-}
 /* "N installed": the first connectors' logos, overlapping, then the count. */
 .market-installed {
   display: flex;
@@ -471,4 +462,14 @@ textarea.market-field {
 /* An agent's logo in a sheet's title row, on the same tile as a symbol. */
 .modal-header > .agent-tile {
   background: var(--field);
+}
+/* A catalog team: the coordinator in front of its first teammate. */
+.catalog-team-face {
+  width: 46px;
+  height: 46px;
+  justify-content: center;
+}
+.catalog-team-face > :first-child:not(:last-child) {
+  margin-right: -12px;
+  opacity: 0.85;
 }

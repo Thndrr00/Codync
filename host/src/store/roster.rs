@@ -1,6 +1,7 @@
 //! Bounded roster queries share the transcript's visible-message rules.
 
 use super::entries::row_entry;
+use super::visibility::PUBLIC;
 use super::{Entry, Store};
 use crate::LockExt;
 use anyhow::Result;
@@ -12,13 +13,29 @@ const VISIBLE: &str = "(kind = 'user' OR (kind = 'agent' AND json_extract(data, 
 
 impl Store {
     pub fn roster_search(&self, bots: &[String], terms: &[String], before: i64, limit: i64) -> Result<Vec<Entry>> {
+        self.roster_search_scoped(bots, terms, before, limit, super::SearchScope::All)
+    }
+
+    pub fn roster_search_scoped(
+        &self,
+        bots: &[String],
+        terms: &[String],
+        before: i64,
+        limit: i64,
+        scope: super::SearchScope,
+    ) -> Result<Vec<Entry>> {
         let mut sql = format!(
             "SELECT {COLS} FROM entries WHERE bot_id IN (SELECT value FROM json_each(?1))
-             AND seq < ?2 AND {VISIBLE}
+             AND seq < ?2 AND {PUBLIC} AND {VISIBLE}
              AND EXISTS (SELECT 1 FROM bots WHERE bots.id = entries.bot_id AND deleted = 0
                          AND COALESCE(json_extract(config, '$.hidden'), 0) = 0)"
         );
         let mut args: Vec<rusqlite::types::Value> = vec![serde_json::to_string(bots)?.into(), before.into()];
+        match scope {
+            super::SearchScope::All => {}
+            super::SearchScope::Main => sql.push_str(" AND thread_id IS NULL"),
+            super::SearchScope::Threads => sql.push_str(" AND thread_id IS NOT NULL"),
+        }
         for term in terms {
             args.push(term.to_lowercase().into());
             write!(
@@ -38,7 +55,7 @@ impl Store {
     pub fn roster_preview(&self, bot: &str) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut statement = c.prepare(&format!(
-            "SELECT {COLS} FROM entries WHERE bot_id = ?1 AND thread_id IS NULL AND {VISIBLE}
+            "SELECT {COLS} FROM entries WHERE bot_id = ?1 AND thread_id IS NULL AND {PUBLIC} AND {VISIBLE}
              ORDER BY seq DESC LIMIT 3"
         ))?;
         let mut rows = statement.query_map([bot], row_entry)?.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -48,12 +65,13 @@ impl Store {
 
     /// A window around a search hit in its own lane, plus its thread root.
     pub fn message_context(&self, entry: &Entry) -> Result<Vec<Entry>> {
+        anyhow::ensure!(!super::is_internal(&entry.data), "message is internal");
         let c = self.db.locked();
         let mut statement = c.prepare(&format!(
-            "SELECT {COLS} FROM entries WHERE id IN (
-               SELECT id FROM (SELECT id FROM entries WHERE bot_id = ?1 AND thread_id IS ?2 AND seq <= ?3
+            "SELECT {COLS} FROM entries WHERE {PUBLIC} AND id IN (
+               SELECT id FROM (SELECT id FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS ?2 AND seq <= ?3
                                ORDER BY seq DESC LIMIT 20)
-               UNION SELECT id FROM (SELECT id FROM entries WHERE bot_id = ?1 AND thread_id IS ?2 AND seq > ?3
+               UNION SELECT id FROM (SELECT id FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND thread_id IS ?2 AND seq > ?3
                                      ORDER BY seq LIMIT 20)
                UNION SELECT id FROM entries WHERE bot_id = ?1 AND id = ?2) ORDER BY seq"
         ))?;
@@ -93,6 +111,14 @@ mod tests {
         let terms = vec!["NEEDLE".into()];
         let hits = s.roster_search(&ids, &terms, i64::MAX, 1).unwrap();
         assert_eq!(hits[0].id, reply.id);
+        let main_hits = s.roster_search_scoped(&ids, &terms, i64::MAX, 1, super::super::SearchScope::Main).unwrap();
+        assert_eq!(main_hits[0].id, root.id, "scope is applied before LIMIT, not after paging");
+        let thread_hits =
+            s.roster_search_scoped(&ids, &terms, i64::MAX, 1, super::super::SearchScope::Threads).unwrap();
+        assert_eq!(thread_hits[0].id, reply.id);
+        assert!(
+            s.roster_search_scoped(&ids, &terms, reply.seq, 1, super::super::SearchScope::Threads).unwrap().is_empty()
+        );
         assert_eq!(s.roster_search(&ids, &terms, reply.seq, 1).unwrap()[0].id, root.id);
         let context = s.message_context(&reply).unwrap();
         assert!(context.iter().any(|e| e.id == root.id));

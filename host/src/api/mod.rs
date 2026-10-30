@@ -2,7 +2,10 @@
 //! apps and helpers (loopback + `Authorization: Bearer <token>`), and `GET /channel`, the
 //! direct end-to-end encrypted channel phones use (see `channel`).
 
+mod apps_bridge;
+pub mod apps_runtime;
 mod bots;
+mod catalog;
 mod computer_activity;
 pub mod devices;
 mod documents;
@@ -11,10 +14,12 @@ mod files;
 mod host;
 mod http;
 mod marketplace;
+mod network;
 mod origin;
 mod rebinding;
 mod remote;
 mod roster;
+mod saved_searches;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
@@ -78,6 +83,9 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 }
 
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+    if matches!(method, "savedSearches" | "saveSearch" | "deleteSavedSearch") {
+        return saved_searches::call(hub, caller, method, &b);
+    }
     if crate::research::METHODS.contains(&method) {
         if method == "setResearchKey" && !matches!(caller, Caller::Local) {
             return Err(Forbidden.into());
@@ -150,7 +158,15 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };
-    let b = match bots::call(hub, method, b).await? {
+    let b = match catalog::call(hub, method, b).await? {
+        ControlFlow::Break(v) => return Ok(v),
+        ControlFlow::Continue(b) => b,
+    };
+    let b = match network::call(hub, method, b).await? {
+        ControlFlow::Break(v) => return Ok(v),
+        ControlFlow::Continue(b) => b,
+    };
+    let b = match bots::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };

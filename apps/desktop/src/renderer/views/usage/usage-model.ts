@@ -1,5 +1,6 @@
 import type { UsageProvider, UsageWindow } from '@shared/models'
 import { isDark } from '../../lib/theme'
+export { providerRegistry, windowTitle, usageStatus } from '../../lib/usage-presentation'
 
 /** Claude keeps its orange; everyone else is ink, like the rest of the app. */
 export function providerTint(id: string) {
@@ -9,19 +10,18 @@ export function providerTint(id: string) {
 /** CSS color for views (follows the scheme by itself). */
 export const providerTintCSS = (id: string) => (id === 'claude' ? '#D97757' : 'var(--accent)')
 
-/** ACP registry id of the provider's agent, for its logo. */
-export const providerRegistry = (id: string) => (['claude', 'codex'].includes(id) ? `${id}-acp` : id)
-
 /** The character that stands for this provider. */
 export const mascotShape = (id: string) => (id === 'codex' ? 'hex' : 'blob')
 
-export const tightest = (p: UsageProvider) => p.windows.reduce<UsageWindow | null>((a, w) => (!a || w.percent > a.percent ? w : a), null)
+/** A plan window. Notes (today's tokens, a dollar balance) are not limits. */
+export const isLimit = (w: UsageWindow) => !w.text
 
-/** "Session" for the 5-hour window, "Opus" for "Weekly · Opus", else the label. */
-export function windowTitle(w: UsageWindow) {
-  if (w.label === '5-hour') return 'Session'
-  const model = w.label.split(' · ')[1]
-  return model ?? w.label
+export const tightest = (p: UsageProvider) =>
+  p.windows.filter(isLimit).reduce<UsageWindow | null>((a, w) => (!a || w.percent > a.percent ? w : a), null)
+
+/** The percent, or the note when this window isn't a share of a cap. */
+export function windowReading(w: UsageWindow) {
+  return w.text || `${Math.round(w.percent)}%`
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

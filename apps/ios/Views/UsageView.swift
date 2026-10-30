@@ -20,7 +20,7 @@ struct UsageView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "chart.bar").font(.system(size: 40)).foregroundStyle(Palette.tertiary)
                         Text(L10n.tr("No usage yet")).font(.title3.weight(.semibold)).foregroundStyle(Palette.text)
-                        Text(L10n.tr("Your computer reads the limits from Claude Code and Codex."))
+                        Text(L10n.tr("Your computer reads plan limits from the agents installed on it."))
                             .font(.subheadline).foregroundStyle(Palette.secondary)
                     }
                     .multilineTextAlignment(.center)
@@ -56,6 +56,9 @@ private struct ProviderCard: View {
                 .rotationEffect(.degrees(collapsed ? 180 : 0))
             }
 
+            if let status = provider.statusLabel {
+                Text(L10n.tr(status)).font(.caption).foregroundStyle(Palette.secondary)
+            }
             if let top = provider.tightest {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
@@ -76,7 +79,7 @@ private struct ProviderCard: View {
             if !collapsed {
                 VStack(spacing: 8) {
                     ForEach(provider.windows) { w in
-                        row(L10n.tr(w.title), "\(Int(w.percent.rounded()))%")
+                        row(L10n.tr(w.title), w.text ?? "\(Int(w.percent.rounded()))%")
                         if let reset = w.resetsShort() { row(L10n.tr("Resets"), L10n.resetLine(reset)) }
                     }
                     row("Source", source)
@@ -95,6 +98,7 @@ private struct ProviderCard: View {
         case "statusline": "Claude Code status line"
         case "agent": "A running bot"
         case "sessions": "Codex sessions"
+        case "antigravity": "Antigravity quota report"
         default: provider.source
         }
     }

@@ -6,6 +6,7 @@
 //! client's catch-up) is capped per bot, and the history search runs through `spawn_blocking`.
 
 mod analytics;
+pub mod apps;
 mod bots;
 mod computer_activity;
 mod devices;
@@ -15,20 +16,26 @@ mod inflight;
 pub(crate) mod mcp_policies;
 mod memory;
 mod model;
+pub mod open_items;
 mod research;
 mod roster;
+mod saved_searches;
+pub use saved_searches::{SearchScope, search_terms};
 pub mod runtime;
 mod schema;
 mod setup;
+mod visibility;
+pub use visibility::is_internal;
 pub(crate) mod slack;
 mod week;
 
+pub use apps::{AppLink, AppLinkMode, BotApp};
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use model::{
-    AVATAR_COLORS, AVATAR_SHAPES, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane, Permission, lane_key,
-    message_text, run_session_key,
+    AVATAR_COLORS, AVATAR_SHAPES, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane, Permission,
+    ProactiveSettings, lane_key, message_text, run_session_key,
 };
 
 use crate::LockExt;
@@ -98,6 +105,16 @@ impl Store {
     }
     pub fn with_connection<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
         f(&self.db.locked())
+    }
+
+    /// Saves a row stamped with the next rev, in one transaction: `value` gets the rev and returns what to save.
+    pub fn kv_set_stamped(&self, k: &str, value: impl FnOnce(i64) -> Result<String>) -> Result<()> {
+        let mut c = self.db.locked();
+        let tx = c.transaction()?;
+        let rev = next_rev(&tx)?;
+        tx.execute("INSERT INTO kv(k, v) VALUES(?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2", params![k, value(rev)?])?;
+        tx.commit()?;
+        Ok(())
     }
 }
 

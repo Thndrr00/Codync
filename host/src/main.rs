@@ -6,10 +6,14 @@ mod api;
 mod background;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 mod browser;
+mod budget;
+mod bundle;
 mod chat;
 mod cli;
+mod cloud_cli;
 mod compat;
 mod computer;
+mod doctor;
 mod documents;
 mod egress;
 mod environment;
@@ -17,10 +21,14 @@ mod external;
 mod hub;
 mod market;
 mod mcp;
+mod network;
+mod network_cli;
+mod proactive;
 mod remote;
 mod research;
 mod routines;
 mod screen;
+mod secret_prompt;
 mod sentinel;
 mod service;
 mod shell;
@@ -116,19 +124,9 @@ enum Sub {
         action: Option<AccessAction>,
     },
     /// Show or change the Codync cloud (reach this computer from anywhere).
-    Cloud {
-        #[arg(long, default_value_t = service::DEFAULT_PORT)]
-        port: u16,
-        #[arg(long, conflicts_with = "disable")]
-        enable: bool,
-        #[arg(long)]
-        disable: bool,
-        /// How devices on this computer's account get in: `code` (compare the 6-digit code,
-        /// the default) or `auto` (no check: anyone who gets into the account, or controls
-        /// the cloud, can then add a device).
-        #[arg(long, value_parser = ["code", "auto"])]
-        approval: Option<String>,
-    },
+    Cloud(cloud_cli::CloudArgs),
+    /// Your other computers: create a network, invite them, see who is around.
+    Network(network_cli::NetworkArgs),
     /// Install and start the host as a background service (launchd / systemd --user).
     Install {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
@@ -162,6 +160,13 @@ enum Sub {
     /// downloaded update.
     #[command(hide = true)]
     Compat,
+    /// Check every bot's setup (folder, agent, fallbacks, group members); exits 1 if any can't run.
+    Doctor {
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+        #[arg(long)]
+        json: bool,
+    },
     /// Show whether the host is installed and running.
     Status {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
@@ -311,6 +316,16 @@ enum McpServer {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
         port: u16,
     },
+    /// For a Claude Code, Codex or other agent session on this computer that isn't a Codync bot:
+    /// list the user's bots (here and on their other computers), message one, read its reply.
+    /// Add it to the agent, for example `claude mcp add codync -- codync-host mcp network --name "Claude Code"`.
+    Network {
+        /// How the bots' chats show this agent.
+        #[arg(long, default_value = "Agent")]
+        name: String,
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+    },
     /// Tools of the apps connected through Composio.
     Composio {
         #[arg(long)]
@@ -378,6 +393,8 @@ fn write_token_file(token: &str) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Every TLS connection (the relay, HTTPS) uses aws-lc-rs, also in builds that have ring too.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let cli = Cli::parse();
     match cli.cmd.unwrap_or(Sub::Serve { port: service::DEFAULT_PORT, bind: "0.0.0.0".into() }) {
         Sub::Serve { port, bind } => serve(&bind, port).await,
@@ -411,29 +428,10 @@ async fn main() -> Result<()> {
                 Ok(())
             }
         },
+        Sub::Doctor { port, json } => doctor(port, json).await,
         Sub::Access { port, action } => access(port, action.unwrap_or(AccessAction::List)).await,
-        Sub::Cloud { port, enable, disable, approval } => {
-            if let Some(approval) = approval {
-                local_call(port, "setApproval", json!({ "approval": approval })).await?;
-            }
-            let status = if enable || disable {
-                local_call(port, "setCloud", json!({"enabled": !disable})).await?
-            } else {
-                local_call(port, "cloudStatus", json!({})).await?
-            };
-            let text = |k: &str| status[k].as_str().unwrap_or("-").to_owned();
-            let owner = status["owner"]["email"].as_str().or(status["owner"]["userId"].as_str()).unwrap_or("none");
-            println!(
-                "enabled:    {}\nurl:        {}\nregistered: {}\nconnected:  {}\naccount:    {owner}\napproval:   {}\nlast error: {}",
-                status["enabled"],
-                text("url"),
-                status["registered"],
-                status["connected"],
-                text("approval"),
-                text("lastError"),
-            );
-            Ok(())
-        }
+        Sub::Cloud(args) => cloud_cli::run(args).await,
+        Sub::Network(args) => network_cli::run(args).await,
         Sub::Install { port } => {
             open_store()?;
             // Windows: the shell Claude Code runs status lines in varies (Git Bash, PowerShell), so
@@ -467,7 +465,7 @@ async fn main() -> Result<()> {
             } else if status {
                 update::status()?
             } else if check {
-                update::check().await?
+                update::check()?
             } else if !worker && service::installed() {
                 tokio::task::spawn_blocking(move || update::spawn_worker(port, force)).await??;
                 update::status()?
@@ -584,6 +582,7 @@ async fn main() -> Result<()> {
         Sub::Mcp { server: McpServer::Manage { bot, port } } => mcp::serve(bot, port, mcp::Server::Manage).await,
         Sub::Mcp { server: McpServer::Memory { bot, port } } => mcp::serve(bot, port, mcp::Server::Memory).await,
         Sub::Mcp { server: McpServer::Composio { bot, port } } => mcp::serve(bot, port, mcp::Server::Composio).await,
+        Sub::Mcp { server: McpServer::Network { name, port } } => mcp::serve(name, port, mcp::Server::Network).await,
         Sub::Mcp { server: McpServer::Local { connector, port } } => mcp::serve_local(connector, port).await,
         Sub::Mcp { server: McpServer::Remote { connector, port } } => mcp::serve_remote(connector, port).await,
         Sub::Tui { url, token, port } => {
@@ -623,6 +622,7 @@ async fn serve(bind: &str, port: u16) -> Result<()> {
     tokio::task::spawn_blocking(backends::hydrate_path).await?;
     let hub = hub::Hub::new(store, host_id, identity, token, port);
     hub.start()?;
+    network::start(&hub).await;
     analytics::host_started(&hub, service::started_by_service());
     background::start(&hub);
     tracing::info!(version = env!("CARGO_PKG_VERSION"), bind, port, "codync-host listening");
@@ -672,6 +672,23 @@ async fn shutdown_signal() {
 }
 
 /// Calls the running host's local API (`~/.codync/token` over loopback).
+async fn doctor(port: u16, json: bool) -> Result<()> {
+    let report = local_call(port, "doctor", json!({})).await?;
+    if json {
+        println!("{report}");
+    } else {
+        for f in report["findings"].as_array().into_iter().flatten() {
+            let label = if f["severity"] == "error" { "error  " } else { "warning" };
+            println!("{label}  {}", f["message"].as_str().unwrap_or_default());
+        }
+        println!("Checked {} bots: {} with errors.", report["checked"], report["errors"]);
+    }
+    if report["errors"].as_u64().unwrap_or(0) > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 async fn local_call(port: u16, method: &str, body: serde_json::Value) -> Result<serde_json::Value> {
     let not_running =
         || anyhow::anyhow!("codync-host isn't running here. Start it with `codync-host install` (or `serve`).");

@@ -2,6 +2,8 @@
 mod check;
 pub use check::Checked;
 mod editor;
+mod failed;
+mod idle;
 pub use editor::{ScheduleDraft, preview as schedule_preview};
 pub mod hooks;
 use hooks::Refused;
@@ -12,7 +14,7 @@ mod runner;
 mod schedule;
 mod watch;
 pub use runner::start;
-pub use schedule::Trigger;
+pub use schedule::{Trigger, local_zone};
 
 use crate::{
     LockExt,
@@ -54,6 +56,9 @@ pub struct Routine {
     /// What each `watch` trigger last saw, by trigger position.
     #[serde(default)]
     pub watch: Vec<watch::WatchState>,
+    /// Finished runs in a row that ran nothing that changes anything (`idle.rs`).
+    #[serde(default)]
+    pub idle_runs: u32,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -229,6 +234,10 @@ impl Routines {
             "runs": state.runs.iter().rev().filter(|r| r.bot_id == bot).take(200).collect::<Vec<_>>()})
     }
 
+    pub fn owns(&self, bot: &str, id: &str) -> bool {
+        self.state.locked().routines.iter().any(|r| r.id == id && r.bot_id == bot && !r.deleted)
+    }
+
     pub fn save(&self, hub: &Hub, bot: &str, body: &Value) -> Result<Value> {
         let row = hub
             .store
@@ -272,6 +281,7 @@ impl Routines {
                 },
                 // Same triggers keep what their watches saw; new ones start a fresh baseline.
                 watch: old.as_ref().filter(|o| o.triggers == triggers).map(|o| o.watch.clone()).unwrap_or_default(),
+                idle_runs: 0,
                 triggers,
                 webhook_key: old.as_ref().map_or_else(webhook_key, |r| r.webhook_key.clone()),
                 deleted: false,
@@ -376,8 +386,9 @@ impl Routines {
         })
     }
 
-    /// The routine's webhook: the public URL through the Codync cloud (when it's on), the
-    /// local one, and the key. `rotate` replaces the key first, cutting off the old one.
+    /// The routine's webhook: the public URL through the Codync cloud (when it's on; a private
+    /// relay doesn't deliver them), the local one, and the key. `rotate` replaces the key first,
+    /// cutting off the old one.
     pub fn credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool) -> Result<Value> {
         if rotate {
             self.change(&hub.store, |s| {
@@ -401,7 +412,8 @@ impl Routines {
                 .clone()
         };
         let cloud = hub.cloud.status();
-        let url = crate::remote::cloud::url(&hub.store)
+        let url = crate::remote::cloud::codync_url(hub)
+            .ok()
             .map(|base| format!("{}/v1/hooks/{}/{id}", base.trim_end_matches('/'), hub.identity.computer_id()));
         Ok(json!({
             "url": url,
