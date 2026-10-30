@@ -44,6 +44,36 @@ the command, by the same `approval_rules::evaluate` a real request goes through,
 bot's `permission`), plus `chained` and `allowPassedOver` (an allow rule that matched but was skipped because the
 command runs several). `rules` tests a list that is not saved yet; without it the bot's saved rules are used.
 
+## "Always allow" as a rule
+
+On the computer's clients (desktop and terminal), choosing the agent's `allow_always` option does not answer at once:
+the client asks `proposeRule {entryId}` and shows the rule the host would keep, the card's command (or its title) as the
+pattern and its tool kind, so the person can widen it (`git status*`) before keeping it. `respondPermission` then carries
+`rule`, which the host checks again (`agent/always_rule.rs`): it is refused unless the answer is `allow_always`, when the
+pattern runs several commands (`;`, `&&`, `|`…), when it would allow a command no bot may run (the pattern is tried as it
+is, with each `*` as nothing and as a word), or when it is blank or longer than 500 characters. A saved rule goes at the
+end of the bot's rules and is not added twice. A command that chains others gets no proposal, only "allow once". The phone
+apps do not offer "always allow" when "allow once" is there: a thumb on a phone should not grant a standing permission. The
+notch island answers "always" as before, with no Codync rule.
+
+## Quick rules by kind of action
+
+A bot's `actionRules` (class → allow, ask or block; the role presets store them) are enforced only after the person turns
+on `actionRulesOn`, so rules a preset stored earlier change nothing. They become pattern rules (`*`, one per tool kind) that
+come after the person's own rules, so an own rule always wins, and an allow never approves a chained command:
+
+| Class | Tool kinds |
+| --- | --- |
+| `files` | read, search, edit, delete, move |
+| `shell` | execute |
+| `browse` | fetch |
+
+`browser`, `apps`, `bots` and `routines` are left out: they reach the agent as MCP tools (kind `other`, named in the
+title), so a rule on a kind would hit every MCP tool alike; the connectors' tool policies govern them
+([MCP tool policies](mcp-tool-policies.md)). `testApprovalRule` lists them in `quickNotEnforced`, and the editors say so.
+Desktop and Android edit the three classes and the switch in the approval rules editor; the terminal's sheet has `Q` for the
+switch and `1 2 3` for the classes.
+
 ## Forbidden commands
 
 Some commands no bot may run, in any profile and with any approval setting, `auto` and the future `Full`

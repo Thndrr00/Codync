@@ -3,7 +3,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
-use super::super::app::{Mode, RulesSheet};
+use super::super::app::{Mode, QUICK_CLASSES, RulesSheet};
 use super::super::l10n::tr;
 use super::super::md::truncate;
 use super::buffer::{centered, frame_box, put, restyle, u};
@@ -43,7 +43,7 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
         );
         y += 1;
     }
-    let room = usize::from(inner.bottom().saturating_sub(y)).saturating_sub(5).max(1);
+    let room = usize::from(inner.bottom().saturating_sub(y)).saturating_sub(6).max(1);
     let off = s.sel.saturating_sub(room - 1);
     for (i, rule) in s.rules.iter().enumerate().skip(off).take(room) {
         let selected = i == s.sel;
@@ -64,6 +64,24 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
     }
     let bottom = inner.bottom();
     let test_y = bottom.saturating_sub(4);
+    if let Some(on) = s.quick_on {
+        let state = if on { "on" } else { "off" };
+        let classes: Vec<String> = QUICK_CLASSES
+            .iter()
+            .map(|(class, label)| {
+                format!("{label}: {}", s.policies.get(*class).and_then(|p| p.as_str()).unwrap_or("-"))
+            })
+            .collect();
+        let line = format!("{} {state} · {}", tr("Quick rules"), classes.join(" · "));
+        put(
+            buf,
+            inner.x,
+            test_y - 1,
+            inner.width,
+            &truncate(&line, usize::from(inner.width)),
+            t.secondary.patch(t.panel),
+        );
+    }
     let tester = if s.mode == Mode::Test { s.editor.text.as_str() } else { "" };
     let prompt =
         if s.mode == Mode::Test { format!("{} {tester}", tr("Try:")) } else { tr("Try a command: T").into_owned() };
@@ -85,6 +103,9 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
         Mode::Pattern => "↵ keep the pattern · esc cancel",
         Mode::Test => "↵ test · esc back",
         Mode::List if s.saving => "saving…",
+        Mode::List if s.quick_on.is_some() => {
+            "a add · ↵ edit · d del · K J move · m t · Q quick on/off · 1 2 3 · T try · ^s save"
+        }
         Mode::List => "a add · ↵ edit · d delete · K J move · m decision · t tool · T try · ^s save · esc close",
     };
     put(buf, inner.x, bottom - 1, inner.width, &truncate(&tr(footer), usize::from(inner.width)), t.dim.patch(t.panel));

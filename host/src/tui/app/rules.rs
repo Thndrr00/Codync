@@ -26,6 +26,9 @@ pub enum Mode {
     Test,
 }
 
+/// The quick rules approvals enforce: wire class and label (the host's table, `approval_rules::QUICK_KINDS`).
+pub const QUICK_CLASSES: [(&str, &str); 3] = [("files", "files"), ("shell", "shell"), ("browse", "web")];
+
 pub struct RulesSheet {
     pub bot_id: String,
     pub bot_name: String,
@@ -37,6 +40,10 @@ pub struct RulesSheet {
     pub answer: Option<String>,
     pub saving: bool,
     pub error: Option<String>,
+    /// Whether the quick rules are enforced; `None` against a host that has none.
+    pub quick_on: Option<bool>,
+    /// Every class's policy as the bot has it; only the three in [`QUICK_CLASSES`] are edited here.
+    pub policies: serde_json::Map<String, Value>,
 }
 
 impl RulesSheet {
@@ -61,7 +68,31 @@ impl RulesSheet {
             answer: None,
             saving: false,
             error: None,
+            quick_on: None,
+            policies: serde_json::Map::new(),
         }
+    }
+
+    /// The same sheet with the bot's quick rules.
+    pub fn with_quick(mut self, on: Option<bool>, policies: serde_json::Map<String, Value>) -> Self {
+        self.quick_on = on;
+        self.policies = policies;
+        self
+    }
+
+    /// Class `at` (0 to 2 of [`QUICK_CLASSES`]) goes to its next policy: not set, allow, ask, block, not set.
+    pub fn cycle_quick(&mut self, at: usize) {
+        let Some((class, _)) = QUICK_CLASSES.get(at) else { return };
+        let next = match self.policies.get(*class).and_then(Value::as_str) {
+            None => Some("allow"),
+            Some("allow") => Some("ask"),
+            Some("ask") => Some("block"),
+            _ => None,
+        };
+        match next {
+            Some(policy) => self.policies.insert((*class).to_owned(), policy.into()),
+            None => self.policies.remove(*class),
+        };
     }
 
     /// The rules as the host reads them: blank patterns dropped, the rest trimmed.
@@ -140,7 +171,8 @@ impl App {
             self.flash("Pick a bot first");
             return;
         };
-        let sheet = RulesSheet::new(&bot.id, &bot.name, &bot.approval_rules);
+        let sheet = RulesSheet::new(&bot.id, &bot.name, &bot.approval_rules)
+            .with_quick(bot.action_rules_on, bot.action_rules.clone());
         self.overlays.push(Overlay::Rules(Box::new(sheet)));
     }
 
@@ -173,7 +205,11 @@ impl App {
             },
             Mode::Test => match k.code {
                 KeyCode::Enter if !s.editor.text.trim().is_empty() => {
-                    let body = json!({"botId": s.bot_id, "command": s.editor.text.trim(), "rules": s.body()});
+                    let mut body = json!({"botId": s.bot_id, "command": s.editor.text.trim(), "rules": s.body()});
+                    if let Some(on) = s.quick_on {
+                        body["actionRulesOn"] = on.into();
+                        body["actionRules"] = Value::Object(s.policies.clone());
+                    }
                     self.call("testApprovalRule", body, After::RuleTest);
                 }
                 KeyCode::Esc => s.mode = Mode::List,
@@ -187,7 +223,11 @@ impl App {
                 KeyCode::Char('s') if k.modifiers.contains(KeyModifiers::CONTROL) => {
                     s.saving = true;
                     s.error = None;
-                    let body = json!({"id": s.bot_id, "approvalRules": s.body()});
+                    let mut body = json!({"id": s.bot_id, "approvalRules": s.body()});
+                    if let Some(on) = s.quick_on {
+                        body["actionRulesOn"] = on.into();
+                        body["actionRules"] = Value::Object(s.policies.clone());
+                    }
                     self.call("updateBot", body, After::RulesSaved);
                 }
                 KeyCode::Down | KeyCode::Char('j') => s.sel = (s.sel + 1).min(s.rules.len().saturating_sub(1)),
@@ -205,6 +245,10 @@ impl App {
                 KeyCode::Char('d' | 'x') if !s.rules.is_empty() => {
                     s.rules.remove(s.sel);
                     s.sel = s.sel.min(s.rules.len().saturating_sub(1));
+                }
+                KeyCode::Char('Q') => s.quick_on = s.quick_on.map(|on| !on),
+                KeyCode::Char(digit @ '1'..='3') if s.quick_on.is_some() => {
+                    s.cycle_quick(usize::from(digit as u8 - b'1'));
                 }
                 KeyCode::Char('K') => s.move_selected(-1),
                 KeyCode::Char('J') => s.move_selected(1),
@@ -278,6 +322,19 @@ mod tests {
             s.cycle_kind();
         }
         assert_eq!(s.rules[0].kind, None, "after the last kind, any tool again");
+    }
+
+    #[test]
+    fn quick_rules_cycle_through_their_policies_and_leave_other_classes_alone() {
+        let mut s = sheet().with_quick(Some(false), serde_json::Map::from_iter([("bots".to_owned(), json!("block"))]));
+        for expected in [Some("allow"), Some("ask"), Some("block"), None] {
+            s.cycle_quick(1);
+            assert_eq!(s.policies.get("shell").and_then(Value::as_str), expected);
+        }
+        s.cycle_quick(2);
+        assert_eq!(s.policies.get("browse"), Some(&json!("allow")));
+        assert_eq!(s.policies.get("bots"), Some(&json!("block")), "a class the sheet doesn't edit is kept");
+        s.cycle_quick(9);
     }
 
     #[test]
