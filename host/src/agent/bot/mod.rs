@@ -25,6 +25,7 @@ mod files;
 mod launch;
 mod lifecycle;
 mod outcome;
+pub(crate) mod pause;
 mod proactive;
 #[cfg(test)]
 mod proactive_tests;
@@ -38,6 +39,7 @@ mod stall;
 mod tool_entry;
 mod turn;
 mod updates;
+mod verdict;
 mod verify;
 mod watchdog;
 
@@ -141,6 +143,7 @@ pub fn spawn(hub: Arc<Hub>, base: BotConfig) -> BotHandle {
         files: files::FileShares::default(),
         perms: HashMap::new(),
         waiting: approval_age::Waiting::default(),
+        continuation: 0,
         stop_requested: false,
         cancel_deadline: None,
         exit_tail: None,
@@ -325,6 +328,8 @@ struct Actor {
     perms: HashMap<String, updates::Answer>,
     /// How long each open approval card has waited.
     waiting: approval_age::Waiting,
+    /// Continuations from a pause card in a row, counting the running turn (0 for any other turn).
+    continuation: u32,
     stop_requested: bool,
     /// A cancelled turn still running past this stops its agent process.
     cancel_deadline: Option<Instant>,

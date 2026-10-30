@@ -345,6 +345,23 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
             json!({"entry": e})
         }
+        // A paused turn's card: one tap sends the continuation (bounded, once per card).
+        "continueTurn" => {
+            let entry_id = str_arg(&b, "entryId")?;
+            let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
+            let used = crate::agent::bot::pause::begin(&e.data)?;
+            if hub.runtime(&e.bot_id).status != crate::hub::BotStatus::Idle {
+                bail!("The bot is busy; continue when it is idle");
+            }
+            hub.set_entry(entry_id, &used);
+            crate::api::apps_runtime::dispatch_bot_turn(
+                hub,
+                &e.bot_id,
+                crate::agent::bot::pause::CONTINUE_TEXT,
+                "continue",
+            )?;
+            json!({})
+        }
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;

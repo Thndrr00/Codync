@@ -100,6 +100,7 @@ impl Actor {
         done_tx: &mpsc::UnboundedSender<Done>,
     ) -> Result<()> {
         self.proactive_turn = self.proactive_batch(entry_ids);
+        self.continuation = if self.continue_batch(entry_ids) { self.continuation + 1 } else { 0 };
         // A routine run keeps the turn its notice took when it began (`Routines::begin`).
         let run_turn = self
             .active_routine
@@ -328,6 +329,7 @@ impl Actor {
             Ok(v) => v["stopReason"].as_str().unwrap_or("end_turn").to_owned(),
             Err(_) => "error".into(),
         };
+        let verdict = super::verdict::TurnVerdict::of(&stop_reason);
         self.publish_proactive_output(!stopped && done.is_ok() && stop_reason == "end_turn");
         let silent_check_in = super::proactive::silent_update(self.proactive_turn, final_text.as_deref());
         let stalled = self.loop_guard.tripped().map(str::to_owned);
@@ -343,8 +345,8 @@ impl Actor {
                 }
             }
             (_, "cancelled") | (Err(_), _) => self.notice("Stopped.", NoticeStyle::Info),
-            (_, "max_tokens") => self.notice("The agent hit its output limit.", NoticeStyle::Info),
-            (_, "max_turn_requests") => self.notice("The agent hit its step limit for this turn.", NoticeStyle::Info),
+            // Half done is not done: a card says so and offers to go on.
+            _ if verdict.unfinished() => self.pause_card(verdict),
             (_, "refusal") => self.notice("The agent declined to continue.", NoticeStyle::Info),
             (Ok(_), "end_turn") if !stopped => crate::market::agent_sign_in::answered(&self.hub, &self.cfg.backend),
             _ => {}
@@ -357,10 +359,8 @@ impl Actor {
             "stopped"
         } else if failed {
             "failed"
-        } else if stop_reason == "end_turn" {
-            "done"
         } else {
-            "incomplete"
+            verdict.state(false)
         };
         self.record_user_result(completion, final_text.as_deref(), &stop_reason);
         if !grouped && !delegated && self.active_request.is_none() {
@@ -466,6 +466,7 @@ impl Actor {
             let body = final_text.unwrap_or_else(|| match (kind, reacted) {
                 (AlertKind::Done, Reacted::With(emoji)) => format!("Reacted {emoji} to your message"),
                 (AlertKind::Done, _) => "Finished.".into(),
+                (AlertKind::Paused, _) => "Paused halfway. Open the chat to continue.".into(),
                 _ => "The agent didn't finish.".into(),
             });
             push::notify(&self.hub, &self.cfg, None, &self.cfg.name, &body, kind);
@@ -533,10 +534,17 @@ impl Actor {
 /// is already queued, or it said nothing on purpose). A turn that ended short of `end_turn` always
 /// reports the failure.
 fn turn_alert(failed: bool, stop_reason: &str, quiet: bool) -> Option<AlertKind> {
-    if failed || !matches!(stop_reason, "end_turn" | "cancelled") {
+    use super::verdict::TurnVerdict;
+    if failed {
         return Some(AlertKind::Failed);
     }
-    (stop_reason == "end_turn" && !quiet).then_some(AlertKind::Done)
+    match TurnVerdict::of(stop_reason) {
+        TurnVerdict::Completed => (!quiet).then_some(AlertKind::Done),
+        TurnVerdict::Cancelled => None,
+        // Half done: told differently from "finished", and not held back by a queued message.
+        TurnVerdict::Paused | TurnVerdict::Truncated => Some(AlertKind::Paused),
+        TurnVerdict::Failed => Some(AlertKind::Failed),
+    }
 }
 
 #[cfg(test)]
@@ -548,7 +556,13 @@ mod tests {
         assert_eq!(turn_alert(false, "end_turn", false), Some(AlertKind::Done));
         assert_eq!(turn_alert(false, "end_turn", true), None, "next message queued, or a reaction held back");
         assert_eq!(turn_alert(false, "cancelled", false), None);
-        assert_eq!(turn_alert(false, "max_turn_requests", false), Some(AlertKind::Failed));
+        assert_eq!(turn_alert(false, "max_turn_requests", false), Some(AlertKind::Paused));
+        assert_eq!(
+            turn_alert(false, "max_tokens", true),
+            Some(AlertKind::Paused),
+            "a queued message doesn't hide a pause"
+        );
+        assert_eq!(turn_alert(false, "refusal", false), Some(AlertKind::Failed));
         assert_eq!(turn_alert(true, "error", true), Some(AlertKind::Failed));
     }
 }
