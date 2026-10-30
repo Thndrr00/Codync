@@ -41,10 +41,10 @@ a card, and an allow-everything rule still does not let `rm -rf /` through.
 
 | Gate | Result |
 |---|---|
-| `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | see `progress-branch.md` |
-| `cargo test -j 1 --bin codync-host -- --test-threads=1`, `--test approval_rules_e2e` | see `progress-branch.md` |
+| `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | pass |
+| `cargo test -j 1 --bin codync-host -- --test-threads=1`, `--test approval_rules_e2e` | 840 passed, 0 failed, 1 ignored; the e2e passes (one clippy style fix in the new terminal test came after the full run, then fmt, clippy and the test were run again) |
 | Desktop `npm run typecheck`, `npm test` | clean; 389 passed |
-| Android `:core:test :app:testDebugUnitTest compileDebugKotlin compileDebugAndroidTestKotlin` | passes (BUILD SUCCESSFUL in 1m 37s); the full `assembleDebug … lintDebug` is run at the next topic's close |
+| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | passes (exit 0, BUILD SUCCESSFUL in 5m 29s) |
 
 ## Not tested
 

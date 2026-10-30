@@ -20,7 +20,7 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 | 2 | Close what was left half done (A-E) | done | see `git log` (`feat: Your week`, saver, takeover commits) | iOS not compiled; no agent run; thresholds only with injected clocks; see `half-done-report.md` |
 | 3 | Forbidden commands | done | see `git log` (`feat(host): forbidden commands`) | no UI; real agents not run; obfuscated commands not caught; see `forbidden-commands-report.md` |
 | 4 | Honest end of turn | done | see `git log` (`feat(host,tui): an honest end of turn`) | no real agent run to a step limit; Paused push not sent for real; Android card compiled, not seen; iOS skipped by instruction; see `turn-verdict-report.md` |
-| 5 | Approval rules editor | pending | | |
+| 5 | Approval rules editor | done | see `git log` (`feat(host): one decision for an approval`) | seen on no screen; no real agent asked for a permission; iOS skipped by instruction; see `approval-rules-editor-report.md` |
 | 6 | "Always" as a rule and `actionRules` | pending | | |
 | 7 | Security profiles | pending | | |
 | 8 | Mini-app and check-in fixes | pending | | |
