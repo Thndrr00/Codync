@@ -55,6 +55,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Persona => "Persona",
             Field::Heartbeat => "Heartbeat",
             Field::Background => "Background model",
+            Field::Saver => "Saver",
             Field::Agent => "Agent",
             Field::Account => "Account",
             Field::Model => "Model",
@@ -117,7 +118,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
                     Field::Soul => "values and boundaries; you write it, the bot can't",
                     Field::Persona => "e.g. Dry and brief. No emoji.",
                     Field::Heartbeat => "what to do when it checks in on its own",
-                    _ => "a cheaper model for routines and check-ins",
+                    _ => "‹ › a cheaper model for routines and check-ins",
                 };
                 if let Some(slot) = field.slot() {
                     text_field(buf, &f.character[slot], &tr(hint), y);
@@ -280,6 +281,14 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
                 let s = if on.is_some() && !applies { format!("{s}  · {}", tr(off_here)) } else { s.into() };
                 put(buf, vx, y, vw, &s, t.text.patch(base));
             }
+            Field::Saver => {
+                let s = match f.saver {
+                    Some(true) => "◉ On at 80% of the daily budget   ○ Off",
+                    Some(false) => "○ On at 80% of the daily budget   ◉ Off",
+                    None => "Not available on this computer's host",
+                };
+                put(buf, vx, y, vw, s, t.text.patch(base));
+            }
             Field::Notify => {
                 let s = if f.notify { "◉ Done and needs-you   ○ Off" } else { "○ Done and needs-you   ◉ Off" };
                 put(buf, vx, y, vw, s, t.text.patch(base));
@@ -376,6 +385,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         | Field::Shape
         | Field::Approvals
         | Field::Notify
+        | Field::Saver
         | Field::Computer
         | Field::Team
         | Field::Network

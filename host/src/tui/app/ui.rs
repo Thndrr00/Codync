@@ -175,6 +175,7 @@ pub enum Field {
     Persona,
     Heartbeat,
     Background,
+    Saver,
     Agent,
     Account,
     Model,
@@ -195,7 +196,7 @@ pub enum Field {
     Skills,
 }
 
-pub const FIELDS: [Field; 25] = [
+pub const FIELDS: [Field; 26] = [
     Field::Name,
     Field::Instructions,
     Field::Check,
@@ -203,6 +204,7 @@ pub const FIELDS: [Field; 25] = [
     Field::Persona,
     Field::Heartbeat,
     Field::Background,
+    Field::Saver,
     Field::Agent,
     Field::Account,
     Field::Model,
@@ -237,6 +239,8 @@ pub struct Form {
     /// What the user writes about how the bot works: check before done, soul, persona, heartbeat, background
     /// model (see [`Field::slot`]).
     pub character: [Editor; 5],
+    /// `None`: the host has no saver.
+    pub saver: Option<bool>,
     pub backend: String,
     pub account: Option<String>,
     pub account_scope: String,

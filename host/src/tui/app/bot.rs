@@ -56,6 +56,9 @@ pub struct Bot {
     pub verify_command: String,
     /// The model routine runs and check-ins use instead of its own (empty: its own).
     pub background_model: String,
+    /// Saver: at 80 percent of its daily token budget, new sessions start on the background model; `None` from an
+    /// older host.
+    pub saver: Option<bool>,
     /// Its soul, persona and heartbeat, written by the user.
     pub personality: [String; 3],
     /// The bot that created this one; `None` when the user did.
@@ -200,6 +203,7 @@ impl Bot {
             reachable_by_assistants: v["reachableByAssistants"].as_bool(),
             verify_command: s("verifyCommand"),
             background_model: s("backgroundModel"),
+            saver: v["saver"].as_bool(),
             personality: ["soul", "persona", "heartbeat"]
                 .map(|layer| v["personality"][layer].as_str().unwrap_or_default().to_owned()),
             created_by: v["createdBy"].as_str().map(str::to_owned),

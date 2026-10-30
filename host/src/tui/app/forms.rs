@@ -135,6 +135,7 @@ impl App {
                 Editor::with(&b.personality[2]),
                 Editor::with(&b.background_model),
             ],
+            saver: b.saver,
             backend: b.backend.clone(),
             account: b.account.clone(),
             account_scope: uuid::Uuid::new_v4().to_string(),
@@ -244,6 +245,13 @@ impl App {
                     f.model = Editor::with(&m);
                 }
             }
+            KeyCode::Left | KeyCode::Right if field == Field::Background => {
+                let d: isize = if k.code == KeyCode::Left { -1 } else { 1 };
+                self.want_models_for(&f.backend, f.account.as_deref());
+                if let Some(m) = self.cycle_model_for(&f.backend, f.account.as_deref(), f.character[4].text.trim(), d) {
+                    f.character[4] = Editor::with(&m);
+                }
+            }
             KeyCode::Enter => self.save_form(&mut f),
             KeyCode::Left | KeyCode::Right | KeyCode::Char(' ')
                 if matches!(
@@ -253,6 +261,7 @@ impl App {
                         | Field::SelfFallbacks
                         | Field::Approvals
                         | Field::Notify
+                        | Field::Saver
                         | Field::Computer
                         | Field::Team
                         | Field::Network
@@ -284,6 +293,7 @@ impl App {
                     Field::SelfFallbacks => f.self_fallbacks = !f.self_fallbacks,
                     Field::Approvals => f.auto = !f.auto,
                     Field::Notify => f.notify = !f.notify,
+                    Field::Saver => f.saver = f.saver.map(|on| !on),
                     Field::Computer => f.computer = !f.computer,
                     Field::Team => f.manage_team = f.manage_team.map(|on| !on),
                     Field::Network => f.offered_to_network = f.offered_to_network.map(|on| !on),
@@ -368,6 +378,7 @@ impl Form {
             "name": self.name.text.trim(),
             "description": self.instructions.text.trim(),
             "verifyCommand": self.character[0].text.trim(),
+            "saver": self.saver.unwrap_or(false),
             "backgroundModel": self.character[4].text.trim(),
             "personality": {
                 "soul": self.character[1].text.trim(),
