@@ -48,6 +48,8 @@ data class Bot(
     val approvalRules: List<ApprovalRule> = emptyList(),
     /** Whether the quick rules ([actionRules]) are enforced; null from an older host. */
     val actionRulesOn: Boolean? = null,
+    /** The security profile it follows, until its rules are changed away from it; null when none (or an older host). */
+    val securityProfile: String? = null,
     /** The bot's character, written by the user. */
     val personality: Personality = Personality(),
     /** The user's other computers list this bot and may message it; null from an older host. */

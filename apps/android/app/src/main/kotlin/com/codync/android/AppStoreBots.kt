@@ -128,6 +128,10 @@ suspend fun AppStore.authenticateAgentAccount(backend: String): AgentAccount {
 suspend fun AppStore.weekSummary(): WeekSummary? = runCatching {
     WireJson.decodeFromJsonElement<WeekSummary>(hostQuery("weekSummary", buildJsonObject { put("days", 7) }))
 }.getOrNull()
+/** The security profiles the host offers; null from an older host or when it can't be reached. */
+suspend fun AppStore.securityProfiles(): List<SecurityProfile>? = runCatching {
+    SecurityProfile.decodeAll(hostQuery("securityProfiles", buildJsonObject { }))
+}.getOrNull()
 /** What the bot would do with [command] under [rules]; null when the host can't say. */
 suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: List<ApprovalRule>, quick: Pair<Boolean, Map<String, String>>? = null): ApprovalEvaluation? = runCatching {
     val payload = buildJsonObject {

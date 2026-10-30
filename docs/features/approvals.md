@@ -44,6 +44,34 @@ the command, by the same `approval_rules::evaluate` a real request goes through,
 bot's `permission`), plus `chained` and `allowPassedOver` (an allow rule that matched but was skipped because the
 command runs several). `rules` tests a list that is not saved yet; without it the bot's saved rules are used.
 
+## Security profiles
+
+One choice when a bot is made, or later in its settings, sets how much it may do without asking
+(`host/src/agent/security_profile.rs`). A profile is the Approvals setting, a list of approval rules and a daily token
+limit, written for the person; it adds no new mechanism.
+
+| Profile | Allowed on its own | Asks before | Refused | Daily limit |
+| --- | --- | --- | --- | --- |
+| Read-only | read, search, fetch, think | edit, delete, move | execute | 300,000 tokens |
+| Builder | the above and edit | delete, move | execute | 1,000,000 |
+| Operator | the above, move and execute (plain commands) | delete | none | 3,000,000 |
+| Full access | everything | nothing | none | the bot's own |
+
+Everything a profile's rules do not cover follows its Approvals setting (`ask`, except Full, which is `auto`). The
+forbidden commands apply under every profile, Full included, and an `allow` rule never approves a chained command, so an
+Operator's `ls && make` still asks. `securityProfiles` lists the profiles (id, title, sentence, setting, limit, rules) for
+a client to show; `createBot` and `updateBot` take `securityProfile`. A profile is applied when it is new to the bot
+(chosen at creation or different from the saved one), which replaces the bot's Approvals setting and rules and sets the
+limit (Full leaves the bot's own limit). If the person later edits the rules or the setting away from it, the bot stops
+claiming the profile (`securityProfile` is dropped), so the settings never name a profile the bot no longer follows.
+
+A profile governs approvals only. It does not confine folders: the agent runs over ACP with its own sandbox and settings,
+and Codync cannot draw a path boundary around it (Mercury's path scopes do not carry over).
+
+Clients: desktop (the bot's settings, for a new or an existing bot), Android (new bot and settings) and the terminal (the
+new bot dialog, and `P` in the rules sheet) show the choice with its sentence and what it sets, and warn that picking one
+for an existing bot replaces its rules.
+
 ## "Always allow" as a rule
 
 On the computer's clients (desktop and terminal), choosing the agent's `allow_always` option does not answer at once:

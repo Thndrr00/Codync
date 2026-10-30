@@ -25,7 +25,8 @@ import kotlinx.coroutines.launch
  * A bot's approval rules, first match first: add, edit, reorder, delete, and try a command against them. The host
  * decides what a rule does (`testApprovalRule`); nothing here copies its logic.
  */
-internal fun CardRows.approvalRulesRows(store: AppStore, draft: BotDraft, change: (BotDraft) -> Unit) {
+internal fun CardRows.approvalRulesRows(state: AppState, store: AppStore, draft: BotDraft, savedProfile: String?, change: (BotDraft) -> Unit) {
+    row { SecurityProfileChooser(state, store, draft, savedProfile, change) }
     val rules = draft.approvalRules.orEmpty()
     fun set(next: List<ApprovalRule>) = change(draft.copy(approvalRules = next))
     row {

@@ -55,6 +55,8 @@ data class BotDraft(
     val approvalRules: List<ApprovalRule>? = null,
     /** Null where the host has no quick rules, so it isn't sent. */
     val actionRulesOn: Boolean? = null,
+    /** The profile picked in the form; null when none, so nothing is sent. */
+    val securityProfile: String? = null,
 ) {
     /** A saved bot keeps a name; only a new one goes without (the host names it after its first conversations). */
     val isValid: Boolean get() = name.isNotBlank()
@@ -88,7 +90,7 @@ data class BotDraft(
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "actionRulesOn", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "saver", "personality")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "actionRulesOn", "securityProfile", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "saver", "personality")
         /** Who reaches a bot belongs to its computer, not its setup, and neither do this computer's specifics. */
         private val TEMPLATE_SKIPS =
             setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks", "offeredToNetwork", "reachableByAssistants")
@@ -100,6 +102,6 @@ data class BotDraft(
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
             bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks,
-            bot.verifyCommand, bot.backgroundModel, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants, bot.approvalRules, bot.actionRulesOn)
+            bot.verifyCommand, bot.backgroundModel, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants, bot.approvalRules, bot.actionRulesOn, bot.securityProfile)
     }
 }
