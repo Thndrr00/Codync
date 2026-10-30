@@ -1,3 +1,4 @@
+import type { ApprovalRule } from './approval-rules'
 import type { ArtifactCard } from './artifacts'
 import type { CallLine } from './calls'
 import { isInternalEntry } from './entry-visibility.ts'
@@ -81,6 +82,8 @@ export interface Bot {
   backgroundModel: string | null
   /** Saver: once its daily token budget reaches 80 percent, new sessions start on the background model until tomorrow. */
   saver: boolean
+  /** The user's rules for the agent's permission requests, first match first. */
+  approvalRules: ApprovalRule[]
   /** The bot's character, written by the user; empty layers when none (or an older host). */
   personality: Personality
   /** Other computers in the user's networks list this bot and may message it; null from an older host. */
@@ -153,6 +156,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     verifyCommand: raw.verifyCommand ?? null,
     backgroundModel: raw.backgroundModel ?? null,
     saver: raw.saver ?? false,
+    approvalRules: raw.approvalRules ?? [],
     personality: { soul: '', persona: '', heartbeat: '', ...raw.personality },
     offeredToNetwork: raw.offeredToNetwork ?? null,
     reachableByAssistants: raw.reachableByAssistants ?? null,
@@ -706,6 +710,7 @@ export interface BotDraft {
   verifyCommand?: string | null
   backgroundModel?: string | null
   saver?: boolean
+  approvalRules?: ApprovalRule[]
   personality?: Personality
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   offeredToNetwork?: boolean
@@ -746,6 +751,7 @@ export function draftOf(bot: Bot): BotDraft {
     verifyCommand: bot.verifyCommand,
     backgroundModel: bot.backgroundModel,
     saver: bot.saver,
+    approvalRules: bot.approvalRules,
     personality: bot.personality,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
     offeredToNetwork: bot.offeredToNetwork ?? undefined,

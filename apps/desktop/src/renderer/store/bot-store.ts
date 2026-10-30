@@ -24,6 +24,7 @@ import {
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
+import { cleanRules, type ApprovalEvaluation, type ApprovalRule } from '@shared/approval-rules'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
 import { FileDownloads } from './file-downloads'
@@ -302,6 +303,16 @@ export class BotStore extends BotSync {
     })
   }
 
+  /** What the bot would do with `command` under `rules` (the saved ones when omitted); null when the host can't say. */
+  async testApprovalRule(botId: string, command: string, rules?: ApprovalRule[]): Promise<ApprovalEvaluation | null> {
+    try {
+      const body = { botId, command, ...(rules ? { rules: cleanRules(rules) } : {}) }
+      return (await (await this.ready()).call<{ evaluation: ApprovalEvaluation }>('testApprovalRule', body)).evaluation
+    } catch {
+      return null
+    }
+  }
+
   /** Continues a turn that stopped half done, from its card; the host refuses a card already used. */
   async continueTurn(entry: Entry): Promise<string | null> {
     try {
@@ -461,8 +472,10 @@ export class BotStore extends BotSync {
     return (await (await this.ready()).botConversation(botId, peerId)).filter((e) => !isInternalEntry(e))
   }
 
-  async save(draft: BotDraft) {
+  async save(saved: BotDraft) {
     const client = await this.ready()
+    // A rule left blank in the editor is no rule.
+    const draft = saved.approvalRules ? { ...saved, approvalRules: cleanRules(saved.approvalRules) } : saved
     const res = draft.id
       ? await client.call<{ bot: Bot }>('updateBot', { ...draft, model: draft.model ?? null, account: draft.account ?? null })
       : await client.call<{ bot: Bot }>('createBot', draft)

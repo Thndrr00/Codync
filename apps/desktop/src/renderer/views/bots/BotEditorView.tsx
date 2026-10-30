@@ -20,6 +20,7 @@ import { errorText, isValid, lastPathComponent, normalized, useFollowSaved, useP
 import { FormSheet } from '../marketplace/pieces'
 import { SkillSheet, type SkillRef } from '../marketplace/SkillSheet'
 import { AnchoredPanel, AutoTextArea, AvatarPicker, Field, SwitchRow } from './parts'
+import { ApprovalRulesEditor } from './ApprovalRulesEditor'
 import { NetworkSwitches } from './NetworkSwitches'
 import { ProactiveCheckIns } from './ProactiveCheckIns'
 import './bots.css'
@@ -306,6 +307,11 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
               onChange={(id) => set('permission', id)}
             />
           </ValueRow>
+          <ApprovalRulesEditor
+            rules={draft.approvalRules ?? []}
+            onChange={(rules) => set('approvalRules', rules)}
+            test={(command, rules) => (draft.id ? store.testApprovalRule(draft.id, command, rules) : Promise.resolve(null))}
+          />
         </CardSection>
 
         <CardSection title="Activity">
