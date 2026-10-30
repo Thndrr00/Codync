@@ -56,7 +56,7 @@ import kotlinx.serialization.json.jsonPrimitive
     val reason = req.text("reason").orEmpty()
     val url = req.text("url").orEmpty()
     val status = req.text("status")
-    val resolved = status == "resolved" || status == "cancelled"
+    val resolved = status == "resolved" || status == "cancelled" || status == "expired"
     Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -72,7 +72,7 @@ import kotlinx.serialization.json.jsonPrimitive
                 SecondaryButton("Cancel") { state.bots.firstOrNull { it.id == entry.botId }?.let { store.stopBot(it) } }
             }
         } else {
-            Text(if (status == "resolved") "Completed" else "Cancelled", style = Type.caption, color = Palette.tertiary)
+            Text(when (status) { "resolved" -> "Completed"; "expired" -> "Expired"; else -> "Cancelled" }, style = Type.caption, color = Palette.tertiary)
         }
     }
 }

@@ -122,13 +122,13 @@ function TakeoverRequestNotice({ entry }: { entry: Entry }) {
   const store = useLiveStore()
   const req = entry.data.takeoverRequest
   if (!req) return null
-  const resolved = req.status === 'resolved' || req.status === 'cancelled'
+  const resolved = req.status === 'resolved' || req.status === 'cancelled' || req.status === 'expired'
   return (
     <ComputerCard
       frame={{
         url: req.url ?? undefined,
         title: req.reason,
-        action: resolved ? 'Completed' : 'Action needed',
+        action: req.status === 'expired' ? 'Expired' : resolved ? 'Completed' : 'Action needed',
         active: !resolved,
       }}
       onFinishTakeover={() =>
