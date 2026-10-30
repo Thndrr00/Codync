@@ -1,0 +1,38 @@
+# Progress of the branch `deska/Implementar-Motor-de-Flujos-de-Rutina-5fa5448a`
+
+Control file. Update it when a topic closes; resume from here if the context is compacted.
+Rules in force: one topic at a time, small commits, push to `origin` without `--force`, no version bump, no tags,
+iOS written but **not compiled** on this PC. Gates: host `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+`cargo test -j 1 -- --test-threads=1`; desktop `npm run typecheck`, `npm test`; Android
+`./gradlew.bat assembleDebug testDebugUnitTest :core:test lintDebug`.
+
+## Before this plan (already on the branch)
+
+Approval reminder at 4 h and close at 24 h (`approval_age.rs`), `verify_command` (`verify.rs`; desktop and Android fields),
+background model (`launch.rs`; free text), soul/persona/heartbeat (desktop and Android), `weekSummary` and the "Your week"
+card (desktop and Android), `SETUP_PROMPT.md`.
+
+## Topics
+
+| # | Topic | State | Closing commit | Not tested |
+|---|---|---|---|---|
+| 1 | Put the branch on the current base (`origin/integrate/upstream-2.29`) | done | merge `6c20c14c` (+ two `fix:` commits) | iOS untouched; no agent run on the merged build; see `base-update-report.md` |
+| 2 | Close what was left half done (A-E) | pending | | |
+| 3 | Forbidden commands | pending | | |
+| 4 | Honest end of turn | pending | | |
+| 5 | Approval rules editor | pending | | |
+| 6 | "Always" as a rule and `actionRules` | pending | | |
+| 7 | Security profiles | pending | | |
+| 8 | Mini-app and check-in fixes | pending | | |
+| 9 | Questions and plans from external sessions | pending | | |
+| 10 | Messaging channels (3 phases) | pending | | |
+| 11 | Computer health | pending | | |
+| 12 | Import agents | pending | | |
+| 13 | Memory as beliefs | pending | | |
+| 14 | Proposed skills inbox | pending | | |
+| 15 | Demo mode | pending | | |
+| 16 | Branch close | pending | | |
+
+## Not touched on purpose
+
+Routines by nodes (`feat/routine-flows-*`), Android widgets (`feat/android-widgets-v2`), syncing with `upstream/main`.
