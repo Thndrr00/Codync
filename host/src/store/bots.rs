@@ -212,6 +212,7 @@ mod tests {
             approval_rules: vec![],
             verify_command: None,
             background_model: None,
+            saver: false,
             personality: crate::agent::personality::Personality::default(),
             computer_permissions: crate::computer::Permissions::default(),
             manage_team: false,

@@ -203,6 +203,10 @@ pub struct BotConfig {
     /// The model routine runs and check-ins use instead of `model`: a cheaper one for work nobody is waiting on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background_model: Option<String>,
+    /// Saver: once its daily token budget reaches the warning level, a new session of the bot starts on its
+    /// background model, until the next day.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub saver: bool,
     /// The bot's soul, persona and heartbeat, written by the user (see `agent::personality`).
     #[serde(default, skip_serializing_if = "crate::agent::personality::Personality::is_empty")]
     pub personality: crate::agent::personality::Personality,
