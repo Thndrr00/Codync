@@ -30,6 +30,20 @@ Bots can't set their own rules: only `updateBot` changes them, and neither the b
 nor the fleet tools pass them on. No client edits them yet. Rakazo's automated review of
 low-risk requests isn't implemented: no model approves on the user's behalf.
 
+## Cards nobody answers
+
+A card left `pending` pushes one reminder after 4 hours (`NeedsInput`, with the card's own options) and
+closes as `cancelled` after 24 hours, and the agent gets a cancel. The reminder is written into the card
+(`reminded: true`), so it cannot repeat, even after a restart. Code: `host/src/agent/bot/approval_age.rs`; the
+clock is injected in its tests.
+
+A human takeover request (`request_handoff`, `host/src/chat/takeover.rs`) pushes `NeedsInput` once as it is
+posted (`takeoverRequest.notified`), and a 60 second sweep turns it into `expired` after 30 minutes, with the
+chat line rewritten as "Takeover request expired". Desktop and Android show an expired card closed and keep it
+out of the pending decisions; the terminal shows the rewritten line. iOS has no takeover card. This build's
+request does not hold the bot's computer: the remote screen's own takeover (`screenTakeover`) is the person's
+choice and is not touched.
+
 ## Answering a card
 
 The card is the effect's key: the first decision is the one that happens.

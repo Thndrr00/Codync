@@ -17,7 +17,7 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 | # | Topic | State | Closing commit | Not tested |
 |---|---|---|---|---|
 | 1 | Put the branch on the current base (`origin/integrate/upstream-2.29`) | done | merge `6c20c14c` (+ two `fix:` commits) | iOS untouched; no agent run on the merged build; see `base-update-report.md` |
-| 2 | Close what was left half done (A-E) | pending | | |
+| 2 | Close what was left half done (A-E) | done | see `git log` (`feat: Your week`, saver, takeover commits) | iOS not compiled; no agent run; thresholds only with injected clocks; see `half-done-report.md` |
 | 3 | Forbidden commands | pending | | |
 | 4 | Honest end of turn | pending | | |
 | 5 | Approval rules editor | pending | | |
