@@ -37,6 +37,8 @@ pub enum After {
     Hello,
     /// `testApprovalRule`: what the host says about a command tried in the rules sheet.
     RuleTest,
+    /// `proposeRule` for an "always allow" on card `.0`, option `.1`.
+    Proposal(String, String),
     /// The rules sheet's save (`updateBot`).
     RulesSaved,
     /// `weekSummary`: the last seven days, for the usage sheet; a host without it says nothing.

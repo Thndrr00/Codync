@@ -141,6 +141,7 @@ impl App {
             Overlay::Analytics(s) => s.key(k),
             Overlay::Network(n) => self.network_key(n, k),
             Overlay::Rules(s) => self.approval_rules_key(s, k),
+            Overlay::Always(s) => self.always_key(s, k),
             // A new code: after a failure, or in place of the one shown.
             Overlay::Pair(_) if k.code == KeyCode::Char('r') => {
                 self.call("pairing", json!({}), After::Pairing);

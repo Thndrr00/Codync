@@ -396,6 +396,8 @@ pub enum Overlay {
     Network(Box<NetworkSheet>),
     /// A bot's approval rules.
     Rules(Box<super::rules::RulesSheet>),
+    /// "Always allow" on a card: the rule to keep, to edit.
+    Always(Box<super::always::AlwaysSheet>),
 }
 
 pub struct Toast {

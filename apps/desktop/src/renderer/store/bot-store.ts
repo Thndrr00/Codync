@@ -24,7 +24,7 @@ import {
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
-import { cleanRules, type ApprovalEvaluation, type ApprovalRule } from '@shared/approval-rules'
+import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
 import { FileDownloads } from './file-downloads'
@@ -295,9 +295,19 @@ export class BotStore extends BotSync {
     })()
   }
 
-  respond(entry: Entry, option: string | null) {
+  /** The rule "always allow" on this card would keep; null when the host can't say (an older one). */
+  async proposeRule(entry: Entry): Promise<RuleProposal | null> {
+    try {
+      return await (await this.ready()).call<RuleProposal>('proposeRule', { entryId: entry.id })
+    } catch {
+      return null
+    }
+  }
+
+  /** Answers a card; with `rule`, an "always allow" also keeps that rule for the bot. */
+  respond(entry: Entry, option: string | null, rule?: ApprovalRule) {
     this.answer(entry, option ?? '', async (c) => {
-      await c.call('respondPermission', { entryId: entry.id, optionId: option })
+      await c.call('respondPermission', { entryId: entry.id, optionId: option, ...(rule ? { rule } : {}) })
       // The card's own update follows on the events stream; hold the spinner until then.
       await sleep(2000)
     })

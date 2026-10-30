@@ -183,6 +183,7 @@ impl App {
                     After::Hello => self.error = Some(e),
                     After::Tracked | After::Week | After::RuleTest => {}
                     After::RulesSaved => self.rules_saved(Err(e)),
+                    After::Proposal(entry, option) => self.always_proposed(entry, option, Err(e)),
                     After::History(id) => {
                         self.history_busy.remove(&id);
                     }
@@ -266,6 +267,7 @@ impl App {
             }
             After::Week => self.week = v,
             After::RuleTest => self.rules_tested(&v),
+            After::Proposal(entry, option) => self.always_proposed(entry, option, Ok(v)),
             After::RulesSaved => self.rules_saved(Ok(())),
             After::Dirs => {
                 if let Some(Overlay::Folder(p)) = self.overlays.last_mut() {

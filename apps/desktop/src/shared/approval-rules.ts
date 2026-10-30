@@ -22,6 +22,12 @@ export type ApprovalEvaluation = (
   allowPassedOver: number | null
 }
 
+/** What "always allow" on a card proposes (`proposeRule`): the rule to keep, or why there is none. */
+export interface RuleProposal {
+  rule: ApprovalRule | null
+  reason?: string
+}
+
 /** The tool kinds a rule can be limited to. */
 export const RULE_KINDS = ['execute', 'edit', 'delete', 'move', 'read', 'search', 'fetch', 'think', 'other'] as const
 

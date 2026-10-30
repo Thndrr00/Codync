@@ -89,3 +89,28 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
     };
     put(buf, inner.x, bottom - 1, inner.width, &truncate(&tr(footer), usize::from(inner.width)), t.dim.patch(t.panel));
 }
+
+/// "Always allow" on a card: the rule it would keep, which the person may edit, or why there is none.
+pub(super) fn always(buf: &mut Buffer, area: Rect, s: &super::super::app::AlwaysSheet) {
+    let t = theme();
+    let r = centered(area, 78, 10);
+    let inner = frame_box(buf, r, t.text, t.panel, Some((tr("Always allow").as_ref(), t.text)));
+    if inner.height < 6 {
+        return;
+    }
+    let y = inner.y + 1;
+    let width = usize::from(inner.width);
+    if let Some(why) = &s.refusal {
+        put(buf, inner.x, y, inner.width, &truncate(&tr(why), width), t.secondary.patch(t.panel));
+    } else {
+        let note = tr("This rule is kept for the bot. Edit it to cover more: * is any text.");
+        put(buf, inner.x, y, inner.width, &note, t.secondary.patch(t.panel));
+        put(buf, inner.x, y + 2, inner.width, &truncate(&s.editor.text, width), t.bold.patch(t.panel));
+    }
+    if let Some(error) = &s.error {
+        put(buf, inner.x, inner.y + 5, inner.width, &truncate(error, width), t.amber.patch(t.panel));
+    }
+    let footer =
+        if s.refusal.is_some() { "o allow once · esc cancel" } else { "↵ keep the rule and allow · esc cancel" };
+    put(buf, inner.x, inner.bottom() - 1, inner.width, &tr(footer), t.dim.patch(t.panel));
+}

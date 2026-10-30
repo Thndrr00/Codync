@@ -1,5 +1,6 @@
 //! TUI state and everything that changes it: host events, keys, mouse, replies.
 
+mod always;
 mod analytics;
 mod bot;
 mod editor;
@@ -19,6 +20,7 @@ mod slash;
 mod steps;
 mod ui;
 
+pub use always::AlwaysSheet;
 pub use bot::{AgentModel, Bot, ModelOption, OwnMemory};
 pub use editor::Editor;
 pub use exchange::{ConversationRow, Exchange, Item, Outcome, conversation, group, rows};
