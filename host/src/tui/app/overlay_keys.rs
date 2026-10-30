@@ -56,7 +56,10 @@ impl App {
             Action::RefreshAgents => self.call("refreshBackends", json!({}), After::Backends),
             Action::Pair => self.open_pair(),
             Action::Network => self.open_network(),
-            Action::Usage => self.overlays.push(Overlay::Usage(0)),
+            Action::Usage => {
+                self.overlays.push(Overlay::Usage(0));
+                self.call("weekSummary", json!({"days": 7}), After::Week);
+            }
             Action::CheckUpdate => self.call("checkHostUpdate", json!({}), After::Update),
             Action::Analytics => self.toggle_analytics(),
             Action::AboutAnalytics => self.overlays.push(Overlay::Analytics(AnalyticsSheet::default())),

@@ -35,6 +35,8 @@ pub enum After {
     Sent(String),
     Connection(String, super::super::connections::Step),
     Hello,
+    /// `weekSummary`: the last seven days, for the usage sheet; a host without it says nothing.
+    Week,
     /// `track`: fire and forget; analytics never surfaces an error.
     Tracked,
     Analytics,

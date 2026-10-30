@@ -63,6 +63,8 @@ pub struct App {
     pub bots: HashMap<String, Bot>,
     pub entries: HashMap<String, BTreeMap<i64, Entry>>,
     pub usage: Value,
+    /// The last seven days (`weekSummary`), read when the usage sheet opens; null until then.
+    pub week: Value,
     pub screen: Value,
     /// This computer's network (`networkView`'s shape); null on hosts without one.
     pub network: Value,
@@ -155,6 +157,7 @@ impl App {
             bots: HashMap::new(),
             entries: HashMap::new(),
             usage: Value::Null,
+            week: Value::Null,
             screen: Value::Null,
             network: Value::Null,
             backends: vec![],

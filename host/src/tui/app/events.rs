@@ -181,7 +181,7 @@ impl App {
             Err(e) => {
                 match after {
                     After::Hello => self.error = Some(e),
-                    After::Tracked => {}
+                    After::Tracked | After::Week => {}
                     After::History(id) => {
                         self.history_busy.remove(&id);
                     }
@@ -263,6 +263,7 @@ impl App {
                     }
                 }
             }
+            After::Week => self.week = v,
             After::Dirs => {
                 if let Some(Overlay::Folder(p)) = self.overlays.last_mut() {
                     v["path"].as_str().unwrap_or_default().clone_into(&mut p.path);
