@@ -192,6 +192,7 @@ mod tests {
             computer: false,
             approval_rules: vec![],
             verify_command: None,
+            background_model: None,
             computer_permissions: crate::computer::Permissions::default(),
             manage_team: false,
             created_by: None,

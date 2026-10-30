@@ -141,6 +141,9 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       <Field label="Check before done" detail="A command run in the workspace after each turn. If it fails, the turn doesn't count as done.">
         <AutoTextArea className="field-box" value={draft.verifyCommand ?? ''} placeholder="e.g. npm test" minRows={1} maxRows={3} onChange={(v) => set('verifyCommand', v)} />
       </Field>
+      <Field label="Background model" detail="A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.">
+        <AutoTextArea className="field-box" value={draft.backgroundModel ?? ''} placeholder="e.g. haiku" minRows={1} maxRows={2} onChange={(v) => set('backgroundModel', v)} />
+      </Field>
     </>
   )
   const model = [

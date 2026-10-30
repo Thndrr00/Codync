@@ -335,7 +335,9 @@ impl Actor {
     async fn finish_session_model(&mut self, sid: &str) -> Result<()> {
         let Some(conn) = self.conn.as_ref() else { bail!("agent not running") };
         let Some(response) = conn.pending_models.get(sid) else { return Ok(()) };
-        let options = select_model(&conn.acp, response, sid, &self.cfg).await?;
+        let cfg =
+            if self.active_routine.is_some() { super::launch::for_background(&self.cfg) } else { self.cfg.clone() };
+        let options = select_model(&conn.acp, response, sid, &cfg).await?;
         self.note_options(sid, &options, Listing::Session);
         if let Some(conn) = self.conn.as_mut() {
             conn.pending_models.remove(sid);

@@ -120,6 +120,9 @@ pub struct BotConfig {
     /// A command (build, tests, typecheck) run in the workspace after each turn: the turn counts as done only if it passes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verify_command: Option<String>,
+    /// The model routine runs and check-ins use instead of `model`: a cheaper one for work nobody is waiting on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_model: Option<String>,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
     /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it

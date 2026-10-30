@@ -37,6 +37,8 @@ data class Bot(
     val manageTeam: Boolean? = null,
     /** A command run in the workspace after each turn: the turn counts as done only if it passes; null when none. */
     val verifyCommand: String? = null,
+    /** The model routine runs and check-ins use instead of [model]; null when none. */
+    val backgroundModel: String? = null,
     /** The bot that created this one; null when the user did. */
     val createdBy: String? = null,
     val computerPermissions: ComputerPermissions = ComputerPermissions(),

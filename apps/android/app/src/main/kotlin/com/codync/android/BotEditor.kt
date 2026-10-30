@@ -119,6 +119,11 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
                     FieldBox(draft.verifyCommand.orEmpty(), { change(draft.copy(verifyCommand = it)) }, "e.g. npm test", 1, 3)
                 }
             }
+            row {
+                Field("Background model", "A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.") {
+                    FieldBox(draft.backgroundModel.orEmpty(), { change(draft.copy(backgroundModel = it)) }, "e.g. haiku", 1, 2)
+                }
+            }
         }
         CardSection("Agent") {
             row {
