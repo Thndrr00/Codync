@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-const REMIND_AFTER: Duration = Duration::from_secs(4 * 60 * 60);
-const CLOSE_AFTER: Duration = Duration::from_secs(24 * 60 * 60);
+const REMIND_AFTER: Duration = Duration::from_hours(4);
+const CLOSE_AFTER: Duration = Duration::from_hours(24);
 
 /// What `Waiting::due` found.
 #[derive(Debug, Default, PartialEq, Eq)]
