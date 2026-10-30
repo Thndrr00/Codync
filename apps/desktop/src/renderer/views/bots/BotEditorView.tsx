@@ -139,6 +139,14 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const connectors = plugins?.connectors ?? []
   const skills = plugins?.skills ?? []
 
+  // The agent's own models; a model that is set but not listed (an older host, another agent) stays pickable.
+  const backgroundChoices = [
+    { id: '', label: 'The bot\'s own model' },
+    ...(models.catalog?.models ?? []).map((m) => ({ id: m.id, label: m.name })),
+    ...(draft.backgroundModel && !models.catalog?.models.some((m) => m.id === draft.backgroundModel)
+      ? [{ id: draft.backgroundModel, label: draft.backgroundModel }]
+      : []),
+  ]
   const instructions = (
     <>
       <Field label="Standing instructions" detail="Rules that always apply. Put task-specific requests in the chat instead.">
@@ -156,9 +164,21 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       <Field label="Heartbeat" detail="What it does when it checks in on its own.">
         <AutoTextArea className="field-box" value={draft.personality?.heartbeat ?? ''} placeholder="e.g. Look for failing tests and say only if something broke." minRows={2} maxRows={8} onChange={(v) => setLayer('heartbeat', v)} />
       </Field>
-      <Field label="Background model" detail="A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.">
-        <AutoTextArea className="field-box" value={draft.backgroundModel ?? ''} placeholder="e.g. haiku" minRows={1} maxRows={2} onChange={(v) => set('backgroundModel', v)} />
+      <Field label="Background model" detail="A cheaper model for routines and check-ins, where nobody is waiting.">
+        <ChoicePicker
+          selection={draft.backgroundModel ?? ''}
+          options={backgroundChoices}
+          onChange={(id) => set('backgroundModel', id || null)}
+        />
       </Field>
+      {draft.backgroundModel ? (
+        <SwitchRow
+          title="Saver"
+          detail="At 80 percent of this bot's daily token budget, new sessions start on the background model until tomorrow."
+          on={draft.saver ?? false}
+          onChange={(on) => set('saver', on)}
+        />
+      ) : null}
     </>
   )
   const ownRest = saved ? restOf(saved, draft.backend, Date.now()) : null

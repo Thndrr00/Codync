@@ -79,6 +79,8 @@ export interface Bot {
   verifyCommand: string | null
   /** The model routine runs and check-ins use instead of `model` (a cheaper one); null when none (or an older host). */
   backgroundModel: string | null
+  /** Saver: once its daily token budget reaches 80 percent, new sessions start on the background model until tomorrow. */
+  saver: boolean
   /** The bot's character, written by the user; empty layers when none (or an older host). */
   personality: Personality
   /** Other computers in the user's networks list this bot and may message it; null from an older host. */
@@ -150,6 +152,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     manageTeam: raw.manageTeam ?? null,
     verifyCommand: raw.verifyCommand ?? null,
     backgroundModel: raw.backgroundModel ?? null,
+    saver: raw.saver ?? false,
     personality: { soul: '', persona: '', heartbeat: '', ...raw.personality },
     offeredToNetwork: raw.offeredToNetwork ?? null,
     reachableByAssistants: raw.reachableByAssistants ?? null,
@@ -700,6 +703,7 @@ export interface BotDraft {
   manageTeam?: boolean
   verifyCommand?: string | null
   backgroundModel?: string | null
+  saver?: boolean
   personality?: Personality
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   offeredToNetwork?: boolean
@@ -739,6 +743,7 @@ export function draftOf(bot: Bot): BotDraft {
     manageTeam: bot.manageTeam ?? undefined,
     verifyCommand: bot.verifyCommand,
     backgroundModel: bot.backgroundModel,
+    saver: bot.saver,
     personality: bot.personality,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
     offeredToNetwork: bot.offeredToNetwork ?? undefined,
