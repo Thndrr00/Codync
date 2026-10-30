@@ -177,6 +177,11 @@ import kotlinx.serialization.json.putJsonArray
                         Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                     )
                 }
+                RosterQuickActions(
+                    query = searchQuery, online = online, account = account, manage = manage,
+                    newBot = newBot, newGroup = newGroup,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                )
                 state.mismatch?.let { UpdateNeededCard(state, it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 Crossfade(
                     preferences.presentation,
@@ -468,6 +473,7 @@ internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {
 @Composable private fun ComputerFilterHeader(state: AppState, store: AppStore, manage: () -> Unit) {
     val summary = connectionSummary(state)
     val shown = state.computer?.id
+    val active = state.bots.any { it.status == "working" || it.status == "needsInput" }
     DropdownMenu({
         listOfNotNull(
             MenuItem("All computers", icon = "checkmark").takeIf { state.computers.size <= 1 },
@@ -475,7 +481,11 @@ internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {
                 if (computer.id == shown) MenuItem("${state.hostName} · ${connectionLabel(state)}", icon = "checkmark")
                 else MenuItem(computer.name, icon = "desktopcomputer") { store.switchComputer(computer.id) }
             }.toTypedArray(),
-            MenuItem("Reconnect", icon = "arrow.clockwise", divider = true, enabled = state.computers.isNotEmpty()) { store.reconnect() },
+            MenuItem(
+                "Stop all", icon = "stop.fill", divider = true,
+                enabled = "stopAll" !in state.busy && state.actualConnection is LinkState.Ready,
+            ) { store.stopAllBots() }.takeIf { active },
+            MenuItem("Reconnect", icon = "arrow.clockwise", divider = !active, enabled = state.computers.isNotEmpty()) { store.reconnect() },
             MenuItem("Manage computers", icon = "desktopcomputer", action = manage),
         )
     }, label = "Computers, $summary. " + if (state.computers.size > 1) "Switch computer" else "Filter conversations") {

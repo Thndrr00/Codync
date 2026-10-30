@@ -2,6 +2,8 @@
 mod check;
 pub use check::Checked;
 mod editor;
+mod failed;
+mod idle;
 pub use editor::{ScheduleDraft, preview as schedule_preview};
 pub mod hooks;
 use hooks::Refused;
@@ -54,6 +56,9 @@ pub struct Routine {
     /// What each `watch` trigger last saw, by trigger position.
     #[serde(default)]
     pub watch: Vec<watch::WatchState>,
+    /// Finished runs in a row that ran nothing that changes anything (`idle.rs`).
+    #[serde(default)]
+    pub idle_runs: u32,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -272,6 +277,7 @@ impl Routines {
                 },
                 // Same triggers keep what their watches saw; new ones start a fresh baseline.
                 watch: old.as_ref().filter(|o| o.triggers == triggers).map(|o| o.watch.clone()).unwrap_or_default(),
+                idle_runs: 0,
                 triggers,
                 webhook_key: old.as_ref().map_or_else(webhook_key, |r| r.webhook_key.clone()),
                 deleted: false,

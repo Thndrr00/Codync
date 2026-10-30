@@ -40,6 +40,13 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         "memoryCall" => {
             crate::chat::memory::tool_call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?
         }
+        "listBotApps" | "createAppLink" | "revokeAppLink" | "deleteBotApp" => {
+            crate::chat::apps::api_call(hub, method, &b)?
+        }
+        "appRequest" => super::apps_bridge::request(hub, &b).await?,
+        "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
+            crate::chat::open_items::api_call(hub, method, &b)?
+        }
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
             if name == "research_sources" {
@@ -52,7 +59,11 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             } else if crate::chat::scratchpad::TOOLS.contains(&name) {
                 crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::teach::TOOLS.contains(&name) {
-                crate::chat::teach::call(hub, bot, name)?
+                crate::chat::teach::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::apps::TOOLS.contains(&name) {
+                crate::chat::apps::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::open_items::TOOLS.contains(&name) {
+                crate::chat::open_items::call(hub, bot, name, &b["arguments"])?
             } else if name == crate::chat::skills::TOOL {
                 crate::chat::skills::call(hub, bot, &b["arguments"]).await?
             } else if crate::chat::fallbacks::TOOLS.contains(&name) {
@@ -259,15 +270,33 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
         // A finished voice call, as a line in the chat ("Voice chat · 0:16").
         "logCall" => crate::voice::receipts::log(hub, &b)?,
         "stop" => {
-            let bot = str_arg(&b, "botId")?;
-            match hub.store.bot(bot)? {
-                Some(row) if row.config.is_group() => hub.groups.stop(hub, bot),
-                // The terminal answers to its own interrupt, not to us.
-                Some(row) if crate::external::is_external(&row.config) => {}
-                _ => hub.send_cmd(bot, Cmd::Stop)?,
-            }
+            hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
         }
+        "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
+        "setTokenBudget" => {
+            let limit = b["limit"].as_u64();
+            hub.budget.set_limit(&hub.store, str_arg(&b, "botId")?, limit)?;
+            hub.budget.status(crate::store::now_ms())
+        }
+        "clearFailedRuns" => {
+            let cleared = hub.routines.clear_failed(&hub.store, b["botId"].as_str())?;
+            json!({"cleared": cleared})
+        }
+        "exportBot" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
+            crate::bundle::export(&[row.config])?
+        }
+        "importBots" => crate::bundle::import(hub, &b["bundle"], str_arg(&b, "cwd")?).await?,
+        "retireDormantSkills" => {
+            let hub = hub.clone();
+            let turned_off =
+                tokio::task::spawn_blocking(move || crate::market::retire_dormant_skills(&hub, crate::store::now_ms()))
+                    .await??;
+            json!({"turnedOff": turned_off})
+        }
+        "doctor" => crate::doctor::report(hub)?,
+        "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {
             hub.send_cmd(str_arg(&b, "botId")?, Cmd::SwitchBack)?;
             json!({})

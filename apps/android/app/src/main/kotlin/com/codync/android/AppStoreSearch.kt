@@ -14,9 +14,10 @@ data class SearchHit(val id: String, val botId: String, val threadId: String?, v
 data class SearchPage(val hits: List<SearchHit>, val next: Long?)
 
 /** Searches one bot's chat-visible messages (main chat and threads) for [query], newest first. */
-suspend fun AppStore.searchMessages(botId: String, query: String, beforeSeq: Long? = null): SearchPage {
+suspend fun AppStore.searchMessages(botId: String, query: String, beforeSeq: Long? = null, searchScope: String = "all"): SearchPage {
     val payload = buildJsonObject {
         put("query", query)
+        put("scope", searchScope)
         put("botIds", JsonArray(listOf(JsonPrimitive(botId))))
         put("limit", 30)
         beforeSeq?.let { put("beforeSeq", it) }
@@ -36,6 +37,19 @@ suspend fun AppStore.searchMessages(botId: String, query: String, beforeSeq: Lon
     val next = response.jsonObject["next"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.longOrNull
     return SearchPage(hits, next)
 }
+
+data class SearchShortcut(val id: String, val query: String, val scope: String)
+
+private fun searchShortcuts(response: JsonElement): List<SearchShortcut> = response.jsonObject.getValue("searches").jsonArray.map {
+    val value = it.jsonObject
+    SearchShortcut(value.getValue("id").jsonPrimitive.content, value.getValue("query").jsonPrimitive.content, value.getValue("scope").jsonPrimitive.content)
+}
+
+suspend fun AppStore.savedSearches(): List<SearchShortcut> = searchShortcuts(hostQuery("savedSearches", buildJsonObject {}))
+suspend fun AppStore.saveSearch(query: String, searchScope: String): List<SearchShortcut> =
+    searchShortcuts(hostQuery("saveSearch", body("query" to query, "scope" to searchScope)))
+suspend fun AppStore.deleteSavedSearch(id: String): List<SearchShortcut> =
+    searchShortcuts(hostQuery("deleteSavedSearch", body("id" to id)))
 
 /** Loads the span around a hit into the mirror, so the jump has its message and neighbours. */
 suspend fun AppStore.loadMessageContext(botId: String, entryId: String) {

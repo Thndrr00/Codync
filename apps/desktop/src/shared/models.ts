@@ -1,6 +1,15 @@
 // Wire types for codync-host (see host/src/api/). Field names match the
 // host's camelCase JSON. Timestamps are epoch milliseconds.
 
+export * from './bdots-models.ts'
+import {
+  DEFAULT_PROACTIVE_SETTINGS,
+  type ActionClass,
+  type BotApp,
+  type ProactiveSettings,
+  type RulePolicy,
+} from './bdots-models.ts'
+
 export type BotStatus = 'idle' | 'working' | 'needsInput' | 'error'
 
 export interface Bot {
@@ -13,6 +22,7 @@ export interface Bot {
   description: string
   avatarColor: string
   avatarShape: string
+  avatarLook?: string | null
   backend: string
   command?: string | null
   cwd: string
@@ -20,6 +30,8 @@ export interface Bot {
   managedWorkspace: boolean
   /** `ask` or `auto`. */
   permission: string
+  actionRules?: Partial<Record<ActionClass, RulePolicy>>
+  proactive?: ProactiveSettings
   model?: string | null
   /** The model's own settings (effort, fast…): agent option id → value. */
   modelOptions: Record<string, string>
@@ -83,11 +95,14 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     description: raw.description ?? '',
     avatarColor: raw.avatarColor ?? 'blue',
     avatarShape: raw.avatarShape ?? 'blob',
+    avatarLook: raw.avatarLook ?? null,
     backend: raw.backend ?? 'custom',
     command: raw.command ?? null,
     cwd: raw.cwd ?? '',
     managedWorkspace: raw.managedWorkspace ?? false,
     permission: raw.permission ?? 'auto',
+    actionRules: raw.actionRules ?? {},
+    proactive: { ...DEFAULT_PROACTIVE_SETTINGS, ...(raw.proactive ?? {}) },
     model: raw.model ?? null,
     modelOptions: raw.modelOptions ?? {},
     fastMode: raw.fastMode ?? false,
@@ -267,16 +282,23 @@ export interface ChiefIncidentCard {
 }
 
 export interface SentinelIssue {
-  id: string
-  severity: 'info' | 'warning' | 'critical'
-  category: string
-  message: string
-  autoFixable: boolean
+  signature: string
+  kind: 'tool_error' | 'retry_loop' | 'turn_error' | 'queue_lag'
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  toolName?: string
+  botId: string
+  firstSeenAt: number
+  lastSeenAt: number
+  count: number
+  wastedTurns: number
+  evidenceEntryId: string
 }
 
 export interface SentinelReport {
-  timestamp: string
-  healthy: boolean
+  scannedAt: number
+  lookbackMs: number
+  entriesExamined: number
   issues: SentinelIssue[]
 }
 
@@ -299,6 +321,10 @@ export interface EntryData {
   compaction?: Compaction
   /** notice: the bot's chat starts over with this handoff (see `HandoffNotice`). */
   handoff?: HandoffCard
+  /** notice: a bot-built interactive mini-app card (Idea 1). */
+  botApp?: BotApp
+  /** notice: human takeover request card (Idea 13). */
+  takeoverRequest?: { reason: string; url?: string | null; status: string }
   /** Interactive Passkey / 2FA assistance card from CDP browser detector (INIC-02). */
   passkeyWall?: PasskeyWallCard
   /** Chief of Staff incident intervention card (INIC-04). */
@@ -583,10 +609,13 @@ export interface BotDraft {
   description: string
   avatarColor: string
   avatarShape: string
+  avatarLook?: string | null
   backend: string
   command?: string | null
   cwd: string
   permission: string
+  actionRules?: Partial<Record<ActionClass, RulePolicy>>
+  proactive?: ProactiveSettings
   model?: string | null
   modelOptions?: Record<string, string>
   fastMode?: boolean
@@ -614,10 +643,13 @@ export function draftOf(bot: Bot): BotDraft {
     description: bot.description,
     avatarColor: bot.avatarColor,
     avatarShape: bot.avatarShape,
+    avatarLook: bot.avatarLook ?? null,
     backend: bot.backend,
     command: bot.command ?? null,
     cwd: bot.managedWorkspace ? '' : bot.cwd,
     permission: bot.permission,
+    actionRules: bot.actionRules,
+    proactive: bot.proactive,
     model: bot.model ?? null,
     modelOptions: bot.modelOptions,
     fastMode: bot.fastMode,
@@ -653,3 +685,29 @@ export interface GroupDraft {
   chiefBotId?: string | null
   pinned?: boolean
 }
+
+/** One thing `doctor` found wrong with a bot's setup. */
+export interface DoctorFinding {
+  botId: string
+  botName: string
+  severity: 'error' | 'warning'
+  problem: string
+  message: string
+}
+
+export interface DoctorReport {
+  checked: number
+  errors: number
+  findings: DoctorFinding[]
+}
+
+/** A daily token limit and today's use; `botId` is `*` for all bots together. */
+export interface TokenBudget {
+  botId: string
+  limit: number
+  used: number
+  level: 'within' | 'warning' | 'exceeded'
+}
+
+/** A bot (or bots) as one portable JSON file: the host makes and reads it. */
+export type BotBundle = Record<string, unknown>

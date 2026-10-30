@@ -37,7 +37,11 @@ impl App {
             Overlay::RosterTools => Some(&mut self.roster_tools.query),
             Overlay::Goto(g) => Some(&mut g.query),
             Overlay::Help(e) => Some(e),
-            Overlay::NewBot(n) => (n.field == NewBotField::Name).then_some(&mut n.name),
+            Overlay::NewBot(n) => match n.field {
+                NewBotField::Name => Some(&mut n.name),
+                NewBotField::Purpose => Some(&mut n.purpose),
+                _ => None,
+            },
             Overlay::Folder(p) => Some(&mut p.query),
             Overlay::Group(g) => match g.field {
                 GroupField::Name => Some(&mut g.name),

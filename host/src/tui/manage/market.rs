@@ -1,4 +1,4 @@
-//! The marketplace: agents, connectors and skills.
+//! The marketplace: ready-made bots and teams, agents, connectors and skills.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::{Value, json};
@@ -14,6 +14,7 @@ impl App {
         self.call("skills", json!({}), After::Skills);
         self.sheet("marketSkills", json!({}), Reply::Skills);
         self.sheet("marketConnectors", json!({"search": ""}), Reply::Registry { more: false });
+        self.sheet("botCatalog", json!({}), Reply::Catalog);
         self.overlays.push(Overlay::Market(Box::new(Market {
             tab: Tab::Agents,
             query: Editor::default(),
@@ -21,6 +22,8 @@ impl App {
             registry: vec![],
             next: None,
             skills: None,
+            catalog: Value::Null,
+            added: vec![],
             loading: true,
             cursor: 0,
             error: None,
@@ -35,6 +38,7 @@ impl App {
             fuzzy(q, &fields)
         };
         match m.tab {
+            Tab::Bots | Tab::Teams => Self::catalog_rows(&m.catalog, m.tab, q),
             Tab::Agents => {
                 let agents = self
                     .backends
@@ -159,6 +163,7 @@ impl App {
             Install(Value),
             More,
             Skill(Value, bool),
+            Catalog(Value, bool),
             None,
         }
         let act = match self.market_rows(&m).get(m.cursor) {
@@ -170,6 +175,8 @@ impl App {
             Some(Row::More) => Act::More,
             Some(Row::Skill(v)) => Act::Skill((*v).clone(), true),
             Some(Row::OwnSkill(v)) => Act::Skill((*v).clone(), false),
+            Some(Row::Profile(v)) if !m.added.contains(&s(v, "id")) => Act::Catalog((*v).clone(), false),
+            Some(Row::Team(v)) if !m.added.contains(&s(v, "id")) => Act::Catalog((*v).clone(), true),
             _ => Act::None,
         };
         match act {
@@ -262,6 +269,7 @@ impl App {
                 self.open_skill(&v, catalog);
                 return None;
             }
+            Act::Catalog(item, team) => self.add_from_catalog(&item, team),
             Act::None => {}
         }
         Some(Overlay::Market(m))

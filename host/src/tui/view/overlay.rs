@@ -62,7 +62,12 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
             let x = put(buf, inner.x, inner.y + 4, 30, &format!(" ↵ {button} "), danger) + 1;
             put(buf, x, inner.y + 4, 14, &format!(" esc {cancel} "), t.text.patch(t.btn).add_modifier(Modifier::BOLD));
         }
-        Overlay::NewBot(n) => new_bot_view(buf, area, n),
+        Overlay::NewBot(n) => {
+            let agent = n.backend.as_deref().map(|id| {
+                app.backends.iter().find(|b| b["id"] == id).and_then(|b| b["name"].as_str()).unwrap_or(id).to_owned()
+            });
+            new_bot_view(buf, area, n, agent.as_deref());
+        }
         Overlay::Folder(p) => {
             let t = theme();
             let matches = App::folder_matches(p);

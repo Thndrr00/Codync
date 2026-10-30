@@ -348,7 +348,7 @@ export function AnchoredMenu({ open, onClose, anchor, point, items, reactions, s
   const { style, width, room } = anchorPlacement(rect)
   return createPortal(
     <div className={`anchored ${shown ? 'shown' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => { e.preventDefault(); onClose() }}>
-      <div className="anchored-panel" style={{ ...style, maxWidth: width }}>
+      <div className={`anchored-panel t-dropdown ${shown ? "is-open" : ""}`} style={{ ...style, maxWidth: width }}>
         <MenuPanel items={frozen.current} reactions={reactions} dismiss={onClose} maxHeight={Math.min(420, room)} search={search} />
       </div>
     </div>,

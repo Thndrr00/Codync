@@ -190,6 +190,7 @@ import kotlinx.coroutines.launch
                 }
             } else {
                 SearchBox(search, { search = it }, inset, ::submit) { search = ""; submit() }
+                CatalogSections(state, store, query, inset)
                 if (agents.isNotEmpty()) Box(inset) {
                     MarketSection(if (query.isEmpty()) "Agents" else "Agents matching “$query”") {
                         if (backends.any { it.needsNode }) NodeNotice(state) { addingNode = true }

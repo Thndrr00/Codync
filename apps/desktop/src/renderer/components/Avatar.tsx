@@ -3,6 +3,7 @@ import { isGroup, isWorking, needsInput, type Bot } from '@shared/models'
 import { DOT_RADIUS, dotGrid } from '../lib/dot-grid'
 import { avatarColor, palette, useDark, usePixelRatio, useReduceMotion } from '../lib/theme'
 import { Icon } from './Icon'
+import { isRobotLook, RobotAvatar } from './RobotAvatar'
 import './avatar.css'
 
 export type Mood = 'idle' | 'working' | 'needsInput' | 'failed'
@@ -280,7 +281,12 @@ export function moodOf(bot: Bot, animated = true): Mood {
 }
 
 export function BotAvatar({ bot, size = 40, animated = true }: { bot: Bot; size?: number; animated?: boolean }) {
-  return <CharacterAvatar shape={bot.avatarShape} color={bot.avatarColor} size={size} mood={moodOf(bot, animated)} />
+  const mood = moodOf(bot, animated)
+  const look = bot.avatarLook || bot.avatarShape
+  if (isRobotLook(look)) {
+    return <RobotAvatar look={look} color={avatarColor(bot.avatarColor)} size={size} working={mood === 'working'} />
+  }
+  return <CharacterAvatar shape={bot.avatarShape} color={bot.avatarColor} size={size} mood={mood} />
 }
 
 /**

@@ -12,6 +12,17 @@ const VISIBLE: &str = "(kind = 'user' OR (kind = 'agent' AND json_extract(data, 
 
 impl Store {
     pub fn roster_search(&self, bots: &[String], terms: &[String], before: i64, limit: i64) -> Result<Vec<Entry>> {
+        self.roster_search_scoped(bots, terms, before, limit, super::SearchScope::All)
+    }
+
+    pub fn roster_search_scoped(
+        &self,
+        bots: &[String],
+        terms: &[String],
+        before: i64,
+        limit: i64,
+        scope: super::SearchScope,
+    ) -> Result<Vec<Entry>> {
         let mut sql = format!(
             "SELECT {COLS} FROM entries WHERE bot_id IN (SELECT value FROM json_each(?1))
              AND seq < ?2 AND {VISIBLE}
@@ -19,6 +30,11 @@ impl Store {
                          AND COALESCE(json_extract(config, '$.hidden'), 0) = 0)"
         );
         let mut args: Vec<rusqlite::types::Value> = vec![serde_json::to_string(bots)?.into(), before.into()];
+        match scope {
+            super::SearchScope::All => {}
+            super::SearchScope::Main => sql.push_str(" AND thread_id IS NULL"),
+            super::SearchScope::Threads => sql.push_str(" AND thread_id IS NOT NULL"),
+        }
         for term in terms {
             args.push(term.to_lowercase().into());
             write!(
@@ -93,6 +109,14 @@ mod tests {
         let terms = vec!["NEEDLE".into()];
         let hits = s.roster_search(&ids, &terms, i64::MAX, 1).unwrap();
         assert_eq!(hits[0].id, reply.id);
+        let main_hits = s.roster_search_scoped(&ids, &terms, i64::MAX, 1, super::super::SearchScope::Main).unwrap();
+        assert_eq!(main_hits[0].id, root.id, "scope is applied before LIMIT, not after paging");
+        let thread_hits =
+            s.roster_search_scoped(&ids, &terms, i64::MAX, 1, super::super::SearchScope::Threads).unwrap();
+        assert_eq!(thread_hits[0].id, reply.id);
+        assert!(
+            s.roster_search_scoped(&ids, &terms, reply.seq, 1, super::super::SearchScope::Threads).unwrap().is_empty()
+        );
         assert_eq!(s.roster_search(&ids, &terms, reply.seq, 1).unwrap()[0].id, root.id);
         let context = s.message_context(&reply).unwrap();
         assert!(context.iter().any(|e| e.id == root.id));

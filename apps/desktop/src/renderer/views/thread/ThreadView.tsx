@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { draftOf, isGroup, isWorkingIn, type Bot, type BotDraft, type Entry } from '@shared/models'
+import { draftOf, folderName, isGroup, isWorkingIn, sharedWorkspacePeers, type Bot, type BotApp, type BotDraft, type Entry } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
+import { BotAppPanel } from '../../components/BotAppPanel'
 import { Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Sheet, usePresence } from '../../components/Overlay'
@@ -57,6 +58,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   const [routineId, setRoutineId] = useState<string | null>(null)
   // A group member's settings, opened from its notice.
   const [editingMember, setEditingMember] = useState<string | null>(null)
+  const [activeApp, setActiveApp] = useState<BotApp | null>(null)
   const [routineRequest, setRoutineRequest] = useState(0)
   const root = useRef<HTMLDivElement>(null)
   const dock = useRef<HTMLDivElement>(null)
@@ -170,7 +172,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
           </button>
         </div>
         {/* An update card takes the composer's place, so there's nothing to reply with. */}
-        <Transcript botId={botId} openTrace={openTrace} onReply={store.mismatch ? undefined : setReplyTo} openRoutine={presentRoutine} openAgent={presentAgent} openBotChat={setBotChat} />
+        <Transcript botId={botId} openTrace={openTrace} onReply={store.mismatch ? undefined : setReplyTo} openRoutine={presentRoutine} openAgent={presentAgent} openBotChat={setBotChat} openApp={setActiveApp} />
         <div className="composer-dock" ref={dock}>
           <div className="composer-fade" />
           {store.mismatch ? (
@@ -221,6 +223,17 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       <FormSheet open={!!member} onClose={() => setEditingMember(null)} width={520} height={680} fixed>
         {member ? <BotEditorView key={member.id} draft={draftOf(member)} /> : null}
       </FormSheet>
+      <BotAppPanel
+        app={activeApp}
+        onClose={() => setActiveApp(null)}
+        onCreateShareLink={async (slug, label, mode) => {
+          const shared = await store.createAppLink(botId, slug, mode, label)
+          return shared
+        }}
+        onRevokeShareLink={async (slug, token) => {
+          await store.revokeAppLink(botId, slug, token)
+        }}
+      />
     </div>
   )
 })
@@ -260,7 +273,7 @@ function ConnectionSubtitle() {
 /** The messages: every loaded message, brought to the newest as it changes while the reader is at the bottom. */
 const PAGE = 40
 
-const Transcript = memo(function Transcript({ botId, openTrace, onReply, openRoutine, openAgent, openBotChat }: { botId: string; openTrace: () => void; onReply?: (e: Entry) => void; openRoutine: (id: string | null) => void; openAgent: (botId: string) => void; openBotChat: (peerId: string) => void }) {
+const Transcript = memo(function Transcript({ botId, openTrace, onReply, openRoutine, openAgent, openBotChat, openApp }: { botId: string; openTrace: () => void; onReply?: (e: Entry) => void; openRoutine: (id: string | null) => void; openAgent: (botId: string) => void; openBotChat: (peerId: string) => void; openApp?: (app: BotApp) => void }) {
   const store = useStore()
   const tr = useTr()
   const bot = store.bots.get(botId) ?? null
@@ -367,9 +380,10 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openRou
           {items.length === 0 && bot ? <div className="transcript-intro">{isGroup(bot) ? <GroupIntroCard group={bot} /> : <IntroCard bot={bot} />}</div> : null}
           {items.map((item) => (
             <div key={item.id} className={arrivals.has(item.id) ? rowIn(item) : undefined}>
-              <Row item={item} chat={bot} openTrace={openTrace} onReply={onReply} openRoutine={openRoutine} openAgent={openAgent} openBotChat={openBotChat} />
+              <Row item={item} chat={bot} openTrace={openTrace} onReply={onReply} openRoutine={openRoutine} openAgent={openAgent} openBotChat={openBotChat} openApp={openApp} />
             </div>
           ))}
+          {bot ? <SharedWorkspaceNotice bot={bot} /> : null}
           {bot ? <WorkingTransition bot={bot} visible={live} /> : null}
           <div className="chat-end" />
         </div>
@@ -392,7 +406,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openRou
   )
 })
 
-function Row({ item, chat, openTrace, onReply, openRoutine, openAgent, openBotChat }: { item: ChatItem; chat: Bot | null; openTrace: () => void; onReply?: (e: Entry) => void; openRoutine: (id: string | null) => void; openAgent: (botId: string) => void; openBotChat: (peerId: string) => void }) {
+function Row({ item, chat, openTrace, onReply, openRoutine, openAgent, openBotChat, openApp }: { item: ChatItem; chat: Bot | null; openTrace: () => void; onReply?: (e: Entry) => void; openRoutine: (id: string | null) => void; openAgent: (botId: string) => void; openBotChat: (peerId: string) => void; openApp?: (app: BotApp) => void }) {
   if (item.kind === 'separator') {
     return <TimeSeparator date={item.date} />
   }
@@ -400,7 +414,23 @@ function Row({ item, chat, openTrace, onReply, openRoutine, openAgent, openBotCh
   const e = item.entry
   if (e.kind === 'notice' && e.data.routineId) return <RoutineNotice entry={e} open={() => openRoutine(e.data.routineId!)} />
 
-  return <ChatRow entry={e} groupStart={item.groupStart} chat={chat} openTrace={openTrace} onReply={onReply} openAgent={openAgent} />
+  return <ChatRow entry={e} groupStart={item.groupStart} chat={chat} openTrace={openTrace} onReply={onReply} openAgent={openAgent} openApp={openApp} />
+}
+
+/** Warns when other bots are actively working in the same project workspace (N16). */
+function SharedWorkspaceNotice({ bot }: { bot: Bot }) {
+  const store = useStore()
+  const peers = sharedWorkspacePeers(bot, store.bots.values())
+  if (peers.length === 0) return null
+  const names = peers.map((p) => p.name).join(', ')
+  return (
+    <HStack gap={6} justify="center" className="chat-row notice">
+      <Icon name="exclamationmark.triangle" size={11} color="var(--warning, #ff9f0a)" />
+      <Text size="caption" tone="attention">
+        {`${names} ${peers.length === 1 ? 'is' : 'are'} also active in ${folderName(bot)}`}
+      </Text>
+    </HStack>
+  )
 }
 
 /** The start of an empty group chat: who's in it and how the room works. */

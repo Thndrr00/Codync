@@ -44,6 +44,31 @@ Clicking a skill (an Extensions row, an installed skill, or the info button besi
 
 Registry-backed package connectors follow their upstream release. The host checks the Registry periodically after credentials are unlocked and checks again immediately before a package process starts. If a newer pinned npm, PyPI, OCI or NuGet reference is available, only that package/image argument is replaced; the running process is not interrupted, and the new version applies on its next launch. Network failures, missing packages and attempted downgrades leave the installed reference unchanged. Custom command connectors are never updated automatically.
 
+## Ready-made bots and coordinator teams
+
+Extensions opens with two Codync-owned catalog sections from the host (`botCatalog`,
+`host/src/market/catalog.json`, written for Codync; no remote catalog, no install counts):
+
+- **Bots**: ready-made profiles (name, look, one-line summary, standing instructions). Add creates the bot
+  with `createBot` on the computer's usual defaults: the host's agent pick, a personal workspace, every
+  installed connector and skill. A profile never asks for more access than a blank bot gets.
+- **Coordinator teams**: a coordinator bot plus catalog bots. Add calls `installTeam {id}`; the host creates
+  the coordinator, then each teammate, then their group chat with the coordinator as `chiefBotId` (the lead
+  the group falls back to and that hands requests to teammates). All or nothing: when a step fails the bots
+  this call already created are deleted. Manage the team stays off; the user turns it on if wanted.
+
+Clicking a row opens its details (instructions, or the coordinator and teammates) with Add. Profiles marked
+`featured` are the New bot screen's **Suggestions**: picking one fills the name, look and instructions.
+
+The New bot screen also asks what the bot should help with (its standing instructions) and lets the user pick
+the agent and model, with the agent's state (not installed, not signed in) shown under the picker.
+
+Clients: desktop (macOS, Linux, Windows) and Android render both sections and the New bot fields; the terminal
+has Bots and Teams tabs in Extensions (↵ adds) and Purpose and Agent fields in the New bot dialog (←→ steps
+through the agents that can run; the model stays the agent's default and changes in Settings). The iPhone app
+is not updated in this change at the owner's request; it keeps the earlier New bot screen and ignores the
+catalog (additive host methods).
+
 ## Hermes Agent
 
 Hermes Agent is a built-in agent that runs its installed CLI with `hermes acp`, without an ACP registry adapter. Install it using the [official installation guide](https://hermes-agent.nousresearch.com/docs/getting-started/installation), then run `hermes acp --setup` to choose a provider and model. In Codync, refresh the agents and select **Hermes Agent** when creating a bot; leave the custom command empty.

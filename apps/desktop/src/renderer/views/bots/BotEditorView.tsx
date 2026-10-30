@@ -4,6 +4,9 @@ import { restLine, restOf, withBackend } from '@shared/fallbacks'
 import { draftOf, type Bot, type BotDraft, type DirListing } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { CharacterAvatar } from '../../components/Avatar'
+import { ProactivePolicySection } from '../../components/ProactivePolicySection'
+import { ProactiveCheckIns } from './ProactiveCheckIns'
+import { RobotAvatar, isRobotLook } from '../../components/RobotAvatar'
 import { CardSection, ChoicePicker, DropdownMenu, IconButton, Pill, SearchField, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, Sheet, SheetPage, useDismiss } from '../../components/Overlay'
@@ -215,7 +218,11 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
         <CardSection title="Profile">
           <ValueRow label="Avatar">
             <button ref={avatarRef} className="avatar-button small" title="Edit Bot avatar" aria-label="Edit Bot avatar" onClick={() => setPickingAvatar((p) => !p)}>
-              <CharacterAvatar shape={draft.avatarShape} color={draft.avatarColor} size={24} />
+              {isRobotLook(draft.avatarLook) ? (
+                <RobotAvatar look={draft.avatarLook!} color={draft.avatarColor} size={24} />
+              ) : (
+                <CharacterAvatar shape={draft.avatarShape} color={draft.avatarColor} size={24} />
+              )}
             </button>
             <AnchoredPanel open={pickingAvatar} onClose={() => setPickingAvatar(false)} anchor={avatarRef}>
               <div className="avatar-picker-panel">
@@ -314,6 +321,15 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             />
           ) : null}
         </CardSection>
+
+        <ProactivePolicySection
+          avatarColorId={draft.avatarColor}
+          avatarLook={draft.avatarLook ?? undefined}
+          onChangeLook={(look) => set('avatarLook', look ?? null)}
+          onApplyRoleTemplate={(tpl) => onChange((d) => ({ ...d, description: draft.description?.trim() ? draft.description : tpl.standingInstructions, avatarLook: tpl.avatarLook, avatarColor: tpl.avatarColor }))}
+        />
+
+        <ProactiveCheckIns settings={draft.proactive} onChange={(next) => set('proactive', next)} />
 
         <PluginToggles
           title="Connectors"

@@ -9,6 +9,7 @@ import { useStore } from '../../store/context'
 import { useScreenViewed } from '../../store/analytics'
 import { ComputerBadge } from '../ComputerBadge'
 import { AgentSheet, AgentTile, NodeNotice } from './AgentSheet'
+import { CatalogSections } from './CatalogSections'
 import { CredentialsView } from './CredentialsView'
 import { CustomConnectorSheet, InstallConnectorSheet, NewSkillSheet } from './ConnectorSheets'
 import { SetupTerminalView } from './SetupTerminal'
@@ -21,6 +22,7 @@ import {
 import { AppLogo, FormSheet, ItemGrid, ItemRow, MarketRow, MarketSection, ScreenHeader, ServiceLogo, SkeletonGrid, SkillGlyph, SlideStack, TileIcon } from './pieces'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
+import { useCardTilt } from '../../lib/use-card-tilt'
 
 const connectorId = (c: MarketConnector) => c.name
 
@@ -202,7 +204,7 @@ export function MarketplaceView({ computers, computer, onComputer }: { computers
         <button
           aria-label={tr('Clear search')}
           title={tr('Clear search')}
-          className="market-search-clear"
+          className={`market-search-clear t-clear ${search ? "is-visible" : ""}`}
           onClick={() => {
             setSearch('')
             setAgentLimit(10)
@@ -223,6 +225,7 @@ export function MarketplaceView({ computers, computer, onComputer }: { computers
         <div className="market-page-content">
           {header}
           {searchField}
+          <CatalogSections query={query} onError={setError} />
           {agents.length > 0 ? (
             <MarketSection title={query ? tr('Agents matching “{query}”').replaceAll('{query}', query) : 'Agents'}>
               {allAgents.some((b) => b.node === 'missing') ? <NodeNotice onAdd={() => setAddingNode(true)} /> : null}
@@ -340,19 +343,23 @@ export function MarketplaceView({ computers, computer, onComputer }: { computers
 }
 
 function AgentCard({ backend, onClick }: { backend: Backend; onClick: () => void }) {
+  const tilt = useCardTilt(4)
   const status = backend.installed !== true && backend.curated === true ? 'Not installed'
     : backend.node === 'missing' ? 'Needs Node.js'
     : backend.installed !== true ? 'Sets up on first use'
     : backend.signedIn === false ? 'Not signed in'
     : 'Installed'
   return (
-    <button className="agent-card" title={backend.name} onClick={onClick}>
+    <div ref={tilt.ref} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave} className="t-tilt">
+    <button className="agent-card t-tilt-card" title={backend.name} onClick={onClick}>
+      <span className="t-tilt-glare" />
       <AgentTile registry={backend.registry ?? backend.id} icon={24} tile={40} radius={11} />
       <VStack as="span" align="flex-start" gap={3} shrink>
         <Text size="subheadline" weight="semibold" tone="text" truncate className="agent-card-line">{backend.name}</Text>
         <Text size="caption" tone="secondary" truncate className="agent-card-line">{status}</Text>
       </VStack>
     </button>
+    </div>
   )
 }
 
@@ -401,11 +408,11 @@ function InstalledView({ back }: { back: () => void }) {
                     <ItemRow
                       key={c.id}
                       title={c.name}
-                      subtitle={needsSignIn(c) ? 'Sign in so bots can use it' : (c.command ?? c.url ?? c.description)}
+                      subtitle={c.lastFailure ? `⚠ ${c.lastFailure.kind.toUpperCase()}: ${c.lastFailure.message}` : needsSignIn(c) ? 'Sign in so bots can use it' : (c.command ?? c.url ?? c.description)}
                       icon={c.kind === 'composio' ? <AppLogo url={c.logo} name={c.name} /> : <ServiceLogo name={c.name} registryName={c.registryName} />}
                       trailing={(
                         <>
-                          {signingIn === c.id ? <Spinner /> : needsSignIn(c) ? <Button onClick={() => void signIn(c.id)}>Sign in</Button> : null}
+                          {signingIn === c.id ? <Spinner /> : (needsSignIn(c) || c.lastFailure?.kind === 'auth') ? <Button onClick={() => void signIn(c.id)}>{c.lastFailure?.kind === 'auth' ? 'Re-authenticate' : 'Sign in'}</Button> : null}
                           <Button kind="secondary" onClick={() => setTools(c)}>Tools &amp; requests</Button>
                           <RemoveButton title={c.name} onClick={() => setRemoving({ id: c.id, name: c.name, isSkill: false })} />
                         </>

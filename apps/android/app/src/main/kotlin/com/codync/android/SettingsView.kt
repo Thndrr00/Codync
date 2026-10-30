@@ -212,7 +212,7 @@ import kotlinx.serialization.json.put
         }
     }
     CodyncSheet(voice, { voice = false }) { VoiceChatSettings(state, store) }
-    CodyncSheet(diagnostics, { diagnostics = false }) { SentinelDiagnosticsSheet(store) }
+    CodyncSheet(diagnostics, { diagnostics = false }) { SentinelDiagnosticsSheet(state, store) }
     SwatchPanel(coloring, paired?.color, { coloring = false }) { color -> paired?.let { store.setColor(it.id, color) } }
     CodyncDialog("Remove the older ${confirmRemoveCopy?.name ?: "computer"}?", confirmRemoveCopy != null, { confirmRemoveCopy = null },
         "It's this computer under an earlier identity and can't be reached anymore. Removing it only cleans up your account.") {
@@ -418,58 +418,4 @@ private val ConnectionRoute.icon get() = when (this) {
     ConnectionRoute.Automatic -> "arrow.triangle.branch"
     ConnectionRoute.CloudflareFirst -> "cloud"
     ConnectionRoute.DirectOnly -> "wifi"
-}
-
-/** Sentinel forensic diagnostics sheet (INIC-05). */
-@Composable private fun SentinelDiagnosticsSheet(store: AppStore) {
-    var loading by remember { mutableStateOf(true) }
-    var healthy by remember { mutableStateOf(true) }
-    var issues by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        try {
-            val res = store.channel?.call("sentinelHealth")?.let { it as? kotlinx.serialization.json.JsonObject }
-            healthy = res?.get("healthy")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content == "true" } ?: true
-            val rawIssues = (res?.get("issues") as? kotlinx.serialization.json.JsonArray).orEmpty()
-            issues = rawIssues.mapNotNull { el ->
-                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
-                Triple(obj.text("severity").orEmpty(), obj.text("category").orEmpty(), obj.text("message").orEmpty())
-            }
-        } catch (e: Exception) {
-            error = e.message ?: "Could not run Sentinel diagnostic."
-        } finally {
-            loading = false
-        }
-    }
-    Column(Modifier.fillMaxSize().background(Palette.background)) {
-        ModalHeader("System diagnostics")
-        CardForm(padding = PaddingValues(20.dp)) {
-            CardSection("Sentinel Watchdog", "Scans SQLite integrity, orphaned browser locks, stale job assignments, and process health.") {
-                row {
-                    ValueRow("Status", when {
-                        loading -> "Scanning…"
-                        error != null -> "Error"
-                        healthy -> "Healthy"
-                        else -> "${issues.size} issue(s)"
-                    })
-                }
-                error?.let { row { Text(it, style = Type.footnote, color = Palette.danger) } }
-            }
-            if (!loading && error == null) {
-                CardSection("Diagnostic Findings") {
-                    if (issues.isEmpty()) {
-                        row { Text("No database, browser profile, or runtime anomalies detected.", style = Type.subheadline, color = Palette.secondary) }
-                    } else {
-                        for ((severity, category, msg) in issues) row {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("${category.uppercase()} · ${severity.uppercase()}", style = Type.subheadline.semibold,
-                                    color = if (severity == "critical") Palette.danger else Palette.warning)
-                                Text(msg, style = Type.footnote, color = Palette.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

@@ -163,6 +163,11 @@ stop between phases. File acceptance verifies a multi-chunk round trip byte for
 byte. `LiveRosterTest` offers separately opted-in read-only inspection of an
 existing connection; it is not the ordinary reset suite.
 
+`CreationNavigationTest` separately opts in with `inspectCreation=true`: it opens
+the real New bot route, checks Name/purpose/suggestions, and closes without
+creating or saving. Run only this named class when inspecting a personal phone;
+do not enable the ordinary reset suite alongside it.
+
 The emulator-only `-PcodyncReleaseTests=true` variant signs an R8 acceptance build
 with the debug key. Ordinary release APKs remain unsigned. Physical camera,
 keyboard/TalkBack, provider login, background push, voice and release acceptance

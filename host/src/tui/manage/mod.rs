@@ -9,6 +9,7 @@ mod accounts;
 mod agent;
 mod analytics;
 mod bot_chat;
+mod catalog;
 pub(in crate::tui) mod computer;
 pub(in crate::tui) mod documents;
 mod fields;
@@ -62,6 +63,9 @@ pub enum Reply {
         more: bool,
     },
     Skills,
+    Catalog,
+    /// A catalog bot or team (its id) was created.
+    CatalogAdded(String),
     /// A skill's instructions, for the details sheet with that id.
     SkillDetails(String),
     Auth(String),
@@ -122,12 +126,20 @@ pub struct RoutineForm {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tab {
+    Bots,
+    Teams,
     Agents,
     Connectors,
     Skills,
 }
 
-pub const TABS: [(Tab, &str); 3] = [(Tab::Agents, "Agents"), (Tab::Connectors, "Connectors"), (Tab::Skills, "Skills")];
+pub const TABS: [(Tab, &str); 5] = [
+    (Tab::Bots, "Bots"),
+    (Tab::Teams, "Teams"),
+    (Tab::Agents, "Agents"),
+    (Tab::Connectors, "Connectors"),
+    (Tab::Skills, "Skills"),
+];
 
 pub struct Market {
     pub tab: Tab,
@@ -137,6 +149,10 @@ pub struct Market {
     pub registry: Vec<Value>,
     pub next: Option<String>,
     pub skills: Option<Vec<Value>>,
+    /// The host's ready-made bots and teams (`botCatalog`); empty on an older host.
+    pub catalog: Value,
+    /// Catalog bots and teams added while this sheet is open.
+    pub added: Vec<String>,
     pub loading: bool,
     pub cursor: usize,
     pub error: Option<String>,
@@ -152,6 +168,10 @@ pub enum Row<'a> {
     More,
     OwnSkill(&'a Value),
     Skill(&'a Value),
+    /// A ready-made bot from the catalog.
+    Profile(&'a Value),
+    /// A catalog team: a coordinator and the bots it hands work to.
+    Team(&'a Value),
 }
 
 pub struct AgentSetup {

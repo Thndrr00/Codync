@@ -71,6 +71,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::profile::tools());
                 list.extend(crate::chat::scratchpad::tools());
                 list.extend(crate::chat::teach::tools());
+                list.extend(crate::chat::apps::tools());
+                list.extend(crate::chat::open_items::tools());
                 list.extend(crate::documents::tools());
                 list.extend(crate::research::tools().as_array().into_iter().flatten().cloned());
                 list.extend(crate::chat::fallbacks::tools());
@@ -206,9 +208,13 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
                         | Server::Memory
                         | Server::Routines
                         | Server::Connectors => {
-                            json!({"content": [{"type": "text", "text": v.to_string()}]})
+                            let text = crate::agent::loop_guard::cap_tool_output(&v.to_string());
+                            json!({"content": [{"type": "text", "text": text}]})
                         }
-                        Server::Composio => json!({"content": [{"type": "text", "text": v["result"].to_string()}]}),
+                        Server::Composio => {
+                            let text = crate::agent::loop_guard::cap_tool_output(&v["result"].to_string());
+                            json!({"content": [{"type": "text", "text": text}]})
+                        }
                     };
                 }
                 Ok(v) => v["error"].as_str().unwrap_or("the Codync host refused the call").to_owned(),

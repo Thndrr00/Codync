@@ -1,0 +1,5 @@
+.routine-run-history { min-width: 0; }
+.routine-history-body { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--layout), opacity var(--fade); }
+.routine-history-body[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+.routine-history-content { min-height: 0; overflow: hidden; }
+.routine-run-detail { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; margin: 0; }

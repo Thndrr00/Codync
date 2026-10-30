@@ -2,13 +2,14 @@ import type { Bot, Entry } from '@shared/models'
 import { Observable } from '../lib/observable.ts'
 import type { BotStore } from './bot-store'
 import type { RosterItem } from './app-model'
+import type { SearchScope } from './search-shortcuts'
 
 export interface RosterHit { id: string; botId: string; threadId: string | null; text: string; seq: number }
 interface SearchPage { results: RosterHit[]; next: number | null }
 export type HistoryResults =
   | { kind: 'idle' | 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; hits: { hit: RosterHit; item: RosterItem }[]; cursors: Map<BotStore, number | null> }
+  | { kind: 'ready'; hits: { hit: RosterHit; item: RosterItem }[]; cursors: Map<BotStore, number | null>; warning?: string }
 
 /** Disposing the screen/account invalidates all outstanding reads, including pagination. */
 export class RosterQuery extends Observable {
@@ -25,35 +26,51 @@ export class RosterQuery extends Observable {
     if (this.timer) clearTimeout(this.timer)
   }
 
-  find(query: string, items: RosterItem[], more = false) {
+  find(query: string, items: RosterItem[], more = false, scope: SearchScope = 'all') {
     const sequence = ++this.sequence
     if (this.timer) clearTimeout(this.timer)
     const previous = more && this.result.kind === 'ready' ? this.result : null
     this.result = { kind: query.trim() ? 'loading' : 'idle' }
     this.changed()
     if (!query.trim()) return
-    this.timer = setTimeout(() => void this.search(query, items, sequence, previous), more ? 0 : 300)
+    this.timer = setTimeout(() => void this.search(query, items, sequence, previous, scope), more ? 0 : 300)
   }
 
   private async search(query: string, items: RosterItem[], sequence: number,
-    previous: Extract<HistoryResults, { kind: 'ready' }> | null) {
+    previous: Extract<HistoryResults, { kind: 'ready' }> | null, scope: SearchScope) {
     try {
       const stores = [...new Set(items.map((item) => item.store))]
-      const pages = await Promise.all(stores.map(async (store) => {
+      const settled = await Promise.allSettled(stores.map(async (store) => {
         const beforeSeq = previous?.cursors.get(store)
-        if (previous && beforeSeq == null) return { store, results: [], next: null }
-        const page = await (await store.ready()).call<SearchPage>('searchMessages', {
-          query, botIds: items.filter((i) => i.store === store).map((i) => i.bot.id), beforeSeq,
+        if (previous?.cursors.has(store) && beforeSeq === null) return { store, results: [], next: null }
+        const client = await store.ready()
+        // Older hosts ignore unknown request fields. Probe before labelling a scoped result.
+        if (scope !== 'all') await client.call('savedSearches', {})
+        const page = await client.call<SearchPage>('searchMessages', {
+          query, scope, botIds: items.filter((i) => i.store === store).map((i) => i.bot.id), beforeSeq,
         })
         return { store, ...page }
       }))
       if (sequence !== this.sequence) return
+      const pages = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+      const failed = settled.flatMap((result, index) => result.status === 'rejected' ? [stores[index].hostName] : [])
+      if (failed.length && !pages.length) throw new Error(`Could not search: ${failed.join(', ')}. Reconnect or update the computer and retry.`)
       const hits = pages.flatMap(({ store, results }) => results.flatMap((hit) => {
         const item = items.find((i) => i.store === store && i.bot.id === hit.botId)
         return item ? [{ hit, item }] : []
       }))
-      this.result = { kind: 'ready', hits: [...(previous?.hits ?? []), ...hits],
-        cursors: new Map(pages.map((page) => [page.store, page.next])) }
+      const cursors = new Map(previous?.cursors)
+      for (const page of pages) cursors.set(page.store, page.next)
+      const combined = [...(previous?.hits ?? []), ...hits]
+      const seen = new Map<BotStore, Set<string>>()
+      const unique = combined.filter(({ item, hit }) => {
+        const ids = seen.get(item.store) ?? new Set<string>()
+        if (ids.has(hit.id)) return false
+        ids.add(hit.id); seen.set(item.store, ids)
+        return true
+      })
+      this.result = { kind: 'ready', hits: unique, cursors,
+        warning: failed.length ? `Some results are missing: ${failed.join(', ')}. Reconnect or update the computer and retry.` : undefined }
     } catch (error) {
       if (sequence !== this.sequence) return
       this.result = { kind: 'error', message: `Search failed: ${error instanceof Error ? error.message : error}` }

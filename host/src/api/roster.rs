@@ -13,16 +13,19 @@ fn visible_bot(hub: &Hub, id: &str) -> Result<()> {
 
 pub(super) async fn search(hub: &Arc<Hub>, body: &Value) -> Result<Value> {
     let query = str_arg(body, "query")?.trim();
-    ensure!(!query.is_empty() && query.chars().count() <= 256, "query must contain 1–256 characters");
-    let terms: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
-    ensure!(terms.len() <= 8, "query may contain at most 8 terms");
+    let terms = crate::store::search_terms(query)?;
+    let scope = serde_json::from_value(body.get("scope").cloned().unwrap_or(json!("all")))?;
     let bots: Vec<String> = serde_json::from_value(body["botIds"].clone()).context("botIds is required")?;
     ensure!(!bots.is_empty(), "select at least one bot");
     let limit = body["limit"].as_i64().unwrap_or(30).clamp(1, 50);
     let before = body["beforeSeq"].as_i64().unwrap_or(i64::MAX);
     let hub = hub.clone();
     tokio::task::spawn_blocking(move || {
-        let mut rows = hub.store.roster_search(&bots, &terms, before, limit + 1)?;
+        let mut rows = if scope == crate::store::SearchScope::All {
+            hub.store.roster_search(&bots, &terms, before, limit + 1)?
+        } else {
+            hub.store.roster_search_scoped(&bots, &terms, before, limit + 1, scope)?
+        };
         let more = rows.len() > usize::try_from(limit)?;
         rows.truncate(usize::try_from(limit)?);
         let next = if more { rows.last().map(|e| e.seq) } else { None };

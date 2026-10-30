@@ -472,3 +472,13 @@ textarea.market-field {
 .modal-header > .agent-tile {
   background: var(--field);
 }
+/* A catalog team: the coordinator in front of its first teammate. */
+.catalog-team-face {
+  width: 46px;
+  height: 46px;
+  justify-content: center;
+}
+.catalog-team-face > :first-child:not(:last-child) {
+  margin-right: -12px;
+  opacity: 0.85;
+}

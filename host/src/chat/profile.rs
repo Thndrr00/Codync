@@ -23,7 +23,11 @@ pub fn tools() -> [Value; 3] {
             "description": format!("Rename yourself. {only_when_asked}"),
             "inputSchema": {
                 "type": "object",
-                "properties": {"name": {"type": "string", "description": format!("The new name, at most {MAX_NAME_CHARS} characters.")}},
+                "properties": {
+                    "name": {"type": "string", "description": format!("The new name, at most {MAX_NAME_CHARS} characters.")},
+                    "avatarLook": {"type": "string", "description": "Optional geometric robot look id (round, visor, dome, boxy, cyclops, ears, scout, owl, pixel, astro, cat, hex)." },
+                    "avatarColor": {"type": "string", "description": "Optional avatar color id."}
+                },
                 "required": ["name"],
             },
             "annotations": {"readOnlyHint": false, "idempotentHint": true},
@@ -62,7 +66,14 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
     let (patch, notice) = match name {
         "set_name" => {
             let name = checked_name(args["name"].as_str().unwrap_or_default())?;
-            (json!({"id": bot, "name": name}), format!("Renamed to {name}"))
+            let mut patch = json!({"id": bot, "name": name});
+            if let Some(look) = args["avatarLook"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                patch["avatarLook"] = Value::String(look.to_owned());
+            }
+            if let Some(color) = args["avatarColor"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                patch["avatarColor"] = Value::String(color.to_owned());
+            }
+            (patch, format!("Renamed to {name}"))
         }
         "set_instructions" => {
             let text = checked_instructions(args["instructions"].as_str().unwrap_or_default())?;

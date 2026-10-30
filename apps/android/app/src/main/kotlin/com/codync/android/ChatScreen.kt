@@ -113,6 +113,23 @@ import com.kyant.shapes.RoundedRectangle
         // Measured with the keyboard and navigation bar under it, so the last message clears them too.
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { composerHeight = it.height }
             .imePadding().navigationBarsPadding()) {
+            val sharedPeers = remember(bot, state.bots) { sharedWorkspacePeers(bot, state.bots) }
+            if (sharedPeers.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).clip(Capsule()).background(Palette.surface).padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Symbol("exclamationmark.triangle", size = 12.dp, tint = Palette.warning)
+                    Text(
+                        "${sharedPeers.joinToString(", ") { it.name }} also active in ${bot.cwd.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\')}",
+                        style = Type.caption,
+                        color = Palette.warning,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             // Nothing sent now could be read on the other side.
             val mismatch = state.mismatch
             if (mismatch != null) UpdateNeededCard(state, mismatch, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))

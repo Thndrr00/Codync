@@ -21,6 +21,7 @@ use tokio::sync::{broadcast, watch};
 mod documents;
 mod order;
 mod reactions;
+mod stop;
 mod sync;
 mod terminal;
 
@@ -73,6 +74,8 @@ impl AgentStep {
 pub struct Hub {
     pub analytics: crate::analytics::Analytics,
     pub routines: crate::routines::Routines,
+    /// Daily token limits and what each bot used today (`budget`).
+    pub budget: crate::budget::Budgets,
     pub team: crate::chat::team::Requests,
     pub groups: crate::chat::group::Rooms,
     pub store: Store,
@@ -120,6 +123,7 @@ impl Hub {
             computer: crate::computer::Access::default(),
             analytics: crate::analytics::Analytics::load(&store),
             routines: crate::routines::Routines::default(),
+            budget: crate::budget::Budgets::load(&store),
             team: crate::chat::team::Requests::default(),
             groups: crate::chat::group::Rooms::default(),
             store,

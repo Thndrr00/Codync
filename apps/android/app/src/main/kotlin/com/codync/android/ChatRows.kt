@@ -142,13 +142,69 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
                 store.respond(entry, it)
             }
         }
-        else -> if (entry.data["passkeyWall"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+        else -> if (entry.data["takeoverRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+            TakeoverRequestCard(entry, state, store)
+        } else if (entry.data["passkeyWall"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             PasskeyWallCard(entry, state, store)
         } else if (entry.data["chiefIncident"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ChiefIncidentCard(entry, state, store)
+        } else if (entry.data["botApp"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
+            BotAppNoticeCard(entry, store)
         } else if (entry.data["connectionRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             ConnectionRequestCard(entry, state, store, connect.openApp, connect.install)
         } else Box(Modifier.padding(top = if (compact) 6.dp else 10.dp)) { NoticeRow(entry, state, store) }
+    }
+}
+
+/** Sandboxed mini-app card published by the bot in chat (Ideas 1–7). */
+@Composable private fun BotAppNoticeCard(entry: Entry, store: AppStore) {
+    val appJson = entry.data["botApp"] as? JsonObject ?: return
+    val app = remember(appJson, entry.botId) { runCatching { botAppFromNotice(entry.botId, appJson) }.getOrNull() }
+    if (app == null) {
+        Text("Mini-app details are unavailable. Open the bot's settings to try again.", style = Type.chatFootnote, color = Palette.danger)
+        return
+    }
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Symbol("macwindow", size = 16.dp, tint = Palette.accent)
+            Text(app.title, style = Type.chatSubheadline.semibold, color = Palette.text)
+            Text("v${app.version}", Modifier.clip(Capsule()).background(Palette.surface).padding(horizontal = 6.dp, vertical = 2.dp),
+                style = Type.caption2.semibold, color = Palette.secondary)
+        }
+        app.description?.takeIf { it.isNotBlank() }?.let { Text(it, style = Type.chatFootnote, color = Palette.secondary) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PrimaryButton("Open App") { open = true }
+        }
+    }
+    if (open) CodyncSheet(app, { open = false }) { BotAppSheet(botId = entry.botId, app = it, store = store) }
+}
+
+/** Ideas 13, 19 & 20: Human takeover request card with action bar in chat. */
+@Composable private fun TakeoverRequestCard(entry: Entry, state: AppState, store: AppStore) {
+    val req = entry.data["takeoverRequest"] as? JsonObject ?: return
+    val reason = req.text("reason").orEmpty()
+    val url = req.text("url").orEmpty()
+    val status = req.text("status")
+    val resolved = status == "resolved" || status == "cancelled"
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Symbol("hand.raised.fill", size = 16.dp, tint = Palette.warning)
+            Text("Human Takeover Requested", style = Type.chatSubheadline.semibold, color = Palette.warning)
+        }
+        Text(if (url.isNotBlank()) "$reason · $url" else reason, style = Type.chatFootnote, color = Palette.secondary)
+        if (!resolved) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton("Done — hand back") {
+                    store.sendDraft(entry.botId, entry.threadId, "I have completed the requested step in the browser. Please continue.") {}
+                }
+                SecondaryButton("Cancel") { state.bots.firstOrNull { it.id == entry.botId }?.let { store.stopBot(it) } }
+            }
+        } else {
+            Text(if (status == "resolved") "Completed" else "Cancelled", style = Type.caption, color = Palette.tertiary)
+        }
     }
 }
 
@@ -222,11 +278,14 @@ internal class ConnectionRequestActions(val openApp: (String, ComposioApp) -> Un
 }
 
 /** The menu a message opens on long press: copy, quote, reply in its thread, what the agent did. */
-private fun messageMenu(context: android.content.Context, entry: Entry, reply: (() -> Unit)?, trace: (() -> Unit)?, quote: (() -> Unit)?) = buildList {
+private fun messageMenu(context: android.content.Context, entry: Entry, reply: (() -> Unit)?, trace: (() -> Unit)?, store: AppStore? = null, quote: (() -> Unit)?) = buildList {
     add(MenuItem("Copy", icon = "square.on.square") {
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Message", entry.text))
     })
     if (quote != null) add(MenuItem("Quote", icon = "text.bubble", action = quote))
+    if (store != null) add(MenuItem("Bookmark", icon = "bookmark") {
+        store.command("saveBookmark", body("botId" to entry.botId, "entryId" to entry.id, "preview" to entry.text, "author" to entry.replyQuote.author), "bookmark:" + entry.id)
+    })
     if (reply != null) add(MenuItem("Reply", icon = "arrowshape.turn.up.left", action = reply))
     if (trace != null) add(MenuItem("Show what it did", icon = "list.bullet", action = trace))
 }
@@ -269,7 +328,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         }
         if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser).swipeToReply(reply)
             .contextActions(reactions = reactionPick(entry, store), preview = { SelectionContainer { UserText(entry.text) } }) {
-                messageMenu(context, entry, reply, null) { store.quoteMessage(entry, thread) }
+                messageMenu(context, entry, reply, null, store) { store.quoteMessage(entry, thread) }
             }) { UserText(entry.text) }
         SendStatusLine(entry.status, state.bots.firstOrNull { it.id == entry.botId }?.status == "working")
     }
@@ -332,12 +391,12 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     val files = entry.files
     Column(Modifier.fillMaxWidth().padding(end = 40.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // A message with files is its files: the text is only the computer's fallback.
-        if (files.isNotEmpty()) Column(Modifier.contextActions(reactions = reactionPick(entry, store)) { messageMenu(context, entry, reply, openTrace) { store.quoteMessage(entry, thread) } },
+        if (files.isNotEmpty()) Column(Modifier.contextActions(reactions = reactionPick(entry, store)) { messageMenu(context, entry, reply, openTrace, store) { store.quoteMessage(entry, thread) } },
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             for (file in files) FileDownloadCard(entry, file, state, store)
         } else if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).swipeToReply(reply)
             .contextActions(reactions = reactionPick(entry, store), preview = { AgentText(entry.text, selectable = true) }) {
-                messageMenu(context, entry, reply, openTrace) { store.quoteMessage(entry, thread) }
+                messageMenu(context, entry, reply, openTrace, store) { store.quoteMessage(entry, thread) }
             }) { AgentText(entry.text, selectable = false) }
     }
 }
@@ -445,7 +504,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             .animateContentSize(Motion.layoutSize).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ThinkingOrb(if (needs) ThinkingOrbState.Listening else ThinkingOrbState.Working, 16.dp, if (needs) Palette.warning else Palette.secondary)
-                Text(bot.activity.ifEmpty { "Working…" }, Modifier.weight(1f, fill = false), style = Type.chatSubheadline,
+                Text(bot.activity.ifEmpty { "Working…" }, Modifier.weight(1f, fill = false).shimmerEffect(active = !needs), style = Type.chatSubheadline,
                     color = if (needs) Palette.warning else Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 bot.startedAt?.let { Elapsed(it) }
                 if (thinking != null) Symbol("chevron.down", Modifier.rotate(turn), size = 12.dp, tint = Palette.tertiary)

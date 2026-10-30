@@ -2,6 +2,9 @@ import {
   isWorking,
   needsInput,
   type AgentAccount,
+  type CreatedAppLink,
+  type AppLinkMode,
+  type BotApp,
   normalizeBot,
   type Bot,
   type BotDraft,
@@ -9,16 +12,20 @@ import {
   type Entry,
   type GroupDraft,
   type Hello,
+  type MessageBookmark,
+  type OpenItem,
   type ReplyQuote,
   type ScreenState,
   type SentinelReport,
   type Usage,
 } from '@shared/models'
+import type { BotCatalog } from '@shared/catalog'
 import type { HostClient } from '../client/host-client'
 import { FileDownloads } from './file-downloads'
 import { BotSync, sleep } from './bot-sync'
 import { DocumentsStore } from './documents-store'
 import type { VoiceTranscript } from '../lib/voice-transcript'
+import { createAppShareLink } from '../lib/app-links'
 
 export { builtInBackendName, type Connection } from './bot-mirror'
 
@@ -151,6 +158,11 @@ export class BotStore extends BotSync {
 
   stop(botId: string) {
     this.perform((c) => c.call('stop', { botId }), true)
+  }
+
+  /** Interrupts every bot on this computer that is working or waiting on the user. */
+  stopAll() {
+    this.perform((c) => c.call('stopAll', {}), true)
   }
 
   openMessageContext(entries: Entry[], hit: { botId: string; id: string; threadId: string | null }) {
@@ -349,6 +361,22 @@ export class BotStore extends BotSync {
     this.changed()
   }
 
+  /** The host's ready-made bots and coordinator teams. */
+  async botCatalog(): Promise<BotCatalog> {
+    return (await this.ready()).call<BotCatalog>('botCatalog', {})
+  }
+
+  /** Creates a catalog team on the host (its coordinator, its teammates and their group) and opens the group. */
+  async installTeam(id: string) {
+    const res = await (await this.ready()).call<{ bot: Bot }>('installTeam', { id }, 60_000)
+    const group = normalizeBot(res.bot)
+    this.bots.set(group.id, group)
+    this.selection = group.id
+    this.onRosterChanged?.()
+    this.changed()
+    return group
+  }
+
   /** Takes one bot out of a group; an automatic "Alice, Bob" name follows the new roster. */
   removeMember(group: Bot, memberId: string) {
     const members = group.members.filter((m) => m !== memberId)
@@ -396,6 +424,46 @@ export class BotStore extends BotSync {
 
   async sentinelHealth(): Promise<SentinelReport> {
     return (await this.ready()).call<SentinelReport>('sentinelHealth', {})
+  }
+
+  async listBotApps(botId: string): Promise<BotApp[]> {
+    const res = await (await this.ready()).call<{ apps: BotApp[] }>('listBotApps', { botId })
+    return res.apps ?? []
+  }
+
+  async createAppLink(botId: string, slug: string, mode: AppLinkMode, label = ''): Promise<CreatedAppLink> {
+    return createAppShareLink(await this.ready(), botId, slug, mode, label)
+  }
+
+  async revokeAppLink(botId: string, slug: string, token: string): Promise<void> {
+    await (await this.ready()).call('revokeAppLink', { botId, slug, token })
+  }
+
+  async deleteBotApp(botId: string, slug: string): Promise<void> {
+    await (await this.ready()).call('deleteBotApp', { botId, slug })
+  }
+
+  async listOpenItems(botId: string): Promise<OpenItem[]> {
+    const res = await (await this.ready()).call<{ items: OpenItem[] }>('listOpenItems', { botId })
+    return res.items ?? []
+  }
+
+  async dismissOpenItem(botId: string, id: string): Promise<void> {
+    await (await this.ready()).call('dismissOpenItem', { botId, id })
+  }
+
+  async listBookmarks(botId: string): Promise<MessageBookmark[]> {
+    const res = await (await this.ready()).call<{ bookmarks: MessageBookmark[] }>('listBookmarks', { botId })
+    return res.bookmarks ?? []
+  }
+
+  async saveBookmark(botId: string, entryId: string, preview: string, note = '', author = '', threadId?: string | null): Promise<MessageBookmark> {
+    const res = await (await this.ready()).call<{ bookmark: MessageBookmark }>('saveBookmark', { botId, entryId, preview, note, author, threadId: threadId ?? null })
+    return res.bookmark
+  }
+
+  async deleteBookmark(botId: string, entryId: string): Promise<void> {
+    await (await this.ready()).call('deleteBookmark', { botId, entryId })
   }
 
   async listDirs(path: string | null) {
@@ -455,6 +523,7 @@ export class BotStore extends BotSync {
 function updatePayload(bot: Bot): BotDraft {
   return {
     id: bot.id, name: bot.name, description: bot.description, avatarColor: bot.avatarColor, avatarShape: bot.avatarShape,
+    avatarLook: bot.avatarLook ?? null, actionRules: bot.actionRules ?? {}, proactive: bot.proactive,
     backend: bot.backend, command: bot.command ?? null, cwd: bot.managedWorkspace ? '' : bot.cwd, permission: bot.permission,
     model: bot.model ?? null, pinned: bot.pinned, hidden: bot.hidden, notify: bot.notify ?? null,
     connectors: bot.connectors, skills: bot.skills, computer: bot.computer, computerPermissions: bot.computerPermissions, fastMode: bot.fastMode,

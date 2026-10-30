@@ -64,6 +64,7 @@ import com.codync.android.core.UsageWindow
 import com.codync.android.core.WidgetBot
 import com.codync.android.core.WidgetFeed
 import com.codync.android.core.WidgetKind
+import com.codync.android.core.lockScreenSummary
 import com.codync.android.core.teamSlots
 import com.codync.android.core.usageLimits
 import com.codync.android.design.characterAvatarBitmap
@@ -123,6 +124,7 @@ private fun style(size: Float, color: Ink, weight: FontWeight = FontWeight.Norma
     Box(GlanceModifier.fillMaxSize().appWidgetBackground().background(ground).cornerRadius(22.dp)
         .then(if (sample) GlanceModifier else GlanceModifier.clickable(actionStartActivity(open))).padding(14.dp)) {
         when {
+            kind == WidgetKind.LockSummary -> LockSummaryCard(lockScreenSummary(feed))
             kind == WidgetKind.Usage -> UsageCard(context, feed, wide = layout != ProviderLayout.Small, sample)
             feed.computerId == null && !sample -> Empty("Codync", "Connect a computer in Codync.")
             kind == WidgetKind.Provider -> {
@@ -423,6 +425,7 @@ class ProviderWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWi
 class UsageWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = UsageWidget() }
 class BotsWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = BotsWidget() }
 class TeamWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = TeamWidget() }
+class LockSummaryWidgetReceiver : CodyncWidgetReceiver() { override val glanceAppWidget = LockSummaryWidget() }
 
 abstract class CodyncWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -435,12 +438,13 @@ abstract class CodyncWidgetReceiver : GlanceAppWidgetReceiver() {
 
 internal object CodyncWidgets {
     val receivers = listOf(ProviderWidgetReceiver::class.java, UsageWidgetReceiver::class.java, BotsWidgetReceiver::class.java,
-        TeamWidgetReceiver::class.java)
+        TeamWidgetReceiver::class.java, LockSummaryWidgetReceiver::class.java)
     fun installed(context: Context): Int = receivers.sumOf { AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, it)).size }
     suspend fun update(context: Context) {
         LeadBotTile.refresh(context)
         if (installed(context) == 0) return
         ProviderWidget().updateAll(context); UsageWidget().updateAll(context); BotsWidget().updateAll(context); TeamWidget().updateAll(context)
+        LockSummaryWidget().updateAll(context)
     }
     /** The launcher's widget picker shows each widget drawn from sample data (Android 15+); the system rate-limits it. */
     suspend fun publishPreviews(context: Context) {
@@ -455,7 +459,8 @@ internal object CodyncWidgets {
         val manager = AppWidgetManager.getInstance(context)
         if (!manager.isRequestPinAppWidgetSupported) return false
         val receiver = when (kind) { WidgetKind.Provider -> ProviderWidgetReceiver::class.java; WidgetKind.Usage -> UsageWidgetReceiver::class.java
-            WidgetKind.Bots -> BotsWidgetReceiver::class.java; WidgetKind.Team -> TeamWidgetReceiver::class.java }
+            WidgetKind.Bots -> BotsWidgetReceiver::class.java; WidgetKind.Team -> TeamWidgetReceiver::class.java
+            WidgetKind.LockSummary -> LockSummaryWidgetReceiver::class.java }
         return manager.requestPinAppWidget(ComponentName(context, receiver), null, null)
     }
 }
