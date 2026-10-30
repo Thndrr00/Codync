@@ -18,6 +18,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
     val index: Int? = null,
     val decision: String? = null,
     val permission: String? = null,
+    val kind: String? = null,
+    val quick: Boolean = false,
     val chained: Boolean = false,
     val allowPassedOver: Int? = null,
 ) {
@@ -28,7 +30,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
             "forbidden" -> "Never allowed: it matches “$pattern” in the list of forbidden commands, whatever the rules say."
             "rule" -> {
                 val verb = when (decision) { "allow" -> "Allowed"; "deny" -> "Denied"; else -> "Asks you" }
-                "$verb by rule ${(index ?: 0) + 1} (“$pattern”)."
+                if (quick) "$verb by the quick rule for ${QUICK_NAMES[kind] ?: "this kind of action"}."
+                else "$verb by rule ${(index ?: 0) + 1} (“$pattern”)."
             }
             else -> "No rule matches: " + (if (permission == "auto") "it is approved automatically" else "it asks you") +
                 ", as the bot's Approvals setting says.$passed"
@@ -36,9 +39,21 @@ import kotlinx.serialization.json.decodeFromJsonElement
     }
 }
 
+/** What a quick rule is called after the tool kind it covers. */
+private val QUICK_NAMES = mapOf("read" to "files", "search" to "files", "edit" to "files", "delete" to "files", "move" to "files",
+    "execute" to "shell commands", "fetch" to "web access")
+
 @Serializable private data class EvaluationEnvelope(@SerialName("evaluation") val evaluation: ApprovalEvaluation)
 
 object ApprovalRules {
+    /** The quick rules ("by kind of action") approvals can enforce: wire class, label, and the tool kinds each covers. */
+    val QUICK_CLASSES = listOf(
+        Triple("files", "Files", "read, search, edit, delete, move"),
+        Triple("shell", "Shell commands", "execute"),
+        Triple("browse", "Web access", "fetch"),
+    )
+    val QUICK_POLICIES = listOf("" to "Not set", "allow" to "Allow", "ask" to "Ask me", "block" to "Deny")
+
     /** The tool kinds a rule can be limited to. */
     val KINDS = listOf("execute", "edit", "delete", "move", "read", "search", "fetch", "think", "other")
     val DECISIONS = listOf("allow" to "Allow", "ask" to "Ask me", "deny" to "Deny")

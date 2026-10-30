@@ -129,11 +129,15 @@ suspend fun AppStore.weekSummary(): WeekSummary? = runCatching {
     WireJson.decodeFromJsonElement<WeekSummary>(hostQuery("weekSummary", buildJsonObject { put("days", 7) }))
 }.getOrNull()
 /** What the bot would do with [command] under [rules]; null when the host can't say. */
-suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: List<ApprovalRule>): ApprovalEvaluation? = runCatching {
+suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: List<ApprovalRule>, quick: Pair<Boolean, Map<String, String>>? = null): ApprovalEvaluation? = runCatching {
     val payload = buildJsonObject {
         put("botId", botId)
         put("command", command)
         put("rules", WireJson.encodeToJsonElement(rules))
+        quick?.let { (on, policies) ->
+            put("actionRulesOn", on)
+            put("actionRules", WireJson.encodeToJsonElement(policies))
+        }
     }
     ApprovalRules.decodeEvaluation(hostQuery("testApprovalRule", payload))
 }.getOrNull()

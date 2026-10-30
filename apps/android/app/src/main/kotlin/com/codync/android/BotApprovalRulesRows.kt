@@ -55,7 +55,27 @@ internal fun CardRows.approvalRulesRows(store: AppStore, draft: BotDraft, change
         }
     }
     row { SecondaryButton(tr("Add rule")) { set(rules + ApprovalRule(pattern = "", decision = "ask")) } }
+    quickRows(draft, change)
     row { RuleTester(store, draft, rules) }
+}
+
+/**
+ * The quick rules by kind of action, under the person's own rules. Shown against a host that has them; off, nothing
+ * below is enforced. Browser, apps, team and routine tools belong to the connectors' tool policies.
+ */
+private fun CardRows.quickRows(draft: BotDraft, change: (BotDraft) -> Unit) {
+    val on = draft.actionRulesOn ?: return
+    row {
+        SwitchRow("Quick rules by kind of action", tr(if (on) "After your rules above, these decide by the kind of tool. " else "Off: nothing below is enforced. ") +
+            tr("Browser, apps, team and routine tools are governed by the connectors' tool policies, not here."),
+            on, { change(draft.copy(actionRulesOn = it)) })
+    }
+    for ((id, label, kinds) in ApprovalRules.QUICK_CLASSES) row {
+        ValueRow(label, detail = kinds) {
+            ChoicePicker(draft.actionRules[id].orEmpty(), ApprovalRules.QUICK_POLICIES,
+                { change(draft.copy(actionRules = if (it.isEmpty()) draft.actionRules - id else draft.actionRules + (id to it))) }, label = label)
+        }
+    }
 }
 
 /** "Try a command": asks the host what the bot would do with it under the rules as they are in the form now. */
@@ -69,7 +89,7 @@ private fun RuleTester(store: AppStore, draft: BotDraft, rules: List<ApprovalRul
         FieldBox(command, { command = it; answer = null }, "Try a command, e.g. git push origin main", 1, 2, capitalize = false)
         SecondaryButton(tr("Test"), enabled = command.isNotBlank() && draft.id != null) {
             scope.launch {
-                val evaluation: ApprovalEvaluation? = store.testApprovalRule(draft.id.orEmpty(), command, ApprovalRules.clean(rules))
+                val evaluation: ApprovalEvaluation? = store.testApprovalRule(draft.id.orEmpty(), command, ApprovalRules.clean(rules), draft.actionRulesOn?.let { it to draft.actionRules })
                 answer = evaluation?.describe() ?: cant
             }
         }

@@ -46,6 +46,8 @@ data class Bot(
     val saver: Boolean? = null,
     /** The user's rules for the agent's permission requests, first match first. */
     val approvalRules: List<ApprovalRule> = emptyList(),
+    /** Whether the quick rules ([actionRules]) are enforced; null from an older host. */
+    val actionRulesOn: Boolean? = null,
     /** The bot's character, written by the user. */
     val personality: Personality = Personality(),
     /** The user's other computers list this bot and may message it; null from an older host. */

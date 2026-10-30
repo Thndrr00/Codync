@@ -43,3 +43,17 @@ class ApprovalRulesTest {
         assertEquals("deny", sent.toString().substringAfter("\"decision\":\"").substringBefore("\""))
     }
 }
+
+class QuickRulesTest {
+    @Test fun `a quick rule is worded by the kind of action, not by a rule number`() {
+        val denied = ApprovalEvaluation("rule", pattern = "*", index = 3, decision = "deny", kind = "execute", quick = true)
+        assertEquals("Denied by the quick rule for shell commands.", denied.describe())
+        val files = ApprovalEvaluation("rule", pattern = "*", index = 0, decision = "allow", kind = "edit", quick = true)
+        assertEquals("Allowed by the quick rule for files.", files.describe())
+    }
+
+    @Test fun `the quick classes are the ones the host enforces`() {
+        assertEquals(listOf("files", "shell", "browse"), ApprovalRules.QUICK_CLASSES.map { it.first })
+        assertEquals(listOf("", "allow", "ask", "block"), ApprovalRules.QUICK_POLICIES.map { it.first })
+    }
+}
