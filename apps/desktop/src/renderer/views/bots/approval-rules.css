@@ -12,3 +12,7 @@
   min-width: 18px;
   text-align: right;
 }
+
+.rule-quick-name {
+  min-width: 120px;
+}

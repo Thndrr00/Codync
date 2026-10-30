@@ -314,9 +314,19 @@ export class BotStore extends BotSync {
   }
 
   /** What the bot would do with `command` under `rules` (the saved ones when omitted); null when the host can't say. */
-  async testApprovalRule(botId: string, command: string, rules?: ApprovalRule[]): Promise<ApprovalEvaluation | null> {
+  async testApprovalRule(
+    botId: string,
+    command: string,
+    rules?: ApprovalRule[],
+    quick?: { on: boolean; policies: Record<string, string> },
+  ): Promise<ApprovalEvaluation | null> {
     try {
-      const body = { botId, command, ...(rules ? { rules: cleanRules(rules) } : {}) }
+      const body = {
+        botId,
+        command,
+        ...(rules ? { rules: cleanRules(rules) } : {}),
+        ...(quick ? { actionRulesOn: quick.on, actionRules: quick.policies } : {}),
+      }
       return (await (await this.ready()).call<{ evaluation: ApprovalEvaluation }>('testApprovalRule', body)).evaluation
     } catch {
       return null

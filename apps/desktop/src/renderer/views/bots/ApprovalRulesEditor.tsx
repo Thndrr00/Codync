@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { Button, ChoicePicker, IconButton } from '../../components/Controls'
+import { Switch } from '../../components/Controls'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import {
   CHAINING_WARNING,
   describeEvaluation,
   moveRule,
+  QUICK_CLASSES,
   RULE_KINDS,
   type ApprovalEvaluation,
   type ApprovalRule,
+  type QuickPolicy,
   type RuleDecision,
 } from '@shared/approval-rules'
 import { Field, AutoTextArea } from './parts'
@@ -25,11 +28,14 @@ const KINDS = [{ id: '', label: 'Any tool' }, ...RULE_KINDS.map((id) => ({ id: i
  * A bot's approval rules, first match first: add, edit, reorder, delete, and try a command against them. The host
  * decides what a rule does (`testApprovalRule`); nothing here copies its logic.
  */
-export function ApprovalRulesEditor({ rules, onChange, test }: {
+export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
   rules: ApprovalRule[]
   onChange: (rules: ApprovalRule[]) => void
   /** Asks the host what the bot would do with `command` under `rules`; null when it can't say. */
   test: (command: string, rules: ApprovalRule[]) => Promise<ApprovalEvaluation | null>
+  /** The quick rules by kind of action; absent from a host that has none. */
+  quick?: { on: boolean; policies: Partial<Record<string, QuickPolicy>> }
+  onQuick?: (next: { on: boolean; policies: Partial<Record<string, QuickPolicy>> }) => void
 }) {
   const [command, setCommand] = useState('')
   const [answer, setAnswer] = useState<string | null>(null)
@@ -59,6 +65,30 @@ export function ApprovalRulesEditor({ rules, onChange, test }: {
         <HStack gap={8}>
           <Button kind="secondary" onClick={() => onChange([...rules, { pattern: '', decision: 'ask', kind: null }])}>Add rule</Button>
         </HStack>
+        {quick && onQuick ? (
+          <VStack gap={6}>
+            <HStack gap={8}>
+              <Switch on={quick.on} onChange={(on) => onQuick({ ...quick, on })}>
+                <Text weight="semibold">Quick rules by kind of action</Text>
+              </Switch>
+            </HStack>
+            <Text size="footnote" tone="secondary">
+              {quick.on ? 'After your rules above, these decide by the kind of tool. ' : 'Off: nothing below is enforced. '}
+              Browser, apps, team and routine tools are governed by the connectors' tool policies, not here.
+            </Text>
+            {QUICK_CLASSES.map((c) => (
+              <HStack key={c.id} gap={8}>
+                <Text className="rule-quick-name">{c.label}</Text>
+                <ChoicePicker
+                  selection={quick.policies[c.id] ?? ''}
+                  options={[{ id: '', label: 'Not set' }, { id: 'allow', label: 'Allow' }, { id: 'ask', label: 'Ask me' }, { id: 'block', label: 'Deny' }]}
+                  onChange={(id) => onQuick({ ...quick, policies: { ...quick.policies, [c.id]: id || undefined } })}
+                />
+                <Text size="caption" tone="tertiary">{c.kinds}</Text>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
         <HStack gap={8} className="rule-try">
           <AutoTextArea className="field-box rule-pattern" value={command} placeholder="Try a command, e.g. git push origin main" minRows={1} maxRows={2}
             onChange={(value) => { setCommand(value); setAnswer(null) }} />

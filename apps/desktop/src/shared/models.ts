@@ -84,6 +84,8 @@ export interface Bot {
   saver: boolean
   /** The user's rules for the agent's permission requests, first match first. */
   approvalRules: ApprovalRule[]
+  /** Whether the quick rules (`actionRules`) are enforced; null from an older host. */
+  actionRulesOn: boolean | null
   /** The bot's character, written by the user; empty layers when none (or an older host). */
   personality: Personality
   /** Other computers in the user's networks list this bot and may message it; null from an older host. */
@@ -157,6 +159,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     backgroundModel: raw.backgroundModel ?? null,
     saver: raw.saver ?? false,
     approvalRules: raw.approvalRules ?? [],
+    actionRulesOn: raw.actionRulesOn ?? null,
     personality: { soul: '', persona: '', heartbeat: '', ...raw.personality },
     offeredToNetwork: raw.offeredToNetwork ?? null,
     reachableByAssistants: raw.reachableByAssistants ?? null,
@@ -711,6 +714,7 @@ export interface BotDraft {
   backgroundModel?: string | null
   saver?: boolean
   approvalRules?: ApprovalRule[]
+  actionRulesOn?: boolean
   personality?: Personality
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   offeredToNetwork?: boolean
@@ -752,6 +756,7 @@ export function draftOf(bot: Bot): BotDraft {
     backgroundModel: bot.backgroundModel,
     saver: bot.saver,
     approvalRules: bot.approvalRules,
+    actionRulesOn: bot.actionRulesOn ?? undefined,
     personality: bot.personality,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
     offeredToNetwork: bot.offeredToNetwork ?? undefined,

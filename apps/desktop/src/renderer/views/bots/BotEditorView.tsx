@@ -310,7 +310,13 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
           <ApprovalRulesEditor
             rules={draft.approvalRules ?? []}
             onChange={(rules) => set('approvalRules', rules)}
-            test={(command, rules) => (draft.id ? store.testApprovalRule(draft.id, command, rules) : Promise.resolve(null))}
+            test={(command, rules) =>
+              draft.id
+                ? store.testApprovalRule(draft.id, command, rules, draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} })
+                : Promise.resolve(null)
+            }
+            quick={draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} }}
+            onQuick={(next) => onChange((d) => ({ ...d, actionRulesOn: next.on, actionRules: next.policies }))}
           />
         </CardSection>
 

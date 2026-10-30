@@ -13,7 +13,7 @@ export interface ApprovalRule {
 /** The host's answer for one command (`approval_rules::Evaluation`). */
 export type ApprovalEvaluation = (
   | { outcome: 'forbidden'; pattern: string }
-  | { outcome: 'rule'; index: number; decision: RuleDecision; pattern: string }
+  | { outcome: 'rule'; index: number; decision: RuleDecision; pattern: string; kind: string | null; quick: boolean }
   | { outcome: 'setting'; permission: 'ask' | 'auto' }
 ) & {
   /** The command runs several commands, so no `allow` rule approves it. */
@@ -26,6 +26,20 @@ export type ApprovalEvaluation = (
 export interface RuleProposal {
   rule: ApprovalRule | null
   reason?: string
+}
+
+/** The quick rules ("by kind of action") approvals can enforce, with the tool kinds each covers (the host's table). */
+export const QUICK_CLASSES = [
+  { id: 'files', label: 'Files', kinds: 'read, search, edit, delete, move' },
+  { id: 'shell', label: 'Shell commands', kinds: 'execute' },
+  { id: 'browse', label: 'Web access', kinds: 'fetch' },
+] as const
+
+/** A quick rule's policy as the wire spells it. */
+export type QuickPolicy = 'allow' | 'ask' | 'block'
+
+const QUICK_NAMES: Record<string, string> = {
+  read: 'files', search: 'files', edit: 'files', delete: 'files', move: 'files', execute: 'shell commands', fetch: 'web access',
 }
 
 /** The tool kinds a rule can be limited to. */
@@ -47,6 +61,7 @@ export function describeEvaluation(e: ApprovalEvaluation): string {
       return `Never allowed: it matches “${e.pattern}” in the list of forbidden commands, whatever the rules say.`
     case 'rule': {
       const verb = e.decision === 'allow' ? 'Allowed' : e.decision === 'deny' ? 'Denied' : 'Asks you'
+      if (e.quick) return `${verb} by the quick rule for ${QUICK_NAMES[e.kind ?? ''] ?? e.kind ?? 'this kind of action'}.`
       return `${verb} by rule ${e.index + 1} (“${e.pattern}”).`
     }
     case 'setting':

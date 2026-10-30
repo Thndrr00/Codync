@@ -41,8 +41,9 @@ test('the tester\'s answer is worded from the host\'s decision', () => {
   const base = { chained: false, allowPassedOver: null }
   const forbidden: ApprovalEvaluation = { outcome: 'forbidden', pattern: 'rm -rf /', ...base }
   assert.match(describeEvaluation(forbidden), /Never allowed.*rm -rf \//)
-  const allowed: ApprovalEvaluation = { outcome: 'rule', index: 1, decision: 'allow', pattern: 'git *', ...base }
+  const allowed: ApprovalEvaluation = { outcome: 'rule', index: 1, decision: 'allow', pattern: 'git *', kind: null, quick: false, ...base }
   assert.equal(describeEvaluation(allowed), 'Allowed by rule 2 (“git *”).')
+  assert.equal(describeEvaluation({ ...allowed, pattern: '*', kind: 'execute', quick: true, decision: 'deny' }), 'Denied by the quick rule for shell commands.')
   assert.match(describeEvaluation({ ...allowed, decision: 'deny' }), /^Denied by rule 2/)
   assert.match(describeEvaluation({ ...allowed, decision: 'ask' }), /^Asks you by rule 2/)
   const setting: ApprovalEvaluation = { outcome: 'setting', permission: 'ask', chained: true, allowPassedOver: 0 }
