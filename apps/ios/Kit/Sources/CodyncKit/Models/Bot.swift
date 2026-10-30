@@ -57,6 +57,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var verifyCommand: String?
     /// The model routine runs and check-ins use instead of `model`. Nil from an older host.
     public var backgroundModel: String?
+    /// Saver: at 80 percent of the daily token budget, new sessions start on `backgroundModel` until tomorrow. Nil from an older host.
+    public var saver: Bool?
     /// Its soul, persona and heartbeat, written by the user. Nil from an older host.
     public var personality: Personality?
     /// The bot that created this one; nil when the user did.
@@ -140,6 +142,7 @@ extension Bot {
         reachableByAssistants = try c.decodeIfPresent(Bool.self, forKey: .reachableByAssistants)
         verifyCommand = try c.decodeIfPresent(String.self, forKey: .verifyCommand)
         backgroundModel = try c.decodeIfPresent(String.self, forKey: .backgroundModel)
+        saver = try c.decodeIfPresent(Bool.self, forKey: .saver)
         personality = try? c.decodeIfPresent(Personality.self, forKey: .personality)
         createdBy = try c.decodeIfPresent(String.self, forKey: .createdBy)
         sharedMemory = try c.decodeIfPresent(Bool.self, forKey: .sharedMemory)

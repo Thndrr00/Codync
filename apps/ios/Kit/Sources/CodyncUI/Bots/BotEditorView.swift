@@ -73,6 +73,8 @@ struct BotSettingsForm: View {
     @State private var pickingFolder = false
     @State private var pickingAvatar = false
     @State private var viewingSkill: SkillRef?
+    /// What the bot's agent offers, for the background model.
+    @State private var backgroundModels: [AgentModels.Model] = []
 
     /// The saved bot, as the host has it now.
     private var bot: Bot? { draft.id.flatMap { model.bots[$0] } }
@@ -97,6 +99,10 @@ struct BotSettingsForm: View {
         }
         // An account's sign-in belongs to one computer.
         .onChange(of: model.computer.id) { _, _ in draft.account = nil }
+        .task(id: "\(model.computer.id)/\(draft.backend)/\(draft.account ?? "")") {
+            guard draft.backend != "custom" else { backgroundModels = []; return }
+            backgroundModels = (try? await model.loadAgentModels(backend: draft.backend, account: draft.account))?.models ?? []
+        }
         .codyncSheet(item: $viewingSkill) { SkillSheet(skill: $0) }
         .codyncSheet(isPresented: $pickingFolder) {
             FolderPicker(start: draft.cwd.isEmpty ? model.hello?.home : draft.cwd) {
@@ -146,11 +152,24 @@ struct BotSettingsForm: View {
             personalityField("Persona", detail: "Its voice and manner.", hint: "e.g. Dry and brief. No emoji.", \.persona)
             personalityField("Heartbeat", detail: "What it does when it checks in on its own.",
                              hint: "e.g. Look for failing tests and say only if something broke.", \.heartbeat)
-            Field("Background model", detail: "A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.") {
-                TextField(L10n.tr("e.g. haiku"), text: Binding(get: { draft.backgroundModel ?? "" }, set: { draft.backgroundModel = $0 }))
-                    .fieldBox()
+            ValueRow("Background model", detail: "A cheaper model for routines and check-ins, where nobody is waiting.") {
+                // The agent's own models; a model that is set but not listed stays pickable. Empty is sent as "" so it can be cleared.
+                ChoicePicker(selection: Binding(get: { draft.backgroundModel ?? "" }, set: { draft.backgroundModel = $0 }),
+                             options: backgroundModelChoices)
+            }
+            if bot?.saver != nil, !(draft.backgroundModel ?? "").isEmpty {
+                SwitchRow("Saver", detail: "At 80 percent of this bot's daily token budget, new sessions start on the background model until tomorrow.",
+                          isOn: Binding(get: { draft.saver ?? false }, set: { draft.saver = $0 }))
             }
         }
+    }
+
+    /// The models the bot's agent offers, loaded once per agent and account.
+    private var backgroundModelChoices: [(id: String, label: String)] {
+        let chosen = draft.backgroundModel ?? ""
+        var choices: [(id: String, label: String)] = [("", "The bot's own model")] + backgroundModels.map { ($0.id, $0.name) }
+        if !chosen.isEmpty, !choices.contains(where: { $0.id == chosen }) { choices.append((chosen, chosen)) }
+        return choices
     }
 
     private func personalityField(_ title: String, detail: String, hint: String,
