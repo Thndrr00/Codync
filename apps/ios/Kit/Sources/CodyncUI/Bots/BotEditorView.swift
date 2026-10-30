@@ -128,6 +128,43 @@ struct BotSettingsForm: View {
                 .lineLimit(3...8)
                 .fieldBox()
         }
+        characterFields
+    }
+
+    /// What only the user writes about how the bot works: the check before done, its soul, persona and heartbeat, and
+    /// its background model. Shown only against a host that has them.
+    @ViewBuilder private var characterFields: some View {
+        if bot?.verifyCommand != nil || draft.verifyCommand != nil || bot?.personality != nil {
+            Field("Check before done", detail: "A command run in the workspace after each turn. If it fails, the turn doesn't count as done.") {
+                TextField(L10n.tr("e.g. npm test"), text: Binding(get: { draft.verifyCommand ?? "" }, set: { draft.verifyCommand = $0 }),
+                          axis: .vertical)
+                    .lineLimit(1...3)
+                    .fieldBox()
+            }
+            personalityField("Soul", detail: "Values and boundaries that never change. Written by you; the bot can't edit it.",
+                             hint: "e.g. Honest, careful with other people's data.", \.soul)
+            personalityField("Persona", detail: "Its voice and manner.", hint: "e.g. Dry and brief. No emoji.", \.persona)
+            personalityField("Heartbeat", detail: "What it does when it checks in on its own.",
+                             hint: "e.g. Look for failing tests and say only if something broke.", \.heartbeat)
+            Field("Background model", detail: "A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.") {
+                TextField(L10n.tr("e.g. haiku"), text: Binding(get: { draft.backgroundModel ?? "" }, set: { draft.backgroundModel = $0 }))
+                    .fieldBox()
+            }
+        }
+    }
+
+    private func personalityField(_ title: String, detail: String, hint: String,
+                                  _ layer: WritableKeyPath<Personality, String>) -> some View {
+        Field(title, detail: detail) {
+            TextField(L10n.tr(hint), text: Binding(get: { (draft.personality ?? Personality())[keyPath: layer] },
+                                                    set: { text in
+                                                        var personality = draft.personality ?? Personality()
+                                                        personality[keyPath: layer] = text
+                                                        draft.personality = personality
+                                                    }), axis: .vertical)
+                .lineLimit(2...8)
+                .fieldBox()
+        }
     }
 
     @ViewBuilder private var modelPicker: some View {
