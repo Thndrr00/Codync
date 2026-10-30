@@ -213,6 +213,10 @@ pub struct BotConfig {
     /// Per-category action policy matrix (`files`, `shell`, `browse`, `browser`, `apps`, `bots`, `routines`, Idea 43).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub action_rules: BTreeMap<ActionClass, RulePolicy>,
+    /// Whether `action_rules` are enforced as approval rules (`approval_rules::quick_rules`). Off until the person turns
+    /// them on, so rules a role preset stored earlier change nothing.
+    #[serde(default)]
+    pub action_rules_on: bool,
     /// Proactive check-ins, quiet hours, daily budget and background app toggle (Ideas 41, 44).
     #[serde(default)]
     pub proactive: ProactiveSettings,

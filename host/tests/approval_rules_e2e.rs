@@ -180,3 +180,44 @@ async fn always_allow_keeps_a_rule_the_person_has_seen_and_may_edit() {
     assert_eq!((refusal["rule"].is_null(), refusal["refusal"].as_str()), (true, Some("chained")), "{refusal}");
     host.call("respondPermission", json!({"entryId": chained_card["id"], "optionId": "no"})).await;
 }
+
+#[tokio::test]
+async fn quick_rules_change_nothing_until_the_person_turns_them_on() {
+    if Command::new(common::python()).arg("--version").output().is_err() {
+        eprintln!("skipping: Python not available");
+        return;
+    }
+    let host = Host::start().await;
+    let bot = bot(&host).await;
+
+    // Stored by an earlier role preset, but off: a real request still asks.
+    host.call("updateBot", json!({"id": bot, "actionRules": {"shell": "allow", "files": "block"}})).await;
+    assert_eq!(test_rule(&host, &bot, "echo hi").await["outcome"], "setting");
+    run(&host, &bot, "echo one").await;
+    let card = pending_card(&host, &bot).await;
+    host.call("respondPermission", json!({"entryId": card["id"], "optionId": "no"})).await;
+    assert!(next_reply(&host, &bot, 0).await.contains("\"no\""));
+
+    // Turned on: the shell is allowed without a card, and the tester says it is the quick rule.
+    host.call("updateBot", json!({"id": bot, "actionRulesOn": true})).await;
+    let evaluation = test_rule(&host, &bot, "echo hi").await;
+    assert_eq!(
+        (evaluation["outcome"].as_str(), evaluation["quick"].as_bool(), evaluation["decision"].as_str()),
+        (Some("rule"), Some(true), Some("allow")),
+        "{evaluation}"
+    );
+    run(&host, &bot, "echo two").await;
+    assert!(next_reply(&host, &bot, 1).await.contains("\"yes\""), "the quick rule approves it");
+
+    // The person's own rule still wins over a quick one, and an unsaved quick setting can be tried.
+    host.call("updateBot", json!({"id": bot, "approvalRules": [{"pattern": "echo *", "decision": "deny"}]})).await;
+    assert_eq!(test_rule(&host, &bot, "echo hi").await["quick"], false);
+    let draft = host
+        .call(
+            "testApprovalRule",
+            json!({"botId": bot, "command": "make", "rules": [], "actionRules": {"shell": "block"}}),
+        )
+        .await;
+    assert_eq!(draft["evaluation"]["decision"], "deny");
+    assert!(draft["quickNotEnforced"].as_array().is_some_and(|c| c.len() == 4), "{draft}");
+}

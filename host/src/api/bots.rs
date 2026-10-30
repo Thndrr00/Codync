@@ -357,9 +357,27 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::agent::approval_rules::validate(&rules)?;
             let command = str_arg(&b, "command")?;
             let kind = b["kind"].as_str().unwrap_or("execute");
-            let evaluation =
-                crate::agent::approval_rules::evaluate(&rules, row.config.permission, kind, Some(command), command);
-            json!({"evaluation": evaluation})
+            // The quick rules as the editor has them (unsaved), else the bot's saved ones.
+            let policies = match b.get("actionRules") {
+                Some(map) if map.is_object() => serde_json::from_value(map.clone())?,
+                _ => row.config.action_rules.clone(),
+            };
+            let quick_on = b["actionRulesOn"].as_bool().unwrap_or(row.config.action_rules_on);
+            let quick = if quick_on { crate::agent::approval_rules::quick_rules(&policies) } else { Vec::new() };
+            let evaluation = crate::agent::approval_rules::evaluate(
+                &rules,
+                &quick,
+                row.config.permission,
+                kind,
+                Some(command),
+                command,
+            );
+            // The quick-rule classes approvals cannot enforce, and why, so an editor can say so.
+            let not_enforced: Vec<Value> = crate::agent::approval_rules::QUICK_UNENFORCED
+                .iter()
+                .map(|(class, why)| json!({"class": class, "reason": why}))
+                .collect();
+            json!({"evaluation": evaluation, "quickNotEnforced": not_enforced})
         }
         // A paused turn's card: one tap sends the continuation (bounded, once per card).
         "continueTurn" => {

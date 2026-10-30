@@ -204,8 +204,16 @@ impl Actor {
         let kind = tool["kind"].as_str().unwrap_or("other");
         // The forbidden commands, then the user's rules, then the bot's general setting: one decision, the same one the
         // rule editor's tester gives.
-        let evaluation =
-            approval_rules::evaluate(&self.cfg.approval_rules, self.cfg.permission, kind, command.as_deref(), &title);
+        let quick =
+            if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
+        let evaluation = approval_rules::evaluate(
+            &self.cfg.approval_rules,
+            &quick,
+            self.cfg.permission,
+            kind,
+            command.as_deref(),
+            &title,
+        );
         match &evaluation.outcome {
             Outcome::Forbidden { pattern } => {
                 self.refuse(rpc_id, &options, &format!("Blocked command (\"{pattern}\"), never allowed: {title}"))
