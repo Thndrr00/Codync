@@ -19,7 +19,7 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 | 1 | Put the branch on the current base (`origin/integrate/upstream-2.29`) | done | merge `6c20c14c` (+ two `fix:` commits) | iOS untouched; no agent run on the merged build; see `base-update-report.md` |
 | 2 | Close what was left half done (A-E) | done | see `git log` (`feat: Your week`, saver, takeover commits) | iOS not compiled; no agent run; thresholds only with injected clocks; see `half-done-report.md` |
 | 3 | Forbidden commands | done | see `git log` (`feat(host): forbidden commands`) | no UI; real agents not run; obfuscated commands not caught; see `forbidden-commands-report.md` |
-| 4 | Honest end of turn | pending | | |
+| 4 | Honest end of turn | in progress (paused by the user) | host, desktop, terminal and Android code committed locally, not pushed | Android gate for this topic NOT run to the end (stopped); the full host suite not rerun; see `turn-verdict-report.md` |
 | 5 | Approval rules editor | pending | | |
 | 6 | "Always" as a rule and `actionRules` | pending | | |
 | 7 | Security profiles | pending | | |
@@ -36,3 +36,16 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 ## Not touched on purpose
 
 Routines by nodes (`feat/routine-flows-*`), Android widgets (`feat/android-widgets-v2`), syncing with `upstream/main`.
+
+## Where to resume (written when the work was stopped)
+
+- **Rule from the user, after the plan was written: no iOS, iPhone or Mac work.** Skip `apps/ios` in every topic from
+  now on. iOS code written earlier in topics 2 (commits `e3de78f9`, `ff044681`, `b0903e8f`, never compiled) is still in
+  the branch; decide whether to revert it before the final push.
+- **Topic 4 left to do:** run `./gradlew.bat assembleDebug testDebugUnitTest :core:test lintDebug --no-daemon
+  -Dorg.gradle.jvmargs=-Xmx2g` in `apps/android` (nothing else compiling), then the full host suite
+  (`cargo test -j 1 --bin codync-host -- --test-threads=1` with `CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1`), fill the Android
+  row of `turn-verdict-report.md`, mark topic 4 done, push without `--force`.
+- **Then topic 5** (approval rules editor), skipping iOS.
+- Machine notes: 8 GB; kill the idle `opencode.exe` processes (the user allowed it) if rustc dies with
+  "memory allocation failed"; Gradle and cargo never at the same time.
