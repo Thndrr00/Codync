@@ -81,6 +81,7 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
       if (entry.data.connectionRequest) return <div className="chat-row group-start"><ConnectionRequestCard entry={entry} /></div>
       if (entry.data.handoff) return <div className="chat-row notice"><HandoffNotice entry={entry} card={entry.data.handoff} /></div>
       if (entry.data.takeoverRequest) return <div className="chat-row group-start"><TakeoverRequestNotice entry={entry} /></div>
+      if (entry.data.pausedTurn) return <div className="chat-row group-start"><PausedTurnNotice entry={entry} /></div>
       if (entry.data.passkeyWall) return <div className="chat-row group-start"><PasskeyWallNotice entry={entry} /></div>
       if (entry.data.chiefIncident) return <div className="chat-row group-start"><ChiefIncidentNotice entry={entry} /></div>
       if (entry.data.botApp) return <div className="chat-row group-start"><BotAppNotice entry={entry} openApp={openApp} /></div>
@@ -137,6 +138,33 @@ function TakeoverRequestNotice({ entry }: { entry: Entry }) {
         })
       }
     />
+  )
+}
+
+/** A turn that stopped half done: said so, with one tap to go on (a few times in a row, then it asks for words). */
+function PausedTurnNotice({ entry }: { entry: Entry }) {
+  const store = useLiveStore()
+  const tr = useTr()
+  const [error, setError] = useState<string | null>(null)
+  const paused = entry.data.pausedTurn
+  if (!paused) return null
+  const open = paused.status === 'waiting'
+  return (
+    <VStack gap={8} className="bubble agent">
+      <HStack gap={8}>
+        <Icon name="pause.circle.fill" size={14} color="var(--warning, #ff9f0a)" />
+        <Text weight="semibold" tone="attention">{tr(paused.verdict === 'truncated' ? 'Answer cut short' : 'Paused halfway')}</Text>
+      </HStack>
+      <Text size="footnote" tone="secondary">{entry.data.text}</Text>
+      {open && paused.canContinue ? (
+        <Button kind="primary" onClick={() => void store.continueTurn(entry).then(setError)}>{tr('Continue')}</Button>
+      ) : (
+        <Text size="caption" tone="tertiary">
+          {tr(open ? 'Say what remains in a message.' : 'Continued')}
+        </Text>
+      )}
+      {error ? <Text size="caption" tone="danger">{error}</Text> : null}
+    </VStack>
   )
 }
 

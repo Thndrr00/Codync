@@ -370,6 +370,8 @@ export interface EntryData {
   botApp?: BotApp
   /** notice: human takeover request card (Idea 13). */
   takeoverRequest?: { reason: string; url?: string | null; status: string }
+  /** notice: a turn that stopped half done (out of steps, or its answer cut); one tap continues it. */
+  pausedTurn?: { verdict: 'paused' | 'truncated'; status: 'waiting' | 'continued'; round: number; canContinue: boolean }
   /** Interactive Passkey / 2FA assistance card from CDP browser detector (INIC-02). */
   passkeyWall?: PasskeyWallCard
   /** Chief of Staff incident intervention card (INIC-04). */

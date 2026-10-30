@@ -302,6 +302,16 @@ export class BotStore extends BotSync {
     })
   }
 
+  /** Continues a turn that stopped half done, from its card; the host refuses a card already used. */
+  async continueTurn(entry: Entry): Promise<string | null> {
+    try {
+      await (await this.ready()).call('continueTurn', { entryId: entry.id })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
   /** Saves the user's version of a handoff that hasn't been sent; whether it did. */
   async editHandoff(entry: Entry, text: string) {
     try {
