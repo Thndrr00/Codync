@@ -42,6 +42,8 @@ data class Bot(
     val verifyCommand: String? = null,
     /** The model routine runs and check-ins use instead of [model]; null when none. */
     val backgroundModel: String? = null,
+    /** Saver: at 80 percent of the daily token budget, new sessions start on [backgroundModel] until tomorrow; null from an older host. */
+    val saver: Boolean? = null,
     /** The bot's character, written by the user. */
     val personality: Personality = Personality(),
     /** The user's other computers list this bot and may message it; null from an older host. */

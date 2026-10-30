@@ -45,6 +45,8 @@ data class BotDraft(
     /** The model routine runs and check-ins use instead of [model]. Null where the host has none. */
     val backgroundModel: String? = null,
     /** Null where the host has none, so it isn't sent. */
+    val saver: Boolean? = null,
+    /** Null where the host has none, so it isn't sent. */
     val personality: Personality? = null,
     /** Null where the host has none, or on a new bot, so it isn't sent. */
     val offeredToNetwork: Boolean? = null,
@@ -81,7 +83,7 @@ data class BotDraft(
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "personality")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "proactive", "offeredToNetwork", "reachableByAssistants", "verifyCommand", "backgroundModel", "saver", "personality")
         /** Who reaches a bot belongs to its computer, not its setup, and neither do this computer's specifics. */
         private val TEMPLATE_SKIPS =
             setOf("id", "pinned", "hidden", "account", "manageTeam", "fallbacks", "selfFallbacks", "offeredToNetwork", "reachableByAssistants")
@@ -93,6 +95,6 @@ data class BotDraft(
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
             bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks,
-            bot.verifyCommand, bot.backgroundModel, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants)
+            bot.verifyCommand, bot.backgroundModel, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants)
     }
 }
