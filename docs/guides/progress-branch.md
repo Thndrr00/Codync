@@ -19,7 +19,7 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 | 1 | Put the branch on the current base (`origin/integrate/upstream-2.29`) | done | merge `6c20c14c` (+ two `fix:` commits) | iOS untouched; no agent run on the merged build; see `base-update-report.md` |
 | 2 | Close what was left half done (A-E) | done | see `git log` (`feat: Your week`, saver, takeover commits) | iOS not compiled; no agent run; thresholds only with injected clocks; see `half-done-report.md` |
 | 3 | Forbidden commands | done | see `git log` (`feat(host): forbidden commands`) | no UI; real agents not run; obfuscated commands not caught; see `forbidden-commands-report.md` |
-| 4 | Honest end of turn | in progress (paused by the user) | host, desktop, terminal and Android code committed locally, not pushed | Android gate for this topic NOT run to the end (stopped); the full host suite not rerun; see `turn-verdict-report.md` |
+| 4 | Honest end of turn | done | see `git log` (`feat(host,tui): an honest end of turn`) | no real agent run to a step limit; Paused push not sent for real; Android card compiled, not seen; iOS skipped by instruction; see `turn-verdict-report.md` |
 | 5 | Approval rules editor | pending | | |
 | 6 | "Always" as a rule and `actionRules` | pending | | |
 | 7 | Security profiles | pending | | |

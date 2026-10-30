@@ -45,9 +45,9 @@ compiled; see `progress-branch.md`.)
 | Gate | Result |
 |---|---|
 | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | pass |
-| Host tests for this topic (`verdict`, `pause`, `turn_alert`, terminal) and `--test pause_e2e` | pass |
+| `cargo test -j 1 --bin codync-host -- --test-threads=1` and `--test pause_e2e` | 835 passed, 0 failed, 1 ignored; the e2e passes |
 | Desktop `npm run typecheck`, `npm test` | clean; 385 passed |
-| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | see `progress-branch.md` |
+| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | passes (exit 0, BUILD SUCCESSFUL in 9m 51s) |
 
 ## Not tested
 
