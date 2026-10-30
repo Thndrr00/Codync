@@ -205,7 +205,8 @@ class ChannelIntegrationTest {
         enqueueHost(burst = 600)
         val connected = HostConnector.connect(computer(), identity())
         try {
-            val events = withTimeout(8_000) { connected.events().onEach { delay(2) }.take(600).toList() }
+            // 600 delays of 2 ms last 9 s where the clock ticks every 15 ms (Windows): the budget must outlast that.
+            val events = withTimeout(30_000) { connected.events().onEach { delay(2) }.take(600).toList() }
             assertEquals((0 until 600).map(Int::toLong), events.map { it.getValue("index").jsonPrimitive.long })
             assertEquals(cid, connected.call("hello").jsonObject.text("computerId"))
         } finally { connected.close() }

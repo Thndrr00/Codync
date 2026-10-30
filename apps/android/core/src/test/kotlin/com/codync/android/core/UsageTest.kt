@@ -4,6 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UsageTest {
+    @Test fun `unsupported Antigravity accounts do not become zero usage`() {
+        val report = UsageReport.decode(WireJson.parseToJsonElement("""{"providers":[{"id":"antigravity:acc_one","name":"Antigravity · One","status":"unsupported","source":"antigravity","windows":[]},{"id":"antigravity:acc_two","name":"Antigravity · Two","status":"unavailable","windows":[]}]}"""))
+        assertEquals(2, report.providers.size)
+        assertNull(report.providers.first().tightest)
+        assertEquals("Update this agent to read its plan limits.", report.providers.first().statusLabel)
+        assertEquals("Plan limits are unavailable for this account.", report.providers.last().statusLabel)
+        assertEquals("Antigravity quota report", report.providers.first().sourceLabel)
+    }
     @Test fun `unknown providers and missing windows remain distinct from zero consumption`() {
         val report = UsageReport.decode(WireJson.parseToJsonElement("""{"providers":[{"id":"future","name":"Future agent","source":"future-source","windows":[{"id":"unknown","label":"Monthly"},{"id":"zero","label":"Daily","percent":0}]}]}"""))
         val provider = report.providers.single()
@@ -13,6 +21,11 @@ class UsageTest {
         assertNull(provider.windows.first().barFraction)
         assertEquals("zero", provider.tightest?.id)
         assertEquals(0.0, provider.windows.last().reportedPercent!!, 0.0)
+        val noted = UsageProvider("vibe", "Mistral Vibe", listOf(
+            UsageWindow("cost", "Cost today", 90.0, text = "$1.50"),
+            UsageWindow("five_hour", "5-hour", 10.0)))
+        assertEquals(listOf("five_hour"), noted.limits.map { it.id })
+        assertEquals("five_hour", noted.tightest?.id)
         assertTrue(UsageReport.decode(WireJson.parseToJsonElement("{}" )).providers.isEmpty())
     }
 
