@@ -66,6 +66,12 @@ pub fn decide<'a>(rules: &'a [ApprovalRule], kind: &str, subject: &str) -> Optio
 
 /// Whether `pattern` (with `*` for any text) covers all of `text`, ignoring case.
 fn matches(pattern: &str, text: &str) -> bool {
+    glob(pattern, text, false)
+}
+
+/// [`matches`], and with `single` a `?` in the pattern stands for exactly one character. The one matcher: the
+/// user's rules and the forbidden commands (`agent::blocklist`) both use it.
+pub(super) fn glob(pattern: &str, text: &str, single: bool) -> bool {
     let pattern: Vec<char> = pattern.trim().to_lowercase().chars().collect();
     let text: Vec<char> = text.trim().to_lowercase().chars().collect();
     // Two cursors; on a mismatch, go back to just after the last `*` and let it take one more char.
@@ -75,7 +81,7 @@ fn matches(pattern: &str, text: &str) -> bool {
         if p < pattern.len() && pattern[p] == '*' {
             star = Some((p, t));
             p += 1;
-        } else if p < pattern.len() && pattern[p] == text[t] {
+        } else if p < pattern.len() && (pattern[p] == text[t] || (single && pattern[p] == '?')) {
             p += 1;
             t += 1;
         } else if let Some((sp, st)) = star {
@@ -105,6 +111,14 @@ mod tests {
         assert!(!matches("git status", "git status --short"));
         assert!(!matches("git push*", "git pull"));
         assert!(matches("*", "anything"));
+    }
+
+    #[test]
+    fn a_question_mark_is_one_character_only_when_asked() {
+        assert!(glob("?:\\", "c:\\", true));
+        assert!(!glob("?:\\", "cc:\\", true));
+        assert!(!matches("?:\\", "c:\\"), "the user's rules keep a plain question mark");
+        assert!(matches("why?", "why?"));
     }
 
     #[test]

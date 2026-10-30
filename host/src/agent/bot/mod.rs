@@ -29,6 +29,7 @@ mod proactive;
 #[cfg(test)]
 mod proactive_tests;
 mod queue;
+mod refuse;
 mod results;
 mod session;
 mod skill_use;

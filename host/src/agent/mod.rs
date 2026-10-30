@@ -6,6 +6,7 @@ pub mod acp;
 pub mod approval_rules;
 pub mod auth;
 pub mod backends;
+pub mod blocklist;
 pub mod bot;
 pub mod config;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]

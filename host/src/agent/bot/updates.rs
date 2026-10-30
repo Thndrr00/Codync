@@ -202,19 +202,18 @@ impl Actor {
             raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
         });
         let kind = tool["kind"].as_str().unwrap_or("other");
-        // The user's rules first, then the bot's general setting.
+        // Forbidden commands first: no rule and no setting, `Full` included, lets them through.
+        if let Some(pattern) = command.as_deref().and_then(crate::agent::blocklist::blocked) {
+            self.refuse(rpc_id, &options, &format!("Blocked command (\"{pattern}\"), never allowed: {title}")).await;
+            return;
+        }
+        // The user's rules, then the bot's general setting.
         let rule =
             approval_rules::decide(&self.cfg.approval_rules, kind, command.as_deref().unwrap_or(&title)).cloned();
         let decision = rule.as_ref().map(|r| r.decision);
         if decision == Some(Decision::Deny) {
             let pattern = rule.as_ref().map(|r| r.pattern.as_str()).unwrap_or_default();
-            let notice = json!({"text": format!("Denied by your rule \"{pattern}\": {title}"), "style": "info"});
-            self.hub.add_entry(&self.lane, EntryKind::Notice, self.turn.unwrap_or(0), &notice);
-            if !self.pick_option(&rpc_id, &options, &["reject_once", "reject_always"], false).await
-                && let Some(conn) = &self.conn
-            {
-                let _ = conn.acp.respond(rpc_id, json!({"outcome": {"outcome": "cancelled"}})).await;
-            }
+            self.refuse(rpc_id, &options, &format!("Denied by your rule \"{pattern}\": {title}")).await;
             return;
         }
         let allowed =
@@ -284,7 +283,7 @@ impl Actor {
 
     /// Answers permission request `rpc_id` with its first option of one of `kinds`, in that order
     /// (with `any`, its first option when none fits); false when there's no such option or agent.
-    async fn pick_option(&self, rpc_id: &Value, options: &[Value], kinds: &[&str], any: bool) -> bool {
+    pub(super) async fn pick_option(&self, rpc_id: &Value, options: &[Value], kinds: &[&str], any: bool) -> bool {
         let pick = kinds
             .iter()
             .find_map(|k| options.iter().find(|o| o["kind"] == *k))

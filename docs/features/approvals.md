@@ -30,6 +30,24 @@ Bots can't set their own rules: only `updateBot` changes them, and neither the b
 nor the fleet tools pass them on. No client edits them yet. Rakazo's automated review of
 low-risk requests isn't implemented: no model approves on the user's behalf.
 
+## Forbidden commands
+
+Some commands no bot may run, in any profile and with any approval setting, `auto` and the future `Full`
+profile included (`host/src/agent/blocklist.rs`): wiping the root or the home folder (`rm -rf /`, `rm -rf ~`,
+`Remove-Item -Recurse -Force C:\`, `rd /s /q C:\`), `sudo`, `mkfs`, `dd if=`, shutting down, formatting, changing
+the execution policy, `net user`, `reg delete`… They are checked before the user's rules and before the bot's
+setting. A match answers the agent's request with its reject option (a cancel when it has none) and writes a notice
+that names the pattern: "Blocked command ("rm -rf /"), never allowed". The same list stops a background `shell_job`
+and a terminal agent's hook (the terminal is told to refuse).
+
+The command is split at `;`, `&`, `|`, newlines, brackets and backticks, and each part is checked after the shell
+wrappers around it are opened (`env`, `FOO=1 …`, `bash -c`, `cmd /c`, `powershell -Command`, up to three deep), so a
+chain or a wrapper doesn't hide it, while words inside a quoted message (`git commit -m "rm -rf /"`) are not a
+command. The list is Mercury Agent's (MIT), with one deliberate change: its `/*` and `C:\*` use `*` as "anything",
+which would refuse `rm -rf /tmp/build` and `rd /s /q C:\Users\me\proj\build`. Here a bracketed `[*]` is a literal
+star, so only the root, the home folder and their contents are refused. The matcher is the same one the user's rules
+use (`approval_rules::glob`); `?` means one character only in this list, not in the user's rules.
+
 ## Cards nobody answers
 
 A card left `pending` pushes one reminder after 4 hours (`NeedsInput`, with the card's own options) and

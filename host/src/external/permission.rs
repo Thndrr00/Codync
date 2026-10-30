@@ -71,6 +71,10 @@ pub(super) async fn request(hub: &Arc<Hub>, ev: &Event) -> Option<Decision> {
     let bot = bot_for(hub, ev)?;
     let config = hub.store.bot(&bot).ok().flatten()?.config;
     let data = card(ev, &bot, &config.cwd);
+    // Forbidden for every bot: the terminal is told to refuse, and no card asks.
+    if data["command"].as_str().is_some_and(|command| crate::agent::blocklist::blocked(command).is_some()) {
+        return Some(Decision::Deny);
+    }
     let title = data["title"].as_str().unwrap_or("Use a tool").to_owned();
     let entry = hub.add_entry(&Lane::main(&bot), EntryKind::Permission, turn_of(hub, &ev.session), &data)?;
 

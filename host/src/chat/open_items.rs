@@ -206,6 +206,9 @@ fn shell_job(hub: &Hub, bot_id: &str, args: &Value) -> Result<Value> {
             if command.is_empty() {
                 bail!("command is required");
             }
+            if let Some(pattern) = crate::agent::blocklist::blocked(&command) {
+                bail!("That command is never allowed (\"{pattern}\")");
+            }
             let row = hub.store.bot(bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
             let job_id = format!("job_{}", &uuid::Uuid::new_v4().simple().to_string()[..10]);
             let output = Arc::new(Mutex::new(String::new()));
