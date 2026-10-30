@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import com.codync.android.core.BotDraft
 import com.codync.android.core.LinkState
+import com.codync.android.core.Personality
+import com.codync.android.core.PersonalityLayer
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 import kotlinx.serialization.json.JsonArray
@@ -35,6 +37,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /** Create or edit a bot in a sheet, as iOS `BotEditorView`: the settings form plus Close and Save. */
+/** One personality field of the editor: its label, help, hint and the layer it edits. */
+private data class EditorLayer(val title: String, val detail: String, val hint: String, val layer: PersonalityLayer)
+
 @Composable fun BotEditor(state: AppState, initial: BotDraft, store: AppStore) {
     var draft by remember(state.generation, initial.id) { mutableStateOf(initial) }
     var folders by remember { mutableStateOf(false) }
@@ -118,6 +123,14 @@ internal val JsonObject.curated get() = this["curated"]?.jsonPrimitive?.booleanO
                 Field("Check before done", "A command run in the workspace after each turn. If it fails, the turn doesn't count as done.") {
                     FieldBox(draft.verifyCommand.orEmpty(), { change(draft.copy(verifyCommand = it)) }, "e.g. npm test", 1, 3)
                 }
+            }
+            for ((title, detail, hint, layer) in listOf(
+                EditorLayer("Soul", "Values and boundaries that never change. Written by you; the bot can't edit it.", "e.g. Honest, careful with other people's data.", PersonalityLayer.Soul),
+                EditorLayer("Persona", "Its voice and manner.", "e.g. Dry and brief. No emoji.", PersonalityLayer.Persona),
+                EditorLayer("Heartbeat", "What it does when it checks in on its own.", "e.g. Look for failing tests and say only if something broke.", PersonalityLayer.Heartbeat),
+            )) row {
+                val current = draft.personality ?: Personality()
+                Field(title, detail) { FieldBox(layer.of(current), { change(draft.copy(personality = layer.set(current, it))) }, hint, 2, 8) }
             }
             row {
                 Field("Background model", "A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.") {

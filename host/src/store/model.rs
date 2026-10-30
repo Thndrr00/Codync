@@ -123,6 +123,9 @@ pub struct BotConfig {
     /// The model routine runs and check-ins use instead of `model`: a cheaper one for work nobody is waiting on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background_model: Option<String>,
+    /// The bot's soul, persona and heartbeat, written by the user (see `agent::personality`).
+    #[serde(default, skip_serializing_if = "crate::agent::personality::Personality::is_empty")]
+    pub personality: crate::agent::personality::Personality,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
     /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it

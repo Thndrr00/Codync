@@ -3,6 +3,13 @@
 
 export type BotStatus = 'idle' | 'working' | 'needsInput' | 'error'
 
+/** Three layers of a bot's character (see the host's `agent::personality`). */
+export interface Personality {
+  soul: string
+  persona: string
+  heartbeat: string
+}
+
 export interface Bot {
   id: string
   /** `agent`, or `group`: several bots and the user in one chat. */
@@ -53,6 +60,8 @@ export interface Bot {
   verifyCommand: string | null
   /** The model routine runs and check-ins use instead of `model` (a cheaper one); null when none (or an older host). */
   backgroundModel: string | null
+  /** The bot's character, written by the user; empty layers when none (or an older host). */
+  personality: Personality
   /** The bot that created this one; null when the user did. */
   createdBy: string | null
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
@@ -112,6 +121,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     manageTeam: raw.manageTeam ?? null,
     verifyCommand: raw.verifyCommand ?? null,
     backgroundModel: raw.backgroundModel ?? null,
+    personality: { soul: '', persona: '', heartbeat: '', ...raw.personality },
     createdBy: raw.createdBy ?? null,
     computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
@@ -607,6 +617,7 @@ export interface BotDraft {
   manageTeam?: boolean
   verifyCommand?: string | null
   backgroundModel?: string | null
+  personality?: Personality
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   sharedMemory?: boolean
   harnessMemory?: boolean
@@ -640,6 +651,7 @@ export function draftOf(bot: Bot): BotDraft {
     manageTeam: bot.manageTeam ?? undefined,
     verifyCommand: bot.verifyCommand,
     backgroundModel: bot.backgroundModel,
+    personality: bot.personality,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fastModeRefusal, fastModeShown } from '@shared/fast-mode'
 import { restLine, restOf, withBackend } from '@shared/fallbacks'
-import { draftOf, type Bot, type BotDraft, type DirListing } from '@shared/models'
+import { draftOf, type Bot, type BotDraft, type DirListing, type Personality } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { CharacterAvatar } from '../../components/Avatar'
 import { CardSection, ChoicePicker, DropdownMenu, IconButton, Pill, SearchField, Spinner, ValueRow } from '../../components/Controls'
@@ -122,6 +122,8 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const [viewingSkill, setViewingSkill] = useState<SkillRef | null>(null)
   const avatarRef = useRef<HTMLButtonElement>(null)
   const set = <K extends keyof BotDraft>(key: K, value: BotDraft[K]) => onChange((d) => ({ ...d, [key]: value }))
+  const setLayer = (layer: keyof Personality, value: string) =>
+    onChange((d) => ({ ...d, personality: { soul: '', persona: '', heartbeat: '', ...d.personality, [layer]: value } }))
   // Options belong to one model.
   const setModel = useCallback((model: string | null) => onChange((d) => (d.model === model ? d : { ...d, model, modelOptions: {} })), [onChange])
   const setModelOptions = useCallback((modelOptions: Record<string, string>) => onChange((d) => ({ ...d, modelOptions })), [onChange])
@@ -140,6 +142,15 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       </Field>
       <Field label="Check before done" detail="A command run in the workspace after each turn. If it fails, the turn doesn't count as done.">
         <AutoTextArea className="field-box" value={draft.verifyCommand ?? ''} placeholder="e.g. npm test" minRows={1} maxRows={3} onChange={(v) => set('verifyCommand', v)} />
+      </Field>
+      <Field label="Soul" detail="Values and boundaries that never change. Written by you; the bot can't edit it.">
+        <AutoTextArea className="field-box" value={draft.personality?.soul ?? ''} placeholder="e.g. Honest, careful with other people's data." minRows={2} maxRows={8} onChange={(v) => setLayer('soul', v)} />
+      </Field>
+      <Field label="Persona" detail="Its voice and manner.">
+        <AutoTextArea className="field-box" value={draft.personality?.persona ?? ''} placeholder="e.g. Dry and brief. No emoji." minRows={2} maxRows={8} onChange={(v) => setLayer('persona', v)} />
+      </Field>
+      <Field label="Heartbeat" detail="What it does when it checks in on its own.">
+        <AutoTextArea className="field-box" value={draft.personality?.heartbeat ?? ''} placeholder="e.g. Look for failing tests and say only if something broke." minRows={2} maxRows={8} onChange={(v) => setLayer('heartbeat', v)} />
       </Field>
       <Field label="Background model" detail="A cheaper model for routines and check-ins, where nobody is waiting. Empty: the bot's own model.">
         <AutoTextArea className="field-box" value={draft.backgroundModel ?? ''} placeholder="e.g. haiku" minRows={1} maxRows={2} onChange={(v) => set('backgroundModel', v)} />

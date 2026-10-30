@@ -40,6 +40,8 @@ data class BotDraft(
     val verifyCommand: String? = null,
     /** The model routine runs and check-ins use instead of [model]. Null where the host has none. */
     val backgroundModel: String? = null,
+    /** Null where the host has none, so it isn't sent. */
+    val personality: Personality? = null,
 ) {
     /** A saved bot keeps a name; only a new one goes without (the host names it after its first conversations). */
     val isValid: Boolean get() = name.isNotBlank()
@@ -68,12 +70,12 @@ data class BotDraft(
     companion object {
         /** A new bot starts with a random face, like iOS. */
         val AVATAR_COLORS = listOf("black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray")
-        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "verifyCommand", "backgroundModel")
+        private val UNSET = setOf("fastMode", "notify", "fallbacks", "selfFallbacks", "verifyCommand", "backgroundModel", "personality")
         val AVATAR_SHAPES = listOf("blob", "pebble", "squircle", "tablet", "wedge", "hex", "cloud", "teardrop")
 
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.model,
             bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
-            bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks, bot.verifyCommand, bot.backgroundModel)
+            bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks, bot.verifyCommand, bot.backgroundModel, bot.personality)
     }
 }

@@ -39,6 +39,8 @@ data class Bot(
     val verifyCommand: String? = null,
     /** The model routine runs and check-ins use instead of [model]; null when none. */
     val backgroundModel: String? = null,
+    /** The bot's character, written by the user. */
+    val personality: Personality = Personality(),
     /** The bot that created this one; null when the user did. */
     val createdBy: String? = null,
     val computerPermissions: ComputerPermissions = ComputerPermissions(),
