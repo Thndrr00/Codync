@@ -25,6 +25,7 @@ import {
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
 import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
+import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
 import { FileDownloads } from './file-downloads'
@@ -293,6 +294,15 @@ export class BotStore extends BotSync {
       this.answering.delete(entry.id)
       this.changed()
     })()
+  }
+
+  /** The security profiles the host offers; null from an older host. */
+  async securityProfiles(): Promise<SecurityProfile[] | null> {
+    try {
+      return (await (await this.ready()).call<{ profiles: SecurityProfile[] }>('securityProfiles', {})).profiles
+    } catch {
+      return null
+    }
   }
 
   /** The rule "always allow" on this card would keep; null when the host can't say (an older one). */

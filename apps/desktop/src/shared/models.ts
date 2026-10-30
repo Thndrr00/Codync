@@ -86,6 +86,8 @@ export interface Bot {
   approvalRules: ApprovalRule[]
   /** Whether the quick rules (`actionRules`) are enforced; null from an older host. */
   actionRulesOn: boolean | null
+  /** The security profile it follows (readOnly, builder, operator, full), until its rules are changed away from it. */
+  securityProfile: string | null
   /** The bot's character, written by the user; empty layers when none (or an older host). */
   personality: Personality
   /** Other computers in the user's networks list this bot and may message it; null from an older host. */
@@ -160,6 +162,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     saver: raw.saver ?? false,
     approvalRules: raw.approvalRules ?? [],
     actionRulesOn: raw.actionRulesOn ?? null,
+    securityProfile: raw.securityProfile ?? null,
     personality: { soul: '', persona: '', heartbeat: '', ...raw.personality },
     offeredToNetwork: raw.offeredToNetwork ?? null,
     reachableByAssistants: raw.reachableByAssistants ?? null,
@@ -715,6 +718,7 @@ export interface BotDraft {
   saver?: boolean
   approvalRules?: ApprovalRule[]
   actionRulesOn?: boolean
+  securityProfile?: string | null
   personality?: Personality
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   offeredToNetwork?: boolean
@@ -757,6 +761,7 @@ export function draftOf(bot: Bot): BotDraft {
     saver: bot.saver,
     approvalRules: bot.approvalRules,
     actionRulesOn: bot.actionRulesOn ?? undefined,
+    securityProfile: bot.securityProfile,
     personality: bot.personality,
     computerPermissions: bot.computerPermissions ?? { browser: false, files: false, shell: false },
     offeredToNetwork: bot.offeredToNetwork ?? undefined,

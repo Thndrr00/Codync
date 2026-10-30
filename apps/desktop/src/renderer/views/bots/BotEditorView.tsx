@@ -21,6 +21,8 @@ import { FormSheet } from '../marketplace/pieces'
 import { SkillSheet, type SkillRef } from '../marketplace/SkillSheet'
 import { AnchoredPanel, AutoTextArea, AvatarPicker, Field, SwitchRow } from './parts'
 import { ApprovalRulesEditor } from './ApprovalRulesEditor'
+import { SecurityProfilePicker } from './SecurityProfilePicker'
+import { profileRules } from '@shared/security-profiles'
 import { NetworkSwitches } from './NetworkSwitches'
 import { ProactiveCheckIns } from './ProactiveCheckIns'
 import './bots.css'
@@ -148,6 +150,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       ? [{ id: draft.backgroundModel, label: draft.backgroundModel }]
       : []),
   ]
+  const loadProfiles = useCallback(() => store.securityProfiles(), [store])
   const instructions = (
     <>
       <Field label="Standing instructions" detail="Rules that always apply. Put task-specific requests in the chat instead.">
@@ -290,6 +293,19 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
               </Pill>
             </DropdownMenu>
           </ValueRow>
+          <SecurityProfilePicker
+            selection={draft.securityProfile ?? null}
+            saved={saved?.securityProfile ?? null}
+            load={loadProfiles}
+            onChange={(profile) =>
+              onChange((d) => ({
+                ...d,
+                securityProfile: profile?.id ?? null,
+                // The form shows what the profile will write; the host writes it on save.
+                ...(profile ? { permission: profile.permission, approvalRules: profileRules(profile) } : {}),
+              }))
+            }
+          />
           <ValueRow
             label="Permissions"
             detail={
