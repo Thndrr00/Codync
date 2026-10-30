@@ -18,13 +18,18 @@ const SHOWN: usize = 1200;
 
 /// `None` when `command` passed in `cwd`; else why it didn't, with the end of its output.
 async fn run(command: &str, cwd: &str) -> Option<String> {
+    run_within(command, cwd, LIMIT).await
+}
+
+/// [`run`] with its own time limit, so a test needn't wait five minutes.
+async fn run_within(command: &str, cwd: &str, limit: Duration) -> Option<String> {
     let mut shell = crate::shell::line(command).tokio();
     shell.kill_on_drop(true).stdin(std::process::Stdio::null());
     if !cwd.is_empty() && Path::new(cwd).is_dir() {
         shell.current_dir(cwd);
     }
-    match tokio::time::timeout(LIMIT, shell.output()).await {
-        Err(_) => Some(format!("It ran longer than {} minutes.", LIMIT.as_secs() / 60)),
+    match tokio::time::timeout(limit, shell.output()).await {
+        Err(_) => Some(format!("It ran longer than {} seconds.", limit.as_secs())),
         Ok(Err(error)) => Some(format!("It couldn't start: {error}")),
         Ok(Ok(out)) if out.status.success() => None,
         Ok(Ok(out)) => {
@@ -63,6 +68,13 @@ mod tests {
         assert_eq!(run("exit 0", &cwd).await, None);
         let failure = run("echo boom && exit 1", &cwd).await.expect("the check fails");
         assert!(failure.contains("boom"), "{failure}");
+    }
+
+    #[tokio::test]
+    async fn a_check_that_runs_too_long_fails_with_the_limit() {
+        let slow = if cfg!(windows) { "ping -n 20 127.0.0.1" } else { "sleep 20" };
+        let failure = run_within(slow, "", Duration::from_secs(1)).await.expect("the limit makes it fail");
+        assert!(failure.contains("longer than 1 seconds"), "{failure}");
     }
 
     #[tokio::test]

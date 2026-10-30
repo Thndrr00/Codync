@@ -170,6 +170,11 @@ pub use crate::store::{AVATAR_COLORS as COLORS, AVATAR_SHAPES as SHAPES};
 pub enum Field {
     Name,
     Instructions,
+    Check,
+    Soul,
+    Persona,
+    Heartbeat,
+    Background,
     Agent,
     Account,
     Model,
@@ -190,9 +195,14 @@ pub enum Field {
     Skills,
 }
 
-pub const FIELDS: [Field; 20] = [
+pub const FIELDS: [Field; 25] = [
     Field::Name,
     Field::Instructions,
+    Field::Check,
+    Field::Soul,
+    Field::Persona,
+    Field::Heartbeat,
+    Field::Background,
     Field::Agent,
     Field::Account,
     Field::Model,
@@ -224,6 +234,9 @@ pub struct Form {
     pub bot_id: String,
     pub name: Editor,
     pub instructions: Editor,
+    /// What the user writes about how the bot works: check before done, soul, persona, heartbeat, background
+    /// model (see [`Field::slot`]).
+    pub character: [Editor; 5],
     pub backend: String,
     pub account: Option<String>,
     pub account_scope: String,
@@ -258,9 +271,38 @@ pub struct Form {
     pub opened: serde_json::Value,
 }
 
+impl Field {
+    /// Where a text field of the bot's character keeps its editor in [`Form::character`].
+    pub fn slot(self) -> Option<usize> {
+        match self {
+            Self::Check => Some(0),
+            Self::Soul => Some(1),
+            Self::Persona => Some(2),
+            Self::Heartbeat => Some(3),
+            Self::Background => Some(4),
+            _ => None,
+        }
+    }
+
+    /// Whether Shift+Enter starts a new line in it.
+    pub fn multiline(self) -> bool {
+        matches!(self, Self::Instructions | Self::Soul | Self::Persona | Self::Heartbeat)
+    }
+}
+
 impl Form {
     pub fn current(&self) -> Field {
         FIELDS[self.field]
+    }
+
+    /// The text editor behind `field`, when it is one.
+    pub fn editor_mut(&mut self, field: Field) -> Option<&mut Editor> {
+        match field {
+            Field::Name => Some(&mut self.name),
+            Field::Instructions => Some(&mut self.instructions),
+            Field::Model => Some(&mut self.model),
+            other => other.slot().map(|slot| &mut self.character[slot]),
+        }
     }
 
     /// The settings picked for the model now in the field; another model has none yet.

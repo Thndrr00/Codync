@@ -128,6 +128,13 @@ impl App {
             bot_id: b.id.clone(),
             name: Editor::with(&b.name),
             instructions: Editor::with(&b.description),
+            character: [
+                Editor::with(&b.verify_command),
+                Editor::with(&b.personality[0]),
+                Editor::with(&b.personality[1]),
+                Editor::with(&b.personality[2]),
+                Editor::with(&b.background_model),
+            ],
             backend: b.backend.clone(),
             account: b.account.clone(),
             account_scope: uuid::Uuid::new_v4().to_string(),
@@ -192,12 +199,16 @@ impl App {
                 f.field = (f.field + FIELDS.len() - 1) % FIELDS.len();
                 f.sub = 0;
             }
-            KeyCode::Enter
-                if field == Field::Instructions && k.modifiers.intersects(KeyModifiers::SHIFT | KeyModifiers::ALT) =>
-            {
-                f.instructions.insert("\n");
+            KeyCode::Enter if field.multiline() && k.modifiers.intersects(KeyModifiers::SHIFT | KeyModifiers::ALT) => {
+                if let Some(ed) = f.editor_mut(field) {
+                    ed.insert("\n");
+                }
             }
-            KeyCode::Char('j') if ctrl && field == Field::Instructions => f.instructions.insert("\n"),
+            KeyCode::Char('j') if ctrl && field.multiline() => {
+                if let Some(ed) = f.editor_mut(field) {
+                    ed.insert("\n");
+                }
+            }
             KeyCode::Backspace | KeyCode::Delete if field == Field::Folder => f.cwd.clear(),
             KeyCode::Enter if field == Field::Folder => {
                 let start = f.cwd.clone();
@@ -314,13 +325,7 @@ impl App {
                 }
             }
             _ => {
-                let ed = match field {
-                    Field::Name => Some(&mut f.name),
-                    Field::Instructions => Some(&mut f.instructions),
-                    Field::Model => Some(&mut f.model),
-                    _ => None,
-                };
-                if let Some(ed) = ed {
+                if let Some(ed) = f.editor_mut(field) {
                     ed.key(k);
                 }
             }
@@ -362,6 +367,13 @@ impl Form {
         json!({
             "name": self.name.text.trim(),
             "description": self.instructions.text.trim(),
+            "verifyCommand": self.character[0].text.trim(),
+            "backgroundModel": self.character[4].text.trim(),
+            "personality": {
+                "soul": self.character[1].text.trim(),
+                "persona": self.character[2].text.trim(),
+                "heartbeat": self.character[3].text.trim(),
+            },
             "backend": self.backend,
             "account": self.account,
             "cwd": self.cwd,
