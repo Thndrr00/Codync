@@ -22,6 +22,7 @@ pub mod personality;
 pub mod registry;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod sandbox;
+pub mod security_profile;
 pub mod term;
 pub mod workspace;
 

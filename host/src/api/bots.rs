@@ -345,6 +345,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
             json!({"entry": e})
         }
+        // The security profiles to choose among: their sentence and what each sets, for a client to show.
+        "securityProfiles" => json!({"profiles": crate::agent::security_profile::describe_all()}),
         // What the bot would do with a command: the same decision a real request gets, so a rule editor tests rules
         // without copying their logic. `rules` tests an unsaved list; without it the bot's saved rules.
         "testApprovalRule" => {

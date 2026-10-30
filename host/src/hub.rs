@@ -20,6 +20,7 @@ use tokio::sync::{broadcast, watch};
 
 mod documents;
 mod order;
+mod profile;
 mod reactions;
 mod stop;
 mod sync;
@@ -255,6 +256,7 @@ impl Hub {
                 return Ok(self.bot_value(&existing).unwrap_or(Value::Null));
             }
         }
+        Self::settle_profile(None, &mut cfg);
         crate::agent::fallback::tidy(&mut cfg);
         validate(&cfg)?;
         crate::agent::workspace::prepare(&mut cfg)?;
@@ -262,6 +264,7 @@ impl Hub {
             let _g = self.emit_lock.locked();
             self.store.save_bot(&cfg)?;
         }
+        self.set_profile_budget(&cfg);
         crate::network::publish(self);
         if !cfg.is_group() {
             self.spawn_bot(cfg.clone());
@@ -303,6 +306,7 @@ impl Hub {
         if cfg.is_group() {
             cfg.members = crate::chat::group::valid_members(&self.store, &cfg.id, &cfg.members)?;
         }
+        Self::settle_profile(Some(&row.config), &mut cfg);
         crate::agent::fallback::tidy(&mut cfg);
         validate(&cfg)?;
         let mut edit = crate::chat::instruction_history::begin(&row.config, &cfg, patch, &self.store)?;
@@ -321,6 +325,9 @@ impl Hub {
                 edit.undo(&self.store)?;
             }
             return Err(error);
+        }
+        if cfg.security_profile != row.config.security_profile {
+            self.set_profile_budget(&cfg);
         }
         crate::network::publish(self);
         if !cfg.is_group() {

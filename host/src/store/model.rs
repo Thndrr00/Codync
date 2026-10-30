@@ -217,6 +217,10 @@ pub struct BotConfig {
     /// them on, so rules a role preset stored earlier change nothing.
     #[serde(default)]
     pub action_rules_on: bool,
+    /// The security profile the bot follows (`agent::security_profile`), until its rules or Approvals setting are
+    /// changed away from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security_profile: Option<crate::agent::security_profile::SecurityProfile>,
     /// Proactive check-ins, quiet hours, daily budget and background app toggle (Ideas 41, 44).
     #[serde(default)]
     pub proactive: ProactiveSettings,
