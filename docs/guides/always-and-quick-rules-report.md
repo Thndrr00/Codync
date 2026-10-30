@@ -58,10 +58,10 @@ unsaved quick settings tested); the terminal sheets; Android and desktop helpers
 
 | Gate | Result |
 |---|---|
-| `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | see `progress-branch.md` |
-| `cargo test -j 1 --bin codync-host -- --test-threads=1`, `--test approval_rules_e2e` | see `progress-branch.md` |
+| `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` | pass |
+| `cargo test -j 1 --bin codync-host -- --test-threads=1`, and the e2e tests `approval_rules_e2e`, `forbidden_e2e`, `pause_e2e` | 851 passed, 0 failed, 1 ignored; the e2e tests pass (4, 2 and 2) |
 | Desktop `npm run typecheck`, `npm test` | clean; 389 passed |
-| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | see `progress-branch.md` |
+| Android `assembleDebug testDebugUnitTest :core:test lintDebug` | passes (exit 0, BUILD SUCCESSFUL in 4m 37s) |
 
 ## Not tested
 
