@@ -345,6 +345,22 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
             json!({"entry": e})
         }
+        // What the bot would do with a command: the same decision a real request gets, so a rule editor tests rules
+        // without copying their logic. `rules` tests an unsaved list; without it the bot's saved rules.
+        "testApprovalRule" => {
+            let row =
+                hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            let rules: Vec<crate::agent::approval_rules::ApprovalRule> = match b.get("rules") {
+                Some(list) if !list.is_null() => serde_json::from_value(list.clone())?,
+                _ => row.config.approval_rules.clone(),
+            };
+            crate::agent::approval_rules::validate(&rules)?;
+            let command = str_arg(&b, "command")?;
+            let kind = b["kind"].as_str().unwrap_or("execute");
+            let evaluation =
+                crate::agent::approval_rules::evaluate(&rules, row.config.permission, kind, Some(command), command);
+            json!({"evaluation": evaluation})
+        }
         // A paused turn's card: one tap sends the continuation (bounded, once per card).
         "continueTurn" => {
             let entry_id = str_arg(&b, "entryId")?;

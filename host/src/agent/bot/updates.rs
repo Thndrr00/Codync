@@ -185,7 +185,7 @@ impl Actor {
     }
 
     pub(super) async fn on_permission(&mut self, rpc_id: Value, params: Value) {
-        use crate::agent::approval_rules::{self, Decision};
+        use crate::agent::approval_rules::{self, Decision, Outcome};
         let options = params["options"].as_array().cloned().unwrap_or_default();
         let tool = &params["toolCall"];
         let title = tool["title"]
@@ -202,22 +202,30 @@ impl Actor {
             raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
         });
         let kind = tool["kind"].as_str().unwrap_or("other");
-        // Forbidden commands first: no rule and no setting, `Full` included, lets them through.
-        if let Some(pattern) = command.as_deref().and_then(crate::agent::blocklist::blocked) {
-            self.refuse(rpc_id, &options, &format!("Blocked command (\"{pattern}\"), never allowed: {title}")).await;
-            return;
+        // The forbidden commands, then the user's rules, then the bot's general setting: one decision, the same one the
+        // rule editor's tester gives.
+        let evaluation =
+            approval_rules::evaluate(&self.cfg.approval_rules, self.cfg.permission, kind, command.as_deref(), &title);
+        match &evaluation.outcome {
+            Outcome::Forbidden { pattern } => {
+                self.refuse(rpc_id, &options, &format!("Blocked command (\"{pattern}\"), never allowed: {title}"))
+                    .await;
+                return;
+            }
+            Outcome::Rule { decision: Decision::Deny, pattern, .. } => {
+                self.refuse(rpc_id, &options, &format!("Denied by your rule \"{pattern}\": {title}")).await;
+                return;
+            }
+            _ => {}
         }
-        // The user's rules, then the bot's general setting.
-        let rule =
-            approval_rules::decide(&self.cfg.approval_rules, kind, command.as_deref().unwrap_or(&title)).cloned();
-        let decision = rule.as_ref().map(|r| r.decision);
-        if decision == Some(Decision::Deny) {
-            let pattern = rule.as_ref().map(|r| r.pattern.as_str()).unwrap_or_default();
-            self.refuse(rpc_id, &options, &format!("Denied by your rule \"{pattern}\": {title}")).await;
-            return;
-        }
-        let allowed =
-            decision == Some(Decision::Allow) || (decision.is_none() && self.cfg.permission == Permission::Auto);
+        let rule_pattern = match &evaluation.outcome {
+            Outcome::Rule { pattern, .. } => Some(pattern.clone()),
+            _ => None,
+        };
+        let allowed = matches!(
+            evaluation.outcome,
+            Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
+        );
         // Like the bot's automatic setting always did: with no allow option, its first option.
         if allowed && self.pick_option(&rpc_id, &options, &["allow_once", "allow_always"], true).await {
             return;
@@ -235,7 +243,7 @@ impl Actor {
             "status": "pending",
             "selected": Value::Null,
             // The rule that asked for this card, when one did (the bot itself approves everything).
-            "rule": rule.as_ref().map(|r| r.pattern.clone()),
+            "rule": rule_pattern,
         });
         self.show_card(&title, data, Answer::Agent(rpc_id));
     }
