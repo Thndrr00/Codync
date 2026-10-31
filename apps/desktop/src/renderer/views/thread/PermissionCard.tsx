@@ -24,6 +24,10 @@ export const permissionHeadline = (toolKind?: string) => {
     case 'read':
     case 'search':
       return 'Wants to read files'
+    case 'question':
+      return 'Asks you a question'
+    case 'plan':
+      return 'Wants your approval of a plan'
     default:
       return 'Wants to use a tool'
   }

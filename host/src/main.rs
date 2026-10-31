@@ -189,6 +189,9 @@ enum Sub {
         agent: String,
         /// The event name, for agents that don't name it in the payload.
         event: Option<String>,
+        /// Wait for a person to answer a question or approve a plan from any Codync client.
+        #[arg(long)]
+        ask: bool,
     },
     /// Add, remove or check the hook that shows Claude Code's terminal sessions in Codync.
     Hooks {
@@ -526,8 +529,8 @@ async fn main() -> Result<()> {
             statusline(port, wrapped.join(" ")).await;
             Ok(())
         }
-        Sub::Hook { port, agent, event } => {
-            let code = cli::hook::run(port, agent, event).await;
+        Sub::Hook { port, agent, event, ask } => {
+            let code = cli::hook::run(port, agent, event, ask).await;
             std::process::exit(i32::from(code != std::process::ExitCode::SUCCESS));
         }
         Sub::Hooks { action } => {

@@ -24,7 +24,7 @@ card (desktop and Android), `SETUP_PROMPT.md`.
 | 6 | "Always" as a rule and `actionRules` | done | see `git log` (`feat(host): 'always allow' keeps a rule`, `quick rules by kind of action`) | seen on no screen; no real agent offered allow_always; browser, apps, bots and routines classes left out on purpose; iOS skipped by instruction; see `always-and-quick-rules-report.md` |
 | 7 | Security profiles | done | see `git log` (`feat(host): security profiles`) | seen on no screen; no real agent ran under a profile; daily limits not exercised; path scopes do not apply over ACP; iOS skipped by instruction; see `security-profiles-report.md` |
 | 8 | Mini-app and check-in fixes | done | see `git log` (`fix(host): a half-done scheduled check-in stays private`) | items 1-5 were already done by the merged base (evidence in the report); the one-hour real-host e2e not run; the Android WebView callbacks not seen; see `miniapps-and-check-ins-report.md` |
-| 9 | Questions and plans from external sessions | pending | | |
+| 9 | Questions and plans from external sessions | done | see `git log` (`feat(host): answer a terminal session's questions and plans from any client`) | no real Claude Code session was run; plan approval output (`allow` + echoed input) is undocumented by Claude Code; multi-select questions stay in the terminal; see `external-questions-report.md` |
 | 10 | Messaging channels (3 phases) | pending | | |
 | 11 | Computer health | pending | | |
 | 12 | Import agents | pending | | |

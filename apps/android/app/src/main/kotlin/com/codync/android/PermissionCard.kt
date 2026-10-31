@@ -51,6 +51,8 @@ import kotlinx.serialization.json.jsonPrimitive
         "edit", "delete", "move" -> "Wants to change files"
         "fetch" -> "Wants to access the web"
         "read", "search" -> "Wants to read files"
+        "question" -> "Asks you a question"
+        "plan" -> "Wants your approval of a plan"
         else -> "Wants to use a tool"
     }
     val diffs = (d["diffs"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
