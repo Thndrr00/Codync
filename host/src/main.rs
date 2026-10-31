@@ -35,6 +35,7 @@ mod service;
 mod shell;
 mod slack;
 mod store;
+mod telegram;
 mod tui;
 mod update;
 mod usage;

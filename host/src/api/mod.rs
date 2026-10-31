@@ -98,6 +98,12 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         }
         return crate::slack::call(hub, method, b).await;
     }
+    if crate::telegram::METHODS.contains(&method) {
+        if !matches!(caller, Caller::Local) && method != "telegramStatus" {
+            return Err(Forbidden.into());
+        }
+        return crate::telegram::call(hub, method, b).await;
+    }
     if matches!(method, "beginProtectedEntry" | "finishProtectedEntry") {
         return crate::screen::protected_entry::call(hub, method, b).await;
     }
