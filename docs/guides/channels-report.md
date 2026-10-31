@@ -44,3 +44,26 @@ instruction; nothing ran against real Slack.
   bot's session code and Telegram has no threads in a private chat.
 - Not done: receiving files or photos from Telegram (ignored), webhooks (polling only), nothing ran against real
   Telegram (`docs/guides/telegram-manual-checklist.md`).
+
+## Phase 3: the Channels screen (this commit)
+
+Every client shows, for the computer's host: each Telegram bot (name, `@username`, which bot answers, state, last message,
+people allowed) and the Slack connection (not connected, Socket Mode or HTTP, workspace).
+
+| Client | Where | What it can do |
+|---|---|---|
+| Desktop | Settings → Channels (`ChannelsSection.tsx`, `store/channels-store.ts`, `shared/channels.ts`) | add a Telegram bot (name, token, bot picker), pair someone (shows the code), take a person out, remove the bot, disconnect Slack |
+| Android | Settings → Channels (`ChannelsSheet.kt`, `AppStoreChannels.kt`, `core/Channels.kt`) | see everything, pair someone, take a person out |
+| Terminal | `Channels: Telegram and Slack…` in the command list (`tui/app/channels.rs`, `tui/view/channels.rs`) | see everything, `p` pair someone, `r` refresh |
+| iOS | not touched, by instruction | |
+
+- **Why Android and the terminal cannot add or remove a Telegram bot:** adding takes the bot's token. Tokens are only
+  given on the computer: `addTelegramBot`, `removeTelegramBot` and all Slack changes refuse any caller but the local one.
+  A paired phone may call `telegramStatus`, `pairTelegram` and `setTelegramAllowed` (letting someone in or out is no more
+  than a phone can already do by sending messages to the bots). The terminal does not ask for a token either; use the
+  desktop app. This is a stated gap, not an oversight.
+- **Slack setup has no form in any client:** it takes seven values (workspace, bot user, bot token, app token or signing
+  secret, bindings). It is done with `setSlackChannel` (see `slack-manual-checklist.md`); the screens show its status and
+  the desktop can disconnect it. A form is the next step once Slack has been tried with a real workspace.
+- Tests: `shared/channels.test.ts` (desktop wording and validation), `core/ChannelsTest.kt` (decode and wording),
+  `tui::app::channels` (the lines). Nothing was seen on a screen.

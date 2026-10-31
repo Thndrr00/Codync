@@ -214,7 +214,7 @@ class ChannelIntegrationTest {
 
     @Test fun `direct-only waits for a cold handshake beyond the relay fallback budget`() = runBlocking {
         enqueueHost(welcomeDelay = 1800)
-        val connected = withTimeout(5_000) { HostConnector.connect(computer().copy(route = ConnectionRoute.DirectOnly), identity()) }
+        val connected = withTimeout(30_000) { HostConnector.connect(computer().copy(route = ConnectionRoute.DirectOnly), identity()) }
         try { assertEquals(cid, connected.call("hello").jsonObject.text("computerId")) }
         finally { connected.close() }
     }

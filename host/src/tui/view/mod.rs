@@ -10,6 +10,7 @@ mod activity;
 mod analytics;
 mod bot_chat;
 mod buffer;
+mod channels;
 mod chat;
 mod computer_access;
 mod fallbacks;

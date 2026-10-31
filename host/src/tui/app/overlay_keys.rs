@@ -57,6 +57,7 @@ impl App {
             Action::Pair => self.open_pair(),
             Action::Network => self.open_network(),
             Action::Rules => self.open_rules(),
+            Action::Channels => self.open_channels(),
             Action::Usage => {
                 self.overlays.push(Overlay::Usage(0));
                 self.call("weekSummary", json!({"days": 7}), After::Week);
@@ -141,6 +142,7 @@ impl App {
             Overlay::Analytics(s) => s.key(k),
             Overlay::Network(n) => self.network_key(n, k),
             Overlay::Rules(s) => self.approval_rules_key(s, k),
+            Overlay::Channels(s) => self.channels_key(s, k),
             Overlay::Always(s) => self.always_key(s, k),
             // A new code: after a failure, or in place of the one shown.
             Overlay::Pair(_) if k.code == KeyCode::Char('r') => {

@@ -3,6 +3,7 @@
 mod always;
 mod analytics;
 mod bot;
+pub mod channels;
 mod editor;
 mod events;
 mod exchange;
@@ -22,6 +23,7 @@ mod ui;
 
 pub use always::AlwaysSheet;
 pub use bot::{AgentModel, Bot, ModelOption, OwnMemory};
+pub use channels::ChannelsSheet;
 pub use editor::Editor;
 pub use exchange::{ConversationRow, Exchange, Item, Outcome, conversation, group, rows};
 pub use model::{After, Entry, Kind, Mark, Msg, Status};

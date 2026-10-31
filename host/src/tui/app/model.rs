@@ -39,6 +39,10 @@ pub enum After {
     RuleTest,
     /// `securityProfiles`.
     Profiles,
+    /// `telegramStatus` and the Telegram calls that answer with it.
+    Channels,
+    /// `slackStatus`.
+    ChannelsSlack,
     /// `proposeRule` for an "always allow" on card `.0`, option `.1`.
     Proposal(String, String),
     /// The rules sheet's save (`updateBot`).
