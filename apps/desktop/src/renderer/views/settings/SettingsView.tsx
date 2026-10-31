@@ -27,6 +27,7 @@ import { ComputerAccessView } from '../computer-access/ComputerAccessView'
 import { FormSheet } from '../marketplace/pieces'
 import { AnalyticsSheet } from './AnalyticsSheet'
 import { DiagnosticsView } from './DiagnosticsView'
+import { ChannelsSection } from './ChannelsSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 
@@ -234,6 +235,7 @@ function GeneralSettings() {
       </CardSection>
       <PrivacySettings />
       {window.codync.platform === 'win32' ? <ResearchSettingsSection /> : null}
+      <ChannelsSection />
       <HiddenBotsSection />
     </CardForm>
   )
