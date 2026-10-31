@@ -8,6 +8,7 @@ mod background;
 mod browser;
 mod budget;
 mod bundle;
+mod channels;
 mod chat;
 mod cli;
 mod cloud_cli;
