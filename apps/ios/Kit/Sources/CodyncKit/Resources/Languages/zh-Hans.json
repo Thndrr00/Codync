@@ -1800,5 +1800,7 @@
   "{name} downloads about {size} the first time it starts.": "{name} 首次启动时会下载约 {size}。",
   "Download and start": "下载并启动",
   "Downloading {name}… {done} of {total}": "正在下载 {name}… {done} / {total}",
-  "Unpacking {name}…": "正在解压 {name}…"
+  "Unpacking {name}…": "正在解压 {name}…",
+  "Drop to send to {name}": "拖放以发送给 {name}",
+  "this bot": "这个机器人"
 }

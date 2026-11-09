@@ -1800,5 +1800,7 @@
   "{name} downloads about {size} the first time it starts.": "{name}은(는) 처음 시작할 때 약 {size}을(를) 내려받습니다.",
   "Download and start": "내려받고 시작",
   "Downloading {name}… {done} of {total}": "{name} 내려받는 중… {done} / {total}",
-  "Unpacking {name}…": "{name} 압축 해제 중…"
+  "Unpacking {name}…": "{name} 압축 해제 중…",
+  "Drop to send to {name}": "놓아서 {name}에게 보내기",
+  "this bot": "이 봇"
 }

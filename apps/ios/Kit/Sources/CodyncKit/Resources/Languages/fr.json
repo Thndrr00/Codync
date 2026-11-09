@@ -1800,5 +1800,7 @@
   "{name} downloads about {size} the first time it starts.": "{name} télécharge environ {size} au premier démarrage.",
   "Download and start": "Télécharger et démarrer",
   "Downloading {name}… {done} of {total}": "Téléchargement de {name}… {done} sur {total}",
-  "Unpacking {name}…": "Décompression de {name}…"
+  "Unpacking {name}…": "Décompression de {name}…",
+  "Drop to send to {name}": "Déposez pour envoyer à {name}",
+  "this bot": "ce bot"
 }

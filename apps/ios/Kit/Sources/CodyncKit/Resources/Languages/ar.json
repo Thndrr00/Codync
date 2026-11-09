@@ -105,5 +105,7 @@
   "{name} downloads about {size} the first time it starts.": "يُنزّل {name} نحو {size} في أول تشغيل.",
   "Download and start": "تنزيل وبدء",
   "Downloading {name}… {done} of {total}": "جارٍ تنزيل {name}… {done} من {total}",
-  "Unpacking {name}…": "جارٍ فك ضغط {name}…"
+  "Unpacking {name}…": "جارٍ فك ضغط {name}…",
+  "Drop to send to {name}": "أفلت للإرسال إلى {name}",
+  "this bot": "هذا الروبوت"
 }

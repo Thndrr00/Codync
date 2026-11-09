@@ -1800,5 +1800,7 @@
   "{name} downloads about {size} the first time it starts.": "При первом запуске {name} загружает около {size}.",
   "Download and start": "Загрузить и запустить",
   "Downloading {name}… {done} of {total}": "Загрузка {name}… {done} из {total}",
-  "Unpacking {name}…": "Распаковка {name}…"
+  "Unpacking {name}…": "Распаковка {name}…",
+  "Drop to send to {name}": "Отпустите, чтобы отправить: {name}",
+  "this bot": "этот бот"
 }

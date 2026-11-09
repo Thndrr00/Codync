@@ -1800,5 +1800,7 @@
   "{name} downloads about {size} the first time it starts.": "{name} 首次啟動時會下載約 {size}。",
   "Download and start": "下載並啟動",
   "Downloading {name}… {done} of {total}": "正在下載 {name}… {done} / {total}",
-  "Unpacking {name}…": "正在解壓縮 {name}…"
+  "Unpacking {name}…": "正在解壓縮 {name}…",
+  "Drop to send to {name}": "拖放以傳送給 {name}",
+  "this bot": "這個機器人"
 }

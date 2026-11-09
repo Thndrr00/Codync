@@ -1800,5 +1800,7 @@
   "{name} downloads about {size} the first time it starts.": "{name} は初回の起動時に約 {size} をダウンロードします。",
   "Download and start": "ダウンロードして開始",
   "Downloading {name}… {done} of {total}": "{name} をダウンロードしています… {done} / {total}",
-  "Unpacking {name}…": "{name} を展開しています…"
+  "Unpacking {name}…": "{name} を展開しています…",
+  "Drop to send to {name}": "ドロップして {name} に送信",
+  "this bot": "このボット"
 }
