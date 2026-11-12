@@ -6,6 +6,7 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { highlightSpans } from './code-highlight.ts'
 import { looksLikeDiff, parseDiff, type DiffRow } from './diff-rows.ts'
+import { A2uiBlock } from './A2uiBlock'
 import './markdown.css'
 
 // The Mac's Markdown for messages: the blocks from `markdown-blocks.ts`, with inline styling like
@@ -104,6 +105,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ block }: { block: Block }) {
  * intact. Diff blocks render through [DiffBlock]; other languages are highlighted locally.
  */
 function CodeBlock({ text, language }: { text: string; language: string }) {
+  if (language.trim().toLowerCase() === 'a2ui') return <A2uiBlock text={text} />
   const diff = looksLikeDiff(language, text) ? parseDiff(text) : null
   if (diff) return <DiffBlock rows={diff} original={text} language={language} />
   return <CodeFrame label={language.trim() || 'Code'} copyText={text} />

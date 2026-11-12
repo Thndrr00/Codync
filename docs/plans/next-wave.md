@@ -10,17 +10,17 @@ is bigger than one release.
 | SBOM for every release | done |
 | Local models (chat, embeddings, voice) | next |
 | Workspace search with citations | done (lexical) |
-| Team meeting: voice roundtable + minutes | next |
+| Team meeting: minutes (`/minutes`) done; voice roundtable next |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | next |
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
-| AG-UI server and A2UI in the chat | next |
+| A2UI in the chat done; AG-UI server next |
 | Agent evaluations harness | done (CI wiring next) |
 | Policies by role and tool | next |
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | next |
-| Desktop agent dock and global shortcut | next |
+| Desktop global shortcut done; agent dock next |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -76,11 +76,11 @@ Goal: a bot can run without an account.
 - Next: embeddings (fastembed or llama.cpp) behind `codync-mem` for semantic search, and a citation card
   in the chat that opens the file at the line.
 
-## Team meeting — next
+## Team meeting — minutes done; voice next
 
-- A routine kind `meeting` runs the group's smart roundtable: every member speaks once, the lead closes
-  with decisions and owners, and the transcript becomes a document linked to the group.
-- Voice: reuse the existing call pipeline with several bots; each speaks its turn, the user can interrupt.
+- `/minutes` (or `/acta`) in a smart-mode team chat: the lead writes the meeting's decisions, owners
+  and open items with `review_document`, then replies with a short summary.
+- Next: a meeting routine kind that runs the roundtable on a schedule, and voice with several bots.
 - Acceptance: a 4-bot meeting produces minutes with owners and actions, without any bot answering in its
   own chat.
 
@@ -105,12 +105,13 @@ Goal: a bot can run without an account.
 - Extensions install from a `.codync-ext` file and appear in Extensions › Apps; no network by default.
 - Acceptance: a sample extension adds one tool and one panel, and cannot read files without permission.
 
-## AG-UI and A2UI — next
+## A2UI — done; AG-UI next
 
-- Host: `host/src/agui/` exposes `POST /agui/{bot}` streaming AG-UI events from the existing bus.
-- Desktop: renders A2UI messages from the agent with Codync's components; the catalog is explicit, no
-  generated code.
-- Acceptance: the AG-UI Dojo talks to a bot, and a bot draws a form that returns values to the host.
+- A2UI: an agent writes a fenced ```a2ui block whose body is JSON (text, facts, table, bars, note);
+  the desktop validates it against a closed schema and draws it with Codync's components. Nothing
+  executes and the model never supplies HTML.
+- Next: AG-UI as an external protocol (`POST /agui/{bot}` streaming events) and interactive A2UI
+  (forms and choices that send a value back to the host).
 
 ## Evaluations — harness done; CI next
 
@@ -128,11 +129,12 @@ Goal: a bot can run without an account.
 - Acceptance: a role cannot run shell outside its folder; retention previews and then deletes only what it
   showed.
 
-## Phone and desktop comfort — next
+## Phone and desktop comfort — shortcut done; the rest next
 
+- Desktop: done — `CommandOrControl+Shift+Space` brings the chat back from anywhere (or hides it).
 - Phone approvals from the notification with the same card as the chat.
 - Share-to-bot extension on Android and iOS.
-- Desktop: menu-bar agent dock with status and a global shortcut, as OpenBot's.
+- Agent dock with status.
 - Offline: encrypted cache of recent chats, queued messages sent on reconnect.
 - Acceptance: approve from the lock screen; share a link to a bot from another app; work on a plane and
   send when back.

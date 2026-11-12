@@ -211,6 +211,8 @@ pub enum Target {
     All,
     /// `/standup`: everyone reports finished, next and blocked.
     Standup,
+    /// `/minutes`: the lead writes the meeting's minutes into a document.
+    Minutes,
 }
 
 /// `/boss`, `/jefe`, `/lead` or `/supervisor` in the text: the lead answers.
@@ -223,6 +225,12 @@ fn calls_boss(text: &str) -> bool {
 fn calls_standup(text: &str) -> bool {
     let text = text.to_lowercase();
     ["/standup", "/daily", "/parte"].iter().any(|command| text.contains(command))
+}
+
+/// `/minutes` or `/acta`: the lead writes the meeting's minutes.
+fn calls_minutes(text: &str) -> bool {
+    let text = text.to_lowercase();
+    ["/minutes", "/acta", "/minuta"].iter().any(|command| text.contains(command))
 }
 
 /// Folds a phrase for matching: lower case, no accents, punctuation as spaces.
@@ -292,6 +300,9 @@ pub fn pick_target(text: &str, group: &BotConfig, members: &[BotConfig]) -> Targ
     if calls_standup(text) {
         return Target::Standup;
     }
+    if calls_minutes(text) {
+        return Target::Minutes;
+    }
     match named_target(&norm, group, members) {
         Some(id) => Target::Member(id),
         None => Target::All,
@@ -336,6 +347,17 @@ async fn run_smart(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> R
                     "{prompt}\n\n[Standup] Report in at most three short lines: what you finished, what is next, and what is blocked. No greeting, no repeat of the agenda."
                 );
                 let _ = ask_once(hub, lane, epoch, member, prompt, shown).await;
+            }
+            Ok(())
+        }
+        Target::Minutes => {
+            let Some(lead) = lead_of(&group, &members) else { return Ok(()) };
+            let (prompt, shown) = team_prompt(hub, &group, &members, &lead, lane)?;
+            let prompt = format!(
+                "{prompt}\n\n[Minutes] Write this meeting's minutes from the room above: decisions, who owns each next step, and what stays open. Save them as a document with review_document (title: the group and the date), then reply with one short summary."
+            );
+            if let Some(text) = ask_once(hub, lane, epoch, &lead, prompt, shown).await? {
+                alert(hub, group_id, &lead.id, &lead.name, &text)?;
             }
             Ok(())
         }
@@ -509,6 +531,7 @@ fn team_prompt(
     }
     out.push(String::new());
     out.push("It's your turn as the team's lead. Write the team's one answer.".into());
+    out.push("To show a status table, key facts or small bars, include a fenced ```a2ui block with JSON blocks (text, facts, table, bars, note); keep the explanation outside it.".into());
     Ok((out.join("\n"), shown))
 }
 
@@ -805,6 +828,7 @@ fn member_prompt(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotCo
         "It's your turn, {}. Reply to the room if you have something worth adding, or reply exactly \"{PASS}\" if you don't.",
         me.name
     ));
+    out.push("To show a status table, key facts or small bars, include a fenced ```a2ui block with JSON blocks (text, facts, table, bars, note).".into());
     Ok(out.join("\n"))
 }
 

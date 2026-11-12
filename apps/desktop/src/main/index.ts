@@ -3,7 +3,7 @@ import { registerAppearance } from './appearance'
 import { execFileSync } from 'node:child_process'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, session, shell, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron'
+import { app, autoUpdater, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeTheme, session, shell, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron'
 import type { HostSnapshot, WindowCommand } from '../shared/ipc'
 import { devPort, HostController } from './host-controller'
 import { registerAgentImport } from './agent-import'
@@ -253,6 +253,7 @@ if (yieldsToInstall()) {
     }
   })
   app.on('activate', () => openChat())
+  app.on('will-quit', () => globalShortcut.unregisterAll())
   ipcMain.on('app:draftsDirty', (_e, dirty: unknown) => {
     draftsDirty = dirty === true
   })
@@ -327,6 +328,18 @@ if (yieldsToInstall()) {
       for (const w of [chat, pairing]) w?.setBackgroundColor(background())
     })
     host.start()
+    // A window-wide shortcut to bring the chat back from anywhere; the menu bar app keeps running.
+    const summonKey = 'CommandOrControl+Shift+Space'
+    if (!globalShortcut.register(summonKey, () => {
+      if (!chat) openChat()
+      else if (chat.isVisible()) chat.hide()
+      else {
+        chat.show()
+        chat.focus()
+      }
+    })) {
+      console.warn(`Could not register ${summonKey}; another app may use it.`)
+    }
     openChat()
     jumpList.request(process.argv)
     // A link that launched the app (before any window existed) opens once the renderer is up.

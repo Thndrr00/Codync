@@ -1,0 +1,117 @@
+/* A fenced a2ui block: the agent's declarative interface, drawn with Codync's components. */
+.a2ui {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--surface) 96%, var(--text) 4%);
+}
+.a2ui-title {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.a2ui-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.a2ui-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.a2ui-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--secondary);
+  font-size: 12.5px;
+}
+.a2ui-note[data-tone='attention'] {
+  background: color-mix(in srgb, var(--attention) 12%, transparent);
+  color: var(--attention);
+}
+.a2ui-note[data-tone='danger'] {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+.a2ui-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 14px;
+  margin: 0;
+}
+.a2ui-fact dt {
+  color: var(--secondary);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.a2ui-fact dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 13px;
+}
+.a2ui-table-scroll {
+  overflow-x: auto;
+}
+.a2ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.a2ui-table th,
+.a2ui-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.a2ui-table th {
+  color: var(--secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.a2ui-bars {
+  padding-top: 2px;
+}
+.a2ui-bar {
+  display: grid;
+  grid-template-columns: minmax(90px, 180px) 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.a2ui-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.a2ui-bar-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  overflow: hidden;
+}
+.a2ui-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--text);
+}
+.a2ui-footer {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.a2ui-invalid {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
