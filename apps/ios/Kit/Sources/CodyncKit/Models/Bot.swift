@@ -8,6 +8,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var kind: String
     /// A group's bots.
     public var members: [String]
+    /// Groups only: how the group works as a team, with its hierarchy.
+    public var team: TeamSettings?
     public var name: String
     public var description: String
     public var avatarColor: String
@@ -117,6 +119,7 @@ extension Bot {
         id = try c.decode(String.self, forKey: .id)
         kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "agent"
         members = try c.decodeIfPresent([String].self, forKey: .members) ?? []
+        team = try? c.decodeIfPresent(TeamSettings.self, forKey: .team)
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Bot"
         description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
         avatarColor = try c.decodeIfPresent(String.self, forKey: .avatarColor) ?? "blue"

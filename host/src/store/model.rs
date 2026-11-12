@@ -276,8 +276,47 @@ pub struct BotConfig {
     /// For a group chat, the member bot ID designated as Chief of Staff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chief_bot_id: Option<String>,
+    /// How a group works as a team: one voice with a hierarchy, or the classic round table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamSettings>,
     #[serde(default)]
     pub created_at: i64,
+}
+
+/// A group's team setup: who leads, who reports to whom, and who may speak.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamSettings {
+    /// `team` answers as one voice through its lead; `roundtable` (or empty) keeps the room turn.
+    #[serde(default)]
+    pub mode: String,
+    /// `lead` (only the lead answers), `lead_and_hands` (members may add a note after it) or `all`.
+    #[serde(default)]
+    pub voice: String,
+    /// The structure, one entry per member. A member missing here is still in the group, outside the chart.
+    #[serde(default)]
+    pub members: Vec<TeamMember>,
+}
+
+/// One member in a group's hierarchy.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamMember {
+    pub bot_id: String,
+    /// Its role in the team, such as "Research" or "Reviewer".
+    #[serde(default)]
+    pub role: String,
+    /// What it is accountable for, in one line.
+    #[serde(default)]
+    pub responsibility: String,
+    /// The member it reports to; none for the lead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reports_to: Option<String>,
+    /// Where its card sits on the chart.
+    #[serde(default)]
+    pub x: f64,
+    #[serde(default)]
+    pub y: f64,
 }
 
 impl BotConfig {

@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import com.codync.android.core.Bot
 import com.codync.android.core.GroupDraft
+import com.codync.android.core.TeamMember
+import com.codync.android.core.TeamSettings
 import com.codync.android.design.*
 
 /**
@@ -92,9 +94,19 @@ import com.codync.android.design.*
                     val chiefOptions = listOf("" to "None (auto-detect Chief)") + picked.map { b -> b.id to (if (b.isChief) "${b.name} ★" else b.name) }
                     Box(Modifier.padding(top = 14.dp)) {
                         ValueRow("Chief of Staff", detail = "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.") {
-                            ChoicePicker(draft.chiefBotId.orEmpty(), chiefOptions, { draft = draft.copy(chiefBotId = it.ifEmpty { null }) }, label = "Chief of Staff")
+                            ChoicePicker(draft.chiefBotId.orEmpty(), chiefOptions, {
+                                draft = draft.copy(chiefBotId = it.ifEmpty { null }, team = (draft.team ?: TeamSettings()).reconciled(draft.members, it.ifEmpty { null }))
+                            }, label = "Chief of Staff")
                         }
                     }
+                    val team = (draft.team ?: TeamSettings()).reconciled(draft.members, draft.chiefBotId)
+                    TeamSection(team, picked, draft.chiefBotId,
+                        onChange = { draft = draft.copy(team = it) },
+                        onLead = { id ->
+                            draft = draft.copy(chiefBotId = id, team = team.copy(members = team.members.map { m ->
+                                if (m.botId == id) m.copy(reportsTo = null) else m
+                            }))
+                        })
                 }
             }
             AnimatedVisibility(state.error != null, enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
@@ -110,9 +122,56 @@ import com.codync.android.design.*
     }
 }
 
+/**
+ * A group's team on the phone: one voice or round table, who may speak, and each member's role
+ * and manager in a compact list (the desktop shows the same structure as a draggable chart).
+ */
+@Composable private fun TeamSection(
+    team: TeamSettings,
+    members: List<Bot>,
+    chiefBotId: String?,
+    onChange: (TeamSettings) -> Unit,
+    onLead: (String) -> Unit,
+) {
+    val lead = chiefBotId ?: members.firstOrNull()?.id
+    val setMember = { member: TeamMember -> onChange(team.copy(members = team.members.map { if (it.botId == member.botId) member else it })) }
+    Column(Modifier.fillMaxWidth().animateContentSize(Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Equipo", style = Type.subheadline.semibold, color = Palette.secondary)
+        SegmentedChoice(if (team.mode == "roundtable") "roundtable" else "team",
+            listOf("team" to "Una voz", "roundtable" to "Mesa redonda")) { onChange(team.copy(mode = it)) }
+        Text(if (team.mode == "roundtable") "Cada miembro responde por turno." else "El líder responde por todo el equipo.",
+            style = Type.caption, color = Palette.tertiary)
+        if (team.mode != "roundtable") {
+            Text("Quién puede hablar", Modifier.padding(top = 4.dp), style = Type.caption, color = Palette.secondary)
+            SegmentedChoice(team.voice.ifEmpty { "lead" },
+                listOf("lead" to "Líder", "lead_and_hands" to "Líder + nombrados", "all" to "Todos")) {
+                onChange(team.copy(voice = it))
+            }
+            for (member in team.members) {
+                val bot = members.firstOrNull { it.id == member.botId } ?: continue
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MemberRow(bot, members) {
+                        if (member.botId == lead) Symbol("star.fill", size = 18.dp, tint = Palette.warning)
+                        else IconButton("Hacer líder", "star") { onLead(member.botId) }
+                    }
+                    PlainTextField(member.role, { setMember(member.copy(role = it)) }, Modifier.fillMaxWidth(),
+                        "Rol, por ejemplo Investigación", singleLine = true, style = Type.subheadline)
+                    if (member.botId != lead) {
+                        val options = listOf("" to "Nadie") + team.members.filter { it.botId != member.botId }.map {
+                            it.botId to (members.firstOrNull { b -> b.id == it.botId }?.name ?: it.botId)
+                        }
+                        ChoicePicker(member.reportsTo.orEmpty(), options, { to ->
+                            setMember(member.copy(reportsTo = to.ifEmpty { null }))
+                        }, label = "Reporta a")
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** A member or candidate: avatar, name, and a trailing control. */
-@Composable private fun MemberRow(bot: Bot, bots: List<Bot>, dimmed: Boolean = false, trailing: @Composable () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+@Composable private fun MemberRow(bot: Bot, bots: List<Bot>, dimmed: Boolean = false, trailing: @Composable () -> Unit) {    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         BotAvatar(bot, bots, 32.dp)
         Text(bot.name, Modifier.weight(1f), style = Type.body, color = if (dimmed) Palette.secondary else Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
         trailing()

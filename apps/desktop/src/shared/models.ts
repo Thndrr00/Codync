@@ -31,6 +31,8 @@ export interface Bot {
   kind: string
   members: string[]
   chiefBotId?: string | null
+  /** Groups only: how the group works as a team, with its hierarchy. */
+  team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon
   name: string
   description: string
@@ -188,6 +190,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     memoryRev: raw.memoryRev ?? 0,
     isChief: raw.isChief ?? false,
     chiefBotId: raw.chiefBotId ?? null,
+    team: raw.team ?? null,
     autoName: raw.autoName ?? false,
     createdAt,
     rev: raw.rev ?? 0,
@@ -815,6 +818,8 @@ export interface BotDraft {
   harnessMemory?: boolean
   isChief?: boolean
   chiefBotId?: string | null
+  /** Groups only: how the group works as a team, with its hierarchy. */
+  team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon
 }
 
@@ -860,6 +865,7 @@ export function draftOf(bot: Bot): BotDraft {
     reachableByAssistants: bot.reachableByAssistants ?? undefined,
     isChief: bot.isChief,
     chiefBotId: bot.chiefBotId ?? null,
+    team: bot.team ?? null,
   }
 }
 
@@ -872,6 +878,30 @@ export interface AgentAccount {
   email?: string | null
 }
 
+/** How a group works as a team: one voice with a hierarchy, or the classic round table. */
+export interface TeamSettings {
+  /** `team` answers as one voice through its lead; `roundtable` keeps every member answering. */
+  mode: 'team' | 'roundtable' | ''
+  /** `lead` (only the lead answers), `lead_and_hands` (a member the lead names may also speak) or `all`. */
+  voice: 'lead' | 'lead_and_hands' | 'all' | ''
+  /** The structure, one entry per member on the chart. */
+  members: TeamMember[]
+}
+
+/** One member on a group's team chart. */
+export interface TeamMember {
+  botId: string
+  /** Its role, such as "Research" or "Reviewer". */
+  role: string
+  /** What it is accountable for, in one line. */
+  responsibility: string
+  /** The member it reports to; none for the lead. */
+  reportsTo?: string | null
+  /** Where its card sits, in chart coordinates. */
+  x: number
+  y: number
+}
+
 export interface GroupDraft {
   id?: string
   kind: 'group'
@@ -879,6 +909,8 @@ export interface GroupDraft {
   description: string
   members: string[]
   chiefBotId?: string | null
+  /** How the group works as a team: one voice with a hierarchy, or the classic round table. */
+  team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon
   pinned?: boolean
 }

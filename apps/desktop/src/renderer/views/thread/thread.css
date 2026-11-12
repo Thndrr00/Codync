@@ -447,3 +447,31 @@
     animation: fade-in 0.12s both;
   }
 }
+
+/* A group that works as a team: one line above the transcript, opening its structure. */
+.team-bar {
+  display: block;
+  width: 100%;
+  margin: 0 auto 6px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.team-bar:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.team-bar-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}

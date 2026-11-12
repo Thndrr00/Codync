@@ -10,6 +10,8 @@ public struct GroupEditorView: View {
     @State private var name: String
     @State private var about: String
     @State private var members: [String]
+    @State private var team: TeamSettings
+    @State private var chiefBotId: String?
     @State private var query = ""
     @State private var adding = false
     @State private var saving = false
@@ -21,6 +23,9 @@ public struct GroupEditorView: View {
         _name = State(initialValue: group.name)
         _about = State(initialValue: group.description)
         _members = State(initialValue: group.members)
+        let saved = group.team ?? TeamSettings()
+        _team = State(initialValue: saved.reconciled(members: group.members, lead: saved.members.first(where: { $0.reportsTo == nil })?.botId))
+        _chiefBotId = State(initialValue: saved.members.first(where: { $0.reportsTo == nil })?.botId)
     }
 
     private var picked: [Bot] { members.compactMap { model.bots[$0] } }
@@ -104,6 +109,7 @@ public struct GroupEditorView: View {
                             .padding(.top, 10)
                     }
                     .animation(Motion.layout, value: members)
+                    teamSection
                     if let error {
                         Text(L10n.tr(error)).font(.footnote).foregroundStyle(Palette.danger).transition(.opacity)
                     }
@@ -121,6 +127,73 @@ public struct GroupEditorView: View {
         }
         .background(Palette.background)
         .deleteBotConfirmation($confirmDelete) { dismiss() }
+    }
+
+    /// The team's structure: one voice or round table, who may speak, and each member's role and manager.
+    @ViewBuilder private var teamSection: some View {
+        let lead = chiefBotId ?? picked.first?.id
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.tr("Team structure"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.secondary)
+            SegmentedChoice(
+                selection: Binding(get: { team.mode == "roundtable" ? "roundtable" : "team" }, set: { team.mode = $0 }),
+                options: [(id: "team", label: "One voice"), (id: "roundtable", label: "Round table")]
+            )
+            Text(L10n.tr(team.mode == "roundtable" ? "Every member answers in turn." : "The lead answers for the whole team."))
+                .font(.caption)
+                .foregroundStyle(Palette.tertiary)
+            if team.mode != "roundtable" {
+                SegmentedChoice(
+                    selection: Binding(get: { team.voice.isEmpty ? "lead" : team.voice }, set: { team.voice = $0 }),
+                    options: [(id: "lead", label: "Lead only"), (id: "lead_and_hands", label: "Lead + named"), (id: "all", label: "Everyone")]
+                )
+                ForEach(team.members.filter { member in picked.contains { $0.id == member.botId } }) { member in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            if let bot = picked.first(where: { $0.id == member.botId }) {
+                                CharacterAvatar(bot: bot, size: 28, animated: false)
+                                Text(bot.name).foregroundStyle(Palette.text).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            if member.botId == lead {
+                                Image(systemName: "star.fill").foregroundStyle(Palette.warning)
+                            } else {
+                                IconButton("Make lead", systemImage: "star") {
+                                    chiefBotId = member.botId
+                                    setMember(member.botId) { $0.reportsTo = nil }
+                                }
+                            }
+                        }
+                        TextField(L10n.tr("Role, such as Research"), text: Binding(
+                            get: { member.role },
+                            set: { role in setMember(member.botId) { $0.role = role } }
+                        ))
+                        .textFieldStyle(.plain)
+                        .font(.subheadline)
+                        if member.botId != lead {
+                            ChoicePicker(
+                                selection: Binding(
+                                    get: { member.reportsTo ?? "" },
+                                    set: { to in setMember(member.botId) { $0.reportsTo = to.isEmpty ? nil : to } }
+                                ),
+                                options: [(id: "", label: "Nobody")] + team.members.filter { $0.botId != member.botId }.map { other in
+                                    (id: other.botId, label: picked.first(where: { $0.id == other.botId })?.name ?? other.botId)
+                                },
+                                fitsAvailableWidth: true
+                            )
+                        }
+                    }
+                    .padding(.top, 6)
+                }
+            }
+        }
+        .opacity(picked.isEmpty ? 0 : 1)
+    }
+
+    private func setMember(_ id: String, _ change: (inout TeamMember) -> Void) {
+        guard let index = team.members.firstIndex(where: { $0.botId == id }) else { return }
+        change(&team.members[index])
     }
 
     /// "Alice, Bob" when no name is typed.
@@ -159,6 +232,8 @@ public struct GroupEditorView: View {
                 var draft = GroupDraft(name: finalName, description: about, members: members)
                 draft.id = groupId
                 draft.pinned = model.bots[groupId]?.pinned
+                draft.chiefBotId = chiefBotId
+                draft.team = team.reconciled(members: members, lead: chiefBotId)
                 try await model.updateGroup(draft)
                 dismiss()
             } catch {

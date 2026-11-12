@@ -288,6 +288,10 @@ public struct GroupDraft: Codable, Hashable, Sendable {
     public var description = ""
     public var members: [String]
     public var pinned: Bool?
+    /// The member that leads the team; nil keeps the first member.
+    public var chiefBotId: String?
+    /// How the group works as a team: one voice with a hierarchy, or the classic round table.
+    public var team: TeamSettings?
 
     public init(name: String, description: String = "", members: [String]) {
         self.name = name
@@ -301,6 +305,57 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         description = group.description
         members = group.members
         pinned = group.pinned
+        team = group.team
+        chiefBotId = group.team?.members.first(where: { $0.reportsTo == nil })?.botId
+    }
+}
+
+/// One member on a group's team chart.
+public struct TeamMember: Codable, Hashable, Sendable, Identifiable {
+    public var botId: String
+    public var role: String
+    public var responsibility: String
+    public var reportsTo: String?
+    public var x: Double
+    public var y: Double
+    public var id: String { botId }
+
+    public init(botId: String, role: String = "", responsibility: String = "", reportsTo: String? = nil, x: Double = 0, y: Double = 0) {
+        self.botId = botId
+        self.role = role
+        self.responsibility = responsibility
+        self.reportsTo = reportsTo
+        self.x = x
+        self.y = y
+    }
+}
+
+/// How a group works as a team: one voice through its lead, or the classic round table.
+public struct TeamSettings: Codable, Hashable, Sendable {
+    /// `team` answers as one voice through its lead; `roundtable` keeps every member answering.
+    public var mode: String
+    /// `lead`, `lead_and_hands` (a member the lead names may also speak) or `all`.
+    public var voice: String
+    public var members: [TeamMember]
+
+    public init(mode: String = "team", voice: String = "lead", members: [TeamMember] = []) {
+        self.mode = mode
+        self.voice = voice
+        self.members = members
+    }
+
+    /// The chart in step with the group: every member present, the lead at the root.
+    public func reconciled(members ids: [String], lead: String?) -> TeamSettings {
+        let root = lead.flatMap { ids.contains($0) ? $0 : nil } ?? ids.first
+        let kept = members.filter { ids.contains($0.botId) }
+        let missing = ids.filter { id in !kept.contains { $0.botId == id } }
+        let rows = (kept + missing.map { TeamMember(botId: $0) }).map { row -> TeamMember in
+            var row = row
+            if row.botId == root { row.reportsTo = nil }
+            else if row.reportsTo == nil || !ids.contains(row.reportsTo!) { row.reportsTo = root }
+            return row
+        }
+        return TeamSettings(mode: mode, voice: voice, members: rows)
     }
 }
 

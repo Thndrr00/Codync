@@ -14,6 +14,9 @@ pub(crate) fn validate(cfg: &BotConfig) -> Result<()> {
         bail!("name is required");
     }
     if cfg.is_group() {
+        if let Some(team) = &cfg.team {
+            crate::chat::group::validate_team(cfg, team)?;
+        }
         return Ok(());
     }
     // The bot a call or shortcut that names none talks to stays in sight.

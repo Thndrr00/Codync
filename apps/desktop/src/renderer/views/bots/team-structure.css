@@ -1,0 +1,121 @@
+/* A group's team chart inside its editor: the mode, who may speak, and the org chart. */
+.team-structure {
+  min-width: 0;
+}
+.team-mode-row,
+.team-voice-row,
+.team-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.team-voice-row {
+  flex-wrap: wrap;
+}
+.team-toolbar {
+  color: var(--secondary);
+}
+.team-select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+.team-chart {
+  position: relative;
+  overflow: auto;
+  min-height: 300px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background-color: color-mix(in srgb, var(--surface) 94%, var(--text) 6%);
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 12%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+  touch-action: none;
+  user-select: none;
+}
+.team-chart-world {
+  position: relative;
+  min-width: 100%;
+}
+.team-chart-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.team-chart-edges path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 26%, transparent);
+  stroke-width: 1.5;
+}
+.team-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+  cursor: grab;
+}
+.team-card[data-selected='true'] {
+  border-color: color-mix(in srgb, var(--text) 32%, transparent);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+}
+.team-card[data-lead='true'] {
+  background: color-mix(in srgb, var(--surface) 88%, var(--warning) 12%);
+}
+.team-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.team-card-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-lead-badge {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--attention);
+}
+.team-card-field {
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.team-card-field.role {
+  font-weight: 500;
+}
+.team-card-field.responsibility {
+  color: var(--secondary);
+}
+.team-card-field:focus {
+  border-color: color-mix(in srgb, var(--text) 26%, transparent);
+}
+.team-card-field::placeholder {
+  color: var(--tertiary);
+}

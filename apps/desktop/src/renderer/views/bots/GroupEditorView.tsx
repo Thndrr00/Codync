@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { isGroup, type Bot } from '@shared/models'
+import { isGroup, type Bot, type TeamSettings } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -9,6 +9,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText } from './drafts'
 import { AutoTextArea } from './parts'
+import { TeamStructureEditor, reconcileTeam } from './TeamStructureEditor'
 import './bots.css'
 import { useTr } from '../../lib/use-language'
 
@@ -25,6 +26,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [about, setAbout] = useState(group.description)
   const [members, setMembers] = useState<string[]>(group.members)
   const [chiefBotId, setChiefBotId] = useState<string | null>(group.chiefBotId ?? null)
+  const [team, setTeam] = useState<TeamSettings>(() => reconcileTeam(group.team, group.members, group.chiefBotId ?? null))
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -48,8 +50,9 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const save = () => {
     setSaving(true)
     setError(null)
+    const effectiveTeam = reconcileTeam(team, members, chiefBotId)
     store
-      .updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId })
+      .updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam })
       .then(dismiss)
       .catch((e: unknown) => setError(errorText(e)))
       .finally(() => setSaving(false))
@@ -103,7 +106,11 @@ export function GroupEditorView({ group }: { group: Bot }) {
                 <Text tone="secondary" className="member-name">{tr(`Add Member`)}</Text>
               </button>
             ) : null}
-            <Text as="div" size="caption" tone="tertiary" className="group-note">{tr(`Everyone answers in turn unless you @mention someone.`)}</Text>
+            <Text as="div" size="caption" tone="tertiary" className="group-note">
+              {reconcileTeam(team, members, chiefBotId).mode === 'team'
+                ? tr('The lead answers for the whole team; a member it names may also speak.')
+                : tr('Everyone answers in turn unless you @mention someone.')}
+            </Text>
             {picked.length > 0 ? (
               <ValueRow
                 label="Chief of Staff"
@@ -115,9 +122,30 @@ export function GroupEditorView({ group }: { group: Bot }) {
                     { id: '', label: 'None (auto-detect Chief)' },
                     ...picked.map((b) => ({ id: b.id, label: b.isChief ? `${b.name} ★` : b.name })),
                   ]}
-                  onChange={(id) => setChiefBotId(id || null)}
+                  onChange={(id) => {
+                    setChiefBotId(id || null)
+                    setTeam((current) => reconcileTeam(current, members, id || null))
+                  }}
                 />
               </ValueRow>
+            ) : null}
+            {members.length > 0 ? (
+              <VStack gap={10} className="group-team">
+                <div className="group-section-title">{tr('Team structure')}</div>
+                <Text size="caption" tone="tertiary">
+                  {tr('Set who leads, what each one is accountable for, and who reports to whom. In one voice, the team answers as a single message.')}
+                </Text>
+                <TeamStructureEditor
+                  bots={picked}
+                  chiefBotId={chiefBotId}
+                  team={reconcileTeam(team, members, chiefBotId)}
+                  onChange={setTeam}
+                  onLead={(id) => {
+                    setChiefBotId(id)
+                    setTeam((current) => reconcileTeam(current, members, id))
+                  }}
+                />
+              </VStack>
             ) : null}
           </VStack>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}

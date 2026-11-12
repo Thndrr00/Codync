@@ -33,6 +33,7 @@ import { TraceView } from './TraceView'
 import { workingSteps } from './trace-turns'
 import { useReading } from './reading'
 import { GroupEditorView } from '../bots/GroupEditorView'
+import { TeamBar } from './TeamBar'
 import { BotTemplateView } from '../bots/BotTemplateView'
 import { BotEditorView } from '../bots/BotEditorView'
 import { FormSheet } from '../marketplace/pieces'
@@ -219,6 +220,9 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
             {store.shownConnection.kind !== 'online' || store.mismatch ? <ConnectionSubtitle /> : null}
           </button>
         </div>
+        {bot && isGroup(bot) && bot.team?.mode === 'team' ? (
+          <TeamBar bot={bot} members={store.members(bot)} onOpen={() => setEditingGroup(true)} />
+        ) : null}
         {/* An update card takes the composer's place, so there's nothing to reply with. */}
         <Transcript botId={botId} openTrace={openTrace} onReply={store.mismatch ? undefined : setReplyTo} openForward={store.mismatch ? undefined : openForward} openFile={openFile} openRoutine={presentRoutine} openAgent={presentAgent} openBotChat={setBotChat} openApp={setActiveApp} openArtifact={openArtifact} openCall={setCallLine} openThread={setThreadRoot} />
         <div className="composer-dock" ref={dock}>
@@ -314,7 +318,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       <Sheet open={templateDraft !== null} onClose={() => setTemplateDraft(null)}>
         {templateDraft ? <BotTemplateView draft={templateDraft} /> : null}
       </Sheet>
-      <Sheet open={editingGroup} onClose={() => setEditingGroup(false)} width={420} height={560}>
+      <Sheet open={editingGroup} onClose={() => setEditingGroup(false)} width={760} height={Math.min(700, window.innerHeight - 60)}>
         {bot ? <GroupEditorView group={bot} /> : null}
       </Sheet>
       <FormSheet open={!!member} onClose={() => setEditingMember(null)} width={520} height={680} fixed>

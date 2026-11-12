@@ -15,7 +15,7 @@ use crate::LockExt;
 use crate::agent::bot::{Cmd, NoticeStyle};
 use crate::hub::{BotStatus, Hub};
 use crate::remote::push::{self, AlertKind};
-use crate::store::{BotConfig, BotKind, Entry, EntryKind, Lane, Store};
+use crate::store::{BotConfig, BotKind, Entry, EntryKind, Lane, Store, TeamSettings};
 use anyhow::{Result, anyhow, bail};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -113,12 +113,225 @@ pub fn with_members(store: &Store, members: &[String]) -> Result<Option<String>>
 /// The user wrote in a group lane: start a room turn there (ending one still running).
 pub fn start(hub: &Arc<Hub>, group: &BotConfig, lane: Lane) {
     let epoch = hub.groups.next(&lane);
+    let team = team_mode(group);
     let (hub, group_id) = (hub.clone(), group.id.clone());
     tokio::spawn(async move {
-        if let Err(error) = run(&hub, &group_id, &lane, epoch).await {
+        let result = if team { run_team(&hub, &group_id, &lane, epoch).await } else { run(&hub, &group_id, &lane, epoch).await };
+        if let Err(error) = result {
             tracing::warn!(group = group_id, error = format!("{error:#}"), "room turn failed");
         }
     });
+}
+
+/// Whether the group answers as one team through its lead, rather than as a round table.
+pub fn team_mode(group: &BotConfig) -> bool {
+    group.team.as_ref().is_some_and(|team| team.mode == "team")
+}
+
+/// Who may speak besides the lead: `lead` (nobody), `lead_and_hands` (members the lead hands the
+/// floor to) or `all`. Defaults to `lead`.
+fn team_voice(group: &BotConfig) -> &str {
+    match group.team.as_ref().map(|t| t.voice.as_str()) {
+        Some("lead_and_hands") => "lead_and_hands",
+        Some("all") => "all",
+        _ => "lead",
+    }
+}
+
+/// Checks a group's team setup against its members: ids belong to the group, and the reporting
+/// lines never loop. The lead is the group's chief, or its first member.
+pub fn validate_team(group: &BotConfig, team: &TeamSettings) -> Result<()> {
+    if !matches!(team.mode.as_str(), "" | "team" | "roundtable") {
+        bail!("team mode must be team or roundtable");
+    }
+    if !matches!(team.voice.as_str(), "" | "lead" | "lead_and_hands" | "all") {
+        bail!("team voice must be lead, lead_and_hands or all");
+    }
+    for member in &team.members {
+        if !group.members.contains(&member.bot_id) {
+            bail!("the team structure names a bot that isn't in the group");
+        }
+        if let Some(reports_to) = &member.reports_to {
+            if reports_to == &member.bot_id {
+                bail!("a member can't report to itself");
+            }
+            if !group.members.contains(reports_to) {
+                bail!("a member reports to a bot that isn't in the group");
+            }
+        }
+        if member.role.len() > 60 || member.responsibility.len() > 240 {
+            bail!("a team role or responsibility is too long");
+        }
+    }
+    // Follow every reporting line: a loop would make the lead unreachable.
+    for start in &team.members {
+        let mut seen = std::collections::HashSet::new();
+        let mut current = Some(start.bot_id.clone());
+        while let Some(id) = current {
+            if !seen.insert(id.clone()) {
+                bail!("the reporting lines form a loop");
+            }
+            current = team
+                .members
+                .iter()
+                .find(|m| m.bot_id == id)
+                .and_then(|m| m.reports_to.clone());
+        }
+    }
+    Ok(())
+}
+
+/// The lead answers for the whole team, in one message, after consulting whoever it needs.
+async fn run_team(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<()> {
+    let group = group(hub, group_id)?;
+    let members = members(hub, &group);
+    if members.is_empty() {
+        bail!("the group has no members");
+    }
+    let lead_id = group
+        .chief_bot_id
+        .clone()
+        .filter(|id| members.iter().any(|m| &m.id == id))
+        .or_else(|| members.first().map(|m| m.id.clone()))
+        .ok_or_else(|| anyhow!("the group has no lead"))?;
+    let lead = members.iter().find(|m| m.id == lead_id).cloned().ok_or_else(|| anyhow!("the lead is missing"))?;
+    let since_user = since_last_user_message(hub, lane)?;
+    // A person who names one member talks to that member, not to the team's voice.
+    let responders = responders(&members, &since_user);
+    if responders.len() == 1 && responders[0].id != lead_id {
+        let target = (*responders[0]).clone();
+        let (prompt, shown) = ask(hub, &group, &members, &target, lane)?;
+        let _ = ask_once(hub, lane, epoch, &target, prompt, shown).await;
+        return Ok(());
+    }
+    let (prompt, shown) = team_prompt(hub, &group, &members, &lead, lane)?;
+    let said = ask_once(hub, lane, epoch, &lead, prompt, shown).await?;
+    // The lead may hand the floor to a member by naming it: it then answers for itself.
+    if team_voice(&group) != "lead" {
+        for member in hand_raisers(hub, &members, &lead, lane)? {
+            if !hub.groups.current(lane, epoch) || member.id == lead.id {
+                continue;
+            }
+            let (prompt, shown) = ask(hub, &group, &members, &member, lane)?;
+            let _ = ask_once(hub, lane, epoch, &member, prompt, shown).await;
+        }
+    }
+    if let Some(text) = said {
+        alert(hub, group_id, &lead.id, &lead.name, &text)?;
+    }
+    Ok(())
+}
+
+/// One member's turn in the room, waited on with the room's timeout; `None` when it passed, was
+/// busy elsewhere or did not finish in time.
+async fn ask_once(
+    hub: &Arc<Hub>,
+    lane: &Lane,
+    epoch: u64,
+    member: &BotConfig,
+    prompt: String,
+    shown: i64,
+) -> Result<Option<String>> {
+    if busy_elsewhere(hub, &member.id, lane) {
+        return Ok(None);
+    }
+    let since_user = since_last_user_message(hub, lane)?;
+    let (reply, answer) = oneshot::channel();
+    let turn =
+        GroupTurn { lane: lane.clone(), prompt, shown, epoch, late: false, reply, answers: answers(&since_user) };
+    if hub.send_cmd(&member.id, Cmd::Group(turn)).is_err() {
+        return Ok(None);
+    }
+    Ok(match tokio::time::timeout(MEMBER_TIMEOUT, answer).await {
+        Ok(Ok(Ok(Some(text)))) if !is_pass(&text) => Some(text),
+        _ => None,
+    })
+}
+
+/// Members the lead named in its answer, in mention order, without the lead.
+fn hand_raisers(hub: &Hub, members: &[BotConfig], lead: &BotConfig, lane: &Lane) -> Result<Vec<BotConfig>> {
+    let since = since_last_user_message(hub, lane)?;
+    let mut out: Vec<BotConfig> = vec![];
+    for entry in since.iter().rev() {
+        if entry.kind != EntryKind::Agent.as_str() || entry.data["author"].as_str() != Some(lead.id.as_str()) {
+            continue;
+        }
+        let text = entry.data["text"].as_str().unwrap_or_default();
+        for member in members {
+            if member.id != lead.id && names(text, member) && !out.iter().any(|m| m.id == member.id) {
+                out.push(member.clone());
+            }
+        }
+        break;
+    }
+    out.truncate(2);
+    Ok(out)
+}
+
+/// The lead's prompt: the hierarchy, the team's rules, and the room since the user last wrote.
+fn team_prompt(
+    hub: &Hub,
+    group: &BotConfig,
+    members: &[BotConfig],
+    lead: &BotConfig,
+    lane: &Lane,
+) -> Result<(String, i64)> {
+    let shown = hub.store.messages_after(lane, 0, 1)?.last().map_or(0, |e| e.seq);
+    let about = group.description.trim();
+    let room = if about.is_empty() { format!("\"{}\"", group.name) } else { format!("\"{}\" — {about}", group.name) };
+    let mut out = vec![format!(
+        "You are {}, the lead of the bot team in the group chat ({room}). You answer for the whole team: the \
+         user sees one message from the team, written by you.",
+        lead.name
+    )];
+    out.push("The team:".into());
+    for member in members {
+        let role = group
+            .team
+            .as_ref()
+            .and_then(|t| t.members.iter().find(|m| m.bot_id == member.id))
+            .cloned()
+            .unwrap_or_default();
+        let title = if role.role.trim().is_empty() { String::new() } else { format!(" — {}", role.role.trim()) };
+        let responsibility =
+            if role.responsibility.trim().is_empty() { String::new() } else { format!(" ({})", role.responsibility.trim()) };
+        let reports = role
+            .reports_to
+            .as_ref()
+            .and_then(|id| members.iter().find(|m| &m.id == id))
+            .map(|m| format!(", reports to {}", m.name))
+            .unwrap_or_default();
+        let me = if member.id == lead.id { " (you)" } else { "" };
+        out.push(format!("- {}{me}{title}{responsibility}{reports}", member.name));
+    }
+    out.push(
+        "Answer as one team in a single short message: decide, then state the result in the team's voice. Use \
+         ask_bot to consult a member when its specialty matters; its reply comes back in this turn, and you own \
+         the final answer. Never claim a member did work it did not do, and never reveal private one-on-one context."
+            .into(),
+    );
+    out.push(
+        "If a member should speak for itself, name it with @Name at the end of your answer, on its own line; \
+         only then will it add its own message."
+            .into(),
+    );
+    out.push(String::new());
+    let seen = hub.store.last_spoke(lane, &lead.id);
+    let header = format!("[Group chat: \"{}\"]", group.name);
+    let mut lines: Vec<String> = vec![];
+    for e in hub.store.messages_after(lane, seen, HISTORY_LINES)? {
+        lines.push(line(hub, group, &e, lead));
+    }
+    out.push(header);
+    if lines.is_empty() {
+        out.push("No new messages in the room since your last turn.".into());
+    } else {
+        out.push("New messages in the room (oldest first):".into());
+        out.extend(lines);
+    }
+    out.push(String::new());
+    out.push("It's your turn as the team's lead. Write the team's one answer.".into());
+    Ok((out.join("\n"), shown))
 }
 
 async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<()> {
@@ -446,5 +659,7 @@ pub fn is_pass(text: &str) -> bool {
     t.is_empty() || t == PASS || t == "pass"
 }
 
+#[cfg(test)]
+mod team_tests;
 #[cfg(test)]
 mod tests;

@@ -95,6 +95,8 @@ data class Bot(
     val account: String? = null,
     val isChief: Boolean = false,
     val chiefBotId: String? = null,
+    /** Groups only: how the group works as a team, with its hierarchy. */
+    val team: TeamSettings? = null,
     /** Agents that carry on, in order, when its own can't answer (out of usage, rate limited, signed out…); null from an older host. */
     val fallbacks: List<Fallback>? = null,
     /** The bot may set its own fallbacks, for example when the user asks it to; null from an older host. */
