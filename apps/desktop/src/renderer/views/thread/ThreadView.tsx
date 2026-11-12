@@ -2,6 +2,7 @@ import { VoiceReceipt } from './VoiceReceipt'
 import { RepliesView } from './RepliesView'
 import { ForwardSheet } from './ForwardSheet'
 import { FileView, type OpenFile } from './FileView'
+import { IslandBudget } from '../island/IslandBudget'
 import { IslandTerminal } from '../island/IslandTerminal'
 import { useIslandThreadNavigation } from './use-island-thread-navigation'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -175,7 +176,12 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     setCompactDetails(false)
   }, [])
   const openIslandMemory = useCallback(() => { setDetailsTab('memory'); setShowSettings(true); setCompactDetails(!wide) }, [wide])
-  const islandNavigation = useIslandThreadNavigation(`${store.computer.id}/${botId}`, openFile, openArtifact, openIslandMemory)
+  const openIslandOperation = useCallback((panel: 'trace' | 'computer' | 'documents', documentId?: string) => {
+    if (panel === 'trace') { setShowTrace(true); return }
+    setDetailsTab(panel); setShowSettings(true); setCompactDetails(!wide)
+    if (panel === 'documents' && documentId) setRoutineRequest((request) => request + 1)
+  }, [wide])
+  const islandNavigation = useIslandThreadNavigation(`${store.computer.id}/${botId}`, openFile, openArtifact, openIslandMemory, openIslandOperation, setActiveApp, store)
   const closeArtifact = useCallback((id: string) => {
     setArtifacts((list) => {
       const next = list.filter((item) => item !== id)
@@ -218,6 +224,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
 
   return (
     <div className="thread-view" ref={root}>
+      <IslandBudget open={islandNavigation.budget} botId={botId} onClose={islandNavigation.closeBudget} />
       <IslandTerminal terminal={islandNavigation.terminal} onClose={islandNavigation.close} />
       <MessageContext botId={botId} />
       <div className="conversation">

@@ -102,6 +102,7 @@ export interface TraySummary {
 
 /** Things the tray menu (or the app menu) asks the window to do. */
 export type WindowCommand =
+  | { kind: 'islandSettings'; page: 'updates' | 'computers' | 'channels' }
   | { kind: 'islandReveal'; ref: string; connectorId?: string }
   | { kind: 'islandAction'; action: IslandAction }
   | { kind: 'openBot'; ref: string }
@@ -340,6 +341,8 @@ export interface CodyncBridge {
   }
   /** The Browser panel's page: a Codync-owned browser with tabs, shown while the host owns it. */
   browser: {
+    existing(): Promise<boolean>
+    focusExisting(): Promise<boolean>
     /** Opens (or focuses) the panel's window, from the chat window. */
     open(): Promise<void>
   }

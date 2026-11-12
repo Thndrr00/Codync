@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { IslandBot, IslandPermission, IslandSummary } from '@shared/island'
 import { folderName, isGroup, isWorking, type Bot, type Entry } from '@shared/models'
 import { useModel, useModels } from '../lib/observable'
+import type { UpdateState } from '@shared/ipc'
+import { IslandOperationsStore } from '../store/island-operations-store'
+import { islandOperationSignals } from '../store/island-operation-signals'
+import { useSSH } from './settings/ssh-model'
 import { IslandIntegrationsStore } from '../store/island-integrations-store'
 import { islandSignals } from '../store/island-signals'
 import { activeDictation } from './thread/active-dictation'
@@ -27,6 +31,13 @@ export function useIslandSummary(app: AppModel) {
   const [activity] = useState(() => new IslandActivityStore(app))
   const [workspace] = useState(() => new IslandWorkspaceStore(app))
   const [integrations] = useState(() => new IslandIntegrationsStore(app))
+  const [operations] = useState(() => new IslandOperationsStore(app))
+  const [updates, setUpdates] = useState<UpdateState | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const ssh = useSSH()
+  const operationLive = useRef({ updates, ssh: ssh.state, updateError })
+  operationLive.current = { updates, ssh: ssh.state, updateError }
+  useModel(operations)
   useModel(integrations)
   useModel(activeDictation)
   useModel(workspace)
@@ -38,12 +49,18 @@ export function useIslandSummary(app: AppModel) {
   useEffect(() => {
     activity.start()
     const off = window.codync.app.onCommand((command) => {
-      if (command.kind === 'islandAction') { void activity.perform(command.action); void workspace.perform(command.action); void integrations.perform(command.action); if (command.action.kind === 'stopDictation') stopDictation(command.action.id) }
+      if (command.kind === 'islandAction') { void activity.perform(command.action); void workspace.perform(command.action); void integrations.perform(command.action); void operations.perform(command.action); if (command.action.kind === 'stopDictation') stopDictation(command.action.id) }
     })
-    const integrationsTimer = setInterval(() => { void window.codync.island.enabled().then((enabled) => { if (enabled) integrations.refresh() }).catch((error) => integrations.reportPollingError(error)) }, 60_000)
+    const integrationsTimer = setInterval(() => { void window.codync.island.enabled().then((enabled) => { if (enabled) { integrations.refresh(); operations.refresh() } }).catch((error) => integrations.reportPollingError(error)) }, 60_000)
     const timer = setInterval(() => workspace.refresh(), 15_000)
-    return () => { clearInterval(integrationsTimer); integrations.dispose(); clearInterval(timer); workspace.dispose(); off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
-  }, [activity, workspace, integrations])
+    return () => { clearInterval(integrationsTimer); integrations.dispose(); operations.dispose(); clearInterval(timer); workspace.dispose(); off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
+  }, [activity, workspace, integrations, operations])
+  useEffect(() => {
+    let alive = true, events = 0
+    const off = window.codync.updates.onChange((value) => { events++; if (alive) { setUpdates(value); setUpdateError(null) } })
+    void window.codync.updates.state().then((value) => { if (alive && events === 0) setUpdates(value) }).catch((error) => { if (alive && events === 0) setUpdateError(error instanceof Error ? error.message : String(error)) })
+    return () => { alive = false; off() }
+  }, [])
   const stores = [...app.stores.values()]
   useEffect(() => {
     const offs = stores.map((store) => store.composerDrafts.subscribe(() => activity.noteDrafts()))
@@ -59,7 +76,7 @@ export function useIslandSummary(app: AppModel) {
     if (pending.current) return
     pending.current = setTimeout(() => {
       pending.current = null
-      const summary = islandSummary(app, activity, workspace, integrations)
+      const summary = { ...islandSummary(app, activity, workspace, integrations), operations: operations.snapshot(), operationSignals: islandOperationSignals(app, operationLive.current.updates, operationLive.current.ssh, operationLive.current.updateError) }
       const json = JSON.stringify(summary)
       if (sent.current === json) return
       sent.current = json

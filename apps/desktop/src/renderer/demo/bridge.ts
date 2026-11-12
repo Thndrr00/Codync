@@ -122,7 +122,7 @@ const bridge: CodyncBridge = {
     openApp() {},
     dropFiles() {},
   },
-  browser: { open: unavailable },
+  browser: { open: unavailable, existing: async () => false, focusExisting: async () => false },
   n8n: { open: unavailable, gotoEditor: unavailable, openSettings() {} },
   tools: { open: unavailable, gotoEditor: unavailable, openLog: unavailable, openModels: unavailable },
   cloud: {

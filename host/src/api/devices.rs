@@ -321,6 +321,9 @@ mod tests {
             "listAgentTerminals",
             "islandDelegations",
             "appendBotScratchpad",
+            "islandRuntime",
+            "islandResources",
+            "islandGit",
         ] {
             assert!(permit(&Caller::Local, method).is_ok());
             assert!(permit(&control, method).is_ok(), "authorized remote workspaces use Control");

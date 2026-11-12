@@ -211,3 +211,18 @@ requires the connection to return.
 `codync-host tool --bot BOT_ID --server memory search_history --file query.json` calls a built-in host tool using a JSON argument file. Use `--file -` to read the JSON object from stdin, or `--arguments` for a small non-private object. Arguments are limited to 256 KiB. The server can be `chat`, `connectors`, `routines`, `computer`, `team`, `manage` or `memory`; use that server's existing MCP tool names and schemas.
 
 The command writes one MCP tool-result JSON object and exits successfully only when the tool succeeds. A tool refusal or failure exits with code 1. It uses this computer's existing host connection, bot permissions and approval cards. Keep Codync open when a tool needs your approval. A script can chain these calls without asking the bot for another reasoning turn; tools that use a model or an external service still have their usual cost. A failed call may have done partial work, so mutating calls are never retried automatically.
+## Desktop island operations
+
+In the desktop floating island, open **Integrations → Operations** and select a
+bot. **Runtime** shows its last reported context, token usage, budget warnings,
+agent changes and pending MCP request metadata. Monetary costs appear as
+unavailable when the host does not report them.
+
+**Project** opens recent documents, favorite miniapps, conflict-related
+conversations and existing worktree bots. It does not switch Git checkouts.
+**System** shows resource usage, updates, SSH, delivery failures and device
+requests, with shortcuts to their existing screens. Update status is read-only;
+SSH retries still require the existing trust and installation steps when needed.
+The browser shortcut focuses an existing local window without creating a session.
+Channel failures apply to the whole computer; document and runtime reports apply
+to the selected bot. Use Refresh if a report is stale; section errors stay visible.

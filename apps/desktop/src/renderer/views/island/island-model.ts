@@ -138,7 +138,7 @@ export class IslandModel extends Observable {
 
   action(action: IslandAction) {
     window.codync.island.action(action)
-    if (['openFlow', 'openChannels', 'openDiagnostics'].includes(action.kind)) this.close()
+    if (['openFlow', 'openChannels', 'openDiagnostics', 'reviewDevices', 'openOperationSettings'].includes(action.kind)) this.close()
   }
 
   clearHistory() {

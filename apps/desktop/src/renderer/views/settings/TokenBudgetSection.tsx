@@ -9,8 +9,8 @@ import { Field } from '../marketplace/pieces'
 const FLEET = '*'
 
 /** Daily token limits, for all bots together or for one: a warning at 80%, and routines pause at the limit. */
-export function TokenBudgetSection({ store, bots, online }: { store: MaintenanceStore; bots: Bot[]; online: boolean }) {
-  const [scope, setScope] = useState(FLEET)
+export function TokenBudgetSection({ store, bots, online, initialScope = FLEET }: { store: MaintenanceStore; bots: Bot[]; online: boolean; initialScope?: string }) {
+  const [scope, setScope] = useState(initialScope)
   const [limit, setLimit] = useState('')
   useEffect(() => { if (online) void store.loadBudgets() }, [store, online])
   const name = (id: string) => (id === FLEET ? 'All bots' : bots.find((b) => b.id === id)?.name ?? 'A deleted bot')

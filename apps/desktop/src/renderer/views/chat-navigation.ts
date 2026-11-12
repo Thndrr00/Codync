@@ -12,11 +12,13 @@ interface Navigation {
   voice(key: VoiceKey): void
   island(action: IslandAction): void
   reveal?(ref: string, connectorId?: string): void
+  operationSettings?(page: 'updates' | 'computers' | 'channels'): void
 }
 
 /** Window navigation stays separate from host mutations and panel rendering. */
 export function navigateCommand(command: WindowCommand, navigation: Navigation) {
   switch (command.kind) {
+    case 'islandSettings': navigation.operationSettings?.(command.page); break
     case 'islandReveal': navigation.reveal?.(command.ref, command.connectorId); break
     case 'newBot': navigation.newBot(); break
     case 'search': navigation.search(); break

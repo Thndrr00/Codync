@@ -151,6 +151,8 @@ export class Island {
     ipcMain.handle('island:configure', (_e, patch: Partial<IslandControls>) => this.configure(patch))
     ipcMain.on('island:action', (_e, input: unknown) => {
       const action = validIslandAction(input)
+      if (action?.kind === 'reviewDevices') { this.deps.send({ kind: 'reviewApprovals' }, true); return }
+      if (action?.kind === 'openOperationSettings') { this.deps.send({ kind: 'islandSettings', page: action.page }, true); return }
       if (action) this.deps.send({ kind: 'islandAction', action }, ['openFlow', 'openChannels', 'openDiagnostics'].includes(action.kind))
     })
     ipcMain.on('island:drag', (_e, on: boolean, snap: boolean) => this.drag(on, snap))

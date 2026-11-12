@@ -1,5 +1,6 @@
-import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
+import { existingBrowser, focusExistingBrowser } from './existing-browser.ts'
 
 /** The Browser panel: one window that shows the host's browser tabs while it is open. */
 let window: BrowserWindow | null = null
@@ -36,12 +37,23 @@ export function registerBrowser(rendererURL: (page: string) => string, chatWindo
     window.webContents.setIgnoreMenuShortcuts(true)
     void window.loadURL(rendererURL('browser'))
   }
-  ipcMain.handle('browser:open', (event) => {
+  const authorize = (event: IpcMainInvokeEvent) => {
     const chat = chatWindow()
     if (!chat || chat.isDestroyed() || event.sender !== chat.webContents ||
         event.senderFrame !== chat.webContents.mainFrame || event.senderFrame.url !== chatLocation) {
       throw new Error('This window cannot open the browser panel.')
     }
+  }
+  ipcMain.handle('browser:existing', (event) => {
+    authorize(event)
+    return existingBrowser(window)
+  })
+  ipcMain.handle('browser:focusExisting', (event) => {
+    authorize(event)
+    return focusExistingBrowser(window)
+  })
+  ipcMain.handle('browser:open', (event) => {
+    authorize(event)
     open()
   })
 }

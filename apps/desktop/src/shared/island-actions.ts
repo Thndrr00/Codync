@@ -8,6 +8,12 @@ export function validIslandAction(input: unknown): IslandAction | null {
   const ref = typeof action.ref === 'string' && action.ref.length <= 512 && /^[^/]+\/.+$/.test(action.ref) ? action.ref : null
   const id = typeof action.id === 'string' && action.id.length > 0 && action.id.length <= 256 ? action.id : null
   switch (action.kind) {
+    case 'reviewDevices': return { kind: action.kind }
+    case 'openOperationSettings': return action.page === 'updates' || action.page === 'computers' || action.page === 'channels' ? { kind: action.kind, page: action.page } : null
+    case 'retryIslandSSH': return id ? { kind: action.kind, id } : null
+    case 'loadOperations': case 'openExistingBrowser': return ref ? { kind: action.kind, ref } : null
+    case 'openOperationDocument': case 'openOperationApp': case 'selectWorktreeBot': return ref && id ? { kind: action.kind, ref, id } : null
+    case 'openOperationPanel': return ref && (action.panel === 'trace' || action.panel === 'computer' || action.panel === 'budget') ? { kind: action.kind, ref, panel: action.panel } : null
     case 'stopDictation': return id ? { kind: action.kind, id } : null
     case 'openGitHubLink': return ref && safeIslandGitHubUrl(action.url) ? { kind: action.kind, ref, url: action.url } : null
     case 'appendScratchpad':

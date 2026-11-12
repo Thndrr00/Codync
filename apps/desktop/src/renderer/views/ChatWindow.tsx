@@ -304,6 +304,7 @@ function ChatSplitView() {
     : null
 
   useChatNavigation({
+    operationSettings: (page) => { setCanvasBot(null); if (page === 'channels') { setSettings(null); openMarketplace('channels') } else { setMarketplace(null); setSettings(page) } },
     reveal: (key, connectorId) => {
       const ref = parseRef(key)
       if (!ref || !app.store(ref.computerId)?.bots.has(ref.botId)) return

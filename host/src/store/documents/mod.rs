@@ -139,6 +139,31 @@ impl Store {
         get(&self.db.locked(), id)
     }
 
+    /// A bounded recent list is separate from the library's stable ID cursor pagination.
+    pub fn recent_documents(&self, bot: &str, limit: u32) -> Result<Vec<DocumentSummary>> {
+        let db = self.db.locked();
+        check_bot(&db, bot)?;
+        let mut statement = db.prepare(
+            "SELECT id, bot_id, parent_id, title, revision, rev, created_at, updated_at
+             FROM documents WHERE bot_id = ?1 AND deleted = 0
+             ORDER BY updated_at DESC, id DESC LIMIT ?2",
+        )?;
+        Ok(statement
+            .query_map(params![bot, i64::from(limit.clamp(1, 50))], |row| {
+                Ok(DocumentSummary {
+                    id: row.get(0)?,
+                    bot_id: row.get(1)?,
+                    parent_id: row.get(2)?,
+                    title: row.get(3)?,
+                    revision: row.get(4)?,
+                    rev: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     pub fn documents(&self, bot: &str, query: &str, after: Option<&str>, limit: u32) -> Result<DocumentPage> {
         let db = self.db.locked();
         check_bot(&db, bot)?;
@@ -255,5 +280,40 @@ impl Store {
         }
         tx.commit()?;
         Ok(DocumentDelete::Deleted { ids, rev })
+    }
+}
+
+#[cfg(test)]
+mod recent_tests {
+    use super::*;
+    use crate::store::tests::temp_store;
+
+    #[test]
+    fn recent_documents_follow_updates_with_a_stable_tie_breaker_and_keep_existing_pagination() {
+        let store = temp_store();
+        for id in ["bot", "other"] {
+            let config = serde_json::from_value(serde_json::json!({"id": id, "name": id})).unwrap();
+            store.save_bot(&config).unwrap();
+        }
+        {
+            let db = store.db.locked();
+            for (id, bot, at, deleted) in [
+                ("a", "bot", 20, 0),
+                ("b", "bot", 10, 0),
+                ("c", "bot", 20, 0),
+                ("d", "bot", 100, 1),
+                ("x", "other", 200, 0),
+            ] {
+                db.execute("INSERT INTO documents(id,bot_id,title,body,revision,rev,created_at,updated_at,deleted) VALUES(?1,?2,?1,'PRIVATE BODY',1,1,1,?3,?4)", params![id, bot, at, deleted]).unwrap();
+            }
+        }
+        let recent = store.recent_documents("bot", 10).unwrap();
+        assert_eq!(recent.iter().map(|document| document.id.as_str()).collect::<Vec<_>>(), ["c", "a", "b"]);
+        assert_eq!(store.recent_documents("bot", 1).unwrap()[0].id, "c");
+        assert!(!serde_json::to_string(&recent).unwrap().contains("PRIVATE BODY"));
+        assert_eq!(store.documents("bot", "", None, 1).unwrap().items[0].id, "a");
+        assert!(store.recent_documents("unknown", 10).is_err());
+        store.delete_bot("bot").unwrap();
+        assert!(store.recent_documents("bot", 10).is_err());
     }
 }

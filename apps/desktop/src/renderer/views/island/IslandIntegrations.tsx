@@ -6,9 +6,10 @@ import { useModel } from '../../lib/observable'
 import { useTr } from '../../lib/use-language'
 import type { IslandModel } from './island-model'
 import { IslandPanel } from './IslandPanel'
+import { OperationsView } from './IslandOperations'
 import './island-integrations.css'
 
-type IntegrationTab = 'project' | 'work' | 'tools'
+type IntegrationTab = 'project' | 'work' | 'tools' | 'operations'
 type NoteRequest = { ref: string; text: string; requestId: string }
 
 /** Existing product workflows, grouped without adding more buttons to the island toolbar. */
@@ -31,13 +32,14 @@ export function IntegrationsView({ model }: { model: IslandModel }) {
 
   return <IslandPanel>
     <div className="island-control-heading"><strong>{tr('Integrations')}</strong><button className="island-tab" title={tr('Refresh integrations')} aria-label={tr('Refresh integrations')} disabled={!selected || data?.loading} onClick={() => selected && model.action({ kind: 'loadIntegrations', ref: selected })}><Icon name="arrow.clockwise" size={13} /></button></div>
-    <ChipChoice<IntegrationTab> label="Integration section" selection={tab} options={[{ id: 'project', label: 'Project' }, { id: 'work', label: 'Work' }, { id: 'tools', label: 'Tools' }]} onChange={setTab} />
+    <ChipChoice<IntegrationTab> label="Integration section" selection={tab} options={[{ id: 'project', label: 'Project' }, { id: 'work', label: 'Work' }, { id: 'tools', label: 'Tools' }, { id: 'operations', label: 'Operations' }]} onChange={setTab} />
     {model.summary.bots.length ? <ChipChoice label="Select bot" selection={selected ?? ''} options={model.summary.bots.map((bot) => ({ id: bot.ref, label: bot.name }))} onChange={(ref) => model.selectFocus(ref)} /> : <span className="island-subtitle">{tr('No bots yet')}</span>}
     {selected && !data ? <span className="island-subtitle" role="status">{tr('Loading integrations…')}</span> : null}
     {data?.loading ? <span className="island-subtitle" role="status">{tr('Refreshing integrations…')}</span> : null}
     {data?.fetchedAt ? <time className="island-subtitle">{tr('Updated')} · {new Date(data.fetchedAt).toLocaleTimeString()}</time> : null}
     {data?.errors.find((error) => error.section === 'connection') ? <span className="island-control-error" role="status">{data.errors.find((error) => error.section === 'connection')!.message}</span> : null}
     {data?.actionError ? <span className="island-control-error" role="alert">{data.actionError}</span> : null}
+    {tab === 'operations' ? <OperationsView model={model} /> : null}
     {tab === 'project' && data ? <ProjectIntegrations model={model} data={data} /> : null}
     {tab === 'work' ? <WorkIntegrations model={model} data={data} /> : null}
     {tab === 'tools' ? <>

@@ -14,8 +14,11 @@ mod files;
 mod folders;
 mod host;
 mod http;
+mod island_git;
 mod island_notes;
 mod island_queue;
+mod island_resources;
+mod island_runtime;
 mod island_workspace;
 mod marketplace;
 mod network;
@@ -99,6 +102,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return crate::native_channels::call(hub, method, &b);
     }
     match method {
+        "islandRuntime" => return island_runtime::read(hub, &b),
+        "islandResources" => return island_resources::read(hub, str_arg(&b, "botId")?),
+        "islandGit" => return island_git::read(hub, &b).await,
         "islandGitHub" => return crate::github::island::read(hub, str_arg(&b, "botId")?).await,
         "appendBotScratchpad" => return island_notes::append(hub, &b),
         "listAgentTerminals" => return Ok(serde_json::json!({"sessions": hub.terms.snapshot(b["backend"].as_str())})),

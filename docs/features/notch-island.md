@@ -199,3 +199,40 @@ device stores. Long-running reads are discarded after selection/owner changes.
   ([notifications and Live Activities](../design/push-and-live-activity.md)); no change.
 - **Terminal UI**: a terminal can't draw over other apps; its roster already shows working and
   waiting bots.
+
+
+## Operations integrations
+
+Integrations → Operations adds Runtime, Project and System views for the selected
+bot. Reports refresh while the island is enabled and can be refreshed manually.
+Partial errors remain visible without hiding successful sections.
+
+- Runtime: last reported main-session context, compaction notices, UTC-day token
+  usage, host budget warnings and the existing budget editor, current fallback
+  and loaded agent-switch history, and unexpired MCP request metadata without a
+  completion receipt. Dispatched requests are not claimed to be running. Costs
+  remain explicitly unavailable: the host does not report monetary prices.
+- Project: ten recently updated documents, favorite miniapps, conflict filenames
+  and existing worktree-associated bots. Documents open through the existing
+  editor; a save in progress asks the person to retry. Later navigation wins over
+  slow reads. Worktree actions select conversations and never change Git or cwd.
+  Miniapp capabilities stay in the main renderer; the overlay gets metadata only.
+- System: CPU/RAM/disk and selected agent RSS, existing local browser availability,
+  computer-use status, app/host update reports, SSH connection status, channel
+  delivery failures and device access/pairing metadata. Update reports never
+  initiate checks, downloads or installation. Browser focus never creates a
+  window, tab, session or control lease. SSH retry never trusts keys or installs.
+
+Context is the persisted report from the main session's last completed turn,
+not a live token counter. Compaction and switch history cover loaded entries.
+Budget counts follow host policy and exclude cached reads. Host update progress
+reports a phase; only the desktop updater supplies download percentage.
+Slack/Discord failures are computer-wide (last 50 receipts per provider, at most
+10 failures each); Telegram has no equivalent delivery history. Git reports are
+bounded to 100 conflicts, 20 worktrees and associations from 1,000 visible bots.
+Device reports omit codes, emails and keys and open the existing consent screen.
+
+These are shortcuts in the desktop floating overlay on macOS, Windows and X11.
+iOS/Android use their existing context, budgets, documents, miniapps, computer,
+connection and device screens; the terminal keeps its existing host views.
+No phone or terminal floating-overlay capability is introduced by this change.

@@ -206,6 +206,8 @@ const bridge: CodyncBridge = {
     target: (computerId) => ipcRenderer.invoke('screen:target', computerId),
   },
   browser: {
+    existing: () => ipcRenderer.invoke('browser:existing'),
+    focusExisting: () => ipcRenderer.invoke('browser:focusExisting'),
     open: () => ipcRenderer.invoke('browser:open'),
   },
   n8n: {

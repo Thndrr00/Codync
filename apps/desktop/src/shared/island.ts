@@ -72,6 +72,8 @@ export interface IslandSummary {
   workspace?: import('./island-workspace').IslandWorkspace
   integrations?: import('./island-integrations').IslandIntegrations
   signals?: import('./island-integrations').IslandSignals
+  operations?: import('./island-operations').IslandOperations
+  operationSignals?: import('./island-operations').IslandOperationSignals
 }
 
 /** The display the island sits on: the notch's size in points, or null at a plain top edge. */
