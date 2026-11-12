@@ -280,6 +280,7 @@ async fn account_reports(hub: &Hub) {
             "grok" => timeout(Duration::from_secs(30), grok::collect_account(hub, &account.id)).await.ok().flatten(),
             _ => None,
         };
+        tracing::info!(account = %account.id, backend, windows = windows.as_ref().map_or(0, Vec::len), "isolated account probed");
         let id = format!("{backend}:{}", account.id);
         ids.push(id.clone());
         if let Some(windows) = windows {

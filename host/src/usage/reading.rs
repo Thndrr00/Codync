@@ -77,7 +77,12 @@ pub(super) fn report<T>(hub: &Hub, agent: &str, key: &str, reading: &Result<T, U
         FAILING.locked().remove(key);
         return;
     };
-    tracing::debug!(agent, ?stage, "couldn't read the agent's usage");
+    if key == agent {
+        tracing::debug!(agent, ?stage, "couldn't read the agent's usage");
+    } else {
+        // An account's reading is rarer and harder to see: its failure is worth a line.
+        tracing::info!(agent, account = key, ?stage, "couldn't read an isolated account's usage");
+    }
     if FAILING.locked().insert(key.to_owned()) {
         let properties = json!({"agent": agent, "stage": stage});
         analytics::capture(hub, Event::UsageReadFailed, properties.as_object().cloned().unwrap_or_default());
