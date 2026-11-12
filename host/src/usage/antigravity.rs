@@ -16,7 +16,7 @@ pub(super) async fn collect(hub: &Hub) -> Option<Vec<Window>> {
     if !server_here && let Some(windows) = from_language_server().await {
         return Some(windows);
     }
-    if signed_in_or_unknown()
+    if signed_in_or_unknown(None)
         && let Some(windows) = super::acp_read::command_reading(hub, "antigravity", "usage", parse_report).await
     {
         return Some(windows);
@@ -24,13 +24,25 @@ pub(super) async fn collect(hub: &Hub) -> Option<Vec<Window>> {
     if server_here { from_language_server().await } else { None }
 }
 
+/// What one of Antigravity's isolated accounts reports, through its own ACP server and login.
+pub(super) async fn collect_account(hub: &Hub, account: &str) -> Option<Vec<Window>> {
+    if !signed_in_or_unknown(Some(account)) {
+        return None;
+    }
+    super::acp_read::account_reading(hub, "antigravity", Some(account), "usage", parse_report).await
+}
+
 /// Windows has no command `BROWSER` could name to keep the signed-out adapter from opening a
 /// browser, so its reading needs a saved login (off macOS the adapter keeps it only in these files).
+/// An isolated account keeps its login under its own home.
 #[cfg(windows)]
-fn signed_in_or_unknown() -> bool {
-    let home = std::env::var_os("GEMINI_HOME")
-        .filter(|home| !home.is_empty())
-        .map(std::path::PathBuf::from)
+fn signed_in_or_unknown(account: Option<&str>) -> bool {
+    let own = account
+        .and_then(|id| crate::agent::account::env(id, "antigravity").ok())
+        .and_then(|env| env.into_iter().find(|(name, _)| name == "GEMINI_HOME"))
+        .map(|(_, home)| std::path::PathBuf::from(home));
+    let home = own
+        .or_else(|| std::env::var_os("GEMINI_HOME").filter(|home| !home.is_empty()).map(std::path::PathBuf::from))
         .or_else(|| dirs::home_dir().map(|home| home.join(".gemini")));
     home.is_some_and(|home| {
         ["acp_token.json", "acp_business_token.json"]
@@ -40,7 +52,7 @@ fn signed_in_or_unknown() -> bool {
 }
 
 #[cfg(not(windows))]
-const fn signed_in_or_unknown() -> bool {
+const fn signed_in_or_unknown(_account: Option<&str>) -> bool {
     true
 }
 

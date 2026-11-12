@@ -48,15 +48,18 @@ impl Requests {
         let mut state = self.0.locked();
         state.capacity(from, "API requests")?;
         let (cancel, receiver) = watch::channel(false);
-        state.pending.insert(id.to_owned(), Request { from: from.to_owned(), to: to.to_owned(), cancel, created_at: crate::store::now_ms() });
+        state.pending.insert(
+            id.to_owned(),
+            Request { from: from.to_owned(), to: to.to_owned(), cancel, created_at: crate::store::now_ms() },
+        );
         Ok(receiver)
     }
 
-    /// Current synchronous waits only; no message bodies or cancellation handles leave the host.
+    /// Current synchronous waits only, the cancelled ones no longer; no message bodies or cancellation handles leave the host.
     pub fn pending_for(&self, bot: &str) -> Vec<serde_json::Value> {
         let state = self.0.locked();
         let mut requests: Vec<_> = state.pending.iter()
-            .filter(|(_, request)| request.from == bot || request.to == bot)
+            .filter(|(_, request)| (request.from == bot || request.to == bot) && !*request.cancel.borrow())
             .map(|(id, request)| serde_json::json!({"id": id, "from": request.from, "to": request.to, "at": request.created_at}))
             .collect();
         requests.sort_by_key(|request| request["at"].as_i64().unwrap_or_default());
@@ -227,7 +230,7 @@ mod tests {
         let requests = Requests::default();
         requests.start_turn("a", Turn::Chat(0));
         requests.begin("a-to-b", "a", "b").unwrap();
-        assert!(requests.pending_for("other").is_empty());
+        assert_eq!(requests.pending_for("other").len(), 0);
         let snapshot = requests.pending_for("b");
         assert_eq!(snapshot.len(), 1);
         assert_eq!(snapshot[0]["id"], "a-to-b");
@@ -236,7 +239,7 @@ mod tests {
         assert!(snapshot[0]["at"].as_i64().unwrap() > 0);
         assert_eq!(snapshot[0].as_object().unwrap().len(), 4);
         requests.cancel_from("a");
-        assert!(requests.pending_for("a").is_empty());
+        assert_eq!(requests.pending_for("a").len(), 0);
     }
 
     #[test]

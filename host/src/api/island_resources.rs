@@ -18,13 +18,13 @@ pub(super) fn read(hub: &Arc<Hub>, bot: &str) -> Result<Value> {
     let mut channel_failures = Vec::new();
     match hub.store.slack_deliveries() {
         Ok(deliveries) => {
-            channel_failures.extend(failure_rows("slack", deliveries.into_iter().map(|item| (item.id, item.state))))
+            channel_failures.extend(failure_rows("slack", deliveries.into_iter().map(|item| (item.id, item.state))));
         }
         Err(error) => errors.push(format!("Slack delivery history: {error}")),
     }
     match hub.store.discord_deliveries() {
         Ok(deliveries) => {
-            channel_failures.extend(failure_rows("discord", deliveries.into_iter().map(|item| (item.id, item.state))))
+            channel_failures.extend(failure_rows("discord", deliveries.into_iter().map(|item| (item.id, item.state))));
         }
         Err(error) => errors.push(format!("Discord delivery history: {error}")),
     }
@@ -72,7 +72,7 @@ mod tests {
         assert_eq!(rows.len(), 10);
         assert_eq!(rows[0], json!({"id":"0","source":"slack","state":"failed"}));
         assert!(rows.iter().all(|row| row.as_object().unwrap().len() == 3));
-        assert!(failure_rows("discord", [("ok".into(), "sent".into())].into_iter()).is_empty());
+        assert_eq!(failure_rows("discord", [("ok".into(), "sent".into())].into_iter()).len(), 0);
     }
 
     #[test]

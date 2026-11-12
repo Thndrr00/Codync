@@ -15,6 +15,7 @@ const MAX_BOTS: usize = 1000;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools, reason = "git reports these as independent flags and the island shows each")]
 struct Worktree {
     path: String,
     branch: Option<String>,
@@ -205,7 +206,7 @@ fn path_parts(path: &Path) -> Vec<OsString> {
         .map(|part| {
             let value = part.as_os_str();
             if cfg!(windows) {
-                value.to_str().map(|value| OsString::from(value.to_lowercase())).unwrap_or_else(|| value.to_owned())
+                value.to_str().map_or_else(|| value.to_owned(), |value| OsString::from(value.to_lowercase()))
             } else {
                 value.to_owned()
             }
@@ -274,7 +275,7 @@ mod tests {
         assert!(conflict_paths(b"\xff\0").is_err());
         assert!(conflict_paths(b"\0").is_err());
         assert!(parse_worktrees(b"").unwrap().is_empty());
-        assert!(conflict_paths(b"").unwrap().is_empty());
+        assert_eq!(conflict_paths(b"").unwrap().len(), 0);
     }
 
     #[test]

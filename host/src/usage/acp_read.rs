@@ -45,8 +45,15 @@ pub(super) async fn guarded(
 
 /// `backend`'s server, past `initialize`. A first start can download its build, which is why no
 /// timeout wraps this: one cut short would start over at every poll. The handshake has its own.
-pub(super) async fn start(store: &Store, backend: &str) -> Result<Started, UsageReadStage> {
-    auth::start_with(store, backend, NO_BROWSER).await.map_err(|error| {
+pub(super) async fn start(store: &Store, backend: &str, account: Option<&str>) -> Result<Started, UsageReadStage> {
+    let mut env: Vec<(String, String)> = NO_BROWSER.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+    if let Some(id) = account {
+        env.extend(crate::agent::account::env(id, backend).map_err(|error| {
+            tracing::debug!(backend, error = format!("{error:#}"), "couldn't find the account to read");
+            UsageReadStage::Start
+        })?);
+    }
+    auth::start_with_env(store, backend, &env).await.map_err(|error| {
         tracing::debug!(backend, error = format!("{error:#}"), "couldn't start the agent for its usage");
         UsageReadStage::Start
     })
@@ -59,17 +66,29 @@ pub(super) async fn command_reading(
     command: &str,
     parse: fn(&str) -> Option<Vec<Window>>,
 ) -> Option<Vec<Window>> {
+    account_reading(hub, backend, None, command, parse).await
+}
+
+/// [`command_reading`] for one of `backend`'s isolated accounts (`None`: the computer's own sign-in), which keeps
+/// its own session for readings.
+pub(super) async fn account_reading(
+    hub: &Hub,
+    backend: &str,
+    account: Option<&str>,
+    command: &str,
+    parse: fn(&str) -> Option<Vec<Window>>,
+) -> Option<Vec<Window>> {
     guarded(hub, backend, async {
-        let text = ask(&hub.store, backend, command).await?;
+        let text = ask(&hub.store, backend, account, command).await?;
         parse(&text).ok_or(UsageReadStage::Parse)
     })
     .await
 }
 
-async fn ask(store: &Store, backend: &str, command: &str) -> Result<String, UsageReadStage> {
-    let Started { acp, mut inbox, init, .. } = start(store, backend).await?;
+async fn ask(store: &Store, backend: &str, account: Option<&str>, command: &str) -> Result<String, UsageReadStage> {
+    let Started { acp, mut inbox, init, .. } = start(store, backend, account).await?;
     let mut talk = Talk { acp: &acp, inbox: &mut inbox, commands: None, text: String::new() };
-    let reply = tokio::time::timeout(READ_TIMEOUT, talk.run(store, &init, backend, command)).await;
+    let reply = tokio::time::timeout(READ_TIMEOUT, talk.run(store, &init, (backend, account), command)).await;
     acp.kill().await;
     reply.unwrap_or(Err(UsageReadStage::Timeout))
 }
@@ -89,10 +108,10 @@ impl Talk<'_> {
         &mut self,
         store: &Store,
         init: &Value,
-        backend: &str,
+        (backend, account): (&str, Option<&str>),
         command: &str,
     ) -> Result<String, UsageReadStage> {
-        let session = self.session(store, init, backend).await.map_err(|error| {
+        let session = self.session(store, init, backend, account).await.map_err(|error| {
             tracing::debug!(backend, error = format!("{error:#}"), "couldn't open the usage session");
             UsageReadStage::Session
         })?;
@@ -110,9 +129,10 @@ impl Talk<'_> {
     }
 
     /// The session kept for readings, or a new one to keep when it's gone or can't be resumed.
-    async fn session(&mut self, store: &Store, init: &Value, backend: &str) -> Result<String> {
+    async fn session(&mut self, store: &Store, init: &Value, backend: &str, account: Option<&str>) -> Result<String> {
         let dir = auth::probe_dir();
-        let key = format!("usage.session.{backend}");
+        let key =
+            account.map_or_else(|| format!("usage.session.{backend}"), |id| format!("usage.session.{backend}.{id}"));
         if let Some(id) = store.kv_get(&key).filter(|_| can_resume(init)) {
             let resume = json!({"sessionId": id, "cwd": dir, "mcpServers": []});
             if self.request("session/resume", resume).await.is_ok() {
@@ -232,7 +252,7 @@ mod tests {
                 Acp::spawn(&crate::shell::python(&fixture), env!("CARGO_MANIFEST_DIR"), &env).unwrap();
             let init = acp.request("initialize", json!({"protocolVersion": 1})).await.unwrap();
             let mut talk = Talk { acp: &acp, inbox: &mut inbox, commands: None, text: String::new() };
-            let outcome = talk.run(&self.store, &init, "test-agent", "usage").await;
+            let outcome = talk.run(&self.store, &init, ("test-agent", None), "usage").await;
             acp.kill().await;
             let calls = std::fs::read_to_string(&log).unwrap();
             (outcome, calls.lines().map(str::to_owned).collect())

@@ -29,7 +29,7 @@ import { useModel } from '../../lib/observable'
 import { ConnectorCatalog } from './connector-catalog'
 import { errorText, market, type ExtensionSection, type MarketAgent, type MarketApp, type MarketConnector, type MarketSkill } from './market-models'
 import { AgentsPanel, AppsPanel, MarketAgentsPanel, MarketPanel, SkillsPanel } from './MarketplacePanel'
-import { ExtensionTabs, FormSheet, ItemRow, MarketSection, ServiceLogo, SlideStack } from './pieces'
+import { ExtensionTabs, FormSheet, ItemRow, MarketSection, ServiceLogo, SkillGlyph, SlideStack } from './pieces'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
 

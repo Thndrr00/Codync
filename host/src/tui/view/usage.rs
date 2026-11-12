@@ -242,8 +242,8 @@ mod tests {
                 {"id": "cursor", "name": "Cursor", "shown": false},
             ],
         });
-        let area = ratatui::layout::Rect::new(0, 0, 80, 24);
-        let mut buf = ratatui::buffer::Buffer::empty(area);
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
         super::usage_chooser(&mut buf, area, &app, 2);
         let text: String = buf.content().iter().map(ratatui::buffer::Cell::symbol).collect();
         assert!(text.contains("  [x] Claude"), "{text}");

@@ -17,7 +17,8 @@ function useProvidersSeen({ providers, services }: Usage) {
   const atFirst = useRef(new Set(providers.map((p) => p.id)))
   for (const provider of providers) seen.current.set(provider.id, provider)
   const rank = (id: string) => {
-    const at = services?.findIndex((s) => s.id === id) ?? -1
+    // An isolated account (`agent:account`) sits right after its agent.
+    const at = services?.findIndex((s) => s.id === id.split(':')[0]) ?? -1
     return at < 0 ? Number.MAX_SAFE_INTEGER : at
   }
   return { seen: [...seen.current.values()].sort((a, b) => rank(a.id) - rank(b.id)), atFirst: atFirst.current }

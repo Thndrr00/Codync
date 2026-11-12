@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn opening_the_store_creates_an_empty_receipt_feed() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        assert!(store.channel_activity(20).unwrap().is_empty());
+        assert_eq!(store.channel_activity(20).unwrap().len(), 0);
     }
 
     #[test]
@@ -209,6 +209,7 @@ mod tests {
                 entry: "channel-entry".into(),
                 text: "message".into(),
                 user: "person".into(),
+                audio: None,
             })
             .unwrap();
         store.db.locked().execute("UPDATE slack_inbox SET created_at=1 WHERE entry_id='channel-entry'", []).unwrap();
@@ -234,18 +235,18 @@ mod tests {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let activity = receipt("message", 10);
         store.record_channel_activity(&activity).unwrap();
-        assert!(store.channel_activity(20).unwrap().is_empty());
+        assert_eq!(store.channel_activity(20).unwrap().len(), 0);
         bot(&store, "a");
         store.record_channel_activity(&activity).unwrap();
         store.db.locked().execute("UPDATE bots SET config=json_set(config,'$.hidden',1) WHERE id='a'", []).unwrap();
-        assert!(store.channel_activity(20).unwrap().is_empty());
+        assert_eq!(store.channel_activity(20).unwrap().len(), 0);
         store.db.locked().execute("UPDATE bots SET config=json_remove(config,'$.hidden') WHERE id='a'", []).unwrap();
         assert_eq!(store.channel_activity(20).unwrap().len(), 1);
         store.db.locked().execute("UPDATE bots SET deleted=1 WHERE id='a'", []).unwrap();
         store.record_channel_activity(&receipt("late-message", 20)).unwrap();
-        assert!(store.channel_activity(20).unwrap().is_empty());
+        assert_eq!(store.channel_activity(20).unwrap().len(), 0);
         store.db.locked().execute("DELETE FROM bots WHERE id='a'", []).unwrap();
-        assert!(store.channel_activity(20).unwrap().is_empty());
+        assert_eq!(store.channel_activity(20).unwrap().len(), 0);
     }
 
     #[test]

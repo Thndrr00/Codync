@@ -124,8 +124,12 @@ impl Window {
 impl Usage {
     /// What the apps get: without the readings of the agents the user doesn't show.
     pub fn visible(&self) -> Self {
-        let hidden = |id: &str| self.services.iter().any(|service| service.id == id && !service.shown);
-        let rank = |id: &str| self.services.iter().position(|service| service.id == id).unwrap_or(usize::MAX);
+        // An isolated account (`<agent>:<account>`) follows its agent: shown with it, hidden with it, listed after it.
+        let hidden =
+            |id: &str| self.services.iter().any(|service| service.id == services::base_id(id) && !service.shown);
+        let rank = |id: &str| {
+            self.services.iter().position(|service| service.id == services::base_id(id)).unwrap_or(usize::MAX)
+        };
         let mut providers: Vec<Provider> =
             self.providers.iter().filter(|provider| !hidden(&provider.id)).cloned().collect();
         providers.sort_by_key(|provider| rank(&provider.id));
@@ -270,6 +274,10 @@ async fn account_reports(hub: &Hub) {
         let windows = match backend {
             "codex" => timeout(Duration::from_secs(15), codex::collect_with(&env)).await.ok().flatten(),
             "claude" => timeout(Duration::from_secs(45), claude::collect_with(&hub.store, &env)).await.ok().flatten(),
+            "antigravity" => {
+                timeout(Duration::from_secs(45), antigravity::collect_account(hub, &account.id)).await.ok().flatten()
+            }
+            "grok" => timeout(Duration::from_secs(30), grok::collect_account(hub, &account.id)).await.ok().flatten(),
             _ => None,
         };
         let id = format!("{backend}:{}", account.id);
@@ -329,6 +337,21 @@ mod tests {
         assert_eq!((c.windows.len(), c.source.as_str()), (2, "statusline"));
         assert!((c.windows[0].percent - 12.0).abs() < f64::EPSILON, "five_hour updated");
         assert_eq!(serde_json::to_value(&u).unwrap()["providers"][0]["windows"][1]["resetsAt"], Value::Null);
+    }
+
+    #[test]
+    fn an_isolated_account_is_listed_after_its_agent_and_hidden_with_it() {
+        let service = |id: &'static str, shown| Service { id, name: id, registry: None, shown };
+        let mut u = Usage { services: vec![service("claude", true), service("codex", true)], ..Usage::default() };
+        for (id, name) in
+            [("codex:acc_1", "Codex 2"), ("claude:acc_9", "Claude 2"), ("codex", "Codex"), ("claude", "Claude")]
+        {
+            u.replace(id, name, "account", vec![Window::new("w", "Weekly", 1.0, None)]);
+        }
+        let ids = |usage: &Usage| usage.providers.iter().map(|p| p.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&u.visible()), ["claude", "claude:acc_9", "codex", "codex:acc_1"]);
+        u.services[1].shown = false;
+        assert_eq!(ids(&u.visible()), ["claude", "claude:acc_9"], "a hidden agent hides its accounts");
     }
 
     #[test]

@@ -63,8 +63,8 @@ mod tests {
         for entity in [
             json!({"type":"mention","offset":-1,"length":10}),
             json!({"type":"mention","offset":100,"length":10}),
-            json!({"type":"mention","offset":0,"length":999999999999_u64}),
-            json!({"type":"mention","offset":18446744073709551615_u64,"length":10}),
+            json!({"type":"mention","offset":0,"length":999_999_999_999_u64}),
+            json!({"type":"mention","offset":18_446_744_073_709_551_615_u64,"length":10}),
             json!({"type":"mention","offset":0}),
             json!({"type":"text_mention","offset":0,"length":10}),
         ] {

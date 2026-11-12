@@ -310,7 +310,7 @@ mod tests {
             ]
         );
         assert_eq!(terms.snapshot(None).len(), 3);
-        assert!(terms.snapshot(Some("missing")).is_empty());
+        assert_eq!(terms.snapshot(Some("missing")).len(), 0);
         assert!(!serde_json::to_string(&terms.snapshot(None)).expect("snapshot JSON").contains("private"));
     }
 

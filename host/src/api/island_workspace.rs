@@ -140,7 +140,7 @@ mod tests {
         let mut untimed = run("a", 30, "succeeded");
         untimed.started_at = None;
         runs.push(untimed);
-        assert!(timing_estimates(&runs).is_empty());
+        assert_eq!(timing_estimates(&runs).len(), 0);
     }
 
     #[test]

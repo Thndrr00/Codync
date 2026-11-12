@@ -14,11 +14,16 @@ use super::{Window, acp_read, iso_ms};
 const READ_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub(super) async fn collect(hub: &Hub) -> Option<Vec<Window>> {
-    acp_read::guarded(hub, "grok", read(&hub.store)).await
+    acp_read::guarded(hub, "grok", read(&hub.store, None)).await
 }
 
-async fn read(store: &Store) -> Result<Vec<Window>, UsageReadStage> {
-    let Started { acp, inbox: _inbox, .. } = acp_read::start(store, "grok").await?;
+/// What one of Grok's isolated accounts reports, through its own login.
+pub(super) async fn collect_account(hub: &Hub, account: &str) -> Option<Vec<Window>> {
+    acp_read::guarded(hub, "grok", read(&hub.store, Some(account))).await
+}
+
+async fn read(store: &Store, account: Option<&str>) -> Result<Vec<Window>, UsageReadStage> {
+    let Started { acp, inbox: _inbox, .. } = acp_read::start(store, "grok", account).await?;
     // ACP's extension methods take a leading underscore, which not every build expects.
     let ask = async {
         match acp.request("x.ai/billing", json!({})).await {

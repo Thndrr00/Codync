@@ -142,7 +142,7 @@ async fn enrich_pull(token: &str, repository: &str, number: u64, pull: &Value, e
                 }
             }
             Err(error) => {
-                errors.push(format!("PR #{number} {}: {error}", if legacy { "commit statuses" } else { "checks" }))
+                errors.push(format!("PR #{number} {}: {error}", if legacy { "commit statuses" } else { "checks" }));
             }
         }
     }
@@ -151,11 +151,12 @@ async fn enrich_pull(token: &str, repository: &str, number: u64, pull: &Value, e
 }
 
 async fn get(token: &str, path: &str, query: &[(&str, &str)]) -> Result<Value> {
-    let url = format!("https://api.github.com{path}");
+    let url = reqwest::Url::parse_with_params(&format!("https://api.github.com{path}"), query)
+        .context("Could not prepare GitHub request")?
+        .to_string();
     let client = crate::egress::client(crate::egress::Policy::Only(&["api.github.com"]), &url).await?;
     let request = client
         .get(url)
-        .query(query)
         .bearer_auth(token)
         .header("accept", "application/vnd.github+json")
         .header("x-github-api-version", "2022-11-28")
@@ -186,9 +187,7 @@ fn repository_of(origin: &str) -> Option<String> {
     if origin.contains(char::is_whitespace) {
         return None;
     }
-    let path = if let Some(path) = origin.strip_prefix("git@github.com:") {
-        path
-    } else {
+    let Some(path) = origin.strip_prefix("git@github.com:") else {
         let url = reqwest::Url::parse(origin).ok()?;
         if url.host_str()? != "github.com"
             || url.port().is_some()

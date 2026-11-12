@@ -36,7 +36,7 @@ mod models;
 mod proxied;
 pub use agent::authenticate;
 use agent::start;
-pub(crate) use agent::{Started, start_registry, start_with, start_with_env};
+pub(crate) use agent::{Started, start_registry, start_with_env};
 pub use models::{InFlight, models};
 pub(crate) use models::{hidden, model_config, model_ids, set_hidden};
 
