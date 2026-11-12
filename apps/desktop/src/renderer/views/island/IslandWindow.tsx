@@ -37,6 +37,7 @@ export function IslandWindow({ model }: { model: IslandModel }) {
   const views = usePresence(open, FOLD_MS, false)
   const wings = usePresence(winged, FOLD_MS, false)
   // Dropping files on the shape sends them to the bot in the big slot (or the one that needs you).
+  const tr = useTr()
   const [dropping, setDropping] = useState(false)
   const target = model.permission?.ref ?? model.focus?.ref
   const drop = (e: DragEvent) => {
