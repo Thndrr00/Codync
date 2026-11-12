@@ -12,6 +12,7 @@ html[data-window='island'] #root {
   --secondary: #8e939c;
   --tertiary: #5f646d;
   --accent-fill: #f5f6f8;
+  --accent: #f5f6f8;
   --on-accent: #0b0c0e;
   --bubble-user: rgba(255, 255, 255, 0.09);
   --danger: #ff8d97;

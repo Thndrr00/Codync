@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { pageOf } from '@shared/island'
+import { usagePercent } from '../../lib/usage-dots'
 import type { UsageProvider, UsageWindow } from '@shared/models'
 import { Icon } from '../../components/Icon'
 import { prefs, usePref } from '../../lib/prefs'
@@ -7,7 +8,7 @@ import { usePixelRatio } from '../../lib/theme'
 import { useResetLine, useTr } from '../../lib/use-language'
 import { UsageBar } from '../usage/UsageBar'
 import { mascotDataURL } from '../usage/ProviderMascot'
-import { providerTintCSS, resetDescription, tightest, usedText, windowReading, windowTitle } from '../usage/usage-model'
+import { providerTintCSS, resetDescription, tightest, usageStatus, usedText, windowReading, windowTitle } from '../usage/usage-model'
 import type { IslandModel } from './island-model'
 
 // Codync's own part of the island: the plan limits the menu bar already tracks (local usage
@@ -53,7 +54,7 @@ export function UsageMeter({ model }: { model: IslandModel }) {
       <span className="island-meter-bar">
         <UsageBar percent={window.percent} tint={providerTintCSS(provider.id)} />
       </span>
-      <span className="island-meter-value">{`${Math.round(window.percent)}%`}</span>
+      <span className="island-meter-value">{`${Math.round(usagePercent(window.percent))}%`}</span>
     </button>
   )
 }
@@ -66,14 +67,13 @@ export function UsageMeter({ model }: { model: IslandModel }) {
 export function UsageView({ model }: { model: IslandModel }) {
   const usage = [...model.summary.usage].sort((a, b) => (tightest(b)?.percent ?? -1) - (tightest(a)?.percent ?? -1))
   const tr = useTr()
-  const line = useResetLine()
   const [wanted, setPage] = useState(0)
   const { items, page, pages } = pageOf(usage, wanted)
   if (!usage.length) {
     return (
       <div className="island-card island-empty">
         <span className="island-empty-text">
-          <span className="island-title">No usage yet.</span>
+          <span className="island-title">{tr('No usage yet')}</span>
           <span className="island-subtitle">{tr('Plan limits show up here once an agent reports them.')}</span>
         </span>
       </div>
@@ -93,31 +93,43 @@ export function UsageView({ model }: { model: IslandModel }) {
         </div>
       ) : null}
       <div key={page} className="island-row-cards island-swap">
-        {items.map((provider) => (
-          <div key={provider.id} className="island-card island-usage">
-            <div className="island-agent">
-              <Mascot provider={provider} size={20} />
-              <span className="island-agent-name truncate" title={provider.name}>{provider.name}</span>
-            </div>
-            <div className="island-usage-windows">
-              {provider.windows.map((w) => (
-                <div key={w.id} className="island-usage-row">
-                  <span className="island-usage-title" title={w.label}>{tr(windowTitle(w))}</span>
-                  {w.text ? (
-                    <span className="island-usage-note">{w.text}</span>
-                  ) : (
-                    <>
-                      <UsageBar percent={w.percent} tint={providerTintCSS(provider.id)} />
-                      <span className="island-usage-value">{windowReading(w, tr)}</span>
-                      <span className="island-usage-reset">{line(resetDescription(w) ?? '')}</span>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        {items.map((provider) => <ProviderUsage key={provider.id} provider={provider} />)}
       </div>
+    </div>
+  )
+}
+
+function ProviderUsage({ provider }: { provider: UsageProvider }) {
+  const tr = useTr()
+  const status = usageStatus(provider)
+  return (
+    <div className="island-card island-usage">
+      <div className="island-agent">
+        <Mascot provider={provider} size={20} />
+        <span className="island-agent-name truncate" title={provider.name}>{provider.name}</span>
+      </div>
+      <div className="island-usage-windows" tabIndex={0} role="region" aria-label={`${tr('Usage')}: ${provider.name}`}>
+        {status ? <span className="island-usage-note">{tr(status)}</span> : null}
+        {provider.windows.map((window) => <WindowUsage key={window.id} window={window} tint={providerTintCSS(provider.id)} />)}
+      </div>
+    </div>
+  )
+}
+
+function WindowUsage({ window: w, tint }: { window: UsageWindow; tint: string }) {
+  const tr = useTr()
+  const line = useResetLine()
+  const reset = resetDescription(w)
+  return (
+    <div className="island-usage-row">
+      <span className="island-usage-title" title={w.label}>{tr(windowTitle(w))}</span>
+      {w.text ? <span className="island-usage-note">{w.text}</span> : (
+        <>
+          <span className="island-usage-value">{windowReading(w, tr)}</span>
+          <UsageBar percent={w.percent} tint={tint} />
+          {reset ? <span className="island-usage-reset">{line(reset)}</span> : null}
+        </>
+      )}
     </div>
   )
 }

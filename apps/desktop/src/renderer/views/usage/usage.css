@@ -16,10 +16,12 @@
   background: #fff;
   border-radius: 50%;
 }
-/* A usage limit's bar (UsageBar): thicker than a progress bar, on the bubble color. */
+/* Mask the whole meter so the filling animation never stretches its dots. */
 .progress-track.usage-bar {
   flex: 1;
   min-width: 0;
-  height: 6px;
+  height: 8px;
+  border-radius: 0;
   background: var(--bubble-agent);
+  mask: radial-gradient(circle at 2px 2px, #000 1.25px, transparent 1.5px) 0 0 / 4px 4px;
 }

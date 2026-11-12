@@ -13,6 +13,7 @@ import { avatarColor, isDark, palette } from '../lib/theme'
 import type { AppModel } from '../store/app-model'
 import { providerTint, resetDate, untilText, windowReading, windowTitle } from './usage/usage-model'
 import { drawMascot, nearlyUsedUp } from './usage/ProviderMascot'
+import { usageDotGrid, usagePercent } from '../lib/usage-dots'
 
 const isMac = window.codync.platform === 'darwin'
 
@@ -72,19 +73,18 @@ export function botDetail(bot: Bot) {
 
 /** One usage limit's bar in the provider's color: amber from 70%, red from 90%. */
 function barIcon(providerId: string, window: UsageWindow) {
-  const percent = Math.round(window.percent)
+  const percent = Math.round(usagePercent(window.percent))
   return canvasImage(`bar|${providerId}|${percent}`, 60, 16, (ctx) => {
     const dark = isDark()
     const color = window.percent >= 90 ? palette(dark).danger : window.percent >= 70 ? palette(dark).warning : providerTint(providerId)
-    ctx.fillStyle = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'
-    ctx.beginPath()
-    ctx.roundRect(0, 5.5, 60, 5, 2.5)
-    ctx.fill()
-    if (window.percent > 0) {
-      ctx.fillStyle = color
-      ctx.beginPath()
-      ctx.roundRect(0, 5.5, Math.max(5, 60 * Math.min(1, window.percent / 100)), 5, 2.5)
-      ctx.fill()
+    const grid = usageDotGrid(60, 8, percent)
+    for (let x = 0; x < grid.columns; x++) {
+      ctx.fillStyle = x < grid.filled ? color : dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'
+      for (let y = 0; y < grid.rows; y++) {
+        ctx.beginPath()
+        ctx.arc((x + 0.5) * grid.stepX, 4 + (y + 0.5) * grid.stepY, grid.radius, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
   })
 }

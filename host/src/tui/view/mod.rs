@@ -194,13 +194,13 @@ fn status_line(buf: &mut Buffer, r: Rect, app: &mut App) {
         for win in wins.iter().take(2).rev() {
             let pct = win["percent"].as_f64().unwrap_or(0.0).clamp(0.0, 100.0);
             let label = short_window(win["label"].as_str().unwrap_or_default());
-            let seg = format!("{label} ▰▰▰▰▰▰▰▰ {pct:.0}%");
+            let seg = format!("{label} ●●●●●●●● {pct:.0}%");
             let sx = right.saturating_sub(u(w(&seg)));
             let on = filled(pct, 8);
             let mut px = put(buf, sx, r.y, 8, &format!("{label} "), t.dim.patch(t.panel));
             let bar_style = if pct >= 80.0 { t.amber } else { t.text };
-            px = put(buf, px, r.y, 8, &"▰".repeat(on), bar_style.patch(t.panel));
-            px = put(buf, px, r.y, 8, &"▱".repeat(8 - on.min(8)), t.line.patch(t.panel));
+            px = put(buf, px, r.y, 8, &"●".repeat(on), bar_style.patch(t.panel));
+            px = put(buf, px, r.y, 8, &"·".repeat(8 - on.min(8)), t.line.patch(t.panel));
             put(buf, px, r.y, 6, &format!(" {pct:.0}%"), t.secondary.patch(t.panel));
             right = sx.saturating_sub(3);
         }

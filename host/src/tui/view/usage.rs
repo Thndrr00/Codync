@@ -170,10 +170,10 @@ fn window(buf: &mut Buffer, inner: Rect, y: u16, win: &Value) {
         inner.x + 21,
         y,
         16,
-        &"▰".repeat(on.min(16)),
+        &"●".repeat(on.min(16)),
         if pct >= 80.0 { t.amber } else { t.text }.patch(t.panel),
     );
-    x = put(buf, x, y, 16, &"▱".repeat(16 - on.min(16)), t.line.patch(t.panel));
+    x = put(buf, x, y, 16, &"·".repeat(16 - on.min(16)), t.line.patch(t.panel));
     put(buf, x + 1, y, 5, &format!("{pct:>3.0}%"), t.text.patch(t.panel));
     let reset = win["resetsAt"]
         .as_i64()
@@ -204,8 +204,22 @@ pub(in crate::tui) fn when_future(ms: i64) -> String {
 mod tests {
     use super::super::super::app::App;
     use super::super::super::net::Client;
-    use super::{usage_scroll_max, week_line};
+    use super::{usage_scroll_max, week_line, window};
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
     use serde_json::{Value, json};
+
+    #[test]
+    fn usage_limits_fill_dots_and_keep_unused_columns_visible() {
+        let area = Rect::new(0, 0, 80, 1);
+        for (percent, expected) in [(0, "················"), (50, "●●●●●●●●········"), (100, "●●●●●●●●●●●●●●●●")]
+        {
+            let mut buf = Buffer::empty(area);
+            window(&mut buf, area, 0, &json!({"label": "Session", "percent": percent}));
+            let dots: String = (21..37).map(|x| buf[(x, 0)].symbol()).collect();
+            assert_eq!(dots, expected);
+        }
+    }
 
     #[test]
     fn the_week_line_counts_and_hides_for_an_empty_week() {

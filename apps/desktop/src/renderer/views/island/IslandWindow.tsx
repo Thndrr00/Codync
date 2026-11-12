@@ -10,6 +10,7 @@ import { Approval, Empty, Message, Notice, Overview, Wings } from './IslandViews
 import { UsageMeter, UsageView } from './IslandUsage'
 import './island.css'
 import './island-views.css'
+import './island-usage.css'
 
 /** How long the views stay on screen while the shape folds back into the notch (its 0.34 s close). */
 const FOLD_MS = 340
