@@ -8,7 +8,10 @@ import { pref } from '../../lib/prefs'
 import { Dictation } from '../thread/dictation'
 import { dictationPlatform } from '../thread/dictation-platform'
 import { defaultIslandControls, dockFor, localIslandRect, type IslandControls, type IslandEdge } from '@shared/island-layout'
-import type { IslandAction } from '@shared/island-activity'
+import { usageNotice, type IslandAction } from '@shared/island-activity'
+import { normalizeIslandHistory, updateIslandHistory, type IslandHistory } from '@shared/island-workspace'
+import { islandUsage } from './island-preferences'
+import type { IslandShortcutAction } from '@shared/island-shortcuts'
 
 /** The bare notch peeks at once and opens after a rest; the compact island opens sooner. */
 const OPEN_FROM_PEEK_MS = 650
@@ -18,10 +21,12 @@ const UNPEEK_MS = 600
 const LEAVE_MS = 800
 export const PINNED_LEAVE_MS = 10_000
 /** Set once the voice input shortcut has been used; until then the message field shows how. */
+const savedHistory = pref<IslandHistory>('islandNoticeHistory', { items: [], active: [] })
 const voiceShortcutUsed = pref('islandVoiceShortcutUsed', false)
 
 /** The island window's state: the chat window's summary, the pointer, the header's tab and what was put off. */
 export class IslandModel extends Observable {
+  history = normalizeIslandHistory(savedHistory.get())
   summary: IslandSummary = { bots: [], permissions: [], usage: [], health: null }
   screen: IslandScreen = { notch: null }
   open = false
@@ -33,6 +38,7 @@ export class IslandModel extends Observable {
   messageRef: string | null = null
   /** The message field's text. */
   draft = ''
+  private resumedDraft: { ref: string; original: string } | null = null
   /** Talking into the message field (the field's mic, or the voice input shortcut). */
   readonly dictation = new Dictation((change) => this.update(() => (this.draft = change(this.draft))), dictationPlatform())
   /** The voice input shortcut, as Settings → General has it. */
@@ -65,6 +71,14 @@ export class IslandModel extends Observable {
     island.onHover((inside) => this.hover(inside))
     island.onKey((answer) => this.answerByKey(answer))
     island.onVoiceKey((key) => this.voiceKey(key))
+    island.onShortcut((action) => this.invokeShortcut(action))
+    island.onResourceOpened(() => this.close())
+    island.onDraft(({ ref, text }) => {
+      if (!this.bot(ref)) return
+      if (this.draft.trim()) { this.update(() => { this.actionError = 'Send or clear the current island message before resuming a saved draft.' }); return }
+      this.update(() => { this.messageRef = ref; this.draft = text; this.resumedDraft = { ref, original: text }; this.actionError = null })
+      this.setTab('message')
+    })
     window.addEventListener('blur', () => {
       if (this.tab === 'message') this.close()
     })
@@ -80,7 +94,7 @@ export class IslandModel extends Observable {
   }
 
   get mode() {
-    return islandMode(this.summary, { open: this.open, peek: this.peek, tab: this.tab, deferred: this.deferred, notice: this.notice })
+    return islandMode(this.summary, { open: this.open, peek: this.peek, tab: this.tab, deferred: this.deferred, notice: this.screen.quiet ? null : this.notice })
   }
 
   get frame() {
@@ -125,6 +139,24 @@ export class IslandModel extends Observable {
   action(action: IslandAction) {
     window.codync.island.action(action)
     if (['openFlow', 'openChannels', 'openDiagnostics'].includes(action.kind)) this.close()
+  }
+
+  clearHistory() {
+    this.history = { items: [], active: this.history.active }
+    savedHistory.set(this.history)
+    this.changed()
+  }
+
+  async setShortcuts(bindings: unknown) {
+    try {
+      const shortcutState = await window.codync.island.setShortcuts(bindings)
+      this.update(() => { this.screen = { ...this.screen, shortcutState }; this.configurationError = null })
+    } catch (error) { this.update(() => { this.configurationError = error instanceof Error ? error.message : String(error) }) }
+  }
+
+  private invokeShortcut(action: IslandShortcutAction) {
+    if (action === 'toggle') { if (this.open) this.close(); else this.openNow() }
+    else if (action !== 'quiet') this.setTab(action === 'search' ? 'workspace' : action)
   }
 
   async configure(patch: Partial<IslandControls>) {
@@ -224,7 +256,8 @@ export class IslandModel extends Observable {
   send() {
     const bot = this.messageBot
     if (!bot || !this.draft.trim()) return
-    window.codync.island.send(bot.ref, this.draft)
+    if (this.resumedDraft?.ref === bot.ref) this.action({ kind: 'sendSavedDraft', ref: bot.ref, text: this.draft, original: this.resumedDraft.original })
+    else window.codync.island.send(bot.ref, this.draft)
     this.close()
   }
 
@@ -260,6 +293,7 @@ export class IslandModel extends Observable {
     this.dictation.cancel()
     this.update(() => {
       this.draft = ''
+      this.resumedDraft = null
       this.open = false
       this.pinned = false
       this.peek = false
@@ -292,6 +326,13 @@ export class IslandModel extends Observable {
     const changes = this.statuses ? transitions(this.statuses, summary.bots) : []
     this.statuses = new Map(summary.bots.map((b) => [b.ref, b.status]))
     this.update(() => {
+      const notices = changes.map((notice) => ({ key: `${notice.kind}:${notice.ref}`, ref: notice.ref, text: `${summary.bots.find((bot) => bot.ref === notice.ref)?.name ?? notice.ref} · ${notice.kind}` }))
+      for (const bot of summary.bots) if (bot.error) notices.push({ key: `bot:${bot.ref}:${bot.error}`, ref: bot.ref, text: `${bot.name} · ${bot.error}` })
+      for (const error of [summary.health, summary.activity?.error, summary.activity?.refreshError, summary.workspace?.error, summary.workspace?.actionError]) if (error) notices.push({ key: `error:${error}`, ref: '', text: error })
+      const usage = usageNotice(summary.usage, islandUsage.get(), Date.now())
+      if (usage) notices.push({ key: `usage:${usage.kind}:${usage.provider}:${usage.resetsAt}`, ref: '', text: `${usage.provider} · ${usage.kind === 'limit' ? `${usage.percent}%` : 'Reset within 15 minutes'}` })
+      const history = updateIslandHistory(this.history, notices, Date.now())
+      if (JSON.stringify(history) !== JSON.stringify(this.history)) { this.history = history; savedHistory.set(history) }
       this.summary = summary
       // Answered and expired cards leave the put-off set.
       for (const id of this.deferred) if (!summary.permissions.some((p) => p.entryId === id)) this.deferred.delete(id)
@@ -315,6 +356,7 @@ export class IslandModel extends Observable {
     clearTimeout(this.hoverTimer)
     const mode = this.mode
     if (inside) {
+      if (this.screen.quiet && !this.open) return
       if (this.closing) this.update(() => (this.closing = false))
       if (mode === 'hidden') {
         this.update(() => (this.peek = true))
@@ -338,13 +380,13 @@ export class IslandModel extends Observable {
    */
   private foldWhenAway() {
     clearTimeout(this.hoverTimer)
-    const counting = this.open && !this.hovering && this.tab !== 'message' && this.tab !== 'options' && !this.moving
+    const counting = this.open && !this.hovering && this.tab !== 'message' && this.tab !== 'options' && this.tab !== 'workspace' && !this.moving
     if (counting !== this.closing) this.update(() => (this.closing = counting))
     if (counting) this.hoverTimer = setTimeout(() => this.close(), PINNED_LEAVE_MS)
   }
 
   private openByHover() {
-    if (!this.hovering) return
+    if (!this.hovering || this.screen.quiet) return
     this.update(() => {
       this.open = true
       this.peek = false

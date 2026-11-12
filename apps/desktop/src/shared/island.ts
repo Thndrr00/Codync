@@ -34,6 +34,9 @@ export interface IslandBot {
   /** Why it stopped, when it failed. */
   error: string | null
   unread?: number
+  project?: string
+  hasDraft?: boolean
+  startedAt?: number | null
 }
 
 export interface IslandOption {
@@ -65,6 +68,7 @@ export interface IslandSummary {
   /** One line when the computer is short of memory (`healthAlert`), else null. */
   health: string | null
   activity?: IslandActivity
+  workspace?: import('./island-workspace').IslandWorkspace
 }
 
 /** The display the island sits on: the notch's size in points, or null at a plain top edge. */
@@ -76,6 +80,8 @@ export interface IslandScreen {
   controls?: IslandControls
   displays?: IslandDisplay[]
   displayId?: number
+  quiet?: boolean
+  shortcutState?: import('./island-shortcuts').IslandShortcutState
 }
 
 /**
@@ -113,9 +119,9 @@ export interface NotchScreen {
 }
 
 /** Closed shapes, then the open views (640 pt wide, under a header of tabs). */
-export type IslandMode = 'hidden' | 'peek' | 'compact' | 'overview' | 'empty' | 'approval' | 'finished' | 'failed' | 'message' | 'usage' | 'activity' | 'status' | 'options'
+export type IslandMode = 'hidden' | 'peek' | 'compact' | 'overview' | 'empty' | 'approval' | 'finished' | 'failed' | 'message' | 'usage' | 'activity' | 'status' | 'options' | 'workspace'
 /** The header's choice: `auto` shows what needs you first (an approval, a finished or failed bot). */
-export type IslandTab = 'auto' | 'bots' | 'message' | 'usage' | 'approvals' | 'activity' | 'status' | 'options'
+export type IslandTab = 'auto' | 'bots' | 'message' | 'usage' | 'approvals' | 'activity' | 'status' | 'options' | 'workspace'
 /** A bot that just stopped, shown until it times out (done) or is dismissed (failed). */
 export interface IslandNotice {
   kind: 'finished' | 'failed'
@@ -155,7 +161,7 @@ export function islandMode(
     if (peek) return 'peek'
     return summary.bots.some(isActive) ? 'compact' : 'hidden'
   }
-  if (tab === 'message' || tab === 'usage' || tab === 'activity' || tab === 'status' || tab === 'options') return tab
+  if (tab === 'message' || tab === 'usage' || tab === 'activity' || tab === 'status' || tab === 'options' || tab === 'workspace') return tab
   if (tab === 'approvals') return summary.permissions.length ? 'approval' : 'activity'
   if (tab === 'auto') {
     if (summary.permissions.length) return 'approval'

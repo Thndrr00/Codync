@@ -87,6 +87,8 @@ export class IslandActivityStore extends Observable {
     }
   }
 
+  noteDrafts() { this.changed() }
+
   async perform(action: IslandAction) {
     switch (action.kind) {
       case 'refreshUsage': return this.refreshUsage()
@@ -141,6 +143,7 @@ export class IslandActivityStore extends Observable {
           const canvas = await client.call<FlowCanvas>('routineFlowCanvas', { botId: item.bot.id })
           for (const card of canvas.routines) for (const run of card.recentRuns.slice(0, 2)) {
             runs.push({ id: run.id, ref: refKey(item.ref), name: card.routine.name, status: run.status, detail: run.detail ?? '', at: run.createdAt,
+              routineId: run.routineId, startedAt: run.startedAt, finishedAt: run.finishedAt, retryable: run.retryable,
               steps: run.id === card.steps[0]?.runId ? card.steps.map((step) => ({ name: store.bots.get(step.botId)?.name || step.botId, status: step.status })) : [] })
           }
         }))

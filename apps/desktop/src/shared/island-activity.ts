@@ -6,6 +6,10 @@ export interface IslandRun {
   status: string
   detail: string
   at: number
+  routineId?: string
+  startedAt?: number | null
+  finishedAt?: number | null
+  retryable?: boolean
   steps: { name: string; status: string }[]
 }
 
@@ -44,6 +48,13 @@ export type IslandAction =
   | { kind: 'openDiagnostics' }
   | { kind: 'callMute'; callId: string }
   | { kind: 'callEnd'; callId: string }
+  | { kind: 'loadWorkspace'; ref: string }
+  | { kind: 'resumeDraft'; ref: string }
+  | { kind: 'sendSavedDraft'; ref: string; text: string; original: string }
+  | { kind: 'retryRun'; ref: string; id: string }
+  | { kind: 'cancelQueued'; ref: string; id: string }
+  | { kind: 'openArtifact'; ref: string; id: string }
+  | { kind: 'openFile'; ref: string; id: string; entryId: string }
 
 export interface IslandUsagePreferences {
   providers: string[]

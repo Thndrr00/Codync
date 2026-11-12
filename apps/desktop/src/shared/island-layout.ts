@@ -13,6 +13,10 @@ export interface IslandControls {
   displayId: number | null
   locked: boolean
   density: IslandDensity
+  quiet: boolean
+  quietFullscreen: boolean
+  fontSize: number
+  highContrast: boolean
   docks: Record<string, IslandDock>
 }
 
@@ -31,7 +35,8 @@ export interface IslandDisplay {
 }
 
 export const defaultIslandControls: IslandControls = {
-  placement: 'automatic', displayId: null, locked: true, density: 'compact', docks: {},
+  placement: 'automatic', displayId: null, locked: true, density: 'compact',
+  quiet: false, quietFullscreen: false, fontSize: 13, highContrast: false, docks: {},
 }
 
 const edges: readonly IslandEdge[] = ['top', 'bottom', 'left', 'right']
@@ -64,6 +69,10 @@ export function normalizeIslandControls(input: unknown): IslandControls {
     displayId: finite(value.displayId) && Number.isSafeInteger(value.displayId) ? value.displayId : null,
     locked: typeof value.locked === 'boolean' ? value.locked : defaultIslandControls.locked,
     density: value.density === 'expanded' ? 'expanded' : 'compact',
+    quiet: value.quiet === true,
+    quietFullscreen: value.quietFullscreen === true,
+    fontSize: finite(value.fontSize) ? clamp(value.fontSize, 11, 18) : defaultIslandControls.fontSize,
+    highContrast: value.highContrast === true,
     docks,
   }
 }

@@ -16,9 +16,9 @@ laptop with an external monitor can keep it on the screen being used.
 
 ## What it shows
 
-Open, the island is 640 pt wide, with a header of tabs beside the notch
-(Bots, Message a bot, Usage, New bot; the working count, a usage meter and Open Codync on the
-right) over a card. The card holds the bot in focus as a big character with a glow and a state
+Open, the island fits its display work area, with a toolbar below the camera notch.
+Workspace, Bots, Message, Usage, Activity, Status and Options share the same scrollable
+content area. Compact or expanded density changes the available content height. The card holds the bot in focus as a big character with a glow and a state
 badge; alerts tint the card from the bottom (amber, green, red). The other bots sit in a column
 on the right.
 
@@ -57,10 +57,51 @@ black shape: the next view cross-fades over the last. When another bot takes the
 springs in out of a blur, a bot joining the pills or the column does the same, and the others
 slide to their new places.
 
+## Workspace and focused controls
+
+Workspace searches bots by name, backend, status or project path and searches existing island
+actions. Selecting a bot reads its recent library, completed edit patches, actual queued-message
+order, Git context and the computer's trailing 24-hour counters. Read-only previews contain at most
+five completed tool edits, three files per edit and 4,000 patch characters per file. Proposed
+permission edits are excluded. Registered files and artifacts open the existing conversation
+viewers; arbitrary filesystem paths are never read by the island. Older registered files whose
+entry is outside loaded history ask the person to open the conversation first.
+
+Cancel removes one waiting user message through the bot actor; it never stops the current turn
+or unrelated queued work. If the message started meanwhile, the host reports that it was not
+cancelled. This list shows user messages, not a claim that background routines occupy no queue
+positions. Retry uses `retryRoutineRun` and its original event, only when the host reports that
+run as retryable. Activity filters by bot or exact workspace path on the same computer.
+
+Resume draft explicitly transfers that saved draft to the island message field without opening
+the main window. Closing without sending keeps the original saved draft. Sending uses the normal
+recoverable send flow and clears the saved original only if it is still unchanged; concurrent
+main-window edits survive. The island never includes draft bodies in its routine summaries.
+
+Elapsed times use host start/finish timestamps. Historical routine estimates are the median of
+at least five successful, timed executions of that same routine in the host's retained last 20
+runs for the bot. Queued time, failures and missing timestamps are excluded. An estimate is a
+historical duration, not a promise of completion time; otherwise the UI says No estimate.
+The daily summary is explicitly Last 24 hours, not a calendar-day count.
+
+Options has independent text size (11–18), high contrast, and an optional Quiet profile. Quiet
+suppresses automatic hover opening and completion/error popups, preserving approvals and manual
+controls. Fullscreen quiet detects other Codync windows only; use manual Quiet for other apps.
+Global shortcuts are opt-in for show/hide, search, activity, message, usage and Quiet. Approval,
+editing and existing application shortcuts are reserved. Unavailable bindings show errors;
+disabling the island unregisters only its own keys.
+
+The notice history is local device UI state: at most 50 grouped items and 200 active keys.
+Unchanged polling does not increment counts; a notice recurring after recovery does. Clear
+history leaves active notices acknowledged so they do not immediately return. It stores short
+error/notice text and bot references, not conversation bodies or credentials.
+
 ## How it works
 
-- **Window** (`apps/desktop/src/main/island.ts`): a fixed 720 × 300 transparent, frameless,
-  non-focusable window at the top center of the chosen display (see *Where it sits*). macOS:
+- **Window** (`apps/desktop/src/main/island.ts`): a transparent, frameless panel bounded by
+  the selected display work area: up to 720 × 380 horizontally or 420 × 560 vertically.
+  Options selects an edge, a display and density; unlocked dragging snaps to the nearest edge.
+  Positions are saved per display in `islandControls`. macOS:
   a non-activating panel at the main-menu level + 3, so it covers the menu bar, every Space and
   full-screen apps. Windows: a toolbar window (out of Alt+Tab). It never resizes; the shape
   animates inside it with CSS (spring open, plain close).
@@ -91,6 +132,8 @@ slide to their new places.
 - **Linux on Wayland**: not available (a window can't place itself at the top or stay above
   others), so the setting is hidden. On X11 the transparent corners need a compositing window
   manager (GNOME, KDE and most desktops have one); without one they show as a solid margin.
+- **Android**: no desktop-style floating OS island. Existing conversation, library, drafts,
+  routine, activity and usage screens retain their behavior.
 - **iPhone**: Live Activities and the Dynamic Island already cover this
   ([notifications and Live Activities](../design/push-and-live-activity.md)); no change.
 - **Terminal UI**: a terminal can't draw over other apps; its roster already shows working and

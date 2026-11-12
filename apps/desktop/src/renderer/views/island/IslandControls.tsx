@@ -1,40 +1,16 @@
-import type { ReactNode } from 'react'
+import { IslandOptionsExtras } from './IslandOptionsExtras'
+import { IslandPanel } from './IslandPanel'
 import type { IslandEdge } from '@shared/island-layout'
 import { Button, Switch } from '../../components/Controls'
-import { Icon } from '../../components/Icon'
 import { useTr } from '../../lib/use-language'
 import type { IslandModel } from './island-model'
 import { useIslandUsage } from './island-preferences'
-
-export function IslandPanel({ children }: { children: ReactNode }) {
-  return <div className="island-card island-control-panel" tabIndex={0}>{children}</div>
-}
 
 function Choices({ label, value, options, onChange }: { label: string; value: string; options: { id: string; label: string }[]; onChange: (id: string) => void }) {
   return <div role="group" aria-label={label}><span className="island-subtitle">{label}</span><div className="island-control-actions">{options.map((option) => <Button key={option.id} kind={value === option.id ? 'primary' : 'secondary'} aria-pressed={value === option.id} onClick={() => onChange(option.id)}>{option.label}</Button>)}</div></div>
 }
 
-export function ActivityView({ model }: { model: IslandModel }) {
-  const tr = useTr()
-  const activity = model.summary.activity
-  const unread = activity?.unread ?? model.summary.bots.filter((bot) => (bot.unread ?? 0) > 0).map((bot) => ({ ...bot, count: bot.unread }))
-  return (
-    <IslandPanel>
-      <div className="island-control-heading"><strong>{tr('Activity')}</strong><button className="island-tab" title={tr('Refresh')} aria-label={tr('Refresh')} onClick={() => model.action({ kind: 'refreshActivity' })}><Icon name="arrow.clockwise" size={13} /></button></div>
-      <div className="island-control-actions"><Button onClick={() => model.setTab('approvals')}>{tr('Approvals')} · {model.summary.permissions.length}</Button><Button onClick={() => model.action({ kind: 'openChannels' })}>{tr('Channels')}</Button></div>
-      <strong>{tr('Unread conversations')}</strong>
-      {unread.length ? unread.map((bot) => <button className="island-control-row" key={bot.ref} onClick={() => model.openBot(bot.ref)}><span>{bot.name}</span><span>{bot.count}</span></button>) : <span className="island-subtitle">{tr('No unread messages')}</span>}
-      <strong>{tr('Routines')}</strong>
-      {activity?.runs.length ? activity.runs.map((run) => <button className="island-control-row vertical" key={run.id} onClick={() => model.action({ kind: 'openFlow', ref: run.ref })}>
-        <span>{run.name} · {tr(run.status)}</span><span className="island-subtitle">{run.detail || new Date(run.at).toLocaleString()}</span>
-        {run.steps.map((step, index) => <span key={index} className="island-subtitle">{step.name} · {tr(step.status)}</span>)}
-      </button>) : <span className="island-subtitle">{tr('No recent runs')}</span>}
-      <strong>{tr('Channel mentions')}</strong>
-      {activity?.channels.length ? activity.channels.map((event) => <button className="island-control-row" key={event.id} onClick={() => model.openBot(event.ref)}><span>{event.source} · {event.channel}</span><time dateTime={new Date(event.at).toISOString()}>{new Date(event.at).toLocaleTimeString()}</time></button>) : <span className="island-subtitle">{tr('No recent mentions')}</span>}
-      {activity?.error ? <span className="island-control-error" role="status">{activity.error}</span> : null}
-    </IslandPanel>
-  )
-}
+export { ActivityView } from './IslandActivity'
 
 export function StatusView({ model }: { model: IslandModel }) {
   const tr = useTr()
@@ -61,6 +37,7 @@ export function OptionsView({ model }: { model: IslandModel }) {
   const [usage, setUsage] = useIslandUsage()
   return <IslandPanel>
     <strong>{tr('Island options')}</strong>
+    <IslandOptionsExtras model={model} />
     <div className="island-control-actions" role="group" aria-label={tr('Screen edge')}>
       {(['top', 'bottom', 'left', 'right'] as IslandEdge[]).map((edge) => <button className={`island-option ${model.screen.edge === edge ? 'selected' : ''}`} key={edge} aria-pressed={model.screen.edge === edge} onClick={() => model.setEdge(edge)}>{tr({ top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right' }[edge])}</button>)}
     </div>

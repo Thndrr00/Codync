@@ -60,6 +60,8 @@ export interface RoutineRun {
   status: string
   createdAt: number
   finishedAt?: number | null
+  startedAt?: number | null
+  retryable?: boolean
   detail?: string | null
   /** A stable failure reason (`timeout`, `usage_limit`, `memory`…), for scanning the history. */
   failureCode?: string | null

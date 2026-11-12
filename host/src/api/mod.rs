@@ -14,6 +14,8 @@ mod files;
 mod folders;
 mod host;
 mod http;
+mod island_queue;
+mod island_workspace;
 mod marketplace;
 mod network;
 mod openai;
@@ -94,6 +96,14 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
     if crate::native_channels::METHODS.contains(&method) {
         return crate::native_channels::call(hub, method, &b);
+    }
+    match method {
+        "islandWorkspace" => return island_workspace::read(hub, str_arg(&b, "botId")?).await,
+        "queuedMessages" => return island_queue::read(hub, str_arg(&b, "botId")?).await,
+        "cancelQueuedMessage" => {
+            return island_queue::cancel(hub, str_arg(&b, "botId")?, str_arg(&b, "entryId")?).await;
+        }
+        _ => {}
     }
     if matches!(method, "savedSearches" | "saveSearch" | "deleteSavedSearch") {
         return saved_searches::call(hub, caller, method, &b);

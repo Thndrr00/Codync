@@ -223,6 +223,13 @@ export interface CodyncBridge {
   ssh: SSHBridge
   /** The notch island (shared/island.ts): its setting, the chat window's summary, and the island window's side. */
   island: {
+    resourceOpened(): void
+    onResourceOpened(cb: () => void): () => void
+    offerDraft(draft: { ref: string; text: string }): void
+    onDraft(cb: (draft: { ref: string; text: string }) => void): () => void
+    shortcuts(): Promise<import('./island-shortcuts').IslandShortcutState>
+    setShortcuts(input: unknown): Promise<import('./island-shortcuts').IslandShortcutState>
+    onShortcut(cb: (action: import('./island-shortcuts').IslandShortcutAction) => void): () => void
     configure(patch: Partial<IslandControls>): Promise<IslandControls>
     drag(on: boolean, snap?: boolean): void
     action(action: IslandAction): void

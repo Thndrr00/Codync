@@ -15,6 +15,7 @@ import {
 import { prefs } from './host-controller'
 import { dockFor, islandPanelBounds, normalizeIslandControls, snapIslandDock, type IslandControls, type IslandDisplay } from '../shared/island-layout'
 import { validIslandAction } from '../shared/island-actions'
+import { IslandShortcuts } from './island-shortcuts'
 
 // Every NSScreen's frame, safe-area top and the menu bar on each side of the notch. JXA reaches
 // AppKit without a helper binary; it runs when the island opens and when displays change.
@@ -84,8 +85,14 @@ export class Island {
   private placing = 0
   private dragging = false
   private dragTimeout: NodeJS.Timeout | undefined
+  private readonly shortcuts = new IslandShortcuts(globalShortcut, (action) => {
+    if (action === 'quiet') this.configure({ quiet: !this.controls.quiet })
+    else this.window?.webContents.send('island:shortcut', action)
+  })
 
-  constructor(private deps: Deps) {}
+  constructor(private deps: Deps) {
+    this.shortcuts.set(prefs.get('islandShortcuts'))
+  }
 
   /** Off until turned on: the island is still experimental. */
   get enabled() {
@@ -112,6 +119,7 @@ export class Island {
     const next = normalizeIslandControls({ ...this.controls, ...patch })
     prefs.set('islandControls', next)
     prefs.set('islandPlacement', next.placement)
+    this.publishControls()
     void this.place()
     this.deps.changed()
     return next
@@ -123,6 +131,17 @@ export class Island {
   }
 
   register() {
+    ipcMain.on('island:resourceOpened', () => { this.deps.openApp(); this.window?.webContents.send('island:resourceOpened') })
+    ipcMain.on('island:draft', (_e, draft: { ref?: unknown; text?: unknown }) => {
+      if (draft && typeof draft.ref === 'string' && typeof draft.text === 'string' && draft.text.length <= 1_000_000) this.window?.webContents.send('island:draft', { ref: draft.ref, text: draft.text })
+    })
+    ipcMain.handle('island:shortcuts', () => this.shortcuts.state)
+    ipcMain.handle('island:setShortcuts', (_e, input: unknown) => {
+      const state = this.shortcuts.set(input)
+      prefs.set('islandShortcuts', state.bindings)
+      this.publishControls()
+      return state
+    })
     ipcMain.handle('island:configure', (_e, patch: Partial<IslandControls>) => this.configure(patch))
     ipcMain.on('island:action', (_e, input: unknown) => {
       const action = validIslandAction(input)
@@ -178,6 +197,7 @@ export class Island {
       notch: null, edge: dock.edge, density: controls.density,
       panel: { width: initial.width, height: initial.height },
       controls, displayId: display.id, displays: this.displays(),
+      quiet: this.effectiveQuiet(), shortcutState: this.shortcuts.state,
     }
     const win = new BrowserWindow({
       ...initial,
@@ -210,15 +230,27 @@ export class Island {
     else win.setIgnoreMouseEvents(true)
     win.once('ready-to-show', () => win.showInactive())
     win.on('closed', () => {
-      if (this.window === win) this.window = null
+      if (this.window === win) {
+        this.window = null
+        this.close()
+      }
     })
     this.window = win
+    this.shortcuts.activate()
+    this.publishControls()
     this.inside = false
     void this.place()
     void win.loadURL(this.deps.url)
     if (!shapedWindow) this.tick()
     // A few times a second is enough to notice the pointer on another screen.
-    this.watch = setInterval(() => this.followPointer(), 400)
+    this.watch = setInterval(() => {
+      this.followPointer()
+      const quiet = this.effectiveQuiet()
+      if (quiet !== this.screen.quiet) {
+        this.screen = { ...this.screen, quiet }
+        this.window?.webContents.send('island:screen', this.screen)
+      }
+    }, 400)
   }
 
   /** `follow`: move the island to the screen the person is working on. */
@@ -229,6 +261,7 @@ export class Island {
   }
 
   private close() {
+    this.shortcuts.deactivate()
     this.dragging = false
     clearTimeout(this.dragTimeout)
     ++this.placing
@@ -239,8 +272,9 @@ export class Island {
     this.timer = null
     this.watch = null
     this.placedOn = -1
-    this.window?.destroy()
+    const win = this.window
     this.window = null
+    win?.destroy()
   }
 
   /** Explicit keyboard interaction focuses the panel without bringing the main app forward. */
@@ -294,12 +328,24 @@ export class Island {
     const notch = dock.edge === 'top' && dock.offset === 0.5 ? notchOf(screens, display.bounds) : null
     const bounds = islandPanelBounds(display, dock, !!notch)
     this.screen = { notch, edge: dock.edge, density: controls.density, panel: { width: bounds.width, height: bounds.height }, controls, displayId: display.id, displays: this.displays() }
+    this.screen = { ...this.screen, quiet: this.effectiveQuiet(), shortcutState: this.shortcuts.state }
     win.setBounds(bounds)
     win.webContents.send('island:screen', this.screen)
   }
 
   private displays(): IslandDisplay[] {
     return screen.getAllDisplays().map((d) => ({ id: d.id, label: d.label || `Display ${d.id}`, bounds: d.bounds, workArea: d.workArea }))
+  }
+
+  /** Fullscreen detection is limited to Codync's own windows; other apps use manual quiet mode. */
+  private effectiveQuiet() {
+    const controls = this.controls
+    return controls.quiet || controls.quietFullscreen && BrowserWindow.getAllWindows().some((win) => win !== this.window && !win.isDestroyed() && win.isFullScreen())
+  }
+
+  private publishControls() {
+    this.screen = { ...this.screen, controls: this.controls, quiet: this.effectiveQuiet(), shortcutState: this.shortcuts.state }
+    this.window?.webContents.send('island:screen', this.screen)
   }
 
   private drag(on: boolean, snap: boolean) {

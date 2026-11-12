@@ -8,6 +8,7 @@ import { PINNED_LEAVE_MS, type IslandModel } from './island-model'
 import { useCrossFade } from './island-motion'
 import { Approval, Empty, Message, Notice, Overview, Wings } from './IslandViews'
 import { UsageMeter, UsageView } from './IslandUsage'
+import { WorkspaceView } from './IslandWorkspace'
 import { ActivityView, StatusView, OptionsView } from './IslandControls'
 import './island.css'
 import './island-views.css'
@@ -50,7 +51,8 @@ export function IslandWindow({ model }: { model: IslandModel }) {
       data-mode={mode}
       data-edge={edge}
       data-narrow={frame.width < 600}
-      style={{ width: frame.width, height: frame.height, left: rect.x, top: rect.y }}
+      data-contrast={model.controls.highContrast}
+      style={{ width: frame.width, height: frame.height, left: rect.x, top: rect.y, '--island-text-scale': model.controls.fontSize / 13, '--scale': model.controls.fontSize / 13 } as import('react').CSSProperties}
       role={closed ? 'button' : undefined}
       tabIndex={closed ? 0 : undefined}
       aria-label={closed ? tr('Show bots') : undefined}
@@ -124,6 +126,8 @@ function View({ model, mode }: { model: IslandModel; mode: IslandMode }) {
       return <Message model={model} />
     case 'usage':
       return <UsageView model={model} />
+    case 'workspace':
+      return <WorkspaceView model={model} />
     case 'activity':
       return <ActivityView model={model} />
     case 'status':
@@ -136,6 +140,7 @@ function View({ model, mode }: { model: IslandModel; mode: IslandMode }) {
 }
 
 const TABS: { tab: IslandTab; icon: string; label: string }[] = [
+  { tab: 'workspace', icon: 'magnifyingglass', label: 'Workspace and search' },
   { tab: 'bots', icon: 'house.fill', label: 'Bots' },
   { tab: 'message', icon: 'bubble.left.fill', label: 'Message a bot' },
   { tab: 'usage', icon: 'gauge.with.dots.needle.33percent', label: 'Usage' },

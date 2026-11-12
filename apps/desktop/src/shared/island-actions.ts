@@ -4,13 +4,21 @@ import type { IslandAction } from './island-activity'
 export function validIslandAction(input: unknown): IslandAction | null {
   if (!input || typeof input !== 'object') return null
   const action = input as Record<string, unknown>
+  const ref = typeof action.ref === 'string' && action.ref.length <= 512 && /^[^/]+\/.+$/.test(action.ref) ? action.ref : null
+  const id = typeof action.id === 'string' && action.id.length > 0 && action.id.length <= 256 ? action.id : null
   switch (action.kind) {
+    case 'sendSavedDraft':
+      return ref && typeof action.text === 'string' && !!action.text.trim() && action.text.length <= 1_000_000 && typeof action.original === 'string' && action.original.length <= 1_000_000 ? { kind: action.kind, ref, text: action.text, original: action.original } : null
     case 'refreshUsage': case 'refreshActivity': case 'openChannels': case 'openDiagnostics':
       return { kind: action.kind }
     case 'callMute': case 'callEnd':
       return typeof action.callId === 'string' && action.callId.length > 0 && action.callId.length <= 128 ? { kind: action.kind, callId: action.callId } : null
-    case 'stopBot': case 'openFlow':
-      return typeof action.ref === 'string' && action.ref.length <= 512 && /^[^/]+\/.+$/.test(action.ref) ? { kind: action.kind, ref: action.ref } : null
+    case 'stopBot': case 'openFlow': case 'loadWorkspace': case 'resumeDraft':
+      return ref ? { kind: action.kind, ref } : null
+    case 'retryRun': case 'cancelQueued': case 'openArtifact':
+      return ref && id ? { kind: action.kind, ref, id } : null
+    case 'openFile':
+      return ref && id && typeof action.entryId === 'string' && action.entryId.length > 0 && action.entryId.length <= 256 ? { kind: action.kind, ref, id, entryId: action.entryId } : null
     default:
       return null
   }

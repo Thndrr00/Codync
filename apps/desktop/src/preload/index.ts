@@ -116,6 +116,13 @@ const bridge: CodyncBridge = {
   },
   ssh: sshBridge,
   island: {
+    resourceOpened: () => ipcRenderer.send('island:resourceOpened'),
+    onResourceOpened: (cb) => listen('island:resourceOpened', cb),
+    offerDraft: (draft) => ipcRenderer.send('island:draft', draft),
+    onDraft: (cb) => listen('island:draft', cb),
+    shortcuts: () => ipcRenderer.invoke('island:shortcuts'),
+    setShortcuts: (input) => ipcRenderer.invoke('island:setShortcuts', input),
+    onShortcut: (cb) => listen('island:shortcut', cb),
     configure: (patch) => ipcRenderer.invoke('island:configure', patch),
     drag: (on, snap) => ipcRenderer.send('island:drag', on, snap),
     action: (action) => ipcRenderer.send('island:action', action),

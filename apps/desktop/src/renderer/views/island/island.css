@@ -32,7 +32,7 @@ html[data-window='island'] #root {
   left: 50%;
   transform: none;
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   transition: width 0.52s var(--island-spring), height 0.52s var(--island-spring), opacity 0.2s var(--ease);
 }
 .island.shrinking {
@@ -128,7 +128,7 @@ html[data-window='island'] #root {
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: calc(12px * var(--island-text-scale, 1));
   color: var(--secondary);
 }
 .island-wing-avatar {
@@ -181,7 +181,7 @@ html[data-window='island'] #root {
   color: var(--text);
 }
 .island-count {
-  font-size: 12px;
+  font-size: calc(12px * var(--island-text-scale, 1));
   color: var(--secondary);
   margin-right: 4px;
 }

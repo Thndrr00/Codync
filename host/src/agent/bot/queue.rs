@@ -47,6 +47,31 @@ impl Actor {
             Cmd::Steer { entry_id } => self.steer(entry_id).await,
             Cmd::Steered { entry_id, outcome } => self.steer_answered(&entry_id, &outcome, done_tx).await,
             Cmd::Unqueue { entry_id } => self.unqueue(&entry_id),
+            Cmd::QueuedMessages { reply } => {
+                let ids = self.queue.iter().filter_map(Queued::user_entry_id).map(str::to_owned).collect();
+                let _ = reply.send(ids);
+            }
+            Cmd::CancelQueued { entry_id, reply } => {
+                let result = (|| -> Result<bool> {
+                    if !self.queue.iter().any(|queued| queued.user_entry_id() == Some(entry_id.as_str()))
+                        || self.hub.store.entry(&entry_id).is_none()
+                    {
+                        return Ok(false);
+                    }
+                    let mut cancelled = false;
+                    // Persist under the emission lock before dropping cached text. A failed write leaves it queued.
+                    self.hub.edit_entry(&entry_id, |entry| {
+                        if entry.bot_id != self.cfg.id || entry.kind != "user" || entry.data["status"] != "queued" {
+                            return Ok(false);
+                        }
+                        entry.data["status"] = "cancelled".into();
+                        cancelled = true;
+                        Ok(true)
+                    })?;
+                    Ok(cancelled && Queued::remove_user(&mut self.queue, &entry_id))
+                })();
+                let _ = reply.send(result);
+            }
             Cmd::Group(turn) => {
                 // The room asks again: this turn answers for any still waiting there.
                 self.queue.retain(|q| !matches!(q, Queued::Group(g) if g.lane == turn.lane));

@@ -2,6 +2,7 @@ import { VoiceReceipt } from './VoiceReceipt'
 import { RepliesView } from './RepliesView'
 import { ForwardSheet } from './ForwardSheet'
 import { FileView, type OpenFile } from './FileView'
+import { useIslandThreadNavigation } from './use-island-thread-navigation'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { draftOf, folderName, isGroup, isWorking, isWorkingIn, sharedWorkspacePeers, type Bot, type BotApp, type BotDraft, type Entry, type SharedFile } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
@@ -172,6 +173,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     setActiveArtifact(id)
     setCompactDetails(false)
   }, [])
+  useIslandThreadNavigation(`${store.computer.id}/${botId}`, openFile, openArtifact)
   const closeArtifact = useCallback((id: string) => {
     setArtifacts((list) => {
       const next = list.filter((item) => item !== id)

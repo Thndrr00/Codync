@@ -3,7 +3,11 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use anyhow::{Context, Result, ensure};
+use tokio::io::AsyncReadExt;
+
 const GIT_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_GIT_OUTPUT: u64 = 1024 * 1024;
 
 /// The project in `cwd` now: branch, changed files and the last commits; nothing outside a repository.
 pub async fn now(cwd: &str) -> String {
@@ -11,25 +15,12 @@ pub async fn now(cwd: &str) -> String {
     if cwd.is_empty() || !dir.ancestors().any(|d| d.join(".git").exists()) {
         return String::new();
     }
-    let Some(git) = git_program().await else { return String::new() };
     let run = |args: &'static [&'static str]| {
-        let (git, dir) = (git.clone(), dir.to_owned());
+        let dir = dir.to_owned();
         async move {
-            let mut cmd = tokio::process::Command::new(git);
-            // The bot's folder only: a `GIT_DIR`, `GIT_INDEX_FILE`… this process inherited (from a git hook, say)
-            // would point git at another repository.
-            for (key, _) in std::env::vars_os().filter(|(k, _)| k.to_string_lossy().starts_with("GIT_")) {
-                cmd.env_remove(key);
-            }
-            // No optional locks: a status killed at the timeout can't leave `.git/index.lock` behind.
-            cmd.args(args)
-                .current_dir(dir)
-                .env("GIT_OPTIONAL_LOCKS", "0")
-                .stdin(std::process::Stdio::null())
-                .kill_on_drop(true);
-            let out = tokio::time::timeout(GIT_TIMEOUT, cmd.output()).await.ok()?.ok()?;
+            let out = git_output(&dir, args).await.ok()?;
             // Only the end: a porcelain line starts with its status column, a space when the change is unstaged.
-            out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim_end().to_owned())
+            Some(String::from_utf8_lossy(&out).trim_end().to_owned())
         }
     };
     let (branch, changes, commits) = tokio::join!(
@@ -57,11 +48,46 @@ pub async fn now(cwd: &str) -> String {
     lines.join("\n")
 }
 
+/// A read-only Git probe shared with the island; bounded in time and output, with no inherited repository redirect.
+pub(crate) async fn git_output(cwd: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    let git = git_program().await.context("Git is not available")?;
+    let mut cmd = tokio::process::Command::new(git);
+    for (key, _) in std::env::vars_os().filter(|(key, _)| key.to_string_lossy().starts_with("GIT_")) {
+        cmd.env_remove(key);
+    }
+    cmd.args(["-c", "core.fsmonitor=false"])
+        .args(args)
+        .current_dir(cwd)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    let mut child = cmd.spawn().context("Could not start Git")?;
+    let stdout = child.stdout.take().context("Git output is unavailable")?;
+    let read = async {
+        let mut output = Vec::new();
+        stdout.take(MAX_GIT_OUTPUT + 1).read_to_end(&mut output).await.context("Could not read Git output")?;
+        ensure!(
+            u64::try_from(output.len()).unwrap_or(u64::MAX) <= MAX_GIT_OUTPUT,
+            "Git output exceeded the read limit"
+        );
+        ensure!(
+            child.wait().await.context("Could not finish Git read")?.success(),
+            "Git could not read this workspace"
+        );
+        Ok(output)
+    };
+    tokio::time::timeout(GIT_TIMEOUT, read).await.context("Git read timed out")?
+}
+
 /// git, where running it can't open macOS's "install the command line tools" prompt.
 async fn git_program() -> Option<PathBuf> {
     let git = crate::agent::backends::which("git")?;
     if cfg!(target_os = "macos") && git == Path::new("/usr/bin/git") {
-        let tools = tokio::process::Command::new("/usr/bin/xcode-select").arg("-p").output().await.ok()?;
+        let mut command = tokio::process::Command::new("/usr/bin/xcode-select");
+        command.arg("-p").stdin(std::process::Stdio::null()).kill_on_drop(true);
+        let tools = tokio::time::timeout(GIT_TIMEOUT, command.output()).await.ok()?.ok()?;
         if !tools.status.success() {
             return None;
         }

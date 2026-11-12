@@ -26,6 +26,12 @@ Each limit here shows how much of it is already used, such as **62% used**, and 
 
 Codex needs its CLI installed and signed in on the computer. The host reads current account limits without starting a conversation or using a model. If the login stops working or the current limits are unavailable, old session-file readings are not shown. Sign in again from **Extensions** or run `codex login --device-auth` on that computer.
 
+The island's **Workspace** searches bots, project paths and actions. Select a bot to inspect its Git branch and changed-file count, completed edit previews, recent artifacts and registered files. Artifacts and files open their existing viewers. Its queued-message list shows actual waiting order; **Cancel** removes only that message, preserving the active turn. If it already started, the island reports that instead. In **Activity**, filter by bot or project and retry runs that the host marks eligible. Run elapsed time uses real timestamps; historical estimates appear only after at least five successful timed runs of the same routine.
+
+**Resume draft** brings a saved draft into the island message field. Closing keeps the saved original; sending clears it only if the main-window draft has not changed meanwhile. **Last 24 hours** shows the selected computer's work counters. The local notice history groups recurring notices with counts and can be cleared.
+
+In **Options**, set island-only text size, high contrast, optional global shortcuts and **Quiet profile**. Quiet suppresses hover opening and completion notices while retaining approvals and manual controls. Automatic fullscreen quiet applies to Codync windows; use manual Quiet for other apps. Shortcuts are off until assigned, and conflicts show an error.
+
 ## Agents Codync knows by name
 
 For these agents, Codync knows the command it looks for, how to install it and how to sign in. The agent must be installed on the computer before a bot can use it.

@@ -89,12 +89,12 @@
   background: var(--warning);
 }
 .island-agent-name {
-  font-size: 14px;
+  font-size: calc(14px * var(--island-text-scale, 1));
   font-weight: 600;
   white-space: nowrap;
 }
 .island-agent-subtitle {
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   color: var(--secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -128,12 +128,12 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   color: var(--tertiary);
   min-width: 0;
 }
 .island-step.current {
-  font-size: 15px;
+  font-size: calc(15px * var(--island-text-scale, 1));
   font-weight: 500;
   color: var(--text);
 }
@@ -154,7 +154,7 @@
   align-items: center;
   gap: 7px;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--island-text-scale, 1));
   font-weight: 500;
   min-width: 0;
   transition: filter var(--hover);
@@ -199,10 +199,10 @@
   gap: 9px;
 }
 .island-alert .island-agent-name {
-  font-size: 15px;
+  font-size: calc(15px * var(--island-text-scale, 1));
 }
 .island-alert .island-agent-subtitle {
-  font-size: 14px;
+  font-size: calc(14px * var(--island-text-scale, 1));
 }
 .island-code {
   align-self: flex-start;
@@ -212,18 +212,18 @@
   border-radius: 10px;
   background: var(--island-raised);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .island-title {
-  font-size: 17px;
+  font-size: calc(17px * var(--island-text-scale, 1));
   font-weight: 700;
 }
 .island-error {
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   line-height: 1.4;
   color: var(--danger);
   display: -webkit-box;
@@ -241,7 +241,7 @@
   height: 32px;
   border-radius: 16px;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   font-weight: 500;
   gap: 8px;
 }
@@ -255,7 +255,7 @@
   opacity: 0.55;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: calc(10px * var(--island-text-scale, 1));
 }
 .island-minis {
   width: 42px;
@@ -281,10 +281,10 @@
   gap: 5px;
 }
 .island-empty .island-title {
-  font-size: 16px;
+  font-size: calc(16px * var(--island-text-scale, 1));
 }
 .island-subtitle {
-  font-size: 13px;
+  font-size: calc(13px * var(--island-text-scale, 1));
   line-height: 1.35;
   color: var(--secondary);
 }
@@ -311,7 +311,7 @@
   align-items: center;
   gap: 6px;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--island-text-scale, 1));
   font-weight: 500;
   flex: none;
 }
@@ -333,7 +333,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--island-text-scale, 1));
   user-select: text;
 }
 .island-field input::placeholder {
@@ -368,7 +368,7 @@
 /* How to talk from any app, until the voice input shortcut is first used. */
 .island-hint {
   padding-left: 16px;
-  font-size: 12px;
+  font-size: calc(12px * var(--island-text-scale, 1));
   color: var(--island-quiet);
 }
 
@@ -435,7 +435,7 @@
   max-height: 58px;
   overflow: auto;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 10px;
+  font-size: calc(10px * var(--island-text-scale, 1));
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.82);
   white-space: pre;
@@ -453,7 +453,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
-  font-size: 11px;
+  font-size: calc(11px * var(--island-text-scale, 1));
   white-space: nowrap;
   pointer-events: none;
 }

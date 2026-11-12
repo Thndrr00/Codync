@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { IslandBot, IslandPermission, IslandSummary } from '@shared/island'
 import { folderName, isGroup, isWorking, type Bot, type Entry } from '@shared/models'
 import { useModel, useModels } from '../lib/observable'
+import { IslandWorkspaceStore } from '../store/island-workspace-store'
 import { IslandActivityStore } from '../store/island-activity-store'
 import { activeCall } from './call/active-call'
 import { refKey, type AppModel, type RosterItem } from '../store/app-model'
@@ -20,6 +21,8 @@ const STEPS = 3
  */
 export function useIslandSummary(app: AppModel) {
   const [activity] = useState(() => new IslandActivityStore(app))
+  const [workspace] = useState(() => new IslandWorkspaceStore(app))
+  useModel(workspace)
   const sent = useRef('')
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
   useModel(activity)
@@ -28,10 +31,16 @@ export function useIslandSummary(app: AppModel) {
   useEffect(() => {
     activity.start()
     const off = window.codync.app.onCommand((command) => {
-      if (command.kind === 'islandAction') void activity.perform(command.action)
+      if (command.kind === 'islandAction') { void activity.perform(command.action); void workspace.perform(command.action) }
     })
-    return () => { off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
-  }, [activity])
+    const timer = setInterval(() => workspace.refresh(), 15_000)
+    return () => { clearInterval(timer); workspace.dispose(); off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
+  }, [activity, workspace])
+  const stores = [...app.stores.values()]
+  useEffect(() => {
+    const offs = stores.map((store) => store.composerDrafts.subscribe(() => activity.noteDrafts()))
+    return () => offs.forEach((off) => off())
+  })
   // The computer's health changes on its own: look again every so often.
   useEffect(() => {
     void app.local?.refreshHealth()
@@ -42,7 +51,7 @@ export function useIslandSummary(app: AppModel) {
     if (pending.current) return
     pending.current = setTimeout(() => {
       pending.current = null
-      const summary = islandSummary(app, activity)
+      const summary = islandSummary(app, activity, workspace)
       const json = JSON.stringify(summary)
       if (sent.current === json) return
       sent.current = json
@@ -51,7 +60,7 @@ export function useIslandSummary(app: AppModel) {
   })
 }
 
-function islandSummary(app: AppModel, activity: IslandActivityStore): IslandSummary {
+function islandSummary(app: AppModel, activity: IslandActivityStore, workspace: IslandWorkspaceStore): IslandSummary {
   const many = app.computers.length > 1
   return {
     bots: app.roster
@@ -61,6 +70,7 @@ function islandSummary(app: AppModel, activity: IslandActivityStore): IslandSumm
     usage: activity.usage.providers,
     health: healthAlert(app.local?.health ?? null),
     activity: activity.snapshot(),
+    workspace: workspace.snapshot(),
   }
 }
 
@@ -75,6 +85,9 @@ function islandBot(store: BotStore, bot: Bot, ref: string, name: string): Island
     status: bot.status,
     backend: store.backendName(bot.backend),
     folder: folderName(bot),
+    project: bot.cwd,
+    hasDraft: !!store.composerDrafts.get(bot.id).trim(),
+    startedAt: bot.startedAt,
     detail: botDetail(bot),
     steps: isWorking(bot)
       ? entries.filter((e) => e.kind === 'tool').slice(-STEPS).map((e) => ({ title: e.data.title || trNow('Use a tool'), kind: e.data.toolKind ?? 'other' }))
