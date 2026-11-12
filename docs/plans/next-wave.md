@@ -16,7 +16,7 @@ is bigger than one release.
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | AG-UI server and A2UI in the chat | next |
-| Agent evaluations in CI | next |
+| Agent evaluations harness | done (CI wiring next) |
 | Policies by role and tool | next |
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | next |
@@ -112,11 +112,11 @@ Goal: a bot can run without an account.
   generated code.
 - Acceptance: the AG-UI Dojo talks to a bot, and a bot draws a form that returns values to the host.
 
-## Evaluations — next
+## Evaluations — harness done; CI next
 
-- A suite per bot: prompts, expected tools, forbidden actions; run with `aimock` so no key is needed.
-- CI job nightly and on demand; a score per model and a diff between runs.
-- Acceptance: changing a bot's prompt shows pass/fail per case before merging.
+- `tools/eval-bots.mjs` runs cases from `evals/*.json` against a running host: final reply must contain
+  the expected strings and the expected tools must have been called; exits 1 on failure.
+- Next: a seeded host in CI and a nightly job with a score per model and a diff between runs.
 
 ## Policies, retention, budgets — retention done; policies and the budget gate next
 
