@@ -91,6 +91,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::documents::tools());
                 list.extend(crate::research::tools().as_array().into_iter().flatten().cloned());
                 list.extend(crate::chat::fallbacks::tools());
+                list.extend(crate::chat::workspace::tools().as_array().into_iter().flatten().cloned());
                 list.push(crate::chat::reactions::tool());
                 list.push(crate::chat::skills::tool());
             }

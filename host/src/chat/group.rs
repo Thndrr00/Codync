@@ -209,12 +209,20 @@ pub enum Target {
     Member(String),
     /// Nobody in particular: everyone answers in the room.
     All,
+    /// `/standup`: everyone reports finished, next and blocked.
+    Standup,
 }
 
 /// `/boss`, `/jefe`, `/lead` or `/supervisor` in the text: the lead answers.
 fn calls_boss(text: &str) -> bool {
     let text = text.to_lowercase();
     ["/boss", "/jefe", "/lead", "/supervisor", "/lider", "/líder"].iter().any(|command| text.contains(command))
+}
+
+/// `/standup` or `/daily`: everyone answers with their own report.
+fn calls_standup(text: &str) -> bool {
+    let text = text.to_lowercase();
+    ["/standup", "/daily", "/parte"].iter().any(|command| text.contains(command))
 }
 
 /// Folds a phrase for matching: lower case, no accents, punctuation as spaces.
@@ -281,6 +289,9 @@ pub fn pick_target(text: &str, group: &BotConfig, members: &[BotConfig]) -> Targ
     if calls_boss(text) {
         return Target::Boss;
     }
+    if calls_standup(text) {
+        return Target::Standup;
+    }
     match named_target(&norm, group, members) {
         Some(id) => Target::Member(id),
         None => Target::All,
@@ -315,6 +326,19 @@ async fn run_smart(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> R
     };
     match target {
         Target::All => run(hub, group_id, lane, epoch).await,
+        Target::Standup => {
+            for member in &members {
+                if !hub.groups.current(lane, epoch) {
+                    break;
+                }
+                let (prompt, shown) = ask(hub, &group, &members, member, lane)?;
+                let prompt = format!(
+                    "{prompt}\n\n[Standup] Report in at most three short lines: what you finished, what is next, and what is blocked. No greeting, no repeat of the agenda."
+                );
+                let _ = ask_once(hub, lane, epoch, member, prompt, shown).await;
+            }
+            Ok(())
+        }
         Target::Boss => {
             let Some(lead) = lead_of(&group, &members) else { return Ok(()) };
             let (prompt, shown) = team_prompt(hub, &group, &members, &lead, lane)?;

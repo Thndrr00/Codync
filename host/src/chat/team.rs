@@ -78,6 +78,16 @@ pub fn tools() -> Value {
                 "properties": {
                     "botId": {"type": "string", "description": "Recipient ID from list_bots (name@computer for a bot on another computer)."},
                     "message": {"type": "string", "description": "Task, relevant context, file paths and expected result."},
+                    "handoff": {
+                        "type": "object",
+                        "description": "What you already did, so the recipient starts where you stopped instead of repeating work. It is prepended to the message as a handoff note.",
+                        "properties": {
+                            "summary": {"type": "string", "description": "What you did and what the result was."},
+                            "files": {"type": "array", "items": {"type": "string"}, "description": "Files you touched or that matter."},
+                            "openQuestions": {"type": "array", "items": {"type": "string"}, "description": "What is still undecided or blocked."}
+                        },
+                        "additionalProperties": false
+                    }
                 },
                 "required": ["botId", "message"],
             },
@@ -405,7 +415,7 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
         "message_bot" => {
             let (to, message) = message_args(args)?;
             match hub.network.recipient(to)? {
-                Recipient::There(target) => remote::message(hub, &visible_bot(hub, from)?, &target, message).await,
+                Recipient::There(target) => remote::message(hub, &visible_bot(hub, from)?, &target, &message).await,
                 Recipient::Here(_) => call(hub, from, name, args),
             }
         }
@@ -437,7 +447,7 @@ fn call(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Result<Value> {
         "message_bot" => {
             let (to, message) = message_args(args)?;
             match hub.network.recipient(to)? {
-                Recipient::Here(to) => message_bot(hub, &source, &to, message),
+                Recipient::Here(to) => message_bot(hub, &source, &to, &message),
                 Recipient::There(target) => bail!("{} is on another computer", target.address),
             }
         }
@@ -446,9 +456,30 @@ fn call(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) -> Result<Value> {
 }
 
 /// `message_bot`'s recipient and message.
-fn message_args(args: &Value) -> Result<(&str, &str)> {
+fn message_args(args: &Value) -> Result<(&str, String)> {
     let to = args["botId"].as_str().ok_or_else(|| anyhow!("botId is required"))?;
-    Ok((to, args["message"].as_str().unwrap_or_default().trim()))
+    let mut message = args["message"].as_str().unwrap_or_default().trim().to_owned();
+    if let Some(handoff) = args.get("handoff").filter(|h| h.is_object()) {
+        let summary = handoff["summary"].as_str().unwrap_or_default().trim();
+        let files: Vec<&str> = handoff["files"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        let questions: Vec<&str> =
+            handoff["openQuestions"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        if !summary.is_empty() || !files.is_empty() || !questions.is_empty() {
+            let mut note = String::from("[Handoff from the bot that had this work before you]\n");
+            if !summary.is_empty() {
+                note.push_str(&format!("What was done: {summary}\n"));
+            }
+            if !files.is_empty() {
+                note.push_str(&format!("Files that matter: {}\n", files.join(", ")));
+            }
+            if !questions.is_empty() {
+                note.push_str(&format!("Still open: {}\n", questions.join("; ")));
+            }
+            note.push_str("Do not repeat that work; start from it.\n\n");
+            message = format!("{note}{message}");
+        }
+    }
+    Ok((to, message))
 }
 
 fn check_message(message: &str) -> Result<()> {
