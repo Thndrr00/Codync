@@ -15,7 +15,7 @@ is bigger than one release.
 | Task board that moves itself | next |
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
-| A2UI in the chat done; AG-UI server next |
+| A2UI in the chat and AG-UI server done |
 | Agent evaluations harness | done (CI wiring next) |
 | Policies by role and tool | next |
 | Retention (preview + delete) | done |
@@ -105,13 +105,16 @@ Goal: a bot can run without an account.
 - Extensions install from a `.codync-ext` file and appear in Extensions › Apps; no network by default.
 - Acceptance: a sample extension adds one tool and one panel, and cannot read files without permission.
 
-## A2UI — done; AG-UI next
+## A2UI and AG-UI — done
 
 - A2UI: an agent writes a fenced ```a2ui block whose body is JSON (text, facts, table, bars, note);
   the desktop validates it against a closed schema and draws it with Codync's components. Nothing
   executes and the model never supplies HTML.
-- Next: AG-UI as an external protocol (`POST /agui/{bot}` streaming events) and interactive A2UI
-  (forms and choices that send a value back to the host).
+- AG-UI: `POST /agui/{bot}` takes the last user message (or `message`) and streams RUN_STARTED,
+  TEXT_MESSAGE_START/CONTENT/END and RUN_FINISHED over SSE once the reply exists; `threadId` and a
+  generated `runId` are echoed. It uses the same bearer token as the local API and accepts loopback.
+- Next: interactive A2UI (forms and choices that send a value back), and delta streaming per token
+  instead of one content event.
 
 ## Evaluations — harness done; CI next
 

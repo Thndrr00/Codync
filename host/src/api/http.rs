@@ -31,6 +31,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/scim/v2/Users", get(scim_users).post(scim_create))
         .route("/scim/v2/Users/{id}", axum::routing::delete(scim_delete))
         .route("/api/{method}", post(command))
+        .route("/agui/{bot}", post(agui))
         .route("/api/setIcon", post(icon_command).layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)))
         .route("/term/{id}", get(term_stream))
         .route("/ingest/statusline", post(statusline))
@@ -292,9 +293,101 @@ async fn term_stream(
     Ok(Sse::new(events).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }
 
+/// `POST /agui/:bot`: a minimal AG-UI endpoint. It takes the last user message (or `message`),
+/// starts a turn on the bot and streams the standard events over SSE once the final reply exists.
+async fn agui(
+    State(hub): State<Arc<Hub>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path(bot): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    use crate::store::Lane;
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    let text = body["message"]
+        .as_str()
+        .map(str::to_owned)
+        .or_else(|| {
+            body["messages"]
+                .as_array()
+                .and_then(|list| list.iter().rev().find(|m| m["role"] == "user"))
+                .and_then(|m| m["content"].as_str())
+                .map(str::to_owned)
+        })
+        .unwrap_or_default();
+    if text.trim().is_empty() {
+        return Err(ApiError(StatusCode::BAD_REQUEST, "message is required".into()));
+    }
+    let run_id = format!("run-{}", uuid::Uuid::new_v4());
+    let thread_id = body["threadId"].as_str().unwrap_or("main").to_owned();
+    let sent = dispatch(
+        &hub,
+        &Caller::Local,
+        "send",
+        json!({"botId": bot, "text": text, "clientNonce": format!("agui-{}", uuid::Uuid::new_v4())}),
+    )
+    .await
+    .map_err(|e| ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")))?;
+    let start = sent["entry"]["seq"].as_i64().unwrap_or(0);
+    let lane = Lane::main(&bot);
+
+    let opened = json!({"threadId": thread_id, "runId": run_id});
+    let started = futures::stream::once(async move {
+        Ok::<Event, Infallible>(Event::default().event("RUN_STARTED").data(opened.to_string()))
+    });
+    let finished = {
+        let hub = hub.clone();
+        let bot = bot.clone();
+        let run_id = run_id.clone();
+        let thread_id = thread_id.clone();
+        futures::stream::once(async move {
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(300);
+            loop {
+                if tokio::time::Instant::now() >= deadline {
+                    let error = json!({"message": "the bot did not finish in five minutes", "runId": run_id});
+                    return vec![Ok(Event::default().event("RUN_ERROR").data(error.to_string()))];
+                }
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                let entries = match hub.store.messages_after(&lane, start, 200) {
+                    Ok(entries) => entries,
+                    Err(error) => {
+                        let data = json!({"message": format!("{error:#}"), "runId": run_id});
+                        return vec![Ok(Event::default().event("RUN_ERROR").data(data.to_string()))];
+                    }
+                };
+                let Some(entry) = entries
+                    .iter()
+                    .rev()
+                    .find(|e| e.kind == "agent" && e.data["author"] == bot.as_str() && e.data["final"] == true)
+                else {
+                    continue;
+                };
+                let message_id = format!("msg-{}", entry.id);
+                let text = entry.data["text"].as_str().unwrap_or_default().to_owned();
+                let events: Vec<Result<Event, Infallible>> = vec![
+                    Ok(Event::default()
+                        .event("TEXT_MESSAGE_START")
+                        .data(json!({"messageId": message_id, "role": "assistant"}).to_string())),
+                    Ok(Event::default()
+                        .event("TEXT_MESSAGE_CONTENT")
+                        .data(json!({"messageId": message_id, "delta": text}).to_string())),
+                    Ok(Event::default().event("TEXT_MESSAGE_END").data(json!({"messageId": message_id}).to_string())),
+                    Ok(Event::default()
+                        .event("RUN_FINISHED")
+                        .data(json!({"threadId": thread_id, "runId": run_id}).to_string())),
+                ];
+                return events;
+            }
+        })
+        .flat_map(|events| futures::stream::iter(events))
+    };
+    Ok(Sse::new(started.chain(finished)).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
+}
+
 #[derive(Deserialize)]
-struct EventsQuery {
-    since: Option<i64>,
+struct EventsQuery {    since: Option<i64>,
     client: Option<String>,
 }
 
