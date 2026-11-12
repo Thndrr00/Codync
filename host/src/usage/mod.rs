@@ -283,8 +283,17 @@ async fn account_reports(hub: &Hub) {
         tracing::info!(account = %account.id, backend, windows = windows.as_ref().map_or(0, Vec::len), "isolated account probed");
         let id = format!("{backend}:{}", account.id);
         ids.push(id.clone());
-        if let Some(windows) = windows {
-            hub.update_usage(|usage| usage.replace(&id, &name, "account", windows));
+        match windows {
+            Some(windows) => hub.update_usage(|usage| usage.replace(&id, &name, "account", windows)),
+            // A connected account that can't report is still listed, as unavailable: no reading isn't zero. A
+            // reading it had before stays until a new one replaces it.
+            None => hub.update_usage(|usage| {
+                if !usage.providers.iter().any(|p| p.id == id) {
+                    let mut provider = Provider::new(&id, &name, "account", Vec::new());
+                    provider.status = Some("unavailable".into());
+                    usage.providers.push(provider);
+                }
+            }),
         }
     }
     // An account that was removed leaves no bar behind.
