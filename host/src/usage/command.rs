@@ -78,7 +78,7 @@ pub(super) async fn json_windows(
         Err(_) if says_signed_out(&text) => return None,
         Err(_) => Err(UsageReadStage::Parse),
     };
-    report(hub, name, &reading);
+    report(hub, name, name, &reading);
     reading.ok()
 }
 

@@ -35,12 +35,13 @@ const NO_BROWSER: &[(&str, &str)] = &[];
 pub(super) async fn guarded(
     hub: &Hub,
     backend: &str,
+    account: Option<&str>,
     reading: impl Future<Output = Result<Vec<Window>, UsageReadStage>>,
 ) -> Option<Vec<Window>> {
     if services::runs(&hub.store, backend) && backends::update_pending(backend) {
         return None;
     }
-    reading::guarded(hub, backend, reading).await
+    reading::guarded_account(hub, backend, account, reading).await
 }
 
 /// `backend`'s server, past `initialize`. A first start can download its build, which is why no
@@ -78,7 +79,7 @@ pub(super) async fn account_reading(
     command: &str,
     parse: fn(&str) -> Option<Vec<Window>>,
 ) -> Option<Vec<Window>> {
-    guarded(hub, backend, async {
+    guarded(hub, backend, account, async {
         let text = ask(&hub.store, backend, account, command).await?;
         parse(&text).ok_or(UsageReadStage::Parse)
     })

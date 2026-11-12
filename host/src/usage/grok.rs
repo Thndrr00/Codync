@@ -14,12 +14,12 @@ use super::{Window, acp_read, iso_ms};
 const READ_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub(super) async fn collect(hub: &Hub) -> Option<Vec<Window>> {
-    acp_read::guarded(hub, "grok", read(&hub.store, None)).await
+    acp_read::guarded(hub, "grok", None, read(&hub.store, None)).await
 }
 
 /// What one of Grok's isolated accounts reports, through its own login.
 pub(super) async fn collect_account(hub: &Hub, account: &str) -> Option<Vec<Window>> {
-    acp_read::guarded(hub, "grok", read(&hub.store, Some(account))).await
+    acp_read::guarded(hub, "grok", Some(account), read(&hub.store, Some(account))).await
 }
 
 async fn read(store: &Store, account: Option<&str>) -> Result<Vec<Window>, UsageReadStage> {

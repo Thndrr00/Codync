@@ -54,20 +54,31 @@ pub(super) async fn guarded(
     agent: &str,
     reading: impl Future<Output = Result<Vec<Window>, UsageReadStage>>,
 ) -> Option<Vec<Window>> {
-    let _reading = Reading::start(agent)?;
+    guarded_account(hub, agent, None, reading).await
+}
+
+/// [`guarded`] for one of `agent`'s isolated accounts: each is read on its own, beside the agent's own sign-in.
+pub(super) async fn guarded_account(
+    hub: &Hub,
+    agent: &str,
+    account: Option<&str>,
+    reading: impl Future<Output = Result<Vec<Window>, UsageReadStage>>,
+) -> Option<Vec<Window>> {
+    let key = account.map_or_else(|| agent.to_owned(), |id| format!("{agent}:{id}"));
+    let _reading = Reading::start(&key)?;
     let outcome = reading.await;
-    report(hub, agent, &outcome);
+    report(hub, agent, &key, &outcome);
     outcome.ok()
 }
 
 /// How a reading ended, for usage analytics: a failure once, not on every poll.
-pub(super) fn report<T>(hub: &Hub, agent: &str, reading: &Result<T, UsageReadStage>) {
+pub(super) fn report<T>(hub: &Hub, agent: &str, key: &str, reading: &Result<T, UsageReadStage>) {
     let Err(stage) = reading else {
-        FAILING.locked().remove(agent);
+        FAILING.locked().remove(key);
         return;
     };
     tracing::debug!(agent, ?stage, "couldn't read the agent's usage");
-    if FAILING.locked().insert(agent.to_owned()) {
+    if FAILING.locked().insert(key.to_owned()) {
         let properties = json!({"agent": agent, "stage": stage});
         analytics::capture(hub, Event::UsageReadFailed, properties.as_object().cloned().unwrap_or_default());
     }
