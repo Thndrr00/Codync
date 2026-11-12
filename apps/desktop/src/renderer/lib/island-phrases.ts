@@ -1,6 +1,8 @@
 /** Desktop-only island chrome. Native clients keep their existing screens and language catalogs. */
+import { islandIntegrationPhrases } from './island-integration-phrases.ts'
 export const islandPhrases: Record<string, Record<string, string>> = {
   es: {
+    ...islandIntegrationPhrases.es,
     "Workspace and search": "Espacio de trabajo y búsqueda",
     "Workspace": "Espacio de trabajo",
     "Refresh workspace": "Actualizar espacio de trabajo",
@@ -74,6 +76,7 @@ export const islandPhrases: Record<string, Record<string, string>> = {
     'Saved display is unavailable; using an available display.': 'La pantalla guardada no está disponible; se utiliza otra pantalla.',
   },
   'zh-Hant': {
+    ...islandIntegrationPhrases['zh-Hant'],
     'Show island': '顯示動態島', 'Island options': '動態島選項', 'Screen edge': '螢幕邊緣',
     Top: '上方', Bottom: '下方', Left: '左側', Right: '右側', Display: '顯示器',
     'Follow pointer': '跟隨游標', Density: '密度', Compact: '精簡', Expanded: '展開',

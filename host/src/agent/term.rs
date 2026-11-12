@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow, bail};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtyPair, PtySize, native_pty_system};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{Read as _, Write as _};
@@ -21,7 +21,7 @@ const SCROLLBACK: usize = 256 * 1024;
 /// A finished terminal stays readable this long.
 const LINGER: Duration = Duration::from_mins(10);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Step {
     Install,
@@ -90,6 +90,21 @@ impl Terms {
 
     pub fn get(&self, id: &str) -> Option<Arc<Term>> {
         self.0.locked().get(id).cloned()
+    }
+
+    /// Existing setup sessions, including their retained exit status; never terminal output or credentials.
+    pub fn snapshot(&self, backend: Option<&str>) -> Vec<Value> {
+        let mut sessions: Vec<Value> = self
+            .0
+            .locked()
+            .iter()
+            .filter(|(_, term)| backend.is_none_or(|backend| term.key.0 == backend))
+            .map(|(id, term)| {
+                json!({"id": id, "backend": term.key.0, "step": term.key.1, "exitCode": term.output.locked().exit})
+            })
+            .collect();
+        sessions.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+        sessions
     }
 
     /// Starts `step` for `backend` (a sign-in `method` the agent advertised, or
@@ -267,6 +282,37 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshots_expose_retained_status_and_filter_backends_without_transcript_content() {
+        let terms = Terms::default();
+        for (id, backend, step, exit) in [
+            ("b", "codex", Step::Login, None),
+            ("a", "claude", Step::Install, Some(0)),
+            ("c", "codex", Step::Login, Some(7)),
+        ] {
+            let (input, _) = mpsc::unbounded_channel();
+            terms.0.locked().insert(
+                id.into(),
+                Arc::new(Term {
+                    key: (backend.into(), step),
+                    input,
+                    output: Mutex::new(Output { scrollback: b"private terminal output".to_vec(), exit }),
+                    events: broadcast::channel(1).0,
+                }),
+            );
+        }
+        assert_eq!(
+            terms.snapshot(Some("codex")),
+            vec![
+                json!({"id": "b", "backend": "codex", "step": "login", "exitCode": null}),
+                json!({"id": "c", "backend": "codex", "step": "login", "exitCode": 7}),
+            ]
+        );
+        assert_eq!(terms.snapshot(None).len(), 3);
+        assert!(terms.snapshot(Some("missing")).is_empty());
+        assert!(!serde_json::to_string(&terms.snapshot(None)).expect("snapshot JSON").contains("private"));
+    }
 
     #[test]
     fn takes_out_the_cursor_query() {

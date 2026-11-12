@@ -1,8 +1,10 @@
-import type { Entry, SharedFile } from '../../shared/models'
+import type { Backend, Entry, SharedFile } from '../../shared/models'
 import { Observable } from '../lib/observable.ts'
 
 /** A destination stays available until its selected conversation has mounted. */
 export type IslandThreadDestination =
+  | { kind: 'memory'; ref: string }
+  | { kind: 'terminal'; ref: string; id: string; backend: Backend | null; step: 'install' | 'login' | 'node' }
   | { kind: 'artifact'; ref: string; artifactId: string }
   | { kind: 'file'; ref: string; entryId: string; file: SharedFile; entry: Entry }
 

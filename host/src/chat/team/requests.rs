@@ -27,6 +27,7 @@ pub enum Turn {
 }
 
 pub(super) struct Request {
+    created_at: i64,
     from: String,
     to: String,
     cancel: watch::Sender<bool>,
@@ -47,8 +48,19 @@ impl Requests {
         let mut state = self.0.locked();
         state.capacity(from, "API requests")?;
         let (cancel, receiver) = watch::channel(false);
-        state.pending.insert(id.to_owned(), Request { from: from.to_owned(), to: to.to_owned(), cancel });
+        state.pending.insert(id.to_owned(), Request { from: from.to_owned(), to: to.to_owned(), cancel, created_at: crate::store::now_ms() });
         Ok(receiver)
+    }
+
+    /// Current synchronous waits only; no message bodies or cancellation handles leave the host.
+    pub fn pending_for(&self, bot: &str) -> Vec<serde_json::Value> {
+        let state = self.0.locked();
+        let mut requests: Vec<_> = state.pending.iter()
+            .filter(|(_, request)| request.from == bot || request.to == bot)
+            .map(|(id, request)| serde_json::json!({"id": id, "from": request.from, "to": request.to, "at": request.created_at}))
+            .collect();
+        requests.sort_by_key(|request| request["at"].as_i64().unwrap_or_default());
+        requests
     }
     pub(super) fn reserve_message(&self, from: &str) -> Result<u8> {
         let mut state = self.0.locked();
@@ -93,7 +105,10 @@ impl Requests {
             }
         }
         let (cancel, receiver) = watch::channel(false);
-        state.pending.insert(id.to_owned(), Request { from: from.to_owned(), to: to.to_owned(), cancel });
+        state.pending.insert(
+            id.to_owned(),
+            Request { from: from.to_owned(), to: to.to_owned(), cancel, created_at: crate::store::now_ms() },
+        );
         Ok((receiver, hops))
     }
 
@@ -205,6 +220,23 @@ mod tests {
         assert!(requests.begin_external("too-many", "openai:key", "a").is_err());
         requests.cancel_bot("a");
         assert!(*cancelled.borrow_and_update());
+    }
+
+    #[test]
+    fn pending_snapshots_are_scoped_metadata_and_follow_completion() {
+        let requests = Requests::default();
+        requests.start_turn("a", Turn::Chat(0));
+        requests.begin("a-to-b", "a", "b").unwrap();
+        assert!(requests.pending_for("other").is_empty());
+        let snapshot = requests.pending_for("b");
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0]["id"], "a-to-b");
+        assert_eq!(snapshot[0]["from"], "a");
+        assert_eq!(snapshot[0]["to"], "b");
+        assert!(snapshot[0]["at"].as_i64().unwrap() > 0);
+        assert_eq!(snapshot[0].as_object().unwrap().len(), 4);
+        requests.cancel_from("a");
+        assert!(requests.pending_for("a").is_empty());
     }
 
     #[test]

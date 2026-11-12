@@ -4,11 +4,14 @@ import { Observable } from '../../lib/observable.ts'
 import type { VoiceProvider } from '../settings/voice-settings.ts'
 import { inOrder, joinDictated, MIN_SAMPLES, pieces } from './dictation-pieces.ts'
 import { trNow } from '../../lib/l10n.ts'
+import { activeDictation } from './active-dictation.ts'
 
 /** The running dictation: one recognizer at a time, and a call stops dictation first. */
 let active: Dictation | null = null
+let sequence = 0
 
-export function stopDictation() {
+export function stopDictation(id?: string) {
+  if (id !== undefined && activeDictation.snapshot?.id !== id) return
   active?.cancel()
 }
 
@@ -70,6 +73,7 @@ export class Dictation extends Observable {
   private done: (() => void) | null = null
   /** Bumped by each start, finish and cancel: a microphone or transcript arriving late for an earlier one is dropped. */
   private generation = 0
+  private identity: string | null = null
   /** Started by the voice input shortcut's double tap: its next tap sends what's in the field. */
   private byShortcut = false
   private readonly keys = new VoiceKeyRouter()
@@ -96,9 +100,14 @@ export class Dictation extends Observable {
   start(draft: string, byShortcut = false) {
     active?.cancel()
     active = this
+    this.identity = `dictation-${++sequence}`
+    this.listening = false
+    this.transcribing = false
+    this.startedAt = 0
     this.byShortcut = byShortcut
     this.error = null
     this.before = draft
+    this.changed()
     const { speech } = this.platform
     const provider = this.platform.host ? this.platform.provider() : null
     if (provider) {
@@ -244,5 +253,16 @@ export class Dictation extends Observable {
     this.done = null
     this.changed()
     return done
+  }
+
+  protected override changed() {
+    super.changed()
+    if (!this.identity) return
+    if (active !== this) { activeDictation.clear(this.identity); return }
+    activeDictation.publish({
+      id: this.identity,
+      phase: this.listening ? 'listening' : this.transcribing || this.startedAt > 0 ? 'transcribing' : 'starting',
+      startedAt: this.startedAt > 0 ? this.startedAt : null,
+    })
   }
 }

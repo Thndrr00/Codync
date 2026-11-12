@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { IslandBot, IslandPermission, IslandSummary } from '@shared/island'
 import { folderName, isGroup, isWorking, type Bot, type Entry } from '@shared/models'
 import { useModel, useModels } from '../lib/observable'
+import { IslandIntegrationsStore } from '../store/island-integrations-store'
+import { islandSignals } from '../store/island-signals'
+import { activeDictation } from './thread/active-dictation'
+import { stopDictation } from './thread/dictation'
 import { IslandWorkspaceStore } from '../store/island-workspace-store'
 import { IslandActivityStore } from '../store/island-activity-store'
 import { activeCall } from './call/active-call'
@@ -22,6 +26,9 @@ const STEPS = 3
 export function useIslandSummary(app: AppModel) {
   const [activity] = useState(() => new IslandActivityStore(app))
   const [workspace] = useState(() => new IslandWorkspaceStore(app))
+  const [integrations] = useState(() => new IslandIntegrationsStore(app))
+  useModel(integrations)
+  useModel(activeDictation)
   useModel(workspace)
   const sent = useRef('')
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -31,11 +38,12 @@ export function useIslandSummary(app: AppModel) {
   useEffect(() => {
     activity.start()
     const off = window.codync.app.onCommand((command) => {
-      if (command.kind === 'islandAction') { void activity.perform(command.action); void workspace.perform(command.action) }
+      if (command.kind === 'islandAction') { void activity.perform(command.action); void workspace.perform(command.action); void integrations.perform(command.action); if (command.action.kind === 'stopDictation') stopDictation(command.action.id) }
     })
+    const integrationsTimer = setInterval(() => { void window.codync.island.enabled().then((enabled) => { if (enabled) integrations.refresh() }).catch((error) => integrations.reportPollingError(error)) }, 60_000)
     const timer = setInterval(() => workspace.refresh(), 15_000)
-    return () => { clearInterval(timer); workspace.dispose(); off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
-  }, [activity, workspace])
+    return () => { clearInterval(integrationsTimer); integrations.dispose(); clearInterval(timer); workspace.dispose(); off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
+  }, [activity, workspace, integrations])
   const stores = [...app.stores.values()]
   useEffect(() => {
     const offs = stores.map((store) => store.composerDrafts.subscribe(() => activity.noteDrafts()))
@@ -51,7 +59,7 @@ export function useIslandSummary(app: AppModel) {
     if (pending.current) return
     pending.current = setTimeout(() => {
       pending.current = null
-      const summary = islandSummary(app, activity, workspace)
+      const summary = islandSummary(app, activity, workspace, integrations)
       const json = JSON.stringify(summary)
       if (sent.current === json) return
       sent.current = json
@@ -60,7 +68,7 @@ export function useIslandSummary(app: AppModel) {
   })
 }
 
-function islandSummary(app: AppModel, activity: IslandActivityStore, workspace: IslandWorkspaceStore): IslandSummary {
+function islandSummary(app: AppModel, activity: IslandActivityStore, workspace: IslandWorkspaceStore, integrations: IslandIntegrationsStore): IslandSummary {
   const many = app.computers.length > 1
   return {
     bots: app.roster
@@ -71,6 +79,8 @@ function islandSummary(app: AppModel, activity: IslandActivityStore, workspace: 
     health: healthAlert(app.local?.health ?? null),
     activity: activity.snapshot(),
     workspace: workspace.snapshot(),
+    integrations: integrations.snapshot(),
+    signals: islandSignals(app),
   }
 }
 
@@ -109,6 +119,7 @@ function pendingCards({ ref, bot, store }: RosterItem): IslandPermission[] {
       const author = (e.data.author ? store.bots.get(e.data.author) : undefined) ?? bot
       return {
         ref: refKey(ref),
+        createdAt: e.createdAt,
         entryId: e.id,
         bot: { customIcon: author.customIcon, name: author.name, shape: author.avatarShape, color: author.avatarColor, backend: store.backendName(author.backend) },
         headline: permissionHeadline(e.data.toolKind),

@@ -40,6 +40,7 @@ export interface IslandActivity {
 }
 
 export type IslandAction =
+  | import('./island-integrations').IslandIntegrationAction
   | { kind: 'refreshUsage' }
   | { kind: 'refreshActivity' }
   | { kind: 'stopBot'; ref: string }

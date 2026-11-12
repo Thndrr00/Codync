@@ -380,7 +380,7 @@ export class IslandModel extends Observable {
    */
   private foldWhenAway() {
     clearTimeout(this.hoverTimer)
-    const counting = this.open && !this.hovering && this.tab !== 'message' && this.tab !== 'options' && this.tab !== 'workspace' && !this.moving
+    const counting = this.open && !this.hovering && this.tab !== 'message' && this.tab !== 'options' && this.tab !== 'workspace' && this.tab !== 'integrations' && !this.moving
     if (counting !== this.closing) this.update(() => (this.closing = counting))
     if (counting) this.hoverTimer = setTimeout(() => this.close(), PINNED_LEAVE_MS)
   }

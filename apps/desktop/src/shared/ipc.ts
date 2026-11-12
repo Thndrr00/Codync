@@ -102,6 +102,7 @@ export interface TraySummary {
 
 /** Things the tray menu (or the app menu) asks the window to do. */
 export type WindowCommand =
+  | { kind: 'islandReveal'; ref: string; connectorId?: string }
   | { kind: 'islandAction'; action: IslandAction }
   | { kind: 'openBot'; ref: string }
   | { kind: 'stopBot'; ref: string }
@@ -223,6 +224,7 @@ export interface CodyncBridge {
   ssh: SSHBridge
   /** The notch island (shared/island.ts): its setting, the chat window's summary, and the island window's side. */
   island: {
+    reveal(ref: string, connectorId?: string): void
     resourceOpened(): void
     onResourceOpened(cb: () => void): () => void
     offerDraft(draft: { ref: string; text: string }): void

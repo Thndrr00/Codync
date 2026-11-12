@@ -20,8 +20,8 @@ export class IslandWorkspaceStore extends Observable {
   private entries: Entry[] = []
   private library: LibraryItem[] = []
   private readonly app: AppModel
-  private readonly didOpenResource: () => void
-  constructor(app: AppModel, didOpenResource = () => window.codync.island.resourceOpened()) { super(); this.app = app; this.didOpenResource = didOpenResource }
+  private readonly didOpenResource: (ref: string) => void
+  constructor(app: AppModel, didOpenResource = (ref: string) => window.codync.island.reveal(ref)) { super(); this.app = app; this.didOpenResource = didOpenResource }
 
   snapshot() {
     const ref = this.value && parseRef(this.value.ref)
@@ -103,7 +103,7 @@ export class IslandWorkspaceStore extends Observable {
         islandThreadNavigation.open({ kind: 'file', ref: action.ref, file: item.file, entryId: item.entryId, entry })
       }
       this.app.select(ref)
-      this.didOpenResource()
+      this.didOpenResource(action.ref)
       return
     }
     if (action.kind !== 'retryRun' && action.kind !== 'cancelQueued') return

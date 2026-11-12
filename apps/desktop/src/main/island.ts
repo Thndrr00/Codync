@@ -131,6 +131,12 @@ export class Island {
   }
 
   register() {
+    ipcMain.on('island:reveal', (_e, ref: string, connectorId?: string) => {
+      const action = validIslandAction(connectorId === undefined ? { kind: 'openMemory', ref } : { kind: 'openConnector', ref, id: connectorId })
+      if (!action) return
+      this.deps.send({ kind: 'islandReveal', ref, ...(connectorId === undefined ? {} : { connectorId }) }, true)
+      this.window?.webContents.send('island:resourceOpened')
+    })
     ipcMain.on('island:resourceOpened', () => { this.deps.openApp(); this.window?.webContents.send('island:resourceOpened') })
     ipcMain.on('island:draft', (_e, draft: { ref?: unknown; text?: unknown }) => {
       if (draft && typeof draft.ref === 'string' && typeof draft.text === 'string' && draft.text.length <= 1_000_000) this.window?.webContents.send('island:draft', { ref: draft.ref, text: draft.text })

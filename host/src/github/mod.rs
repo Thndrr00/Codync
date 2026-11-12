@@ -2,6 +2,7 @@
 //! the user's behalf. A fine-grained token with the repository permissions the outputs need is enough;
 //! no GitHub App install is involved.
 
+pub(crate) mod island;
 #[cfg(test)]
 mod tests;
 

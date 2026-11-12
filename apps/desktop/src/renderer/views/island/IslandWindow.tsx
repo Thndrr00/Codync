@@ -8,6 +8,7 @@ import { PINNED_LEAVE_MS, type IslandModel } from './island-model'
 import { useCrossFade } from './island-motion'
 import { Approval, Empty, Message, Notice, Overview, Wings } from './IslandViews'
 import { UsageMeter, UsageView } from './IslandUsage'
+import { IntegrationsView } from './IslandIntegrations'
 import { WorkspaceView } from './IslandWorkspace'
 import { ActivityView, StatusView, OptionsView } from './IslandControls'
 import './island.css'
@@ -126,6 +127,8 @@ function View({ model, mode }: { model: IslandModel; mode: IslandMode }) {
       return <Message model={model} />
     case 'usage':
       return <UsageView model={model} />
+    case 'integrations':
+      return <IntegrationsView model={model} />
     case 'workspace':
       return <WorkspaceView model={model} />
     case 'activity':
@@ -140,6 +143,7 @@ function View({ model, mode }: { model: IslandModel; mode: IslandMode }) {
 }
 
 const TABS: { tab: IslandTab; icon: string; label: string }[] = [
+  { tab: 'integrations', icon: 'link', label: 'Integrations' },
   { tab: 'workspace', icon: 'magnifyingglass', label: 'Workspace and search' },
   { tab: 'bots', icon: 'house.fill', label: 'Bots' },
   { tab: 'message', icon: 'bubble.left.fill', label: 'Message a bot' },

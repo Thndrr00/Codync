@@ -98,6 +98,67 @@ error/notice text and bot references, not conversation bodies or credentials.
 
 ## How it works
 
+### Project and workflow integrations
+
+The Integrations tab groups tools into Project, Work and Tools. Select a bot to
+read its computer's resources; data from another selection never substitutes for
+its snapshot. Each section distinguishes loading, unsupported/unavailable,
+empty and partial results. Refresh is manual or once per minute while the island
+is enabled. Live connection, upload and dictation metadata comes from existing
+device stores. Long-running reads are discarded after selection/owner changes.
+
+- **GitHub:** the host reads the selected bot's `remote.origin.url` and named
+  branch. Supported origins are GitHub.com SSH/HTTPS URLs without credentials.
+  With the host's configured GitHub token, show up to two same-branch PRs,
+  requested reviewers/teams, latest submitted reviews, head-commit check runs
+  and classic statuses, and ten recent issues assigned to that GitHub account.
+  These are repository/branch associations, not an invented per-bot issue link.
+  Successful metadata survives permission/rate-limit errors in other reads.
+  Checks with failed reads are unavailable, never reported as successful/empty.
+  Metadata is cached for 60 seconds (16 entries), HTTP bodies are capped at
+  1 MiB and each snapshot has a 15-second HTTP budget. Account replacement or
+  disconnection during the read invalidates its result. Tokens and issue/PR
+  bodies never enter the island. GitHub.com links open in the normal browser.
+- **Terminals:** show existing setup terminals for the selected agent, including
+  their real retained exit code. These are installation/login/Node setup PTYs,
+  not a fabricated list of general project shell sessions. An existing owner
+  screen is focused in place, preserving its process lifetime. Otherwise the
+  terminal viewer attaches to the exact retained ID without starting a command
+  or taking ownership. Closing an attached viewer never stops that session.
+  Normal setup screens retain their original cleanup behavior. Finished sessions
+  remain available for the host's existing ten-minute retention period.
+- **Memory:** show low-confidence beliefs classified by the host, with a link to
+  the existing memory panel. There is no separate formal memory-review queue.
+- **Connectors:** show sign-out and classified failure states. Open the selected
+  computer's installed connector controls, with that connector first. Reopening
+  the same target works even if Extensions is already mounted. Authentication
+  still uses the existing sign-in, device-code and OAuth interfaces.
+- **Artifact updates:** known published revisions generate a marker from the
+  existing SSE cache, with a periodic library refresh fallback. Opening one
+  updates the existing viewer's metadata cache and opens its latest revision.
+  It does not claim to fetch historical versions. A failed library read does
+  not acknowledge an unseen revision. Baselines are local to the selected view.
+- **Delegation:** the host exposes only current synchronous bot waits involving
+  the selected bot, with sender/recipient IDs and start time. Message text and
+  cancellation handles stay in the host. Completed/cancelled waits disappear.
+- **Other work:** show host-computed upcoming routine occurrences, pending
+  approval ages from real timestamps, sending/upload progress from existing
+  attachment IDs, and metadata-only dictation state. A stale dictation stop ID
+  cannot stop a replacement recognizer. No audio/text is copied or microphone
+  acquired to render this status. Calls keep their existing microphone ownership.
+- **Connections:** reconnect the selected computer's existing stream and show
+  failures, instead of refreshing every computer.
+- **Quick notes:** append up to 4,000 Unicode characters to the bot's main-lane
+  scratchpad, using the existing 16,000-character total bound and write mutex.
+  A running routine/group never redirects this intent. Acknowledgements are
+  scoped to the request/owner/bot, including switching away and back, and do not
+  erase newer typed text. This is a scratchpad capture, not a chat message.
+- **Saved searches and bookmarks:** run the host-saved query/scope within the
+  selected bot (at most ten preview hits) and open the existing host-validated
+  message-context viewer. Bookmark entry and thread IDs retain their identities.
+  No arbitrary entry or external URL from a client payload is accepted as a
+  substitute for a known snapshot resource.
+
 - **Window** (`apps/desktop/src/main/island.ts`): a transparent, frameless panel bounded by
   the selected display work area: up to 720 × 380 horizontally or 420 × 560 vertically.
   Options selects an edge, a display and density; unlocked dragging snaps to the nearest edge.

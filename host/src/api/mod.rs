@@ -14,6 +14,7 @@ mod files;
 mod folders;
 mod host;
 mod http;
+mod island_notes;
 mod island_queue;
 mod island_workspace;
 mod marketplace;
@@ -98,6 +99,16 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return crate::native_channels::call(hub, method, &b);
     }
     match method {
+        "islandGitHub" => return crate::github::island::read(hub, str_arg(&b, "botId")?).await,
+        "appendBotScratchpad" => return island_notes::append(hub, &b),
+        "listAgentTerminals" => return Ok(serde_json::json!({"sessions": hub.terms.snapshot(b["backend"].as_str())})),
+        "islandDelegations" => {
+            let bot = str_arg(&b, "botId")?;
+            if hub.store.bot(bot)?.is_none_or(|row| row.deleted) {
+                return Err(anyhow!("Unknown bot"));
+            }
+            return Ok(serde_json::json!({"requests": hub.team.pending_for(bot)}));
+        }
         "islandWorkspace" => return island_workspace::read(hub, str_arg(&b, "botId")?).await,
         "queuedMessages" => return island_queue::read(hub, str_arg(&b, "botId")?).await,
         "cancelQueuedMessage" => {

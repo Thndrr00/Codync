@@ -2,6 +2,7 @@ import { VoiceReceipt } from './VoiceReceipt'
 import { RepliesView } from './RepliesView'
 import { ForwardSheet } from './ForwardSheet'
 import { FileView, type OpenFile } from './FileView'
+import { IslandTerminal } from '../island/IslandTerminal'
 import { useIslandThreadNavigation } from './use-island-thread-navigation'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { draftOf, folderName, isGroup, isWorking, isWorkingIn, sharedWorkspacePeers, type Bot, type BotApp, type BotDraft, type Entry, type SharedFile } from '@shared/models'
@@ -173,7 +174,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     setActiveArtifact(id)
     setCompactDetails(false)
   }, [])
-  useIslandThreadNavigation(`${store.computer.id}/${botId}`, openFile, openArtifact)
+  const openIslandMemory = useCallback(() => { setDetailsTab('memory'); setShowSettings(true); setCompactDetails(!wide) }, [wide])
+  const islandNavigation = useIslandThreadNavigation(`${store.computer.id}/${botId}`, openFile, openArtifact, openIslandMemory)
   const closeArtifact = useCallback((id: string) => {
     setArtifacts((list) => {
       const next = list.filter((item) => item !== id)
@@ -216,6 +218,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
 
   return (
     <div className="thread-view" ref={root}>
+      <IslandTerminal terminal={islandNavigation.terminal} onClose={islandNavigation.close} />
       <MessageContext botId={botId} />
       <div className="conversation">
         <div className="top-chrome">

@@ -91,6 +91,7 @@ const bridge: CodyncBridge = {
     setConfigAccess: async () => ({ access: 'denied', hosts: [] }),
   },
   island: {
+    reveal: () => {},
     resourceOpened: () => {},
     onResourceOpened: none,
     offerDraft: () => {},

@@ -116,6 +116,7 @@ const bridge: CodyncBridge = {
   },
   ssh: sshBridge,
   island: {
+    reveal: (ref, connectorId) => ipcRenderer.send('island:reveal', ref, connectorId),
     resourceOpened: () => ipcRenderer.send('island:resourceOpened'),
     onResourceOpened: (cb) => listen('island:resourceOpened', cb),
     offerDraft: (draft) => ipcRenderer.send('island:draft', draft),

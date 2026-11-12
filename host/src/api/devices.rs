@@ -313,7 +313,15 @@ mod tests {
         assert!(permit(&control, "screenOffer").is_err(), "screen needs the screen scope");
         assert!(permit(&control, "screenStatus").is_ok(), "status is control");
         assert!(permit(&control, "installHostUpdate").is_ok(), "a phone can update a computer that's behind");
-        for method in ["islandWorkspace", "queuedMessages", "cancelQueuedMessage"] {
+        for method in [
+            "islandWorkspace",
+            "queuedMessages",
+            "cancelQueuedMessage",
+            "islandGitHub",
+            "listAgentTerminals",
+            "islandDelegations",
+            "appendBotScratchpad",
+        ] {
             assert!(permit(&Caller::Local, method).is_ok());
             assert!(permit(&control, method).is_ok(), "authorized remote workspaces use Control");
             assert!(permit(&Caller::Device { key: "k".into(), scopes: vec![Scope::Screen] }, method).is_err());

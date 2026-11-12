@@ -263,7 +263,7 @@ function ChatSplitView() {
   const [filesBot, setFilesBot] = useState<BotTarget | null>(null)
   const [onboarding, setOnboarding] = useState(() => localStorage.getItem('codync.onboarding') !== 'done')
   const [marketplace, setMarketplace] = useState<string | null>(null)
-  const [marketplaceLink, setMarketplaceLink] = useState<{ section: ExtensionSection; id?: string } | null>(null)
+  const [marketplaceLink, setMarketplaceLink] = useState<{ section: ExtensionSection; id?: string; installedConnectorId?: string; requestId?: string } | null>(null)
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
@@ -304,6 +304,13 @@ function ChatSplitView() {
     : null
 
   useChatNavigation({
+    reveal: (key, connectorId) => {
+      const ref = parseRef(key)
+      if (!ref || !app.store(ref.computerId)?.bots.has(ref.botId)) return
+      app.select(ref)
+      setSettings(null); setMarketplace(null); setCanvasBot(null)
+      if (connectorId) { setMarketplaceLink({ section: 'apps', installedConnectorId: connectorId, requestId: crypto.randomUUID() }); setMarketplace(ref.computerId) }
+    },
     newBot: () => { if (onlineStores.length) create('bot') },
     search: () => setSearching(true),
     network: () => setSettings('network'),
@@ -610,7 +617,7 @@ function ChatSplitView() {
       <Sheet open={marketplace !== null} onClose={() => { setMarketplace(null); setMarketplaceLink(null) }} width={Math.min(920, windowSize.width - 80)} height={sheetHeight} dismissOnDim>
         {marketplace && app.store(marketplace) ? (
           <StoreContext.Provider value={app.store(marketplace)!}>
-            <MarketplaceView key={marketplace} initialSection={marketplaceLink?.section} initialAgent={marketplaceLink?.id} />
+            <MarketplaceView key={`${marketplace}:${marketplaceLink?.requestId ?? ''}`} initialSection={marketplaceLink?.section} initialAgent={marketplaceLink?.id} initialInstalledConnector={marketplaceLink?.installedConnectorId} />
           </StoreContext.Provider>
         ) : null}
       </Sheet>

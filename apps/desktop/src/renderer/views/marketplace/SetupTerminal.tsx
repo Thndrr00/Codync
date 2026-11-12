@@ -15,6 +15,7 @@ import type { Backend } from '@shared/models'
 import { errorText, market, type AuthMethod, type SetupStep } from './market-models'
 import { ScreenHeader } from './pieces'
 import { useTr } from '../../lib/use-language'
+import { ownSetupTerminal } from './setup-terminal-owners'
 
 
 const openLink = (uri: string) => {
@@ -25,12 +26,14 @@ const openLink = (uri: string) => {
  * Installing or signing in to an agent, or adding Node.js, live: the command runs in a
  * terminal on the computer and this screen is that terminal (links open here).
  */
-export function SetupTerminalView({ backend, step, method, back }: {
+export function SetupTerminalView({ backend, step, method, existingTermId, back }: {
   /** Null only for the `node` step, which belongs to the computer. */
   backend: Backend | null
   step: SetupStep
   /** A terminal sign-in method the agent offered; null runs Codync's own command. */
   method?: AuthMethod | null
+  /** Attaches to this retained session; opening it must never start or own a new process. */
+  existingTermId?: string
   /** Back to the agent's sheet (the terminal is a step inside it). */
   back: () => void
 }) {
@@ -68,6 +71,7 @@ export function SetupTerminalView({ backend, step, method, back }: {
     let cancelled = false
     let exited: number | null = null
     let termId: string | null = null
+    let releaseOwner: (() => void) | null = null
     let size = { cols: term.cols, rows: term.rows }
     let sent = { cols: 0, rows: 0 }
     let stopStream: (() => void) | null = null
@@ -138,13 +142,16 @@ export function SetupTerminalView({ backend, step, method, back }: {
     void (async () => {
       try {
         const client = await store.ready()
-        const id = await market.agentSetup(client, backend?.id ?? '', step, method?.id ?? null, size.cols, size.rows)
+        if (cancelled) return
+        if (existingTermId !== undefined && !existingTermId.trim()) throw new Error('This setup terminal is unavailable.')
+        const id = existingTermId ?? await market.agentSetup(client, backend?.id ?? '', step, method?.id ?? null, size.cols, size.rows)
         if (cancelled) {
-          void market.termClose(client, id).catch(() => {})
+          if (existingTermId === undefined) void market.termClose(client, id).catch(() => {})
           return
         }
         termId = id
-        sent = size
+        if (existingTermId === undefined) releaseOwner = ownSetupTerminal(store, id, () => { window.codync.island.resourceOpened(); term.focus() })
+        if (existingTermId === undefined) sent = size
         syncSize()
         // Reattach after a dropped connection; the host replays the whole scrollback.
         while (exited === null && !cancelled) {
@@ -158,17 +165,18 @@ export function SetupTerminalView({ backend, step, method, back }: {
       if (!cancelled) await store.refreshBackends()
     })()
 
-    // Leaving the screen ends whatever is still running.
+    // A screen that started a process owns its lifetime; an attached viewer only detaches.
     return () => {
       cancelled = true
+      releaseOwner?.()
       observer.disconnect()
       subs.forEach((s) => s.dispose())
       stopStream?.()
       const client = store.client
-      if (exited === null && client && termId) void market.termClose(client, termId).catch(() => {})
+      if (existingTermId === undefined && exited === null && client && termId) void market.termClose(client, termId).catch(() => {})
       term.dispose()
     }
-  }, [store, backend?.id, step, method?.id])
+  }, [store, backend?.id, step, method?.id, existingTermId])
 
   const name = backend?.name ?? tr('the agent')
   const title = step === 'node' ? 'Add Node.js' : step === 'install' ? `Install ${name}` : (method?.name ?? `Sign in to ${name}`)

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Backend } from '@shared/models'
-import { Button, IconButton, Spinner } from '../../components/Controls'
+import { Button, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { Dialog, SheetPage, useDismiss } from '../../components/Overlay'
+import { useDismiss } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore, useApp } from '../../store/context'
@@ -23,13 +23,13 @@ import { TOOLS } from '@shared/tools'
 import { ComfySheet } from './ComfySheet'
 import { WhatsAppSheet } from './WhatsAppSheet'
 import { SetupTerminalView } from './SetupTerminal'
-import { McpToolsSheet } from './McpToolsSheet'
+import { InstalledView } from './InstalledView'
 import { SkillSheet, type SkillRef } from './SkillSheet'
 import { useModel } from '../../lib/observable'
 import { ConnectorCatalog } from './connector-catalog'
-import { errorText, market, needsSignIn, type ExtensionSection, type MarketAgent, type MarketApp, type MarketConnector, type MarketSkill } from './market-models'
+import { errorText, market, type ExtensionSection, type MarketAgent, type MarketApp, type MarketConnector, type MarketSkill } from './market-models'
 import { AgentsPanel, AppsPanel, MarketAgentsPanel, MarketPanel, SkillsPanel } from './MarketplacePanel'
-import { AppLogo, ExtensionTabs, FormSheet, ItemGrid, ItemRow, MarketSection, ScreenHeader, ServiceLogo, SkillGlyph, SlideStack } from './pieces'
+import { ExtensionTabs, FormSheet, ItemRow, MarketSection, ServiceLogo, SlideStack } from './pieces'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
 
@@ -40,7 +40,7 @@ import { useTr } from '../../lib/use-language'
  * happens on that computer; each bot turns connectors and skills on in its settings. Each
  * computer has its own, opened from its heading in the sidebar.
  */
-export function MarketplaceView({ initialSection = 'apps', initialAgent }: { initialSection?: ExtensionSection; initialAgent?: string } = {}) {
+export function MarketplaceView({ initialSection = 'apps', initialAgent, initialInstalledConnector }: { initialSection?: ExtensionSection; initialAgent?: string; initialInstalledConnector?: string } = {}) {
   const store = useStore()
   const tr = useTr()
   const plugins = usePlugins(store)
@@ -80,7 +80,8 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent }: { ini
   const channelModel = useModel(channels)
   const [viewingChannel, setViewingChannel] = useState<ChannelProviderEntry | null>(null)
   const [agentGroup, setAgentGroup] = useState('all')
-  const [showInstalled, setShowInstalled] = useState(false)
+  const [showInstalled, setShowInstalled] = useState(!!initialInstalledConnector)
+  useEffect(() => { if (initialInstalledConnector) setShowInstalled(true) }, [initialInstalledConnector])
   const [showCredentials, setShowCredentials] = useState(false)
   // Kept above the sections so a catalog entry still shows as added when its section is left and reopened.
   const [catalogAdded, setCatalogAdded] = useState<string[]>([])
@@ -326,7 +327,7 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent }: { ini
 
   return (
     <>
-      <SlideStack base={page} top={showCredentials ? <CredentialsView onBack={() => setShowCredentials(false)} /> : showInstalled ? <InstalledView back={() => setShowInstalled(false)} /> : null} />
+      <SlideStack base={page} top={showCredentials ? <CredentialsView onBack={() => setShowCredentials(false)} /> : showInstalled ? <InstalledView connectorId={initialInstalledConnector} back={() => setShowInstalled(false)} /> : null} />
       <FormSheet open={installing !== null} onClose={() => setInstalling(null)}>
         {installing ? <InstallConnectorSheet key={installing.name} item={installing} done={() => void connectors.reload()} /> : null}
       </FormSheet>
@@ -391,124 +392,3 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent }: { ini
 }
 
 // MARK: - Installed
-
-function InstalledView({ back }: { back: () => void }) {
-  const store = useStore()
-  const tr = useTr()
-  const plugins = usePlugins(store)
-  const [removing, setRemoving] = useState<{ id: string; name: string; isSkill: boolean } | null>(null)
-  const [signingIn, setSigningIn] = useState<string | null>(null)
-  const [tools, setTools] = useState<{ id: string; name: string } | null>(null)
-  const [viewingSkill, setViewingSkill] = useState<SkillRef | null>(null)
-  const empty = plugins.installedConnectors.length === 0 && plugins.installedSkills.length === 0
-
-  const signIn = async (id: string) => {
-    setSigningIn(id)
-    try {
-      await plugins.signIn(id)
-    } catch (e) {
-      store.setError(errorText(e))
-    }
-    setSigningIn(null)
-  }
-
-  const remove = async (r: { id: string; isSkill: boolean }) => {
-    try {
-      if (r.isSkill) await plugins.removeSkill(r.id)
-      else await plugins.removeConnector(r.id)
-    } catch (e) {
-      store.setError(errorText(e))
-    }
-  }
-
-  return (
-    <SheetPage>
-      <ScreenHeader title="Connectors & skills" onBack={back} />
-      <div className="market-installed-body">
-        <div className="market-scroll">
-          <div className="market-page-content">
-            {empty ? <EmptyState icon="shippingbox" title="Nothing installed" detail="Connectors and skills you add show up here." /> : null}
-            {plugins.installedConnectors.length ? (
-              <MarketSection title="Connectors">
-                <ItemGrid>
-                  {plugins.installedConnectors.map((c) => (
-                    <ItemRow
-                      key={c.id}
-                      title={c.name}
-                      subtitle={c.lastFailure ? `⚠ ${c.lastFailure.kind.toUpperCase()}: ${c.lastFailure.message}` : needsSignIn(c) ? 'Sign in so bots can use it' : (c.command ?? c.url ?? c.description)}
-                      icon={c.kind === 'composio' ? <AppLogo url={c.logo} name={c.name} /> : <ServiceLogo name={c.name} registryName={c.registryName} />}
-                      trailing={(
-                        <>
-                          {signingIn === c.id ? <Spinner /> : (needsSignIn(c) || c.lastFailure?.kind === 'auth') ? <Button onClick={() => void signIn(c.id)}>{c.lastFailure?.kind === 'auth' ? 'Re-authenticate' : 'Sign in'}</Button> : null}
-                          <Button kind="secondary" onClick={() => setTools(c)}>Tools &amp; requests</Button>
-                          <RemoveButton title={c.name} onClick={() => setRemoving({ id: c.id, name: c.name, isSkill: false })} />
-                        </>
-                      )}
-                    />
-                  ))}
-                </ItemGrid>
-              </MarketSection>
-            ) : null}
-            {plugins.installedSkills.length ? (
-              <MarketSection title="Skills">
-                <ItemGrid>
-                  {plugins.installedSkills.map((s) => (
-                    <ItemRow
-                      key={s.id}
-                      title={s.name}
-                      subtitle={s.description}
-                      icon={<SkillGlyph />}
-                      onOpen={() => setViewingSkill({ id: s.id, name: s.name, description: s.description })}
-                      trailing={<RemoveButton title={s.name} onClick={() => setRemoving({ id: s.id, name: s.name, isSkill: true })} />}
-                    />
-                  ))}
-                </ItemGrid>
-              </MarketSection>
-            ) : null}
-          </div>
-        </div>
-      </div>
-      <Dialog
-        open={removing !== null}
-        title={tr('Remove {name}?').replaceAll('{name}', removing?.name ?? '')}
-        message={removing ? tr(removing.isSkill ? 'Bots stop using this skill.' : 'Bots lose this connector, and the keys saved for it are deleted.') : null}
-        actions={removing ? [{ title: 'Remove', destructive: true, action: () => void remove(removing) }] : []}
-        onClose={() => setRemoving(null)}
-      />
-      <FormSheet open={viewingSkill !== null} onClose={() => setViewingSkill(null)}>
-        {viewingSkill ? <SkillSheet key={viewingSkill.name} skill={viewingSkill} /> : null}
-      </FormSheet>
-      <FormSheet open={tools !== null} onClose={() => setTools(null)}>
-        {tools && <McpToolsSheet key={`${store.contextId}:${store.computer.id}:${tools.id}`} connector={tools} />}
-      </FormSheet>
-    </SheetPage>
-  )
-}
-
-/** A quiet "nothing here" message (replaces `ContentUnavailableView`). */
-function EmptyState({ icon, title, detail }: { icon: string; title: string; detail: string }) {
-  const tr = useTr()
-  return (
-    <VStack align="center" gap={8} className="market-empty">
-      <Icon name={icon} size={28} color="var(--tertiary)" />
-      <Text size="compactBody" weight="semibold" tone="text">{tr(title)}</Text>
-      <Text size="compactSecondary" tone="secondary">{tr(detail)}</Text>
-    </VStack>
-  )
-}
-
-function RemoveButton({ title, onClick }: { title: string; onClick: () => void }) {
-  return (
-    <button
-      title="Remove"
-      aria-label={`Remove ${title}`}
-      className="market-remove"
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-    >
-      <Icon name="trash" size={13} />
-    </button>
-  )
-}

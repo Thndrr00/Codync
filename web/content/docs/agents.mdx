@@ -32,6 +32,12 @@ The island's **Workspace** searches bots, project paths and actions. Select a bo
 
 In **Options**, set island-only text size, high contrast, optional global shortcuts and **Quiet profile**. Quiet suppresses hover opening and completion notices while retaining approvals and manual controls. Automatic fullscreen quiet applies to Codync windows; use manual Quiet for other apps. Shortcuts are off until assigned, and conflicts show an error.
 
+The island's **Integrations** tab has **Project**, **Work** and **Tools** sections. Select a bot to see GitHub PRs for its repository and branch, requested reviews, head-commit checks, and recent issues assigned to the connected GitHub account. GitHub must already be connected on that computer; failed or unsupported reads show an explanation while successful sections remain available.
+
+**Work** shows upcoming routines, low-confidence memories to review, existing agent setup terminals and their exit codes, artifact revision notices, current synchronous requests between bots, approval ages, uploads and dictation status. Reopening a setup terminal preserves its existing process; opening an artifact revision shows the latest version in its normal viewer. These controls reuse Codync's existing memory and microphone flows.
+
+In **Tools**, reconnect a computer, open a connector's existing sign-in controls, append a quick note to the selected bot's main scratchpad, run a saved search within that bot, or open a bookmarked message with its surrounding context. Notes are added only after **Save note**; successful acknowledgements preserve newer edits made while saving. Integrations refresh once a minute while the island is enabled, with manual refresh available.
+
 ## Agents Codync knows by name
 
 For these agents, Codync knows the command it looks for, how to install it and how to sign in. The agent must be installed on the computer before a bot can use it.

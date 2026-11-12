@@ -11,11 +11,13 @@ interface Navigation {
   marketplace(command: Extract<WindowCommand, { kind: 'openMarketplace' }>): void
   voice(key: VoiceKey): void
   island(action: IslandAction): void
+  reveal?(ref: string, connectorId?: string): void
 }
 
 /** Window navigation stays separate from host mutations and panel rendering. */
 export function navigateCommand(command: WindowCommand, navigation: Navigation) {
   switch (command.kind) {
+    case 'islandReveal': navigation.reveal?.(command.ref, command.connectorId); break
     case 'newBot': navigation.newBot(); break
     case 'search': navigation.search(); break
     case 'networkSettings': navigation.network(); break
