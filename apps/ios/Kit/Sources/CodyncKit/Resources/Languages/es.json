@@ -2026,5 +2026,17 @@
   "Structure": "Estructura",
   "Who answers follows the request.": "Responde según a quién preguntes.",
   "Answers who you ask: /boss for the lead, a role for that member, or everyone.": "Responde a quien preguntes: /boss para el líder, un rol para ese miembro, o todos.",
-  "Write /boss for the lead, name a role (\"UI/UX\", \"Auditor\") for that member, or ask in general and everyone answers in this chat.": "Escribe /boss para el líder, nombra un rol («UI/UX», «Auditor») para ese miembro, o pregunta en general y todos responden en este chat."
+  "Write /boss for the lead, name a role (\"UI/UX\", \"Auditor\") for that member, or ask in general and everyone answers in this chat.": "Escribe /boss para el líder, nombra un rol («UI/UX», «Auditor») para ese miembro, o pregunta en general y todos responden en este chat.",
+  "Add member": "Añadir miembro",
+  "Every member is on the chart": "Todos los miembros están en el esquema",
+  "Pick a card to edit its role, responsibility and manager.": "Elige una tarjeta para editar su rol, su responsabilidad y su jefe.",
+  "No responsibility yet": "Sin responsabilidad todavía",
+  "Or type a role": "O escribe un rol",
+  "Responsibility": "Responsabilidad",
+  "Nobody (a top)": "Nadie (es una cima)",
+  "This is the lead.": "Este es el líder.",
+  "Remove from chart": "Quitar del esquema",
+  "Drag the dot under a card onto the member it reports to.": "Arrastra el punto bajo una tarjeta hasta el miembro al que reporta.",
+  "Select a card": "Elige una tarjeta",
+  "That line would create a loop.": "Esa línea crearía un bucle."
 }

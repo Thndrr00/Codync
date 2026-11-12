@@ -33,6 +33,12 @@ No member ever answers in its own chat: every room turn writes to the group lane
 
 ## The chart
 
+The desktop editor is a canvas, not a form: cards move freely, the canvas pans and zooms, and a
+reporting line is drawn by dragging the dot under a card onto the member it reports to. Several tops
+are allowed; the lead is the card with the star. A card carries a role (presets such as Supervisor,
+UI/UX, Código, Auditor, QA, Producto, Datos, Marketing or Soporte, or anything typed), what it is
+accountable for, and who it reports to. Members can join or leave the chart without leaving the group.
+
 `team.members` holds one entry per member on the chart:
 
 | Field | Meaning |

@@ -318,7 +318,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       <Sheet open={templateDraft !== null} onClose={() => setTemplateDraft(null)}>
         {templateDraft ? <BotTemplateView draft={templateDraft} /> : null}
       </Sheet>
-      <Sheet open={editingGroup} onClose={() => setEditingGroup(false)} width={760} height={Math.min(700, window.innerHeight - 60)}>
+      <Sheet open={editingGroup} onClose={() => setEditingGroup(false)} width={980} height={Math.min(760, window.innerHeight - 40)}>
         {bot ? <GroupEditorView group={bot} /> : null}
       </Sheet>
       <FormSheet open={!!member} onClose={() => setEditingMember(null)} width={520} height={680} fixed>
