@@ -2030,5 +2030,9 @@
   "The flow is running. Its steps show here as they finish.": "El flujo está en marcha. Sus pasos aparecen aquí al terminar.",
   "Agent added to the diagram.": "Agente añadido al diagrama.",
   "Canvas tools": "Herramientas del lienzo",
-  "Fit to window": "Ajustar a la ventana"
+  "Fit to window": "Ajustar a la ventana",
+  "Running now": "En marcha",
+  "Cancelled": "Cancelado",
+  "Edit routine": "Editar rutina",
+  "Pick a routine to see its history.": "Elige una rutina para ver su historial."
 }

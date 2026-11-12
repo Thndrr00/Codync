@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { isGroup, type Bot } from '@shared/models'
 import { Button, IconButton, Spinner } from '../../../components/Controls'
-import { AnchoredMenu } from '../../../components/Overlay'
+import { BotAvatar } from '../../../components/Avatar'
+import { AnchoredMenu, ModalHeader, Sheet } from '../../../components/Overlay'
 import { Icon } from '../../../components/Icon'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
@@ -10,6 +11,8 @@ import type { FlowCanvas, FlowLink } from '../../../lib/routine-flow'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import { errorText, type Routine, type RoutineRun } from '../routine'
+import { RoutineEditorView } from '../RoutineEditorView'
+import { RoutineRunHistory } from '../RoutineRunHistory'
 import './workflow.css'
 
 /** A routine of any bot, with what the list needs to show it. */
@@ -133,6 +136,9 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [marks, setMarks] = useState<Mark[]>([])
+  const [showDetails, setShowDetails] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
+  const [editing, setEditing] = useState(false)
   const viewport = useRef<HTMLDivElement | null>(null)
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 })
   const drag = useRef<{ key: string; start: Point; origin: Point } | null>(null)
@@ -229,6 +235,17 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
   const addable = [...bots.values()].filter(
     (bot) => !bot.hidden && !isGroup(bot) && bot.backend !== 'external' && !agents.some((agent) => agent.botId === bot.id),
   )
+
+  const steps = flow?.routines.find((card) => card.routine.id === selected?.routine.id)?.steps ?? []
+  const stepLabel = (botId: string): string | null => {
+    const step = steps.find((s) => s.botId === botId)
+    if (!step) return null
+    if (step.status === 'running') return tr('Running now')
+    if (step.status === 'succeeded') return tr('Finished')
+    if (step.status === 'failed') return step.error || tr('Failed')
+    if (step.status === 'cancelled') return tr('Cancelled')
+    return tr('Skipped')
+  }
 
   const nodePoint = (key: string, index: number): Point =>
     positions[key] ?? { x: 40 + index * (AGENT_WIDTH + COLUMN_GAP), y: 90 }
@@ -343,11 +360,12 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
         </HStack>
         <Spacer />
         <HStack gap={12} align="center">
-          <HStack gap={5} align="center" className="workflow-history">
+          <IconButton title={tr('Routine details')} icon="sidebar.left" selected={showDetails} onClick={() => setShowDetails((v) => !v)} />
+          <button type="button" className="workflow-history" onClick={() => setShowHistory(true)}>
             <Icon name="clock" size={14} />
             <Text size="caption">{tr('History')}</Text>
             <span className="workflow-count">{selected?.runs.length ?? 0}</span>
-          </HStack>
+          </button>
           <Button disabled={!selected || busy} onClick={() => void runFlow()}>
             {busy ? <Spinner /> : <Icon name="play.circle" size={14} />}
             {tr('Run flow')}
@@ -355,7 +373,7 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
         </HStack>
       </header>
 
-      <div className="workflow-body">
+      <div className={`workflow-body ${showDetails ? '' : 'no-details'}`}>
         <aside className="workflow-list">
           <label className="workflow-search">
             <Icon name="magnifyingglass" size={13} />
@@ -373,7 +391,9 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
                 data-selected={row.routine.id === selectedId ? 'true' : undefined}
                 onClick={() => setSelectedId(row.routine.id)}
               >
-                <span className={`workflow-avatar ${row.routine.enabled ? '' : 'paused'}`}>{row.botName.slice(0, 1).toUpperCase()}</span>
+                <span className="workflow-row-avatar" data-paused={row.routine.enabled ? undefined : 'true'}>
+                  {bots.get(row.botId) ? <BotAvatar bot={bots.get(row.botId)!} size={32} animated={false} /> : row.botName.slice(0, 1).toUpperCase()}
+                </span>
                 <span className="workflow-row-text">
                   <span className="workflow-row-top">
                     <strong>{row.routine.name}</strong>
@@ -400,12 +420,34 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
           onPointerMove={onPointerMove}
           onPointerUp={endPointer}
           onPointerCancel={endPointer}
+          onWheel={(e) => {
+            if (!e.ctrlKey && !e.metaKey) return
+            zoomBy(e.deltaY > 0 ? -0.08 : 0.08)
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            openMenu('node', e)
+          }}
         >
           <div
             className="workflow-world"
             style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             onDoubleClick={(e) => openMenu('node', e)}
           >
+            {selected && agents.length > 1 ? (
+              <svg className="workflow-edges" aria-hidden>
+                {agents.slice(1).map((agent, index) => {
+                  const from = nodePoint('trigger', 0)
+                  const to = nodePoint(`agent:${agent.botId}`, index + 1)
+                  const x1 = from.x + TRIGGER_WIDTH
+                  const y1 = from.y + 90
+                  const x2 = to.x
+                  const y2 = to.y + 95
+                  const mid = (x1 + x2) / 2
+                  return <path key={agent.botId} d={`M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`} />
+                })}
+              </svg>
+            ) : null}
             {selected ? (
               <>
                 <article
@@ -422,6 +464,7 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
                     <span className="workflow-node-icon schedule"><Icon name="calendar" size={14} /></span>
                     <strong>{tr('Schedule')}</strong>
                     <Spacer />
+                    <IconButton title={tr('Edit routine')} icon="pencil" size={22} onClick={() => setEditing(true)} />
                     <Icon name="chevron.down" size={12} />
                   </div>
                   <div className="workflow-node-body">
@@ -463,13 +506,19 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
                         onBlur={(e) => void saveInstruction(agent, e.target.value)}
                       />
                       <div className="workflow-node-footer">
-                        <span className={`workflow-avatar tiny ${agent.color}`}>{agent.name.slice(0, 1).toUpperCase()}</span>
+                        <span className="workflow-avatar tiny">
+                          {bots.get(agent.botId) ? <BotAvatar bot={bots.get(agent.botId)!} size={18} animated={false} /> : agent.name.slice(0, 1).toUpperCase()}
+                        </span>
                         <span className="workflow-agent-name">{agent.name}</span>
                         <Spacer />
                         <span className="workflow-model">
                           <Icon name="sparkles" size={12} />
                           {agent.model}
                         </span>
+                      </div>
+                      <div className="workflow-node-state" data-status={steps.find((s) => s.botId === agent.botId)?.status}>
+                        {stepLabel(agent.botId) ?? tr('No runs yet')}
+                        {selected.routine.enabled ? null : <span className="workflow-node-warn">{tr('Paused')}</span>}
                       </div>
                       <Button kind="secondary" className="workflow-run-step" disabled={busy} onClick={() => void runFlow()}>
                         {tr('Run step')}
@@ -526,7 +575,9 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
           </div>
 
           <div className="workflow-ask">
-            <span className={`workflow-avatar tiny ${selected ? 'blue' : ''}`}>{(selected?.botName ?? 'A').slice(0, 1).toUpperCase()}</span>
+            <span className="workflow-avatar tiny">
+              {selected && bots.get(selected.botId) ? <BotAvatar bot={bots.get(selected.botId)!} size={18} animated={false} /> : (selected?.botName ?? 'A').slice(0, 1).toUpperCase()}
+            </span>
             <input
               value={ask}
               onChange={(e) => setAsk(e.target.value)}
@@ -565,7 +616,7 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
           />
         </div>
 
-        <aside className="workflow-details">
+        <aside className="workflow-details" style={showDetails ? undefined : { display: 'none' }}>
           <strong>{tr('Routine details')}</strong>
           {selected ? (
             <VStack gap={10}>
@@ -584,6 +635,29 @@ export function RoutineWorkflowView({ onClose }: { onClose?: () => void }) {
           )}
         </aside>
       </div>
+
+      <Sheet open={showHistory} onClose={() => setShowHistory(false)} width={520} height={Math.min(620, window.innerHeight - 80)}>
+        <VStack gap={12} className="workflow-sheet">
+          <ModalHeader icon="clock" title={tr('History')} onClose={() => setShowHistory(false)} />
+          {selected ? <RoutineRunHistory runs={selected.runs} name={selected.routine.name} /> : <Text tone="secondary">{tr('Pick a routine to see its history.')}</Text>}
+        </VStack>
+      </Sheet>
+
+      <Sheet open={editing} onClose={() => setEditing(false)} width={560} height={Math.min(680, window.innerHeight - 60)}>
+        {selected ? (
+          <VStack gap={12} className="workflow-sheet">
+            <ModalHeader icon="pencil" title={tr('Edit routine')} onClose={() => setEditing(false)} />
+            <RoutineEditorView
+              botId={selected.botId}
+              routine={selected.routine}
+              saved={() => {
+                setEditing(false)
+                reload()
+              }}
+            />
+          </VStack>
+        ) : null}
+      </Sheet>
     </div>
   )
 }

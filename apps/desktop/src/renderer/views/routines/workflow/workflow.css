@@ -36,11 +36,20 @@
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 .workflow-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 28px;
   padding: 0 10px;
+  border: none;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 5%, transparent);
   color: var(--secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.workflow-history:hover {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
 }
 .workflow-count {
   min-width: 16px;
@@ -120,6 +129,20 @@
   background: linear-gradient(140deg, #ff9a8b, #ff6a88 55%, #ff99ac);
   color: #fff;
   font: 600 13px/1 system-ui, sans-serif;
+}
+.workflow-row-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  overflow: hidden;
+}
+.workflow-row-avatar[data-paused='true'] {
+  filter: grayscale(1);
+  opacity: 0.65;
 }
 .workflow-avatar.paused {
   filter: grayscale(1);
@@ -324,6 +347,55 @@
   min-width: 0;
   color: var(--secondary);
   font-size: 11.5px;
+}
+.workflow-node-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+  color: var(--secondary);
+  font-size: 11px;
+}
+.workflow-node-state[data-status='running'] {
+  color: var(--attention);
+}
+.workflow-node-state[data-status='failed'] {
+  color: var(--danger);
+}
+.workflow-node-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--attention);
+}
+.workflow-node-warn::before {
+  content: '!';
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--attention) 20%, transparent);
+  font: 700 9px/1 ui-monospace, monospace;
+}
+.workflow-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.workflow-edges path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 28%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.workflow-body.no-details {
+  grid-template-columns: 296px minmax(0, 1fr);
+}
+.workflow-sheet {
+  padding: 4px 2px;
+  min-height: 0;
 }
 .workflow-agent-name {
   overflow: hidden;
