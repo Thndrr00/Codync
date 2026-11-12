@@ -35,6 +35,9 @@ pub struct TeamProfile {
     pub coordinator: BotProfile,
     /// Ids of catalog bots.
     pub members: Vec<String>,
+    /// The role each bot gets on the group's team chart, by id (the coordinator included).
+    #[serde(default)]
+    pub roles: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

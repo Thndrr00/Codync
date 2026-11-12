@@ -164,6 +164,18 @@ async fn create_team(
         "description": team.purpose,
         "members": created,
         "chiefBotId": created.first(),
+        "team": {
+            "mode": "smart",
+            "voice": "lead",
+            "members": created.iter().enumerate().map(|(index, id)| json!({
+                "botId": id,
+                "role": team.roles.get(id).cloned().unwrap_or_default(),
+                "responsibility": "",
+                "reportsTo": if index == 0 { Value::Null } else { json!(created.first()) },
+                "x": 40.0 + (index as f64) * 300.0,
+                "y": if index == 0 { 40.0 } else { 216.0 },
+            })).collect::<Vec<_>>(),
+        },
     });
     let group = create(hub, group).await?;
     Ok(json!({"bot": group}))

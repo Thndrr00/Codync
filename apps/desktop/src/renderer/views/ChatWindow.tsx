@@ -18,6 +18,7 @@ import { BotRoster } from './BotRoster'
 import { ExtensionsMovedTip } from './ExtensionsMovedTip'
 import { RailAccountNotice } from './SidebarFooter'
 import { AppRail } from './AppRail'
+import { InboxView } from './inbox/InboxView'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -259,6 +260,8 @@ function ChatSplitView() {
   const [marketplace, setMarketplace] = useState<string | null>(null)
   const [marketplaceLink, setMarketplaceLink] = useState<{ section: ExtensionSection; id?: string } | null>(null)
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
+  // The Inbox takes the window beside the rail: everything that waits on a person.
+  const [inboxPage, setInboxPage] = useState(false)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
@@ -430,16 +433,30 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
-  const width = compact ? 76 : sidebarWidth
+  if (inboxPage) {
+    detail = (
+      <InboxView
+        stores={stores}
+        onOpen={(computerId, botId) => {
+          setInboxPage(false)
+          app.select({ computerId, botId })
+        }}
+      />
+    )
+  }
+
+  const railActive = inboxPage ? 'inbox' : canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const width = compact || inboxPage ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
-      <aside className={`sidebar ${compact ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
+      <aside className={`sidebar ${compact || inboxPage ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
         <div className="sidebar-rail">
           <AppRail
             active={railActive}
-            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null) }}
+            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false) }}
+            onInbox={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(true) }}
             onCanvas={() => {
+              setInboxPage(false)
               if (selectedBot && selectedStore) {
                 setCanvasBot(selectedBot.id)
                 setCanvasStore(selectedStore)
@@ -451,11 +468,11 @@ function ChatSplitView() {
               setCanvasBot(first.bot.id)
               setCanvasStore(first.store)
             }}
-            onUsage={() => setSettings('usage')}
+            onUsage={() => { setInboxPage(false); setSettings('usage') }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
-            onExtensions={() => openMarketplace()}
-            onSettings={() => setSettings('general')}
+            onExtensions={() => { setInboxPage(false); openMarketplace() }}
+            onSettings={() => { setInboxPage(false); setSettings('general') }}
             onAccount={() => setShowAccount((s) => !s)}
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
@@ -471,7 +488,7 @@ function ChatSplitView() {
             </div>
           ) : null}
         </div>
-        <div className="sidebar-panel">
+        <div className="sidebar-panel" style={inboxPage ? { display: 'none' } : undefined}>
         <div className="sidebar-header drag" inert={compact}>
           <Spacer />
           <HStack gap={6} className="no-drag">

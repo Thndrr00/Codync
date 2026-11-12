@@ -2038,5 +2038,18 @@
   "Remove from chart": "Quitar del esquema",
   "Drag the dot under a card onto the member it reports to.": "Arrastra el punto bajo una tarjeta hasta el miembro al que reporta.",
   "Select a card": "Elige una tarjeta",
-  "That line would create a loop.": "Esa línea crearía un bucle."
+  "That line would create a loop.": "Esa línea crearía un bucle.",
+  "Inbox": "Bandeja",
+  "Nothing waits on you.": "No hay nada pendiente.",
+  "things wait on you": "cosas esperan por ti",
+  "All clear": "Todo al día",
+  "Approvals, unread replies and failed runs from every bot land here.": "Las aprobaciones, respuestas sin leer y ejecuciones fallidas de todos los bots llegan aquí.",
+  "Waiting for your approval": "Esperando tu aprobación",
+  "New replies in a thread": "Respuestas nuevas en un hilo",
+  "unread message": "mensaje sin leer",
+  "unread messages": "mensajes sin leer",
+  "Routine recovering": "Rutina recuperándose",
+  "Routine failed": "Rutina fallida",
+  "Open the bot to see what happened": "Abre el bot para ver qué pasó",
+  "Open the first bot": "Abrir el primer bot"
 }

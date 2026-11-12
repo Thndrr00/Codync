@@ -124,7 +124,17 @@
         "avatarShape": "squircle",
         "featured": false
       },
-      "members": ["code-reviewer", "debugger", "qa-tester"]
+      "members": [
+        "code-reviewer",
+        "debugger",
+        "qa-tester"
+      ],
+      "roles": {
+        "tech-lead": "Supervisor",
+        "code-reviewer": "Código",
+        "debugger": "Código",
+        "qa-tester": "QA"
+      }
     },
     {
       "id": "research-desk",
@@ -140,7 +150,15 @@
         "avatarShape": "hex",
         "featured": false
       },
-      "members": ["researcher", "writer"]
+      "members": [
+        "researcher",
+        "writer"
+      ],
+      "roles": {
+        "research-lead": "Supervisor",
+        "researcher": "Datos",
+        "writer": "Redacción"
+      }
     },
     {
       "id": "product-squad",
@@ -156,7 +174,17 @@
         "avatarShape": "cloud",
         "featured": false
       },
-      "members": ["product-designer", "project-planner", "writer"]
+      "members": [
+        "product-designer",
+        "project-planner",
+        "writer"
+      ],
+      "roles": {
+        "product-lead": "Supervisor",
+        "product-designer": "UI/UX",
+        "project-planner": "Producto",
+        "writer": "Redacción"
+      }
     },
     {
       "id": "personal-office",
@@ -172,7 +200,68 @@
         "avatarShape": "blob",
         "featured": false
       },
-      "members": ["email-assistant", "personal-organizer", "trip-planner", "meeting-assistant"]
+      "members": [
+        "email-assistant",
+        "personal-organizer",
+        "trip-planner",
+        "meeting-assistant"
+      ],
+      "roles": {
+        "chief-of-staff": "Supervisor",
+        "email-assistant": "Correo",
+        "personal-organizer": "Organización",
+        "trip-planner": "Viajes",
+        "meeting-assistant": "Actas"
+      }
+    },
+    {
+      "id": "quality-squad",
+      "name": "Quality squad",
+      "summary": "A security reviewer leading a code reviewer and a QA tester.",
+      "purpose": "Review changes for security, correctness and what breaks in practice.",
+      "coordinator": {
+        "id": "quality-lead",
+        "name": "Quality lead",
+        "summary": "Reviews what the team ships for security, correctness and what breaks.",
+        "instructions": "You lead a quality squad. When a change or a feature arrives, decide what to check, hand the security angle to the security reviewer, the code reading to the code reviewer and the hands-on checks to the QA tester by @mentioning them. Collect their findings, separate blockers from nits, and give one verdict with the evidence behind it.",
+        "avatarColor": "black",
+        "avatarShape": "hex",
+        "featured": false
+      },
+      "members": [
+        "code-reviewer",
+        "qa-tester"
+      ],
+      "roles": {
+        "quality-lead": "Supervisor",
+        "security-reviewer": "Auditor",
+        "code-reviewer": "Código",
+        "qa-tester": "QA"
+      }
+    },
+    {
+      "id": "design-squad",
+      "name": "Design squad",
+      "summary": "A product designer leading research and writing.",
+      "purpose": "Shape a feature: research, flows and screens, and the words around it.",
+      "coordinator": {
+        "id": "design-lead",
+        "name": "Design lead",
+        "summary": "Turns a product idea into research, flows, screens and the words around them.",
+        "instructions": "You lead a design squad. Start from the user and the problem, ask the researcher for evidence when facts are missing, shape the flow and the screens yourself, and hand the copy to the writer by @mentioning them. Collect the pieces and present one coherent proposal with the trade-offs.",
+        "avatarColor": "violet",
+        "avatarShape": "tablet",
+        "featured": false
+      },
+      "members": [
+        "researcher",
+        "writer"
+      ],
+      "roles": {
+        "design-lead": "UI/UX",
+        "researcher": "Investigación",
+        "writer": "Redacción"
+      }
     }
   ]
 }
