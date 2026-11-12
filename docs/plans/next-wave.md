@@ -9,16 +9,16 @@ is bigger than one release.
 | Team templates with seeded roles and hierarchy | done |
 | SBOM for every release | done |
 | Local models (chat, embeddings, voice) | next |
-| Workspace RAG with citations | next |
+| Workspace search with citations | done (lexical) |
 | Team meeting: voice roundtable + minutes | next |
-| Standup routines for a team | next |
+| Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | next |
-| Handoff with context between bots | next |
+| Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | AG-UI server and A2UI in the chat | next |
 | Agent evaluations in CI | next |
 | Policies by role and tool | next |
-| Retention and redaction | next |
+| Retention (preview + delete) | done |
 | Approvals from the phone notification | next |
 | Desktop agent dock and global shortcut | next |
 | Share-to-bot on Android and iOS | next |
@@ -68,12 +68,13 @@ Goal: a bot can run without an account.
 - Acceptance: a bot answers and uses a tool with no network, and memory search returns results without a
   provider key.
 
-## Workspace RAG — next
+## Workspace search — done (lexical)
 
-- Host: `host/src/rag/` indexes the bot's folder (code, Markdown, PDF through PDFium) into chunks with
-  embeddings; a `search_workspace` tool returns passages with file and line.
-- Desktop: a citation card in the chat that opens the file at the line.
-- Acceptance: "where is the login handled?" answers with three citations that resolve.
+- Host: `host/src/chat/workspace.rs` adds `search_workspace` and `read_workspace_file`, bounded to 4,000
+  files, 512 KB per file and 40 matches, skipping `.git`, `node_modules`, `target` and other build
+  folders; each match carries file, line and a snippet, and reading returns numbered lines.
+- Next: embeddings (fastembed or llama.cpp) behind `codync-mem` for semantic search, and a citation card
+  in the chat that opens the file at the line.
 
 ## Team meeting — next
 
@@ -83,17 +84,18 @@ Goal: a bot can run without an account.
 - Acceptance: a 4-bot meeting produces minutes with owners and actions, without any bot answering in its
   own chat.
 
-## Standup and the board — next
+## Standup — done; the board is next
 
-- Standup: a group routine with the roles as the agenda; each member reports, the lead summarises.
+- Standup: `/standup` (or `/daily`, `/parte`) in a smart-mode team chat makes every member report what
+  it finished, what is next and what is blocked, in the group chat. It runs when asked, not on a schedule.
 - Board: tasks attached to the group with state driven by the run (`assigned`, `working`, `waiting`,
   `done`), rendered as columns on the group page and as cards on the canvas.
 - Acceptance: assigning "review the PR" moves the card as the bot works and ends in `done` with the result.
 
-## Handoff — next
+## Handoff — done
 
-- Extend `message_bot` with `handoff: true`: the recipient receives the summary of what was done, the
-  files touched and the open questions; the sender's chat shows a single line instead of the full history.
+- `message_bot` accepts a `handoff` object (summary, files, open questions) and prepends it as a note,
+  so the recipient starts from the sender's result instead of repeating it.
 - Acceptance: a bot hands a failing test to the debugger and the debugger starts with the failing output.
 
 ## Extension SDK — next
@@ -116,10 +118,11 @@ Goal: a bot can run without an account.
 - CI job nightly and on demand; a score per model and a diff between runs.
 - Acceptance: changing a bot's prompt shows pass/fail per case before merging.
 
-## Policies, retention, budgets — next
+## Policies, retention, budgets — retention done; policies and the budget gate next
 
 - Policy: per-role and per-tool allow/deny on top of approval rules (which folder, which host, which MCP).
-- Retention: days per space for messages, attachments and runs; a prune job with a dry-run preview.
+- Retention: done — `retentionPreview` and `pruneRetention` count and delete messages older than N days,
+  and Diagnostics › Message retention previews before deleting.
 - Budget: reserve before a turn, release on failure, block with a clear state (today routines pause at the
   limit; user turns never do).
 - Acceptance: a role cannot run shell outside its folder; retention previews and then deletes only what it

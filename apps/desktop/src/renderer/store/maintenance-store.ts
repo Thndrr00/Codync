@@ -6,6 +6,7 @@ import type { BotBundle, DoctorReport, TokenBudget } from '@shared/models'
 export class MaintenanceStore extends Observable {
   report: DoctorReport | null = null
   budgets: TokenBudget[] = []
+  retention: { days: number; messages: number } | null = null
   busy = false
   error: string | null = null
   notice: string | null = null
@@ -36,6 +37,22 @@ export class MaintenanceStore extends Observable {
     await this.run(async (c) => {
       const { cleared } = await c.call<{ cleared: number }>('clearFailedRuns', {})
       this.notice = cleared ? `Cleared ${cleared} failed ${cleared === 1 ? 'run' : 'runs'}.` : 'No failed runs to clear.'
+    })
+  }
+
+  /** How many messages a retention of `days` would delete, without deleting them. */
+  async previewRetention(days: number) {
+    await this.run(async (c) => {
+      this.retention = await c.call<{ days: number; messages: number }>('retentionPreview', { days })
+    })
+  }
+
+  /** Deletes the messages older than `days`. */
+  async pruneRetention(days: number) {
+    await this.run(async (c) => {
+      const { deleted } = await c.call<{ deleted: number }>('pruneRetention', { days })
+      this.retention = null
+      this.notice = deleted ? `Deleted ${deleted} old ${deleted === 1 ? 'message' : 'messages'}.` : 'Nothing was older than that.'
     })
   }
 

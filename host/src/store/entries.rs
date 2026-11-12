@@ -466,6 +466,25 @@ impl Store {
         tx.commit()?;
         Ok(Some(rev))
     }
+
+    /// How many messages are older than `cutoff` (a retention preview).
+    pub fn count_entries_before(&self, cutoff: i64) -> Result<u64> {
+        let c = self.db.locked();
+        let count: i64 = c.query_row("SELECT COUNT(*) FROM entries WHERE created_at < ?1", [cutoff], |row| row.get(0))?;
+        Ok(u64::try_from(count).unwrap_or(0))
+    }
+
+    /// Deletes the messages older than `cutoff`; one rev tells every client to reload.
+    pub fn prune_entries_before(&self, cutoff: i64) -> Result<u64> {
+        let mut c = self.db.locked();
+        let tx = c.transaction()?;
+        let deleted = tx.execute("DELETE FROM entries WHERE created_at < ?1", [cutoff])?;
+        if deleted > 0 {
+            let _ = next_rev(&tx)?;
+        }
+        tx.commit()?;
+        Ok(u64::try_from(deleted).unwrap_or(0))
+    }
 }
 
 #[cfg(test)]

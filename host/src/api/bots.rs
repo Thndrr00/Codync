@@ -427,6 +427,17 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let cleared = hub.routines.clear_failed(&hub.store, b["botId"].as_str())?;
             json!({"cleared": cleared})
         }
+        "retentionPreview" => {
+            let days = b["days"].as_u64().filter(|d| (1..=3650).contains(d)).context("days must be 1 to 3650")?;
+            let cutoff = crate::store::now_ms() - i64::try_from(days).unwrap_or(1) * 86_400_000;
+            json!({"days": days, "messages": hub.store.count_entries_before(cutoff)?})
+        }
+        "pruneRetention" => {
+            let days = b["days"].as_u64().filter(|d| (1..=3650).contains(d)).context("days must be 1 to 3650")?;
+            let cutoff = crate::store::now_ms() - i64::try_from(days).unwrap_or(1) * 86_400_000;
+            let deleted = hub.store.prune_entries_before(cutoff)?;
+            json!({"days": days, "deleted": deleted})
+        }
         "exportBot" => {
             let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
             crate::bundle::export(&[row.config])?
