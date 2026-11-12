@@ -137,15 +137,22 @@ import com.codync.android.design.*
     val setMember = { member: TeamMember -> onChange(team.copy(members = team.members.map { if (it.botId == member.botId) member else it })) }
     Column(Modifier.fillMaxWidth().animateContentSize(Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Equipo", style = Type.subheadline.semibold, color = Palette.secondary)
-        SegmentedChoice(if (team.mode == "roundtable") "roundtable" else "team",
-            listOf("team" to "Una voz", "roundtable" to "Mesa redonda")) { onChange(team.copy(mode = it)) }
-        Text(if (team.mode == "roundtable") "Cada miembro responde por turno." else "El líder responde por todo el equipo.",
-            style = Type.caption, color = Palette.tertiary)
+        SegmentedChoice(if (team.mode == "roundtable") "roundtable" else if (team.mode == "team") "team" else "smart",
+            listOf("smart" to "Automático", "team" to "Una voz", "roundtable" to "Mesa redonda")) { onChange(team.copy(mode = it)) }
+        Text(when (team.mode) {
+            "roundtable" -> "Cada miembro responde por turno."
+            "team" -> "El líder responde por todo el equipo."
+            else -> "Responde a quien preguntes: /boss para el líder, un rol para ese miembro, o todos en general."
+        }, style = Type.caption, color = Palette.tertiary)
         if (team.mode != "roundtable") {
-            Text("Quién puede hablar", Modifier.padding(top = 4.dp), style = Type.caption, color = Palette.secondary)
-            SegmentedChoice(team.voice.ifEmpty { "lead" },
-                listOf("lead" to "Líder", "lead_and_hands" to "Líder + nombrados", "all" to "Todos")) {
-                onChange(team.copy(voice = it))
+            if (team.mode == "team") {
+                Text("Quién puede hablar", Modifier.padding(top = 4.dp), style = Type.caption, color = Palette.secondary)
+            }
+            if (team.mode == "team") {
+                SegmentedChoice(team.voice.ifEmpty { "lead" },
+                    listOf("lead" to "Líder", "lead_and_hands" to "Líder + nombrados", "all" to "Todos")) {
+                    onChange(team.copy(voice = it))
+                }
             }
             for (member in team.members) {
                 val bot = members.firstOrNull { it.id == member.botId } ?: continue

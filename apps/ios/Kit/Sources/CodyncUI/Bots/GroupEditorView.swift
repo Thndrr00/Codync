@@ -137,17 +137,24 @@ public struct GroupEditorView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Palette.secondary)
             SegmentedChoice(
-                selection: Binding(get: { team.mode == "roundtable" ? "roundtable" : "team" }, set: { team.mode = $0 }),
-                options: [(id: "team", label: "One voice"), (id: "roundtable", label: "Round table")]
+                selection: Binding(get: { team.mode == "roundtable" ? "roundtable" : team.mode == "team" ? "team" : "smart" }, set: { team.mode = $0 }),
+                options: [(id: "smart", label: "Automatic"), (id: "team", label: "One voice"), (id: "roundtable", label: "Round table")]
             )
-            Text(L10n.tr(team.mode == "roundtable" ? "Every member answers in turn." : "The lead answers for the whole team."))
+            Text(L10n.tr(team.mode == "roundtable" ? "Every member answers in turn." : team.mode == "team" ? "The lead answers for the whole team." : "Who answers follows the request."))
                 .font(.caption)
                 .foregroundStyle(Palette.tertiary)
-            if team.mode != "roundtable" {
+            if team.mode == "smart" {
+                Text(L10n.tr("Write /boss for the lead, name a role (\"UI/UX\", \"Auditor\") for that member, or ask in general and everyone answers in this chat."))
+                    .font(.caption)
+                    .foregroundStyle(Palette.tertiary)
+            }
+            if team.mode == "team" {
                 SegmentedChoice(
                     selection: Binding(get: { team.voice.isEmpty ? "lead" : team.voice }, set: { team.voice = $0 }),
                     options: [(id: "lead", label: "Lead only"), (id: "lead_and_hands", label: "Lead + named"), (id: "all", label: "Everyone")]
                 )
+            }
+            if team.mode != "roundtable" {
                 ForEach(team.members.filter { member in picked.contains { $0.id == member.botId } }) { member in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 12) {

@@ -17,7 +17,7 @@ data class TeamMember(
 @Serializable
 data class TeamSettings(
     /** `team` answers as one voice through its lead; `roundtable` keeps every member answering. */
-    val mode: String = "team",
+    val mode: String = "smart",
     /** `lead`, `lead_and_hands` (a member the lead names may also speak) or `all`. */
     val voice: String = "lead",
     /** One entry per member on the chart. */

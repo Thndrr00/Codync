@@ -113,19 +113,38 @@ pub fn with_members(store: &Store, members: &[String]) -> Result<Option<String>>
 /// The user wrote in a group lane: start a room turn there (ending one still running).
 pub fn start(hub: &Arc<Hub>, group: &BotConfig, lane: Lane) {
     let epoch = hub.groups.next(&lane);
-    let team = team_mode(group);
+    let mode = team_mode(group);
     let (hub, group_id) = (hub.clone(), group.id.clone());
     tokio::spawn(async move {
-        let result = if team { run_team(&hub, &group_id, &lane, epoch).await } else { run(&hub, &group_id, &lane, epoch).await };
+        let result = match mode {
+            TeamMode::OneVoice => run_team(&hub, &group_id, &lane, epoch).await,
+            TeamMode::Smart => run_smart(&hub, &group_id, &lane, epoch).await,
+            TeamMode::Roundtable => run(&hub, &group_id, &lane, epoch).await,
+        };
         if let Err(error) = result {
             tracing::warn!(group = group_id, error = format!("{error:#}"), "room turn failed");
         }
     });
 }
 
-/// Whether the group answers as one team through its lead, rather than as a round table.
-pub fn team_mode(group: &BotConfig) -> bool {
-    group.team.as_ref().is_some_and(|team| team.mode == "team")
+/// How a group answers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TeamMode {
+    /// Classic: members answer in rounds, @mentions choose who.
+    Roundtable,
+    /// The lead answers once for the whole team.
+    OneVoice,
+    /// Who answers depends on the request: `/boss`, a role, or everyone.
+    Smart,
+}
+
+/// The group's answering mode. A group without a team setup keeps the round table.
+pub fn team_mode(group: &BotConfig) -> TeamMode {
+    match group.team.as_ref().map(|t| t.mode.as_str()) {
+        Some("team") => TeamMode::OneVoice,
+        Some("smart") => TeamMode::Smart,
+        _ => TeamMode::Roundtable,
+    }
 }
 
 /// Who may speak besides the lead: `lead` (nobody), `lead_and_hands` (members the lead hands the
@@ -141,8 +160,8 @@ fn team_voice(group: &BotConfig) -> &str {
 /// Checks a group's team setup against its members: ids belong to the group, and the reporting
 /// lines never loop. The lead is the group's chief, or its first member.
 pub fn validate_team(group: &BotConfig, team: &TeamSettings) -> Result<()> {
-    if !matches!(team.mode.as_str(), "" | "team" | "roundtable") {
-        bail!("team mode must be team or roundtable");
+    if !matches!(team.mode.as_str(), "" | "team" | "roundtable" | "smart") {
+        bail!("team mode must be team, roundtable or smart");
     }
     if !matches!(team.voice.as_str(), "" | "lead" | "lead_and_hands" | "all") {
         bail!("team voice must be lead, lead_and_hands or all");
@@ -181,6 +200,147 @@ pub fn validate_team(group: &BotConfig, team: &TeamSettings) -> Result<()> {
     Ok(())
 }
 
+/// Who should answer a smart-mode request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// `/boss`: only the team's lead.
+    Boss,
+    /// A role or a name: that member alone.
+    Member(String),
+    /// Nobody in particular: everyone answers in the room.
+    All,
+}
+
+/// `/boss`, `/jefe`, `/lead` or `/supervisor` in the text: the lead answers.
+fn calls_boss(text: &str) -> bool {
+    let text = text.to_lowercase();
+    ["/boss", "/jefe", "/lead", "/supervisor", "/lider", "/líder"].iter().any(|command| text.contains(command))
+}
+
+/// Folds a phrase for matching: lower case, no accents, punctuation as spaces.
+fn fold(text: &str) -> String {
+    let plain: String = text
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'ä' | 'â' | 'ã' => 'a',
+            'é' | 'è' | 'ë' | 'ê' => 'e',
+            'í' | 'ì' | 'ï' | 'î' => 'i',
+            'ó' | 'ò' | 'ö' | 'ô' | 'õ' => 'o',
+            'ú' | 'ù' | 'ü' | 'û' => 'u',
+            'ñ' => 'n',
+            'ç' => 'c',
+            other => other,
+        })
+        .flat_map(char::to_lowercase)
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    plain.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The member a message asks for by role or by name, when exactly one matches.
+fn named_target(norm: &str, group: &BotConfig, members: &[BotConfig]) -> Option<String> {
+    let mut best: Option<(usize, Vec<String>)> = None;
+    let mut consider = |phrase: &str, id: &str| {
+        let phrase = fold(phrase);
+        if phrase.len() < 3 || !norm.contains(&phrase) {
+            return;
+        }
+        match &mut best {
+            Some((len, _)) if *len > phrase.len() => {}
+            Some((len, ids)) if *len == phrase.len() => {
+                if !ids.iter().any(|other| other == id) {
+                    ids.push(id.to_owned());
+                }
+            }
+            slot => *slot = Some((phrase.len(), vec![id.to_owned()])),
+        }
+    };
+    for member in members {
+        let role = group
+            .team
+            .as_ref()
+            .and_then(|t| t.members.iter().find(|m| m.bot_id == member.id))
+            .map(|m| m.role.clone())
+            .unwrap_or_default();
+        if !role.trim().is_empty() {
+            consider(&role, &member.id);
+        }
+        if let Some(first) = member.name.split_whitespace().next() {
+            consider(first, &member.id);
+        }
+    }
+    match best {
+        Some((_, ids)) if ids.len() == 1 => ids.into_iter().next(),
+        _ => None,
+    }
+}
+
+/// Decides who answers a smart-mode request from its text alone.
+pub fn pick_target(text: &str, group: &BotConfig, members: &[BotConfig]) -> Target {
+    let norm = fold(text);
+    if calls_boss(text) {
+        return Target::Boss;
+    }
+    match named_target(&norm, group, members) {
+        Some(id) => Target::Member(id),
+        None => Target::All,
+    }
+}
+
+/// The group's lead: its chief when that is a member, else its first member.
+fn lead_of(group: &BotConfig, members: &[BotConfig]) -> Option<BotConfig> {
+    group
+        .chief_bot_id
+        .clone()
+        .filter(|id| members.iter().any(|m| &m.id == id))
+        .or_else(|| members.first().map(|m| m.id.clone()))
+        .and_then(|id| members.iter().find(|m| m.id == id).cloned())
+}
+
+/// The request answers itself: the lead for `/boss`, one member for a role or name, everyone else.
+async fn run_smart(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<()> {
+    let group = group(hub, group_id)?;
+    let members = members(hub, &group);
+    if members.is_empty() {
+        bail!("the group has no members");
+    }
+    let since = since_last_user_message(hub, lane)?;
+    let text = since.first().and_then(|e| e.data["text"].as_str()).unwrap_or_default().to_owned();
+    // An @mention is already a direct address.
+    let mentioned = responders(&members, &since);
+    let target = if members.len() > 1 && mentioned.len() == 1 {
+        Target::Member(mentioned[0].id.clone())
+    } else {
+        pick_target(&text, &group, &members)
+    };
+    match target {
+        Target::All => run(hub, group_id, lane, epoch).await,
+        Target::Boss => {
+            let Some(lead) = lead_of(&group, &members) else { return Ok(()) };
+            let (prompt, shown) = team_prompt(hub, &group, &members, &lead, lane)?;
+            if let Some(text) = ask_once(hub, lane, epoch, &lead, prompt, shown).await? {
+                alert(hub, group_id, &lead.id, &lead.name, &text)?;
+            }
+            Ok(())
+        }
+        Target::Member(id) => {
+            let Some(member) = members.iter().find(|m| m.id == id).cloned() else {
+                return Ok(());
+            };
+            let is_lead = lead_of(&group, &members).is_some_and(|lead| lead.id == member.id);
+            let (prompt, shown) = if is_lead {
+                team_prompt(hub, &group, &members, &member, lane)?
+            } else {
+                ask(hub, &group, &members, &member, lane)?
+            };
+            if let Some(text) = ask_once(hub, lane, epoch, &member, prompt, shown).await? {
+                alert(hub, group_id, &member.id, &member.name, &text)?;
+            }
+            Ok(())
+        }
+    }
+}
+
 /// The lead answers for the whole team, in one message, after consulting whoever it needs.
 async fn run_team(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<()> {
     let group = group(hub, group_id)?;
@@ -188,17 +348,11 @@ async fn run_team(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Re
     if members.is_empty() {
         bail!("the group has no members");
     }
-    let lead_id = group
-        .chief_bot_id
-        .clone()
-        .filter(|id| members.iter().any(|m| &m.id == id))
-        .or_else(|| members.first().map(|m| m.id.clone()))
-        .ok_or_else(|| anyhow!("the group has no lead"))?;
-    let lead = members.iter().find(|m| m.id == lead_id).cloned().ok_or_else(|| anyhow!("the lead is missing"))?;
+    let lead = lead_of(&group, &members).ok_or_else(|| anyhow!("the group has no lead"))?;
     let since_user = since_last_user_message(hub, lane)?;
     // A person who names one member talks to that member, not to the team's voice.
     let responders = responders(&members, &since_user);
-    if responders.len() == 1 && responders[0].id != lead_id {
+    if responders.len() == 1 && responders[0].id != lead.id {
         let target = (*responders[0]).clone();
         let (prompt, shown) = ask(hub, &group, &members, &target, lane)?;
         let _ = ask_once(hub, lane, epoch, &target, prompt, shown).await;

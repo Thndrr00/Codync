@@ -24,7 +24,7 @@ export function defaultTeam(members: string[], chiefBotId: string | null): TeamS
     x: 40 + index * (NODE_WIDTH + SIDE_GAP),
     y: id === lead ? 40 : 40 + LEVEL_GAP,
   }))
-  return { mode: 'team', voice: 'lead', members: rows }
+  return { mode: 'smart', voice: 'lead', members: rows }
 }
 
 /** Keeps the chart in step with the group's members and its chief. */
@@ -147,8 +147,9 @@ export function TeamStructureEditor({ bots, chiefBotId, team, onChange, onLead }
     <VStack gap={12} className="team-structure">
       <div className="team-mode-row">
         <SegmentedChoice
-          selection={rows.mode === 'roundtable' ? 'roundtable' : 'team'}
+          selection={rows.mode === 'roundtable' ? 'roundtable' : rows.mode === 'team' ? 'team' : 'smart'}
           options={[
+            { id: 'smart', label: tr('Automatic') },
             { id: 'team', label: tr('One voice') },
             { id: 'roundtable', label: tr('Round table') },
           ]}
@@ -156,24 +157,36 @@ export function TeamStructureEditor({ bots, chiefBotId, team, onChange, onLead }
         />
         <Spacer />
         <Text size="caption" tone="secondary">
-          {rows.mode === 'roundtable' ? tr('Every member answers in turn.') : tr('The lead answers for the whole team.')}
+          {rows.mode === 'roundtable'
+            ? tr('Every member answers in turn.')
+            : rows.mode === 'team'
+              ? tr('The lead answers for the whole team.')
+              : tr('Who answers follows the request.')}
         </Text>
       </div>
 
+      {rows.mode === 'smart' ? (
+        <Text size="caption" tone="tertiary">
+          {tr('Write /boss for the lead, name a role ("UI/UX", "Auditor") for that member, or ask in general and everyone answers in this chat.')}
+        </Text>
+      ) : null}
+
       {rows.mode !== 'roundtable' ? (
         <>
-          <div className="team-voice-row">
-            <Text size="caption" tone="secondary">{tr('Who may speak')}</Text>
-            <SegmentedChoice
-              selection={rows.voice === '' ? 'lead' : rows.voice}
-              options={[
-                { id: 'lead', label: tr('Lead only') },
-                { id: 'lead_and_hands', label: tr('Lead + named') },
-                { id: 'all', label: tr('Everyone') },
-              ]}
-              onChange={(voice) => onChange({ ...rows, voice: voice as TeamSettings['voice'] })}
-            />
-          </div>
+          {rows.mode === 'team' ? (
+            <div className="team-voice-row">
+              <Text size="caption" tone="secondary">{tr('Who may speak')}</Text>
+              <SegmentedChoice
+                selection={rows.voice === '' ? 'lead' : rows.voice}
+                options={[
+                  { id: 'lead', label: tr('Lead only') },
+                  { id: 'lead_and_hands', label: tr('Lead + named') },
+                  { id: 'all', label: tr('Everyone') },
+                ]}
+                onChange={(voice) => onChange({ ...rows, voice: voice as TeamSettings['voice'] })}
+              />
+            </div>
+          ) : null}
 
           <div className="team-toolbar">
             <HStack gap={6} align="center">

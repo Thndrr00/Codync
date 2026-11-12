@@ -109,7 +109,9 @@ export function GroupEditorView({ group }: { group: Bot }) {
             <Text as="div" size="caption" tone="tertiary" className="group-note">
               {reconcileTeam(team, members, chiefBotId).mode === 'team'
                 ? tr('The lead answers for the whole team; a member it names may also speak.')
-                : tr('Everyone answers in turn unless you @mention someone.')}
+                : reconcileTeam(team, members, chiefBotId).mode === 'smart'
+                  ? tr('Answers who you ask: /boss for the lead, a role for that member, or everyone.')
+                  : tr('Everyone answers in turn unless you @mention someone.')}
             </Text>
             {picked.length > 0 ? (
               <ValueRow

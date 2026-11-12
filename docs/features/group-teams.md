@@ -4,14 +4,22 @@ A group chat can stay a round table (today's behaviour) or work as a team with a
 reporting lines. The setting lives in the group's own config (`team`), so every client reads the same
 structure and the host enforces it.
 
-## The two modes
+## The three modes
 
-- **Round table** (`mode: "roundtable"`, or no `team` at all): unchanged. Up to three rounds, members
-  answer one at a time, `@mentions` pick who speaks, `(pass)` stays out of the room.
-- **One voice** (`mode: "team"`): the lead answers once, for the whole team. Its prompt carries the
-  hierarchy (who reports to whom, each role), and it can consult any member with `ask_bot` before
-  answering; the member's reply comes back inside the same turn and the lead owns the final message.
-  A person who `@mentions` one member still talks to that member directly.
+- **Round table** (`mode: "roundtable"`, or no `team` at all): the original behaviour, unchanged. Up to
+  three rounds, members answer one at a time, `@mentions` pick who speaks, `(pass)` stays out of the room.
+- **Smart** (`mode: "smart"`, the default a new team setup starts with): who answers follows the request,
+  and every answer lands in the group chat.
+  - `/boss`, `/jefe`, `/lead`, `/supervisor`: only the lead answers, with the whole team's context.
+  - A role or a name (`"¿cómo vamos con el UI/UX?"`, `"que lo vea el auditor"`, `"Dani, ¿cómo va?"`):
+    exactly that member answers, in the group.
+  - Nothing in particular (`"¿cómo vamos?"`, `"¿cómo va el equipo?"`): every member answers in the group,
+    like a stand-up.
+  - An `@mention` is already a direct address and wins over role matching.
+- **One voice** (`mode: "team"`): the lead answers once for everybody, may consult members with
+  `ask_bot` inside the turn, and may hand the floor to a member by naming it (see `voice`).
+
+No member ever answers in its own chat: every room turn writes to the group lane.
 
 ## Who may speak
 

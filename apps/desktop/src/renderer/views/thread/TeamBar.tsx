@@ -13,7 +13,13 @@ export function TeamBar({ bot, members, onOpen }: { bot: Bot; members: Bot[]; on
   const tr = useTr()
   const leadId = bot.chiefBotId ?? bot.members[0] ?? null
   const lead = members.find((m) => m.id === leadId) ?? null
-  const voice = bot.team?.voice === 'all' ? tr('Everyone') : bot.team?.voice === 'lead_and_hands' ? tr('Lead + named') : tr('Lead only')
+  const voice = bot.team?.mode === 'smart'
+    ? tr('Automatic')
+    : bot.team?.voice === 'all'
+      ? tr('Everyone')
+      : bot.team?.voice === 'lead_and_hands'
+        ? tr('Lead + named')
+        : tr('Lead only')
   return (
     <button type="button" className="team-bar" onClick={onOpen} title={tr('Open the team structure')}>
       <HStack gap={8} align="center">

@@ -220,7 +220,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
             {store.shownConnection.kind !== 'online' || store.mismatch ? <ConnectionSubtitle /> : null}
           </button>
         </div>
-        {bot && isGroup(bot) && bot.team?.mode === 'team' ? (
+        {bot && isGroup(bot) && (bot.team?.mode === 'team' || bot.team?.mode === 'smart') ? (
           <TeamBar bot={bot} members={store.members(bot)} onOpen={() => setEditingGroup(true)} />
         ) : null}
         {/* An update card takes the composer's place, so there's nothing to reply with. */}

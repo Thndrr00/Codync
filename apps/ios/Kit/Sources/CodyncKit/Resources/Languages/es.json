@@ -2023,5 +2023,8 @@
   "Open the team structure": "Abrir la estructura del equipo",
   "leads": "lidera",
   "agents": "agentes",
-  "Structure": "Estructura"
+  "Structure": "Estructura",
+  "Who answers follows the request.": "Responde según a quién preguntes.",
+  "Answers who you ask: /boss for the lead, a role for that member, or everyone.": "Responde a quien preguntes: /boss para el líder, un rol para ese miembro, o todos.",
+  "Write /boss for the lead, name a role (\"UI/UX\", \"Auditor\") for that member, or ask in general and everyone answers in this chat.": "Escribe /boss para el líder, nombra un rol («UI/UX», «Auditor») para ese miembro, o pregunta en general y todos responden en este chat."
 }

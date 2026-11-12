@@ -47,11 +47,11 @@ fn a_team_hierarchy_must_name_its_own_members_and_never_loop() {
 #[test]
 fn only_team_mode_answers_as_one() {
     let mut g = team_group(&["a", "b"], Some("a"));
-    assert!(!team_mode(&g), "no setup keeps the round table");
+    assert_eq!(team_mode(&g), TeamMode::Roundtable, "no setup keeps the round table");
     g.team = Some(TeamSettings { mode: "roundtable".into(), ..TeamSettings::default() });
-    assert!(!team_mode(&g));
+    assert_eq!(team_mode(&g), TeamMode::Roundtable);
     g.team = Some(TeamSettings { mode: "team".into(), ..TeamSettings::default() });
-    assert!(team_mode(&g));
+    assert_eq!(team_mode(&g), TeamMode::OneVoice);
 }
 
 #[test]
@@ -65,3 +65,30 @@ fn a_lead_naming_a_member_hands_it_the_floor() {
     with_hands.team = Some(TeamSettings { voice: "lead_and_hands".into(), ..TeamSettings::default() });
     assert_eq!(team_voice(&with_hands), "lead_and_hands");
 }
+
+#[test]
+fn smart_mode_routes_by_command_role_or_everyone() {
+    let members = [bot("a", "Ana"), bot("b", "Beto"), bot("c", "Caro"), bot("d", "Dani")];
+    let team = TeamSettings {
+        mode: "smart".into(),
+        members: vec![
+            TeamMember { bot_id: "a".into(), role: "Supervisor".into(), ..TeamMember::default() },
+            TeamMember { bot_id: "b".into(), role: "UI/UX".into(), ..TeamMember::default() },
+            TeamMember { bot_id: "c".into(), role: "Código".into(), ..TeamMember::default() },
+            TeamMember { bot_id: "d".into(), role: "Auditor".into(), ..TeamMember::default() },
+        ],
+        ..TeamSettings::default()
+    };
+    let mut g = team_group(&["a", "b", "c", "d"], Some("a"));
+    g.team = Some(team);
+    assert_eq!(pick_target("cómo vamos /boss", &g, &members), Target::Boss);
+    assert_eq!(pick_target("cómo vamos, jefe /jefe", &g, &members), Target::Boss);
+    assert_eq!(pick_target("cómo vamos con el UI/UX", &g, &members), Target::Member("b".into()));
+    assert_eq!(pick_target("revisa el código por favor", &g, &members), Target::Member("c".into()));
+    assert_eq!(pick_target("que lo vea el auditor", &g, &members), Target::Member("d".into()));
+    assert_eq!(pick_target("cómo vamos", &g, &members), Target::All);
+    assert_eq!(pick_target("cómo va el equipo hoy", &g, &members), Target::All);
+    // A name also works when nobody has that role.
+    assert_eq!(pick_target("Dani, ¿cómo va?", &g, &members), Target::Member("d".into()));
+}
+

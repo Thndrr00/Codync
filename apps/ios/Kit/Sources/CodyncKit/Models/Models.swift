@@ -338,7 +338,7 @@ public struct TeamSettings: Codable, Hashable, Sendable {
     public var voice: String
     public var members: [TeamMember]
 
-    public init(mode: String = "team", voice: String = "lead", members: [TeamMember] = []) {
+    public init(mode: String = "smart", voice: String = "lead", members: [TeamMember] = []) {
         self.mode = mode
         self.voice = voice
         self.members = members

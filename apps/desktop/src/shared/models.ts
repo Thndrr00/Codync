@@ -880,8 +880,8 @@ export interface AgentAccount {
 
 /** How a group works as a team: one voice with a hierarchy, or the classic round table. */
 export interface TeamSettings {
-  /** `team` answers as one voice through its lead; `roundtable` keeps every member answering. */
-  mode: 'team' | 'roundtable' | ''
+  /** `smart` routes each request (a /boss command, a role, or everyone); `team` answers as one voice; `roundtable` keeps every member answering. */
+  mode: 'smart' | 'team' | 'roundtable' | ''
   /** `lead` (only the lead answers), `lead_and_hands` (a member the lead names may also speak) or `all`. */
   voice: 'lead' | 'lead_and_hands' | 'all' | ''
   /** The structure, one entry per member on the chart. */
