@@ -18,6 +18,7 @@ import { BotRoster } from './BotRoster'
 import { ExtensionsMovedTip } from './ExtensionsMovedTip'
 import { RailAccountNotice } from './SidebarFooter'
 import { AppRail } from './AppRail'
+import { RoutineWorkflowView } from './routines/workflow/RoutineWorkflowView'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -259,6 +260,8 @@ function ChatSplitView() {
   const [marketplace, setMarketplace] = useState<string | null>(null)
   const [marketplaceLink, setMarketplaceLink] = useState<{ section: ExtensionSection; id?: string } | null>(null)
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
+  // The Routines page takes the window beside the rail, as OpenBot's does.
+  const [routinesPage, setRoutinesPage] = useState(false)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
@@ -430,16 +433,20 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
-  const width = compact ? 76 : sidebarWidth
+  if (routinesPage) detail = <RoutineWorkflowView onClose={() => setRoutinesPage(false)} />
+
+  const railActive = routinesPage ? 'routines' : canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const width = compact || routinesPage ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
-      <aside className={`sidebar ${compact ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
+      <aside className={`sidebar ${compact || routinesPage ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
         <div className="sidebar-rail">
           <AppRail
             active={railActive}
-            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null) }}
+            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setRoutinesPage(false) }}
+            onRoutines={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setRoutinesPage(true) }}
             onCanvas={() => {
+              setRoutinesPage(false)
               if (selectedBot && selectedStore) {
                 setCanvasBot(selectedBot.id)
                 setCanvasStore(selectedStore)
@@ -451,11 +458,11 @@ function ChatSplitView() {
               setCanvasBot(first.bot.id)
               setCanvasStore(first.store)
             }}
-            onUsage={() => setSettings('usage')}
+            onUsage={() => { setRoutinesPage(false); setSettings('usage') }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
-            onExtensions={() => openMarketplace()}
-            onSettings={() => setSettings('general')}
+            onExtensions={() => { setRoutinesPage(false); openMarketplace() }}
+            onSettings={() => { setRoutinesPage(false); setSettings('general') }}
             onAccount={() => setShowAccount((s) => !s)}
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
@@ -471,7 +478,7 @@ function ChatSplitView() {
             </div>
           ) : null}
         </div>
-        <div className="sidebar-panel">
+        <div className="sidebar-panel" style={routinesPage ? { display: 'none' } : undefined}>
         <div className="sidebar-header drag" inert={compact}>
           <Spacer />
           <HStack gap={6} className="no-drag">

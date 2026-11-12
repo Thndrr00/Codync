@@ -6,7 +6,7 @@ import appIcon from '../../../resources/icon.png'
 import './app-rail.css'
 
 /** Where the rail's icons point. The panel shows the list of the one that is current. */
-export type AppRailPage = 'bots' | 'canvas' | 'usage' | 'marketplace' | 'settings'
+export type AppRailPage = 'bots' | 'routines' | 'canvas' | 'usage' | 'marketplace' | 'settings'
 
 /** One icon in the rail: a square button with a tooltip and a selected state. */
 function RailButton({ label, icon, current, onClick, children, status }: {
@@ -46,9 +46,10 @@ function n8nStatus(n8n: N8nState | null | undefined): string {
  * pages in the middle, and the account and settings at the bottom. The list
  * panel beside it changes with the page.
  */
-export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n }: {
+export function AppRail({ active, onBots, onRoutines, onCanvas, onUsage, onN8n, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n }: {
   active: AppRailPage
   onBots: () => void
+  onRoutines: () => void
   onCanvas: () => void
   onUsage: () => void
   onN8n: () => void
@@ -69,6 +70,7 @@ export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onBrowser, o
       </div>
       <div className="app-rail-group">
         <RailButton label={tr('Bots')} icon="bubble.left.and.bubble.right" current={active === 'bots'} onClick={onBots} />
+        <RailButton label={tr('Routines')} icon="checklist" current={active === 'routines'} onClick={onRoutines} />
         <RailButton label={tr('Bot canvas')} icon="arrow.triangle.branch" current={active === 'canvas'} onClick={onCanvas} />
         <RailButton label={tr('Usage')} icon="gauge.with.dots.needle.33percent" current={active === 'usage'} onClick={onUsage} />
         <RailButton
