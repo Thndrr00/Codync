@@ -79,6 +79,15 @@ pub(super) fn accept(hub: &Hub, c: &Config, message: &Value) -> Result<()> {
     hub.store.enqueue_discord(&incoming)?;
     let root = stable_id(&[&c.generation, channel, "root"]);
     hub.store.map_discord_thread(&incoming, &root)?;
+    hub.store.record_channel_activity(&crate::store::ChannelActivity {
+        id: format!("discord-{}", incoming.entry),
+        source: "discord".into(),
+        bot_id: incoming.bot.clone(),
+        thread_id: Some(root),
+        channel: incoming.channel.clone(),
+        mentioned: mention,
+        at: crate::store::now_ms(),
+    })?;
     Ok(())
 }
 

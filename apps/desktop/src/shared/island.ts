@@ -1,4 +1,6 @@
 import type { BotStatus, UsageProvider } from './models'
+import type { IslandActivity } from './island-activity'
+import type { IslandControls, IslandDisplay, IslandEdge, IslandDensity } from './island-layout'
 
 // The notch island: a black shape at the top of the screen (in the notch on a
 // MacBook) that shows working bots and takes approvals. The chat window owns the stores and
@@ -31,6 +33,7 @@ export interface IslandBot {
   steps: IslandStep[]
   /** Why it stopped, when it failed. */
   error: string | null
+  unread?: number
 }
 
 export interface IslandOption {
@@ -61,11 +64,18 @@ export interface IslandSummary {
   usage: UsageProvider[]
   /** One line when the computer is short of memory (`healthAlert`), else null. */
   health: string | null
+  activity?: IslandActivity
 }
 
 /** The display the island sits on: the notch's size in points, or null at a plain top edge. */
 export interface IslandScreen {
   notch: { width: number; height: number } | null
+  edge?: IslandEdge
+  density?: IslandDensity
+  panel?: { width: number; height: number }
+  controls?: IslandControls
+  displays?: IslandDisplay[]
+  displayId?: number
 }
 
 /**
@@ -103,9 +113,9 @@ export interface NotchScreen {
 }
 
 /** Closed shapes, then the open views (640 pt wide, under a header of tabs). */
-export type IslandMode = 'hidden' | 'peek' | 'compact' | 'overview' | 'empty' | 'approval' | 'finished' | 'failed' | 'message' | 'usage'
+export type IslandMode = 'hidden' | 'peek' | 'compact' | 'overview' | 'empty' | 'approval' | 'finished' | 'failed' | 'message' | 'usage' | 'activity' | 'status' | 'options'
 /** The header's choice: `auto` shows what needs you first (an approval, a finished or failed bot). */
-export type IslandTab = 'auto' | 'bots' | 'message' | 'usage'
+export type IslandTab = 'auto' | 'bots' | 'message' | 'usage' | 'approvals' | 'activity' | 'status' | 'options'
 /** A bot that just stopped, shown until it times out (done) or is dismissed (failed). */
 export interface IslandNotice {
   kind: 'finished' | 'failed'
@@ -122,7 +132,7 @@ export const PANEL = { width: 720, height: 300 }
 export const OPEN_WIDTH = 640
 
 /**
- * Every open view has the same height (for a 32 pt notch; a taller one adds its extra), so
+ * Every open view has the same base height, plus the toolbar's camera/narrow-panel inset, so
  * switching tabs or alerts never moves the black shape: only what's inside changes.
  */
 const OPEN_HEIGHT = 196
@@ -145,7 +155,8 @@ export function islandMode(
     if (peek) return 'peek'
     return summary.bots.some(isActive) ? 'compact' : 'hidden'
   }
-  if (tab === 'message' || tab === 'usage') return tab
+  if (tab === 'message' || tab === 'usage' || tab === 'activity' || tab === 'status' || tab === 'options') return tab
+  if (tab === 'approvals') return summary.permissions.length ? 'approval' : 'activity'
   if (tab === 'auto') {
     if (summary.permissions.length) return 'approval'
     if (notice) return notice.kind
@@ -175,24 +186,27 @@ export function othersOf(bots: IslandBot[], focus: IslandBot | null, limit: numb
   return [...rest.filter(isActive), ...rest.filter((b) => !isActive(b))].slice(0, limit)
 }
 
-/** The header's height: a taller notch pushes the content down so nothing sits behind the camera. */
-export const contentTop = (screen: IslandScreen) => 36 + Math.max(0, (screen.notch?.height ?? 32) - 32)
+/** The larger toolbar sits below a camera notch; narrow panels use two toolbar rows. */
+export const contentTop = (screen: IslandScreen) => 36 + (screen.notch?.height ?? 0) + ((screen.panel?.width ?? PANEL.width) < 600 ? 36 : 0)
 
 /** The shape's size and bottom corner radius for `mode`. */
 export function islandFrame(mode: IslandMode, screen: IslandScreen) {
   const notch = screen.notch
   const bar = notch?.height ?? BAR
   const closedRadius = notch ? 14 : bar / 2
+  const side = screen.edge === 'left' || screen.edge === 'right'
+  const panel = screen.panel ?? PANEL
+  const fit = (frame: { width: number; height: number; radius: number }) => ({ ...frame, width: Math.min(frame.width, panel.width), height: Math.min(frame.height, panel.height) })
   switch (mode) {
     case 'hidden':
       // At a plain top edge only a thin strip under the edge wakes it.
-      return notch ? { width: notch.width, height: notch.height, radius: closedRadius } : { width: 160, height: 0, radius: 0 }
+      return fit(notch ? { width: notch.width, height: notch.height, radius: closedRadius } : side ? { width: 0, height: 160, radius: 0 } : { width: 160, height: 0, radius: 0 })
     case 'peek':
-      return { width: notch ? notch.width + 64 : 120, height: bar, radius: closedRadius }
+      return fit(side ? { width: bar, height: 120, radius: closedRadius } : { width: notch ? notch.width + 64 : 120, height: bar, radius: closedRadius })
     case 'compact':
-      return { width: notch ? notch.width + 104 : 240, height: bar, radius: closedRadius }
+      return fit(side ? { width: bar, height: 240, radius: closedRadius } : { width: notch ? notch.width + 104 : 240, height: bar, radius: closedRadius })
     default:
-      return { width: OPEN_WIDTH, height: OPEN_HEIGHT + contentTop(screen) - 36, radius: 30 }
+      return fit({ width: side ? 400 : OPEN_WIDTH, height: (side ? 380 : OPEN_HEIGHT) + (screen.density === 'expanded' ? 100 : 0) + contentTop(screen) - 36, radius: 30 })
   }
 }
 
@@ -203,7 +217,7 @@ export function islandRect(frame: { width: number; height: number }, windowWidth
 
 /** The part of the window that takes the mouse: the shape with `HIT_MARGIN` around it, inside the window. */
 export function hitRect(rect: IslandRect): IslandRect {
-  if (rect.width <= 0) return { x: 0, y: 0, width: 0, height: 0 }
+  if (rect.width <= 0 && rect.height <= 0) return { x: 0, y: 0, width: 0, height: 0 }
   const x = Math.max(0, Math.floor(rect.x - HIT_MARGIN))
   const y = Math.max(0, Math.floor(rect.y - HIT_MARGIN))
   return { x, y, width: Math.ceil(rect.x + rect.width + HIT_MARGIN) - x, height: Math.ceil(rect.y + rect.height + HIT_MARGIN) - y }
@@ -232,5 +246,5 @@ export function pageOf<T>(items: T[], page: number, perPage = USAGE_PER_PAGE) {
   return { items: items.slice(current * perPage, (current + 1) * perPage), page: current, pages }
 }
 
-/** The setting's name: a notch on the Mac, the top edge elsewhere. */
-export const islandLabel = (platform: string) => (platform === 'darwin' ? 'Show in Notch' : 'Show at top of screen')
+/** The island can now attach to any usable screen edge. */
+export const islandLabel = (_platform: string) => 'Show island'

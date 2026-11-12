@@ -62,6 +62,7 @@ import { useOnboardingTelemetry } from './use-onboarding-telemetry'
 import { useTr } from '../lib/use-language'
 import type { ExtensionSection } from './marketplace/market-models'
 import { useTool } from '../lib/use-tool'
+import { useChatNavigation } from './chat-navigation'
 
 
 /** Native desktop chat: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
@@ -302,26 +303,36 @@ function ChatSplitView() {
     ? { options: onlineStores.map((s) => ({ id: s.computer.id, label: s.hostName })), selection: creating.computerId, onChange: (computerId: string) => setCreating({ ...creating, computerId }) }
     : null
 
-  useEffect(
-    () =>
-      window.codync.app.onCommand((c) => {
-        if (c.kind === 'newBot' && onlineStores.length) create('bot')
-        if (c.kind === 'search') setSearching(true)
-        if (c.kind === 'networkSettings') setSettings('network')
-        if (c.kind === 'toggleSidebar') setCompact(!prefs.sidebarCompact.get())
-        if (c.kind === 'openMarketplace') {
+  useChatNavigation({
+    newBot: () => { if (onlineStores.length) create('bot') },
+    search: () => setSearching(true),
+    network: () => setSettings('network'),
+    sidebar: () => setCompact(!prefs.sidebarCompact.get()),
+    marketplace: (c) => {
           const target = (selectedStore ?? onlineStores[0])?.computer.id
           if (target) {
             setMarketplaceLink({ section: c.section, id: c.id })
             setMarketplace(target)
           }
+    },
+    voice: (key) => {
+          if (key === 'double' && !app.selection) app.select((voiceTarget(roster as any) as any)?.ref ?? null)
+          queueVoiceKey(key)
+    },
+    island: (action) => {
+      if (action.kind === 'openDiagnostics') setSettings('diagnostics')
+      if (action.kind === 'openChannels') openMarketplace('channels')
+      if (action.kind === 'openFlow') {
+        const ref = parseRef(action.ref)
+        const store = ref ? app.store(ref.computerId) : null
+        if (ref && store) {
+          app.select(ref)
+          setCanvasStore(store)
+          setCanvasBot(ref.botId)
         }
-        if (c.kind === 'voiceKey') {
-          if (c.key === 'double' && !app.selection) app.select((voiceTarget(roster as any) as any)?.ref ?? null)
-          queueVoiceKey(c.key)
-        }
-      }),
-  )
+      }
+    },
+  })
 
   // Screenshot/UI checks (development builds): open a screen at launch.
   const debugOpened = useRef(false)

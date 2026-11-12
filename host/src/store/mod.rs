@@ -8,6 +8,7 @@
 mod analytics;
 pub mod apps;
 mod bots;
+mod channel_activity;
 mod computer_activity;
 mod devices;
 mod documents;
@@ -39,6 +40,7 @@ pub(crate) mod slack;
 pub(crate) mod whatsapp;
 
 pub use apps::{AppLink, AppLinkMode, BotApp};
+pub use channel_activity::ChannelActivity;
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceAccount, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};

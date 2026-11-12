@@ -17,6 +17,15 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "openaiKeys" | "openaiCreateKey" | "openaiRevokeKey" => super::openai_keys::call(hub, method, &b).await?,
         "hostUpdateStatus" => crate::update::status()?,
         "hostHealth" => crate::health::value(hub),
+        "channelActivity" => {
+            let limit = b["limit"].as_u64().and_then(|n| usize::try_from(n).ok()).unwrap_or(30);
+            let activity = if b["mentionsOnly"].as_bool().unwrap_or(true) {
+                hub.store.channel_mentions(limit)?
+            } else {
+                hub.store.channel_activity(limit)?
+            };
+            json!({"activity": activity})
+        }
         "diagnostics" => crate::diagnostics::snapshot(hub)?,
         // The security decisions made on this computer.
         "auditLog" => crate::audit::list(hub),

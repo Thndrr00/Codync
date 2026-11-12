@@ -1,0 +1,74 @@
+.island-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.island-control-heading,
+.island-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.island-control-row {
+  flex: none;
+  min-width: 0;
+  padding: 6px 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+button.island-control-row:hover { color: var(--secondary); }
+.island-control-row.vertical { flex-direction: column; align-items: flex-start; gap: 4px; }
+.island-control-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.island-control-actions .styled-button { min-height: 28px; height: auto; white-space: normal; }
+.island-control-error,
+.island .island-danger { color: var(--danger); overflow-wrap: anywhere; }
+.island-option { background: var(--island-fill); color: var(--text); padding: 6px 10px; border-radius: var(--radius-s); }
+.island-option.selected { background: var(--text); color: var(--island-shape); }
+.island-drag-handle { touch-action: none; cursor: grab; }
+.island-drag-handle:disabled { opacity: 0.35; cursor: default; }
+.island-drag-handle:active { cursor: grabbing; }
+.island[data-edge='bottom'] .island-ear,
+.island[data-edge='left'] .island-ear,
+.island[data-edge='right'] .island-ear { display: none; }
+.island[data-narrow='true'] .island-header { height: 68px; flex-direction: column; align-items: stretch; justify-content: center; gap: 4px; }
+.island[data-narrow='true'] .island-tabs { gap: 3px; }
+.island[data-narrow='true'] .island-tabs:last-child { justify-content: flex-end; }
+.island[data-edge='left'] .island-wings,
+.island[data-edge='right'] .island-wings { flex-direction: column; }
+.island[data-edge='left'] .island-wing-left,
+.island[data-edge='left'] .island-wing-right,
+.island[data-edge='right'] .island-wing-left,
+.island[data-edge='right'] .island-wing-right { width: 100%; height: 52px; }
+.island[data-edge='left'] .island-wings-label,
+.island[data-edge='right'] .island-wings-label { writing-mode: vertical-rl; }
+.island[data-narrow='true'] .island-with-minis { overflow-y: auto; }
+.island[data-narrow='true'] .island-focus { width: 100%; }
+.island[data-narrow='true'] .island-pills { display: none; }
+.island[data-narrow='true'] .island-alert { padding: 10px; }
+.island[data-narrow='true'] .island-alert .island-swap-slot { align-items: flex-start; }
+.island-approval-navigation { display: flex; align-items: center; gap: 4px; }
+.island-focus-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.island-focus-container { width: 322px; min-width: 0; display: flex; flex-direction: column; }
+.island-focus-container.alone { flex: 1; }
+.island-focus-container > .island-focus { width: 100%; flex: 1; min-height: 0; }
+.island .island-focus-actions .styled-button { height: 26px; font-size: 12px; }
+.island[data-narrow='true'] .island-focus-container { width: 100%; }
+.island-alert-text { overflow-y: auto; min-height: 0; }
+.island-meter[data-notice='true'] { color: var(--warning); }
+.island-usage-toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.island-usage-meta { flex: none; max-height: 64px; overflow-y: auto; scrollbar-width: thin; }
+.island-usage-freshness { font-size: 11px; color: var(--secondary); overflow-wrap: anywhere; }
+.island-usage-toolbar > button { flex: none; }
+.island-usage-notice { display: block; flex: none; color: var(--warning); font-size: 11px; overflow-wrap: anywhere; }
+.island-window-title { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.island-window-title > span { flex: 1; min-width: 0; }
+.island-pin { flex: none; width: 22px; height: 22px; border-radius: var(--radius-xs); color: var(--secondary); background: transparent; display: grid; place-items: center; }
+.island-pin[aria-pressed='true'] { color: var(--text); background: var(--island-fill); }

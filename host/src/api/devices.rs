@@ -35,6 +35,7 @@ const LOCAL_ONLY: &[&str] = &[
     "openaiKeys",
     "openaiCreateKey",
     "openaiRevokeKey",
+    "channelActivity",
     "hostUpdateStatus",
     "diagnostics",
     "checkHostUpdate",

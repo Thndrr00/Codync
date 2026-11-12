@@ -91,6 +91,9 @@ const bridge: CodyncBridge = {
     setConfigAccess: async () => ({ access: 'denied', hosts: [] }),
   },
   island: {
+    configure: async () => ({ placement: 'automatic', displayId: null, locked: true, density: 'compact', docks: {} }),
+    drag() {},
+    action() {},
     supported: false,
     enabled: async () => false,
     setEnabled: async () => false,

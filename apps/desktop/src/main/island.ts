@@ -6,7 +6,6 @@ import {
   hitRect,
   hits,
   notchOf,
-  PANEL,
   type IslandPlacement,
   type IslandRect,
   type IslandScreen,
@@ -14,6 +13,8 @@ import {
   type NotchScreen,
 } from '../shared/island'
 import { prefs } from './host-controller'
+import { dockFor, islandPanelBounds, normalizeIslandControls, snapIslandDock, type IslandControls, type IslandDisplay } from '../shared/island-layout'
+import { validIslandAction } from '../shared/island-actions'
 
 // Every NSScreen's frame, safe-area top and the menu bar on each side of the notch. JXA reaches
 // AppKit without a helper binary; it runs when the island opens and when displays change.
@@ -64,8 +65,8 @@ interface Deps {
 }
 
 /**
- * The notch island's window: a fixed transparent panel at the top center of
- * the notch's display. The renderer animates the shape inside it and reports where it is; the
+ * The island's transparent panel docks to a chosen display edge.
+ * The renderer animates the shape inside it and reports where it is; the
  * window takes the mouse only over that shape and lets every other click through.
  */
 export class Island {
@@ -80,6 +81,9 @@ export class Island {
   private watch: NodeJS.Timeout | null = null
   private shaped: IslandRect = { x: 0, y: 0, width: 0, height: 0 }
   private unfocus: NodeJS.Timeout | undefined
+  private placing = 0
+  private dragging = false
+  private dragTimeout: NodeJS.Timeout | undefined
 
   constructor(private deps: Deps) {}
 
@@ -97,18 +101,34 @@ export class Island {
 
   /** Where the island sits on this computer's screens. */
   get placement(): IslandPlacement {
-    const saved = prefs.get('islandPlacement')
-    return saved === 'follow' || saved === 'primary' ? saved : 'automatic'
+    return this.controls.placement
+  }
+
+  private get controls(): IslandControls {
+    return normalizeIslandControls(prefs.get('islandControls') ?? { placement: prefs.get('islandPlacement') })
+  }
+
+  private configure(patch: Partial<IslandControls>) {
+    const next = normalizeIslandControls({ ...this.controls, ...patch })
+    prefs.set('islandControls', next)
+    prefs.set('islandPlacement', next.placement)
+    void this.place()
+    this.deps.changed()
+    return next
   }
 
   setPlacement(placement: IslandPlacement) {
-    prefs.set('islandPlacement', placement)
-    void this.place()
-    this.deps.changed()
+    this.configure({ placement, displayId: null })
     return this.placement
   }
 
   register() {
+    ipcMain.handle('island:configure', (_e, patch: Partial<IslandControls>) => this.configure(patch))
+    ipcMain.on('island:action', (_e, input: unknown) => {
+      const action = validIslandAction(input)
+      if (action) this.deps.send({ kind: 'islandAction', action }, ['openFlow', 'openChannels', 'openDiagnostics'].includes(action.kind))
+    })
+    ipcMain.on('island:drag', (_e, on: boolean, snap: boolean) => this.drag(on, snap))
     ipcMain.on('island:supported', (e) => (e.returnValue = islandSupported))
     ipcMain.handle('island:enabled', () => this.enabled)
     ipcMain.handle('island:setEnabled', (_e, on: boolean) => this.setEnabled(on))
@@ -149,12 +169,18 @@ export class Island {
   private open() {
     if (this.window) return
     const isMac = process.platform === 'darwin'
-    // Top center of the main display until the notch is measured (place() moves it if needed).
-    const main = screen.getPrimaryDisplay().bounds
+    // Apply the saved safe dock before showing; notch measurements may arrive later.
+    const display = this.target([])
+    const controls = this.controls
+    const dock = dockFor(controls, display.id)
+    const initial = islandPanelBounds(display, dock, false)
+    this.screen = {
+      notch: null, edge: dock.edge, density: controls.density,
+      panel: { width: initial.width, height: initial.height },
+      controls, displayId: display.id, displays: this.displays(),
+    }
     const win = new BrowserWindow({
-      ...PANEL,
-      x: Math.round(main.x + (main.width - PANEL.width) / 2),
-      y: main.y,
+      ...initial,
       show: false,
       frame: false,
       transparent: true,
@@ -197,12 +223,15 @@ export class Island {
 
   /** `follow`: move the island to the screen the person is working on. */
   private followPointer() {
-    if (!this.window || this.placement !== 'follow') return
+    if (!this.window || this.dragging || this.placement !== 'follow' || this.controls.displayId !== null) return
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
     if (display.id !== this.placedOn) void this.place()
   }
 
   private close() {
+    this.dragging = false
+    clearTimeout(this.dragTimeout)
+    ++this.placing
     this.setKeys(false)
     clearTimeout(this.unfocus)
     if (this.timer) clearTimeout(this.timer)
@@ -214,7 +243,7 @@ export class Island {
     this.window = null
   }
 
-  /** Only the message field takes the keyboard; a panel takes it without bringing the app forward. */
+  /** Explicit keyboard interaction focuses the panel without bringing the main app forward. */
   private setFocusable(on: boolean) {
     const win = this.window
     if (!win) return
@@ -251,21 +280,60 @@ export class Island {
     this.window?.webContents.send('island:voiceKey', key)
   }
 
-  /** Top center of the chosen display (see [`Island::placement`]). */
+  /** Apply the chosen display's saved dock and usable work area. */
   private async place() {
     if (!this.window) return
+    const generation = ++this.placing
     const screens = await readScreens()
     const win = this.window
-    if (!win || win.isDestroyed()) return
+    if (!win || win.isDestroyed() || generation !== this.placing) return
     const display = this.target(screens)
     this.placedOn = display.id
-    this.screen = { notch: notchOf(screens, display.bounds) }
-    const b = display.bounds
-    win.setBounds({ x: Math.round(b.x + (b.width - PANEL.width) / 2), y: b.y, ...PANEL })
+    const controls = this.controls
+    const dock = dockFor(controls, display.id)
+    const notch = dock.edge === 'top' && dock.offset === 0.5 ? notchOf(screens, display.bounds) : null
+    const bounds = islandPanelBounds(display, dock, !!notch)
+    this.screen = { notch, edge: dock.edge, density: controls.density, panel: { width: bounds.width, height: bounds.height }, controls, displayId: display.id, displays: this.displays() }
+    win.setBounds(bounds)
     win.webContents.send('island:screen', this.screen)
   }
 
+  private displays(): IslandDisplay[] {
+    return screen.getAllDisplays().map((d) => ({ id: d.id, label: d.label || `Display ${d.id}`, bounds: d.bounds, workArea: d.workArea }))
+  }
+
+  private drag(on: boolean, snap: boolean) {
+    const win = this.window
+    if (!win) return
+    clearTimeout(this.dragTimeout)
+    if (on) {
+      if (this.controls.locked) return
+      this.dragging = true
+      if (shapedWindow) {
+        const { width, height } = win.getBounds()
+        win.setShape([{ x: 0, y: 0, width, height }])
+      }
+      else win.setIgnoreMouseEvents(false)
+      this.dragTimeout = setTimeout(() => this.drag(false, false), 15_000)
+      return
+    }
+    if (!this.dragging) return
+    this.dragging = false
+    if (snap && !this.controls.locked) {
+      const point = screen.getCursorScreenPoint()
+      const display = screen.getDisplayNearestPoint(point)
+      const first = snapIslandDock(point, display, win.getBounds())
+      const bounds = islandPanelBounds(display, first, false)
+      const dock = snapIslandDock(point, display, bounds)
+      this.configure({ displayId: display.id, docks: { ...this.controls.docks, [display.id]: dock } })
+    }
+    if (shapedWindow) this.shape()
+    else { this.inside = true; win.setIgnoreMouseEvents(false) }
+  }
+
   private target(screens: NotchScreen[]) {
+    const selected = screen.getAllDisplays().find((d) => d.id === this.controls.displayId)
+    if (selected) return selected
     switch (this.placement) {
       case 'follow':
         return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
@@ -280,7 +348,9 @@ export class Island {
   private shape() {
     const win = this.window
     if (!win) return
-    const next = hitRect(this.rect)
+    const hit = hitRect(this.rect)
+    const bounds = win.getBounds()
+    const next = { x: Math.min(hit.x, bounds.width), y: Math.min(hit.y, bounds.height), width: Math.max(0, Math.min(hit.width, bounds.width - hit.x)), height: Math.max(0, Math.min(hit.height, bounds.height - hit.y)) }
     const grows = next.width * next.height >= this.shaped.width * this.shaped.height
     if (this.timer) clearTimeout(this.timer)
     const apply = () => {
@@ -300,12 +370,12 @@ export class Island {
     const x = point.x - bounds.x
     const y = point.y - bounds.y
     const inside = hits(this.rect, x, y)
-    if (inside !== this.inside) {
+    if (!this.dragging && inside !== this.inside) {
       this.inside = inside
       win.setIgnoreMouseEvents(!inside)
       win.webContents.send('island:hover', inside)
     }
-    const near = x > -60 && x < bounds.width + 60 && y < bounds.height + 60
+    const near = x > -60 && x < bounds.width + 60 && y > -60 && y < bounds.height + 60
     this.timer = setTimeout(this.tick, near ? 16 : 150)
   }
 }

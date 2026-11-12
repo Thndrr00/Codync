@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { IslandBot, IslandDiff, IslandPermission } from '@shared/island'
+import { isActive } from '@shared/island'
 import { CharacterAvatar } from '../../components/Avatar'
 import { Button, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -65,11 +66,13 @@ export function Overview({ model }: { model: IslandModel }) {
   const swap = useSwap(focus?.ref)
   const arrivals = useArrivals(others.map((b) => b.ref))
   const pills = useRef<HTMLDivElement>(null)
+  const tr = useTr()
   useFlip(pills)
   if (!focus) return null
   const steps = focus.steps.length ? focus.steps : [{ title: focus.detail, kind: 'other' }]
   return (
     <div className="island-row-cards">
+      <div className={`island-focus-container ${others.length ? '' : 'alone'}`}>
       <button className={`island-card island-focus ${others.length ? '' : 'alone'}`} onClick={() => model.openBot(focus.ref)} title="Open conversation">
         <span key={focus.ref} className={`island-swap-slot ${swap}`}>
           <BigCharacter bot={focus} size={70} mood={moodOf(focus)} badge={badgeOf(focus)} />
@@ -90,6 +93,11 @@ export function Overview({ model }: { model: IslandModel }) {
           </span>
         </span>
       </button>
+      <div className="island-focus-actions">
+        <Button kind="secondary" onClick={() => model.nextFocus()} disabled={model.summary.bots.length < 2}>{tr('Next bot')}</Button>
+        <Button kind="secondary" className="island-danger" disabled={!isActive(focus)} onClick={() => model.action({ kind: 'stopBot', ref: focus.ref })}>{tr('Stop')}</Button>
+      </div>
+      </div>
       {others.length ? (
         <div ref={pills} className="island-card island-pills">
           {others.map((b) => (
@@ -98,7 +106,7 @@ export function Overview({ model }: { model: IslandModel }) {
               data-flip={b.ref}
               className={`island-pill ${arrivals.has(b.ref) ? 'island-swap' : ''}`}
               style={{ background: withAlpha(avatarColor(b.color), 0.16), color: `color-mix(in srgb, ${avatarColor(b.color)} 55%, white)` }}
-              onClick={() => model.openBot(b.ref)}
+              onClick={() => model.selectFocus(b.ref)}
               title={b.detail}
             >
               <span className="island-pill-bot">
@@ -135,12 +143,19 @@ const optionOrder = (kind: string) => ({ reject_always: 0, reject_once: 1, allow
 export function Approval({ model, card }: { model: IslandModel; card: IslandPermission }) {
   const options = [...card.options].sort((a, b) => optionOrder(a.kind) - optionOrder(b.kind))
   const swap = useSwap(card.entryId)
+  const tr = useTr()
+  const count = model.summary.permissions.length
   return (
     <div className="island-with-minis">
       <div className="island-card island-alert" style={{ background: `${veil(AMBER, 0.42)}, var(--island-card)` }}>
         <div key={card.entryId} className={`island-swap-slot ${swap}`}>
           <BigCharacter bot={card.bot} size={56} mood="needsInput" badge="needsInput" onOpen={() => model.openBot(card.ref)} />
           <div className="island-alert-text">
+            <div className="island-approval-navigation">
+              <button className="island-tab" disabled={count < 2} aria-label={tr('Previous approval')} onClick={() => model.nextApproval(-1)}><Icon name="chevron.left" size={12} /></button>
+              <span aria-live="polite">{model.summary.permissions.findIndex((item) => item.entryId === card.entryId) + 1} / {count}</span>
+              <button className="island-tab" disabled={count < 2} aria-label={tr('Next approval')} onClick={() => model.nextApproval(1)}><Icon name="chevron.right" size={12} /></button>
+            </div>
             <AgentRow color={card.bot.color} name={card.bot.name} subtitle={`${card.bot.backend} ${card.headline.charAt(0).toLowerCase()}${card.headline.slice(1)}`} />
             {card.title ? <div className="island-code">{card.title}</div> : null}
             {card.diffs.length ? <DiffPeek diffs={card.diffs} /> : null}

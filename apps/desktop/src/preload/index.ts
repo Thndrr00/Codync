@@ -116,6 +116,9 @@ const bridge: CodyncBridge = {
   },
   ssh: sshBridge,
   island: {
+    configure: (patch) => ipcRenderer.invoke('island:configure', patch),
+    drag: (on, snap) => ipcRenderer.send('island:drag', on, snap),
+    action: (action) => ipcRenderer.send('island:action', action),
     supported: ipcRenderer.sendSync('island:supported') as boolean,
     enabled: () => ipcRenderer.invoke('island:enabled'),
     setEnabled: (on) => ipcRenderer.invoke('island:setEnabled', on),

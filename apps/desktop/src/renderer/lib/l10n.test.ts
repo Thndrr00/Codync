@@ -2,6 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { appLanguages, readsRightToLeft, resolvedLanguage, resetLine, languageTitle, systemIsChinese, systemScript, translate, usesChinese } from './l10n.ts'
 
+test('island controls follow regional Spanish and Traditional Chinese without changing English', () => {
+  assert.equal(translate('Island options', 'system', 'es-MX'), 'Opciones de la isla')
+  assert.equal(translate('Show island', 'es', 'en-US'), 'Mostrar isla')
+  assert.equal(translate('Island options', 'zh-Hant', 'en-US'), '動態島選項')
+  assert.equal(translate('Island options', 'en', 'es-MX'), 'Island options')
+})
+
 test('chinese follows the choice, and a system preference follows the computer', () => {
   assert.equal(usesChinese('zh', false), true)
   assert.equal(usesChinese('en', true), false)

@@ -1,0 +1,33 @@
+/** Desktop-only island chrome. Native clients keep their existing screens and language catalogs. */
+export const islandPhrases: Record<string, Record<string, string>> = {
+  es: {
+    'Show island': 'Mostrar isla', 'Island options': 'Opciones de la isla',
+    'Screen edge': 'Borde de la pantalla', Top: 'Arriba', Bottom: 'Abajo', Left: 'Izquierda', Right: 'Derecha',
+    Display: 'Pantalla', 'Main display': 'Pantalla principal', 'Follow pointer': 'Seguir el puntero',
+    Density: 'Densidad', Compact: 'Compacta', Expanded: 'Ampliada',
+    'Lock position': 'Bloquear posición', 'Move island': 'Mover isla',
+    'Unlock position in island options': 'Desbloquea la posición en las opciones de la isla',
+    'Drag to a screen edge': 'Arrastra a un borde de la pantalla',
+    'Unlock, then drag the handle to a screen edge. Positions are saved per display.': 'Desbloquea y arrastra el control hasta un borde. La posición se guarda para cada pantalla.',
+    'Usage notices': 'Avisos de uso', 'Usage warning': 'Umbral de aviso',
+    'Notices stay in the island; resets within 15 minutes are highlighted.': 'Los avisos aparecen solo en la isla. Se destacan los reinicios en los próximos 15 minutos.',
+    'Resets within 15 minutes': 'Se restablece en los próximos 15 minutos',
+    'Pin provider': 'Fijar proveedor', 'Pin limit': 'Fijar límite', 'Refresh usage': 'Actualizar uso',
+    'Unread conversations': 'Conversaciones sin leer', 'No unread messages': 'No hay mensajes sin leer',
+    'No recent runs': 'No hay ejecuciones recientes', 'Channel mentions': 'Menciones de canales',
+    'No recent mentions': 'No hay menciones recientes', 'Connection and health': 'Conexión y estado del equipo',
+    'No active call': 'No hay llamadas activas', 'Open n8n': 'Abrir n8n', 'MCP connected': 'MCP conectado',
+    'Next bot': 'Siguiente bot', 'Previous approval': 'Aprobación anterior', 'Next approval': 'Siguiente aprobación',
+    'Saved display is unavailable; using an available display.': 'La pantalla guardada no está disponible; se utiliza otra pantalla.',
+  },
+  'zh-Hant': {
+    'Show island': '顯示動態島', 'Island options': '動態島選項', 'Screen edge': '螢幕邊緣',
+    Top: '上方', Bottom: '下方', Left: '左側', Right: '右側', Display: '顯示器',
+    'Follow pointer': '跟隨游標', Density: '密度', Compact: '精簡', Expanded: '展開',
+    'Lock position': '鎖定位置', 'Move island': '移動動態島',
+    'Usage notices': '用量提示', 'Usage warning': '用量警告門檻', 'Pin provider': '釘選供應商', 'Pin limit': '釘選額度',
+    'Refresh usage': '更新用量', 'Channel mentions': '頻道提及', 'No recent mentions': '最近沒有提及',
+    'Connection and health': '連線與電腦狀態', 'Next bot': '下一個 Bot',
+    'Previous approval': '上一個核准要求', 'Next approval': '下一個核准要求',
+  },
+}

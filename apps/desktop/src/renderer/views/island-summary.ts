@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { IslandBot, IslandPermission, IslandSummary } from '@shared/island'
 import { folderName, isGroup, isWorking, type Bot, type Entry } from '@shared/models'
-import { useModels } from '../lib/observable'
+import { useModel, useModels } from '../lib/observable'
+import { IslandActivityStore } from '../store/island-activity-store'
+import { activeCall } from './call/active-call'
 import { refKey, type AppModel, type RosterItem } from '../store/app-model'
 import type { BotStore } from '../store/bot-store'
 import { healthAlert } from '@shared/health'
@@ -12,15 +14,24 @@ import { trNow } from '../lib/l10n.ts'
 /** Tool calls in the island's ticker. */
 const STEPS = 3
 
-let sent = ''
-let pending: ReturnType<typeof setTimeout> | null = null
-
 /**
  * Sends the notch island what it shows when the stores change: at most every 150 ms while
  * replies stream (reading the stores when it fires), and only when that changed.
  */
 export function useIslandSummary(app: AppModel) {
+  const [activity] = useState(() => new IslandActivityStore(app))
+  const sent = useRef('')
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useModel(activity)
+  useModel(activeCall)
   useModels([...app.stores.values()])
+  useEffect(() => {
+    activity.start()
+    const off = window.codync.app.onCommand((command) => {
+      if (command.kind === 'islandAction') void activity.perform(command.action)
+    })
+    return () => { off(); activity.dispose(); if (pending.current) clearTimeout(pending.current); pending.current = null }
+  }, [activity])
   // The computer's health changes on its own: look again every so often.
   useEffect(() => {
     void app.local?.refreshHealth()
@@ -28,27 +39,28 @@ export function useIslandSummary(app: AppModel) {
     return () => clearInterval(timer)
   }, [app.local])
   useEffect(() => {
-    if (pending) return
-    pending = setTimeout(() => {
-      pending = null
-      const summary = islandSummary(app)
+    if (pending.current) return
+    pending.current = setTimeout(() => {
+      pending.current = null
+      const summary = islandSummary(app, activity)
       const json = JSON.stringify(summary)
-      if (json === sent) return
-      sent = json
+      if (sent.current === json) return
+      sent.current = json
       window.codync.island.setSummary(summary)
     }, 150)
   })
 }
 
-function islandSummary(app: AppModel): IslandSummary {
+function islandSummary(app: AppModel, activity: IslandActivityStore): IslandSummary {
   const many = app.computers.length > 1
   return {
     bots: app.roster
       .filter((i) => !isGroup(i.bot))
       .map((i) => islandBot(i.store, i.bot, refKey(i.ref), many ? `${i.bot.name} · ${i.computer.name}` : i.bot.name)),
     permissions: app.roster.flatMap(pendingCards),
-    usage: app.local?.usage.providers ?? [],
+    usage: activity.usage.providers,
     health: healthAlert(app.local?.health ?? null),
+    activity: activity.snapshot(),
   }
 }
 
@@ -68,6 +80,7 @@ function islandBot(store: BotStore, bot: Bot, ref: string, name: string): Island
       ? entries.filter((e) => e.kind === 'tool').slice(-STEPS).map((e) => ({ title: e.data.title || trNow('Use a tool'), kind: e.data.toolKind ?? 'other' }))
       : [],
     error: bot.status === 'error' ? (lastError(entries) ?? null) : null,
+    unread: bot.unread,
   }
 }
 

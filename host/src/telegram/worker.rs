@@ -195,7 +195,8 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
     if !bot.allowed.contains(&user) {
         return pair(hub, ep, &bot, chat, user, text).await;
     }
-    if text.to_lowercase().contains(&format!("@{}", bot.username.to_lowercase())) {
+    let mentioned = super::mentions::mentions_bot(message, &bot.username);
+    if mentioned {
         hub.routines.receive_event(
             &hub.store,
             &json!({
@@ -250,9 +251,24 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
             *route = Some(Route { chat, turn, live: None, cards: HashMap::new() });
         }
     }
-    if let Err(error) = super::input::post(hub, name, user, expected, &text, &nonce) {
-        *shared.lock().await = None;
-        say(ep, &bot, chat, &format!("Could not reach the bot: {error:#}")).await;
+    match super::input::post(hub, name, user, expected, &text, &nonce) {
+        Ok(entry) => {
+            if let Err(error) = hub.store.record_channel_activity(&crate::store::ChannelActivity {
+                id: nonce,
+                source: "telegram".into(),
+                bot_id: bot.bot_id.clone(),
+                thread_id: None,
+                channel: chat.to_string(),
+                mentioned,
+                at: entry.created_at,
+            }) {
+                tracing::warn!(error = format!("{error:#}"), "Telegram activity receipt was not saved");
+            }
+        }
+        Err(error) => {
+            *shared.lock().await = None;
+            say(ep, &bot, chat, &format!("Could not reach the bot: {error:#}")).await;
+        }
     }
 }
 

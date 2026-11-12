@@ -8,7 +8,11 @@ If an agent's login stops working (for example, signing in somewhere else revoke
 
 Usage meters use Codync's dotted style on desktop, iPhone, Android and their widgets. Colored dots show the used share, and dim dots show the remaining allowance; the percentage and reset time stay alongside the meter. The terminal uses filled and dim dots for the same reading.
 
-On desktop, the island's **Usage** tab shows two providers per page. Use the arrows to change pages and scroll inside a provider's card to reach additional limits. Long labels and reset times wrap within the card; accounts that cannot report limits show an explanation.
+On desktop, enable **Settings > General > System > Show island**. In the island's **Options**, choose the top, bottom, left or right edge, a display, and compact or expanded density. Unlock its position to drag the handle to another edge. Positions are remembered per display; the island stays within the usable screen area, with the centered Mac notch as the exception. Automatic, primary-display and pointer-follow placement remain available. On Linux, the floating island requires X11.
+
+The island's **Usage** tab shows up to two providers per page, or one in narrow layouts. Use the arrows to change pages and scroll inside a provider's card to reach additional limits. Long labels and reset times wrap within the card; accounts that cannot report limits show an explanation. Pin providers or individual limits to put them first. The refresh button shows progress and errors, and the timestamp distinguishes saved readings from current ones. Optional island-only notices highlight a chosen usage threshold or a reset within 15 minutes.
+
+The **Activity** tab links to unread conversations, pending approvals, recent routine runs and their flow steps, and new channel mentions. The host records mention metadata when Slack, Discord or Telegram accepts a message; this list starts empty after upgrading and does not reconstruct older mentions. **Connection and health** shows the host route, resource readings and diagnostics, active voice-call controls, and n8n's status and editor shortcut. Select a bot to open its conversation or stop it through the existing host action. The approval queue can be browsed without answering a different card.
 
 On desktop, open **Settings > Usage** to see the limits reported by your connected computers. On the phones it's **State > Usage limits**, and in the terminal UI press `U`. The host refreshes usage every five minutes, and GitHub Copilot's every 30.
 

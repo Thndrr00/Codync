@@ -4,6 +4,8 @@ import type { SharedFile } from './models'
 import type { SSHBridge } from './ssh'
 import type { ScreenAgentState } from './computer-access'
 import type { IslandRect, IslandScreen, IslandSummary } from './island'
+import type { IslandControls } from './island-layout'
+import type { IslandAction } from './island-activity'
 import type { VoiceKey, VoiceShortcut } from './voice-shortcut'
 import type { ErrorReport } from './error-report'
 import type { Appearance } from './appearance'
@@ -100,6 +102,7 @@ export interface TraySummary {
 
 /** Things the tray menu (or the app menu) asks the window to do. */
 export type WindowCommand =
+  | { kind: 'islandAction'; action: IslandAction }
   | { kind: 'openBot'; ref: string }
   | { kind: 'stopBot'; ref: string }
   | { kind: 'reviewApprovals' }
@@ -220,6 +223,9 @@ export interface CodyncBridge {
   ssh: SSHBridge
   /** The notch island (shared/island.ts): its setting, the chat window's summary, and the island window's side. */
   island: {
+    configure(patch: Partial<IslandControls>): Promise<IslandControls>
+    drag(on: boolean, snap?: boolean): void
+    action(action: IslandAction): void
     /** False where a window can't place itself at the top of the screen (Linux on Wayland). */
     supported: boolean
     enabled(): Promise<boolean>
@@ -231,7 +237,7 @@ export interface CodyncBridge {
     /** The pointer reached or left the shape. */
     onHover(cb: (inside: boolean) => void): () => void
     setShape(rect: IslandRect): void
-    /** The message field takes the keyboard (the island never does otherwise). */
+    /** Explicit input and control interaction can focus the island until it closes. */
     setFocusable(on: boolean): void
     /** ⌥Y / ⌥N answer the approval on screen, from any app, while it shows. */
     setKeys(on: boolean): void

@@ -8,9 +8,11 @@ import { PINNED_LEAVE_MS, type IslandModel } from './island-model'
 import { useCrossFade } from './island-motion'
 import { Approval, Empty, Message, Notice, Overview, Wings } from './IslandViews'
 import { UsageMeter, UsageView } from './IslandUsage'
+import { ActivityView, StatusView, OptionsView } from './IslandControls'
 import './island.css'
 import './island-views.css'
 import './island-usage.css'
+import './island-controls.css'
 
 /** How long the views stay on screen while the shape folds back into the notch (its 0.34 s close). */
 const FOLD_MS = 340
@@ -20,6 +22,8 @@ export function IslandWindow({ model }: { model: IslandModel }) {
   const tr = useTr()
   useModel(model)
   const { mode, frame } = model
+  const edge = model.screen.edge ?? 'top'
+  const rect = model.rect
   const open = isOpenMode(mode)
   const winged = mode === 'compact' || mode === 'peek'
   const closed = winged || mode === 'hidden'
@@ -44,10 +48,17 @@ export function IslandWindow({ model }: { model: IslandModel }) {
     <div
       className={`island ${model.growing ? 'growing' : 'shrinking'} ${model.screen.notch ? '' : 'edge'} ${dropping ? 'dropping' : ''}`}
       data-mode={mode}
-      style={{ width: frame.width, height: frame.height }}
+      data-edge={edge}
+      data-narrow={frame.width < 600}
+      style={{ width: frame.width, height: frame.height, left: rect.x, top: rect.y }}
       role={closed ? 'button' : undefined}
+      tabIndex={closed ? 0 : undefined}
       aria-label={closed ? tr('Show bots') : undefined}
       onClick={closed ? () => model.openNow() : undefined}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') { model.drag(false); model.close() }
+        if (closed && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); model.openNow() }
+      }}
       onDragOver={(e) => {
         if (!target || !e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
@@ -59,7 +70,7 @@ export function IslandWindow({ model }: { model: IslandModel }) {
     >
       <span className="island-ear left" />
       <span className="island-ear right" />
-      <div className="island-body" style={{ borderBottomLeftRadius: frame.radius, borderBottomRightRadius: frame.radius }}>
+      <div className="island-body" style={{ borderRadius: frame.radius, ...(edge === 'top' ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : edge === 'bottom' ? { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : edge === 'left' ? { borderTopLeftRadius: 0, borderBottomLeftRadius: 0 } : { borderTopRightRadius: 0, borderBottomRightRadius: 0 }) }}>
         {wings.mounted ? (
           <div className={`island-layer ${wings.shown ? '' : 'leaving'}`}>
             <Wings model={model} peek={lastWings.current === 'peek'} />
@@ -113,6 +124,12 @@ function View({ model, mode }: { model: IslandModel; mode: IslandMode }) {
       return <Message model={model} />
     case 'usage':
       return <UsageView model={model} />
+    case 'activity':
+      return <ActivityView model={model} />
+    case 'status':
+      return <StatusView model={model} />
+    case 'options':
+      return <OptionsView model={model} />
     default:
       return null
   }
@@ -122,24 +139,28 @@ const TABS: { tab: IslandTab; icon: string; label: string }[] = [
   { tab: 'bots', icon: 'house.fill', label: 'Bots' },
   { tab: 'message', icon: 'bubble.left.fill', label: 'Message a bot' },
   { tab: 'usage', icon: 'gauge.with.dots.needle.33percent', label: 'Usage' },
+  { tab: 'activity', icon: 'bell.badge', label: 'Activity' },
+  { tab: 'status', icon: 'server.rack', label: 'Connection and health' },
+  { tab: 'options', icon: 'slider.horizontal.3', label: 'Island options' },
 ]
 
 /** Tabs on the left of the notch; the working count, the usage meter and Codync on the right. */
 function Header({ model, mode }: { model: IslandModel; mode: IslandMode }) {
   const tr = useTr()
-  const selected = mode === 'message' || mode === 'usage' ? mode : mode === 'overview' || mode === 'empty' ? 'bots' : null
+  const selected = mode === 'overview' || mode === 'empty' ? 'bots' : mode
   const count = model.activeCount
   return (
-    <div className="island-header">
+    <div className="island-header" style={{ top: (model.screen.notch?.height ?? 0) + 2 }}>
       <div className="island-tabs">
         {TABS.map((t) => (
-          <button key={t.tab} className={`island-tab ${selected === t.tab ? 'selected' : ''}`} title={t.label} aria-label={t.label} onClick={() => model.setTab(t.tab)}>
+          <button key={t.tab} className={`island-tab ${selected === t.tab ? 'selected' : ''}`} title={tr(t.label)} aria-label={tr(t.label)} onClick={() => model.setTab(t.tab)}>
             <Icon name={t.icon} size={13} scaled={false} />
           </button>
         ))}
         <button className="island-tab" title="New bot" aria-label="New bot" onClick={() => model.newBot()}>
           <Icon name="plus" size={13} weight="semibold" scaled={false} />
         </button>
+        <DragHandle model={model} />
       </div>
       <div className="island-tabs">
         {count ? <span className="island-count">{tr('{count} working').replaceAll('{count}', () => String(count))}</span> : null}
@@ -147,7 +168,26 @@ function Header({ model, mode }: { model: IslandModel; mode: IslandMode }) {
         <button className="island-tab" title="Open Codync" aria-label="Open Codync" onClick={() => model.openApp()}>
           <Icon name="arrow.up.right.square" size={13} scaled={false} />
         </button>
+        <button className="island-tab" title={tr('Close')} aria-label={tr('Close')} onClick={() => model.close()}><Icon name="xmark" size={12} /></button>
       </div>
     </div>
   )
+}
+
+function DragHandle({ model }: { model: IslandModel }) {
+  const from = useRef<{ x: number; y: number } | null>(null)
+  const moved = useRef(false)
+  const tr = useTr()
+  return <button className="island-tab island-drag-handle" disabled={model.controls.locked} title={tr(model.controls.locked ? 'Unlock position in island options' : 'Drag to a screen edge')} aria-label={tr('Move island')}
+    onPointerDown={(event) => {
+      if (event.button !== 0) return
+      from.current = { x: event.screenX, y: event.screenY }; moved.current = false
+      event.currentTarget.setPointerCapture(event.pointerId)
+      model.drag(true)
+    }}
+    onPointerMove={(event) => { if (from.current && Math.hypot(event.screenX - from.current.x, event.screenY - from.current.y) >= 4) moved.current = true }}
+    onPointerUp={() => { from.current = null; model.drag(false, moved.current) }}
+    onPointerCancel={() => { from.current = null; model.drag(false) }}
+    onLostPointerCapture={() => { from.current = null; if (model.moving) model.drag(false) }}
+  ><Icon name="hand.point.up.left" size={13} /></button>
 }

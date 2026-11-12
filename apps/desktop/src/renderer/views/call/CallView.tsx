@@ -14,6 +14,7 @@ import { VoiceChatSettingsView } from '../settings/VoiceChatSettingsView'
 import { engine as preferredEngine, voiceStatus, voiceSpeak, voiceSpeechStream } from '../settings/voice-settings'
 import { stopDictation } from '../thread/dictation'
 import { CallLink } from './call-link'
+import { activeCall } from './active-call'
 import { CallQuality } from './call-quality'
 import { CloudSpeechEngine } from './CloudSpeechEngine'
 import { GeminiLiveEngine } from './GeminiLiveEngine'
@@ -241,6 +242,20 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
   const working = bot ? isWorking(bot) : false
   const connecting = session?.isConnecting ?? true
   const failure = blocked ?? (phase === 'failed' ? session?.failure : null)
+
+  useEffect(() => {
+    if (!session) return
+    return activeCall.publish({
+      id: link.current!.call,
+      ref: `${store.computer.id}/${botId}`,
+      name: bot?.name ?? 'Bot',
+      phase: session.phase,
+      muted,
+    }, {
+      mute: () => { session.muted = !session.muted },
+      end: onEnd,
+    })
+  }, [store.computer.id, botId, bot?.name, session, muted, phase, onEnd])
 
   return (
     <div className="call">

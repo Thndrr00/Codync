@@ -11,6 +11,7 @@ mod commands;
 mod inbox;
 mod input;
 pub(crate) use input::claim_prompt;
+mod mentions;
 mod pairing;
 mod worker;
 

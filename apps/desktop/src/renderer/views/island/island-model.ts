@@ -1,5 +1,5 @@
 import {
-  FINISHED_MS, focusOf, isActive, islandFrame, islandMode, islandRect, othersOf, stopsDictation, transitions,
+  FINISHED_MS, focusOf, isActive, islandFrame, islandMode, othersOf, stopsDictation, transitions,
   type IslandBot, type IslandNotice, type IslandPermission, type IslandScreen, type IslandSummary, type IslandTab,
 } from '@shared/island'
 import { VOICE_SHORTCUT_KEYS, type VoiceKey, type VoiceShortcut } from '@shared/voice-shortcut'
@@ -7,6 +7,8 @@ import { Observable } from '../../lib/observable'
 import { pref } from '../../lib/prefs'
 import { Dictation } from '../thread/dictation'
 import { dictationPlatform } from '../thread/dictation-platform'
+import { defaultIslandControls, dockFor, localIslandRect, type IslandControls, type IslandEdge } from '@shared/island-layout'
+import type { IslandAction } from '@shared/island-activity'
 
 /** The bare notch peeks at once and opens after a rest; the compact island opens sooner. */
 const OPEN_FROM_PEEK_MS = 650
@@ -37,6 +39,11 @@ export class IslandModel extends Observable {
   shortcut: VoiceShortcut = 'off'
   /** The shape grew on its last change: open with a spring, close without one. */
   growing = true
+  selectedRef: string | null = null
+  approvalId: string | null = null
+  configurationError: string | null = null
+  actionError: string | null = null
+  moving = false
   private peek = false
   private pinned = false
   private hovering = false
@@ -44,15 +51,17 @@ export class IslandModel extends Observable {
   private statuses: Map<string, string> | null = null
   private hoverTimer: ReturnType<typeof setTimeout> | undefined
   private noticeTimer: ReturnType<typeof setTimeout> | undefined
-  private shape = { width: 0, height: 0 }
+  private shape = { x: 0, y: 0, width: 0, height: 0 }
   private keys = false
-  /** The window took the keyboard for the message field; it keeps it until the island closes. */
+  /** Manual controls can take the keyboard; it returns when the island closes. */
   private keyboard = false
 
   start() {
     const island = window.codync.island
     island.onSummary((s) => this.apply(s))
     island.onScreen((s) => this.update(() => (this.screen = s)))
+    window.addEventListener('resize', () => this.update(() => {}))
+    setInterval(() => this.update(() => {}), 30_000)
     island.onHover((inside) => this.hover(inside))
     island.onKey((answer) => this.answerByKey(answer))
     island.onVoiceKey((key) => this.voiceKey(key))
@@ -81,11 +90,63 @@ export class IslandModel extends Observable {
   /** The approval to answer now: the first not put off, else the first. */
   get permission(): IslandPermission | null {
     const cards = this.summary.permissions
-    return cards.find((p) => !this.deferred.has(p.entryId)) ?? cards[0] ?? null
+    return cards.find((p) => p.entryId === this.approvalId) ?? cards.find((p) => !this.deferred.has(p.entryId)) ?? cards[0] ?? null
   }
 
   get focus() {
-    return focusOf(this.summary.bots)
+    return this.bot(this.selectedRef) ?? focusOf(this.summary.bots)
+  }
+
+  get controls() { return this.screen.controls ?? defaultIslandControls }
+  get rect() { return localIslandRect(this.frame, window.innerWidth, window.innerHeight, this.screen.edge ?? 'top') }
+
+  selectFocus(ref: string) { this.update(() => { this.selectedRef = ref }) }
+
+  nextFocus() {
+    const bots = this.summary.bots
+    if (!bots.length) return
+    const at = bots.findIndex((bot) => bot.ref === this.focus?.ref)
+    this.selectFocus(bots[(at + 1) % bots.length]!.ref)
+  }
+
+  async openN8n() {
+    this.update(() => { this.actionError = null })
+    try { await window.codync.n8n.open() }
+    catch (error) { this.update(() => { this.actionError = error instanceof Error ? error.message : String(error) }) }
+  }
+
+  nextApproval(step: number) {
+    const cards = this.summary.permissions
+    if (!cards.length) return
+    const at = cards.findIndex((card) => card.entryId === this.permission?.entryId)
+    this.update(() => { this.approvalId = cards[(at + step + cards.length) % cards.length]!.entryId })
+  }
+
+  action(action: IslandAction) {
+    window.codync.island.action(action)
+    if (['openFlow', 'openChannels', 'openDiagnostics'].includes(action.kind)) this.close()
+  }
+
+  async configure(patch: Partial<IslandControls>) {
+    try {
+      const controls = await window.codync.island.configure(patch)
+      this.update(() => { this.screen = { ...this.screen, controls }; this.configurationError = null })
+    } catch (error) {
+      this.update(() => { this.configurationError = error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  setEdge(edge: IslandEdge) {
+    const id = this.screen.displayId
+    if (id === undefined) return
+    const dock = dockFor(this.controls, id)
+    void this.configure({ docks: { ...this.controls.docks, [id]: { ...dock, edge } } })
+  }
+
+  drag(on: boolean, snap = false) {
+    if (on && this.controls.locked) return
+    this.update(() => { this.moving = on })
+    window.codync.island.drag(on, snap)
   }
 
   /** The bots beside the big slot: pills (overview), the mini column and the compact cluster. */
@@ -117,6 +178,8 @@ export class IslandModel extends Observable {
 
   /** A click on the closed island opens it and keeps it open. */
   openNow() {
+    this.keyboard = true
+    window.codync.island.setFocusable(true)
     this.update(() => {
       this.open = true
       this.pinned = true
@@ -135,14 +198,15 @@ export class IslandModel extends Observable {
       this.open = true
       this.pinned = true
     })
-    // Only the message field takes the keyboard. It goes back when the island closes, not on the
-    // next tab: giving it back blinks the window on macOS.
-    if (tab === 'message') {
+    // Explicit tabs take the keyboard for their controls. Keep it through tab changes:
+    // giving it back between them blinks the panel on macOS.
+    if (tab !== 'auto') {
       this.keyboard = true
       window.codync.island.setFocusable(true)
-      this.readShortcut()
+      if (tab === 'message') this.readShortcut()
     }
     this.foldWhenAway()
+    if (tab === 'activity' || tab === 'status') this.action({ kind: 'refreshActivity' })
   }
 
   /** The message field's bot chip steps through the bots. */
@@ -166,7 +230,8 @@ export class IslandModel extends Observable {
 
   respond(card: IslandPermission, optionId: string) {
     window.codync.island.respond(card.ref, card.entryId, optionId)
-    if (this.open) this.close()
+    if (this.open && this.summary.permissions.length <= 1) this.close()
+    else this.nextApproval(1)
   }
 
   openBot(ref: string) {
@@ -273,7 +338,7 @@ export class IslandModel extends Observable {
    */
   private foldWhenAway() {
     clearTimeout(this.hoverTimer)
-    const counting = this.open && !this.hovering && this.tab !== 'message'
+    const counting = this.open && !this.hovering && this.tab !== 'message' && this.tab !== 'options' && !this.moving
     if (counting !== this.closing) this.update(() => (this.closing = counting))
     if (counting) this.hoverTimer = setTimeout(() => this.close(), PINNED_LEAVE_MS)
   }
@@ -289,10 +354,11 @@ export class IslandModel extends Observable {
   private update(change: () => void) {
     change()
     const frame = this.frame
-    if (frame.width !== this.shape.width || frame.height !== this.shape.height) {
+    const rect = this.rect
+    if (rect.x !== this.shape.x || rect.y !== this.shape.y || frame.width !== this.shape.width || frame.height !== this.shape.height) {
       this.growing = frame.width * frame.height >= this.shape.width * this.shape.height
-      this.shape = { width: frame.width, height: frame.height }
-      window.codync.island.setShape(islandRect(frame, window.innerWidth))
+      this.shape = rect
+      window.codync.island.setShape(rect)
     }
     const keys = this.mode === 'approval'
     if (keys !== this.keys) {

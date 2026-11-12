@@ -30,7 +30,7 @@ html[data-window='island'] #root {
   position: absolute;
   top: 0;
   left: 50%;
-  transform: translateX(-50%);
+  transform: none;
   color: var(--text);
   font-size: 13px;
   transition: width 0.52s var(--island-spring), height 0.52s var(--island-spring), opacity 0.2s var(--ease);

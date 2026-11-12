@@ -139,6 +139,15 @@ pub(super) fn accept(hub: &Hub, c: &Config, envelope: &Value) -> Result<()> {
     hub.store.enqueue_slack(&incoming)?;
     let root = stable_id(&[&c.generation, &binding.channel_id, thread, "root"]);
     hub.store.map_slack_thread(&incoming, &root)?;
+    hub.store.record_channel_activity(&crate::store::ChannelActivity {
+        id: format!("slack-{}", incoming.entry),
+        source: "slack".into(),
+        bot_id: incoming.bot.clone(),
+        thread_id: Some(root),
+        channel: incoming.channel.clone(),
+        mentioned: mention,
+        at: crate::store::now_ms(),
+    })?;
     Ok(())
 }
 

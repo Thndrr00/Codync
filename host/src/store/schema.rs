@@ -242,6 +242,7 @@ impl Store {
         super::whatsapp::open(&c)?;
         super::slack::open(&c)?;
         super::native_channels::open(&c)?;
+        super::channel_activity::open(&c)?;
         super::research::open(&c)?;
         super::analytics::open(&c)?;
         super::apps::open(&c)?;

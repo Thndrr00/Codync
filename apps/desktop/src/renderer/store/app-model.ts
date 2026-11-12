@@ -1,6 +1,7 @@
 import { trackBody } from '@shared/analytics'
 import type { HostSnapshot, LocalHost } from '@shared/ipc'
 import type { AccessRequest, Bot, Computer, PairingRequest } from '@shared/models'
+import type { BotRef } from '@shared/bot-ref'
 import { HostError, LoopbackTransport, type HostTransport } from '../client/host-client'
 import { Observable } from '../lib/observable'
 import { undoOnFailure } from '../lib/undo-on-failure'
@@ -12,18 +13,7 @@ import { CloudComputerModel } from './cloud-computer'
 import { DeviceComputerOrder } from './computer-order'
 import { ComputerAccess } from './computer-access'
 
-/** A bot on a computer: bot ids are only unique per computer. */
-export interface BotRef {
-  computerId: string
-  botId: string
-}
-
-export const refKey = (r: BotRef) => `${r.computerId}/${r.botId}`
-export const parseRef = (key: string): BotRef | null => {
-  const at = key.indexOf('/')
-  return at < 0 ? null : { computerId: key.slice(0, at), botId: key.slice(at + 1) }
-}
-export const sameRef = (a: BotRef | null, b: BotRef | null) => !!a && !!b && a.computerId === b.computerId && a.botId === b.botId
+export { refKey, parseRef, sameRef, type BotRef } from '@shared/bot-ref'
 
 export interface RosterItem {
   ref: BotRef

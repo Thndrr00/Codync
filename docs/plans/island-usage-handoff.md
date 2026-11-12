@@ -56,7 +56,9 @@ current checkout's commit instead of rebasing the shared checkout.
 
 ## Fifteen proposed island improvements
 
-These are proposals for a subsequent change, not features implemented here.
+These proposals are implemented by the follow-up branch `feat/island-control-center`;
+see [its integration handoff](island-control-center-handoff.md). They remain listed
+here to preserve the original scope of the usage correction.
 Client views should render existing host state and send existing intents;
 missing shared logic belongs in the host.
 

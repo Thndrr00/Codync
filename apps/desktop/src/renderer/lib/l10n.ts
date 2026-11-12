@@ -9,6 +9,7 @@ import ruPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages
 import ptBRPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/pt-BR.json' with { type: 'json' }
 import hansPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/zh-Hans.json' with { type: 'json' }
 import hantPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/zh-Hant.json' with { type: 'json' }
+import { islandPhrases } from './island-phrases.ts'
 
 /** This app's interface language. `zh` is Simplified, kept so a saved choice still means that. */
 export const appLanguages = ['system', 'en', 'zh', 'zh-Hant', 'ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'it'] as const
@@ -60,7 +61,7 @@ export function resolvedLanguage(preference: AppLanguage, system: string | boole
 }
 
 const catalogs: Record<Exclude<AppLanguage, 'system'>, Record<string, string>> = {
-  en: {}, zh: hans, 'zh-Hant': hant, ja: jaPhrases, ko: koPhrases, fr: frPhrases, de: dePhrases, es: esPhrases, 'pt-BR': ptBRPhrases, ru: ruPhrases, ar: arPhrases, it: itPhrases,
+  en: {}, zh: hans, 'zh-Hant': { ...hant, ...islandPhrases['zh-Hant'] }, ja: jaPhrases, ko: koPhrases, fr: frPhrases, de: dePhrases, es: { ...esPhrases, ...islandPhrases.es }, 'pt-BR': ptBRPhrases, ru: ruPhrases, ar: arPhrases, it: itPhrases,
 }
 
 /** One piece of a phrase key such as "Runs the official installer on {name}." */
