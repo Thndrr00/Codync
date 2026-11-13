@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { N8nState } from '@shared/models'
+import type { ToolState } from '@shared/tools'
 import { Icon } from '../components/Icon'
 import { useTr } from '../lib/use-language'
 import appIcon from '../../../resources/icon.png'
@@ -34,7 +35,7 @@ function RailButton({ label, icon, current, onClick, children, status }: {
   )
 }
 
-function n8nStatus(n8n: N8nState | null | undefined): string {
+function n8nStatus(n8n: N8nState | ToolState | null | undefined): string {
   if (n8n?.state === 'running') return 'running'
   if (n8n?.state === 'starting') return 'starting'
   if (n8n?.state === 'error') return 'error'
@@ -46,7 +47,7 @@ function n8nStatus(n8n: N8nState | null | undefined): string {
  * pages in the middle, and the account and settings at the bottom. The list
  * panel beside it changes with the page.
  */
-export function AppRail({ active, onBots, onInbox, onBoard, onRoutines, onCanvas, onUsage, onN8n, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n, inboxCount = 0 }: {
+export function AppRail({ active, onBots, onInbox, onBoard, onRoutines, onCanvas, onUsage, onN8n, onBrowser, onComfy, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n, comfy, inboxCount = 0 }: {
   active: AppRailPage
   onBots: () => void
   onInbox: () => void
@@ -56,6 +57,7 @@ export function AppRail({ active, onBots, onInbox, onBoard, onRoutines, onCanvas
   onUsage: () => void
   onN8n: () => void
   onBrowser: () => void
+  onComfy: () => void
   onExtensions: () => void
   onSettings: () => void
   onAccount: () => void
@@ -65,6 +67,8 @@ export function AppRail({ active, onBots, onInbox, onBoard, onRoutines, onCanvas
   n8n?: N8nState | null
   /** Approvals waiting: a small count on the Inbox icon. */
   inboxCount?: number
+  /** ComfyUI's state; the button hides on a build that doesn't include it. */
+  comfy?: ToolState | null
 }) {
   const tr = useTr()
   return (
@@ -89,6 +93,9 @@ export function AppRail({ active, onBots, onInbox, onBoard, onRoutines, onCanvas
           status={n8nStatus(n8n)}
         />
         <RailButton label={tr('Browser')} icon="globe" onClick={onBrowser} />
+        {comfy?.comfy?.bundled === false ? null : (
+          <RailButton label={tr('ComfyUI: make images, run by this computer')} icon="photo" onClick={onComfy} status={n8nStatus(comfy)} />
+        )}
         <RailButton label={tr('Extensions')} icon="square.grid.2x2" current={active === 'marketplace'} onClick={onExtensions} />
       </div>
       <div className="app-rail-group app-rail-bottom">
