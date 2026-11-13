@@ -172,7 +172,8 @@ action the person saw and not another one.
   `approvedAt`.
 - A card answered before the record existed is adopted when it is answered, so its answer still
   leaves one.
-- Records keep 90 days, like the audit log.
+- Records keep 90 days, like the audit log, and `approvalHistory {botId}` returns the newest 100 of
+  them for that bot: what it was allowed to do, who said so and when.
 
 Idea from agentes.chat's single-use approvals (`packages/engine`, AGPL-3.0-only): the behavior,
 not the code.

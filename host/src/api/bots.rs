@@ -523,6 +523,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::sql::set_database(&hub.store, bot, b["path"].as_str())?;
             json!({"database": crate::sql::database(hub, bot)})
         }
+        "approvalHistory" => {
+            let bot = str_arg(&b, "botId")?;
+            json!({"approvals": hub.store.approvals_recent(bot, 100)})
+        }
         "approvalLessons" => {
             let bot = str_arg(&b, "botId")?;
             json!({"lessons": hub.store.approval_lessons(bot, None)})
