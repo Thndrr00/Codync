@@ -55,6 +55,15 @@ than the bot working directory. Generated files are separate from input uploads;
 `attachments` and `readUpload` retain their existing meaning. Older clients show
 the entry's filename/size text fallback. No version or compatibility floor changes.
 
+### Versions of the same name
+
+Publishing a second file under the same name never replaces the first: each is its own
+immutable snapshot, so the history of that name is the list of snapshots that carry it.
+`fileVersions {botId, name}` returns them newest first as `{versions: [{at, entryId,
+file}]}`; the first one is what a download of that name serves, and any older one is read
+with `readFile {entryId, fileId}` exactly like the newest. Nothing is deleted when a new
+version arrives, so an older file is still there after the next one is published.
+
 The authenticated `readFile {entryId, fileId, offset}` API requires a nonnegative
 integer offset within the saved size and a file belonging to that final agent entry
 in an undeleted bot's own chat. Existing caller permissions apply: paired
