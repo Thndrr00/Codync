@@ -88,6 +88,12 @@ public extension HostClient {
         return try await call("setGitHubToken", Body(token: token.trimmed))
     }
 
+    /// Creates a repository on that account; the answer carries `created` plus the fresh status.
+    func githubCreateRepo(name: String, isPrivate: Bool, description: String) async throws -> GitHubStatus {
+        struct Body: Encodable { var name: String; var `private`: Bool; var description: String }
+        return try await call("githubCreateRepo", Body(name: name.trimmed, private: isPrivate, description: description.trimmed))
+    }
+
     func whatsappState() async throws -> WhatsAppLink { try await call("whatsappState", Empty()) }
 
     /// Starts the link; the host reports the QR code through `whatsappState`.

@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "登录在 {name} 自己的页面上进行。",
   "needs a key": "需要密钥",
   "Carries a credential": "带有凭据",
-  "Could not check the arguments for a credential": "无法检查参数中是否带有凭据"
+  "Could not check the arguments for a credential": "无法检查参数中是否带有凭据",
+  "New repository name": "新仓库名称",
+  "Description (optional)": "描述（可选）",
+  "Private": "私有",
+  "Creating…": "正在创建…",
+  "Create repository": "创建仓库",
+  "The workspace origin now points here.": "工作区的 origin 现在指向这里。"
 }

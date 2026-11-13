@@ -25,6 +25,9 @@ public struct ChannelsSheet: View {
     @State private var discordToken = ""
     @State private var rows: [BindingDraft] = []
     @State private var githubToken = ""
+    @State private var repoName = ""
+    @State private var repoDescription = ""
+    @State private var repoPrivate = true
 
     private struct Pairing: Equatable {
         let bot: String
@@ -227,7 +230,7 @@ public struct ChannelsSheet: View {
     }
 
     private var githubSection: some View {
-        CardSection("GitHub", footer: "A fine-grained token with the repository permissions your workflows need. It stays on the computer; Codync never sends it anywhere else.") {
+        CardSection("GitHub", footer: "A fine-grained token with the repository permissions your workflows need, plus Administration to create repositories. It stays on the computer; Codync never sends it anywhere else.") {
             VStack(alignment: .leading, spacing: 6) {
                 if let github, github.configured {
                     Text("\(L10n.tr("Signed in as")) \(github.login ?? "")").foregroundStyle(Palette.secondary)
@@ -235,6 +238,33 @@ public struct ChannelsSheet: View {
                         Text("\(L10n.tr("Scopes")): \(github.scopes.joined(separator: ", "))")
                             .font(.caption)
                             .foregroundStyle(Palette.tertiary)
+                    }
+                    if github.canCreateRepos {
+                        plainField($repoName, prompt: L10n.tr("New repository name"))
+                        plainField($repoDescription, prompt: L10n.tr("Description (optional)"))
+                        Toggle(L10n.tr("Private"), isOn: $repoPrivate).toggleStyle(.codync)
+                        Button(busy ? L10n.tr("Creating…") : L10n.tr("Create repository")) {
+                            act {
+                                github = try await store.githubCreateRepo(name: repoName, isPrivate: repoPrivate, description: repoDescription)
+                                repoName = ""
+                                repoDescription = ""
+                            }
+                        }
+                        .buttonStyle(.secondary)
+                        .disabled(busy || !Channels.repoNameOk(repoName))
+                    }
+                    if let created = github.created {
+                        Text("\(L10n.tr("Created")) \(created.fullName)")
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                        Text(created.cloneUrl)
+                            .font(.caption)
+                            .foregroundStyle(Palette.tertiary)
+                        if created.originSet {
+                            Text(L10n.tr("The workspace origin now points here."))
+                                .font(.caption)
+                                .foregroundStyle(Palette.tertiary)
+                        }
                     }
                     Button("Disconnect GitHub") {
                         act { github = try await store.disconnectGitHub() }

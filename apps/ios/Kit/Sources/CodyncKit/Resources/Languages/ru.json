@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "Вход остаётся на странице {name}.",
   "needs a key": "нужен ключ",
   "Carries a credential": "Содержит учётные данные",
-  "Could not check the arguments for a credential": "Не удалось проверить аргументы на учётные данные"
+  "Could not check the arguments for a credential": "Не удалось проверить аргументы на учётные данные",
+  "New repository name": "Название нового репозитория",
+  "Description (optional)": "Описание (необязательно)",
+  "Private": "Приватный",
+  "Creating…": "Создание…",
+  "Create repository": "Создать репозиторий",
+  "The workspace origin now points here.": "Origin рабочей папки теперь указывает сюда."
 }

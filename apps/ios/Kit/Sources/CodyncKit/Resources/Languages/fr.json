@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "La connexion reste sur la page de {name}.",
   "needs a key": "nécessite une clé",
   "Carries a credential": "Contient un identifiant",
-  "Could not check the arguments for a credential": "Les arguments n’ont pas pu être vérifiés pour un identifiant"
+  "Could not check the arguments for a credential": "Les arguments n’ont pas pu être vérifiés pour un identifiant",
+  "New repository name": "Nom du nouveau dépôt",
+  "Description (optional)": "Description (facultatif)",
+  "Private": "Privé",
+  "Creating…": "Création…",
+  "Create repository": "Créer le dépôt",
+  "The workspace origin now points here.": "L’origine de l’espace de travail pointe désormais ici."
 }

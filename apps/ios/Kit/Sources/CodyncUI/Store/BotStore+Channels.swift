@@ -53,6 +53,11 @@ extension BotStore {
         try await ready().setGitHubToken(token)
     }
 
+    /// Creates a repository on that account; the answer carries `created` plus the fresh status.
+    public func githubCreateRepo(name: String, isPrivate: Bool, description: String) async throws -> GitHubStatus {
+        try await ready().githubCreateRepo(name: name, isPrivate: isPrivate, description: description)
+    }
+
     /// The computer's linked WhatsApp number.
     public func whatsapp() async throws -> WhatsAppLink { try await ready().whatsappState() }
 

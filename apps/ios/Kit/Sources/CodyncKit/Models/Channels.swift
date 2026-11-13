@@ -133,15 +133,30 @@ public struct GitHubStatus: Decodable, Equatable, Sendable {
     public var configured: Bool
     public var login: String?
     public var scopes: [String]
+    /// The token may create repositories (Administration, or a classic token's `repo` scope).
+    public var canCreateRepos: Bool
+    /// The repository the last `githubCreateRepo` made; only that answer carries it.
+    public var created: CreatedRepo?
 
-    private enum CodingKeys: String, CodingKey { case configured, login, scopes }
+    private enum CodingKeys: String, CodingKey { case configured, login, scopes, canCreateRepos, created }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
         login = try c.decodeIfPresent(String.self, forKey: .login)
         scopes = try c.decodeIfPresent([String].self, forKey: .scopes) ?? []
+        canCreateRepos = try c.decodeIfPresent(Bool.self, forKey: .canCreateRepos) ?? false
+        created = try c.decodeIfPresent(CreatedRepo.self, forKey: .created)
     }
+}
+
+/// A repository `githubCreateRepo` just created.
+public struct CreatedRepo: Decodable, Equatable, Sendable {
+    public var fullName: String
+    public var htmlUrl: String
+    public var cloneUrl: String
+    /// The host pointed the workspace at it, because the workspace had no origin.
+    public var originSet: Bool
 }
 
 /// The computer's linked WhatsApp number, as `whatsappState` reports it.
@@ -198,6 +213,13 @@ public enum Channels {
     public static func githubTokenOk(_ token: String) -> Bool {
         let value = token.trimmingCharacters(in: .whitespacesAndNewlines)
         return (20...255).contains(value.count) && value.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
+    }
+
+    /// GitHub's own repository-name rule, checked before the host is asked.
+    public static func repoNameOk(_ name: String) -> Bool {
+        let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = value.first, first.isASCII, first.isLetter || first.isNumber || first == "_" || first == "-" else { return false }
+        return value.count <= 100 && value.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" || $0 == ".") }
     }
 
     public static func stateText(_ state: String) -> String {

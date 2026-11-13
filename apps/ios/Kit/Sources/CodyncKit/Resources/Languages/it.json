@@ -2420,5 +2420,12 @@
   "The sign-in stays on {name}’s own page.": "L’accesso resta sulla pagina di {name}.",
   "needs a key": "richiede una chiave",
   "Carries a credential": "Porta una credenziale",
-  "Could not check the arguments for a credential": "Non è stato possibile controllare gli argomenti per una credenziale"
+  "Could not check the arguments for a credential": "Non è stato possibile controllare gli argomenti per una credenziale",
+  "New repository name": "Nome del nuovo repository",
+  "Description (optional)": "Descrizione (facoltativa)",
+  "Private": "Privato",
+  "Creating…": "Creazione…",
+  "Create repository": "Crea repository",
+  "The workspace origin now points here.": "L’origine dell’area di lavoro ora punta qui.",
+  "Reviewed by CopilotKit": "Revisionato da CopilotKit"
 }

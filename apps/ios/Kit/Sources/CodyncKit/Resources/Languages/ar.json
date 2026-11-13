@@ -369,5 +369,12 @@
   "The sign-in stays on {name}’s own page.": "يتم تسجيل الدخول على صفحة {name} نفسها.",
   "needs a key": "يحتاج إلى مفتاح",
   "Carries a credential": "يحمل بيانات اعتماد",
-  "Could not check the arguments for a credential": "تعذّر فحص الوسائط بحثًا عن بيانات اعتماد"
+  "Could not check the arguments for a credential": "تعذّر فحص الوسائط بحثًا عن بيانات اعتماد",
+  "New repository name": "اسم المستودع الجديد",
+  "Description (optional)": "الوصف (اختياري)",
+  "Private": "خاص",
+  "Creating…": "جارٍ الإنشاء…",
+  "Create repository": "إنشاء مستودع",
+  "Created": "أُنشئ",
+  "The workspace origin now points here.": "أصبح أصل مساحة العمل يشير إلى هنا."
 }

@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "サインインは {name} のページで行います。",
   "needs a key": "キーが必要",
   "Carries a credential": "認証情報を含む",
-  "Could not check the arguments for a credential": "引数に認証情報がないか確認できませんでした"
+  "Could not check the arguments for a credential": "引数に認証情報がないか確認できませんでした",
+  "New repository name": "新しいリポジトリ名",
+  "Description (optional)": "説明（任意）",
+  "Private": "プライベート",
+  "Creating…": "作成中…",
+  "Create repository": "リポジトリを作成",
+  "The workspace origin now points here.": "ワークスペースの origin は今後ここを指します。"
 }

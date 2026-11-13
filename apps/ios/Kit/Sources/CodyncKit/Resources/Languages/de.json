@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "Die Anmeldung bleibt auf der Seite von {name}.",
   "needs a key": "braucht einen Schlüssel",
   "Carries a credential": "Trägt ein Zugangsmerkmal",
-  "Could not check the arguments for a credential": "Die Argumente konnten nicht auf ein Zugangsmerkmal geprüft werden"
+  "Could not check the arguments for a credential": "Die Argumente konnten nicht auf ein Zugangsmerkmal geprüft werden",
+  "New repository name": "Name des neuen Repositories",
+  "Description (optional)": "Beschreibung (optional)",
+  "Private": "Privat",
+  "Creating…": "Wird erstellt…",
+  "Create repository": "Repository erstellen",
+  "The workspace origin now points here.": "Der Origin des Arbeitsbereichs zeigt jetzt hierhin."
 }

@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "登入在 {name} 自己的頁面上進行。",
   "needs a key": "需要金鑰",
   "Carries a credential": "帶有憑證",
-  "Could not check the arguments for a credential": "無法檢查參數中是否帶有憑證"
+  "Could not check the arguments for a credential": "無法檢查參數中是否帶有憑證",
+  "New repository name": "新儲存庫名稱",
+  "Description (optional)": "說明（選填）",
+  "Private": "私人",
+  "Creating…": "建立中…",
+  "Create repository": "建立儲存庫",
+  "The workspace origin now points here.": "工作區的 origin 現在指向這裡。"
 }

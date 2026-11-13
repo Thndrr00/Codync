@@ -2421,5 +2421,11 @@
   "The sign-in stays on {name}’s own page.": "로그인은 {name}의 페이지에서 합니다.",
   "needs a key": "키 필요",
   "Carries a credential": "자격 증명 포함",
-  "Could not check the arguments for a credential": "인수에 자격 증명이 있는지 확인하지 못했습니다"
+  "Could not check the arguments for a credential": "인수에 자격 증명이 있는지 확인하지 못했습니다",
+  "New repository name": "새 저장소 이름",
+  "Description (optional)": "설명 (선택 사항)",
+  "Private": "비공개",
+  "Creating…": "만드는 중…",
+  "Create repository": "저장소 만들기",
+  "The workspace origin now points here.": "이 작업 공간의 origin이 이제 여기를 가리킵니다."
 }
