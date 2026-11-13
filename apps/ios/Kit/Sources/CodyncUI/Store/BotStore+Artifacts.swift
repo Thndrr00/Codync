@@ -19,6 +19,11 @@ extension BotStore {
         }
     }
 
+    /// Every snapshot the bot published under `name`, newest first: an older one is read like the newest.
+    func fileVersions(_ botId: String, name: String) async throws -> [SharedFileVersion] {
+        try await withLink(replay: true) { try await $0.fileVersions(botId: botId, name: name) }
+    }
+
     /// A card on screen: the version it names is known now (history and the cache don't come as events), and the
     /// artifact's HTML is read unless the newest version is here.
     func showArtifact(_ ref: ArtifactRef, botId: String) {

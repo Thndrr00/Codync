@@ -16,6 +16,8 @@ struct LibraryView: View {
     @State private var renaming: Artifact?
     @State private var sharing: ArtifactFile?
     @State private var viewing: Attachment?
+    @State private var versioning: VersioningFile?
+    @State private var versions: [SharedFileVersion] = []
 
     var body: some View {
         let items = files + model.artifacts.artifacts(of: botId).map(ChatLibraryItem.init)
@@ -48,6 +50,25 @@ struct LibraryView: View {
         .codyncSheet(item: $renaming) { ArtifactRenameSheet(artifact: $0) }
         .artifactShareSheet($sharing)
         .codyncSheet(item: $viewing) { AttachmentViewer(file: $0, botId: botId) }
+        .codyncSheet(item: $versioning) { target in
+            VStack(alignment: .leading, spacing: 12) {
+                ModalHeader(target.name)
+                if versions.isEmpty {
+                    Text(L10n.tr("No other versions.")).font(.caption).foregroundStyle(Palette.secondary)
+                } else {
+                    ForEach(versions) { version in
+                        Button { download(version.file, entryId: version.entryId) } label: {
+                            LibraryRow(title: version.id == versions.first?.id ? L10n.tr("Newest") : L10n.tr("Older"),
+                                       detail: ByteCountFormatter.string(fromByteCount: version.file.size, countStyle: .file)) {
+                                Image(systemName: "doc").font(.system(size: 18)).foregroundStyle(Palette.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(20)
+        }
         .fileExportSheet(model, botId: botId)
     }
 
@@ -70,6 +91,14 @@ struct LibraryView: View {
                 }
             }
             .buttonStyle(.plain)
+            .contextActions {
+                [MenuItem("Versions", icon: "clock.arrow.circlepath") {
+                    Task {
+                        versions = (try? await model.fileVersions(botId, name: file.name)) ?? []
+                        versioning = VersioningFile(name: file.name)
+                    }
+                }]
+            }
         case .attachment(let file, _) where file.isImage:
             Button { viewing = file } label: {
                 LibraryRow(title: file.name) {
@@ -132,6 +161,12 @@ struct LibraryView: View {
 }
 
 /// One Library row: its picture (a symbol or a thumbnail), the name, and an optional line under it.
+/// The file whose versions the sheet lists; a name is enough to identify it.
+private struct VersioningFile: Identifiable {
+    let name: String
+    var id: String { name }
+}
+
 private struct LibraryRow<Leading: View>: View {
     let title: String
     var detail: String?
