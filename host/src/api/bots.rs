@@ -116,13 +116,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         // The same prompt through two or three bots' harnesses, each in a throwaway session: the
         // answers are compared without posting anything into their chats.
         "compareModels" => {
-            let ids: Vec<String> = b["botIds"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect();
+            let ids: Vec<String> =
+                b["botIds"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect();
             if !(2..=3).contains(&ids.len()) {
                 bail!("pick two or three bots to compare");
             }
@@ -638,9 +633,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     }
                 }
                 routines.push(json!({"botId": bot.id, "routines": hub.routines.list(&bot.id, |_| false)}));
-                scheduled.extend(hub.store.scheduled_for_bot(&bot.id)?.into_iter().map(|message| json!({
-                    "botId": message.bot_id, "text": message.text, "sendAt": message.send_at,
-                })));
+                scheduled.extend(hub.store.scheduled_for_bot(&bot.id)?.into_iter().map(|message| {
+                    json!({
+                        "botId": message.bot_id, "text": message.text, "sendAt": message.send_at,
+                    })
+                }));
                 for entry in hub.store.history(&bot.id, i64::MAX, 300)? {
                     if !matches!(entry.kind.as_str(), "user" | "agent" | "notice") {
                         continue;

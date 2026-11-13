@@ -42,7 +42,11 @@ impl Problem {
             Self::NoFolder | Self::MissingFolder | Self::NoAgent | Self::EmptyFallback | Self::MissingMember => {
                 Severity::Error
             }
-            Self::UnknownAgent | Self::SmallGroup | Self::DuplicateName | Self::SkillLimit | Self::DormantSkills
+            Self::UnknownAgent
+            | Self::SmallGroup
+            | Self::DuplicateName
+            | Self::SkillLimit
+            | Self::DormantSkills
             | Self::MissingConnector => Severity::Warning,
         }
     }

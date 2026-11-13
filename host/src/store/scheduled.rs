@@ -48,8 +48,7 @@ impl When {
 }
 
 fn read(c: &rusqlite::Connection) -> Result<Vec<ScheduledMessage>> {
-    let value: Option<String> =
-        c.query_row("SELECT v FROM kv WHERE k = ?1", [KEY], |row| row.get(0)).optional()?;
+    let value: Option<String> = c.query_row("SELECT v FROM kv WHERE k = ?1", [KEY], |row| row.get(0)).optional()?;
     match value {
         Some(value) => Ok(serde_json::from_str(&value)?),
         None => Ok(Vec::new()),

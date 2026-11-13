@@ -33,8 +33,7 @@ pub struct BoardTask {
 }
 
 fn read(c: &rusqlite::Connection) -> Result<Vec<BoardTask>> {
-    let value: Option<String> =
-        c.query_row("SELECT v FROM kv WHERE k = ?1", [KEY], |row| row.get(0)).optional()?;
+    let value: Option<String> = c.query_row("SELECT v FROM kv WHERE k = ?1", [KEY], |row| row.get(0)).optional()?;
     match value {
         Some(value) => Ok(serde_json::from_str(&value)?),
         None => Ok(Vec::new()),
@@ -87,7 +86,8 @@ impl Store {
         let mut tasks = read(&c)?;
         let task = match id {
             Some(id) => {
-                let task = tasks.iter_mut().find(|task| task.id == id).ok_or_else(|| anyhow::anyhow!("no such task"))?;
+                let task =
+                    tasks.iter_mut().find(|task| task.id == id).ok_or_else(|| anyhow::anyhow!("no such task"))?;
                 task.title = title.to_owned();
                 task.detail = detail.to_owned();
                 task.status = status.to_owned();
@@ -150,8 +150,7 @@ mod tests {
     #[test]
     fn a_card_can_be_created_changed_moved_and_deleted() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        let task =
-            store.save_board_task(None, "  review the PR ", "", "todo", Some("b1"), None, NOW).expect("created");
+        let task = store.save_board_task(None, "  review the PR ", "", "todo", Some("b1"), None, NOW).expect("created");
         assert_eq!(task.title, "review the PR");
         assert_eq!(store.board_tasks().unwrap().len(), 1);
         let changed = store

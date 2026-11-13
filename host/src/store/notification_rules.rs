@@ -117,7 +117,12 @@ mod tests {
     }
 
     fn rules() -> NotificationRules {
-        NotificationRules { timezone: Some("UTC".into()), quiet_start: 22, quiet_end: 8, ..NotificationRules::default() }
+        NotificationRules {
+            timezone: Some("UTC".into()),
+            quiet_start: 22,
+            quiet_end: 8,
+            ..NotificationRules::default()
+        }
     }
 
     #[test]
