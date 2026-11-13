@@ -444,6 +444,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "comfyJobs" => hub.tools.comfy_jobs().history(),
         "comfyTemplates" => json!({
             "templates": crate::tools::comfy::templates::list().iter().map(|t| t.summary()).collect::<Vec<_>>(),
+            "curated": crate::tools::comfy::templates::curated(),
             "problems": crate::tools::comfy::templates::problems(),
         }),
         "comfyTemplate" => crate::tools::comfy_mcp::describe_template(hub, &b).await?,

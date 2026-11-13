@@ -73,3 +73,10 @@
 .file-view { position: absolute; inset: 60px 0 0; padding: 16px 20px; overflow: auto; }
 .file-view-image { display: flex; justify-content: center; }
 .file-view-image img { max-width: 100%; max-height: 70vh; object-fit: contain; }
+
+/* A video or audio ComfyUI made: played in the card that carried it, before any download. */
+.attachment-media { width: 100%; border-radius: var(--radius-m); background: #000; }
+.attachment-media.video { max-height: 360px; }
+.attachment-media.audio { background: var(--background); }
+.file-view .attachment-media.video { max-height: 70vh; }
+.attachment-placeholder.media { height: 120px; border-radius: var(--radius-m); }

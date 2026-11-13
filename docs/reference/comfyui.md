@@ -69,10 +69,12 @@ A job is `queued → running → done | cancelled | error`, with the node and st
 
 ## Not covered here yet
 
-- **The official ComfyUI MCP, CLI and Agent** were not evaluated: that needs the pinned server and a network run, and this change was written without compiling or running the app (see the delivery report). The bridge keeps its own names until that comparison exists.
-- **The Higgsfield challenge pack** (Panorama Stickers, Paint a Plate, H3 Motion, OneShot MV, H3 AudioRetake, Genobi, Splat Edit Engine, Sonder, Max Editor, Blocksfield, Creativefield, ComfyArt, Reshoot 4D, Freefield, Henge) is not included: those graphs belong to their authors, come with their own licences and custom nodes, and must be imported with their markers and models checked, not invented. The manifest format and importer are ready for them.
-- **One job at a time**, no parallel queue.
-- **The gallery, form and model manager are on the desktop**; Android shows the job and its percentage and cancels it, and iOS has no ComfyUI section yet. The host owns the state, so those screens can follow without host changes.
+- **The official ComfyUI MCP** was evaluated from its published tool list, not run: see [comfy-official-mcp.md](comfy-official-mcp.md) for the coverage table and why Codync keeps its bridge (AGPL/commercial licence, a Python + `comfy-cli` runtime, beta). `tools/comfy-mcp-smoke.mjs` is the harness for a later adoption.
+- **The Higgsfield challenge pack** is catalogued, not imported: `host/assets/comfy-templates/curated.json` lists the fifteen entries with their authors' repositories, licences and output types (from the contest's winner page and the GitHub API), and the gallery shows them as imports. A graph, its custom nodes and its models belong to its author; importing one means copying its workflow with markers and checking its models, not inventing it.
+- **One job at a time**, no parallel queue, and the twenty-entry history lives in the host process (not SQLite).
+- **The gallery, form and model manager are on the desktop**; Android shows the job, its percentage and cancel, and iOS has no ComfyUI section yet. The host owns the state, so those screens can follow without host changes.
+- **Audio has a player in the chat; meshes and splats do not**: a `.glb` arrives with its type and a download, with no WebGL viewer yet.
+- **Analytics and the version bump** were left out of this change.
 
 ## Known limits
 

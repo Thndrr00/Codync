@@ -14,7 +14,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// The templates that ship with Codync, by id: their manifest is embedded in the binary.
+/// The manifests that ship with Codync, by id: their manifest is embedded in the binary.
 const BASE: [(&str, &str); 5] = [
     ("text-to-image", include_str!("../../../assets/comfy-templates/text-to-image.json")),
     ("image-to-image", include_str!("../../../assets/comfy-templates/image-to-image.json")),
@@ -22,6 +22,28 @@ const BASE: [(&str, &str); 5] = [
     ("image-upscale", include_str!("../../../assets/comfy-templates/image-upscale.json")),
     ("smoke-test", include_str!("../../../assets/comfy-templates/smoke-test.json")),
 ];
+
+/// The Open Source Higgsfield entries, with the author's repository and licence. They are not
+/// templates: a graph and its models belong to its author, so the gallery lists them as imports.
+const CURATED: &str = include_str!("../../../assets/comfy-templates/curated.json");
+
+/// One challenge entry, as the gallery shows it before its graph is imported.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Curated {
+    pub id: String,
+    pub name: String,
+    pub repo: String,
+    pub license: String,
+    /// What it makes: `image`, `video`, `audio` or `mesh`, alone or combined.
+    pub output: Vec<String>,
+    pub summary: String,
+    pub author: String,
+}
+
+/// The challenge catalogue; empty when the embedded list can't be read.
+pub fn curated() -> Vec<Curated> {
+    serde_json::from_str(CURATED).unwrap_or_default()
+}
 
 /// The folder every installed manifest lives in.
 pub fn dir() -> PathBuf {
@@ -706,6 +728,21 @@ mod tests {
         assert_eq!(render(&json!("{{n}}"), &values).expect("number"), json!(5));
         assert_eq!(render(&json!("a {{who}} and {{n}}"), &values).expect("text"), json!("a cat and 5"));
         assert!(render(&json!("{{missing}}"), &values).is_err());
+    }
+
+    #[test]
+    fn the_challenge_catalogue_names_its_repositories_and_licences() {
+        let all = curated();
+        assert_eq!(all.len(), 15);
+        for entry in all {
+            assert!(entry.repo.starts_with("https://github.com/"), "{}", entry.id);
+            assert!(!entry.license.is_empty() && !entry.summary.is_empty(), "{}", entry.id);
+            assert!(
+                entry.output.iter().all(|kind| ["image", "video", "audio", "mesh"].contains(&kind.as_str())),
+                "{}",
+                entry.id
+            );
+        }
     }
 
     #[test]

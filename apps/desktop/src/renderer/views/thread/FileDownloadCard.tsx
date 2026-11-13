@@ -6,9 +6,12 @@ import { Icon } from '../../components/Icon'
 import { IconButtonBase } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
-import { AttachmentImage, AttachmentViewer, attachmentSymbol, byteCount, type ImageSource } from './Attachments'
+import { AttachmentImage, AttachmentMedia, AttachmentViewer, attachmentSymbol, byteCount, isAudioName, isVideoName, type ImageSource } from './Attachments'
 import { trNow } from '../../lib/l10n.ts'
 import './attachments.css'
+
+/** Above this a clip is offered as a download rather than fetched whole into the chat. */
+const MEDIA_PREVIEW_MAX = 50 * 1024 * 1024
 
 /** What the download button does now (also the Library's file rows). */
 export function downloadAction(state: DownloadState | undefined) {
@@ -31,13 +34,16 @@ export function FileDownloadCard({ entry, file, onOpen }: { entry: Entry; file: 
   const busy = state?.kind === 'downloading'
   const [action, detail] = [downloadAction(state), downloadDetail(state, file)]
   const [viewing, setViewing] = useState(false)
-  const image: ImageSource = { file, entryId: entry.id }
+  const source: ImageSource = { file, entryId: entry.id }
+  const playable = file.size <= MEDIA_PREVIEW_MAX
+  const video = playable && isVideoName(file.name)
+  const audio = playable && isAudioName(file.name)
   return <VStack gap={12} className="file-card">
-    {showsAsImage(file) ? <>
+    {video || audio ? <AttachmentMedia source={source} kind={video ? 'video' : 'audio'} /> : showsAsImage(file) ? <>
       <button className="file-card-image" aria-label={file.name} onClick={() => setViewing(true)}>
-        <AttachmentImage source={image} fit="thumbnail" />
+        <AttachmentImage source={source} fit="thumbnail" />
       </button>
-      <AttachmentViewer source={viewing ? image : null} close={() => setViewing(false)} />
+      <AttachmentViewer source={viewing ? source : null} close={() => setViewing(false)} />
     </> : null}
     <HStack gap={12}>
       <Icon name={attachmentSymbol(file.name)} size={24} color="var(--secondary)" />

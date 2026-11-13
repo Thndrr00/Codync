@@ -13,9 +13,27 @@ export function attachmentSymbol(name: string) {
   if (['png', 'jpg', 'jpeg', 'heic', 'gif', 'webp', 'tiff', 'bmp', 'svg'].includes(ext)) return 'photo'
   if (ext === 'pdf') return 'doc.richtext'
   if (['zip', 'gz', 'tar', '7z'].includes(ext)) return 'doc.zipper'
-  if (['mov', 'mp4', 'm4v'].includes(ext)) return 'film'
-  if (['mp3', 'm4a', 'wav', 'aac'].includes(ext)) return 'waveform'
+  if (['mov', 'mp4', 'm4v', 'webm', 'mkv', 'avi'].includes(ext)) return 'film'
+  if (['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg', 'opus'].includes(ext)) return 'waveform'
+  if (['glb', 'gltf', 'obj', 'ply', 'stl', 'splat', 'ksplat', 'spz'].includes(ext)) return 'shippingbox'
   return 'doc'
+}
+
+/** A video ComfyUI produced: played in the chat instead of only offered as a download. */
+export const isVideoName = (name: string) => ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi'].includes(name.split('.').pop()?.toLowerCase() ?? '')
+
+/** An audio ComfyUI produced: played in the chat. */
+export const isAudioName = (name: string) => ['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg', 'opus'].includes(name.split('.').pop()?.toLowerCase() ?? '')
+
+/** A mesh or splat: no viewer yet, so the card keeps its type and a download. */
+export const isMeshName = (name: string) => ['glb', 'gltf', 'obj', 'ply', 'stl', 'splat', 'ksplat', 'spz'].includes(name.split('.').pop()?.toLowerCase() ?? '')
+
+/** The MIME a blob needs for `<video>`/`<audio>` to pick the right decoder. */
+function mediaMime(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  const video: Record<string, string> = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', m4v: 'video/mp4', mkv: 'video/x-matroska', avi: 'video/x-msvideo' }
+  const audio: Record<string, string> = { mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', aac: 'audio/aac', flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/ogg' }
+  return video[ext] ?? audio[ext] ?? ''
 }
 
 export function byteCount(bytes: number) {
@@ -74,8 +92,8 @@ export function AttachmentViewer({ source, close }: { source: ImageSource | null
   )
 }
 
-/** A picture from the computer, fetched once and then read from the cache. */
-export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'icon' | 'thumbnail' | 'full' }) {
+/** The bytes of a shared file as an object URL, fetched once and kept while the card is mounted. */
+function useObjectUrl(source: ImageSource, mime: string): string | null {
   const store = useStoreRef()
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
@@ -85,7 +103,7 @@ export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'ic
       const data = 'entryId' in source ? store.sharedFileData(source.file, source.entryId) : store.attachmentData(source.file.id, source.botId)
       void data.then((data) => {
         if (!data || revoked || made) return
-        made = URL.createObjectURL(new Blob([data as BlobPart], { type: source.file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : '' }))
+        made = URL.createObjectURL(new Blob([data as BlobPart], { type: mime }))
         setUrl(made)
       })
     }
@@ -103,7 +121,13 @@ export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'ic
       if (made) URL.revokeObjectURL(made)
     }
     // A file's id names its bytes for good; `source` is a new object every render.
-  }, [store, source.file.id])
+  }, [store, source.file.id, mime])
+  return url
+}
+
+/** A picture from the computer, fetched once and then read from the cache. */
+export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'icon' | 'thumbnail' | 'full' }) {
+  const url = useObjectUrl(source, source.file.name.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : '')
   if (!url) {
     return (
       <div className={`attachment-placeholder ${fit}`}>
@@ -112,4 +136,21 @@ export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'ic
     )
   }
   return <img src={url} alt="" className={`attachment-image ${fit}`} />
+}
+
+/** A video or audio file played where it arrived, so a five-second clip needs no download first. */
+export function AttachmentMedia({ source, kind }: { source: ImageSource; kind: 'video' | 'audio' }) {
+  const url = useObjectUrl(source, mediaMime(source.file.name))
+  if (!url) {
+    return (
+      <div className="attachment-placeholder media">
+        <Icon name={kind === 'video' ? 'film' : 'waveform'} size={18} color="var(--tertiary)" />
+      </div>
+    )
+  }
+  return kind === 'video' ? (
+    <video className="attachment-media video" src={url} controls playsInline preload="metadata" />
+  ) : (
+    <audio className="attachment-media audio" src={url} controls preload="metadata" />
+  )
 }

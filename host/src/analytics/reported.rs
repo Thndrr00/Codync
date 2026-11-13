@@ -138,6 +138,11 @@ pub enum Reported {
     KofiInviteAnswered {
         opened: bool,
     },
+    /// A named ComfyUI template was run from the card: queued, refused by the preflight, or failed.
+    ComfyTemplateRun {
+        outcome: ComfyRunOutcome,
+        output: ComfyOutput,
+    },
     WhatsNewShown,
 }
 
@@ -149,6 +154,29 @@ pub enum Reported {
 pub enum WindowRecoveryOutcome {
     Reloaded,
     GaveUp,
+    #[serde(other)]
+    Other,
+}
+
+/// How a template run from the card ended before it was queued.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComfyRunOutcome {
+    Queued,
+    Refused,
+    Failed,
+    #[serde(other)]
+    Other,
+}
+
+/// What a ComfyUI template makes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComfyOutput {
+    Image,
+    Video,
+    Audio,
+    Mesh,
     #[serde(other)]
     Other,
 }
@@ -429,6 +457,15 @@ mod tests {
             Some((Event::OnboardingCompleted, json!({"app": "desktop"})))
         );
         assert_eq!(read_json(&json!({"event": "signed_out"})), Some((Event::SignedOut, json!({"app": "desktop"}))));
+    }
+
+    #[test]
+    fn a_template_run_names_its_outcome_and_output() {
+        assert_eq!(
+            read_json(&json!({"event": "comfy_template_run", "outcome": "refused", "output": "video"})),
+            Some((Event::ComfyTemplateRun, json!({"app": "desktop", "outcome": "refused", "output": "video"})))
+        );
+        assert!(read(&json!({"event": "comfy_template_run", "outcome": "queued"})).is_err(), "missing `output`");
     }
 
     #[test]

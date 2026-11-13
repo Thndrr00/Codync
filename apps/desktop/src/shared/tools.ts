@@ -142,6 +142,17 @@ export interface ModelLibrary {
   downloads: ModelDownload[]
 }
 
+/** One Open Source Higgsfield entry: its author's repository, not an installed template. */
+export interface CuratedTemplate {
+  id: string
+  name: string
+  repo: string
+  license: string
+  output: string[]
+  summary: string
+  author: string
+}
+
 
 /** What the host shows on ComfyUI's card. */
 export interface ComfyCard {

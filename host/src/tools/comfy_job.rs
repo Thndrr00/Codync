@@ -369,6 +369,19 @@ impl Jobs {
     }
 }
 
+#[cfg(test)]
+impl Jobs {
+    /// A test job that is already active, so `/ws` has something to report.
+    pub(crate) fn activate_for_test(&self, id: &str) {
+        *self.current.locked() = Some(Job::queued(id, "test", None, BTreeMap::new()));
+    }
+
+    /// Ends the test job so the `/ws` listener stops.
+    pub(crate) fn finish_for_test(&self, id: &str) {
+        self.update(id, |job| job.phase = Phase::Done);
+    }
+}
+
 /// Sends `files` to `bot`'s chat; only works while the bot's turn runs.
 async fn attach(hub: &Arc<Hub>, bot: &str, files: &[PathBuf]) -> Result<()> {
     for file in files {

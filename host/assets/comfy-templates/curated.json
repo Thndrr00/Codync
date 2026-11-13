@@ -1,0 +1,137 @@
+[
+  {
+    "id": "panorama-stickers",
+    "name": "Panorama Stickers",
+    "repo": "https://github.com/nomadoor/ComfyUI-Panorama-Stickers",
+    "license": "MIT",
+    "output": ["image"],
+    "summary": "Turns a picture into a 360 panorama and places stickers in it. Best Overall of the challenge.",
+    "author": "nomadoor"
+  },
+  {
+    "id": "paint-a-plate",
+    "name": "Paint a Plate",
+    "repo": "https://github.com/AInVFX/ainvfx-paintaplate",
+    "license": "Apache-2.0",
+    "output": ["video"],
+    "summary": "VFX plates: paint on the first frame and the edit carries through the shot.",
+    "author": "AInVFX"
+  },
+  {
+    "id": "h3-motion",
+    "name": "H3 Motion",
+    "repo": "https://github.com/PxTicks/h3-motion",
+    "license": "AGPL-3.0",
+    "output": ["video"],
+    "summary": "Motion and camera work on MiniMax H3 guide latents.",
+    "author": "PxTicks"
+  },
+  {
+    "id": "one-shot-mv",
+    "name": "OneShot MV",
+    "repo": "https://github.com/VisualFrisson/ComfyUI-OneShotMV",
+    "license": "MIT",
+    "output": ["video", "audio"],
+    "summary": "A lip-synced music video from a song and one line about its world.",
+    "author": "VisualFrisson"
+  },
+  {
+    "id": "h3-audio-retake",
+    "name": "H3 AudioRetake",
+    "repo": "https://github.com/Nebuluss/H3-AudioRetake-studio",
+    "license": "MIT",
+    "output": ["video", "audio"],
+    "summary": "An audio and lip-sync retake studio for ComfyUI and MiniMax H3.",
+    "author": "Nebuluss"
+  },
+  {
+    "id": "genobi",
+    "name": "Genobi",
+    "repo": "https://github.com/koshimazaki/genobi",
+    "license": "MIT",
+    "output": ["image", "video", "audio"],
+    "summary": "A voice-first, harness-first generative studio.",
+    "author": "koshimazaki"
+  },
+  {
+    "id": "splat-edit-engine",
+    "name": "Splat Edit Engine",
+    "repo": "https://github.com/Burgstall-labs/ComfyUI-SpEdE",
+    "license": "AGPL-3.0",
+    "output": ["mesh"],
+    "summary": "Click an object in a Gaussian splat, then remove, replace or extract it.",
+    "author": "Burgstall-labs"
+  },
+  {
+    "id": "sonder",
+    "name": "Sonder",
+    "repo": "https://github.com/SonderSaid/ComfyUI-Sonder-Editor",
+    "license": "GPL-3.0",
+    "output": ["video"],
+    "summary": "A timeline-based video editor with scenes, keyframes, render staging and takes.",
+    "author": "SonderSaid"
+  },
+  {
+    "id": "max-editor",
+    "name": "Max Editor",
+    "repo": "https://github.com/xentome/EDITS-WITH-AI",
+    "license": "Apache-2.0",
+    "output": ["video", "audio"],
+    "summary": "Musical edits with MiniMax H3 and a local model, inside ComfyUI.",
+    "author": "xentome"
+  },
+  {
+    "id": "blocksfield",
+    "name": "Blocksfield",
+    "repo": "https://github.com/Hcoder10/blocksfield",
+    "license": "MIT",
+    "output": ["image", "mesh"],
+    "summary": "A pitch becomes a playable Roblox game: art, props and music from open weights.",
+    "author": "Hcoder10"
+  },
+  {
+    "id": "creativefield",
+    "name": "Creativefield",
+    "repo": "https://github.com/rhymeas/Creativefield",
+    "license": "GPL-3.0",
+    "output": ["image", "video", "mesh"],
+    "summary": "A creative studio: keyframe animation, grey-block scenes made real, character swap and 3D.",
+    "author": "rhymeas"
+  },
+  {
+    "id": "comfyart",
+    "name": "ComfyArt",
+    "repo": "https://github.com/jtydhr88/ComfyArt",
+    "license": "MIT",
+    "output": ["image"],
+    "summary": "A fully local design canvas on top of ComfyUI.",
+    "author": "jtydhr88"
+  },
+  {
+    "id": "reshoot-4d",
+    "name": "Reshoot 4D",
+    "repo": "https://github.com/itsmetamike/reshoot-4d",
+    "license": "AGPL-3.0",
+    "output": ["video"],
+    "summary": "A 4D camera editor inside ComfyUI, running on open weights.",
+    "author": "itsmetamike"
+  },
+  {
+    "id": "freefield",
+    "name": "Freefield",
+    "repo": "https://github.com/neuregex/freefield",
+    "license": "MIT",
+    "output": ["image", "video", "audio"],
+    "summary": "120 image, video, VFX and audio apps, every model open weights.",
+    "author": "neuregex"
+  },
+  {
+    "id": "henge",
+    "name": "Henge",
+    "repo": "https://github.com/alisson-anjos/Henge",
+    "license": "MIT",
+    "output": ["video"],
+    "summary": "Motion transfer and video swaps with MiniMax H3 guide latents.",
+    "author": "alisson-anjos"
+  }
+]

@@ -80,6 +80,8 @@ pub enum Event {
     ConnectorRemoved,
     ConnectorUpdated,
     ConnectorSigninStarted,
+    /// A named ComfyUI template was run from the card (`outcome`), and what it makes (`output`).
+    ComfyTemplateRun,
     SkillInstalled,
     SkillRemoved,
     SkillWritten,
@@ -197,6 +199,7 @@ impl Event {
             Self::ConnectorRemoved => "connector_removed",
             Self::ConnectorUpdated => "connector_updated",
             Self::ConnectorSigninStarted => "connector_signin_started",
+            Self::ComfyTemplateRun => "comfy_template_run",
             Self::SkillInstalled => "skill_installed",
             Self::SkillRemoved => "skill_removed",
             Self::SkillWritten => "skill_written",

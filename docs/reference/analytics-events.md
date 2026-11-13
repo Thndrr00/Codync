@@ -69,7 +69,8 @@ host answers and sends it once the host is up.
 | `cloud_computer_awake` | cloud (`codync-cloud`) | A woken Codync Cloud computer's host is back on its relay | `seconds` (since the first wake attempt, to a tenth), `attempts` (provider wakes it took), `provider` |
 | `kofi_invite_shown` | host `track` (desktop, TUI) | The Ko-fi invitation appeared under the first reply on this device (the phones don't show it: store rules on external tip links) | — |
 | `kofi_invite_answered` | host `track` (desktop) | The Ko-fi invitation was opened or dismissed, which ends it on this device (the terminal UI only shows the link) | `opened` |
-| `whats_new_shown` | host `track` (desktop, TUI), iOS, Android | The What's new window is on screen after an update to a release with an announcement ([What's new](../features/whats-new.md)); `app_version` says which | — |
+| `whats_new_shown` | host `track` (desktop, TUI), iOS, Android | The What's new window is on screen after an update to a release with an announcement ([What's new](../features/whats-new.md)); `app_version` says which | - |
+| `comfy_template_run` | host `track` (desktop) | A named ComfyUI template was run from the card: queued, refused by the preflight, or failed | `outcome` (`queued`/`refused`/`failed`), `output` (`image`/`video`/`audio`/`mesh`) |
 | `computer_found_on_network` | iOS, Android | A phone reached a computer in no account at an address it found on the local network | — |
 | `pairing_code_created` | host (`pairing`) | A pairing QR code is made (desktop, terminal UI, `codync-host pair`), including each new one an open pairing screen makes when its code expires: count persons, not events | `client` |
 | `pairing_failed` | iOS, Android | A pairing attempt fails | `reason` (`not_pairing_link`/`outdated_host`/`invalid`/`expired`/`unauthorized`/`unreachable`/`timeout`/`upgrade_required`/`other`) |

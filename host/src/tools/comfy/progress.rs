@@ -67,10 +67,12 @@ fn handle(text: &str, prompt_id: &str, jobs: &Jobs, node: &mut Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::sync::broadcast;
 
     #[test]
     fn a_progress_event_names_the_node_that_ran_before_it() {
-        let jobs = Jobs::new(tokio::sync::broadcast::channel(8).0);
+        let jobs = Jobs::new(broadcast::channel(8).0);
         // Nothing is active: the event is dropped, which is also what happens after a cancel.
         let mut node = None;
         handle(r#"{"type":"executing","data":{"node":"5","prompt_id":"p"}}"#, "p", &jobs, &mut node);
@@ -78,5 +80,47 @@ mod tests {
         handle(r#"{"type":"progress","data":{"value":3,"max":20}}"#, "p", &jobs, &mut node);
         handle(r#"{"type":"executing","data":{"node":null}}"#, "p", &jobs, &mut node);
         assert_eq!(node, None);
+    }
+
+    /// The listener against a fake `/ws`: two events give the job its node and its step, which is
+    /// what the card and the phone read. No ComfyUI, no GPU.
+    #[tokio::test]
+    async fn a_fake_ws_gives_the_job_its_node_and_step() {
+        use axum::Router;
+        use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+        use axum::routing::get;
+
+        async fn socket(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
+            ws.on_upgrade(|mut socket: WebSocket| async move {
+                for event in [
+                    r#"{"type":"executing","data":{"node":"5"}}"#,
+                    r#"{"type":"progress","data":{"value":3,"max":20}}"#,
+                ] {
+                    let _ = socket.send(Message::Text(event.to_owned().into())).await;
+                }
+            })
+        }
+
+        let app = Router::new().route("/ws", get(socket));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a fake socket");
+        let port = listener.local_addr().expect("its port").port();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let jobs = Arc::new(Jobs::new(broadcast::channel(8).0));
+        jobs.activate_for_test("p1");
+        let listener = tokio::spawn(follow(port, "p1".to_owned(), jobs.clone()));
+        for _ in 0..80 {
+            if jobs.status()["progress"]["step"] == 3 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(jobs.status()["progress"]["node"], "5", "{}", jobs.status());
+        assert_eq!(jobs.status()["progress"]["step"], 3);
+        assert_eq!(jobs.status()["progress"]["percent"], 0.15);
+        jobs.finish_for_test("p1");
+        let _ = tokio::time::timeout(Duration::from_secs(2), listener).await;
     }
 }

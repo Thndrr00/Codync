@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ComfyTemplate, ComfyTemplateSummary, TemplateInput, TemplatePreflightProblem } from '@shared/tools'
+import type { ComfyTemplate, ComfyTemplateSummary, CuratedTemplate, TemplateInput, TemplatePreflightProblem } from '@shared/tools'
 import { Button, CardSection, ChoicePicker, RowLabel, Spinner, Switch } from '../../../components/Controls'
 import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
+import { analytics } from '../../../store/analytics'
 import { ErrorText } from '../pieces'
 import { ProblemRow, type ToolCall } from './parts'
 
@@ -108,6 +109,7 @@ function Field({ input, value, picked, busy, onChange, onPick }: {
 export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: () => void }) {
   const tr = useTr()
   const [templates, setTemplates] = useState<ComfyTemplateSummary[] | null>(null)
+  const [curated, setCurated] = useState<CuratedTemplate[]>([])
   const [selected, setSelected] = useState<ComfyTemplate | null>(null)
   const [values, setValues] = useState<Record<string, unknown>>({})
   const [picked, setPicked] = useState<Record<string, string>>({})
@@ -116,8 +118,11 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
-    void call<{ templates: ComfyTemplateSummary[] }>('comfyTemplates')
-      .then((reply) => setTemplates(reply.templates))
+    void call<{ templates: ComfyTemplateSummary[]; curated?: CuratedTemplate[] }>('comfyTemplates')
+      .then((reply) => {
+        setTemplates(reply.templates)
+        setCurated(reply.curated ?? [])
+      })
       .catch((e: unknown) => setError(message(e)))
   }, [call])
 
@@ -181,11 +186,14 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
         values: payload(values),
       })
       if (reply.ok === false) {
+        analytics.track({ event: 'comfy_template_run', outcome: 'refused', output: selected.output.type })
         setError(reply.problems?.[0]?.message ?? tr('The job was not queued.'))
         return
       }
+      analytics.track({ event: 'comfy_template_run', outcome: 'queued', output: selected.output.type })
       onQueued()
     } catch (e) {
+      analytics.track({ event: 'comfy_template_run', outcome: 'failed', output: selected.output.type })
       setError(message(e))
     } finally {
       setBusy(false)
@@ -217,6 +225,26 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
             ))}
           </div>
         )}
+        {curated.length > 0 ? (
+          <VStack gap={8} className="comfy-challenge">
+            <Text size="caption" tone="secondary">
+              {tr('Open Source Higgsfield: each entry is its author\'s repository. Import its graph, nodes and models from there; it is not installed here.')}
+            </Text>
+            {curated.map((entry) => (
+              <button key={entry.id} className="comfy-template curated" onClick={() => window.codync.app.openExternal(entry.repo)}>
+                <HStack gap={8}>
+                  <Text weight="medium" tone="text" grow>{entry.name}</Text>
+                  <span className="comfy-badge">{entry.license}</span>
+                </HStack>
+                <Text size="caption" tone="secondary">{entry.summary}</Text>
+                <HStack gap={10} wrap>
+                  <Text size="caption" tone="tertiary">{entry.author}</Text>
+                  <Text size="caption" tone="tertiary">{entry.output.join(' · ')}</Text>
+                </HStack>
+              </button>
+            ))}
+          </VStack>
+        ) : null}
         {error ? <ErrorText text={error} /> : null}
       </VStack>
     )
