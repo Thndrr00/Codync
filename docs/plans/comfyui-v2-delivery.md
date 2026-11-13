@@ -10,6 +10,8 @@ Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, mo
 >
 > **Quinta pasada, sin compilar.** Se importaron las tres familias que faltaban por su dificultad, no por su licencia: **H3 Motion** (AGPL-3.0), **Genobi/Openjutsu** (MIT sobre un pack GPL-3.0) y **OneShot MV** (MIT). Los manifiestos estrenan entradas `video` y `audio`, que el host sube como cualquier imagen; el preflight nombra cada nodo del pack que falte. Las licencias se anotan en el manifiesto y en la ficha, y no bloquean nada: el usuario instala el pack y acepta con ello su licencia.
 
+> **Sexta pasada: las quince familias, sin excepción.** Se importaron las diez que faltaban (Blocksfield, ComfyArt, Henge, Splat Edit Engine, Max Editor, Creativefield, Panorama Stickers, Sonder, Reshoot 4D y H3 Audio Retake) sobre lo que ya existía: mismo runner, mismo ComfyUI empaquetado, misma cola, mismo puente, mismos adjuntos. Tres de ellas solo publican grafo en formato de editor, así que se escribió el conversor `tools/comfy-ui-to-api.mjs` con sus pruebas. Se añadió el tipo de entrada `file` para escenas de splat, packs de cámara y mallas. No se pudo ejecutar nada de esto de verdad: esta máquina sigue sin ComfyUI, sin GPU y sin macOS ni SDK de Android.
+
 > **Compilado y probado en esta máquina (Windows, sin GPU).** Se ejecutaron `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, las pruebas unitarias del host (`comfy` y `analytics`), `npm run typecheck` y `npm test` del escritorio, y el arnés del MCP oficial. No se abrió Codync Dev ni se ejecutó un trabajo real: no hay ComfyUI instalado, ni GPU, ni SDK de Android, ni macOS para iOS.
 
 ## Lo que se construyó
@@ -19,7 +21,7 @@ Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, mo
 - `host/src/tools/comfy/templates.rs`: un manifiesto por carpeta en `userData/comfy/templates/<id>/template.json`, con `id`, `name`, `version`, `description`, `workflow`, `inputs`, `models`, `output`, `estimate`, `tags` y `license`.
 - Validación antes de listar o ejecutar: id, versión semver, rangos y opciones, carpetas de modelos, tamaños, hashes y URLs, y que el conjunto de marcadores `{{input}}` del grafo sea exactamente el de campos del formulario (un campo que el grafo no usa se rechaza; un marcador sin campo, también). El grafo es dato, nunca código: solo se sustituyen marcadores y cada `class_type` se comprueba contra `/object_info`.
 - Un `{{key}}` que ocupa todo el string conserva su tipo JSON (un número sigue siendo número); dentro de un texto se une como texto.
-- Las cinco plantillas base van embebidas desde `host/assets/comfy-templates/` y se copian al arrancar. Una plantilla base que el usuario editó no se pisa: la nueva versión queda al lado como `template.json.new`.
+- Las veinte plantillas base van embebidas desde `host/assets/comfy-templates/` y se copian al arrancar. Una plantilla base que el usuario editó no se pisa: la nueva versión queda al lado como `template.json.new`.
 
 ### T2 · Preflight
 
@@ -65,15 +67,18 @@ Añadidas junto a las existentes (los nombres viejos se conservan): `comfy_list_
 - `tools/comfy-mcp-smoke.mjs` se ejecutó contra una venv con `comfy-mcp 0.10.0` y `comfy-cli 1.26.0`: handshake, 39 tools, **7/7** operaciones presentes, `server_info` y `search_templates` (761 plantillas). No había ComfyUI, así que no se ejecutó ningún workflow.
 - Si se adopta, el orden de retirada del puente está escrito: primero `list_models`/`list_nodes`, luego `run_workflow`/`job_status`/`cancel_job`, después `upload_image`; los `comfy_*` de plantillas se quedan.
 
-### T7 · Higgsfield (cinco familias importadas, el resto catalogado)
+### T7 · Higgsfield (las quince familias importadas)
 
-- `host/assets/comfy-templates/curated.json` lista las quince familias con su repositorio real, licencia y tipo de salida, leídos de la página del concurso y de la API de GitHub: Panorama Stickers (MIT), Paint a Plate (Apache-2.0), H3 Motion (AGPL-3.0), OneShot MV (MIT), H3 AudioRetake (MIT), Genobi (MIT), Splat Edit Engine (AGPL-3.0), Sonder (GPL-3.0), Max Editor (Apache-2.0), Blocksfield (MIT), Creativefield (GPL-3.0), ComfyArt (MIT), Reshoot 4D (AGPL-3.0), Freefield (MIT) y Henge (MIT).
+- `host/assets/comfy-templates/curated.json` lista las quince familias con su repositorio real, licencia y tipo de salida, leídos de la página del concurso y de la API de GitHub: Panorama Stickers (MIT), Paint a Plate (Apache-2.0), H3 Motion (AGPL-3.0), OneShot MV (MIT), H3 AudioRetake (MIT), Genobi (MIT), Splat Edit Engine (AGPL-3.0), Sonder (GPL-3.0), Max Editor (Apache-2.0), Blocksfield (MIT), Creativefield (GPL-3.0), ComfyArt (MIT), Reshoot 4D (AGPL-3.0), Freefield (MIT) y Henge (MIT). Las quince llevan `imported: true` y cada una tiene manifiesto.
 - **Angles (Freefield)** está importada como `freefield-angles`: su `workflow.api.json` real, cuatro campos, cinco modelos públicos con tamaño y SHA-256, 31,2 GB y ~24 GB de VRAM. `tools/import-freefield-app.mjs` convierte cualquier `app.json` + `workflow.api.json` de Freefield.
 - **Paint a Plate** está importada como `paint-a-plate`: su grafo `edit.json` (30 nodos) con cinco imágenes, pie de foto, sampler y controles de máscara/relight; tres modelos FLUX 3 **gated** (11,2 GB) con tamaño exacto y sin hash público. El preflight y la pestaña Modelos abren la página de Hugging Face en vez de intentar una descarga anónima que daría 401.
 - **H3 Motion** está importada como `h3-motion-mask` desde su `workflows/api/h3m_inpaint.api.json` (31 nodos): clip, clip de máscara, qué aparece dentro, fotogramas, tamaño y semilla; cinco modelos públicos (42,1 GB) con tamaño y SHA-256. **Genobi / Openjutsu** está importada como `openjutsu-swap` desde `comfy-build/workflows/openjutsu-swap.api.json` (34 nodos): clip de 5–15 s, foto de personaje, prompt, recorte y toggles de máscara/ancla; siete modelos públicos (46,3 GB). **OneShot MV** está importada como `oneshot-mv` desde `api/OneShotMV_director_api.json`: canción, una línea de mundo, duración, formato, calidad y juego de modelos; once modelos públicos (71,8 GB). Las tres necesitan el pack de nodos de su autor (ComfyUI-vlo, `h3_character_swap` GPL-3.0 con su parche, y el de OneShot MV): el preflight nombra cada nodo que falta y `installNode` lleva a instalarlo.
-- Los manifiestos estrenan los tipos de entrada `video` y `audio` (ruta local que el host sube hasta 300 MB, o nombre que el servidor ya tiene, con extensión comprobada); el formulario de escritorio y la herramienta del bot suben vídeo y sonido con `LoadVideo`/`LoadAudio`.
-- Quedan diez catalogadas. H3 AudioRetake no publica ningún grafo; Panorama Stickers, Reshoot 4D y Sonder solo publican grafos en formato UI. Las otras seis sí publican grafo API (Blocksfield y ComfyArt sobre nodos del núcleo; Splat Edit Engine, Max Editor, Henge y Creativefield sobre el pack de su autor), así que importarlas es un manifiesto por grafo, no una decisión de licencia.
-- `tools/check-comfy-manifests.mjs` valida los diez manifiestos (marcadores, tipos, carpetas, gated, salida) sin compilar.
+- Las diez restantes también están importadas, cada una desde el grafo que publica su autor y nunca reimplementada: **Blocksfield** (`blocksfield-art`, 13 nodos del núcleo), **ComfyArt** (`comfyart-edit`, 9 nodos), **Henge** (`henge-motion`, 17 nodos con su LoRA de movimiento y su selector SAM 3.1 / SAM 3D), **Splat Edit Engine** (`spede-replace`, 35 nodos de su pack), **Max Editor** (`maxeditor-retouch`, su plantilla `retocar.api.json`), **H3 Audio Retake** (`h3-audio-retake`, el preset de labios de su web), **Creativefield** (`creativefield-edit`), **Panorama Stickers** (`panorama-cutout`), **Sonder** (`sonder-render`, el render de referencia a vídeo de su editor) y **Reshoot 4D** (`reshoot-4d`, captura 4D y reshoot fotorrealista con LTX 2.3).
+- Tres de esos diez grafos solo existen en formato de editor, así que `tools/comfy-ui-to-api.mjs` los convierte: aplana subgrafos, sigue `Reroute`, pliega `PrimitiveNode`, descarta notas y nodos silenciados, y sustituye un nodo puenteado por el cable del mismo tipo que lo alimentaba. Los nombres de cada campo salen de `widgets_values_named` (todos los grafos UI lo traen) y solo caen en `tools/comfy-widget-names.json` cuando el nodo guarda una lista posicional. Los diez manifiestos se regeneran desde los grafos publicados con `node tools/comfy-families/build.mjs` y `build-audioretake.mjs`, sobre el inventario resuelto de `tools/comfy-families/models.json`; los grafos y el inventario quedan en el repositorio.
+- Los manifiestos estrenan los tipos de entrada `video` y `audio` (ruta local que el host sube hasta 300 MB, o nombre que el servidor ya tiene, con extensión comprobada) y ahora `file` para escenas de splat, packs de cámara y mallas (`ply`, `npz`, `spz`, `splat`, `obj`, `glb`, `gltf`, `zip`); el formulario de escritorio, la herramienta del bot y la validación del host suben los tres igual. Splat Edit Engine resuelve sus rutas contra el directorio de trabajo del proceso, no contra `input/`, así que su manifiesto las prefija.
+- Paso manual que ningún manifiesto puede declarar, y que la ficha dice: Reshoot 4D necesita registro de SMPL-X y su `SMPLX_NEUTRAL.npz`, aparte de ReDirector y de las guías de LTX 2.3; Sonder necesita el dataset de ejemplo del autor o un proyecto propio; H3 Audio Retake se descarga su detector facial en el primer uso; Splat Edit Engine necesita escena, pack de cámara y objeto recortado exportados por su propio estudio.
+- Licencias no comerciales anotadas en cada manifiesto: Qwen-Image 2.1 (licencia de investigación), Fibo 2.0 (CC BY-NC 4.0), el tramo de captura de Reshoot 4D (GVHMR, SMPL-X y la LoRA Turbo CC BY-NC-SA) y los términos de Gemma en LTX. Ninguna bloquea la integración.
+- `tools/check-comfy-manifests.mjs` valida los veinte manifiestos (marcadores, tipos, carpetas, gated, salida) sin compilar.
 
 ## Plantillas incluidas
 
@@ -88,6 +93,16 @@ Añadidas junto a las existentes (los nombres viejos se conservan): `comfy_list_
 | H3 Motion (`h3-motion-mask`) | MiniMax H3, su text encoder, dos VAE y una LoRA: 42,1 GB | AGPL-3.0 + MiniMax H3 Community License | 240 s, 24 GB; 90 s en RTX 4090 |
 | Swap the person (`openjutsu-swap`) | MiniMax H3, su text encoder, dos VAE, SAM 3.1 y dos LoRA: 46,3 GB | MIT + GPL-3.0 (pack) + SAM License + Apache-2.0 | 300 s, 24 GB; 120 s en RTX 4090 |
 | OneShot MV (`oneshot-mv`) | Krea 2, LTX-2.3, Gemma, upscaler y seis LoRA: 71,8 GB | MIT + Krea 2 y LTX-2 Community License | 1800 s, 24 GB; 900 s en RTX 4090 |
+| Blocksfield (`blocksfield-art`) | Qwen-Image 2.1 Turbo, su text encoder y VAE: 17,3 GB | MIT + Qwen-Image 2.1 (no comercial) | 12 s, 12 GB |
+| ComfyArt (`comfyart-edit`) | Qwen-Image 2.1, su text encoder y VAE: 17,3 GB | MIT + Qwen-Image 2.1 (no comercial) | 18 s, 14 GB |
+| Henge (`henge-motion`) | H3, su text encoder, VAE, LoRA de movimiento, SAM 3.1 y SAM 3D: 58,5 GB | MIT + MiniMax H3 Community License + SAM License | 300 s, 24 GB |
+| Splat Edit Engine (`spede-replace`) | Qwen-Image 2.1 Turbo, su text encoder y VAE, SAM 3.1, TripoSplat, su VAE, DINOv3 y FLUX.2 VAE: 22,4 GB | AGPL-3.0 + AGPL-3.0 (pack) + no comercial | 240 s, 20 GB |
+| Max Editor (`maxeditor-retouch`) | H3 Singularity, su text encoder, dos VAE, SAM 3.1, LoRA Pika y TAEH3: 68,3 GB | Apache-2.0 + MiniMax H3 Community License + SAM License | 300 s, 24 GB |
+| H3 Audio Retake (`h3-audio-retake`) | H3 Singularity, su text encoder, dos VAE y LoRA Pika: 55,9 GB | MIT + MiniMax H3 Community License | 300 s, 24 GB |
+| Creativefield (`creativefield-edit`) | Fibo 2.0, su VAE, dos text encoders: 23,0 GB | GPL-3.0 + CC BY-NC 4.0 + no comercial | 20 s, 16 GB |
+| Panorama Stickers (`panorama-cutout`) | Qwen-Image 2.1, su text encoder y VAE: 17,3 GB | MIT + Qwen-Image 2.1 (no comercial) | 30 s, 16 GB |
+| Sonder (`sonder-render`) | H3, su text encoder, tres VAE y dos LoRA turbo: 75,6 GB | GPL-3.0 + MiniMax H3 Community License | 420 s, 24 GB |
+| Reshoot 4D (`reshoot-4d`) | LTX 2.3, Gemma, proyección, tres VAE, upscaler, tres LoRA, DA3, BiRefNet, MoGe y Qwen3-VL: 50,7 GB | AGPL-3.0 + LTX-2 Community License + Gemma + CC BY-NC-SA + Apache-2.0/MIT | 3600 s, 24 GB |
 | Colour check (`smoke-test`) | Ninguno | Codync | 1 s, 0 GB |
 
 Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hugging Face y GitHub) con una petición de rango y la API de Hugging Face. Los tiempos y la VRAM son estimaciones del manifiesto, **no medidas**: la matriz real de T10 no se pudo correr.
@@ -102,11 +117,14 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 | `cargo test --bin codync-host analytics` | 32 pasan. |
 | Suite completa `cargo test` | No terminó: los binarios de integración (`*_e2e`) se quedan esperando servicios en esta máquina. Las pruebas unitarias del host sí pasan. |
 | `npm run typecheck` (escritorio) | Pasa, con el visor 3D. |
-| `npm test` (escritorio) | 805 pasan, 4 fallan por el idioma del sistema (esperan inglés y el Windows está en español); no tocan ComfyUI. |
+| `npm test` (escritorio) | 809 pasan, 4 fallan por el idioma del sistema (esperan inglés y el Windows está en español: `refresh`, dos de `routine`, `bot-exchange`); no tocan ComfyUI. |
 | `node --test apps/desktop/src/renderer/views/thread/media.test.ts` | 4 pasan: familias de archivo, MIME, símbolo y tamaños. |
 | `node --test tools/import-freefield-app.test.mjs` | 2 pasan: el importador enlaza todos los campos y no muta el grafo de origen. |
-| `node tools/check-comfy-manifests.mjs` | Los diez manifiestos pasan: marcadores, tipos, carpetas, gated, salida. |
+| `node --test tools/comfy-ui-to-api.test.mjs` | 8 pasan: cable y widget, widget convertido en enchufe, `Reroute`, `PrimitiveNode`, nodo silenciado y puenteado, nota, tipo sin tabla de nombres y subgrafo con promociones. |
 | `node --test apps/desktop/src/renderer/views/marketplace/comfy/media.test.ts` | 2 pasan: cada campo acepta solo su tipo de archivo y el botón lo nombra. |
+| `node tools/check-comfy-manifests.mjs` | Los veinte manifiestos pasan: marcadores, tipos, carpetas, gated, salida. |
+| `node tools/comfy-families/build.mjs` y `build-audioretake.mjs` | Regeneran los diez manifiestos desde los grafos publicados dentro del repositorio, sin cambios en el resultado. |
+| Verificación de grafos (`verify-graphs.mjs`) | Sin enlaces colgantes ni marcadores sin campo; queda el falso positivo conocido de `freefield-angles` (`{{move}} {{details}}` en un solo valor). |
 | `tools/comfy-mcp-smoke.mjs` | 39 tools reales de `comfy-mcp 0.10.0`; 7/7 operaciones presentes; `server_info` y `search_templates` (761 plantillas) responden. Sin ComfyUI no se ejecutó ningún workflow. |
 | Codync Dev abierto / trabajo real | **No**: no hay ComfyUI, GPU ni modelos en esta máquina. |
 | Android / iOS | **No compilados**: no hay SDK de Android ni macOS aquí. |
@@ -114,7 +132,7 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 ## Lo que quedó fuera
 
 - **T6 · Adopción del MCP oficial**: evaluado y probado en superficie (39 tools, 7/7), no adoptado; no se generó nada con él porque no hay ComfyUI.
-- **T7 · Grafos ejecutables de Higgsfield**: cinco familias importadas (Angles, Paint a Plate, H3 Motion, Genobi/Openjutsu y OneShot MV) y las otras diez catalogadas con su repositorio y licencia. Las tres de vídeo necesitan el pack de nodos de su autor; el preflight lo dice nodo a nodo. De las diez que quedan, seis publican grafo en formato API, tres solo en formato UI y H3 AudioRetake ninguno. No se inventó ninguno.
+- **T7 · Grafos ejecutables de Higgsfield**: las quince familias están importadas, ninguna reimplementada. Las diez de esta pasada necesitan el pack de nodos de su autor; el preflight lo dice nodo a nodo. Reshoot 4D, Sonder y Splat Edit Engine además necesitan un paso manual que no cabe en un manifiesto (SMPL-X con registro, un proyecto del dataset, escena y cámaras exportadas) y la ficha lo dice. Falta ejecutarlas: no hay ComfyUI ni GPU.
 - **T10 · Matriz completa**: las pruebas unitarias del host y el `/ws` falso pasan; faltan las cinco pruebas reales con GPU y las mediciones, y la suite completa no terminó en esta máquina porque los binarios `*_e2e` esperan servicios. No hay ComfyUI ni GPU aquí.
 - **Móvil**: Android muestra el porcentaje del sampler y ya cancelaba; no tiene galería ni formulario. iOS no tiene sección de ComfyUI. No hay SDK de Android ni macOS en esta máquina para compilar ninguno de los dos.
 - **T9 · No bloquear**: `comfy_run_template` espera hasta 5 minutos (como `run_workflow`) para poder adjuntar dentro del turno; con `wait: false` encola y vuelve. El adjunto fuera de turno no existe en el host, así que el resultado se entrega cuando el bot vuelve a consultar.
@@ -128,6 +146,6 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 2. `cd apps/desktop && npm run typecheck && npm test`
 3. `cd apps/android && ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug`
 4. Con una GPU y ComfyUI descargado: abrir Codync Dev, **Extensions → Apps → ComfyUI → Templates**, ejecutar **Colour check** (no necesita modelo), luego descargar SD 1.5 desde **Text to image**, ejecutarlo y ver el archivo en el chat. Repetir con un vídeo real (fuera de las plantillas base) para comprobar póster y MIME.
-5. Medir las cinco plantillas y sustituir las estimaciones del manifiesto por los números medidos.
-6. Con el MCP oficial instalado (`pip install comfy-mcp "comfy-cli>=1.14.0"`), `node tools/comfy-mcp-smoke.mjs --bin comfy-mcp --comfy-bin <ruta a comfy> --call` y comparar su tabla con `docs/reference/comfy-official-mcp.md`.
-7. Importar una familia de Higgsfield desde su repositorio y validar su manifiesto con `Template::validate` antes de añadirla a la galería. Sus modelos y su VRAM se miden como las demás.
+5. Medir las veinte plantillas y sustituir las estimaciones del manifiesto por los números medidos; empezar por las que no piden GPU propia (Colour check) y seguir por una de cada familia.
+6. Ejecutar de verdad una de las familias reconvertidas (Panorama Stickers) con un grafo convertido, para confirmar que el conversor UI→API y el tipo de entrada `file` funcionan contra un servidor: primero SpEdE con una escena diminuta, luego Sonder con el dataset del autor.
+7. Con el MCP oficial instalado (`pip install comfy-mcp "comfy-cli>=1.14.0"`), `node tools/comfy-mcp-smoke.mjs --bin comfy-mcp --comfy-bin <ruta a comfy> --call` y comparar su tabla con `docs/reference/comfy-official-mcp.md`.
