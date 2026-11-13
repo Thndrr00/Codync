@@ -18,9 +18,18 @@ interface DayMarks {
   failed: number
   skipped: number
   upcoming: number
+  message: number
 }
 
-const emptyMarks = (): DayMarks => ({ done: 0, failed: 0, skipped: 0, upcoming: 0 })
+const emptyMarks = (): DayMarks => ({ done: 0, failed: 0, skipped: 0, upcoming: 0, message: 0 })
+
+/** A message this bot will send (or has scheduled) as the person's own. */
+interface ScheduledMessage {
+  id: string
+  botId: string
+  text: string
+  sendAt: number
+}
 
 /**
  * The bot's routines on a month: the runs that stood for each day, and the occurrences that
@@ -35,6 +44,7 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
   })
   const [selected, setSelected] = useState(() => new Date().setHours(0, 0, 0, 0))
   const [data, setData] = useState<RoutineCalendarListing | null>(null)
+  const [messages, setMessages] = useState<ScheduledMessage[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const from = new Date(month.getFullYear(), month.getMonth(), 1).getTime()
@@ -45,9 +55,14 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
     let timer: ReturnType<typeof setTimeout> | undefined
     const tick = async () => {
       try {
-        const result = await (await store.ready()).call<RoutineCalendarListing>('routineCalendar', { botId, from, to })
+        const client = await store.ready()
+        const [result, scheduled] = await Promise.all([
+          client.call<RoutineCalendarListing>('routineCalendar', { botId, from, to }),
+          client.call<{ messages: ScheduledMessage[] }>('scheduledMessages', {}),
+        ])
         if (!stopped) {
           setData(result)
+          setMessages(scheduled.messages.filter((message) => message.botId === botId))
           setError(null)
         }
       } catch (e) {
@@ -77,8 +92,9 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
       else if (run.status === 'failed' || run.status === 'interrupted') add(dayKey(run.at), { failed: 1 })
     }
     for (const upcoming of data?.scheduled ?? []) add(dayKey(upcoming.at), { upcoming: 1 })
+    for (const message of messages) add(dayKey(message.sendAt), { message: 1 })
     return map
-  }, [data])
+  }, [data, messages])
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1)
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
@@ -105,17 +121,20 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
   const toneOf = (run: RoutineCalendarRun) =>
     run.skipped ? 'skipped' : run.status === 'failed' || run.status === 'interrupted' ? 'failed' : 'done'
 
-  // The selected day's moments, runs and to-come, in the order of the day.
+  // The selected day's moments, runs and to-come, in the order of the day. A scheduled message is
+  // the person's own message going out at that time, so it sits beside the routines on the same day.
   const moments = useMemo(() => {
-    const runs = (data?.runs ?? []).filter((run) => dayKey(run.at) === selectedKey)
-    const upcoming = (data?.scheduled ?? []).filter((s) => dayKey(s.at) === selectedKey)
-    return [
-      ...runs.map((run) => ({ at: run.at, routineId: run.routineId, label: statusWord(run), tone: toneOf(run) })),
-      ...upcoming.map((s) => ({ at: s.at, routineId: s.routineId, label: tr('Upcoming'), tone: 'upcoming' })),
-    ]
-      .sort((a, b) => a.at - b.at)
-      .map((m) => ({ ...m, name: nameOf.get(m.routineId) }))
-  }, [data, selectedKey, nameOf, tr])
+    const runs = (data?.runs ?? [])
+      .filter((run) => dayKey(run.at) === selectedKey)
+      .map((run) => ({ at: run.at, name: nameOf.get(run.routineId), label: statusWord(run), tone: toneOf(run) }))
+    const upcoming = (data?.scheduled ?? [])
+      .filter((s) => dayKey(s.at) === selectedKey)
+      .map((s) => ({ at: s.at, name: nameOf.get(s.routineId), label: tr('Upcoming'), tone: 'upcoming' }))
+    const messages = scheduled
+      .filter((message) => dayKey(message.sendAt) === selectedKey)
+      .map((message) => ({ at: message.sendAt, name: message.text.slice(0, 80), label: tr('Message'), tone: 'message' }))
+    return [...runs, ...upcoming, ...messages].sort((a, b) => a.at - b.at)
+  }, [data, scheduled, selectedKey, nameOf, tr])
 
   const shift = (delta: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + delta, 1))
   const goToday = () => {
@@ -156,6 +175,7 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
                   <Text size="caption">{day.getDate()}</Text>
                   <span className="cal-dots">
                     {dot(marks.get(dayKey(day.getTime())), 'upcoming')}
+                    {dot(marks.get(dayKey(day.getTime())), 'message')}
                     {dot(marks.get(dayKey(day.getTime())), 'done')}
                     {dot(marks.get(dayKey(day.getTime())), 'failed')}
                     {dot(marks.get(dayKey(day.getTime())), 'skipped')}
@@ -166,6 +186,7 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
           </div>
           <HStack gap={12} className="cal-legend">
             <span className="cal-legend-item"><span className="cal-dot upcoming" />{tr('Upcoming')}</span>
+            <span className="cal-legend-item"><span className="cal-dot message" />{tr('Message')}</span>
             <span className="cal-legend-item"><span className="cal-dot done" />{tr('Ran')}</span>
             <span className="cal-legend-item"><span className="cal-dot failed" />{tr('Failed')}</span>
             <span className="cal-legend-item"><span className="cal-dot skipped" />{tr('Skipped')}</span>

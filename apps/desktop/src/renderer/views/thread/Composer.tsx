@@ -27,6 +27,7 @@ import { useDictation } from './dictation-platform'
 import { DictationEngineMenu } from './DictationEngineMenu'
 import { builtInCommand, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
 import { useVoiceShortcut } from './voice-shortcut-keys'
+import { PromptLibrarySheet } from '../PromptLibrarySheet'
 
 type Trailing = 'interrupt' | 'stop' | 'call' | 'send'
 
@@ -71,6 +72,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [scheduleAt, setScheduleAt] = useState('')
   const [scheduling, setScheduling] = useState(false)
+  const [promptsOpen, setPromptsOpen] = useState(false)
   const dictation = useDictation((change) => drafts.set(draftKey, change(drafts.get(draftKey))), () => setVoiceSettings(true))
   const field = useRef<HTMLTextAreaElement>(null)
   const measure = useRef<HTMLDivElement>(null)
@@ -310,6 +312,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
                   { title: 'Add files', icon: 'folder', action: () => void window.codync.app.pickFiles().then(append) },
                   { title: 'Wrap in code', icon: 'terminal', action: () => applyEdit(wrapInCode(draft, fieldSelection().start, fieldSelection().end)) },
                   { title: 'Code block', icon: 'terminal', action: () => applyEdit(insertCodeBlock(draft, fieldSelection().start, fieldSelection().end)) },
+                  { title: 'Prompt library…', icon: 'book.closed', action: () => setPromptsOpen(true) },
                   // Send it later instead of now: the text waits here until its time.
                   ...(canSchedule && draft.trim() ? [{ title: 'Schedule message…', icon: 'clock', action: openSchedule }] : []),
                 ]}
@@ -400,6 +403,11 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
           </div>
         </div>
       </div>
+      <PromptLibrarySheet open={promptsOpen} onClose={() => setPromptsOpen(false)} onPick={(text) => {
+        setDraft(draft.trim() ? `${draft}\n${text}` : text)
+        setPromptsOpen(false)
+        field.current?.focus()
+      }} />
       <Sheet open={scheduleOpen} onClose={() => setScheduleOpen(false)} width={460}>
         <VStack gap={12}>
           <ModalHeader icon="clock" title="Schedule message" onClose={() => setScheduleOpen(false)} />

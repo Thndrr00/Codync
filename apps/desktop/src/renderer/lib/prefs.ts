@@ -74,6 +74,8 @@ export const prefs = {
   appLanguage: pref<AppLanguage>('appLanguage', 'system'),
   /** The working pill unfolds the turn's thinking and steps; off keeps the chat to its messages. */
   thinkingDetails: pref('showThinkingDetails', false),
+  /** Comfortable keeps the app's spacing; compact fits more conversations on screen. */
+  density: pref<'comfortable' | 'compact'>('interfaceDensity', 'comfortable'),
   extensionsMovedTipSeen: pref('extensionsMovedTipSeen', false),
 }
 
@@ -88,3 +90,10 @@ export function applyTextSize(size: number) {
 }
 
 prefs.textSize.subscribe(() => applyTextSize(prefs.textSize.get()))
+
+/** `data-density="compact"` tightens the gaps the CSS reads, without changing the text size. */
+export function applyDensity(density: 'comfortable' | 'compact') {
+  document.documentElement.dataset.density = density
+}
+
+prefs.density.subscribe(() => applyDensity(prefs.density.get()))

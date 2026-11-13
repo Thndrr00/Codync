@@ -26,6 +26,10 @@ is bigger than one release.
 | Scheduled messages | done (desktop) |
 | Notification rules (kinds and quiet hours) | done (desktop; phone settings next) |
 | Tool rate limits and a read-only tool cache | done |
+| Prompt library in the composer | done (desktop; phone next) |
+| Unified calendar (routines + scheduled messages) | done (desktop) |
+| Compare models in Diagnostics | done (desktop) |
+| Density preference | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -146,6 +150,19 @@ Goal: a bot can run without an account.
   asking the relay. An approval ignores quiet hours: a bot waiting for an answer is stuck until the
   person reads it. Diagnostics › Notifications edits the rules.
 - Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
+
+## Prompt library, calculator and compare — done (desktop)
+
+- The composer's `+` menu opens a prompt library: twelve starting points (summarize, plan, review, risks,
+  notes into actions, email, compare, debug, explain, extract, ask first, check writing). Picking one
+  fills the message box; nothing runs until it is sent.
+- The routines calendar now marks scheduled messages on the day they go out, beside routine runs and
+  upcoming occurrences, and lists them in the selected day.
+- Diagnostics › Compare models sends one prompt through two or three bots at once, each in a throwaway
+  session (`chat::oneshot`): the answers, model and time sit side by side. Nothing is posted in their
+  chats and nothing is remembered.
+- Settings › General › Density offers Comfortable or Compact, which tightens chat rows, roster rows and
+  settings rows without changing the text size.
 
 ## Tool guards — done
 

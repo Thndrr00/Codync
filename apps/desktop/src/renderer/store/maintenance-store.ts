@@ -19,6 +19,17 @@ export const DEFAULT_NOTIFICATION_RULES: NotificationRules = {
   done: true, needsInput: true, failed: true, paused: true, quietStart: 0, quietEnd: 0, timezone: null,
 }
 
+/** One bot's answer in the comparison. */
+export interface ModelCompareResult {
+  botId: string
+  name: string
+  backend: string
+  model: string | null
+  text?: string
+  error?: string
+  ms: number
+}
+
 /** A message written now that goes out later, as the person's own message in its chat. */
 export interface ScheduledMessage {
   id: string
@@ -35,6 +46,7 @@ export class MaintenanceStore extends Observable {
   retention: { days: number; messages: number } | null = null
   rules: NotificationRules | null = null
   scheduled: ScheduledMessage[] = []
+  compare: ModelCompareResult[] = []
   busy = false
   error: string | null = null
   notice: string | null = null
@@ -104,8 +116,16 @@ export class MaintenanceStore extends Observable {
     })
   }
 
-  /** Takes a waiting message back before its time. */
-  async cancelScheduled(id: string) {
+  /** The same prompt through two or three bots, each in a throwaway session, compared side by side. */
+  async compareModels(botIds: string[], prompt: string) {
+    await this.run(async (c) => {
+      const { results } = await c.call<{ results: ModelCompareResult[] }>('compareModels', { botIds, prompt }, 600_000)
+      this.compare = results
+      this.notice = `Compared ${results.length} ${results.length === 1 ? 'bot' : 'bots'}.`
+    })
+  }
+
+  /** Takes a waiting message back before its time. */  async cancelScheduled(id: string) {
     await this.run(async (c) => {
       const { cancelled } = await c.call<{ cancelled: boolean }>('cancelScheduled', { id })
       if (cancelled) this.scheduled = this.scheduled.filter((message) => message.id !== id)

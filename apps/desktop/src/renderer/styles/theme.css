@@ -310,3 +310,25 @@ h3 {
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* Compact density (Settings › General › Density): the same text size with tighter gaps, for small
+   screens and for people who keep many conversations open. Comfortable is the default. */
+html[data-density='compact'] .chat-row {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+html[data-density='compact'] .chat-row.group-start {
+  padding-top: 9px;
+}
+html[data-density='compact'] .transcript-content {
+  padding-top: 8px;
+}
+html[data-density='compact'] .computer-roster-toggle,
+html[data-density='compact'] .roster-section-toggle {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+html[data-density='compact'] .settings-row {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}

@@ -149,6 +149,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   const systemLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language
   const [usageIconStyle, setUsageIconStyle] = usePref(prefs.usageIconStyle)
   const [compact, setCompact] = usePref(prefs.sidebarCompact)
+  const [density, setDensity] = usePref(prefs.density)
   const [thinkingDetails, setThinkingDetails] = usePref(prefs.thinkingDetails)
   const [showInDock, setShowInDock] = useState(true)
   useEffect(() => void window.codync.app.showInDock().then(setShowInDock), [])
@@ -202,6 +203,13 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
             selection={textSize}
             options={TEXT_SIZES.map((s) => ({ id: s, label: s === DEFAULT_TEXT_SIZE ? tr('{size} pt (Default)').replace('{size}', String(s)) : `${s} pt` }))}
             onChange={setTextSize}
+          />
+        </ValueRow>
+        <ValueRow label="Density">
+          <ChoicePicker
+            selection={density}
+            options={[{ id: 'comfortable', label: 'Comfortable' }, { id: 'compact', label: 'Compact' }]}
+            onChange={setDensity}
           />
         </ValueRow>
         <ValueRow label="Usage icons">

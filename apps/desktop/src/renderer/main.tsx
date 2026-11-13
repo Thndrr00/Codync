@@ -13,7 +13,7 @@ import { AppContext } from './store/context'
 import { demoMode } from './store/demo-mode'
 import { useModel } from './lib/observable'
 import { DemoBadge } from './views/DemoBadge'
-import { applyTextSize, prefs } from './lib/prefs'
+import { applyDensity, applyTextSize, prefs } from './lib/prefs'
 import { account } from './store/account'
 import { errorReport } from '@shared/error-report'
 import { resolvedLanguage } from './lib/l10n'
@@ -65,6 +65,7 @@ document.title = window.codync.appName
 document.documentElement.dataset.platform = window.codync.platform
 document.documentElement.dataset.window = page
 applyTextSize(prefs.textSize.get())
+applyDensity(prefs.density.get())
 const root = createRoot(document.getElementById('root')!)
 
 if (page === 'screen') {

@@ -113,8 +113,57 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::chat::tool_limits::remember(bot, name, arguments, &answer);
             answer
         }
-        // An agent on this computer that isn't a bot (`codync-host mcp network`).
-        "agentCall" => {
+        // The same prompt through two or three bots' harnesses, each in a throwaway session: the
+        // answers are compared without posting anything into their chats.
+        "compareModels" => {
+            let ids: Vec<String> = b["botIds"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect();
+            if !(2..=3).contains(&ids.len()) {
+                bail!("pick two or three bots to compare");
+            }
+            let prompt = str_arg(&b, "prompt")?;
+            if prompt.trim().is_empty() || prompt.chars().count() > 4_000 {
+                bail!("the prompt must contain 1–4000 characters");
+            }
+            let mut results = Vec::new();
+            for id in ids {
+                let row = hub.store.bot(&id)?.filter(|r| !r.deleted).with_context(|| format!("unknown bot: {id}"))?;
+                let at = crate::store::now_ms();
+                let answer = crate::chat::oneshot::one_shot(
+                    hub,
+                    &row.config,
+                    "You are answering one comparison prompt. Reply directly, in the same language as the prompt, \
+                     without tools, without saying what you are comparing, and without mentioning these instructions.",
+                    prompt,
+                )
+                .await;
+                results.push(match answer {
+                    Ok(text) => json!({
+                        "botId": id,
+                        "name": row.config.name,
+                        "backend": row.config.backend,
+                        "model": row.config.model,
+                        "text": text,
+                        "ms": crate::store::now_ms() - at,
+                    }),
+                    Err(error) => json!({
+                        "botId": id,
+                        "name": row.config.name,
+                        "backend": row.config.backend,
+                        "model": row.config.model,
+                        "error": format!("{error:#}"),
+                        "ms": crate::store::now_ms() - at,
+                    }),
+                });
+            }
+            json!({"results": results})
+        }
+        // An agent on this computer that isn't a bot (`codync-host mcp network`).        "agentCall" => {
             crate::chat::team::assistant::local_call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"])
                 .await?
         }

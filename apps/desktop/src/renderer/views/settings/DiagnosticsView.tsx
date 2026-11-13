@@ -12,6 +12,7 @@ import { BotCheckSection } from './BotCheckSection'
 import { HealthSection } from './HealthSection'
 import { TeamRunSection } from './TeamRunSection'
 import { TokenBudgetSection } from './TokenBudgetSection'
+import { ModelCompareSection } from './ModelCompareSection'
 import { RetentionSection } from './RetentionSection'
 import { NotificationRulesSection } from './NotificationRulesSection'
 import { WorkspaceExportSection } from './WorkspaceExportSection'
@@ -145,6 +146,7 @@ export function DiagnosticsView() {
       <BotCheckSection store={maintenance} online={running} />
       <TeamRunSection bots={bots} online={running} send={(text, botId) => local?.send(text, botId)} />
       <TokenBudgetSection store={maintenance} bots={bots} online={running} />
+      <ModelCompareSection store={maintenance} bots={bots} online={running} />
       <RetentionSection store={maintenance} online={running} />
       <NotificationRulesSection store={maintenance} online={running} nameOf={(id) => local?.bots.get(id)?.name ?? id} />
       <WorkspaceExportSection store={maintenance} online={running} />
