@@ -23,6 +23,7 @@ const option = (name, fallback) => {
 }
 const home = option('--home', process.env.CODYNC_HOME ?? join(process.env.LOCALAPPDATA ?? homedir(), 'Codync', 'dev'))
 const port = Number(option('--port', process.env.CODYNC_PORT ?? 19223))
+const botsOption = option('--bots', '').split(',').map((id) => id.trim()).filter(Boolean)
 const files = args.length ? args : defaultFiles()
 
 function defaultFiles() {
@@ -77,20 +78,25 @@ for (const file of files) {
   const raw = JSON.parse(readFileSync(resolve(file), 'utf8'))
   const cases = Array.isArray(raw) ? raw : (raw.cases ?? [])
   for (const test of cases) {
-    try {
-      const result = await runCase(test)
-      if (result.ok) {
-        console.log(`ok    ${result.name}`)
-      } else {
+    const bots = botsOption.length ? botsOption : [test.botId]
+    for (const botId of bots) {
+      const run = { ...test, botId }
+      const label = bots.length > 1 ? `${run.name ?? run.prompt} [${botId}]` : (run.name ?? run.prompt)
+      try {
+        const result = await runCase(run)
+        if (result.ok) {
+          console.log(`ok    ${label}`)
+        } else {
+          failed += 1
+          console.log(`FAIL  ${label}`)
+          if (result.missing.length) console.log(`      missing: ${result.missing.join(', ')}`)
+          if (result.missingTools.length) console.log(`      tools not called: ${result.missingTools.join(', ')}`)
+          if (result.text) console.log(`      reply: ${result.text.slice(0, 240)}`)
+        }
+      } catch (error) {
         failed += 1
-        console.log(`FAIL  ${result.name}`)
-        if (result.missing.length) console.log(`      missing: ${result.missing.join(', ')}`)
-        if (result.missingTools.length) console.log(`      tools not called: ${result.missingTools.join(', ')}`)
-        if (result.text) console.log(`      reply: ${result.text.slice(0, 240)}`)
+        console.log(`ERROR ${label}: ${error.message}`)
       }
-    } catch (error) {
-      failed += 1
-      console.log(`ERROR ${test.name ?? test.prompt}: ${error.message}`)
     }
   }
 }

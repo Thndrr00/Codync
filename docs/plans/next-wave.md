@@ -16,7 +16,7 @@ is bigger than one release.
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | A2UI (with choices and forms) and AG-UI server done |
-| Agent evaluations harness | done (CI wiring next) |
+| Agent evaluations harness (text, tools, `--bots` comparison) | done (CI wiring next) |
 | Policies by role and tool | next |
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | next |

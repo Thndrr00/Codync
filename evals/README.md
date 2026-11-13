@@ -7,6 +7,12 @@ host (or use the Dev one), then:
 node tools/eval-bots.mjs --home <CODYNC_HOME> --port 19223 evals/example.json
 ```
 
+Compare two bots (or models behind them) on the same cases:
+
+```bash
+node tools/eval-bots.mjs --bots b1,b2 evals/example.json
+```
+
 Without files it reads every `evals/*.json`. A file is an array (or `{ "cases": [...] }`) of:
 
 ```json
