@@ -130,6 +130,17 @@ in a new session (the retry rules below still apply). Session recovery cannot
 guarantee exactly-once external side effects; inspect the transcript before retrying
 an interrupted action.
 
+### The board
+
+`board {botId}` groups the bot's recent routine runs into `queued`, `running`, `blocked`, `done` and
+`failed`. The columns are views, not data: a card moves when the host changes the run's state, so
+nothing has to be dragged. A running card carries the run's current step (`detail`), the name of its
+routine and when it started. While an approval card waits for the person, a running run shows in
+`blocked` instead of `running`, because the work is on them until they answer.
+
+A task asked in chat isn't a run: a message starts a turn, and a turn leaves no card. Turning a
+message into a card is a product decision (a task with its own state), not a view.
+
 ### The daily token limit (`limitPolicy`)
 
 A bot's daily token budget (`budget.rs`) tallies each finished turn: at 80% its chat gets a

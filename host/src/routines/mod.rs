@@ -300,6 +300,11 @@ impl Routines {
         self.state.locked().routines.iter().any(|r| r.id == id && r.bot_id == bot && !r.deleted)
     }
 
+    /// The name of one of `bot`'s routines, for a view that says what a run belongs to.
+    pub fn name(&self, bot: &str, routine: &str) -> Option<String> {
+        self.state.locked().routines.iter().find(|r| r.id == routine && r.bot_id == bot).map(|r| r.name.clone())
+    }
+
     /// The bot's calendar for [from, to]: the runs that stand for moments in the window, and the
     /// clock occurrences of its enabled routines that are still to come.
     pub fn calendar(&self, bot: &str, from: i64, to: i64) -> Result<Value> {
