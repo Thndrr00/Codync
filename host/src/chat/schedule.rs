@@ -30,6 +30,11 @@ fn send(hub: &Hub, message: &ScheduledMessage) -> bool {
         tracing::info!(bot = %message.bot_id, "a scheduled message's chat is hidden; dropping it");
         return true;
     }
+    // Over today's token limit the message waits in the list for the reset; the chat says why once.
+    if crate::chat::budget_gate::blocks(hub, &message.bot_id) {
+        tracing::info!(bot = %message.bot_id, "holding a scheduled message until the token budget resets");
+        return false;
+    }
     match dispatch_bot_turn(hub, &message.bot_id, &message.text, "scheduled") {
         Ok(()) => true,
         Err(error) => {
