@@ -174,12 +174,17 @@ pub(super) fn decided_line(out: &mut Built, e: &Entry) {
         (Some("expired"), _) => ("·", t.dim, "Expired".to_owned()),
         _ => ("·", t.dim, "Cancelled".to_owned()),
     };
-    out.lines.push(Line::from(vec![
+    let mut spans = vec![
         Span::styled(format!(" {g} "), gs),
         Span::styled(what, t.secondary),
         Span::styled(format!(" · {title}"), t.dim),
         Span::styled(format!(" · {}", clock(e.created_at)), t.dim),
-    ]));
+    ];
+    // Who answered, when the host recorded it: a decided card is not anonymous.
+    if let Some(by) = e.data["approvedBy"].as_str() {
+        spans.push(Span::styled(format!(" · {by}"), t.dim));
+    }
+    out.lines.push(Line::from(spans));
 }
 
 #[cfg(test)]
@@ -191,5 +196,29 @@ mod tests {
         let o = |k: &str| (String::new(), String::new(), k.to_owned());
         let keys = option_keys(&[o("allow_once"), o("allow_always"), o("reject_once"), o("reject_always")]);
         assert_eq!(keys, ["y", "a", "n", "4"]);
+    }
+
+    #[test]
+    fn a_decided_card_names_who_answered() {
+        let data = serde_json::json!({
+            "title": "Run tests",
+            "status": "answered",
+            "selected": "yes",
+            "options": [{"optionId": "yes", "name": "Allow", "kind": "allow_once"}],
+            "approvedBy": "iPhone",
+        });
+        let e = Entry {
+            id: "c1".into(),
+            seq: 1,
+            turn: 1,
+            kind: crate::tui::app::Kind::Permission,
+            data,
+            created_at: 0,
+        };
+        let mut out = Built { lines: Vec::new(), buttons: Vec::new(), messages: Vec::new() };
+        decided_line(&mut out, &e);
+        let text: String =
+            out.lines.iter().flat_map(|line| line.spans.iter().map(|span| span.content.as_ref())).collect();
+        assert!(text.contains("iPhone"), "{text}");
     }
 }
