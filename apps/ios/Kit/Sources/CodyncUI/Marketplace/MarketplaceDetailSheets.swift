@@ -182,7 +182,8 @@ struct AppSheet: View {
                     }
                     .padding(.vertical, 4)
                 }
-                if app.setup == "local", !app.steps.isEmpty {
+                ConnectionGuideCard(guide: app.guide, name: app.name)
+                if app.setup == "local", !app.steps.isEmpty, app.guide == nil {
                     CardSection(title: "Setup") {
                         ForEach(Array(app.steps.enumerated()), id: \.offset) { index, step in
                             Text("\(index + 1). \(L10n.tr(step))").font(.body).foregroundStyle(Palette.text)
@@ -194,8 +195,10 @@ struct AppSheet: View {
                 }
                 if app.setup == "key" {
                     CardSection(title: "Setup") {
-                        ForEach(Array(app.steps.enumerated()), id: \.offset) { index, step in
-                            Text("\(index + 1). \(L10n.tr(step))").font(.body).foregroundStyle(Palette.secondary)
+                        if app.guide == nil {
+                            ForEach(Array(app.steps.enumerated()), id: \.offset) { index, step in
+                                Text("\(index + 1). \(L10n.tr(step))").font(.body).foregroundStyle(Palette.secondary)
+                            }
                         }
                         ForEach(app.fields) { field in
                             VStack(alignment: .leading, spacing: 4) {
@@ -213,7 +216,7 @@ struct AppSheet: View {
                                 if let hint = field.hint { Text(L10n.tr(hint)).font(.caption).foregroundStyle(Palette.secondary) }
                             }
                         }
-                        if let docs = app.docsUrl, let url = URL(string: docs) {
+                        if app.guide == nil, let docs = app.docsUrl, let url = URL(string: docs) {
                             Link(app.docsLabel ?? L10n.tr("Get a key"), destination: url).font(.footnote)
                         }
                     }
@@ -240,7 +243,7 @@ struct AppSheet: View {
                                 if let hint = field.hint { Text(L10n.tr(hint)).font(.caption).foregroundStyle(Palette.secondary) }
                             }
                         }
-                        if !app.fields.isEmpty, let docs = app.docsUrl, let url = URL(string: docs) {
+                        if app.guide == nil, !app.fields.isEmpty, let docs = app.docsUrl, let url = URL(string: docs) {
                             Link(app.docsLabel ?? L10n.tr("Open the guide"), destination: url).font(.footnote)
                         }
                     }

@@ -59,6 +59,7 @@ struct ComposioSection: View {
                             MarketRow(
                                 title: app.name,
                                 subtitle: app.description ?? app.slug,
+                                note: app.keyNote,
                                 added: app.connected,
                                 addLabel: "Connect"
                             ) {
@@ -234,6 +235,9 @@ struct ComposioConnectSheet: View {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+            if !connected {
+                ConnectionGuideCard(guide: plan?.guide ?? app.guide, name: app.name)
             }
             if connected {
                 CardSection(footer: "Turn \(app.name) on for a bot in the bot's settings, under Connectors.") {

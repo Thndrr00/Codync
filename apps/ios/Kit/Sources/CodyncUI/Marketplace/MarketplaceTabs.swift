@@ -66,7 +66,9 @@ extension MarketplaceView {
                 MarketSection(title: title) {
                     ItemGrid {
                         ForEach(group) { app in
-                            MarketRow(title: app.name, subtitle: app.tagline, added: app.installed || addedApps.contains(app.id),
+                            MarketRow(title: app.name, subtitle: app.tagline,
+                                      note: app.guide?.kind == "key" ? L10n.tr("Needs a key from {name}").replacingOccurrences(of: "{name}", with: app.name) : nil,
+                                      added: app.installed || addedApps.contains(app.id),
                                       open: { viewingApp = app }) {
                                 ServiceLogo(website: app.website, name: app.name, registryName: nil)
                             } add: {
