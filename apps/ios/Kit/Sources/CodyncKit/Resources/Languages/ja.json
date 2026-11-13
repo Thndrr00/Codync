@@ -2446,5 +2446,18 @@
   "min": "分",
   "At least 5 seconds.": "5秒以上にしてください。",
   "Enter a whole number of at least 5 seconds.": "5秒以上の整数を入力してください。",
-  "Set": "設定"
+  "Set": "設定",
+  "xAI": "xAI",
+  "Groq": "Groq",
+  "xAI voice": "xAI の声",
+  "Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.": "返信は xAI が独自のキーで読み上げます。音声認識は選択中の音声プロバイダーを引き続き使います。",
+  "Read replies aloud with your own xAI key.": "自分の xAI キーで返信を読み上げます。",
+  "{error} Pick OpenAI, Gemini, ElevenLabs or Groq beside the mic.": "{error} マイクの横で OpenAI、Gemini、ElevenLabs、Groq のいずれかを選んでください。",
+  "Voice providers": "音声プロバイダー",
+  "Calls and dictation": "通話とディクテーション",
+  "Reads replies aloud": "返信を読み上げ",
+  "Dictation only": "ディクテーションのみ",
+  "Add key": "キーを追加",
+  "No key": "キーなし",
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "キーはこのコンピューターに保存されます。ホストがプロバイダーで確認してから保存します。"
 }

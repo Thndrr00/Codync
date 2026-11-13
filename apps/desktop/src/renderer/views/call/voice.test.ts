@@ -58,6 +58,21 @@ test('ElevenLabs holds no live call, so its mode is always speech', async () => 
 })
 
 
+test('xAI reads replies and Groq dictates; neither carries a whole call', async () => {
+  const { VoiceSettings } = await import('./voice.ts')
+  const settings = await import('../settings/voice-settings.ts')
+  assert.equal(settings.isCallProvider('xai'), false)
+  assert.equal(settings.isCallProvider('groq'), false)
+  assert.equal(settings.canSpeak('xai'), true)
+  assert.equal(settings.canDictate('groq'), true)
+  assert.equal(settings.chosenVoice('groq'), '')
+  settings.speechOutput.set('xai')
+  assert.equal(VoiceSettings.speechProvider('openai'), 'xai')
+  assert.equal(VoiceSettings.speechModel('xai'), 'xai-tts')
+  settings.speechOutput.set('provider')
+  assert.equal(VoiceSettings.speechProvider('openai'), 'openai')
+})
+
 test('Windows and Linux retain automatic call fallback until a provider is explicitly picked', async () => {
   const { VoiceSettings } = await import('./voice.ts')
   const settings = await import('../settings/voice-settings.ts')

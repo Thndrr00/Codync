@@ -2446,5 +2446,18 @@
   "min": "分钟",
   "At least 5 seconds.": "至少 5 秒。",
   "Enter a whole number of at least 5 seconds.": "请输入至少 5 秒的整数。",
-  "Set": "设置"
+  "Set": "设置",
+  "xAI": "xAI",
+  "Groq": "Groq",
+  "xAI voice": "xAI 语音",
+  "Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.": "回复由 xAI 用自己的密钥朗读。语音识别仍使用你选择的语音提供方。",
+  "Read replies aloud with your own xAI key.": "用自己的 xAI 密钥朗读回复。",
+  "{error} Pick OpenAI, Gemini, ElevenLabs or Groq beside the mic.": "{error} 在麦克风旁选择 OpenAI、Gemini、ElevenLabs 或 Groq。",
+  "Voice providers": "语音提供方",
+  "Calls and dictation": "通话与听写",
+  "Reads replies aloud": "朗读回复",
+  "Dictation only": "仅听写",
+  "Add key": "添加密钥",
+  "No key": "无密钥",
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "密钥保存在这台电脑上。主机先向提供方验证，通过后才保存。"
 }

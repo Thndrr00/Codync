@@ -2446,5 +2446,18 @@
   "min": "Min.",
   "At least 5 seconds.": "Mindestens 5 Sekunden.",
   "Enter a whole number of at least 5 seconds.": "Gib eine ganze Zahl von mindestens 5 Sekunden ein.",
-  "Set": "Festlegen"
+  "Set": "Festlegen",
+  "xAI": "xAI",
+  "Groq": "Groq",
+  "xAI voice": "xAI-Stimme",
+  "Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.": "Antworten werden von xAI mit deinem eigenen Schlüssel vorgelesen. Die Spracherkennung nutzt weiterhin den gewählten Sprachanbieter.",
+  "Read replies aloud with your own xAI key.": "Lies Antworten mit deinem eigenen xAI-Schlüssel vor.",
+  "{error} Pick OpenAI, Gemini, ElevenLabs or Groq beside the mic.": "{error} Wähle neben dem Mikrofon OpenAI, Gemini, ElevenLabs oder Groq.",
+  "Voice providers": "Sprachanbieter",
+  "Calls and dictation": "Anrufe und Diktat",
+  "Reads replies aloud": "Liest Antworten vor",
+  "Dictation only": "Nur Diktat",
+  "Add key": "Schlüssel hinzufügen",
+  "No key": "Kein Schlüssel",
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "Der Schlüssel bleibt auf diesem Computer. Der Host prüft ihn beim Anbieter, bevor er ihn behält."
 }

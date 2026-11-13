@@ -33,12 +33,13 @@ mod routines;
 mod scroll;
 mod skill;
 mod threads;
+mod voice;
 mod when;
 
 pub use analytics::AnalyticsSheet;
 pub use dev_servers::{DevServer, DevServerSummary, DevServersSheet, LogsView, summary as dev_server_summary};
 pub use documents::{DocumentReply, DocumentSheet};
-pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields};
+pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields, voice_key_fields};
 pub use flow::{FlowSheet, FlowStage, Target};
 pub use library::{ArtifactTitles, LibraryItem};
 pub use memory::{MemoryMode, MemorySheet, Section};
@@ -48,6 +49,7 @@ pub use network_setup::{CONNECTORS, Setup, SetupField};
 pub use pages::Page;
 pub use scroll::Scroll;
 pub use skill::SkillSheet;
+pub use voice::VoiceSheet;
 pub use when::complete_zone;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -107,6 +109,10 @@ pub enum Reply {
         search: String,
         cursor: Option<String>,
     },
+    /// The voice providers and whether this computer holds each key.
+    VoiceStatus,
+    /// A voice key was saved or removed: the sheet loads again.
+    VoiceKeySaved,
     Skills,
     Apps,
     Catalog,
@@ -390,6 +396,10 @@ pub enum Submit {
     ProtectedFill {
         id: String,
         code: bool,
+    },
+    /// A voice provider's key (`setVoiceKey`), kept by the computer after it checks it.
+    VoiceKey {
+        provider: String,
     },
     RenameArtifact {
         bot: String,

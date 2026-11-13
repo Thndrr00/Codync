@@ -63,7 +63,7 @@ was recognized so far. The desktop island's message field has the same mic and p
 
 A `chevron.up` beside the composer's mic picks dictation's engine, kept on the device apart from the
 call engine (`dictationEngine`): **On device** (the above), or **OpenAI** / **Gemini** /
-**ElevenLabs** on the user's own key. With a provider, the mic first checks that the computer holds its key (`voiceStatus`; no key
+**ElevenLabs** / **Groq** on the user's own key. With a provider, the mic first checks that the computer holds its key (`voiceStatus`; no key
 opens Voice chat settings before anything is recorded), then records; the pill (and its time) appears only once
 the microphone is open, so nothing said before it is lost; nothing is typed while recording. The
 pill's stop turns the pill into "Transcribing…" and the whole recording goes through
@@ -189,7 +189,18 @@ and remembers it. The picker offers OpenAI, Gemini and ElevenLabs.
 | Gemini | Google AI Studio key on the computer | WebSocket, device ↔ Google (default `gemini-3.8-live`) | `GeminiLiveEngine` |
 | ElevenLabs | ElevenLabs API key on the computer | Speech mode only: Scribe hears, ElevenLabs voices speak (defaults `scribe_v1`, `eleven_flash_v2_5`) | `CloudSpeechEngine` |
 
-OpenAI and Gemini each have two **modes** (ElevenLabs has only Speech):
+xAI and Groq each do half a voice, so neither is a call engine (OpenBot 0.60): **xAI** reads replies
+aloud on its own key (`voiceSpeak` with provider `xai`, voice `eve`/`ara`/`leo`/`rex`/`sal`, 24 kHz
+PCM wrapped as WAV), and **Groq** dictates (`voiceTranscribe` with provider `groq`, models
+`whisper-large-v3-turbo` and `whisper-large-v3`). In Speech mode, **Speech output** picks who reads
+the replies: **Provider voice** (the call engine's own text-to-speech), **xAI voice** (xAI's key,
+while recognition stays with the call engine) or **NeuTTS local · Jo**. xAI's route takes no model
+name, so its speech model is the fixed id `xai-tts`; Groq's route takes the model by name, and its
+answer is OpenAI-compatible `{text}`. xAI's request body is OpenBot's exactly: `{text, voice_id,
+language: "auto", output_format: {codec: "pcm", sample_rate: 24000}}`, and its answer is raw PCM or
+`{"audio": "<base64>"}`.
+
+OpenAI and Gemini each have two **modes** (ElevenLabs has only Speech, and xAI and Groq are not call engines):
 
 - **Realtime**: a live conversation with the provider's realtime model (below), talk over replies.
 - **Speech** (`CloudSpeechEngine`): the on-device loop with the provider's models instead of Apple's.
@@ -198,7 +209,8 @@ OpenAI and Gemini each have two **modes** (ElevenLabs has only Speech):
   speech-to-text and is sent as an ordinary message; replies are read with its text-to-speech. Both
   run on the computer (`voiceTranscribe`, `voiceSpeak`), so the key never leaves it; utterances stop
   at 20 s and replies are spoken in clips (OpenAI 600 characters as AAC, Gemini 150 as WAV,
-  ElevenLabs 600 as 64 kbps MP3) so every request and answer fits one 1 MiB channel message.
+  ElevenLabs 600 as 64 kbps MP3, xAI 150 as 24 kHz WAV) so every request and answer fits one 1 MiB
+  channel message.
   ElevenLabs holds no live conversation, so it is always Speech mode and its Mode row is hidden.
   Speech-to-text gets the app's and
   the bots' names as hints (gpt-transcribe also as `keywords`). gpt-transcribe returns Chinese in
@@ -229,9 +241,11 @@ generation wins, full models over `mini`; Gemini's names carry the version, plai
 `-lite` / variants; dated snapshots and previews never become defaults. Clients remember the
 last `defaults` they saw (`callDefaults.<provider>`) and refresh them at every call. The ids
 built into the host and the app (today `gpt-realtime-2.1`, `gpt-transcribe`, `gpt-4o-mini-tts`;
-`gemini-3.8-live`, `gemini-3.8-flash`, `gemini-3.8-flash-tts`; `scribe_v1`, `eleven_flash_v2_5`)
-are used only until the first list arrives. ElevenLabs' models list covers text to speech only, so
-its Scribe choices (`scribe_v2`, `scribe_v1`) are fixed, and its voices come from the account.
+`gemini-3.8-live`, `gemini-3.8-flash`, `gemini-3.8-flash-tts`; `scribe_v1`, `eleven_flash_v2_5`;
+`xai-tts`; `whisper-large-v3-turbo`) are used only until the first list arrives. ElevenLabs'
+models list covers text to speech only, so its Scribe choices (`scribe_v2`, `scribe_v1`) are
+fixed, and its voices come from the account. xAI and Groq have no speech model to work out: the
+host still reads `GET /v1/models` with their key (which checks it), then keeps their fixed ids.
 
 Voice settings (`VoiceChatSettingsView`) open from the call bar's gear and from settings: on the
 iPhone and Android, **Voice chat** on the computer's card in **Manage computers**; on the desktop, **Settings → Voice chat** (this
@@ -244,13 +258,20 @@ credential for the chosen model and voice, or in Speech mode reads "OK" aloud in
 which ElevenLabs always does), a model picker, a voice picker, and minutes used this month.
 ElevenLabs' voice picker comes from the account through `voiceVoices`, by name; the other
 providers have fixed voice ids.
-Speech mode adds speech-to-text and text-to-speech pickers and the pause length; dictating with
-the provider shows its speech-to-text picker too. When dictation's engine is a provider the call
-engine isn't, that provider gets its own section below with just the key and speech-to-text picker
-("For dictation in the message box."), so its key can be added without switching the call engine; its **Test** lists the key's models instead of minting a call credential. The model list comes from the provider through the computer (`voiceModels`: OpenAI `GET /v1/models`
+Speech mode adds speech-to-text and text-to-speech pickers, the speech-output picker (Provider
+voice, xAI voice, NeuTTS local · Jo) and the pause length; dictating with the provider shows its
+speech-to-text picker too. When dictation's engine is a provider the call engine isn't, that
+provider gets its own section below with just the key and speech-to-text picker ("For dictation in
+the message box."), so its key can be added without switching the call engine; its **Test** lists
+the key's models instead of minting a call credential. Picking **xAI voice** for speech output adds
+an xAI section of its own (key, `Text to speech`, voice, "Read replies aloud with your own xAI
+key."), because xAI hears nothing and cannot carry the call. The terminal UI has no microphone, so
+it has no model or voice pickers; **Go to → Voice providers…** lists every provider with what it
+does and whether this computer holds its key, and adds or removes a key. The model list comes from the provider through the computer (`voiceModels`: OpenAI `GET /v1/models`
 ids sorted into realtime, transcribe and tts models; Gemini `GET v1beta/models` by
 `bidiGenerateContent` / `generateContent` and name; ElevenLabs `GET /v1/models`, its text-to-speech
-models, with Scribe v1/v2 for transcription; translation and diarization models left out), fetched after a successful test and each time the form opens. The call bar
+models, with Scribe v1/v2 for transcription; xAI and Groq `GET /v1/models` to check the key, then
+their fixed ids; translation and diarization models left out), fetched after a successful test and each time the form opens. The call bar
 shows the provider's name next to the dots whenever audio leaves the device.
 
 ### Where the key lives
@@ -263,16 +284,41 @@ shows the provider's name next to the dots whenever audio leaves the device.
   10-minute grant that adds the key: [Agents and the host's secrets](../plans/codync-cloud.md#agents-and-the-hosts-secrets).
 - Host methods (control scope): `voiceStatus` (which providers have a key), `setVoiceKey
   {provider, key}` (checked with the provider before it's kept: one credential mint for
-  OpenAI/Gemini, and for ElevenLabs the voice list plus one character read aloud; empty removes it),
+  OpenAI/Gemini, `GET /v1/models` for xAI and Groq, and for ElevenLabs the voice list plus one
+  character read aloud; empty removes it),
   `voiceSession {provider, model, voice}` → `{credential}`, `voiceModels {provider}` → `{models,
   transcribe, speech}`, `voiceVoices {provider}` → `{voices}` (ElevenLabs' account voices),
-  `voiceTranscribe {provider, model, audio}` (base64 16 kHz WAV) → `{text}`,
-  `voiceSpeak {provider, model, voice, text}` → `{audio, format}`.
+  `voiceTranscribe {provider, model, audio}` (base64 16 kHz WAV) → `{text}` (Groq through
+  `POST https://api.groq.com/openai/v1/audio/transcriptions`, multipart `file`, `model`,
+  `response_format=json`),
+  `voiceSpeak {provider, model, voice, text}` → `{audio, format}` (xAI through
+  `POST https://api.x.ai/v1/tts` with `Authorization: Bearer`, answering 24 kHz PCM as WAV).
 - The long-lived key is used for minting a short-lived credential at call start (OpenAI
   `POST /v1/realtime/client_secrets`, 10 minutes; Gemini `POST v1alpha/auth_tokens`, one use) and
   listing models. The client's audio session only ever sees that credential.
 - Audio is not proxied through the host: it would cross the encrypted channel and the relay
   (latency, relay bandwidth). The device streams to the provider directly.
+
+### When a voice request fails
+
+A failed `voiceTranscribe` or `voiceSpeak` appends one line to `<data>/logs/voice.log`
+(`host/src/voice/error_log.rs`, written by the same `Log` that keeps each tool's log in that
+folder): time, operation (`transcribe` or `speak`), provider, model, the chat turn when the caller
+knows one (`-` today, because a voice request carries no turn id) and the provider's reason, with
+credentials removed by the same redaction as the support snapshot (`diagnostics::redact`). The
+spoken text and the audio are never written. OpenBot keeps the same record for agent failures in
+`logs/providers/providers.log` (0.63); Codync has no provider log, so this is its voice half.
+
+### What Codync does not port from OpenBot's voice
+
+OpenBot 0.60–0.65 also has local dictation models (Parakeet TDT/Unified, Cohere Transcribe, and
+retired Bark), a user-run "voice server", and dictation threads. They are **not ported**: every one
+needs OpenBot's shipped native `sherpa-onnx` addon (`voice-transcription-host.ts`, one binary per
+platform) or a local HTTP server Codync doesn't run, and Codync has no such runtime. Local speech in
+Codync is its existing **NeuTTS** engine (`voice/neutts.rs`, Hermes's prepared model) for reading
+replies, and provider dictation (OpenAI, Gemini, ElevenLabs, Groq) for hearing speech; nothing here
+pretends a local model exists. Porting them would mean shipping and supervising a per-platform
+inference runtime, which is its own card.
 
 ### The call on the host
 

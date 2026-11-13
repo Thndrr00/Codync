@@ -117,6 +117,13 @@ impl App {
                     Reply::FieldsSaved,
                 );
             }
+            Submit::VoiceKey { provider } => {
+                self.sheet(
+                    "setVoiceKey",
+                    json!({"provider": provider, "key": values.get("key").cloned().unwrap_or_default()}),
+                    Reply::VoiceKeySaved,
+                );
+            }
             Submit::ProtectedFill { id, code } => {
                 let mut body = json!({"id":id});
                 body[if *code { "code" } else { "loginId" }] = values["value"].clone();
@@ -171,6 +178,40 @@ pub fn voice_decision_fields(bot: &str, receipt: &str) -> Fields {
         choices: vec![], choice: 0,
         inputs: vec![Input { name:"summary".into(),label:"Decisions".into(),secret:false,required:true,multiline:true,placeholder:String::new(),ed:Editor::default() }],
         cursor:0,error:None,saving:false,submit:Submit::VoiceDecisions{bot:bot.into(),receipt:receipt.into()},
+    }
+}
+
+/// A voice provider's key: pasted here, checked by the host with the provider, then kept on this computer.
+pub fn voice_key_fields(provider: &str, name: &str) -> Fields {
+    let placeholder = match provider {
+        "openai" => "sk-…",
+        "gemini" => "AIza…",
+        "elevenlabs" => "sk_…",
+        "xai" => "xai-…",
+        "groq" => "gsk_…",
+        _ => "",
+    };
+    Fields {
+        title: format!("{name} key"),
+        note: super::super::l10n::tr(
+            "The key stays on this computer. The host checks it with the provider before keeping it.",
+        )
+        .into_owned(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![Input {
+            name: "key".into(),
+            label: "API key".into(),
+            secret: true,
+            required: true,
+            multiline: false,
+            placeholder: placeholder.into(),
+            ed: Editor::default(),
+        }],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::VoiceKey { provider: provider.into() },
     }
 }
 

@@ -395,5 +395,18 @@
   "min": "د",
   "At least 5 seconds.": "5 ثوانٍ على الأقل.",
   "Enter a whole number of at least 5 seconds.": "أدخل عددًا صحيحًا لا يقل عن 5 ثوانٍ.",
-  "Set": "تعيين"
+  "Set": "تعيين",
+  "xAI": "xAI",
+  "Groq": "Groq",
+  "xAI voice": "صوت xAI",
+  "Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.": "يقرأ xAI الردود بصوت عالٍ بمفتاحك الخاص. لا يزال التعرف على الكلام يستخدم مزوّد الصوت الذي اخترته.",
+  "Read replies aloud with your own xAI key.": "اقرأ الردود بصوت عالٍ باستخدام مفتاح xAI الخاص بك.",
+  "{error} Pick OpenAI, Gemini, ElevenLabs or Groq beside the mic.": "{error} اختر OpenAI أو Gemini أو ElevenLabs أو Groq بجانب الميكروفون.",
+  "Voice providers": "مزوّدو الصوت",
+  "Calls and dictation": "المكالمات والإملاء",
+  "Reads replies aloud": "يقرأ الردود بصوت عالٍ",
+  "Dictation only": "الإملاء فقط",
+  "Add key": "إضافة مفتاح",
+  "No key": "لا يوجد مفتاح",
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "يبقى المفتاح على هذا الكمبيوتر. يتحقق منه المضيف لدى المزوّد قبل حفظه."
 }

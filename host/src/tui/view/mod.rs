@@ -38,6 +38,7 @@ mod time;
 mod trace;
 mod transcript;
 mod usage;
+mod voice;
 mod whats_new;
 
 pub(super) use buffer::{centered, frame_box, hline, put, restyle, rput, u, window};

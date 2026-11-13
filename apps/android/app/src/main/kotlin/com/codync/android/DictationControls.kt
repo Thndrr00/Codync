@@ -78,7 +78,7 @@ import kotlinx.coroutines.delay
     var engine by remember { mutableStateOf(choices.dictation) }
     DropdownMenu({
         listOf(MenuItem("On device", selected = engine == null) { engine = null; choices.dictation = null }) +
-            VoiceProvider.entries.map { provider -> MenuItem(provider.title, selected = engine == provider) { engine = provider; choices.dictation = provider } }
+            VoiceProvider.dictationProviders.map { provider -> MenuItem(provider.title, selected = engine == provider) { engine = provider; choices.dictation = provider } }
     }, Modifier.height(height).padding(end = 6.dp).width(20.dp), label = "Dictation engine") {
         Symbol("chevron.up", Modifier.align(Alignment.Center), size = 12.dp, tint = Palette.secondary)
     }

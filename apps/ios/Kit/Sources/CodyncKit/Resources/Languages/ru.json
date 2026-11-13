@@ -2446,5 +2446,18 @@
   "min": "мин",
   "At least 5 seconds.": "Не меньше 5 секунд.",
   "Enter a whole number of at least 5 seconds.": "Введите целое число не меньше 5 секунд.",
-  "Set": "Задать"
+  "Set": "Задать",
+  "xAI": "xAI",
+  "Groq": "Groq",
+  "xAI voice": "Голос xAI",
+  "Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.": "xAI читает ответы вслух с вашим собственным ключом. Распознавание речи по-прежнему использует выбранного поставщика голоса.",
+  "Read replies aloud with your own xAI key.": "Читайте ответы вслух с вашим собственным ключом xAI.",
+  "{error} Pick OpenAI, Gemini, ElevenLabs or Groq beside the mic.": "{error} Выберите OpenAI, Gemini, ElevenLabs или Groq рядом с микрофоном.",
+  "Voice providers": "Поставщики голоса",
+  "Calls and dictation": "Звонки и диктовка",
+  "Reads replies aloud": "Читает ответы вслух",
+  "Dictation only": "Только диктовка",
+  "Add key": "Добавить ключ",
+  "No key": "Нет ключа",
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "Ключ остаётся на этом компьютере. Хост проверяет его у поставщика, прежде чем сохранить."
 }

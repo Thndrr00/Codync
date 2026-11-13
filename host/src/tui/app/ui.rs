@@ -71,10 +71,11 @@ pub enum Action {
     Language,
     ThinkingDetails,
     Keys,
+    Voice,
     Appearance(super::super::appearance::Appearance),
 }
 
-pub const ACTIONS: [(&str, &str, Action); 27] = [
+pub const ACTIONS: [(&str, &str, Action); 28] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -101,6 +102,7 @@ pub const ACTIONS: [(&str, &str, Action); 27] = [
     ("Appearance: Dark", "", Action::Appearance(super::super::appearance::Appearance::Dark)),
     ("App language…", "", Action::Language),
     ("Show thinking details", "", Action::ThinkingDetails),
+    ("Voice providers…", "", Action::Voice),
     ("Keys", "?", Action::Keys),
 ];
 
@@ -128,6 +130,10 @@ pub enum ConfirmAct {
     RemoveSkill(String),
     /// A thread, by bot and root entry.
     DeleteThread(String, String),
+    /// A voice provider's key, removed from this computer.
+    RemoveVoiceKey {
+        provider: String,
+    },
 }
 
 pub struct Confirm {
@@ -439,6 +445,8 @@ pub enum Overlay {
     Skill(SkillSheet),
     Analytics(AnalyticsSheet),
     Network(Box<NetworkSheet>),
+    /// The voice providers' keys (`voiceStatus`).
+    Voice(Box<super::super::manage::VoiceSheet>),
     /// A bot's approval rules.
     Rules(Box<super::rules::RulesSheet>),
     /// "Always allow" on a card: the rule to keep, to edit.

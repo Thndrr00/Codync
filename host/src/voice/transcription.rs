@@ -76,6 +76,7 @@ pub(crate) async fn note(store: &Store, bytes: &[u8]) -> Result<String> {
     let container = Container::sniff(bytes).context("The attachment is not a recognized audio container")?;
     let provider = Provider::ALL
         .into_iter()
+        .filter(|p| p.transcribes())
         .find(|p| keys::configured(store, *p).unwrap_or(false))
         .context("Configure a speech provider in Codync call settings to transcribe voice notes")?;
     let model = defaults(store, provider).transcribe;
@@ -113,6 +114,27 @@ async fn transcribe_bytes(
 ) -> Result<Value> {
     ensure!(!wav.is_empty() && wav.len() <= MAX_NOTE_BYTES, "Audio must contain 1 byte to 20 MiB");
     let model = checked(model)?;
+    let result = transcribe_at(p, model, wav, container, request).await;
+    if let Err(error) = &result {
+        super::error_log::record(super::error_log::Failure {
+            operation: "transcribe",
+            provider: p,
+            model,
+            turn: None,
+            reason: &format!("{error:#}"),
+        })
+        .await;
+    }
+    result
+}
+
+async fn transcribe_at(
+    p: Provider,
+    model: &str,
+    wav: &[u8],
+    container: Container,
+    request: &SpeechRequest,
+) -> Result<Value> {
     let extension = container.extension();
     let mime = container.mime();
     let names = &request.names;
@@ -152,6 +174,34 @@ async fn transcribe_bytes(
                 .body(body);
             send(p, req).await?["text"].as_str().unwrap_or_default().to_owned()
         }
+        // OpenBot 0.65.0 (`src/main/voice-transcription-service.ts` sends Groq through
+        // `transcribeRecording` in `voice-server-service.ts`): its OpenAI-compatible route takes
+        // multipart `file`, `model` and `response_format=json`; the answer is `{text}`.
+        Provider::Groq => {
+            let boundary = format!("codync-{}", uuid::Uuid::new_v4().simple());
+            let mut body = Vec::with_capacity(wav.len() + 512);
+            body.extend_from_slice(
+                format!("--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{model}\r\n").as_bytes(),
+            );
+            body.extend_from_slice(
+                format!("--{boundary}\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\njson\r\n")
+                    .as_bytes(),
+            );
+            body.extend_from_slice(
+                format!(
+                    "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.{extension}\"\r\nContent-Type: {mime}\r\n\r\n"
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(wav);
+            body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+            let req = request
+                .access
+                .request(p, Method::POST, "/v1/audio/transcriptions")
+                .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+                .body(body);
+            send(p, req).await?["text"].as_str().unwrap_or_default().to_owned()
+        }
         Provider::Gemini => {
             let audio = STANDARD.encode(wav);
             let body = json!({"contents": [{"parts": [
@@ -169,6 +219,7 @@ async fn transcribe_bytes(
         Provider::ElevenLabs => {
             super::elevenlabs::transcribe(request.access.secret()?, model, wav.to_vec(), extension, mime).await?
         }
+        Provider::Xai => anyhow::bail!("{} reads replies aloud but doesn't hear you.", p.name()),
     };
     Ok(json!({"text": text.trim()}))
 }
@@ -176,6 +227,60 @@ async fn transcribe_bytes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn groq_gets_the_multipart_fields_openbot_sends() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = reqwest::Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            let mut size = None;
+            let mut total = 0;
+            loop {
+                let mut line = String::new();
+                let count = stream.read_line(&mut line).await.unwrap();
+                assert!(count > 0, "request ended before its headers");
+                total += count;
+                assert!(total < 16 * 1024, "unexpectedly large headers");
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':')
+                    && name.eq_ignore_ascii_case("content-length")
+                {
+                    size = Some(value.trim().parse::<usize>().unwrap());
+                }
+            }
+            let size = size.expect("bounded multipart body must advertise its length");
+            assert!(size < 64 * 1024);
+            let mut body = vec![0; size];
+            stream.read_exact(&mut body).await.unwrap();
+            let body = String::from_utf8_lossy(&body);
+            assert!(body.contains("name=\"model\"\r\n\r\nwhisper-large-v3-turbo"), "{body}");
+            assert!(body.contains("name=\"response_format\"\r\n\r\njson"), "{body}");
+            assert!(body.contains("name=\"file\"; filename=\"speech.wav\""), "{body}");
+            assert!(body.contains("Content-Type: audio/wav"), "{body}");
+            // Groq's route takes no prompt, unlike OpenAI's: the words never leave as a hint.
+            assert!(!body.contains("name=\"prompt\""), "{body}");
+            let answer = r#"{"text":" hello world "}"#;
+            stream.get_mut().write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}", answer.len()).as_bytes()).await.unwrap();
+        });
+        let request = SpeechRequest {
+            access: Access::direct_at(endpoint.as_str().trim_end_matches('/'), "fixture-only-key"),
+            names: vec!["Captured Bot".into()],
+        };
+        let operation = async {
+            let result =
+                transcribe_bytes(Provider::Groq, "whisper-large-v3-turbo", b"RIFFfixture", Container::Wav, &request)
+                    .await
+                    .unwrap();
+            assert_eq!(result["text"], "hello world");
+            server.await.unwrap();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), operation).await.unwrap();
+    }
 
     #[tokio::test]
     async fn repeated_audio_coalesces_only_within_the_same_speech_connection_and_context() {

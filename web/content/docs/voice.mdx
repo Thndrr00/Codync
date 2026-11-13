@@ -3,7 +3,7 @@ You can talk to your bots two ways:
 - **Voice call:** a hands-free conversation with a bot or a group chat. You speak, the bot's replies are read aloud.
 - **Dictation:** speak into the message box, check the text, then send it yourself.
 
-Both work in the iPhone, Android and desktop apps. The terminal UI has no microphone, so it has neither, but it shows the line a call leaves in the chat (press `o` on it to read the call).
+Both work in the iPhone, Android and desktop apps. The terminal UI has no microphone, so it has neither, but it shows the line a call leaves in the chat (press `o` on it to read the call), and **Go to → Voice providers…** shows each provider's key and adds or removes one.
 
 A call doesn't change the bot. It's the same agent on your computer; you're just talking to it instead of typing.
 
@@ -52,6 +52,8 @@ Under **Engine**, pick one. The choice is kept on this device. Changed during a 
 | **Gemini** | Your Google AI Studio key, kept on the computer | Google's models hear you and speak |
 | **ElevenLabs** | Your ElevenLabs API key, kept on the computer | ElevenLabs hears you with Scribe and reads replies with the voices of your account (Speech mode only) |
 
+Two more providers each do one half of a voice, so they appear where that half belongs rather than as engines: **xAI** reads replies aloud, under **Speech output** in Speech mode, and **Groq** dictates, under **Dictation engine** beside the microphone.
+
 ### On device
 
 - You speak in the language set under **Language** (by default, your device's first language).
@@ -72,6 +74,8 @@ OpenAI and Gemini each offer two modes, under **Mode**:
 
 ElevenLabs has no live conversation: its calls always use Speech, so **Mode** isn't shown. Its voices are the ones on your ElevenLabs account, premade, cloned and saved: the **Voice** list comes from your key, by name. **Test key** reads "OK" in the chosen voice, so you hear it before the next call.
 
+In Speech mode, **Speech output** chooses who reads the replies: **Provider voice** (the engine's own voice), **xAI voice** (your xAI key; recognition still uses the call's engine) or **NeuTTS local · Jo** (synthesized on the computer). Picking **xAI voice** adds an xAI section with its key, **Text to speech** and **Voice** (eve, ara, leo, rex or sal); **Test key** reads "OK".
+
 In Realtime mode, the voice model is the bot's voice line, not the bot: it talks with you, and the bot does the work. It passes your requests on to the bot (along with your own words, so nothing gets lost in its wording), reads the bot's replies out in shortened form, keeps you posted while the bot works (and tells you what it's doing when you ask), lets you know when an approval is waiting, answers an approval for you once you've said which option, can stop the bot, and can look up what the bot remembers.
 
 Before a Realtime call, your computer gives the voice model the background it needs: the date and time, what your bots remember about you, this bot's settings and memory, the project's git branch and recent changes, what the bot is working on, the recent messages and calls in this chat, your other bots, and the files shared in the chat. When the call reconnects or you switch engine mid-call, the voice model also gets what was said on the call so far. Like your audio, it goes to OpenAI or Google on your own key.
@@ -87,7 +91,7 @@ If a provider can't start, or the connection doesn't come back after a few tries
 Keys are entered on the computer, never on the phone:
 
 1. In the desktop app on that computer, open **Settings → Voice chat**. For a computer you reach over SSH from the desktop app, use the **Voice chat** button (waveform) on its card in **Settings → Computers & devices**.
-2. Pick **OpenAI**, **Gemini** or **ElevenLabs** as the engine. Use **Get a key from OpenAI** (or Gemini, or ElevenLabs) if you need one.
+2. Pick **OpenAI**, **Gemini** or **ElevenLabs** as the engine, or pick **xAI voice** under Speech output, or **Groq** as the dictation engine. Use **Get a key from OpenAI** (or Gemini, ElevenLabs, xAI, or Groq) if you need one.
 3. Paste the key and press **Save**. The computer checks it with the provider and keeps it only if it works; otherwise you see the provider's error.
 
 Once saved, the section shows **Key saved** with **Test key**, **Replace key** and **Remove key**. The iPhone shows whether the computer has a key and can test it, and tells you where to add one if it doesn't.
@@ -100,7 +104,7 @@ The key is stored encrypted in Codync's vault on the computer (with the system k
 | --- | --- | --- |
 | On device | Stays on your device. Only the recognized text goes to the computer, as a message. Apple's speech recognition may use Apple's servers when on-device recognition isn't available for your language. On Android, calls are always recognized on the phone; dictation uses the phone's speech service when the phone can't recognize your language itself, and that service may use its provider's servers (Google's on most phones). | Not needed |
 | Realtime | Streams directly between your device and the provider (OpenAI over WebRTC, Gemini over a WebSocket). It doesn't pass through your computer or the relay. The written transcript of the call is kept on your computer. | Stays on the computer, which gives your device a short-lived credential for each call |
-| Speech mode, or dictation with a provider | Recordings go to your computer over the encrypted connection, and the computer sends them to the provider (OpenAI, Google or ElevenLabs), with the names of the bots on the computer as spelling hints. The spoken replies come back the same way. | Stays on the computer |
+| Speech mode, or dictation with a provider | Recordings go to your computer over the encrypted connection, and the computer sends them to the provider (OpenAI, Google, ElevenLabs or Groq), with the names of the bots on the computer as spelling hints. The spoken replies come back the same way (from OpenAI, Google, ElevenLabs or xAI). | Stays on the computer |
 
 The relay only ever sees encrypted data. Whenever audio leaves your device, the call bar names the provider.
 
@@ -108,9 +112,10 @@ The relay only ever sees encrypted data. Whenever audio leaves your device, the 
 
 ### Messaging voice notes
 
-Telegram, WhatsApp, Slack and Discord voice notes can reuse the computer's saved OpenAI or Gemini speech
+Telegram, WhatsApp, Slack and Discord voice notes can reuse the computer's saved speech
 connection. The host checks the channel's sender permissions before transcription. It sends
-recognized audio containers of up to 20 MiB to OpenAI when configured, or otherwise to Gemini,
+recognized audio containers of up to 20 MiB to the first configured speech provider (OpenAI,
+Gemini, ElevenLabs or Groq),
 and adds the transcript to the incoming message. Provider charges apply. Without a configured
 provider, or when transcription fails, the channel reports the failure instead of inventing text.
 If the host uses `CODYNC_OPENAI_BASE_URL`, the OpenAI engine sends the recording to that
@@ -142,6 +147,13 @@ The host bounds the frame queue and the app pulls one frame ahead of playback. S
 speech interrupts the reply and cancels its owned synthesis worker; leaving the call cancels
 pending frames too. The voice is fixed to Jo for this engine.
 
+### What Codync doesn't include
+
+Codync has no local dictation models such as Parakeet or Cohere Transcribe, no voice server you run
+yourself, and no dictation threads. Those need OpenBot's bundled native speech runtime on each
+platform, which Codync doesn't ship. Local speech in Codync is NeuTTS, above; dictation uses the
+providers in the list beside the microphone.
+
 ### Foreground wake phrase on phones
 
 With **On device** selected, enable **Wake phrase → Hey Hermes** on iPhone or Android.
@@ -167,12 +179,12 @@ While it listens, the microphone becomes a recording pill with a stop button, th
 
 ### Pick the dictation engine
 
-The small arrow beside the microphone (**Dictation engine**) chooses **On device**, **OpenAI**, **Gemini** or **ElevenLabs**. It's kept on this device, separate from the call engine.
+The small arrow beside the microphone (**Dictation engine**) chooses **On device**, **OpenAI**, **Gemini**, **ElevenLabs** or **Groq**. It's kept on this device, separate from the call engine.
 
 - **On device:** words appear as they're recognized, in the language set for calls. On the iPhone and Android, stop keeps what was recognized so far. In the desktop app, dictation keeps listening through pauses until you press stop.
-- **OpenAI, Gemini or ElevenLabs:** Codync first checks that the computer has the provider's key (if not, voice settings open so you can configure it before anything is recorded). The pill appears once the microphone is open, so nothing you say is lost. Nothing is typed while you record. When you press stop, the pill shows "Transcribing…" and the text lands in the box when it arrives. It uses the **Speech to text** model from Voice chat settings, and the recording counts toward that provider's minutes this month.
+- **OpenAI, Gemini, ElevenLabs or Groq:** Codync first checks that the computer has the provider's key (if not, voice settings open so you can configure it before anything is recorded). The pill appears once the microphone is open, so nothing you say is lost. Nothing is typed while you record. When you press stop, the pill shows "Transcribing…" and the text lands in the box when it arrives. It uses the **Speech to text** model from Voice chat settings, and the recording counts toward that provider's minutes this month.
 - **On device:** words appear as they're recognized, in the language set for calls. On the iPhone and Android, stop keeps what was recognized so far, and dictation tells you why if it can't start or stops on an error; a pause with nothing said just ends it. In the desktop app, dictation keeps listening through pauses until you press stop.
-- **OpenAI or Gemini:** Codync first checks that the computer has the provider's key (if not, voice settings open so you can configure it before anything is recorded). The pill appears once the microphone is open, so nothing you say is lost. Nothing is typed while you record. When you press stop, the pill shows "Transcribing…" and the text lands in the box when it arrives. It uses the **Speech to text** model from Voice chat settings, and the recording counts toward that provider's minutes this month.
+- **OpenAI, Gemini, ElevenLabs or Groq:** Codync first checks that the computer has the provider's key (if not, voice settings open so you can configure it before anything is recorded). The pill appears once the microphone is open, so nothing you say is lost. Nothing is typed while you record. When you press stop, the pill shows "Transcribing…" and the text lands in the box when it arrives. It uses the **Speech to text** model from Voice chat settings, and the recording counts toward that provider's minutes this month.
 
 If dictation uses a provider that your calls don't, Voice chat settings show a separate section for it ("For dictation in the message box.") with its key status and speech-to-text model.
 

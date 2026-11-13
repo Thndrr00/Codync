@@ -98,12 +98,15 @@ private fun AppStore.begin(call: VoiceBinding, provider: VoiceProvider?) {
             choices.speechMode(provider) -> {
                 startCallOnHost(call, "speech", provider)
                 val transcribe = choices.model(provider, VoiceChoices.Model.Transcribe)
-                val speech = choices.model(provider, VoiceChoices.Model.Speech)
+                // Recognition stays with the call's provider; xAI can read the replies instead of it.
+                val speak = choices.speechProvider(provider)
+                val speech = choices.model(speak, VoiceChoices.Model.Speech)
+                val speechVoice = choices.voice(speak)
                 CloudSpeechEngine(contextScope, provider, settings, mic(), AndroidClipPlayer, CloudSpeechEngine.Speech(
                     transcribe = { inReadersScript(voiceTranscribe(provider, transcribe, it)) },
-                    synthesize = { voiceSpeak(provider, speech, voice, it, choices.localSpeech, call.botId) },
+                    synthesize = { voiceSpeak(speak, speech, speechVoice, it, choices.localSpeech, call.botId) },
                     send = { sendFromCall(call, it) },
-                    stream = if (choices.localSpeech) ({ text -> voiceSpeechStream(text,call.botId) }) else null), clipCharacters = if (choices.localSpeech) 120 else provider.speechChunk)
+                    stream = if (choices.localSpeech) ({ text -> voiceSpeechStream(text,call.botId) }) else null), clipCharacters = if (choices.localSpeech) 120 else speak.speechChunk)
             }
             // WebRTC records the microphone itself.
             provider == VoiceProvider.OpenAI -> OpenAIRealtimeEngine(contextScope, settings, model, voice,

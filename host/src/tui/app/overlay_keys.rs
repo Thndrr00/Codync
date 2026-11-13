@@ -89,6 +89,7 @@ impl App {
                 "Thinking details off"
             }),
             Action::Keys => self.overlays.push(Overlay::Help(Editor::default())),
+            Action::Voice => self.open_voice(),
         }
     }
 
@@ -135,6 +136,11 @@ impl App {
                             json!({"botId": bot, "threadId": root}),
                             After::Sheet(Reply::ThreadDeleted(root.clone())),
                         ),
+                        ConfirmAct::RemoveVoiceKey { provider, .. } => self.call(
+                            "setVoiceKey",
+                            json!({"provider": provider, "key": ""}),
+                            After::Sheet(Reply::VoiceKeySaved),
+                        ),
                     }
                     None
                 }
@@ -161,6 +167,7 @@ impl App {
             Overlay::Skill(s) => self.skill_key(s, k),
             Overlay::Analytics(s) => s.key(k),
             Overlay::Network(n) => self.network_key(n, k),
+            Overlay::Voice(s) => self.voice_key(s, k),
             Overlay::Rules(s) => self.approval_rules_key(s, k),
             Overlay::Channels(s) => self.channels_key(s, k),
             Overlay::Beliefs(s) => self.beliefs_key(s, k),

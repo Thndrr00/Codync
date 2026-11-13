@@ -29,10 +29,12 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
   const [rate, setRate] = usePref(voice.rate)
   const [language, setLanguage] = usePref(voice.language)
   const languages = useMemo(() => voice.languageOptions(window.codync.speech.locales()), [])
-  const provider = voice.isVoiceProvider(engine) ? engine : null
+  const provider = voice.isVoiceProvider(engine) && voice.isCallProvider(engine) ? engine : null
   const [dictationEngine] = usePref(voice.dictationEngine)
   /** Dictation on another provider than calls still needs that provider's key and speech-to-text model. */
-  const dictationProvider = voice.isVoiceProvider(dictationEngine) && dictationEngine !== provider ? dictationEngine : null
+  const dictationProvider = voice.isVoiceProvider(dictationEngine) && voice.canDictate(dictationEngine) && dictationEngine !== provider
+    ? dictationEngine
+    : null
   const [mode, setMode] = usePref(voice.mode(provider ?? 'openai'))
   const [speechOutput, setSpeechOutput] = usePref(voice.speechOutput)
   // Closing hands a running call to a different engine picked here.
@@ -66,8 +68,14 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
                         ]
                       : []),
                     ...(voice.isSpeechMode(provider) ? [
-                      <ValueRow key="speech-output" label="Speech output" detail="NeuTTS runs on your computer with its prepared Hermes model. Recognition still uses your selected speech provider.">
-                        <ChoicePicker selection={speechOutput} options={[{ id: 'provider', label: 'Provider voice' }, { id: 'neutts', label: 'NeuTTS local · Jo' }]} onChange={setSpeechOutput} />
+                      <ValueRow key="speech-output" label="Speech output" detail={speechOutput === 'xai'
+                        ? tr('Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.')
+                        : 'NeuTTS runs on your computer with its prepared Hermes model. Recognition still uses your selected speech provider.'}>
+                        <ChoicePicker selection={speechOutput} options={([
+                          { id: 'provider', label: 'Provider voice' },
+                          { id: 'xai', label: tr('xAI voice') },
+                          { id: 'neutts', label: 'NeuTTS local · Jo' },
+                        ] as { id: voice.SpeechOutput; label: string }[])} onChange={setSpeechOutput} />
                       </ValueRow>,
                       <PauseRow key="pause" />,
                     ] : []),
@@ -88,6 +96,9 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
             ]}
           </CardSection>
           {provider ? <ProviderVoiceSettings key={provider} provider={provider} /> : null}
+          {provider && voice.isSpeechMode(provider) && speechOutput === 'xai'
+            ? <ProviderVoiceSettings key="speech-xai" provider="xai" speechOnly />
+            : null}
           {dictationProvider ? <ProviderVoiceSettings key={`dictation-${dictationProvider}`} provider={dictationProvider} dictationOnly /> : null}
         </CardForm>
       </div>
@@ -128,8 +139,8 @@ function playSample(clip: { audio: string; format: string }) {
   void audio.play().catch(done)
 }
 
-/** One provider: the key the computer keeps, models, voice and this month's minutes. `dictationOnly` keeps the key and speech-to-text model. */
-function ProviderVoiceSettings({ provider, dictationOnly = false }: { provider: VoiceProvider; dictationOnly?: boolean }) {
+/** One provider: the key the computer keeps, models, voice and this month's minutes. `dictationOnly` keeps the key and speech-to-text model; `speechOnly` keeps them and the spoken-replies model (xAI). */
+function ProviderVoiceSettings({ provider, dictationOnly = false, speechOnly = false }: { provider: VoiceProvider; dictationOnly?: boolean; speechOnly?: boolean }) {
   const tr = useTr()
   const store = useStore()
   const info = voice.voiceInfo[provider]
@@ -150,14 +161,14 @@ function ProviderVoiceSettings({ provider, dictationOnly = false }: { provider: 
   const busyRef = useRef(false)
   const speechMode = voice.isSpeechMode(provider)
   /** Speech mode and dictation with this provider both use its speech-to-text model. */
-  const transcribes = dictationOnly || speechMode || dictationEngine === provider
+  const transcribes = !speechOnly && (dictationOnly || speechMode || dictationEngine === provider)
   const hasKey = saved === true
   const canEditKey = store.client?.transport instanceof LoopbackTransport
   const notConnected = { ok: false, text: tr('Not connected to {name}.').replaceAll('{name}', () => store.hostName) }
 
   const loadModels = async (client: HostClient) => {
     let list: VoiceModels
-    if (!voice.supportsRealtime(provider)) {
+    if (provider === 'elevenlabs') {
       // ElevenLabs' voices belong to the account: premade, cloned and saved.
       try {
         const own = (await voice.voiceVoices(client, provider)).voices
@@ -264,6 +275,7 @@ function ProviderVoiceSettings({ provider, dictationOnly = false }: { provider: 
   let footer: string | null = null
   if (!hasKey) footer = `Add a key to choose from ${info.name}'s models.`
   else if (dictationOnly) footer = tr('For dictation in the message box.')
+  else if (speechOnly) footer = tr('Read replies aloud with your own xAI key.')
   const keyArea = (
     <VStack key="key" gap={8}>
       {hasKey && !replacing ? (

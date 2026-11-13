@@ -16,6 +16,8 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - 應用程式現在會說明金鑰要到哪裡取得：逐步指引、前往該應用程式自己頁面的按鈕，表單欄位也改用白話說明。
 - 需要登入的應用程式排在前面，需要金鑰的列會先標明，再讓你打開。
 - 呼叫連接器時如果夾帶金鑰或密碼，這次呼叫底下會標示「帶有憑證」，展開後列出金鑰在哪個參數，不必把值抄出來。
+- 語音設定新增 xAI 與 Groq：xAI 用你自己的金鑰在「語音輸出」朗讀回覆，Groq 則在麥克風旁提供 Whisper 聽寫；兩者的金鑰都只留在電腦上。
+- 語音請求出錯時，電腦會在 logs/voice.log 記下原因、提供者、模型與回合，並移除任何金鑰。
 
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
@@ -25,6 +27,8 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - Apps now say where to get the key they need: steps, a button to the app’s own page, and the form’s boxes in plain words.
 - Apps you sign in to are listed first, and a row that needs a key says so before you open it.
 - A connector call that carries a key or password says it carries a credential, and unfolding it lists which argument holds it, without copying the value.
+- Voice settings add xAI and Groq: xAI reads replies aloud with your own key under Speech output, and Groq adds Whisper dictation beside the microphone; both keys stay on the computer.
+- When a voice request fails, the computer writes the reason, provider, model and turn to logs/voice.log, with any keys removed.
 
 ## 2.44.1
 ### zh-Hant

@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 
 const SLOT: &str = "voice";
 const ELEVENLABS: &str = "https://api.elevenlabs.io";
+const XAI: &str = "https://api.x.ai";
+/// Groq's OpenAI-compatible API: the route is `/openai/v1/audio/transcriptions`.
+const GROQ: &str = "https://api.groq.com/openai";
 
 #[derive(Default, Serialize, Deserialize)]
 struct Keys {
@@ -22,6 +25,10 @@ struct Keys {
     gemini: String,
     #[serde(default)]
     elevenlabs: String,
+    #[serde(default)]
+    xai: String,
+    #[serde(default)]
+    groq: String,
 }
 
 impl Keys {
@@ -30,6 +37,8 @@ impl Keys {
             Provider::OpenAi => &self.openai,
             Provider::Gemini => &self.gemini,
             Provider::ElevenLabs => &self.elevenlabs,
+            Provider::Xai => &self.xai,
+            Provider::Groq => &self.groq,
         }
     }
 
@@ -38,6 +47,8 @@ impl Keys {
             Provider::OpenAi => self.openai = key,
             Provider::Gemini => self.gemini = key,
             Provider::ElevenLabs => self.elevenlabs = key,
+            Provider::Xai => self.xai = key,
+            Provider::Groq => self.groq = key,
         }
     }
 }
@@ -60,6 +71,8 @@ impl Provider {
             Self::OpenAi => OPENAI,
             Self::Gemini => GEMINI,
             Self::ElevenLabs => ELEVENLABS,
+            Self::Xai => XAI,
+            Self::Groq => GROQ,
         }
     }
 
@@ -72,7 +85,7 @@ impl Provider {
     /// The keeper's record for this provider's `key`.
     fn record(self, key: &str) -> Record {
         match self {
-            Self::OpenAi => Record::bearer(OPENAI, key),
+            Self::OpenAi | Self::Xai | Self::Groq => Record::bearer(self.base(), key),
             Self::Gemini => Record::google_key(GEMINI, key),
             Self::ElevenLabs => Record::header(ELEVENLABS, "xi-api-key", key.to_owned()),
         }
@@ -129,7 +142,7 @@ impl Access {
         let req = client().request(method, format!("{}{path}", self.base));
         match (&self.key, p) {
             (None, _) => req,
-            (Some(key), Provider::OpenAi) => req.bearer_auth(key),
+            (Some(key), Provider::OpenAi | Provider::Xai | Provider::Groq) => req.bearer_auth(key),
             (Some(key), Provider::Gemini) => req.header("x-goog-api-key", key),
             (Some(key), Provider::ElevenLabs) => req.header("xi-api-key", key),
         }

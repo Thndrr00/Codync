@@ -35,6 +35,21 @@ impl App {
                 }
             }
             Reply::Computer(reply) => self.computer_reply(&reply, Ok(v)),
+            Reply::VoiceStatus => {
+                for o in &mut self.overlays {
+                    if let Overlay::Voice(s) = o {
+                        s.fill(&v);
+                    }
+                }
+            }
+            Reply::VoiceKeySaved => {
+                // The key form goes away; the sheet behind it shows the new state.
+                if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, super::Submit::VoiceKey { .. }))
+                {
+                    self.overlays.pop();
+                }
+                self.sheet("voiceStatus", json!({}), Reply::VoiceStatus);
+            }
             Reply::McpTools(reply) => self.mcp_tools_reply(&reply, Ok(v)),
             Reply::N8n(reply) => self.n8n_reply(&reply, Ok(v)),
             Reply::Documents(reply) => self.on_document_reply(&reply, &v),
@@ -527,6 +542,20 @@ impl App {
                 }
                 self.flash(&e);
             }
+            Reply::VoiceStatus => {
+                for o in &mut self.overlays {
+                    if let Overlay::Voice(s) = o {
+                        s.error = Some(e.clone());
+                    }
+                }
+            }
+            Reply::VoiceKeySaved => match self.overlays.last_mut() {
+                Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::VoiceKey { .. }) => {
+                    f.saving = false;
+                    f.error = Some(e);
+                }
+                _ => self.flash(&e),
+            },
             _ => self.flash(&e),
         }
     }
