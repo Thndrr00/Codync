@@ -17,7 +17,9 @@ Three catalogues ship with the host, and they are not mixed:
 - **Agents and skills**: `host/src/market/openbot/`, generated from the `nightly-labs/openbot` marketplace
   by `tools/import-openbot-catalog.mjs`: 27 agents, 92 skills (including the pstack pack) and the apps
   CopilotKit's catalogue doesn't cover. Skills install from an embedded archive, so browsing works
-  without a network; attributions and licences are in `host/src/market/openbot/NOTICE.md`.
+  without a network; attributions and licences are in `host/src/market/openbot/NOTICE.md`. An app
+  comes over only with its vendor's own published entry: its MCP endpoint, sign-in kind, prompts and
+  limitations, as GitLab's, Omnisend's and Higgsfield's did.
 - **Apps**: `host/src/market/copilotkit/`, every connector of the `CopilotKit/OpenBot` catalogue,
   regenerated with `tools/import-copilotkit-connectors.mjs` from `server/src/plugins/catalogue.ts` of
   that checkout (MIT, see its `NOTICE.md`). The entries keep upstream's keys, titles, vendors, hosts and
