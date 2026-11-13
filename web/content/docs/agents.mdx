@@ -6,11 +6,12 @@ If an agent's login stops working (for example, signing in somewhere else revoke
 
 ## Local models (Ollama)
 
-Codync can use a local [Ollama](https://ollama.com) for embeddings, and Diagnostics › **Local models**
-shows whether one is running and which models it has. Semantic workspace search uses
-`nomic-embed-text` (or `CODYNC_EMBED_MODEL`) to rerank results; set `CODYNC_OLLAMA_URL` to point at
-another install. The chat itself still runs through an agent harness: choosing a local model for the
-conversation is not available yet.
+Codync can use a local [Ollama](https://ollama.com) for embeddings and for a whole bot. Diagnostics ›
+**Local models** shows whether Ollama is running and lists its models; pick one and **Create a local bot**
+(or use a custom bot whose command is `<path to codync-host> local-agent --model <name>`). That bot answers
+with the model on your computer, without a provider account; it has no tools. Semantic workspace search
+uses `nomic-embed-text` (or `CODYNC_EMBED_MODEL`) to rerank results. Set `CODYNC_OLLAMA_URL` to point at
+another install. Local voice is not available yet.
 
 ## Usage limits
 

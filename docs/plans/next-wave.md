@@ -8,7 +8,7 @@ is bigger than one release.
 | Decisions inbox (approvals, unread threads, failed runs) | done (desktop) |
 | Team templates with seeded roles and hierarchy | done |
 | SBOM for every release | done |
-| Local models (chat, embeddings, voice) | embeddings status + semantic rerank done; local chat next |
+| Local models (chat, embeddings, voice) | chat via `local-agent` and embeddings done; local voice next |
 | Workspace search with citations | done (lexical + optional semantic rerank) |
 | Team meeting: minutes (`/minutes`) done; text roundtable done, voice next |
 | Standup in a team chat (`/standup`) | done |
@@ -192,8 +192,9 @@ Goal: a bot can run without an account.
 - **Semantic workspace search**: the `semantic_search` tool runs the lexical pass and reranks the
   matches with Ollama embeddings (`CODYNC_EMBED_MODEL`, default `nomic-embed-text`), returning a
   `score` per match. Without Ollama it returns the lexical order with `semantic: false`.
-- **Local chat models** are still next: the chat runs through an ACP harness, and a local one needs its
-  own agent.
+- **Local chat models**: `codync-host local-agent --model <name>` is a small ACP agent that answers
+  through Ollama (`/api/chat`); a custom bot with that command (or **Create a local bot** in
+  Diagnostics › Local models) runs it without tools or a provider account.
 - **Evals in CI**: `.github/workflows/evals.yml` builds the host, seeds a Claude bot with the
   `ANTHROPIC_API_KEY` secret and runs `evals/*.json` through `tools/eval-bots.mjs`; without the secret it
   skips the model run.

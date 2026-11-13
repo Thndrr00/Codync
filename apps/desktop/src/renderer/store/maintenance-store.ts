@@ -175,6 +175,14 @@ export class MaintenanceStore extends Observable {
     })
   }
 
+  /** Creates a bot that runs a local Ollama model through codync-host's ACP shim. */
+  async createLocalBot(model: string) {
+    await this.run(async (c) => {
+      const { bot } = await c.call<{ bot: { name: string } }>('createLocalBot', { model }, 60_000)
+      this.notice = `Created ${bot.name}.`
+    })
+  }
+
   /** What a local Ollama offers, for semantic search and the models page. */
   async loadLocalModels() {
     await this.run(async (c) => {

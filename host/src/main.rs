@@ -32,6 +32,7 @@ mod hub;
 mod icons;
 mod import;
 mod import_cli;
+mod local_agent;
 mod local_api;
 mod local_models;
 mod market;
@@ -256,6 +257,13 @@ enum Sub {
     /// Add Codync's own Node.js, for agents that run on it (an agent's setup step).
     #[command(hide = true)]
     Node,
+    /// A local Ollama model as an ACP agent (stdio), for a custom bot command.
+    #[command(hide = true)]
+    LocalAgent {
+        /// Model name as Ollama lists it (default from CODYNC_LOCAL_MODEL, else llama3.2).
+        #[arg(long)]
+        model: Option<String>,
+    },
     /// Built-in MCP servers that bots are started with (stdio).
     #[command(hide = true)]
     Mcp {
@@ -549,6 +557,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Sub::Node => agent::node::add().await,
+        Sub::LocalAgent { model } => local_agent::run(model).await,
         Sub::Npm { args } => std::process::exit(agent::node::npm(&args).await?),
         Sub::Statusline { port, wrapped } => {
             statusline(port, wrapped.join(" ")).await;

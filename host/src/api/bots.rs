@@ -807,6 +807,37 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "doctor" => crate::doctor::report(hub)?,
         // What a local Ollama offers, if it is running (semantic search uses its embeddings).
         "localModels" => crate::local_models::status().await?,
+        // A bot on a local Ollama model, as a custom ACP command (no provider account, no tools).
+        "createLocalBot" => {
+            let model = str_arg(&b, "model")?.trim();
+            if model.is_empty() {
+                bail!("pick a model");
+            }
+            let exe = std::env::current_exe().context("couldn't find codync-host")?;
+            let command = format!(
+                "{} local-agent --model {}",
+                crate::shell::quote(&exe.to_string_lossy()),
+                crate::shell::quote(model)
+            );
+            let cwd = crate::service::data_dir().join("local-workspace");
+            std::fs::create_dir_all(&cwd)?;
+            let cfg = crate::agent::new_bot::with_defaults(
+                hub,
+                json!({
+                    "name": format!("Local ({model})"),
+                    "description": format!("Runs {model} on this computer through Ollama. No provider account and no tools."),
+                    "backend": "custom",
+                    "command": command,
+                    "cwd": cwd.to_string_lossy(),
+                    "permission": "auto",
+                    "connectors": [],
+                    "skills": [],
+                }),
+            )
+            .await?;
+            let bot = hub.create_bot(cfg)?;
+            json!({"bot": bot})
+        }
         "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {
             hub.send_cmd(str_arg(&b, "botId")?, Cmd::SwitchBack)?;
