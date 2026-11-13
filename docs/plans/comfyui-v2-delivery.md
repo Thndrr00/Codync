@@ -1,6 +1,6 @@
 # ComfyUI: plantillas, modelos y resultados (entrega V2)
 
-Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, modelos en `userData/comfy`, cola de un trabajo, puente `comfyui` y adjuntos del chat). No se rehizo nada de esa base: se amplió. El trabajo quedó en la rama `deska/PROMPT-V2---SOBRE-LO-QUE-YA-EST----PLANTILLAS--MODELOS-Y-RE--5db46a30` (commits `7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed` y el de este reporte), empujada a `origin`.
+Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, modelos en `userData/comfy`, cola de un trabajo, puente `comfyui` y adjuntos del chat). No se rehizo nada de esa base: se amplió. El trabajo quedó en la rama `deska/PROMPT-V2---SOBRE-LO-QUE-YA-EST----PLANTILLAS--MODELOS-Y-RE--5db46a30` (commits `7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`, `daa5b533` y el de este reporte), empujada a `origin`.
 
 > **Segunda pasada.** Sobre la entrega inicial se añadieron el reproductor de vídeo y audio en el chat, el catálogo de las quince familias del desafío Higgsfield con sus repositorios y licencias, la evaluación del MCP oficial con su arnés de prueba, el servidor falso de `/ws` y el evento `comfy_template_run`.
 >
@@ -111,7 +111,7 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 - **T9 · No bloquear**: `comfy_run_template` espera hasta 5 minutos (como `run_workflow`) para poder adjuntar dentro del turno; con `wait: false` encola y vuelve. El adjunto fuera de turno no existe en el host, así que el resultado se entrega cuando el bot vuelve a consultar.
 - **Cola**: sigue habiendo un trabajo a la vez; el historial no se persiste en SQLite (vive en el proceso del host).
 - **Versión**: no se pudo ejecutar `tools/bump-version.py`: el `project.pbxproj` del fork está en 2.39.0 y `project.yml` en 2.45.1, y regenerarlo necesita `xcodegen` (macOS), que no existe aquí. Editar el pbxproj a mano está prohibido por las reglas del repositorio.
-- **Commits por ficha**: van cuatro commits funcionales (`7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`) más el del reporte, no uno por ficha. Los archivos se cruzan entre fichas (`comfy_job.rs`, `api/host.rs`, `lifecycle.rs`, la tarjeta) y separarlos por hunks habría dejado commits que no se sostienen.
+- **Commits por ficha**: van cinco commits funcionales (`7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`, `daa5b533`) más el del reporte, no uno por ficha. Los archivos se cruzan entre fichas (`comfy_job.rs`, `api/host.rs`, `lifecycle.rs`, la tarjeta) y separarlos por hunks habría dejado commits que no se sostienen.
 
 ## Cómo comprobarlo cuando se pueda compilar
 
