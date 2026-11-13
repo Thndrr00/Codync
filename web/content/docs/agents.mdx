@@ -14,6 +14,11 @@ Each limit here shows how much of it is already used, such as **62% used**, and 
 
 Codex needs its CLI installed and signed in on the computer. The host reads current account limits without starting a conversation or using a model. If the login stops working or the current limits are unavailable, old session-file readings are not shown. Sign in again from **Extensions** or run `codex login --device-auth` on that computer.
 
+Your own daily token limits, in **Settings › System diagnostics › Token budgets**, also gate the chats: when a bot's
+limit (or the limit for all bots together) is reached, a message still lands in the chat but its turn waits
+until tomorrow, and the chat says so once that day. Raise the limit to let the next message through. Routine
+runs follow each routine's own choice: wait for the reset or skip.
+
 ## Agents Codync knows by name
 
 For these agents, Codync knows the command it looks for, how to install it and how to sign in. The agent must be installed on the computer before a bot can use it.

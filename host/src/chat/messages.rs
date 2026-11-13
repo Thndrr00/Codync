@@ -23,6 +23,10 @@ pub fn post_in_lane(hub: &Arc<Hub>, cfg: &BotConfig, lane: Lane, mut data: Value
     if let Err(error) = hub.mark_read(&cfg.id) {
         tracing::warn!(%error, bot = %cfg.id, "couldn't mark bot read after send");
     }
+    // Over today's token limit the message stays in the chat and the turn waits for the reset.
+    if crate::chat::budget_gate::blocks(hub, &cfg.id) {
+        return Ok(e);
+    }
     if cfg.is_group() {
         // Each member reads it in its room prompt (`chat::group`).
         crate::chat::group::start(hub, cfg, lane);

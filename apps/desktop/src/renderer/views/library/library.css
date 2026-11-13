@@ -178,3 +178,29 @@
 .artifact-tab.active > button:first-child { color: var(--text); }
 .artifact-tab-close { display: flex; padding: 4px 8px 4px 4px; color: var(--tertiary); }
 .artifact-tab-close:hover { color: var(--text); }
+
+/* Presentation: the artifact fills the window, and a small button (or Esc) brings Codync back. */
+.artifact-layer.presenting .artifact-body {
+  inset: 0;
+}
+.artifact-present-exit {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-s);
+  cursor: pointer;
+  opacity: 0.5;
+}
+.artifact-present-exit:hover {
+  opacity: 1;
+}

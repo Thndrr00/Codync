@@ -19,26 +19,44 @@ export function ArtifactView({ botId, artifactId, close }: { botId: string; arti
   const tr = useTr()
   const store = useStore()
   const [error, setError] = useState<string | null>(null)
+  // Presentation hides Codync's chrome and gives the artifact the whole window; Esc brings it back.
+  const [presenting, setPresenting] = useState(false)
   const artifact = store.artifacts.byId.get(artifactId)
   const html = store.artifacts.html.get(artifactId)
   const failed = store.artifacts.failed.get(artifactId)
   const newest = artifact?.updatedAt
   useEffect(() => store.artifacts.load(store.client, botId, artifactId), [store, store.client, botId, artifactId, newest])
+  useEffect(() => {
+    if (!presenting) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPresenting(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [presenting])
   useScreenViewed('artifact', artifactId)
   return (
-    <div className="artifact-layer fade-in">
-      <div className="top-chrome">
-        <div className="top-chrome-row">
-          <MacChatButton className="ringed" title={tr('Close artifact')} icon="xmark" direction={[-1, 0]} onClick={close} />
-          <Spacer />
-          {artifact ? (
-            <DropdownMenu className="mac-chat-button ringed artifact-share" title={tr('Share artifact')} items={() => artifactShareItems(store, artifact, setError)}>
-              <Icon name="square.and.arrow.up" size={16} weight="medium" />
-            </DropdownMenu>
-          ) : null}
+    <div className={presenting ? 'artifact-layer fade-in presenting' : 'artifact-layer fade-in'}>
+      {presenting ? null : (
+        <div className="top-chrome">
+          <div className="top-chrome-row">
+            <MacChatButton className="ringed" title={tr('Close artifact')} icon="xmark" direction={[-1, 0]} onClick={close} />
+            <Spacer />
+            <MacChatButton className="ringed" title={tr('Present')} icon="arrow.down.right.and.arrow.up.left" onClick={() => setPresenting(true)} />
+            {artifact ? (
+              <DropdownMenu className="mac-chat-button ringed artifact-share" title={tr('Share artifact')} items={() => artifactShareItems(store, artifact, setError)}>
+                <Icon name="square.and.arrow.up" size={16} weight="medium" />
+              </DropdownMenu>
+            ) : null}
+          </div>
+          {artifact ? <ArtifactTitle artifact={artifact} onError={setError} /> : null}
         </div>
-        {artifact ? <ArtifactTitle artifact={artifact} onError={setError} /> : null}
-      </div>
+      )}
+      {presenting ? (
+        <button type="button" className="press artifact-present-exit" title={tr('Exit presentation')} onClick={() => setPresenting(false)}>
+          <Icon name="xmark" size={15} weight="medium" />
+        </button>
+      ) : null}
       <div className="artifact-body">
         {html ? (
           <ArtifactFrame id={artifactId} html={html} title={artifact?.title ?? ''} />
@@ -53,12 +71,14 @@ export function ArtifactView({ botId, artifactId, close }: { botId: string; arti
           </div>
         )}
       </div>
-      <div className="composer-dock">
-        {error ? <Text as="div" size="caption" tone="danger" role="alert" className="artifact-error">{error}</Text> : null}
-        {/* A message here replies to the artifact's card, so its bot knows which artifact (`chat::replies`); an artifact
-            published without one (a routine's) has nothing to reply to. */}
-        {artifact?.entryId ? <Composer botId={botId} about={artifact} /> : null}
-      </div>
+      {presenting ? null : (
+        <div className="composer-dock">
+          {error ? <Text as="div" size="caption" tone="danger" role="alert" className="artifact-error">{error}</Text> : null}
+          {/* A message here replies to the artifact's card, so its bot knows which artifact (`chat::replies`); an artifact
+              published without one (a routine's) has nothing to reply to. */}
+          {artifact?.entryId ? <Composer botId={botId} about={artifact} /> : null}
+        </div>
+      )}
     </div>
   )
 }

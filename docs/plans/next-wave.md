@@ -23,6 +23,7 @@ is bigger than one release.
 | Desktop global shortcut done; agent dock next |
 | Global search across chats and documents | done |
 | Workspace export (bots + documents) | done |
+| Full workspace export (routines, scheduled messages, recent chats) | done |
 | Scheduled messages | done (desktop) |
 | Notification rules (kinds and quiet hours) | done (desktop; phone settings next) |
 | Tool rate limits and a read-only tool cache | done |
@@ -30,6 +31,7 @@ is bigger than one release.
 | Unified calendar (routines + scheduled messages) | done (desktop) |
 | Compare models in Diagnostics | done (desktop) |
 | Density preference | done (desktop) |
+| Presentation mode for artifacts | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -163,6 +165,8 @@ Goal: a bot can run without an account.
   chats and nothing is remembered.
 - Settings › General › Density offers Comfortable or Compact, which tightens chat rows, roster rows and
   settings rows without changing the text size.
+- An artifact has a Present button: it hides Codync's chrome and gives the artifact the whole window;
+  Esc (or the small close button) brings the chat back round it.
 
 ## Tool guards — done
 
@@ -173,13 +177,17 @@ Goal: a bot can run without an account.
   `read_workspace_file`) are answered from memory for 20 seconds, capped at 64 KiB and 256 entries.
   Nothing that writes is cached. Both live in memory and vanish with the host.
 
-## Policies, retention, budgets — retention done; policies and the budget gate next
+## Policies, retention, budgets — retention and the user-turn gate done; policies and reservations next
 
-- Policy: per-role and per-tool allow/deny on top of approval rules (which folder, which host, which MCP).
 - Retention: done — `retentionPreview` and `pruneRetention` count and delete messages older than N days,
   and Diagnostics › Message retention previews before deleting.
-- Budget: reserve before a turn, release on failure, block with a clear state (today routines pause at the
-  limit; user turns never do).
+- Budget: done for user turns — `chat::budget_gate` posts the message, does not start the turn, and leaves one
+  notice that day ("today's token limit is reached"); raising the limit lets the next message through.
+  Routines already pause at the limit with the routine's `limitPolicy`. Reservations before the turn (so a
+  half-finished turn is counted too) are still next.
+- Policy: per-role and per-tool allow/deny exists as approval rules plus the four action classes
+  (`action_rules`), tested in the rule editor (`testApprovalRule`); a role preset seeds them. A per-role
+  matrix shown as one screen is next.
 - Acceptance: a role cannot run shell outside its folder; retention previews and then deletes only what it
   showed.
 

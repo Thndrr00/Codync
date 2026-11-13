@@ -551,10 +551,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
             crate::bundle::export(&[row.config])?
         }
-        // Everything a person needs to keep or move: bots, their documents and routines, in one file.
+        // Everything a person needs to keep or move: bots, their documents, routines, scheduled messages
+        // and the recent conversation, in one file.
         "exportWorkspace" => {
             let mut bots = Vec::new();
             let mut documents = Vec::new();
+            let mut routines = Vec::new();
+            let mut chats = Vec::new();
+            let mut scheduled = Vec::new();
             for row in hub.store.bots()?.into_iter().filter(|r| !r.deleted) {
                 let bot = row.config;
                 let page = hub.store.documents(&bot.id, "", None, 100)?;
@@ -566,6 +570,20 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                         }));
                     }
                 }
+                routines.push(json!({"botId": bot.id, "routines": hub.routines.list(&bot.id, |_| false)?}));
+                scheduled.extend(hub.store.scheduled_for_bot(&bot.id)?.into_iter().map(|message| json!({
+                    "botId": message.bot_id, "text": message.text, "sendAt": message.send_at,
+                })));
+                for entry in hub.store.history(&bot.id, i64::MAX, 300)? {
+                    if !matches!(entry.kind.as_str(), "user" | "agent" | "notice") {
+                        continue;
+                    }
+                    chats.push(json!({
+                        "botId": bot.id, "kind": entry.kind,
+                        "text": crate::store::message_text(&entry.data),
+                        "at": entry.created_at,
+                    }));
+                }
                 bots.push(bot);
             }
             json!({
@@ -573,6 +591,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 "exportedAt": crate::store::now_ms(),
                 "bots": crate::bundle::export(&bots)?,
                 "documents": documents,
+                "routines": routines,
+                "scheduled": scheduled,
+                "chats": chats,
             })
         }
         "retireDormantSkills" => {

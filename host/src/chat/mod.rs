@@ -3,6 +3,7 @@
 
 pub mod apps;
 pub mod artifacts;
+pub mod budget_gate;
 pub mod calls;
 pub mod context;
 pub mod decider;
