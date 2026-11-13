@@ -12,7 +12,7 @@ is bigger than one release.
 | Workspace search with citations | done (lexical) |
 | Team meeting: minutes (`/minutes`) done; voice roundtable next |
 | Standup in a team chat (`/standup`) | done |
-| Task board that moves itself | next |
+| Task board that moves itself | done (desktop) |
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | A2UI (with choices and forms) and AG-UI server done |
@@ -119,12 +119,13 @@ Goal: a bot can run without an account.
 - Acceptance: a 4-bot meeting produces minutes with owners and actions, without any bot answering in its
   own chat.
 
-## Standup — done; the board is next
+## Standup — done; the board follows routines
 
 - Standup: `/standup` (or `/daily`, `/parte`) in a smart-mode team chat makes every member report what
   it finished, what is next and what is blocked, in the group chat. It runs when asked, not on a schedule.
-- Board: tasks attached to the group with state driven by the run (`assigned`, `working`, `waiting`,
-  `done`), rendered as columns on the group page and as cards on the canvas.
+- Board: the standalone board is done (four columns, one card per task, drag and menu moves, a routine
+  per card that moves it on its next run). Attaching a card to a group's room turn, and rendering the
+  board on the group page and canvas, is still next.
 - Acceptance: assigning "review the PR" moves the card as the bot works and ends in `done` with the result.
 
 ## Handoff — done
