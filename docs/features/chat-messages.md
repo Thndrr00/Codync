@@ -101,7 +101,10 @@ scroll inside it past 280 pt and follow new ones until the reader scrolls up, an
 folded; the pill leaves with the turn. The host sets `bookkeeping` on every tool entry: `true` for
 the bot's own bookkeeping (a `send_message` call, a `memory` MCP call, or a call naming a file in a
 memory folder the bot sees), which the steps leave out, as the working line does. A host older than
-2.25.0 sets none, so its tool calls stay out of the steps too. A turn with no steps yet unfolds to
+2.25.0 sets none, so its tool calls stay out of the steps too. A call whose arguments carry a
+credential (`caution`: a category and a structural path, never the value) says so under its title,
+and unfolding it lists the paths, or says the arguments couldn't be checked; it reads the same in
+Full conversation. A turn with no steps yet unfolds to
 **Nothing yet.**: some agents send no thinking text, and Claude's arrives only as its thinking ends.
 Claude Code leaves an SDK session's thinking text out unless asked, so Claude bots start with
 summaries shown (`--thinking-display summarized`, through `claudeCode.options.extraArgs` in

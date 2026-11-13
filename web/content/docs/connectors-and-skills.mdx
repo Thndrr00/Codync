@@ -94,6 +94,8 @@ The cards themselves hold no credentials. You can answer them in the iPhone app,
 - Bots reach connectors through Codync on the computer, which adds the saved values when the connector runs, so the values aren't handed to the agent. This isn't a sandbox: programs running as your user on that computer, including the agent's own shell commands, aren't kept away from them.
 - Credentials don't sync between computers. A copy of Codync's data moved to another machine can't decrypt them, so back up the system keychain along with it.
 
+A call that carries a key you pasted into the chat is marked **Carries a credential** under its name, in the working steps and in **Full conversation**; unfold it to see which argument holds it. Only the field's place is shown, never the value. It is a hint, not a guarantee: a key under a field name Codync doesn't recognize, or hidden inside a longer text, isn't marked, and calls that stay on the computer (reads and edits) aren't checked.
+
 **Extensions → Credentials** shows where values are stored, lets you replace a connection's saved values (they stay hidden), and connects 1Password: paste a service account token and use `op://vault/item/field` references in any credential field. Give that service account access to one dedicated vault only. The 1Password CLI must be installed on the computer.
 
 ## Turn connectors and skills on or off per bot
