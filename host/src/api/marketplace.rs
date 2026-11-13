@@ -198,12 +198,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 serde_json::to_value(market::install_skill(&hub.store, str_arg(&b, "source")?).await?)?
             } else {
                 let text = |k: &str| b[k].as_str().unwrap_or_default();
+                let owner = b["enableFor"].as_str().filter(|bot| !bot.is_empty());
                 serde_json::to_value(market::add_custom_skill(
                     &hub.store,
                     text("name"),
                     text("description"),
                     text("instructions"),
-                    None,
+                    owner,
                 )?)?
             };
             // A skill saved from one chat belongs to that bot until the person turns it on elsewhere.
