@@ -485,6 +485,30 @@ impl Store {
         tx.commit()?;
         Ok(u64::try_from(deleted).unwrap_or(0))
     }
+
+    /// Chats whose text matches `query`, newest first, for the global search.
+    pub fn search_messages(&self, query: &str, limit: u64) -> Result<Vec<Value>> {
+        let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let like = format!("%{escaped}%");
+        let c = self.db.locked();
+        let mut stmt = c.prepare(
+            "SELECT id, bot_id, kind, json_extract(data, '$.text'), created_at, thread_id
+             FROM entries
+             WHERE json_extract(data, '$.text') LIKE ?1 ESCAPE '\\'
+             ORDER BY created_at DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![like, limit], |row| {
+            Ok(serde_json::json!({
+                "entryId": row.get::<_, String>(0)?,
+                "botId": row.get::<_, String>(1)?,
+                "kind": row.get::<_, String>(2)?,
+                "text": row.get::<_, Option<String>>(3)?,
+                "createdAt": row.get::<_, i64>(4)?,
+                "threadId": row.get::<_, Option<String>>(5)?,
+            }))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
 }
 
 #[cfg(test)]

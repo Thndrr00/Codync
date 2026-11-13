@@ -21,6 +21,7 @@ is bigger than one release.
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | next |
 | Desktop global shortcut done; agent dock next |
+| Global search across chats and documents | done |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -52,6 +53,13 @@ hierarchy in the install sheet.
 `tools/sbom.mjs` writes a CycloneDX 1.5 inventory of the Rust crates (via `cargo metadata`) and the
 desktop npm tree (production dependencies only), deduplicated by purl. Attach it to the release job next
 to the signed installers.
+
+## Global search — done
+
+- Host: `searchAll` finds messages (by their text) and documents (title or body) across every bot,
+  newest first, capped at 50 each.
+- Desktop: the command palette gains an "Everything" mode: two characters and a short pause, results
+  with the bot's face, the kind (message or document) and a snippet; picking one opens that bot.
 
 ## Local models — next
 

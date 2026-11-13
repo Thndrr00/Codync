@@ -35,7 +35,7 @@ import { MarketplaceView } from './marketplace/MarketplaceView'
 import { SignInCodeDialog } from './marketplace/ConnectorSheets'
 import { SettingsView, type SettingsPage } from './settings/SettingsView'
 import { ApprovalSheet } from './settings/ApprovalSheet'
-import { SearchPalette } from './SearchPalette'
+import { SearchPalette, type SearchHit } from './SearchPalette'
 import { AccountWelcomeView, useWelcomeGate } from './AccountWelcomeView'
 import { ComputerAccessView } from './computer-access/ComputerAccessView'
 import { AccessOnboarding } from './computer-access/AccessOnboarding'
@@ -560,7 +560,36 @@ function ChatSplitView() {
         </div>
       ) : null}
 
-      <SearchPalette open={searching} items={visibleRoster} onPick={(ref) => app.select(ref)} onClose={() => setSearching(false)} actions={[
+      <SearchPalette open={searching} items={visibleRoster} onPick={(ref) => app.select(ref)} onClose={() => setSearching(false)} onSearch={async (query): Promise<SearchHit[]> => {
+        const found = await Promise.all(
+          onlineStores.map(async (store) => {
+            const client = await store.ready()
+            const answer = await client.call<{
+              messages: { entryId: string; botId: string; kind: string; text?: string; createdAt: number }[]
+              documents: { id: string; botId: string; title: string; updatedAt: number }[]
+            }>('searchAll', { query, limit: 20 })
+            return [
+              ...answer.messages.map((message): SearchHit => ({
+                computerId: store.computer.id,
+                botId: message.botId,
+                entryId: message.entryId,
+                kind: message.kind,
+                text: (message.text ?? '').slice(0, 180),
+                createdAt: message.createdAt,
+              })),
+              ...answer.documents.map((document): SearchHit => ({
+                computerId: store.computer.id,
+                botId: document.botId,
+                documentId: document.id,
+                kind: 'document',
+                text: document.title,
+                createdAt: document.updatedAt,
+              })),
+            ]
+          }),
+        )
+        return found.flat().sort((a, b) => b.createdAt - a.createdAt).slice(0, 40)
+      }} actions={[
         ...(onlineStores.length ? [
           { id: 'new-bot', title: 'New bot', icon: 'plus', run: () => { setSearching(false); create('bot') } },
           { id: 'new-group', title: 'New group', icon: 'person.2', run: () => { setSearching(false); create('group') } },

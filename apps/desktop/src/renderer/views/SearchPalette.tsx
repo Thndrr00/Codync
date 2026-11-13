@@ -22,21 +22,36 @@ export function matchBots(items: RosterItem[], query: string, filter: RosterFilt
   return items.filter(({ bot }) => matchesRoster(bot, q, filter))
 }
 
+/** One result of the global search: a message or a document. */
+export interface SearchHit {
+  computerId: string
+  botId: string
+  entryId?: string
+  documentId?: string
+  kind: string
+  text: string
+  createdAt: number
+}
+
 /** Grok Bot's bot search: a floating list over the window, arrows/Enter or ⌘1-9 to open a bot. */
-export function SearchPalette({ open, items, onPick, onClose, actions = [] }: { open: boolean; items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions?: SearchAction[] }) {
+export function SearchPalette({ open, items, onPick, onClose, actions = [], onSearch }: { open: boolean; items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions?: SearchAction[]; onSearch?: (query: string) => Promise<SearchHit[]> }) {
   return (
     <Sheet open={open} onClose={onClose} width={640} dismissOnDim>
-      {open ? <PaletteBody items={items} onPick={onPick} onClose={onClose} actions={actions} /> : null}
+      {open ? <PaletteBody items={items} onPick={onPick} onClose={onClose} actions={actions} onSearch={onSearch} /> : null}
     </Sheet>
   )
 }
 
-function PaletteBody({ items, onPick, onClose, actions }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions: SearchAction[] }) {
+function PaletteBody({ items, onPick, onClose, actions, onSearch }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions: SearchAction[]; onSearch?: (query: string) => Promise<SearchHit[]> }) {
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState<'bots' | 'history' | 'actions'>('bots')
+  const [mode, setMode] = useState<'bots' | 'messages' | 'history' | 'actions'>('bots')
   const [filter, setFilter] = useState<RosterFilter>('all')
   const [active, setActive] = useState(0)
+  const [hits, setHits] = useState<SearchHit[]>([])
+  const [searching, setSearching] = useState(false)
   const list = useRef<HTMLDivElement>(null)
+  const searchRef = useRef(onSearch)
+  searchRef.current = onSearch
   const results = matchBots(items, query, filter)
   const pick = (item: RosterItem | undefined) => {
     if (!item) return
@@ -48,6 +63,35 @@ function PaletteBody({ items, onPick, onClose, actions }: { items: RosterItem[];
   useEffect(() => {
     list.current?.children[active]?.scrollIntoView({ block: 'nearest' })
   }, [active])
+  // The global search asks the host after a short pause; two characters are the minimum.
+  useEffect(() => {
+    const search = searchRef.current
+    if (mode !== 'messages' || !search) return
+    const q = query.trim()
+    if (q.length < 2) {
+      setHits([])
+      setSearching(false)
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    const timer = window.setTimeout(() => {
+      void search(q)
+        .then((found) => {
+          if (!cancelled) setHits(found)
+        })
+        .catch(() => {
+          if (!cancelled) setHits([])
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false)
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [query, mode])
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.nativeEvent.isComposing) return
@@ -68,10 +112,43 @@ function PaletteBody({ items, onPick, onClose, actions }: { items: RosterItem[];
   return (
     <div className="palette" onKeyDown={mode === 'bots' ? onKey : undefined}>
       <HStack gap={8} justify="space-between">
-        <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, { id: 'history', label: 'History' }, ...(window.codync.platform === 'win32' ? [{ id: 'actions' as const, label: 'Actions' }] : [])]} onChange={setMode} />
+        <ChoicePicker selection={mode} options={[{ id: 'bots', label: 'Bots' }, ...(onSearch ? [{ id: 'messages' as const, label: 'Everything' }] : []), { id: 'history', label: 'History' }, ...(window.codync.platform === 'win32' ? [{ id: 'actions' as const, label: 'Actions' }] : [])]} onChange={setMode} />
         {mode === 'bots' ? <ChoicePicker selection={filter} options={rosterFilters} onChange={setFilter} /> : null}
       </HStack>
-      {mode === 'actions' ? <SearchActions actions={[{ id: 'history', title: 'Search history', icon: 'magnifyingglass', run: () => setMode('history') }, ...actions]} /> : mode === 'history' ? <RosterHistory items={items} onPick={(item) => onPick(item.ref)} onClose={onClose} /> : <>
+      {mode === 'actions' ? <SearchActions actions={[{ id: 'history', title: 'Search history', icon: 'magnifyingglass', run: () => setMode('history') }, ...actions]} /> : mode === 'history' ? <RosterHistory items={items} onPick={(item) => onPick(item.ref)} onClose={onClose} /> : mode === 'messages' ? <>
+        <div className="palette-field">
+          <Icon name="magnifyingglass" size={15} color="var(--secondary)" />
+          <input autoFocus value={query} placeholder="Search every chat and document" aria-label="Search everything" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <div className="palette-list" role="listbox">
+          {searching ? <div className="palette-empty">Searching…</div> : null}
+          {hits.map((hit) => {
+            const item = items.find((it) => it.ref.botId === hit.botId && it.ref.computerId === hit.computerId)
+            return (
+              <button
+                key={`${hit.computerId}-${hit.botId}-${hit.entryId ?? hit.documentId}`}
+                role="option"
+                aria-selected={false}
+                className="palette-row"
+                onClick={() => {
+                  onPick({ computerId: hit.computerId, botId: hit.botId })
+                  onClose()
+                }}
+              >
+                {item ? <AvatarWithStatus bot={item.bot} members={isGroup(item.bot) ? item.store.members(item.bot) : []} size={32} /> : <Icon name={hit.documentId ? 'doc.text' : 'bubble.left'} size={20} />}
+                <VStack as="span" gap={2} grow>
+                  <Text size="body" tone="text" truncate>{hit.text}</Text>
+                  <Text size="subheadline" tone="secondary" truncate>
+                    {item?.bot.name ?? hit.botId} · {hit.documentId ? 'Document' : 'Message'}
+                  </Text>
+                </VStack>
+              </button>
+            )
+          })}
+          {!searching && query.trim().length >= 2 && hits.length === 0 ? <div className="palette-empty">No matches</div> : null}
+          {query.trim().length < 2 ? <div className="palette-empty">Type at least two characters</div> : null}
+        </div>
+      </> : <>
       <div className="palette-field">
         <Icon name="magnifyingglass" size={15} color="var(--secondary)" />
         <input autoFocus value={query} placeholder="Search" aria-label="Search bots" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />

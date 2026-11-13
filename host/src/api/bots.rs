@@ -427,6 +427,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let cleared = hub.routines.clear_failed(&hub.store, b["botId"].as_str())?;
             json!({"cleared": cleared})
         }
+        "searchAll" => {
+            let query = b["query"].as_str().unwrap_or_default().trim();
+            if query.chars().count() < 2 {
+                return Ok(ControlFlow::Break(json!({"messages": [], "documents": []})));
+            }
+            let limit = b["limit"].as_u64().unwrap_or(20).clamp(1, 50);
+            let messages = hub.store.search_messages(query, limit)?;
+            let documents = hub.store.search_documents(query, limit)?;
+            json!({"messages": messages, "documents": documents})
+        }
         "retentionPreview" => {
             let days = b["days"].as_u64().filter(|d| (1..=3650).contains(d)).context("days must be 1 to 3650")?;
             let cutoff = crate::store::now_ms() - i64::try_from(days).unwrap_or(1) * 86_400_000;

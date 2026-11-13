@@ -139,6 +139,29 @@ impl Store {
         get(&self.db.locked(), id)
     }
 
+    /// Documents whose title or body matches `query`, newest first, for the global search.
+    pub fn search_documents(&self, query: &str, limit: u64) -> Result<Vec<serde_json::Value>> {
+        let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let like = format!("%{escaped}%");
+        let db = self.db.locked();
+        let mut statement = db.prepare(
+            "SELECT id, bot_id, title, substr(body, 1, 240), updated_at
+             FROM documents
+             WHERE deleted = 0 AND (title LIKE ?1 ESCAPE '\\' OR body LIKE ?1 ESCAPE '\\')
+             ORDER BY updated_at DESC LIMIT ?2",
+        )?;
+        let rows = statement.query_map(params![like, limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "botId": row.get::<_, String>(1)?,
+                "title": row.get::<_, String>(2)?,
+                "excerpt": row.get::<_, String>(3)?,
+                "updatedAt": row.get::<_, i64>(4)?,
+            }))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    }
+
     pub fn documents(&self, bot: &str, query: &str, after: Option<&str>, limit: u32) -> Result<DocumentPage> {
         let db = self.db.locked();
         check_bot(&db, bot)?;
