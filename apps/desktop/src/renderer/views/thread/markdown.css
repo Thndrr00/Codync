@@ -8,6 +8,17 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* Code, diffs, commands and file paths keep their own direction in a mirrored (Arabic, Hebrew)
+   window: a line of code never reorders, and it stays aligned to the left edge. */
+.md-code,
+.md-code-text,
+.md-code-span,
+.md-diff,
+.md-diff-line {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
 /* SwiftUI's `.lineSpacing(4 * scale)`: four points between lines on top of the font's own. */
 .md-spaced,
 .md-table,

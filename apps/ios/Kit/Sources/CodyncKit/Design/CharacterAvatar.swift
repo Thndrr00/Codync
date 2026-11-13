@@ -389,12 +389,7 @@ public struct AvatarWithStatus: View {
         BotAvatar(bot: bot, members: members, size: size)
             .overlay(alignment: bot.lead ? .topTrailing : .bottomTrailing) {
                 if bot.needsInput {
-                    Image(systemName: "exclamationmark")
-                        .font(.system(size: size * 0.2, weight: .black))
-                        .foregroundStyle(.white)
-                        .frame(width: size * 0.36, height: size * 0.36)
-                        .background(Palette.warning, in: Circle())
-                        .overlay(Circle().stroke(Palette.background, lineWidth: 2))
+                    FeltBall(size: size * 0.36)
                 } else if bot.unread > 0 {
                     Circle()
                         .fill(Palette.accentFill)

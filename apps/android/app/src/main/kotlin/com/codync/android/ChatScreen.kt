@@ -112,7 +112,8 @@ import com.kyant.shapes.RoundedRectangle
     // The main chat ignores an open thread: it stays put underneath.
     val chatState = state.copy(thread = null, trace = false)
     DisposableEffect(Unit) { onDispose { store.stopReading() } }
-    GlassStage(Modifier.fillMaxSize().background(bot.chatColor?.let { Color(android.graphics.Color.parseColor(it)).copy(alpha = 0.1f).compositeOver(Palette.background) } ?: Palette.background), chrome = {
+    val chatGround = Palette.chatBackground ?: Palette.background
+    GlassStage(Modifier.fillMaxSize().background(bot.chatColor?.let { Color(android.graphics.Color.parseColor(it)).copy(alpha = 0.1f).compositeOver(chatGround) } ?: chatGround), chrome = {
         // Down to just above the header's bottom; the bottom one stops under Jump to latest.
         ScrollEdge(Edge.Top, top + 84.dp)
         ScrollEdge(Edge.Bottom, with(density) { composerHeight.toDp() } + 4.dp, Modifier.align(Alignment.BottomCenter))

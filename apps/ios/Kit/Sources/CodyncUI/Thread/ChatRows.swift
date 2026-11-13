@@ -132,6 +132,9 @@ struct UserBubble: View {
     /// Starts a thread branched from this message; nil in a thread.
     var branch: (() -> Void)?
     @Environment(BotStore.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+    /// The chat colour of this theme; reading it here redraws the bubble when Settings changes it.
+    @AppStorage(ChatAppearance.colourKey) private var storedChatColour = ""
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -158,7 +161,7 @@ struct UserBubble: View {
             }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(ChatAppearance.userBubble(dark: colorScheme == .dark), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .contextActions(reactions: model.reactionPick(entry)) {
                     var items = [MenuItem("Copy", icon: "square.on.square") { Pasteboard.copy(entry.data.text) }]
                     if let reply { items.append(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply)) }

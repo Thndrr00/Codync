@@ -73,9 +73,11 @@ pub enum Action {
     Keys,
     Voice,
     Appearance(super::super::appearance::Appearance),
+    ChatColour,
+    ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 28] = [
+pub const ACTIONS: [(&str, &str, Action); 30] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -100,6 +102,8 @@ pub const ACTIONS: [(&str, &str, Action); 28] = [
     ("Appearance: System", "", Action::Appearance(super::super::appearance::Appearance::System)),
     ("Appearance: Light", "", Action::Appearance(super::super::appearance::Appearance::Light)),
     ("Appearance: Dark", "", Action::Appearance(super::super::appearance::Appearance::Dark)),
+    ("Chat colour…", "", Action::ChatColour),
+    ("Chat background…", "", Action::ChatBackground),
     ("App language…", "", Action::Language),
     ("Show thinking details", "", Action::ThinkingDetails),
     ("Voice providers…", "", Action::Voice),

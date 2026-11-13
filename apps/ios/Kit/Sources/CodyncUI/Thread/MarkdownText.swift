@@ -76,8 +76,10 @@ private struct MarkdownBlock: View {
                     .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(Palette.text)
                     .padding(10)
+                    .codeDirection()
             }
             .background(Palette.codeBackground, in: RoundedRectangle(cornerRadius: 8))
+            .codeDirection()
         }
     }
 }

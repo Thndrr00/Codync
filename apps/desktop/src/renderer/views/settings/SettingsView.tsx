@@ -23,6 +23,7 @@ import { NetworkView } from './NetworkView'
 import { errorText, isMac, thisMac } from './parts'
 import { UsageSection } from './UsageLimits'
 import { ThemePaletteSection } from './ThemePaletteSection'
+import { ChatAppearanceSection } from './ChatAppearanceSection'
 import { EnterpriseSection } from './EnterpriseSection'
 import { DiagnosticsButton } from './DiagnosticsButton'
 import { GettingStartedSection } from './GettingStartedSection'
@@ -221,6 +222,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <SwitchRow title="Show agent logos" detail="Marks each bot with its agent's logo when your bots use more than one agent." on={agentLogos} onChange={setAgentLogos} />
       </CardSection>
       <EnterpriseSection />
+      <ChatAppearanceSection />
       <ThemePaletteSection />
       <CardSection
         title="Language"

@@ -81,6 +81,14 @@ impl App {
                 Ok(()) => self.flash(&format!("Appearance: {}", mode.name())),
                 Err(error) => self.flash(&format!("Couldn't save appearance: {error}")),
             },
+            Action::ChatColour => match super::super::appearance::cycle_chat_colour() {
+                Ok(id) => self.flash(&format!("Chat colour: {id}")),
+                Err(error) => self.flash(&format!("Couldn't save the chat colour: {error}")),
+            },
+            Action::ChatBackground => match super::super::appearance::cycle_chat_background() {
+                Ok(id) => self.flash(&format!("Chat background: {id}")),
+                Err(error) => self.flash(&format!("Couldn't save the chat background: {error}")),
+            },
             Action::Language => {
                 let title = super::super::l10n::cycle_language();
                 self.flash(title.as_ref());

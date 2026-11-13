@@ -35,6 +35,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.CodeHighlight
@@ -62,7 +63,8 @@ private const val SYNC_HIGHLIGHT_CHARS = 1_500
     val highlighted = rememberHighlighted(code, language)
     CodeFrame(label = language.trim().ifEmpty { "Code" }, copyText = code, wrap = wrap, onWrap = { wrap = !wrap }) {
         Box(Modifier.fillMaxWidth().then(if (wrap) Modifier else Modifier.horizontalScroll(rememberScrollState()))) {
-            Text(highlighted, Modifier.padding(10.dp), style = Type.chatFootnote.monospaced, color = Palette.text, softWrap = wrap)
+            Text(highlighted, Modifier.padding(10.dp), style = Type.chatFootnote.monospaced.copy(textDirection = CodeTextDirection),
+                color = Palette.text, softWrap = wrap, textAlign = TextAlign.Left)
         }
     }
 }
@@ -82,7 +84,7 @@ private const val SYNC_HIGHLIGHT_CHARS = 1_500
 }
 
 @Composable private fun DiffLine(row: DiffRow) {
-    val style = Type.chatFootnote.monospaced
+    val style = Type.chatFootnote.monospaced.copy(textDirection = CodeTextDirection)
     val (tint, ink) = when (row) {
         is DiffRow.Added -> Palette.added.copy(alpha = 0.14f) to Palette.text
         is DiffRow.Removed -> Palette.removed.copy(alpha = 0.14f) to Palette.text
@@ -111,7 +113,7 @@ private const val SYNC_HIGHLIGHT_CHARS = 1_500
     Column(Modifier.fillMaxWidth().clip(RoundedRectangle(8.dp)).background(Palette.codeBackground)) {
         Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(label, Modifier.weight(1f), style = Type.caption.monospaced, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, Modifier.weight(1f), style = Type.caption.monospaced.copy(textDirection = CodeTextDirection), color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (wrap != null) WrapSwitch(wrap, onWrap)
             CopyButton(copyText)
         }

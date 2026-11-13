@@ -2475,5 +2475,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "エージェントがターン中にスキルの SKILL.md を読むと 1 回として数えます。",
   "RAM": "RAM",
   "CPU": "CPU",
-  "Disk": "ディスク"
+  "Disk": "ディスク",
+  "Chat colour": "チャットの色",
+  "The colour of your own messages, for each theme.": "自分のメッセージの色です。ライトとダークで別々に選べます。",
+  "Chat background": "チャットの背景",
+  "The colour behind the chat, for each theme.": "チャットの背景色です。ライトとダークで別々に選べます。",
+  "Question {current} of {total}": "質問 {current}/{total}",
+  "Summary": "まとめ",
+  "Send answers": "回答を送信",
+  "Answers sent": "回答を送信しました",
+  "All": "すべて",
+  "Images": "画像",
+  "Every image and file from this computer.": "このコンピュータのすべての画像とファイル。",
+  "Nothing in the library yet.": "ライブラリにはまだ何もありません。",
+  "Couldn't load the library.": "ライブラリを読み込めませんでした。",
+  "Pinned": "ピン留め",
+  "Unread": "未読",
+  "Back to the previous question": "前の質問に戻る",
+  "Open the library": "ライブラリを開く"
 }

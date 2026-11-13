@@ -424,5 +424,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "تُحتسب التحميلة عندما يقرأ وكيل ملف SKILL.md لمهارة أثناء دور.",
   "RAM": "الذاكرة",
   "CPU": "المعالج",
-  "Disk": "القرص"
+  "Disk": "القرص",
+  "Chat colour": "لون الدردشة",
+  "The colour of your own messages, for each theme.": "لون رسائلك، لكل سمة.",
+  "Chat background": "خلفية الدردشة",
+  "The colour behind the chat, for each theme.": "اللون خلف الدردشة، لكل سمة.",
+  "Question {current} of {total}": "السؤال {current} من {total}",
+  "Summary": "ملخص",
+  "Send answers": "إرسال الإجابات",
+  "Answers sent": "تم إرسال الإجابات",
+  "All": "الكل",
+  "Images": "الصور",
+  "Every image and file from this computer.": "كل صورة وملف من هذا الحاسوب.",
+  "Nothing in the library yet.": "لا شيء في المكتبة بعد.",
+  "Couldn't load the library.": "تعذّر تحميل المكتبة.",
+  "Pinned": "مثبّت",
+  "Unread": "غير مقروء",
+  "Back to the previous question": "العودة إلى السؤال السابق",
+  "Open the library": "فتح المكتبة"
 }

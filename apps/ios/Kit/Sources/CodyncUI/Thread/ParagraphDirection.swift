@@ -36,4 +36,9 @@ extension View {
     func paragraphDirection(of text: String) -> some View {
         environment(\.layoutDirection, ParagraphDirection.of(text))
     }
+
+    /// Code, diffs, commands and file paths stay left to right, even in a mirrored layout.
+    func codeDirection() -> some View {
+        environment(\.layoutDirection, .leftToRight)
+    }
 }

@@ -2475,5 +2475,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "智能体在一轮中读取技能的 SKILL.md 时计为一次加载。",
   "RAM": "内存",
   "CPU": "处理器",
-  "Disk": "磁盘"
+  "Disk": "磁盘",
+  "Chat colour": "聊天颜色",
+  "The colour of your own messages, for each theme.": "你自己的消息在浅色和深色主题下的颜色。",
+  "Chat background": "聊天背景",
+  "The colour behind the chat, for each theme.": "聊天背后的颜色，浅色和深色主题各一。",
+  "Question {current} of {total}": "第 {current} 个问题，共 {total} 个",
+  "Summary": "摘要",
+  "Send answers": "发送答案",
+  "Answers sent": "答案已发送",
+  "All": "全部",
+  "Images": "图片",
+  "Every image and file from this computer.": "这台电脑上的每一张图片和每一个文件。",
+  "Nothing in the library yet.": "资料库还是空的。",
+  "Couldn't load the library.": "无法加载资料库。",
+  "Pinned": "已置顶",
+  "Unread": "未读",
+  "Back to the previous question": "返回上一个问题",
+  "Open the library": "打开资料库"
 }

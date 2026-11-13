@@ -45,8 +45,17 @@
 .avatar-badge.needs-you {
   display: grid;
   place-items: center;
-  background: var(--warning);
-  color: var(--on-warning);
+  /* The amber felt ball of OpenBot's badges, drawn with gradients: warm at the top left. */
+  background: radial-gradient(circle at 32% 26%, #F5B54E, #C97A0E 78%);
+  color: #FFF4DA;
+}
+.avatar-badge.needs-you .felt-yarn {
+  width: 62%;
+  height: 62%;
+  fill: none;
+  stroke: #FFF4DA;
+  stroke-width: 2.6;
+  stroke-linecap: round;
 }
 .avatar-badge.unread {
   background: var(--accent-fill);

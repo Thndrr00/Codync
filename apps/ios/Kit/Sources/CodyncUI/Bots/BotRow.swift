@@ -107,11 +107,6 @@ public struct UnreadBadge: View {
     public init(count: Int) { self.count = count }
 
     public var body: some View {
-        Text("\(count)")
-            .font(.caption2.bold())
-            .foregroundStyle(Palette.onAccent)
-            .padding(.horizontal, 6)
-            .frame(minWidth: 18, minHeight: 18)
-            .background(Palette.accentFill, in: Capsule())
+        FeltCountBadge(count: count)
     }
 }

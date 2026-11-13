@@ -383,7 +383,10 @@ export function AvatarWithStatus({ bot, members = [], size = 44, agent = null }:
       {bot.lead ? <LeadAgentBadge size={Math.max(12, size * 0.34)} /> : null}
       {needsInput(bot) ? (
         <div className="avatar-badge needs-you" style={{ width: size * 0.36, height: size * 0.36 }}>
-          <Icon name="exclamationmark" size={size * 0.2} weight="black" scaled={false} />
+          <svg className="felt-yarn" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 8C8 2 16 22 20 15" />
+            <path d="M5 17C9 23 15 1 19 7" />
+          </svg>
         </div>
       ) : bot.unread > 0 ? (
         <div className="avatar-badge unread" style={{ width: size * 0.28, height: size * 0.28 }} />

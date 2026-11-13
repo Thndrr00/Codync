@@ -18,7 +18,7 @@ enum class AppLanguage(val stored: String, val title: String) {
     // The menu's order, as on the iPhone: Chinese first, then English and the rest.
     System("system", "Follow system"), Zh("zh", "简体中文"), ZhHant("zh-Hant", "繁體中文"), En("en", "English"),
     Ja("ja", "日本語"), Ko("ko", "한국어"), Fr("fr", "Français"), De("de", "Deutsch"), Es("es", "Español"),
-    PtBr("pt-BR", "Português (Brasil)"), Ru("ru", "Русский"), Ar("ar", "العربية"), It("it", "Italiano");
+    PtBr("pt-BR", "Português (Brasil)"), Ru("ru", "Русский"), Ar("ar", "العربية"), He("he", "עברית"), It("it", "Italiano");
 
     fun resolved(systemTag: String): AppLanguage {
         if (this != System) return this
@@ -27,8 +27,8 @@ enum class AppLanguage(val stored: String, val title: String) {
         return entries.firstOrNull { it != System && it.stored == base } ?: En
     }
 
-    /** Arabic reads right to left: the whole layout mirrors, while each paragraph follows its own text. */
-    fun readsRightToLeft(systemTag: String): Boolean = resolved(systemTag) == Ar
+    /** Arabic and Hebrew read right to left: the whole layout mirrors, while each paragraph follows its own text. */
+    fun readsRightToLeft(systemTag: String): Boolean = resolved(systemTag).let { it == Ar || it == He }
 
     fun usesChinese(systemIsChinese: Boolean): Boolean = this == Zh || this == ZhHant || (this == System && systemIsChinese)
 

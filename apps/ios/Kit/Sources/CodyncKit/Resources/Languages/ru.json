@@ -2475,5 +2475,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "Загрузка считается, когда агент читает SKILL.md навыка во время хода.",
   "RAM": "ОЗУ",
   "CPU": "ЦП",
-  "Disk": "Диск"
+  "Disk": "Диск",
+  "Chat colour": "Цвет чата",
+  "The colour of your own messages, for each theme.": "Цвет ваших сообщений для каждой темы.",
+  "Chat background": "Фон чата",
+  "The colour behind the chat, for each theme.": "Цвет за чатом для каждой темы.",
+  "Question {current} of {total}": "Вопрос {current} из {total}",
+  "Summary": "Сводка",
+  "Send answers": "Отправить ответы",
+  "Answers sent": "Ответы отправлены",
+  "All": "Все",
+  "Images": "Изображения",
+  "Every image and file from this computer.": "Каждое изображение и файл этого компьютера.",
+  "Nothing in the library yet.": "В библиотеке пока пусто.",
+  "Couldn't load the library.": "Не удалось загрузить библиотеку.",
+  "Pinned": "Закреплено",
+  "Unread": "Непрочитано",
+  "Back to the previous question": "Вернуться к предыдущему вопросу",
+  "Open the library": "Открыть библиотеку"
 }

@@ -146,6 +146,10 @@ pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: 
     let decision = match option_id {
         Some(ALLOW) => Some(Decision::Allow),
         Some(DENY) => Some(Decision::Deny),
+        // A question's options are their positions; Back is the row after them.
+        Some(id) if super::question::is_back(id) => {
+            entry.data["options"].as_array().and_then(|options| options.len().checked_sub(1)).map(Decision::Pick)
+        }
         Some(index) => index.parse().ok().map(Decision::Pick),
         None => None,
     };

@@ -105,23 +105,16 @@ import com.kyant.shapes.RoundedRectangle
     }
 }
 
-/** A coding agent's logo by ACP registry id, in its brand color when it has one; a terminal glyph otherwise. */
-@Composable internal fun AgentIcon(registry: String?, size: Dp) {
-    val tint = AGENT_TINTS[registry]?.let { Color(it) } ?: Palette.text
+/** A coding agent's logo by ACP registry id, in one colour: grey at rest, an accent while it is chosen. */
+@Composable internal fun AgentIcon(registry: String?, size: Dp, tint: Color = Palette.secondary) {
     val res = agentIconRes(registry)
     if (res != null) Image(painterResource(res), null, Modifier.size(size).clearAndSetSemantics {}, colorFilter = ColorFilter.tint(tint))
     else Symbol("terminal", Modifier.padding(size * 0.1f), size = size * 0.8f, tint = tint)
 }
 
-// Registry logos are one color; these carry their brand's (a gradient's middle for Gemini and omp).
-private val AGENT_TINTS = mapOf("claude-acp" to 0xFFD97857, "gemini" to 0xFF9178C7, "antigravity-acp" to 0xFF4285F5,
-    "mistral-vibe" to 0xFFFA520F, "qwen-code" to 0xFF615CED, "amp-acp" to 0xFFF24F40, "kiro" to 0xFF8F45FF,
-    "cortex-code" to 0xFF29B5E8, "omp" to 0xFF9C4DFF)
-
-/** A cloud provider's logo by the cloud's id for it (`boat`), Boat in its brand blue (in dark mode too, like the agents'
- * tints); the cloud symbol for a provider this app doesn't know. */
+/** A cloud provider's logo by the cloud's id for it, in the same resting grey as the agents' logos. */
 @Composable internal fun ProviderIcon(provider: String, size: Dp) {
-    val tint = if (provider == "boat") Color(0xFF263FA9) else Palette.text
+    val tint = Palette.secondary
     val res = providerIconRes(provider)
     if (res != null) Image(painterResource(res), null, Modifier.size(size).clearAndSetSemantics {}, colorFilter = ColorFilter.tint(tint))
     else Symbol("cloud", size = size, tint = tint)

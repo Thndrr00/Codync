@@ -11,7 +11,7 @@ use super::buffer::u;
 use super::chat::with_bg;
 use super::permission::{decided_line, permission_card};
 use super::roster::plain;
-use super::style::{FACE, bot_color, face_style, person, spin, theme};
+use super::style::{FACE, bot_color, chat_band, face_style, person, spin, theme};
 use super::time::clock;
 
 pub(super) struct Built {
@@ -197,7 +197,7 @@ pub(super) fn entry_lines(out: &mut Built, app: &App, b: &Bot, e: &Entry, info: 
                     Span::styled(format!("  {}", file_size(size)), t.dim),
                 ]));
             }
-            out.lines.extend(with_bg(body, width, t.band));
+            out.lines.extend(with_bg(body, width, chat_band(t.band)));
             reactions(out, app, e);
             out.messages.push((e.id.clone(), from, out.lines.len()));
         }

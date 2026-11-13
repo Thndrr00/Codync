@@ -2475,5 +2475,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "Un caricamento conta quando un agente legge lo SKILL.md di un'abilità durante un turno.",
   "RAM": "RAM",
   "CPU": "CPU",
-  "Disk": "Disco"
+  "Disk": "Disco",
+  "Chat colour": "Colore della chat",
+  "The colour of your own messages, for each theme.": "Il colore dei tuoi messaggi, per ogni tema.",
+  "Chat background": "Sfondo della chat",
+  "The colour behind the chat, for each theme.": "Il colore dietro la chat, per ogni tema.",
+  "Question {current} of {total}": "Domanda {current} di {total}",
+  "Summary": "Riepilogo",
+  "Send answers": "Invia risposte",
+  "Answers sent": "Risposte inviate",
+  "All": "Tutti",
+  "Images": "Immagini",
+  "Every image and file from this computer.": "Ogni immagine e file di questo computer.",
+  "Nothing in the library yet.": "Non c'è ancora nulla nella libreria.",
+  "Couldn't load the library.": "Impossibile caricare la libreria.",
+  "Pinned": "Fissato",
+  "Unread": "Non letto",
+  "Back to the previous question": "Torna alla domanda precedente",
+  "Open the library": "Apri la libreria"
 }

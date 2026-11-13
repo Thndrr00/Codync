@@ -150,6 +150,19 @@ The card is the effect's key: the first decision is the one that happens.
 Two answers that arrive at the same moment both see a pending card; the bot's actor applies the
 first and drops the second, so only one reaches the agent.
 
+## Questions, one at a time
+
+Claude Code's `AskUserQuestion` reaches the host through the `hook --ask` bridge
+(`host/src/external/question.rs`). Up to four questions, each with two to four single-choice
+answers, become question cards: `toolKind` is `question`, and each card's `options` are that
+question's answers. The card also carries `questions` (the whole set), `questionIndex`,
+`questionCount` and `answers` (what was answered before it). The last question's card adds no
+Back row; every later one does (`optionId` `__back`), and answering it re-asks the question
+before, with its earlier answer kept. Clients show one question at a time in a bubble, with
+"Question i of n", Back to the previous question, and a summary of every answer before the last
+one is sent. The host API is unchanged: an answer is still one of the card's options.
+
+
 Ideas from rakazo's `action-approval.ts`, `approval-effect-key.ts` and `answerable-ask.ts`
 (Apache-2.0); no code copied. Rakazo's channel receipts and message commands need messaging
 channels, which Codync doesn't have.

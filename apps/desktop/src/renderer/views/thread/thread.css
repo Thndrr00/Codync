@@ -16,7 +16,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--background);
+  background: var(--chat-background, var(--background));
 }
 
 /* Grok's desktop chat: no title bar. The chat blurs and fades as it scrolls up, with the bot in
@@ -322,7 +322,7 @@
   min-width: 0;
 }
 .bubble.user {
-  background: var(--chat-user);
+  background: var(--chat-bubble-user, var(--chat-user));
   color: var(--text);
   font-size: var(--conversation);
   line-height: 1.5;

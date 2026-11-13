@@ -28,6 +28,9 @@ public struct ThreadView: View {
     @State var following = true
     @State var loadingEarlier = false
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.colorScheme) var colorScheme
+    /// The chat background of this theme; reading it here redraws the chat when Settings changes it.
+    @AppStorage(ChatAppearance.backgroundKey) var storedChatBackground = ""
 
     var bot: Bot? { model.bots[botId] }
 
@@ -35,7 +38,7 @@ public struct ThreadView: View {
     /// composer, without the platform's top chrome.
     private var chat: some View {
         transcript
-        .background(Palette.background)
+        .background(ChatAppearance.background(dark: colorScheme == .dark))
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 6) {
                 if let mismatch = model.mismatch {

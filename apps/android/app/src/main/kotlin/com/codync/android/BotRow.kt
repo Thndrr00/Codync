@@ -193,15 +193,7 @@ import kotlinx.coroutines.launch
                         }
                     }
                 }
-                if (bot.unread > 0) {
-                    Box(
-                        Modifier.height(18.dp).widthIn(min = 18.dp).clip(Capsule()).background(Palette.accentFill)
-                            .padding(horizontal = 6.dp).semantics { contentDescription = "${bot.unread} unread" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("${bot.unread}", style = Type.caption2.bold, color = Palette.onAccent)
-                    }
-                }
+                if (bot.unread > 0) FeltCountBadge(bot.unread)
             }
         }
     }

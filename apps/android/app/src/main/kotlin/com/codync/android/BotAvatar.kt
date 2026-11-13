@@ -47,9 +47,8 @@ internal class AgentMark(val registry: String, val name: String)
             .semantics { contentDescription = agent.name }, contentAlignment = Alignment.Center) {
             AgentIcon(agent.registry, size * .28f)
         }
-        if (bot.status == "needsInput") Box(Modifier.size(size * .36f).align(if (bot.lead) Alignment.TopEnd else Alignment.BottomEnd).ring()
-            .background(Palette.warning, CircleShape), contentAlignment = Alignment.Center) {
-            Symbol("exclamationmark", size = size * .24f, tint = Color.White)
+        if (bot.status == "needsInput") Box(Modifier.align(if (bot.lead) Alignment.TopEnd else Alignment.BottomEnd)) {
+            FeltBall(size * .36f)
         } else if (bot.unread > 0) Box(Modifier.size(size * .28f).align(if (bot.lead) Alignment.TopEnd else Alignment.BottomEnd).ring().background(Palette.accentFill, CircleShape))
         if (bot.lead) Box(Modifier.align(Alignment.BottomEnd)) { LeadAgentBadge(size * .34f) }
     }

@@ -47,6 +47,13 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var command: String?
     public var detail: String?
     public var cwd: String?
+    /// A question card (`toolKind` "question"): which of the agent's questions it asks, of how many.
+    public var questionIndex: Int?
+    public var questionCount: Int?
+    /// The whole set, so the card shows its progress and the summary before the last answer.
+    public var questions: [QuestionCard]?
+    /// The questions answered before this card's, oldest first.
+    public var answers: [QuestionAnswer]?
     public var entries: [PlanItem]?
     /// notice: info | error
     public var style: String?
@@ -135,6 +142,24 @@ public struct ReplyQuote: Codable, Hashable, Sendable {
 
 /// A memory line from an older host, known only to keep it out of the chat.
 public struct MemoryLine: Codable, Hashable, Sendable {}
+
+/// One of the questions of a question card, with the choices the agent offers.
+public struct QuestionCard: Codable, Hashable, Sendable {
+    public var text: String
+    public var header: String?
+    public var options: [QuestionChoice]
+}
+
+public struct QuestionChoice: Codable, Hashable, Sendable {
+    public var label: String
+    public var description: String?
+}
+
+/// A question answered before the card's own, for the summary.
+public struct QuestionAnswer: Codable, Hashable, Sendable {
+    public var text: String
+    public var label: String
+}
 
 /// A root line's thread, as the chat's chip shows it: how many replied, how many are new, when the last one
 /// landed and who wrote the recent ones.

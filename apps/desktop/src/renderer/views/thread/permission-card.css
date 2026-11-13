@@ -55,11 +55,17 @@
   font-size: calc(10px * var(--scale));
   color: var(--text);
   width: max-content;
+  /* A command keeps its own direction in a mirrored window. */
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
 }
 .diff-header {
   font-family: var(--mono);
   font-size: var(--text-caption);
   color: var(--secondary);
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 .diff-line {
   white-space: pre;

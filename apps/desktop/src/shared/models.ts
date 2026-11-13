@@ -487,6 +487,13 @@ export interface EntryData {
   command?: string
   detail?: string
   cwd?: string
+  /** A question card (`toolKind` "question"): which of the agent's questions it asks, of how many. */
+  questionIndex?: number
+  questionCount?: number
+  /** The whole set, so the card can show its progress and the summary before the last answer. */
+  questions?: { text: string; header?: string; options: { label: string; description?: string }[] }[]
+  /** The questions answered before this card's, oldest first. */
+  answers?: { text: string; label: string }[]
   entries?: PlanItem[]
   /** notice: info | error */
   style?: string

@@ -2475,5 +2475,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "에이전트가 턴 중에 스킬의 SKILL.md를 읽으면 1회로 집계됩니다.",
   "RAM": "RAM",
   "CPU": "CPU",
-  "Disk": "디스크"
+  "Disk": "디스크",
+  "Chat colour": "채팅 색상",
+  "The colour of your own messages, for each theme.": "내 메시지의 색상입니다. 라이트와 다크 테마에서 각각 선택합니다.",
+  "Chat background": "채팅 배경",
+  "The colour behind the chat, for each theme.": "채팅 뒤의 색상입니다. 라이트와 다크 테마에서 각각 선택합니다.",
+  "Question {current} of {total}": "질문 {current}/{total}",
+  "Summary": "요약",
+  "Send answers": "답변 보내기",
+  "Answers sent": "답변을 보냈습니다",
+  "All": "전체",
+  "Images": "이미지",
+  "Every image and file from this computer.": "이 컴퓨터의 모든 이미지와 파일.",
+  "Nothing in the library yet.": "라이브러리에 아직 아무것도 없습니다.",
+  "Couldn't load the library.": "라이브러리를 불러오지 못했습니다.",
+  "Pinned": "고정됨",
+  "Unread": "읽지 않음",
+  "Back to the previous question": "이전 질문으로 돌아가기",
+  "Open the library": "라이브러리 열기"
 }

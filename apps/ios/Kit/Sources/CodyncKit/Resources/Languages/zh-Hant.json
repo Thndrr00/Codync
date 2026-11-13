@@ -2475,5 +2475,22 @@
   "A load is counted when an agent reads a skill's SKILL.md during a turn.": "代理在一輪中讀取技能的 SKILL.md 時計為一次載入。",
   "RAM": "記憶體",
   "CPU": "處理器",
-  "Disk": "磁碟"
+  "Disk": "磁碟",
+  "Chat colour": "聊天顏色",
+  "The colour of your own messages, for each theme.": "你自己的訊息在淺色和深色主題下的顏色。",
+  "Chat background": "聊天背景",
+  "The colour behind the chat, for each theme.": "聊天背後的顏色，淺色和深色主題各一。",
+  "Question {current} of {total}": "第 {current} 個問題，共 {total} 個",
+  "Summary": "摘要",
+  "Send answers": "傳送答案",
+  "Answers sent": "答案已傳送",
+  "All": "全部",
+  "Images": "圖片",
+  "Every image and file from this computer.": "這台電腦上的每一張圖片和每一個檔案。",
+  "Nothing in the library yet.": "資料庫還是空的。",
+  "Couldn't load the library.": "無法載入資料庫。",
+  "Pinned": "已置頂",
+  "Unread": "未讀",
+  "Back to the previous question": "回到上一個問題",
+  "Open the library": "開啟資料庫"
 }

@@ -4,6 +4,7 @@ import frPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages
 import dePhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/de.json' with { type: 'json' }
 import esPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/es.json' with { type: 'json' }
 import arPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/ar.json' with { type: 'json' }
+import hePhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/he.json' with { type: 'json' }
 import itPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/it.json' with { type: 'json' }
 import ruPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/ru.json' with { type: 'json' }
 import ptBRPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languages/pt-BR.json' with { type: 'json' }
@@ -12,7 +13,7 @@ import hantPhrases from '../../../../ios/Kit/Sources/CodyncKit/Resources/Languag
 import { islandPhrases } from './island-phrases.ts'
 
 /** This app's interface language. `zh` is Simplified, kept so a saved choice still means that. */
-export const appLanguages = ['system', 'en', 'zh', 'zh-Hant', 'ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'it'] as const
+export const appLanguages = ['system', 'en', 'zh', 'zh-Hant', 'ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'he', 'it'] as const
 export type AppLanguage = typeof appLanguages[number]
 
 /** Traditional is its own table. A boolean `true` from older callers means Simplified. */
@@ -57,11 +58,11 @@ export function resolvedLanguage(preference: AppLanguage, system: string | boole
   const base = tag.split('-')[0]
   if (base === 'zh') return systemScript(tag) === 'hant' ? 'zh-Hant' : 'zh'
   if (base === 'pt') return 'pt-BR'
-  return ['ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar', 'it'].includes(base) ? base as 'ja' | 'ko' | 'fr' | 'de' | 'es' | 'ru' | 'ar' | 'it' : 'en'
+  return ['ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar', 'he', 'it'].includes(base) ? base as 'ja' | 'ko' | 'fr' | 'de' | 'es' | 'ru' | 'ar' | 'he' | 'it' : 'en'
 }
 
 const catalogs: Record<Exclude<AppLanguage, 'system'>, Record<string, string>> = {
-  en: {}, zh: hans, 'zh-Hant': { ...hant, ...islandPhrases['zh-Hant'] }, ja: jaPhrases, ko: koPhrases, fr: frPhrases, de: dePhrases, es: { ...esPhrases, ...islandPhrases.es }, 'pt-BR': ptBRPhrases, ru: ruPhrases, ar: arPhrases, it: itPhrases,
+  en: {}, zh: hans, 'zh-Hant': { ...hant, ...islandPhrases['zh-Hant'] }, ja: jaPhrases, ko: koPhrases, fr: frPhrases, de: dePhrases, es: { ...esPhrases, ...islandPhrases.es }, 'pt-BR': ptBRPhrases, ru: ruPhrases, ar: arPhrases, he: hePhrases, it: itPhrases,
 }
 
 /** One piece of a phrase key such as "Runs the official installer on {name}." */
@@ -205,14 +206,15 @@ function compactTime(time: string, tr: (key: string) => string): string | null {
 }
 
 const nativeNames: Record<Exclude<AppLanguage, 'system'>, string> = {
-  en: 'English', zh: '简体中文', 'zh-Hant': '繁體中文', ja: '日本語', ko: '한국어', fr: 'Français', de: 'Deutsch', es: 'Español', 'pt-BR': 'Português (Brasil)', ru: 'Русский', ar: 'العربية', it: 'Italiano',
+  en: 'English', zh: '简体中文', 'zh-Hant': '繁體中文', ja: '日本語', ko: '한국어', fr: 'Français', de: 'Deutsch', es: 'Español', 'pt-BR': 'Português (Brasil)', ru: 'Русский', ar: 'العربية', he: 'עברית', it: 'Italiano',
 }
 
 export function languageTitle(language: AppLanguage, preference: AppLanguage, system: string | boolean): string {
   return language === 'system' ? translate('Follow system', preference, system) : nativeNames[language]
 }
 
-/** Arabic reads right to left: the window mirrors, while a paragraph still follows its own text (`dir="auto"`). */
+/** Arabic and Hebrew read right to left: the window mirrors, while a paragraph still follows its own text (`dir="auto"`). */
 export function readsRightToLeft(language: AppLanguage, system: string | boolean = typeof navigator === 'undefined' ? 'en' : navigator.language): boolean {
-  return resolvedLanguage(language, system) === 'ar'
+  const resolved = resolvedLanguage(language, system)
+  return resolved === 'ar' || resolved === 'he'
 }
