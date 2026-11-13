@@ -1,0 +1,387 @@
+{
+  "BasicGuider": [
+    "model",
+    "conditioning"
+  ],
+  "BasicScheduler": [
+    "model",
+    "scheduler",
+    "steps",
+    "denoise"
+  ],
+  "CLIPLoader": [
+    "clip_name",
+    "type",
+    "device"
+  ],
+  "EmptyLatentImage": [
+    "width",
+    "height",
+    "batch_size"
+  ],
+  "EmptyMiniMaxH3LatentAV": [
+    "width",
+    "height",
+    "length"
+  ],
+  "GetImageSize": [],
+  "GetNode": [
+    "Constant"
+  ],
+  "KSampler": [
+    "seed",
+    "control_after_generate",
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "denoise"
+  ],
+  "KSamplerSelect": [
+    "sampler_name"
+  ],
+  "LoadImage": [
+    "image"
+  ],
+  "LoraLoaderModelOnly": [
+    "model",
+    "lora_name",
+    "strength_model"
+  ],
+  "LTXVConcatAVLatent": [
+    "video_latent",
+    "audio_latent"
+  ],
+  "MiniMaxH3AddGuide": [
+    "positive",
+    "vae",
+    "audio_vae",
+    "latent",
+    "image",
+    "audio",
+    "frame_idx"
+  ],
+  "MiniMaxH3FunControlNetApply": [
+    "model",
+    "model_patch",
+    "vae",
+    "strength",
+    "start_percent",
+    "end_percent",
+    "control_video",
+    "mask",
+    "source_video"
+  ],
+  "MiniMaxH3ImageConditioning": [
+    "clip",
+    "vae",
+    "prompt",
+    "width",
+    "height",
+    "images",
+    "image"
+  ],
+  "MiniMaxH3ImageToVideo": [
+    "clip",
+    "vae",
+    "prompt",
+    "width",
+    "height",
+    "length",
+    "first_frame",
+    "last_frame"
+  ],
+  "MiniMaxH3LatentUpscaleWithModel": [
+    "model",
+    "samples",
+    "width",
+    "height"
+  ],
+  "MiniMaxH3ReferenceToVideo": [
+    "clip",
+    "vae",
+    "audio_vae",
+    "prompt",
+    "width",
+    "height",
+    "length",
+    "ref_image_size",
+    "ref_images",
+    "ref_image",
+    "ref_videos",
+    "ref_video",
+    "ref_video_audios",
+    "ref_video_audio",
+    "ref_audios",
+    "ref_audio"
+  ],
+  "MiniMaxH3SigmaShift": [
+    "model",
+    "shift_video",
+    "shift_audio"
+  ],
+  "ModelPreviewOverrideKJ": [
+    "model",
+    "max_resolution",
+    "jpeg_quality",
+    "suppress_default_preview",
+    "preview_frames",
+    "preview_fps",
+    "vae",
+    "tiny_vae",
+    "audio_vae"
+  ],
+  "PanoramaStudio": [
+    "background",
+    "world",
+    "sticker",
+    "sticker_state",
+    "background_color",
+    "background_range",
+    "megapixels",
+    "multiple",
+    "state_json"
+  ],
+  "PH3ImageConditioning": [
+    "clip",
+    "vae",
+    "prompt",
+    "width",
+    "height",
+    "images",
+    "image"
+  ],
+  "PreviewAny": [
+    "source",
+    "text",
+    "result"
+  ],
+  "PreviewImage": [
+    "images"
+  ],
+  "RandomNoise": [
+    "noise_seed"
+  ],
+  "Sam3dbxCameraDirector": [
+    "capture",
+    "mode",
+    "director_state",
+    "train_dir"
+  ],
+  "Sam3dbxCameraFX": [
+    "images",
+    "lens_mm",
+    "zoom_start",
+    "zoom_end",
+    "roll_start",
+    "roll_end",
+    "depth_of_field",
+    "fstop",
+    "focus_m",
+    "vignette",
+    "grain",
+    "seed",
+    "zoom_aim",
+    "shift_x",
+    "shift_y",
+    "max_blur_px",
+    "distortion",
+    "chromatic_aberration",
+    "bloom",
+    "halation",
+    "anamorphic",
+    "passes",
+    "edge_matte",
+    "keyframes",
+    "matte",
+    "retake",
+    "camera_path"
+  ],
+  "Sam3dbxCaptureSubject": [
+    "video",
+    "name",
+    "start_time",
+    "end_time",
+    "mode",
+    "views",
+    "train_steps",
+    "subject",
+    "upload"
+  ],
+  "Sam3dbxFinish": [
+    "images",
+    "fps",
+    "frame_rate",
+    "shutter_angle",
+    "upscale",
+    "retake",
+    "camera_path",
+    "filename_prefix",
+    "rife_model"
+  ],
+  "Sam3dbxRetake": [
+    "train_dir",
+    "camera_path",
+    "resolution",
+    "steps",
+    "seed",
+    "prompt",
+    "cfg"
+  ],
+  "Sam3dbxRetakePhotoreal": [
+    "retake",
+    "seed",
+    "start_strength",
+    "control_strength",
+    "control_lora_strength",
+    "first_frame_strength",
+    "detailer",
+    "pass_type",
+    "crossview_start"
+  ],
+  "SamplerCustomAdvanced": [
+    "noise",
+    "guider",
+    "sampler",
+    "sigmas",
+    "latent_image"
+  ],
+  "SaveImage": [
+    "images",
+    "filename_prefix",
+    "result"
+  ],
+  "SeedGenerator": [
+    "seed"
+  ],
+  "SetLatentNoiseMask": [
+    "samples",
+    "mask"
+  ],
+  "SetNode": [
+    "Constant"
+  ],
+  "SonderEditor": [
+    "project",
+    "project_name",
+    "fps",
+    "width",
+    "height"
+  ],
+  "SonderGuidesBridgeEnd": [
+    "project",
+    "flow_control"
+  ],
+  "SonderGuidesBridgeStart": [
+    "bridge_overrides_json",
+    "project",
+    "iteration_index"
+  ],
+  "SonderLazyCluster": [
+    "select",
+    "branches",
+    "lanes"
+  ],
+  "SonderMasksBridge": [
+    "project",
+    "edit_video",
+    "edit_audio",
+    "video_latent",
+    "audio_latent",
+    "video_vae",
+    "audio_vae",
+    "spatial_mask",
+    "frame_count"
+  ],
+  "SonderMetadataCollectorV3": [
+    "value",
+    "values"
+  ],
+  "SonderReferenceAudioBridge": [
+    "unused_slots"
+  ],
+  "SonderReferenceImageBridge": [
+    "unused_slots"
+  ],
+  "SonderReferenceSelector": [
+    "reference_lanes"
+  ],
+  "SonderSaveVideo": [
+    "project",
+    "frames",
+    "filename_prefix",
+    "fps",
+    "mode",
+    "place_audio_on_timeline",
+    "mark_queue_complete",
+    "audio",
+    "embed_metadata",
+    "save_preset",
+    "custom_output_kind",
+    "custom_container",
+    "custom_video_codec",
+    "custom_pix_fmt",
+    "custom_crf",
+    "custom_encoder_preset",
+    "custom_audio_codec",
+    "custom_audio_bitrate_kbps",
+    "custom_png_compression",
+    "autoplay_preview",
+    "color_drift_correction"
+  ],
+  "SonderSelector": [
+    "choice",
+    "choice_list"
+  ],
+  "TextEncodeQwenImage21": [
+    "clip",
+    "prompt",
+    "negative_prompt",
+    "vae",
+    "resolution",
+    "images",
+    "image"
+  ],
+  "UNETLoader": [
+    "unet_name",
+    "weight_dtype"
+  ],
+  "VAEDecode": [
+    "samples",
+    "vae"
+  ],
+  "VAEDecodeAudio": [],
+  "VAEDecodeTiled": [
+    "samples",
+    "vae",
+    "tile_size",
+    "overlap",
+    "temporal_size",
+    "temporal_overlap"
+  ],
+  "VAEEncodeAudio": [],
+  "VAEEncodeTiled": [
+    "pixels",
+    "vae",
+    "tile_size",
+    "overlap",
+    "temporal_size",
+    "temporal_overlap"
+  ],
+  "VAELoader": [
+    "vae_name"
+  ],
+  "VHS_VideoCombine": [
+    "frame_rate",
+    "loop_count",
+    "filename_prefix",
+    "format",
+    "pix_fmt",
+    "crf",
+    "save_metadata",
+    "trim_to_audio",
+    "pingpong",
+    "save_output",
+    "videopreview"
+  ]
+}
