@@ -65,7 +65,7 @@ The ten base manifests are embedded from `host/assets/comfy-templates/` and copi
 - **Swap the person in a clip** (`openjutsu-swap`), from Genobi's MIT copy of Comfy Openjutsu and Akatz Labs' MIT H3 Character Swap: a five-to-fifteen-second clip and one character picture. It needs Akatz Labs' `h3_character_swap` pack, GPL-3.0, with Genobi's GPL patch; that is a licence the user accepts by installing it, not one Codync ships.
 - **OneShot MV: a song into a music video** (`oneshot-mv`), from VisualFrisson's MIT `api/OneShotMV_director_api.json`: a song, one line about the world, length, shape, quality. `FVDirector` is one node that plans, casts, renders and edits inside its own pack, so the manifest is three nodes and the pack is required.
 
-The ten families left catalogued have no importable graph (Panorama Stickers publishes no workflow JSON) or an app-shaped one (Splat Edit Engine, Sonder, Reshoot 4D, H3 AudioRetake and the rest): their cards open the author's repository.
+The ten families left catalogued publish no API graph at all (H3 AudioRetake) or only UI-format ones (Panorama Stickers, Reshoot 4D, Sonder); the rest do publish API graphs — Blocksfield and ComfyArt on core nodes, Splat Edit Engine, Max Editor, Henge and Creativefield on their own node packs — so importing them is a manifest each, not a licence decision. Their cards open the author's repository.
 
 ## Preflight
 
