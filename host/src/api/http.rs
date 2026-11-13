@@ -143,7 +143,7 @@ async fn a2a(
     let result = match crate::chat::oneshot::one_shot(&hub, &row.config, A2A_SYSTEM, text).await {
         Ok(answer) => json!({
             "kind": "task",
-            "id": task_id,
+            "id": task_id.clone(),
             "contextId": context_id,
             "status": {"state": "completed", "timestamp": crate::store::now_ms()},
             "artifacts": [{
