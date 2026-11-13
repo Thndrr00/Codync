@@ -132,6 +132,13 @@ Type `/` at the start of a message to see the bot's commands:
 
 Any other `/command` goes to the agent unchanged, so the agent's own commands keep working. There's no command to start a new session: Codync starts one on its own when a conversation needs it. See [Bots](/docs/bots#sessions).
 
+## A bot's recent activity
+
+On the desktop, the panel beside a chat (the inspector) has an **Activity** tab. It lists the chat's
+messages, approval cards and notices, and the runs of that bot's routines, newest first. It leaves out
+the tool steps and thinking of each turn, which live under **Show what it did** on the message itself.
+It refreshes every fifteen seconds.
+
 ## Fresh conversations
 
 When a conversation in a bot's own chat has grown long, Codync may start the agent over with a summary instead of carrying all of it. The chat then shows a card saying why: the conversation is long and has gone quiet, you've been away a while after several summaries, or summarizing no longer frees enough room. Your next message starts the fresh conversation.

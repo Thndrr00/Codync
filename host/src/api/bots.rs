@@ -322,6 +322,49 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 .collect();
             json!({"approvals": approvals, "runs": runs, "threads": threads})
         }
+        // A bot's week at a glance: the messages, cards and notices in its main chat, plus its routine
+        // runs, newest first. The inspector's Activity tab reads it.
+        "botActivity" => {
+            let bot = str_arg(&b, "botId")?;
+            let limit = b["limit"].as_u64().unwrap_or(80).clamp(1, 200);
+            let limit = i64::try_from(limit).unwrap_or(80);
+            let items: Vec<Value> = hub
+                .store
+                .history(bot, i64::MAX, limit)?
+                .into_iter()
+                .filter(|entry| matches!(entry.kind.as_str(), "user" | "agent" | "permission" | "notice"))
+                .map(|entry| {
+                    let text = if entry.kind == "permission" {
+                        entry.data["title"].as_str().unwrap_or("Approval").to_owned()
+                    } else {
+                        crate::store::message_text(&entry.data)
+                    };
+                    json!({
+                        "id": entry.id,
+                        "kind": entry.kind,
+                        "text": text,
+                        "at": entry.created_at,
+                        "status": entry.data["status"],
+                    })
+                })
+                .collect();
+            let runs: Vec<Value> = hub
+                .routines
+                .runs_for(bot)
+                .into_iter()
+                .take(30)
+                .map(|run| {
+                    json!({
+                        "id": run.id,
+                        "routineId": run.routine_id,
+                        "status": run.status,
+                        "at": run.started_at,
+                        "detail": run.detail,
+                    })
+                })
+                .collect();
+            json!({"items": items, "runs": runs})
+        }
         "deleteBot" => {
             let bot = str_arg(&b, "botId")?;
             hub.delete_bot(bot)?;

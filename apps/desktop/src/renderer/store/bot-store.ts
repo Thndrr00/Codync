@@ -2,6 +2,7 @@ import {
   isWorking,
   isInternalEntry,
   needsInput,
+  type ActionClass,
   type AgentAccount,
   type CreatedAppLink,
   type AppLinkMode,
@@ -16,6 +17,7 @@ import {
   type MessageBookmark,
   type OpenItem,
   type ReplyQuote,
+  type RulePolicy,
   type ScreenState,
   type SentinelReport,
   type SharedFile,
@@ -423,6 +425,11 @@ export class BotStore extends BotSync {
 
   setPinned(bot: Bot, pinned: boolean) {
     this.patchBot(bot, { pinned })
+  }
+
+  /** Role rules from a group editor: the four action classes this member shares with its role. */
+  setActionRules(bot: Bot, policies: Partial<Record<ActionClass, RulePolicy>>) {
+    this.patchBot(bot, { actionRules: policies, actionRulesOn: true })
   }
 
   /** Whether the bot may see and use the computer's screen. */

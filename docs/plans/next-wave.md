@@ -32,6 +32,8 @@ is bigger than one release.
 | Compare models in Diagnostics | done (desktop) |
 | Density preference | done (desktop) |
 | Presentation mode for artifacts | done (desktop) |
+| Bot activity timeline | done (desktop) |
+| Policies by role (group editor) | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -176,6 +178,17 @@ Goal: a bot can run without an account.
 - Identical read-only calls (`list_artifacts`, `instruction_history`, `search_workspace`,
   `read_workspace_file`) are answered from memory for 20 seconds, capped at 64 KiB and 256 entries.
   Nothing that writes is cached. Both live in memory and vanish with the host.
+
+## Activity and role rules — done (desktop)
+
+- The inspector (the panel beside a chat) gains an **Activity** tab: `botActivity` returns the main chat's
+  messages, cards and notices plus the bot's routine runs, newest first, without the tool steps (the
+  trace has those). It refreshes every 15 seconds.
+- A group's editor gains **Permissions by role**: Files, Shell, Browser and Apps, each Allow / Ask / Block,
+  for every role in its team structure. Saving writes the chosen role's rules into each member with that
+  role (`updateBot` with `actionRules` and `actionRulesOn`); only roles whose pickers were touched are
+  written, so opening and saving a group changes nothing by itself. Unset classes show Ask.
+- The same decision is tested per bot in the rule editor (`testApprovalRule`).
 
 ## Policies, retention, budgets — retention and the user-turn gate done; policies and reservations next
 

@@ -17,6 +17,7 @@ import { SkillProposalsCard } from '../bots/SkillProposalsCard'
 import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ComputerPanel } from '../bots/ComputerPanel'
+import { BotActivityCard } from './BotActivityCard'
 import { RoutinesView } from '../routines/RoutinesView'
 import { LibraryView } from '../library/LibraryView'
 import { MacChatButton } from './MacChatButton'
@@ -26,10 +27,11 @@ import '../bots/documents.css'
 import { useTr } from '../../lib/use-language'
 
 
-export type DetailsTab = 'details' | 'library' | 'apps' | 'memory' | 'documents' | 'computer' | 'settings'
+export type DetailsTab = 'details' | 'activity' | 'library' | 'apps' | 'memory' | 'documents' | 'computer' | 'settings'
 
 const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'details', label: 'Details' },
+  { id: 'activity', label: 'Activity' },
   { id: 'apps', label: 'Apps' },
   { id: 'library', label: 'Library' },
   { id: 'memory', label: 'Memory' },
@@ -76,6 +78,8 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
                 </>
               ) : tab === 'apps' ? (
                 <BotAppsCard botId={botId} />
+              ) : tab === 'activity' ? (
+                <BotActivityCard botId={botId} />
               ) : tab === 'library' ? (
                 <LibraryView botId={botId} openArtifact={openArtifact} />
               ) : tab === 'memory' ? (

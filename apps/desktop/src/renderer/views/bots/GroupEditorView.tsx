@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { isGroup, type Bot, type TeamSettings } from '@shared/models'
+import { isGroup, type ActionClass, type Bot, type RulePolicy, type TeamSettings } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -12,6 +12,20 @@ import { AutoTextArea } from './parts'
 import { TeamStructureEditor, reconcileTeam } from './TeamStructureEditor'
 import './bots.css'
 import { useTr } from '../../lib/use-language'
+
+/** The four classes a group editor sets per role; the rest stay in each bot's own settings. */
+const ROLE_CLASSES: { id: ActionClass; label: string }[] = [
+  { id: 'files', label: 'Files' },
+  { id: 'shell', label: 'Shell' },
+  { id: 'browser', label: 'Browser' },
+  { id: 'apps', label: 'Apps' },
+]
+
+const ROLE_POLICIES: { id: RulePolicy; label: string }[] = [
+  { id: 'allow', label: 'Allow' },
+  { id: 'ask', label: 'Ask' },
+  { id: 'block', label: 'Block' },
+]
 
 
 /**
@@ -33,6 +47,24 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Bot | null>(null)
 
+  // One set of permission rules per role: every member with that role gets the same four classes.
+  const roles = [...new Set(team.members.map((m) => m.role.trim()).filter(Boolean))]
+  const [roleRules, setRoleRules] = useState<Record<string, Partial<Record<ActionClass, RulePolicy>>>>(() => {
+    const initial: Record<string, Partial<Record<ActionClass, RulePolicy>>> = {}
+    for (const member of team.members) {
+      const role = member.role.trim()
+      if (!role || initial[role]) continue
+      initial[role] = store.bots.get(member.bot_id)?.actionRules ?? {}
+    }
+    return initial
+  })
+  const roleRule = (role: string, cls: ActionClass): RulePolicy => roleRules[role]?.[cls] ?? 'ask'
+  const [changedRoles, setChangedRoles] = useState<string[]>([])
+  const setRoleRule = (role: string, cls: ActionClass, policy: RulePolicy) => {
+    setRoleRules((current) => ({ ...current, [role]: { ...current[role], [cls]: policy } }))
+    setChangedRoles((current) => (current.includes(role) ? current : [...current, role]))
+  }
+
   const picked = members.map((id) => store.bots.get(id)).filter((b): b is Bot => !!b)
   // Bots that can still join, filtered by the search.
   const q = query.trim().toLowerCase()
@@ -47,15 +79,28 @@ export function GroupEditorView({ group }: { group: Bot }) {
     setQuery('')
   }
 
-  const save = () => {
+  const save = async () => {
     setSaving(true)
     setError(null)
     const effectiveTeam = reconcileTeam(team, members, chiefBotId)
-    store
-      .updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam })
-      .then(dismiss)
-      .catch((e: unknown) => setError(errorText(e)))
-      .finally(() => setSaving(false))
+    try {
+      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam })
+      // Each role's rules reach every member with that role; the bot's own rules keep the rest.
+      // Only roles whose pickers were touched are written, so opening and saving a group changes
+      // nothing about approval by itself.
+      for (const member of effectiveTeam.members) {
+        const role = member.role.trim()
+        const rules = role && changedRoles.includes(role) ? roleRules[role] : undefined
+        const bot = store.bots.get(member.bot_id)
+        if (!rules || !bot) continue
+        store.setActionRules(bot, { ...(bot.actionRules ?? {}), ...rules })
+      }
+      dismiss()
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -147,6 +192,28 @@ export function GroupEditorView({ group }: { group: Bot }) {
                     setTeam((current) => reconcileTeam(current, members, id))
                   }}
                 />
+              </VStack>
+            ) : null}
+            {roles.length > 0 ? (
+              <VStack gap={10} className="group-team">
+                <div className="group-section-title">{tr('Permissions by role')}</div>
+                <Text size="caption" tone="tertiary">
+                  {tr('What this role may do without asking. Saving writes these rules into every member with that role; each bot keeps any other rule it had.')}
+                </Text>
+                {roles.map((role) => (
+                  <VStack key={role} gap={6} className="role-rules">
+                    <Text size="callout" weight="medium">{role}</Text>
+                    {ROLE_CLASSES.map(({ id, label }) => (
+                      <ValueRow key={id} label={tr(label)}>
+                        <ChoicePicker
+                          selection={roleRule(role, id)}
+                          options={ROLE_POLICIES}
+                          onChange={(policy) => setRoleRule(role, id, policy)}
+                        />
+                      </ValueRow>
+                    ))}
+                  </VStack>
+                ))}
               </VStack>
             ) : null}
           </VStack>

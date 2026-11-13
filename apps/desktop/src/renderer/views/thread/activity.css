@@ -1,0 +1,43 @@
+/* A bot's recent activity in the inspector: one line per message, card, notice or routine run. */
+.activity-card {
+  width: 100%;
+}
+.activity-scroll {
+  display: flex;
+  flex-direction: column;
+  max-height: 58vh;
+  overflow: auto;
+}
+.activity-row {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-row:last-child {
+  border-bottom: none;
+}
+.activity-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--secondary);
+}
+.activity-icon.attention {
+  color: var(--attention);
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+}
+.activity-text {
+  min-width: 0;
+}
+.activity-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
