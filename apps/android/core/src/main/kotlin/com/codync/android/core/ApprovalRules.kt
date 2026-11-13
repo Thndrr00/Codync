@@ -45,6 +45,36 @@ private val QUICK_NAMES = mapOf("read" to "files", "search" to "files", "edit" t
 
 @Serializable private data class EvaluationEnvelope(@SerialName("evaluation") val evaluation: ApprovalEvaluation)
 
+/** A rule the bot proposes after the same action was denied twice (`approvalLessons`). */
+@Serializable data class ApprovalLesson(
+    val id: String,
+    val botId: String,
+    /** What was denied, as the person saw it. */
+    val subject: String = "",
+    val kind: String = "other",
+    val denials: Int = 0,
+    val status: String = "proposed",
+    val rule: ApprovalRule,
+)
+
+/** One recorded decision on an approval card (`approvalHistory`). */
+@Serializable data class ApprovalRecord(
+    val entryId: String,
+    val botId: String,
+    val subject: String = "",
+    val kind: String = "other",
+    /** `allow`, `deny` or `cancelled`. */
+    val decision: String? = null,
+    /** Who answered: a device's name, "This computer" or "A voice call". */
+    val actor: String? = null,
+    val askedAt: Long = 0,
+    val decidedAt: Long? = null,
+    val consumedAt: Long? = null,
+)
+
+@Serializable private data class LessonsEnvelope(val lessons: List<ApprovalLesson> = emptyList())
+@Serializable private data class HistoryEnvelope(val approvals: List<ApprovalRecord> = emptyList())
+
 object ApprovalRules {
     /** The quick rules ("by kind of action") approvals can enforce: wire class, label, and the tool kinds each covers. */
     val QUICK_CLASSES = listOf(
@@ -76,4 +106,8 @@ object ApprovalRules {
         rules.map { it.copy(pattern = it.pattern.trim(), kind = it.kind?.takeIf(String::isNotEmpty)) }.filter { it.pattern.isNotEmpty() }
 
     fun decodeEvaluation(response: JsonElement): ApprovalEvaluation = WireJson.decodeFromJsonElement<EvaluationEnvelope>(response).evaluation
+
+    fun decodeLessons(response: JsonElement): List<ApprovalLesson> = WireJson.decodeFromJsonElement<LessonsEnvelope>(response).lessons
+
+    fun decodeHistory(response: JsonElement): List<ApprovalRecord> = WireJson.decodeFromJsonElement<HistoryEnvelope>(response).approvals
 }

@@ -173,6 +173,19 @@ suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: Lis
     }
     ApprovalRules.decodeEvaluation(hostQuery("testApprovalRule", payload))
 }.getOrNull()
+/** The rules a bot proposes after the same action was denied twice. */
+suspend fun AppStore.approvalLessons(botId: String): List<ApprovalLesson> = runCatching {
+    ApprovalRules.decodeLessons(hostQuery("approvalLessons", buildJsonObject { put("botId", botId) }))
+}.getOrDefault(emptyList())
+/** Keeps or dismisses a proposed rule; the host saves the rule and reconfigures the bot. */
+suspend fun AppStore.decideApprovalLesson(lessonId: String, accept: Boolean): Boolean = runCatching {
+    hostQuery("decideApprovalLesson", buildJsonObject { put("lessonId", lessonId); put("accept", accept) })
+    true
+}.getOrDefault(false)
+/** The newest decisions on a bot's approval cards, newest first. */
+suspend fun AppStore.approvalHistory(botId: String): List<ApprovalRecord> = runCatching {
+    ApprovalRules.decodeHistory(hostQuery("approvalHistory", buildJsonObject { put("botId", botId) }))
+}.getOrDefault(emptyList())
 /** A forced usage read that returns when it's done, for pull to refresh. */
 suspend fun AppStore.reloadUsage() { refreshUsage(true); actions["usage"]?.join() }
 fun AppStore.refreshUsage(force: Boolean = true) = action("usage") {

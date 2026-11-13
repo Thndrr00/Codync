@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.ApprovalEvaluation
+import com.codync.android.core.ApprovalLesson
+import com.codync.android.core.ApprovalRecord
 import com.codync.android.core.ApprovalRule
 import com.codync.android.core.ApprovalRules
 import com.codync.android.core.BotDraft
@@ -58,6 +61,44 @@ internal fun CardRows.approvalRulesRows(state: AppState, store: AppStore, draft:
     row { SecondaryButton(tr("Add rule")) { set(rules + ApprovalRule(pattern = "", decision = "ask")) } }
     quickRows(draft, change)
     row { RuleTester(store, draft, rules) }
+    row { ApprovalLessons(store, draft) }
+}
+
+/**
+ * What the bot learned from refusals (a rule it proposes, to keep or dismiss) and the newest decisions on its cards.
+ * Both are the host's; nothing here decides anything.
+ */
+@Composable
+private fun ApprovalLessons(store: AppStore, draft: BotDraft) {
+    val botId = draft.id ?: return
+    var lessons by remember(botId) { mutableStateOf<List<ApprovalLesson>>(emptyList()) }
+    var history by remember(botId) { mutableStateOf<List<ApprovalRecord>>(emptyList()) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(botId) {
+        lessons = store.approvalLessons(botId)
+        history = store.approvalHistory(botId)
+    }
+    if (lessons.isNotEmpty()) {
+        Text(tr("Learned from your refusals"), style = Type.body, color = Palette.text)
+        for (lesson in lessons) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(lesson.rule.pattern + (lesson.rule.kind?.let { " · $it" } ?: ""), style = Type.body, color = Palette.text, modifier = Modifier.weight(1f))
+                LinkButton(tr("Keep rule")) {
+                    scope.launch { store.decideApprovalLesson(lesson.id, true); lessons = store.approvalLessons(botId) }
+                }
+                LinkButton(tr("Dismiss")) {
+                    scope.launch { store.decideApprovalLesson(lesson.id, false); lessons = store.approvalLessons(botId) }
+                }
+            }
+        }
+    }
+    if (history.isNotEmpty()) {
+        Text(tr("Recent decisions"), style = Type.body, color = Palette.text)
+        for (record in history.take(10)) {
+            val what = when (record.decision) { "allow" -> tr("Allowed"); "deny" -> tr("Denied"); else -> tr("Cancelled") }
+            Text(what + " · " + record.subject + (record.actor?.let { " · $it" } ?: ""), style = Type.caption, color = Palette.secondary)
+        }
+    }
 }
 
 /**
