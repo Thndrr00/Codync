@@ -76,12 +76,12 @@ pub fn cached(bot: &str, name: &str, arguments: &Value) -> Option<Value> {
     }
     let key = cache_key(bot, name, arguments);
     let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let (at, answer) = cache.get(&key)?;
-    if at.elapsed() > CACHE_TTL {
+    let expired = cache.get(&key).is_some_and(|(at, _)| at.elapsed() > CACHE_TTL);
+    if expired {
         cache.remove(&key);
         return None;
     }
-    Some(answer.clone())
+    cache.get(&key).map(|(_, answer)| answer.clone())
 }
 
 /// Keeps a read-only answer for the next identical call, when it is small enough to hold.

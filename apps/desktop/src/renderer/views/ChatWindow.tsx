@@ -413,8 +413,8 @@ function ChatSplitView() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== '?') return
-      const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      const target = event.target
+      if (target instanceof HTMLElement && target.closest('input, textarea, [contenteditable="true"]')) return
       event.preventDefault()
       setShortcutsOpen((open) => !open)
     }

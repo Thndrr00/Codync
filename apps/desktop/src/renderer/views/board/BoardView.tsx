@@ -7,7 +7,7 @@ import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
 import type { BotStore } from '../../store/bot-store'
-import { errorText } from '../settings/parts'
+import { errorText } from '../bots/drafts'
 import { Field } from '../marketplace/pieces'
 import './board.css'
 

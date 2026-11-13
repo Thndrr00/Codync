@@ -636,7 +636,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                         }));
                     }
                 }
-                routines.push(json!({"botId": bot.id, "routines": hub.routines.list(&bot.id, |_| false)?}));
+                routines.push(json!({"botId": bot.id, "routines": hub.routines.list(&bot.id, |_| false)}));
                 scheduled.extend(hub.store.scheduled_for_bot(&bot.id)?.into_iter().map(|message| json!({
                     "botId": message.bot_id, "text": message.text, "sendAt": message.send_at,
                 })));

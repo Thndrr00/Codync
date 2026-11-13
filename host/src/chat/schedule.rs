@@ -18,22 +18,22 @@ fn send(hub: &Hub, message: &ScheduledMessage) -> bool {
     let row = match hub.store.bot(&message.bot_id) {
         Ok(Some(row)) => row,
         Ok(None) => {
-            tracing::warn!(bot = message.bot_id, "a scheduled message's chat is gone; dropping it");
+            tracing::warn!(bot = %message.bot_id, "a scheduled message's chat is gone; dropping it");
             return true;
         }
         Err(error) => {
-            tracing::warn!(bot = message.bot_id, error = format!("{error:#}"), "couldn't read a scheduled message's chat");
+            tracing::warn!(bot = %message.bot_id, error = format!("{error:#}"), "couldn't read a scheduled message's chat");
             return false;
         }
     };
     if row.deleted || row.config.hidden {
-        tracing::info!(bot = message.bot_id, "a scheduled message's chat is hidden; dropping it");
+        tracing::info!(bot = %message.bot_id, "a scheduled message's chat is hidden; dropping it");
         return true;
     }
     match dispatch_bot_turn(hub, &message.bot_id, &message.text, "scheduled") {
         Ok(()) => true,
         Err(error) => {
-            tracing::warn!(bot = message.bot_id, error = format!("{error:#}"), "couldn't send a scheduled message");
+            tracing::warn!(bot = %message.bot_id, error = format!("{error:#}"), "couldn't send a scheduled message");
             false
         }
     }

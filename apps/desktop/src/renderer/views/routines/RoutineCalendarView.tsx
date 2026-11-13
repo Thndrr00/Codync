@@ -130,11 +130,11 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
     const upcoming = (data?.scheduled ?? [])
       .filter((s) => dayKey(s.at) === selectedKey)
       .map((s) => ({ at: s.at, name: nameOf.get(s.routineId), label: tr('Upcoming'), tone: 'upcoming' }))
-    const messages = scheduled
+    const messageMoments = messages
       .filter((message) => dayKey(message.sendAt) === selectedKey)
       .map((message) => ({ at: message.sendAt, name: message.text.slice(0, 80), label: tr('Message'), tone: 'message' }))
-    return [...runs, ...upcoming, ...messages].sort((a, b) => a.at - b.at)
-  }, [data, scheduled, selectedKey, nameOf, tr])
+    return [...runs, ...upcoming, ...messageMoments].sort((a, b) => a.at - b.at)
+  }, [data, messages, selectedKey, nameOf, tr])
 
   const shift = (delta: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + delta, 1))
   const goToday = () => {
