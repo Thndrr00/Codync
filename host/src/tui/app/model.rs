@@ -39,6 +39,8 @@ pub enum After {
     RuleTest,
     /// The lessons and the recent decisions that go with a bot's rules.
     RulesExtras,
+    /// The snapshots of a shared file's name.
+    LibraryVersions,
     /// `securityProfiles`.
     Profiles,
     /// `hostHealth`: the header's memory word; a host without it says nothing.

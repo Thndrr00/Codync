@@ -49,7 +49,24 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, l: &Library) {
             }
         }
     }
-    footer(buf, inner, None, "↵ open an artifact in the browser · f save to Downloads · r rename · esc");
+    if let Some(name) = &l.versioning {
+        let listed = if l.versions.is_empty() {
+            format!("{name}: no versions yet")
+        } else {
+            let parts: Vec<String> = l
+                .versions
+                .iter()
+                .enumerate()
+                .map(|(index, version)| {
+                    let size = version["file"]["size"].as_u64().unwrap_or_default();
+                    format!("{} · {}", if index == 0 { "newest" } else { "older" }, file_size(size))
+                })
+                .collect();
+            format!("{name}: {}", parts.join(" · "))
+        };
+        put(buf, inner.x, inner.bottom() - 2, inner.width, &truncate(&listed, usize::from(inner.width)), t.dim.patch(t.panel));
+    }
+    footer(buf, inner, None, "↵ open an artifact in the browser · f save to Downloads · v versions · r rename · esc");
 }
 
 /// A row as the chat shows it: `▤ <title>` for an artifact, `▤ name · size` for a file.

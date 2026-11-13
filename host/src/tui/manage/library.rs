@@ -75,7 +75,7 @@ impl App {
         };
         let bot = b.id.clone();
         self.sheet("library", json!({"botId": bot}), Reply::Library(bot.clone()));
-        self.overlays.push(Overlay::Library(Library { bot, items: None, cursor: 0 }));
+        self.overlays.push(Overlay::Library(Library { bot, items: None, cursor: 0, versioning: None, versions: Vec::new() }));
     }
 
     pub(in crate::tui) fn library_key(&mut self, mut l: Library, k: KeyEvent) -> Option<Overlay> {
@@ -101,6 +101,14 @@ impl App {
                 return None;
             }
             (KeyCode::Char('r'), Some(_)) => self.flash("Only artifacts can be renamed"),
+            // A file the bot shared: the snapshots of that name, newest first.
+            (KeyCode::Char('v'), Some(LibraryItem::File { file, .. })) => {
+                let name = file.name.clone();
+                l.versioning = Some(name.clone());
+                l.versions.clear();
+                self.call("fileVersions", json!({"botId": &l.bot, "name": name}), After::LibraryVersions);
+            }
+            (KeyCode::Char('v'), Some(_)) => self.flash("Only files the bot shared have versions"),
             _ => {}
         }
         Some(Overlay::Library(l))
@@ -148,6 +156,13 @@ impl App {
         if open && adds_to_library(e) || first_card {
             self.artifact_titles.asked.insert(bot.to_owned());
             self.sheet("library", json!({"botId": bot}), Reply::Library(bot.to_owned()));
+        }
+    }
+
+    /// The host's answer to `fileVersions`: the snapshots of the name the Library is showing.
+    pub(in crate::tui) fn library_versions(&mut self, v: &Value) {
+        if let Some(Overlay::Library(l)) = self.overlays.last_mut() {
+            l.versions = v["versions"].as_array().cloned().unwrap_or_default();
         }
     }
 
@@ -249,7 +264,7 @@ mod tests {
         .expect("a card parses")
         .1;
         assert_eq!(app.artifact_title(&card).as_deref(), Some("Old"));
-        app.overlays.push(Overlay::Library(Library { bot: "bot".into(), items: None, cursor: 0 }));
+        app.overlays.push(Overlay::Library(Library { bot: "bot".into(), items: None, cursor: 0, versioning: None, versions: Vec::new() }));
         let file = json!({"id": "x", "name": "a.csv", "size": 9, "sha256": "0".repeat(64)});
         app.library_loaded(
             "bot",

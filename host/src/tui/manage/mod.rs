@@ -118,6 +118,9 @@ pub struct Library {
     pub bot: String,
     pub items: Option<Vec<LibraryItem>>,
     pub cursor: usize,
+    /// The name whose versions are listed (`fileVersions`), and what the host said.
+    pub versioning: Option<String>,
+    pub versions: Vec<Value>,
 }
 
 pub struct RoutineList {
