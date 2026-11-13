@@ -531,7 +531,7 @@ fn team_prompt(
     }
     out.push(String::new());
     out.push("It's your turn as the team's lead. Write the team's one answer.".into());
-    out.push("To show a status table, key facts or small bars, include a fenced ```a2ui block with JSON blocks (text, facts, table, bars, note); keep the explanation outside it.".into());
+    out.push("To show a status table, key facts, small bars or a choice/form, include a fenced ```a2ui block with JSON blocks (text, facts, table, bars, note, choices, form); keep the explanation outside it.".into());
     Ok((out.join("\n"), shown))
 }
 
@@ -828,7 +828,7 @@ fn member_prompt(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotCo
         "It's your turn, {}. Reply to the room if you have something worth adding, or reply exactly \"{PASS}\" if you don't.",
         me.name
     ));
-    out.push("To show a status table, key facts or small bars, include a fenced ```a2ui block with JSON blocks (text, facts, table, bars, note).".into());
+    out.push("To show a status table, key facts, small bars or a choice/form, include a fenced ```a2ui block with JSON blocks (text, facts, table, bars, note, choices, form).".into());
     Ok(out.join("\n"))
 }
 

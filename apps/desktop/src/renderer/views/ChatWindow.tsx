@@ -404,6 +404,16 @@ function ChatSplitView() {
   const errorMessage = app.errorMessage
   const mismatchStores = stores.filter((s) => shown.has(s.computer.id) && s.mismatch)
   const selected = app.selection
+  // A choice or form drawn by an agent sends its answer as a message to that bot.
+  useEffect(() => {
+    const onReply = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text
+      if (!text || !selected) return
+      app.store(selected.computerId)?.send(text, selected.botId)
+    }
+    window.addEventListener('codync:a2ui', onReply)
+    return () => window.removeEventListener('codync:a2ui', onReply)
+  }, [app, selected])
   const selectedBot = selected && selectedStore?.bots.get(selected.botId)
 
   let detail: ReactNode

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
@@ -6,8 +6,9 @@ import './a2ui.css'
 
 /**
  * Declarative agent UI: a fenced ```a2ui block whose body is JSON. The agent describes what it
- * wants (text, facts, a table, bars) and Codync draws it with its own components. The schema is a
- * closed list: nothing here executes code or renders HTML from the model.
+ * wants (text, facts, a table, bars, choices or a small form) and Codync draws it with its own
+ * components. The schema is a closed list: nothing here executes code or renders HTML from the
+ * model. Choices and forms send a message back to the bot that drew them.
  */
 interface A2uiBlockText { type: 'text'; text: string }
 interface A2uiFact { label: string; value: string }
@@ -15,7 +16,10 @@ interface A2uiFacts { type: 'facts'; items: A2uiFact[] }
 interface A2uiTable { type: 'table'; columns: string[]; rows: string[][] }
 interface A2uiBars { type: 'bars'; items: { label: string; value: number }[] }
 interface A2uiNote { type: 'note'; text: string; tone?: 'info' | 'attention' | 'danger' }
-type Block = A2uiBlockText | A2uiFacts | A2uiTable | A2uiBars | A2uiNote
+interface A2uiChoices { type: 'choices'; prompt: string; options: { id: string; label: string }[] }
+interface A2uiFormField { id: string; label: string; placeholder?: string }
+interface A2uiForm { type: 'form'; prompt?: string; fields: A2uiFormField[]; submit?: string }
+type Block = A2uiBlockText | A2uiFacts | A2uiTable | A2uiBars | A2uiNote | A2uiChoices | A2uiForm
 
 interface Document {
   title?: string
@@ -34,8 +38,12 @@ function parse(text: string): Document | null {
   }
 }
 
-export function A2uiBlock({ text }: { text: string }) {
-  const doc = useMemo(() => parse(text), [text])
+/** A choice or a form sends one message back to the bot that drew it. */
+function reply(text: string) {
+  window.dispatchEvent(new CustomEvent('codync:a2ui', { detail: { text } }))
+}
+
+export function A2uiBlock({ text }: { text: string }) {  const doc = useMemo(() => parse(text), [text])
   if (!doc) {
     return (
       <div className="a2ui a2ui-invalid">
@@ -113,6 +121,24 @@ export function A2uiBlock({ text }: { text: string }) {
                 </VStack>
               )
             }
+            case 'choices': {
+              const options = (block.options ?? []).slice(0, 8)
+              if (options.length === 0) return null
+              return (
+                <div key={key} className="a2ui-choices">
+                  {block.prompt ? <Text size="caption" tone="secondary">{limited(block.prompt, 400)}</Text> : null}
+                  <div className="a2ui-choice-row">
+                    {options.map((option) => (
+                      <button key={option.id} type="button" className="a2ui-choice" onClick={() => reply(limited(option.label, 200))}>
+                        {limited(option.label, 200)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            }
+            case 'form':
+              return <A2uiFormBlock key={key} block={block} />
             default:
               return null
           }
@@ -125,5 +151,37 @@ export function A2uiBlock({ text }: { text: string }) {
         </HStack>
       </footer>
     </section>
+  )
+}
+
+/** A small form: each field labelled, one submit that sends the values back as a message. */
+function A2uiFormBlock({ block }: { block: A2uiForm }) {
+  const fields = (block.fields ?? []).slice(0, 6)
+  const [values, setValues] = useState<Record<string, string>>({})
+  if (fields.length === 0) return null
+  const send = () => {
+    const filled = fields
+      .map((field) => `${field.label.trim() || field.id}: ${(values[field.id] ?? '').trim()}`)
+      .filter((line) => !line.endsWith(': '))
+    if (filled.length === 0) return
+    reply(block.prompt ? `${block.prompt}\n${filled.join('\n')}` : filled.join('\n'))
+  }
+  return (
+    <div className="a2ui-form">
+      {block.prompt ? <Text size="caption" tone="secondary">{limited(block.prompt, 400)}</Text> : null}
+      {fields.map((field) => (
+        <label key={field.id} className="a2ui-field">
+          <span>{limited(field.label || field.id, 120)}</span>
+          <input
+            value={values[field.id] ?? ''}
+            placeholder={limited(field.placeholder, 120)}
+            onChange={(event) => setValues((current) => ({ ...current, [field.id]: event.target.value }))}
+          />
+        </label>
+      ))}
+      <button type="button" className="a2ui-submit" onClick={send}>
+        {limited(block.submit, 60) || 'Send'}
+      </button>
+    </div>
   )
 }

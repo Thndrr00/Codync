@@ -110,6 +110,63 @@
   padding-top: 6px;
   border-top: 1px solid var(--border);
 }
+.a2ui-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.a2ui-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.a2ui-choice,
+.a2ui-submit {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.a2ui-choice:hover,
+.a2ui-submit:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.a2ui-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.a2ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--secondary);
+  font-size: 11.5px;
+}
+.a2ui-field input {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.a2ui-field input:focus {
+  border-color: color-mix(in srgb, var(--text) 28%, transparent);
+}
+.a2ui-submit {
+  align-self: flex-start;
+  background: var(--text);
+  color: var(--background);
+  border-color: transparent;
+}
 .a2ui-invalid {
   flex-direction: row;
   align-items: center;
