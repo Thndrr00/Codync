@@ -21,6 +21,12 @@ data class FileExport(val id: String, val path: String, val name: String, val en
 
 private fun downloadKey(fileId: String) = "file:$fileId"
 
+/** Every snapshot a bot published under [name], newest first: an older one is read like the newest. */
+suspend fun AppStore.fileVersions(botId: String, name: String): List<SharedFileVersion> = runCatching {
+    val body = hostQuery("fileVersions", buildJsonObject { put("botId", botId); put("name", name) })
+    WireJson.decodeFromJsonElement<List<SharedFileVersion>>(body.getValue("versions"))
+}.getOrDefault(emptyList())
+
 /** Downloads `file`, then opens the share sheet in its conversation, now or when the reader comes back to it. */
 fun AppStore.saveFile(entry: Entry, file: SharedFile) {
     val running = state.value.busy.filter { it.startsWith("file:") }

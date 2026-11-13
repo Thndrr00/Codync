@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,9 @@ import com.codync.android.core.LibraryItem
 import com.codync.android.core.LibraryPeriod
 import com.codync.android.core.LinkState
 import com.codync.android.core.Artifact
+import com.codync.android.core.SharedFile
+import com.codync.android.core.SharedFileVersion
+import kotlinx.coroutines.launch
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 
@@ -43,6 +47,10 @@ import com.kyant.shapes.RoundedRectangle
     val items = state.artifacts.library(bot.id, state.library[bot.id].orEmpty())
     var renaming by remember { mutableStateOf<Artifact?>(null) }
     var image by remember { mutableStateOf<Attachment?>(null) }
+    // The file whose versions are open, and what the host listed for it.
+    var versioning by remember { mutableStateOf<SharedFile?>(null) }
+    var versions by remember { mutableStateOf<List<SharedFileVersion>>(emptyList()) }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxWidth()) {
         when {
             items.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -54,7 +62,11 @@ import com.kyant.shapes.RoundedRectangle
                             when (item) {
                                 is LibraryItem.ArtifactItem -> ArtifactRow(item.artifact, { open(OpenArtifact(bot.id, item.artifact.id, item.artifact.title, item.artifact.entryId)) },
                                     { renaming = item.artifact }) { store.shareArtifact(bot.id, item.artifact.id, item.artifact.title) }
-                                is LibraryItem.FileItem -> FileRow(item, bot.id, state, store)
+                                is LibraryItem.FileItem -> FileRow(item, bot.id, state, store) { file ->
+                                    versioning = file
+                                    versions = emptyList()
+                                    scope.launch { versions = store.fileVersions(bot.id, file.name) }
+                                }
                                 is LibraryItem.AttachmentItem -> AttachmentRow(item.file, bot.id, state, store) { image = item.file }
                             }
                         }
@@ -69,6 +81,20 @@ import com.kyant.shapes.RoundedRectangle
     val target = renaming
     RenameArtifactDialog(target?.title, { renaming = null }) { title -> target?.let { store.renameArtifact(bot.id, it.id, title) } }
     AttachmentImageSheet(image, bot.id, state, store) { image = null }
+    val versionFile = versioning
+    CodyncSheet(versionFile != null, { versioning = null }) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ModalHeader(versionFile?.name.orEmpty())
+            if (versions.isEmpty()) Text("No other versions.", style = Type.caption, color = Palette.secondary)
+            for (version in versions) {
+                LibraryRow(Modifier.plainButton { store.saveFile(version.entryId, bot.id, version.file) }, {
+                    Symbol(AttachmentIcon.symbol(version.file.name), size = 22.dp, tint = Palette.secondary)
+                }) {
+                    NameAndDetail(if (version == versions.first()) "Newest" else "Older", detail(version.file, state.fileDownloads[version.file.id]))
+                }
+            }
+        }
+    }
 }
 
 /** One row of the Library: what it is on the left, its name and detail. */
@@ -91,10 +117,11 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** A file the bot shared: tapping downloads it to the share sheet, as its card in the chat does (again: cancels). */
-@Composable private fun FileRow(item: LibraryItem.FileItem, botId: String, state: AppState, store: AppStore) {
+@Composable private fun FileRow(item: LibraryItem.FileItem, botId: String, state: AppState, store: AppStore, onVersions: () -> Unit) {
     val download = state.fileDownloads[item.file.id]
     val busy = download is FileDownloadState.Downloading
-    LibraryRow(Modifier.plainButton { if (busy) store.cancelFile(item.file.id) else store.saveFile(item.entryId, botId, item.file) },
+    LibraryRow(Modifier.plainButton { if (busy) store.cancelFile(item.file.id) else store.saveFile(item.entryId, botId, item.file) }
+        .contextActions { listOf(MenuItem("Versions", icon = "clock.arrow.circlepath") { onVersions() }) },
         { Symbol(AttachmentIcon.symbol(item.file.name), size = 22.dp, tint = Palette.secondary) }) {
         NameAndDetail(item.file.name, detail(item.file, download))
     }

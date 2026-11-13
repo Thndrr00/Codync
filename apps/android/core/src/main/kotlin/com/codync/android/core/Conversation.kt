@@ -110,6 +110,9 @@ private data class EntryFields(
 private fun isImageName(name: String) = name.substringAfterLast('.', "").lowercase() in listOf("png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp", "svg")
 
 /** A file a bot shared: immutable on the computer, checked against its SHA-256 once downloaded. */
+/** One snapshot of a file a bot published (`fileVersions`): the same name, an older version. */
+@Serializable data class SharedFileVersion(val at: Long, val entryId: String, val file: SharedFile)
+
 @Serializable data class SharedFile(val id: String, val name: String, val size: Long, val sha256: String) {
     /** An image small enough to show in the chat (the phone fetches all of it). */
     val showsAsImage: Boolean get() = isImageName(name) && size <= 20L * 1024 * 1024
