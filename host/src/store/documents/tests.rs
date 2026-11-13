@@ -224,3 +224,53 @@ fn creation_nonce_returns_original_document_without_overwriting_newer_edits() {
     assert_eq!(store.documents("a", "", None, 100).unwrap().items.len(), 1);
     assert_eq!(store.document(&newer.id).unwrap().unwrap(), newer);
 }
+
+#[test]
+fn a_page_links_to_another_and_the_other_shows_the_backlink() {
+    let store = temp_store();
+    bot(&store, "a");
+    let target = saved(store.save_document("a", draft("Roadmap", "the plan")).unwrap());
+    let source = saved(store.save_document("a", draft("Notes", "see [[Roadmap]] and [[Missing]]")).unwrap());
+
+    let links = store.document_links(&source.id).unwrap();
+    assert_eq!(links.iter().map(|l| l.target.as_str()).collect::<Vec<_>>(), ["Missing", "Roadmap"]);
+    let roadmap = links.iter().find(|l| l.target == "Roadmap").expect("the roadmap link");
+    assert_eq!(roadmap.document_id.as_deref(), Some(target.id.as_str()));
+    assert!(links.iter().find(|l| l.target == "Missing").expect("the missing link").document_id.is_none());
+
+    let backlinks = store.document_backlinks(&target.id).unwrap();
+    assert_eq!(backlinks.len(), 1);
+    assert_eq!(backlinks[0].id, source.id);
+}
+
+#[test]
+fn rewriting_a_page_drops_the_links_it_no_longer_makes() {
+    let store = temp_store();
+    bot(&store, "a");
+    let target = saved(store.save_document("a", draft("Roadmap", "the plan")).unwrap());
+    let source = saved(store.save_document("a", draft("Notes", "see [[Roadmap]]")).unwrap());
+    assert_eq!(store.document_backlinks(&target.id).unwrap().len(), 1);
+
+    let rewritten = saved(
+        store
+            .save_document(
+                "a",
+                DocumentDraft { id: Some(source.id.clone()), if_revision: 1, ..draft("Notes", "no links now") },
+            )
+            .unwrap(),
+    );
+    assert!(store.document_links(&rewritten.id).unwrap().is_empty());
+    assert!(store.document_backlinks(&target.id).unwrap().is_empty());
+}
+
+#[test]
+fn deleting_a_page_forgets_its_links() {
+    let store = temp_store();
+    bot(&store, "a");
+    let target = saved(store.save_document("a", draft("Roadmap", "the plan")).unwrap());
+    let source = saved(store.save_document("a", draft("Notes", "see [[Roadmap]]")).unwrap());
+    assert_eq!(store.document_backlinks(&target.id).unwrap().len(), 1);
+
+    store.delete_document(&source.id, 1).unwrap();
+    assert!(store.document_backlinks(&target.id).unwrap().is_empty());
+}

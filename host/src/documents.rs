@@ -55,7 +55,9 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
                 .document(id(args)?)?
                 .filter(|doc| doc.bot_id == bot)
                 .context("unknown document for this bot")?;
-            Ok(json!({"document": document}))
+            let links = hub.store.document_links(&document.id)?;
+            let backlinks = hub.store.document_backlinks(&document.id)?;
+            Ok(json!({"document": document, "links": links, "backlinks": backlinks}))
         }
         "get_document_review" => {
             let review = hub

@@ -1,11 +1,13 @@
 //! Durable Markdown pages. Ownership, revision checks and hierarchy live in one transaction.
 
+mod links;
 mod reviews;
 mod schema;
 #[cfg(test)]
 mod tests;
 mod types;
 
+pub use links::Link;
 pub use reviews::{ReviewDecision, ReviewStatus};
 pub use types::{Document, DocumentDelete, DocumentDraft, DocumentPage, DocumentSummary, DocumentWrite};
 
@@ -100,6 +102,7 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         let rev = next_rev(db)?;
         db.execute("UPDATE documents SET title = ?2, body = ?3, revision = revision + 1, rev = ?4, updated_at = ?5 WHERE id = ?1",
             params![id, draft.title, draft.body, rev, now])?;
+        links::reindex(db, bot, id, &draft.body)?;
         return Ok(DocumentWrite::Saved(Document {
             title: draft.title.clone(),
             body: draft.body.clone(),
@@ -131,6 +134,7 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         VALUES(?1,?2,?3,?4,?5,1,?6,?7,?7)",
         params![doc.id, bot, doc.parent_id, doc.title, doc.body, doc.rev, now],
     )?;
+    links::reindex(db, bot, &doc.id, &doc.body)?;
     Ok(DocumentWrite::Saved(doc))
 }
 
@@ -252,6 +256,7 @@ impl Store {
                 "UPDATE documents SET deleted = 1, revision = revision + 1, rev = ?2, updated_at = ?3 WHERE id = ?1",
                 params![id, rev, now_ms()],
             )?;
+            links::forget(&tx, id)?;
         }
         tx.commit()?;
         Ok(DocumentDelete::Deleted { ids, rev })

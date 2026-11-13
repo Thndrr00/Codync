@@ -18,7 +18,11 @@ pub(in crate::store) fn open(db: &Connection) -> Result<()> {
             payload_hash TEXT NOT NULL, payload TEXT NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('pending','approved','declined','expired','conflict')),
             document TEXT, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
-         CREATE INDEX IF NOT EXISTS document_reviews_bot ON document_reviews(bot_id, created_at);",
+         CREATE INDEX IF NOT EXISTS document_reviews_bot ON document_reviews(bot_id, created_at);
+         CREATE TABLE IF NOT EXISTS document_links(
+            bot_id TEXT NOT NULL, from_id TEXT NOT NULL, target TEXT NOT NULL,
+            PRIMARY KEY(from_id, target));
+         CREATE INDEX IF NOT EXISTS document_links_bot ON document_links(bot_id, target);",
     )?;
     Ok(())
 }

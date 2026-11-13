@@ -50,7 +50,15 @@ pub(super) fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
                 limit,
             )?)?
         }
-        "getDocument" => json!({"document": document(hub, str_arg(&body, "id")?)?}),
+        "getDocument" => {
+            let id = str_arg(&body, "id")?;
+            let document = document(hub, id)?;
+            json!({
+                "document": document,
+                "links": hub.store.document_links(id)?,
+                "backlinks": hub.store.document_backlinks(id)?,
+            })
+        }
         "saveDocument" => {
             let bot = str_arg(&body, "botId")?.to_owned();
             let nonce = body

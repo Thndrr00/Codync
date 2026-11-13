@@ -12,7 +12,9 @@ These authenticated host methods require the existing control scope:
 
 - `listDocuments {botId, query?, afterId?, limit?}` returns metadata `items` and
   `next`. Pages contain at most 100 results; search matches titles.
-- `getDocument {id}` returns `{document}` including the body and revision.
+- `getDocument {id}` returns `{document, links, backlinks}`: the body and revision,
+  the `[[titles]]` the body names (each with `documentId` when a page in the same
+  bot has that title), and the pages of the same bot that link to this one.
 - `saveDocument {botId, id?, parentId?, title, body, ifRevision, clientNonce?}`
   returns `{status: "saved" | "conflict", document}`. New pages use revision
   zero; updates must supply the revision last read. An update's parent is
@@ -26,6 +28,15 @@ owner choices. Creation retries reuse a stable `clientNonce`: the host returns
 the original creation result, even after the page has changed. Clients bind the
 returned ID/revision while preserving text edited since the original request,
 then save that text with a revision check. A nonce is not an overwrite command.
+
+## Links and backlinks
+
+A page links to another by naming it in its body: `[[Roadmap]]`, `[[Roadmap|the plan]]` or
+`[[Roadmap#Q3]]` all name the page titled "Roadmap" of the same bot. Links are read from the body
+on every save (`store/documents/links.rs`) and resolved by title when they are read, so renaming a
+page never leaves a broken id behind, and a title that doesn't exist yet is a link waiting for its
+page. A page shows at most 200 links; `getDocument` and `get_document` return the page's `links`
+and the `backlinks` of the pages that name it.
 
 ## Agent proposals
 
