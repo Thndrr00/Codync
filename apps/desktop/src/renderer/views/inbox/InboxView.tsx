@@ -9,11 +9,18 @@ import { useTr } from '../../lib/use-language'
 import type { BotStore } from '../../store/bot-store'
 import './inbox.css'
 
+interface ApprovalOption {
+  optionId: string
+  name?: string
+  kind?: string
+}
+
 interface Approval {
   id: string
   title: string
   detail: string
   since: number
+  options?: ApprovalOption[]
 }
 
 interface Run {
@@ -109,7 +116,25 @@ const when = (ms: number) => new Date(ms).toLocaleString(undefined, { day: 'nume
 export function InboxView({ stores, onOpen }: { stores: BotStore[]; onOpen: (computerId: string, botId: string) => void }) {
   const tr = useTr()
   const { boxes, loading, error, reload } = useInbox(stores)
+  const [answering, setAnswering] = useState<Record<string, boolean>>({})
+  const [answerError, setAnswerError] = useState<string | null>(null)
   const total = boxes.reduce((n, b) => n + b.approvals.length + b.threads.length + b.runs.length, 0)
+  const answer = async (box: BotInbox, approval: Approval, optionId: string) => {
+    setAnswering((current) => ({ ...current, [approval.id]: true }))
+    setAnswerError(null)
+    try {
+      await box.store.answerCard(approval.id, optionId)
+      reload()
+    } catch (e) {
+      setAnswerError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAnswering((current) => {
+        const next = { ...current }
+        delete next[approval.id]
+        return next
+      })
+    }
+  }
 
   return (
     <div className="inbox-page">
@@ -126,6 +151,7 @@ export function InboxView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
       </header>
 
       {error ? <Text size="caption" tone="danger">{error}</Text> : null}
+      {answerError ? <Text size="caption" tone="danger">{answerError}</Text> : null}
 
       {!loading && boxes.length === 0 ? (
         <div className="inbox-empty">
@@ -150,16 +176,28 @@ export function InboxView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
               <Icon name="chevron.right" size={11} />
             </button>
 
-            {box.approvals.map((approval) => (
-              <button key={approval.id} type="button" className="inbox-row" onClick={() => onOpen(box.store.computer.id, box.bot.id)}>
-                <span className="inbox-row-icon attention"><Icon name="hand.raised" size={13} /></span>
-                <span className="inbox-row-text">
-                  <span className="inbox-row-title">{approval.title}</span>
-                  <span className="inbox-row-sub">{approval.detail || tr('Waiting for your approval')}</span>
-                </span>
-                <time>{when(approval.since)}</time>
-              </button>
-            ))}
+            {box.approvals.map((approval) => {
+              const allow = approval.options?.find((option) => option.kind === 'allow_once') ?? approval.options?.find((option) => option.kind?.startsWith('allow'))
+              const deny = approval.options?.find((option) => option.kind === 'reject_once') ?? approval.options?.find((option) => option.kind?.startsWith('reject'))
+              return (
+                <div key={approval.id} className="inbox-row inbox-approval">
+                  <button type="button" className="inbox-approval-open" onClick={() => onOpen(box.store.computer.id, box.bot.id)}>
+                    <span className="inbox-row-icon attention"><Icon name="hand.raised" size={13} /></span>
+                    <span className="inbox-row-text">
+                      <span className="inbox-row-title">{approval.title}</span>
+                      <span className="inbox-row-sub">{approval.detail || tr('Waiting for your approval')}</span>
+                    </span>
+                    <time>{when(approval.since)}</time>
+                  </button>
+                  {answering[approval.id] ? <Spinner size={12} /> : (
+                    <HStack gap={2} className="inbox-approval-actions">
+                      {deny ? <IconButton title={tr('Deny')} icon="xmark" size={26} onClick={() => void answer(box, approval, deny.optionId)} /> : null}
+                      {allow ? <IconButton title={tr('Allow')} icon="checkmark" size={26} onClick={() => void answer(box, approval, allow.optionId)} /> : null}
+                    </HStack>
+                  )}
+                </div>
+              )
+            })}
 
             {box.threads.map((thread) => (
               <button key={thread.id} type="button" className="inbox-row" onClick={() => onOpen(box.store.computer.id, box.bot.id)}>

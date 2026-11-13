@@ -3,6 +3,7 @@
 
 pub mod apps;
 pub mod artifacts;
+pub mod board_auto;
 pub mod budget_gate;
 pub mod calls;
 pub mod context;
@@ -33,7 +34,7 @@ pub mod skill_proposals;
 pub mod skills;
 pub mod takeover;
 pub mod teach;
-pub mod tool_limits;
-pub mod workspace;
 pub mod team;
+pub mod tool_limits;
 pub mod uploads;
+pub mod workspace;

@@ -527,6 +527,7 @@ function ChatSplitView() {
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
             account={<ProfileAvatar />}
+            inboxCount={app.approvals.length}
           />
           {compact ? (
             <div className="sidebar-rail-actions">
@@ -667,6 +668,8 @@ function ChatSplitView() {
         { id: 'access', title: 'Computer access', icon: 'lock.shield', run: () => { setSearching(false); setSettings('access') } },
         { id: 'shortcuts', title: 'Keyboard shortcuts', icon: 'keyboard.chevron.compact.down', run: () => { setSearching(false); setShortcutsOpen(true) } },
         { id: 'notifications', title: 'Notifications', icon: 'bell.badge', run: () => { setSearching(false); setNotificationsOpen(true) } },
+        { id: 'board', title: 'Board', icon: 'checklist', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false); setBoardPage(true) } },
+        { id: 'scheduled', title: 'Scheduled messages', icon: 'clock', run: () => { setSearching(false); setSettings('diagnostics') } },
       ]} />
       <Sheet open={editing !== null} onClose={() => setEditing(null)} width={520} height={Math.min(680, sheetHeight)}>
         {editing ? (

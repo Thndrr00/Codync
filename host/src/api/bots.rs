@@ -288,6 +288,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                         "title": entry.data["title"].as_str().unwrap_or("Approval"),
                         "detail": entry.data["detail"].as_str().unwrap_or_default(),
                         "since": entry.created_at,
+                        "options": entry.data["options"],
                     })
                 })
                 .collect();
@@ -341,6 +342,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                         "text": text,
                         "at": entry.created_at,
                         "status": entry.data["status"],
+                        "options": entry.data["options"],
                     })
                 })
                 .collect();
@@ -371,6 +373,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 b["detail"].as_str().unwrap_or_default(),
                 b["status"].as_str().unwrap_or("todo"),
                 b["botId"].as_str().filter(|id| !id.is_empty()),
+                b["routineId"].as_str().filter(|id| !id.is_empty()),
                 b["dueAt"].as_i64(),
                 now,
             )?;

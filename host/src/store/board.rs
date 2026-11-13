@@ -26,6 +26,9 @@ pub struct BoardTask {
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bot_id: Option<String>,
+    /// A routine whose next finished run moves the card (`chat::board_auto`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_at: Option<i64>,
     pub created_at: i64,
@@ -74,6 +77,7 @@ impl Store {
         detail: &str,
         status: &str,
         bot_id: Option<&str>,
+        routine_id: Option<&str>,
         due_at: Option<i64>,
         now: i64,
     ) -> Result<BoardTask> {
@@ -92,6 +96,7 @@ impl Store {
                 task.detail = detail.to_owned();
                 task.status = status.to_owned();
                 task.bot_id = bot_id.map(str::to_owned);
+                task.routine_id = routine_id.map(str::to_owned);
                 task.due_at = due_at;
                 task.updated_at = now;
                 task.clone()
@@ -104,6 +109,7 @@ impl Store {
                     detail: detail.to_owned(),
                     status: status.to_owned(),
                     bot_id: bot_id.map(str::to_owned),
+                    routine_id: routine_id.map(str::to_owned),
                     due_at,
                     created_at: now,
                     updated_at: now,
@@ -150,11 +156,12 @@ mod tests {
     #[test]
     fn a_card_can_be_created_changed_moved_and_deleted() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        let task = store.save_board_task(None, "  review the PR ", "", "todo", Some("b1"), None, NOW).expect("created");
+        let task =
+            store.save_board_task(None, "  review the PR ", "", "todo", Some("b1"), None, None, NOW).expect("created");
         assert_eq!(task.title, "review the PR");
         assert_eq!(store.board_tasks().unwrap().len(), 1);
         let changed = store
-            .save_board_task(Some(&task.id), "review the PR", "failing test", "doing", Some("b1"), None, NOW + 10)
+            .save_board_task(Some(&task.id), "review the PR", "failing test", "doing", Some("b1"), None, None, NOW + 10)
             .expect("changed");
         assert_eq!((changed.status.as_str(), changed.created_at), ("doing", NOW));
         assert!(store.move_board_task(&task.id, "done", NOW + 20).unwrap());
@@ -168,10 +175,10 @@ mod tests {
     #[test]
     fn titles_and_columns_are_checked_and_a_known_card_is_required() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-        assert!(store.save_board_task(None, "  ", "", "todo", None, None, NOW).is_err());
-        assert!(store.save_board_task(None, "x", "", "someday", None, None, NOW).is_err());
-        assert!(store.save_board_task(Some("nope"), "x", "", "todo", None, None, NOW).is_err());
-        let task = store.save_board_task(None, "x", "", "waiting", None, None, NOW).unwrap();
+        assert!(store.save_board_task(None, "  ", "", "todo", None, None, None, NOW).is_err());
+        assert!(store.save_board_task(None, "x", "", "someday", None, None, None, NOW).is_err());
+        assert!(store.save_board_task(Some("nope"), "x", "", "todo", None, None, None, NOW).is_err());
+        let task = store.save_board_task(None, "x", "", "waiting", None, None, None, NOW).unwrap();
         assert!(store.move_board_task(&task.id, "later", NOW).is_err());
         assert_eq!(store.board_tasks().unwrap().len(), 1, "a refused move changes nothing");
     }

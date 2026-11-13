@@ -18,6 +18,7 @@ interface BoardTask {
   detail: string
   status: string
   botId?: string
+  routineId?: string
   dueAt?: number
   createdAt: number
   updatedAt: number
@@ -51,6 +52,10 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [owner, setOwner] = useState('')
+  const [routine, setRoutine] = useState('')
+  const [routines, setRoutines] = useState<{ id: string; name: string }[]>([])
+  const [query, setQuery] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState<BoardTask | null>(null)
   const [editTitle, setEditTitle] = useState('')
@@ -81,8 +86,31 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
   }, [store])
 
   const bots = useMemo(() => (store ? [...store.bots.values()].filter((bot) => !isGroup(bot) && !bot.hidden) : []), [store])
-  const nameOf = (id?: string) => (id ? store?.bots.get(id)?.name ?? id : null)
-  const columns = COLUMNS.map((column) => ({ ...column, cards: tasks.filter((task) => task.status === column.id) }))
+  useEffect(() => {
+    setRoutine('')
+    if (!store || !owner) {
+      setRoutines([])
+      return
+    }
+    let stopped = false
+    void (async () => {
+      try {
+        const result = await (await store.ready()).call<{ routines: { id: string; name: string }[] }>('routines', { botId: owner })
+        if (!stopped) setRoutines(result.routines)
+      } catch {
+        if (!stopped) setRoutines([])
+      }
+    })()
+    return () => {
+      stopped = true
+    }
+  }, [store, owner])
+  const q = query.trim().toLowerCase()
+  const visible = tasks.filter((task) => {
+    if (ownerFilter && task.botId !== ownerFilter) return false
+    return !q || `${task.title}\n${task.detail}`.toLowerCase().includes(q)
+  })
+  const columns = COLUMNS.map((column) => ({ ...column, cards: visible.filter((task) => task.status === column.id) }))
 
   const reload = async () => {
     if (!store) return
@@ -95,7 +123,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
     setBusy(true)
     setError(null)
     try {
-      await (await store.ready()).call('saveBoardTask', { title: title.trim(), detail: '', status: 'todo', botId: owner || null })
+      await (await store.ready()).call('saveBoardTask', { title: title.trim(), detail: '', status: 'todo', botId: owner || null, routineId: routine || null })
       setTitle('')
       await reload()
     } catch (e) {
@@ -156,6 +184,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
         detail: editDetail.trim(),
         status: editing.status,
         botId: editing.botId ?? null,
+        routineId: editing.routineId ?? null,
         dueAt,
       })
       setEditing(null)
@@ -178,6 +207,16 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
         </VStack>
         <Spacer />
         {loading ? <Spinner /> : null}
+        <div className="board-search">
+          <Field label="Search cards" value={query} onChange={setQuery} placeholder={tr('Search cards')} />
+        </div>
+        {bots.length > 0 ? (
+          <ChoicePicker
+            selection={ownerFilter}
+            options={[{ id: '', label: tr('Every bot') }, ...bots.map((bot) => ({ id: bot.id, label: bot.name }))]}
+            onChange={setOwnerFilter}
+          />
+        ) : null}
         {online.length > 1 ? (
           <ChoicePicker
             selection={store?.computer.id ?? ''}
@@ -196,19 +235,41 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
           <HStack gap={8} className="board-add" align="end">
             <VStack gap={4} grow>
               <Text size="caption" tone="secondary">{tr('New card')}</Text>
-              <Field label="New card" value={title} onChange={setTitle} placeholder="What needs doing?" />
+              <Field label="New card" value={title} onChange={setTitle} placeholder="What needs doing?" autoFocus />
             </VStack>
             <ChoicePicker
               selection={owner}
               options={[{ id: '', label: tr('No bot') }, ...bots.map((bot) => ({ id: bot.id, label: bot.name }))]}
               onChange={setOwner}
             />
+            {routines.length > 0 ? (
+              <ChoicePicker
+                selection={routine}
+                options={[{ id: '', label: tr('No routine') }, ...routines.map((item) => ({ id: item.id, label: item.name }))]}
+                onChange={setRoutine}
+              />
+            ) : null}
             <Button disabled={busy || !title.trim()} onClick={() => void add()}>{tr('Add')}</Button>
           </HStack>
 
           <div className="board-columns">
             {columns.map((column) => (
-              <section key={column.id} className={`board-column ${column.id}`} aria-label={tr(column.label)}>
+              <section
+                key={column.id}
+                className={`board-column ${column.id}`}
+                aria-label={tr(column.label)}
+                onDragOver={(event) => {
+                  if (event.dataTransfer.types.includes('text/board-card')) event.preventDefault()
+                }}
+                onDrop={(event) => {
+                  const id = event.dataTransfer.getData('text/board-card')
+                  const task = tasks.find((item) => item.id === id)
+                  if (task && task.status !== column.id) {
+                    event.preventDefault()
+                    void move(task, column.id)
+                  }
+                }}
+              >
                 <HStack gap={6} align="center" className="board-column-head">
                   <Text size="callout" weight="semibold" grow>{tr(column.label)}</Text>
                   <Text size="caption" tone="tertiary">{column.cards.length}</Text>
@@ -218,7 +279,15 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
                   const due = dueText(task.dueAt)
                   const bot = task.botId ? store.bots.get(task.botId) : null
                   return (
-                    <article key={task.id} className="board-card">
+                    <article
+                      key={task.id}
+                      className="board-card"
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData('text/board-card', task.id)
+                        event.dataTransfer.effectAllowed = 'move'
+                      }}
+                    >
                       <HStack gap={6} align="start">
                         <Text size="callout" grow className="board-card-title">{task.title}</Text>
                         <DropdownMenu className="board-card-menu" title={tr('Card actions')} items={() => [
@@ -237,6 +306,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
                             <span>{bot.name}</span>
                           </button>
                         ) : null}
+                        {task.routineId ? <Text size="caption" tone="tertiary">↻ {tr('Routine')}</Text> : null}
                         {due ? <Text size="caption" tone={due.late ? 'danger' : 'tertiary'}>{due.text}</Text> : null}
                       </HStack>
                     </article>

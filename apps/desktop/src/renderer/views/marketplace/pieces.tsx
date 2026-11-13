@@ -264,7 +264,7 @@ export function SlideStack({ base, top }: { base: ReactNode; top: ReactNode | nu
 }
 
 /** Plain text entry for card rows: one line, a secret, or a growing multi-line box. */
-export function Field({ value, onChange, placeholder, secret = false, lines, mono = false, label }: {
+export function Field({ value, onChange, placeholder, secret = false, lines, mono = false, label, autoFocus = false }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
@@ -273,6 +273,7 @@ export function Field({ value, onChange, placeholder, secret = false, lines, mon
   lines?: [number, number]
   mono?: boolean
   label?: string
+  autoFocus?: boolean
 }) {
   const tr = useTr()
   const hint = placeholder ? tr(placeholder) : undefined
@@ -286,6 +287,7 @@ export function Field({ value, onChange, placeholder, secret = false, lines, mon
         value={value}
         placeholder={hint}
         spellCheck={false}
+        autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value)}
         style={{ minHeight: `${lines[0] * 1.3}em`, maxHeight: `${lines[1] * 1.3}em` }}
       />
@@ -300,6 +302,7 @@ export function Field({ value, onChange, placeholder, secret = false, lines, mon
       placeholder={hint}
       spellCheck={false}
       autoComplete="off"
+      autoFocus={autoFocus}
       onChange={(e) => onChange(e.target.value)}
     />
   )

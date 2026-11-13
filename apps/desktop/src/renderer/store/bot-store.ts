@@ -354,6 +354,11 @@ export class BotStore extends BotSync {
     })
   }
 
+  /** Answers a card by id, for a list that only knows the entry (the inbox). */
+  async answerCard(entryId: string, optionId: string) {
+    await (await this.ready()).call('respondPermission', { entryId, optionId })
+  }
+
   /** What the bot would do with `command` under `rules` (the saved ones when omitted); null when the host can't say. */
   async testApprovalRule(
     botId: string,

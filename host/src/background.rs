@@ -24,6 +24,7 @@ pub fn start(hub: &Arc<Hub>) {
     tokio::spawn(crate::chat::takeover::sweep_loop(hub.clone()));
     tokio::spawn(crate::chat::recap::run(hub.clone()));
     tokio::spawn(crate::chat::schedule::run(hub.clone()));
+    tokio::spawn(crate::chat::board_auto::run(hub.clone()));
     tokio::spawn({
         let hub = hub.clone();
         async move { market::agent_sign_in::refresh(&hub).await }

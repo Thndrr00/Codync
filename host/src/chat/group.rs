@@ -190,11 +190,7 @@ pub fn validate_team(group: &BotConfig, team: &TeamSettings) -> Result<()> {
             if !seen.insert(id.clone()) {
                 bail!("the reporting lines form a loop");
             }
-            current = team
-                .members
-                .iter()
-                .find(|m| m.bot_id == id)
-                .and_then(|m| m.reports_to.clone());
+            current = team.members.iter().find(|m| m.bot_id == id).and_then(|m| m.reports_to.clone());
         }
     }
     Ok(())
@@ -493,8 +489,11 @@ fn team_prompt(
             .cloned()
             .unwrap_or_default();
         let title = if role.role.trim().is_empty() { String::new() } else { format!(" — {}", role.role.trim()) };
-        let responsibility =
-            if role.responsibility.trim().is_empty() { String::new() } else { format!(" ({})", role.responsibility.trim()) };
+        let responsibility = if role.responsibility.trim().is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", role.responsibility.trim())
+        };
         let reports = role
             .reports_to
             .as_ref()

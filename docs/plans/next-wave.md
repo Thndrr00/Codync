@@ -44,6 +44,11 @@ is bigger than one release.
 | Document revision history | done (desktop) |
 | Custom prompts in the prompt library | done (desktop) |
 | Board from anywhere (`Ctrl+Shift+B`) | done (desktop) |
+| Board automation (routine runs, due reminders) | done |
+| Inbox approvals in place and a rail count | done (desktop) |
+| Document diff (revision vs now) | done (desktop) |
+| Board search, bot filter, drag between columns | done (desktop) |
+| Activity: approve or deny in place | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -165,7 +170,20 @@ Goal: a bot can run without an account.
   person reads it. Diagnostics › Notifications edits the rules.
 - Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
 
-## Prompt library, calculator and compare — done (desktop)
+## Board that moves itself, inbox answers — done
+
+- A card in **Doing** can name a routine (`chat::board_auto`): when that routine's next run finishes
+  after the card was moved, the card goes to **Done** on success or **Waiting** on failure. The board's
+  add row offers the owning bot's routines.
+- A card due today or tomorrow (or up to a week late) writes one notice a day in its bot's chat, so the
+  chat and the notification center carry the reminder.
+- The board gains a search box, a filter by owning bot, drag between columns (the card menu still
+  works), and the new-card field takes focus when the board opens.
+- The inbox answers approvals in place: **Deny** and **Allow** beside each card (`botTasks` now returns
+  its options), and the rail shows how many approvals wait.
+- Activity's approval rows answer the same way.
+
+## Prompts, documents and comparisons — done
 
 - The composer's `+` menu opens a prompt library: twelve starting points (summarize, plan, review, risks,
   notes into actions, email, compare, debug, explain, extract, ask first, check writing). Picking one
@@ -208,6 +226,9 @@ Goal: a bot can run without an account.
   sheet lists them and puts one back in the editor to save.
 - **Prompt library**: the message box's text can be saved as a prompt of the person's own (device only,
   up to 50) and removed from the same sheet.
+- **Documents**: the editor's history sheet now compares a revision with the text in the editor
+  (`views/bots/doc-diff.ts`, a capped line diff) beside its numbers, and still offers to put the whole
+  revision back.
 
 ## Connector health — done
 

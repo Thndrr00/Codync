@@ -13,7 +13,8 @@ const MAX_BYTES: u64 = 512 * 1024;
 const MAX_MATCHES: usize = 40;
 const SNIPPET_CHARS: usize = 160;
 const READ_BYTES: usize = 64 * 1024;
-const SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".idea", ".vscode"];
+const SKIP_DIRS: &[&str] =
+    &[".git", "node_modules", "target", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".idea", ".vscode"];
 
 pub fn tools() -> Value {
     json!([

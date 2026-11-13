@@ -128,3 +128,20 @@ html[data-platform='darwin'] .app-rail {
   .update-badge:active:not(:disabled) { transform: none; }
 }
 
+
+/* A count of approvals waiting, on the Inbox icon. */
+.app-rail-badge {
+  position: absolute;
+  top: -1px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--warning);
+  color: var(--on-warning);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}

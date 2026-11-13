@@ -93,4 +93,3 @@ fn smart_mode_routes_by_command_role_or_everyone() {
     // A name also works when nobody has that role.
     assert_eq!(pick_target("Dani, ¿cómo va?", &g, &members), Target::Member("d".into()));
 }
-

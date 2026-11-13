@@ -46,7 +46,7 @@ function n8nStatus(n8n: N8nState | null | undefined): string {
  * pages in the middle, and the account and settings at the bottom. The list
  * panel beside it changes with the page.
  */
-export function AppRail({ active, onBots, onInbox, onBoard, onCanvas, onUsage, onN8n, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n }: {
+export function AppRail({ active, onBots, onInbox, onBoard, onCanvas, onUsage, onN8n, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n, inboxCount = 0 }: {
   active: AppRailPage
   onBots: () => void
   onInbox: () => void
@@ -62,6 +62,8 @@ export function AppRail({ active, onBots, onInbox, onBoard, onCanvas, onUsage, o
   update?: ReactNode
   account?: ReactNode
   n8n?: N8nState | null
+  /** Approvals waiting: a small count on the Inbox icon. */
+  inboxCount?: number
 }) {
   const tr = useTr()
   return (
@@ -71,7 +73,10 @@ export function AppRail({ active, onBots, onInbox, onBoard, onCanvas, onUsage, o
       </div>
       <div className="app-rail-group">
         <RailButton label={tr('Bots')} icon="bubble.left.and.bubble.right" current={active === 'bots'} onClick={onBots} />
-        <RailButton label={tr('Inbox')} icon="tray" current={active === 'inbox'} onClick={onInbox} />
+        <RailButton label={tr('Inbox')} icon="tray" current={active === 'inbox'} onClick={onInbox}>
+          <Icon name="tray" size={19} />
+          {inboxCount > 0 ? <span className="app-rail-badge">{inboxCount > 99 ? '99+' : inboxCount}</span> : null}
+        </RailButton>
         <RailButton label={tr('Board')} icon="checklist" current={active === 'board'} onClick={onBoard} />
         <RailButton label={tr('Bot canvas')} icon="arrow.triangle.branch" current={active === 'canvas'} onClick={onCanvas} />
         <RailButton label={tr('Usage')} icon="gauge.with.dots.needle.33percent" current={active === 'usage'} onClick={onUsage} />

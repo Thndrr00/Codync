@@ -41,3 +41,9 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Approve or deny a waiting card straight from the activity list. */
+.activity-answer {
+  flex: none;
+  align-self: center;
+}

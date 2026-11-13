@@ -8,6 +8,7 @@ import { useModel } from '../../lib/observable'
 import type { BotStore } from '../../store/bot-store'
 import type { DocumentsStore, DocumentRevision } from '../../store/documents-store'
 import { documentTree, documentDescendants } from '../../lib/document-tree'
+import { lineDiff, type DocDiffLine } from './doc-diff'
 import { DocumentMarkdownEditor } from './DocumentMarkdownEditor'
 import { MarkdownText } from '../thread/Markdown'
 import { RepliesView } from '../thread/RepliesView'
@@ -31,6 +32,7 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const [conversation, setConversation] = useState<{ botId: string; documentId: string } | null>(null)
   const [history, setHistory] = useState<DocumentRevision[] | null>(null)
   const [historyBusy, setHistoryBusy] = useState(false)
+  const [compare, setCompare] = useState<{ revision: number; lines: DocDiffLine[] | null } | null>(null)
   useEffect(() => {
     documents.resume()
     void documents.load()
@@ -47,10 +49,23 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const openHistory = async () => {
     if (!draft?.id) return
     setHistoryBusy(true)
+    setCompare(null)
     try {
       setHistory(await documents.revisions(draft.id))
     } catch (error) {
       setHistory(null)
+      documents.error = error instanceof Error ? error.message : String(error)
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
+  const compareRevision = async (revision: number) => {
+    if (!draft?.id) return
+    setHistoryBusy(true)
+    try {
+      const found = await documents.revision(draft.id, revision)
+      setCompare({ revision, lines: lineDiff(found.body, draft.body) })
+    } catch (error) {
       documents.error = error instanceof Error ? error.message : String(error)
     } finally {
       setHistoryBusy(false)
@@ -184,10 +199,32 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
                 <Text weight="semibold">Revision {revision.revision} · {revision.title}</Text>
                 <Text size="caption" tone="secondary">{relativeTime.day(revision.at)} · {revision.body.length.toLocaleString()} characters</Text>
               </VStack>
+              <Button kind="secondary" disabled={historyBusy} onClick={() => void compareRevision(revision.revision)}>Compare</Button>
               <Button kind="secondary" disabled={historyBusy} onClick={() => void restore(revision.revision)}>Use this text</Button>
             </HStack>
           ))
         )}
+        {compare ? (
+          <VStack gap={8} className="documents-compare">
+            <HStack gap={8} align="center">
+              <Text weight="semibold" grow>Revision {compare.revision} → now</Text>
+              <Button kind="secondary" onClick={() => setCompare(null)}>Close</Button>
+            </HStack>
+            {compare.lines ? (
+              <div className="documents-diff">
+                {compare.lines.map((row, index) => (
+                  <div key={index} className={`documents-diff-line ${row.kind}`}>
+                    <span className="documents-diff-num">{row.kind === 'added' ? '' : row.oldNumber ?? ''}</span>
+                    <span className="documents-diff-num">{row.kind === 'removed' ? '' : row.newNumber ?? ''}</span>
+                    <span className="documents-diff-text">{row.text || ' '}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Text size="caption" tone="secondary">This document is too long to compare here. Use this text and compare it outside.</Text>
+            )}
+          </VStack>
+        ) : null}
       </VStack>
     </Sheet>
   </div>

@@ -91,3 +91,14 @@
     grid-template-columns: repeat(2, minmax(190px, 1fr));
   }
 }
+
+/* Searching the board and dragging a card to another column. */
+.board-search {
+  width: 220px;
+}
+.board-card {
+  cursor: grab;
+}
+.board-card:active {
+  cursor: grabbing;
+}

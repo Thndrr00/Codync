@@ -142,3 +142,30 @@
 .inbox-footer {
   padding-top: 4px;
 }
+
+/* An approval row with a Deny and an Allow beside it, so it can be answered here. */
+.inbox-approval {
+  padding: 0;
+  cursor: default;
+}
+.inbox-approval-open {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 4px 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.inbox-approval-open:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.inbox-approval-actions {
+  flex: none;
+  padding-right: 8px;
+}

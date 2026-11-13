@@ -9,9 +9,16 @@ that computer sees the same board, and it is still there after a restart.
 - **Waiting:** on someone else, or on a decision.
 - **Done:** finished, kept in its column instead of disappearing.
 
-Each card's menu moves it to another column or deletes it. A card can name the bot that owns the
-task; its name and face sit on the card, and clicking them opens that bot's chat, where the work
-itself happens. A due date, when set, turns red once it has passed.
+Each card's menu moves it to another column or deletes it; a card can also be dragged from one column
+to another. A card can name the bot that owns the task; its name and face sit on the card, and clicking
+them opens that bot's chat, where the work itself happens. A due date, when set, turns red once it has
+passed and writes one reminder a day in that bot's chat when it is close.
+
+A card in **Doing** can also name one of its bot's routines: when that routine's next run finishes, the
+card moves to **Done** if it succeeded or **Waiting** if it failed. The board asks the bot's routines in
+the add row once a bot is picked.
+
+The search box filters cards by their title and detail, and the picker beside it shows one bot's cards.
 
 ## Adding a card
 

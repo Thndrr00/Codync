@@ -35,3 +35,41 @@ button.documents-row:hover { background: var(--surface); border-radius: var(--ra
 .documents-history-row:last-child {
   border-bottom: none;
 }
+
+/* Revision comparison: old number, new number, and the line, tinted by what changed. */
+.documents-compare {
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.documents-diff {
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  font: 11.5px/1.45 ui-monospace, 'SF Mono', Consolas, monospace;
+}
+.documents-diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.documents-diff-line.added {
+  background: color-mix(in srgb, var(--added) 14%, transparent);
+}
+.documents-diff-line.removed {
+  background: color-mix(in srgb, var(--removed) 14%, transparent);
+}
+.documents-diff-num {
+  flex: none;
+  width: 32px;
+  color: var(--tertiary);
+  text-align: right;
+  user-select: none;
+}
+.documents-diff-text {
+  flex: 1;
+  min-width: 0;
+}
