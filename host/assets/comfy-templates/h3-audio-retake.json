@@ -1,0 +1,410 @@
+{
+  "id": "h3-audio-retake",
+  "name": "H3 Audio Retake: redo a speaking face from new audio",
+  "version": "1.0.0",
+  "description": "Keeps a shot as it is and regenerates only the mouth: the face is tracked, cropped and rebuilt to follow the new audio, then stitched back into the frame. Imported from H3 Audio Retake Studio (MIT); its lip repair ships inside the studio’s web UI.",
+  "tags": [
+    "video",
+    "audio",
+    "audio-retake",
+    "lip-sync",
+    "higgsfield",
+    "needs-nodes"
+  ],
+  "license": "H3 Audio Retake Studio is MIT (Nebuluss) and needs its pack. Models: MiniMax H3 Community License and the Pika Flex LoRA, an H3 derivative on the same licence. Its face detector downloads itself on first use.",
+  "inputs": [
+    {
+      "key": "video",
+      "label": "The shot to retake",
+      "type": "video",
+      "required": true,
+      "help": "One speaking face, 24 fps."
+    },
+    {
+      "key": "audio",
+      "label": "The new sound",
+      "type": "audio",
+      "required": true,
+      "help": "The voice the mouth has to follow."
+    },
+    {
+      "key": "face",
+      "label": "Reference frame of the face",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "What the shot shows",
+      "type": "text",
+      "default": "A speaker talks naturally, synchronized to the provided audio."
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "Minimax-h3_Singularity_ref2va_v2_int8.safetensors",
+      "folder": "diffusion_models",
+      "size": 20970379616,
+      "sha256": "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "folder": "text_encoders",
+      "size": 27141342152,
+      "sha256": "bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_video_vae_fp16.safetensors",
+      "folder": "vae",
+      "size": 5207808496,
+      "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_audio_vae_fp32.safetensors",
+      "folder": "vae",
+      "size": 605254808,
+      "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "pika_h3_flex_ref2va_comfy_bf16.safetensors",
+      "folder": "loras",
+      "size": 1956172176,
+      "sha256": "e4d058fbd027377b925a0ee607b514ddd9037873fee3afa05d73b302e6f7f8e1",
+      "url": "https://huggingface.co/Pika-Labs/Pika-H3-Flex/resolve/main/comfy/loras/pika_h3_flex_ref2va_comfy_bf16.safetensors",
+      "license": "MiniMax H3 Community License"
+    }
+  ],
+  "output": {
+    "type": "video",
+    "mime": "video/mp4"
+  },
+  "estimate": {
+    "seconds": 300,
+    "vram_gb": 24,
+    "output_gb": 0.3
+  },
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "Minimax-h3_Singularity_ref2va_v2_int8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "3": {
+      "class_type": "LoraLoaderBypassModelOnly",
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "lora_name": "pika_h3_flex_ref2va_comfy_bf16.safetensors",
+        "strength_model": 1
+      }
+    },
+    "4": {
+      "class_type": "AudioRetakePikaSampler",
+      "inputs": {
+        "model": [
+          "3",
+          0
+        ]
+      }
+    },
+    "5": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    "6": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "7": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      }
+    },
+    "11": {
+      "class_type": "MiniMaxH3ReferenceToVideo",
+      "inputs": {
+        "clip": [
+          "5",
+          0
+        ],
+        "vae": [
+          "6",
+          0
+        ],
+        "audio_vae": [
+          "7",
+          0
+        ],
+        "prompt": "{{prompt}}",
+        "width": 512,
+        "height": 512,
+        "length": [
+          "81",
+          6
+        ],
+        "ref_image_size": "match"
+      }
+    },
+    "12": {
+      "class_type": "BasicGuider",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "conditioning": [
+          "11",
+          0
+        ]
+      }
+    },
+    "13": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": "{{seed}}"
+      }
+    },
+    "14": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "13",
+          0
+        ],
+        "guider": [
+          "12",
+          0
+        ],
+        "sampler": [
+          "4",
+          1
+        ],
+        "sigmas": [
+          "4",
+          2
+        ],
+        "latent_image": [
+          "88",
+          0
+        ]
+      }
+    },
+    "80": {
+      "class_type": "VHS_LoadVideoPath",
+      "inputs": {
+        "video": "{{video}}",
+        "force_rate": 24,
+        "custom_width": 0,
+        "custom_height": 0,
+        "frame_load_cap": 56,
+        "skip_first_frames": 126,
+        "select_every_nth": 1,
+        "format": "None"
+      }
+    },
+    "81": {
+      "class_type": "H3FaceTrackCrop",
+      "inputs": {
+        "images": [
+          "80",
+          0
+        ],
+        "detector": "face_yolov8m.pt",
+        "confidence": 0.35,
+        "crop_factor": 2.5,
+        "canvas_width": 512,
+        "canvas_height": 512,
+        "canvas_mode": "manual",
+        "smooth_window": 21,
+        "size_smooth_window": 51,
+        "smooth_method": "gaussian",
+        "size_mode": "per_frame",
+        "identity_track": false,
+        "select": "closest_to_xy",
+        "X": 310,
+        "Y": 210,
+        "frame_index": 0,
+        "cut_detection": "none"
+      }
+    },
+    "82": {
+      "class_type": "H3InjectVideoLatent",
+      "inputs": {
+        "av_latent": [
+          "11",
+          1
+        ],
+        "images": [
+          "81",
+          0
+        ],
+        "vae": [
+          "6",
+          0
+        ]
+      }
+    },
+    "83": {
+      "class_type": "LoadAudio",
+      "inputs": {
+        "audio": "{{audio}}"
+      }
+    },
+    "84": {
+      "class_type": "MiniMaxH3SongMaskedAVContext",
+      "inputs": {
+        "latent": [
+          "82",
+          0
+        ],
+        "audio_vae": [
+          "7",
+          0
+        ],
+        "master_audio": [
+          "83",
+          0
+        ],
+        "clip_start_seconds": 0,
+        "context_length": 0,
+        "source_fps": 24,
+        "crop": "disabled"
+      }
+    },
+    "85": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{{face}}"
+      }
+    },
+    "86": {
+      "class_type": "RepeatImageBatch",
+      "inputs": {
+        "image": [
+          "85",
+          0
+        ],
+        "amount": [
+          "81",
+          6
+        ]
+      }
+    },
+    "87": {
+      "class_type": "ImageToMask",
+      "inputs": {
+        "image": [
+          "86",
+          0
+        ],
+        "channel": "red"
+      }
+    },
+    "88": {
+      "class_type": "MiniMaxH3SetAVNoiseMask",
+      "inputs": {
+        "latent": [
+          "84",
+          0
+        ],
+        "video_mask": [
+          "87",
+          0
+        ]
+      }
+    },
+    "89": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "14",
+          0
+        ],
+        "vae": [
+          "6",
+          0
+        ]
+      }
+    },
+    "90": {
+      "class_type": "H3FaceStitch",
+      "inputs": {
+        "base_images": [
+          "80",
+          0
+        ],
+        "refined_crops": [
+          "89",
+          0
+        ],
+        "transform": [
+          "81",
+          1
+        ],
+        "paste_region": "face_only",
+        "mask_dilation": 8,
+        "feather": 6,
+        "colour_match": 0.5,
+        "blend": 1,
+        "undetected_frames": "fade_out",
+        "masks": [
+          "87",
+          0
+        ]
+      }
+    },
+    "91": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "images": [
+          "90",
+          0
+        ],
+        "fps": 24,
+        "audio": [
+          "84",
+          2
+        ],
+        "bit_depth": 8,
+        "color_space": "sRGB",
+        "codec": "none"
+      }
+    },
+    "92": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "video": [
+          "91",
+          0
+        ],
+        "filename_prefix": "AudioRepairStudio/lip_repair",
+        "format": "auto",
+        "codec": "auto"
+      }
+    }
+  }
+}

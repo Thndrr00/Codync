@@ -1,0 +1,566 @@
+{
+  "id": "spede-replace",
+  "name": "Splat Edit Engine: replace an object in a splat",
+  "version": "1.0.0",
+  "description": "Click an object in a Gaussian splat, say what should stand there, and the scene is rebuilt with a new one. Imported from Splat Edit Engine (AGPL-3.0) with its own local replace graph.",
+  "tags": [
+    "mesh",
+    "spede",
+    "splat",
+    "replace",
+    "needs-nodes",
+    "higgsfield"
+  ],
+  "license": "Splat Edit Engine is AGPL-3.0 (Burgstall-labs) and needs its ComfyUI-SpEdE pack. Models: Qwen-Image 2.1 Research License (non-commercial), SAM License, TripoSplat MIT, DINOv3 License, FLUX.2 VAE Apache-2.0.",
+  "inputs": [
+    {
+      "key": "scene",
+      "label": "The scene (3DGS .ply)",
+      "type": "file",
+      "required": true
+    },
+    {
+      "key": "cameras",
+      "label": "Camera pack (.npz)",
+      "type": "file",
+      "required": true
+    },
+    {
+      "key": "object",
+      "label": "The object only (.ply)",
+      "type": "file",
+      "required": true,
+      "help": "The cut-out object already in the scene, as the pack exports it."
+    },
+    {
+      "key": "reference",
+      "label": "Hero frame of the view",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "What takes its place",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "object_name",
+      "label": "Name of the object",
+      "type": "text",
+      "required": true,
+      "help": "Used for the cut-out and for SAM 3.1."
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "sam3.1_multiplex_fp16.safetensors",
+      "folder": "checkpoints",
+      "size": 1745546848,
+      "sha256": "9ba99c92703c2e8b4f47de2d34a539bb8e18923049e238b780d70dbe6368eb03",
+      "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors",
+      "license": "SAM License (Meta)"
+    },
+    {
+      "file": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "folder": "diffusion_models",
+      "size": 7256787829,
+      "sha256": "8144a0182964aa8403ad6dbc011db837304167d235161b9aabaa8532e967314c",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen3vl_8b_int8_convrot.safetensors",
+      "folder": "text_encoders",
+      "size": 9350798360,
+      "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen_image_2.1_vae_bf16.safetensors",
+      "folder": "vae",
+      "size": 675509688,
+      "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "triposplat_fp16.safetensors",
+      "folder": "diffusion_models",
+      "size": 741106994,
+      "sha256": "c870b97ac1d6bc9177608a5ec625e19ef9f3c5019aa68f64b0fb7803abcd6d20",
+      "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/diffusion_models/triposplat_fp16.safetensors",
+      "license": "MIT (VAST-AI)"
+    },
+    {
+      "file": "triposplat_vae_decoder_fp16.safetensors",
+      "folder": "vae",
+      "size": 576148442,
+      "sha256": "ed0d0c3d43b599e326845d0ec70f3cf77be9a55e2d97627ac3b34d2830763cc8",
+      "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/vae/triposplat_vae_decoder_fp16.safetensors",
+      "license": "MIT (VAST-AI)"
+    },
+    {
+      "file": "dino_v3_vit_h.safetensors",
+      "folder": "clip_vision",
+      "size": 1681247696,
+      "sha256": "a29ef35101a16966972a0d50732a6f3a608ff7cfffb2afa9bbe9007cb842cc53",
+      "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors",
+      "license": "DINOv3 License (Meta)"
+    },
+    {
+      "file": "flux2-vae.safetensors",
+      "folder": "vae",
+      "size": 336213556,
+      "sha256": "d64f3a68e1cc4f9f4e29b6e0da38a0204fe9a49f2d4053f0ec1fa1ca02f9c4b5",
+      "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/vae/flux2-vae.safetensors",
+      "license": "Apache-2.0 (FLUX.2 VAE)"
+    }
+  ],
+  "output": {
+    "type": "mesh",
+    "mime": "application/octet-stream"
+  },
+  "estimate": {
+    "seconds": 240,
+    "vram_gb": 20,
+    "output_gb": 0.4
+  },
+  "workflow": {
+    "1": {
+      "class_type": "SpEdE_LocalLoadScene",
+      "inputs": {
+        "source_ply": "input/{{scene}}"
+      }
+    },
+    "2": {
+      "class_type": "SpEdE_LocalLoadCameras",
+      "inputs": {
+        "camera_targets_npz": "input/{{cameras}}"
+      }
+    },
+    "3": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{{reference}}"
+      }
+    },
+    "10": {
+      "inputs": {
+        "scene": [
+          "1",
+          0
+        ],
+        "cameras": [
+          "2",
+          0
+        ],
+        "view_id": "camera_0",
+        "object_ply": "input/{{object}}",
+        "output_path": "spede/local/replace_base.ply",
+        "device": "cuda",
+        "remove_fill_ply": "",
+        "remove_scene_ply": "",
+        "hero_image_path": ""
+      },
+      "class_type": "SpEdE_LocalReplaceBase"
+    },
+    "20": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+      }
+    },
+    "27": {
+      "class_type": "SpEdE_LocalViewImage",
+      "inputs": {
+        "cameras": [
+          "2",
+          0
+        ],
+        "view_id": "camera_0"
+      }
+    },
+    "30": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "31": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "32": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "33": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "30",
+          0
+        ],
+        "device": "auto",
+        "dtype": "default"
+      }
+    },
+    "34": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "31",
+          0
+        ],
+        "vae": [
+          "32",
+          0
+        ],
+        "prompt": "{{prompt}}",
+        "negative_prompt": "",
+        "resolution": 1024,
+        "images.image_1": [
+          "10",
+          1
+        ],
+        "images.image_2": [
+          "27",
+          0
+        ],
+        "images.image_3": [
+          "3",
+          0
+        ]
+      }
+    },
+    "35": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "35a",
+          0
+        ],
+        "guider": [
+          "35b",
+          0
+        ],
+        "sampler": [
+          "35c",
+          0
+        ],
+        "sigmas": [
+          "35d",
+          0
+        ],
+        "latent_image": [
+          "34",
+          2
+        ]
+      }
+    },
+    "36": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "35",
+          0
+        ],
+        "vae": [
+          "32",
+          0
+        ]
+      }
+    },
+    "42": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "36",
+          0
+        ],
+        "filename_prefix": "spede/local/replace_qwen"
+      }
+    },
+    "43": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "101",
+          0
+        ],
+        "filename_prefix": "spede/local/replace_render"
+      }
+    },
+    "44": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "10",
+          1
+        ],
+        "filename_prefix": "spede/local/replace_clean_hero"
+      }
+    },
+    "84": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "20",
+          1
+        ],
+        "text": "{{object_name}}"
+      }
+    },
+    "85": {
+      "class_type": "SAM3_Detect",
+      "inputs": {
+        "model": [
+          "20",
+          0
+        ],
+        "image": [
+          "36",
+          0
+        ],
+        "conditioning": [
+          "84",
+          0
+        ],
+        "threshold": 0.4,
+        "refine_iterations": 2,
+        "individual_masks": false
+      }
+    },
+    "86": {
+      "class_type": "SpEdE_LocalObjectCutout",
+      "inputs": {
+        "image": [
+          "36",
+          0
+        ],
+        "mask": [
+          "85",
+          0
+        ],
+        "name": "{{object_name}}"
+      }
+    },
+    "87": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "86",
+          2
+        ],
+        "filename_prefix": "spede/local/replace_cutout"
+      }
+    },
+    "90": {
+      "class_type": "TripoSplatPreprocessImage",
+      "inputs": {
+        "image": [
+          "86",
+          0
+        ],
+        "mask": [
+          "86",
+          1
+        ],
+        "erode_radius": 1,
+        "size": 1024
+      }
+    },
+    "91": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "triposplat_fp16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "92": {
+      "class_type": "CLIPVisionLoader",
+      "inputs": {
+        "clip_name": "dino_v3_vit_h.safetensors"
+      }
+    },
+    "93": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "flux2-vae.safetensors"
+      }
+    },
+    "94": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "triposplat_vae_decoder_fp16.safetensors"
+      }
+    },
+    "95": {
+      "class_type": "TripoSplatConditioning",
+      "inputs": {
+        "clip_vision": [
+          "92",
+          0
+        ],
+        "vae": [
+          "93",
+          0
+        ],
+        "image": [
+          "90",
+          0
+        ]
+      }
+    },
+    "96": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          "91",
+          0
+        ],
+        "positive": [
+          "95",
+          0
+        ],
+        "negative": [
+          "95",
+          1
+        ],
+        "latent_image": [
+          "95",
+          2
+        ],
+        "seed": 46,
+        "steps": 30,
+        "cfg": 3,
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "denoise": 1
+      }
+    },
+    "97": {
+      "class_type": "VAEDecodeTripoSplat",
+      "inputs": {
+        "samples": [
+          "96",
+          0
+        ],
+        "vae": [
+          "94",
+          0
+        ],
+        "num_gaussians": 262144,
+        "seed": 0
+      }
+    },
+    "98": {
+      "class_type": "SplatToFile3D",
+      "inputs": {
+        "splat": [
+          "97",
+          0
+        ],
+        "format": "ply"
+      }
+    },
+    "100": {
+      "class_type": "SpEdE_LocalPlaceGenerated",
+      "inputs": {
+        "scene": [
+          "1",
+          0
+        ],
+        "cameras": [
+          "2",
+          0
+        ],
+        "view_id": "camera_0",
+        "object_ply": "input/{{object}}",
+        "generated": [
+          "98",
+          0
+        ],
+        "inserted_image": [
+          "36",
+          0
+        ],
+        "object_mask": [
+          "86",
+          1
+        ],
+        "max_shift": 0.25,
+        "size": "match",
+        "remove_fill_ply": "",
+        "remove_scene_ply": "",
+        "output_path": "spede/local/replaced_scene.ply",
+        "device": "cuda"
+      }
+    },
+    "101": {
+      "class_type": "SpEdE_LocalRender",
+      "inputs": {
+        "scene": [
+          "100",
+          0
+        ],
+        "cameras": [
+          "2",
+          0
+        ],
+        "view_id": "camera_0",
+        "device": "cuda"
+      }
+    },
+    "35a": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": "{{seed}}"
+      }
+    },
+    "35b": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "33",
+          0
+        ],
+        "positive": [
+          "34",
+          0
+        ],
+        "negative": [
+          "34",
+          1
+        ],
+        "cfg": 1
+      }
+    },
+    "35c": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "35d": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    }
+  }
+}

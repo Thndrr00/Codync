@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The manifests that ship with Codync, by id: their manifest is embedded in the binary.
-const BASE: [(&str, &str); 10] = [
+const BASE: [(&str, &str); 20] = [
     ("text-to-image", include_str!("../../../assets/comfy-templates/text-to-image.json")),
     ("image-to-image", include_str!("../../../assets/comfy-templates/image-to-image.json")),
     ("canny-to-image", include_str!("../../../assets/comfy-templates/canny-to-image.json")),
@@ -25,6 +25,16 @@ const BASE: [(&str, &str); 10] = [
     ("h3-motion-mask", include_str!("../../../assets/comfy-templates/h3-motion-mask.json")),
     ("openjutsu-swap", include_str!("../../../assets/comfy-templates/openjutsu-swap.json")),
     ("oneshot-mv", include_str!("../../../assets/comfy-templates/oneshot-mv.json")),
+    ("blocksfield-art", include_str!("../../../assets/comfy-templates/blocksfield-art.json")),
+    ("comfyart-edit", include_str!("../../../assets/comfy-templates/comfyart-edit.json")),
+    ("henge-motion", include_str!("../../../assets/comfy-templates/henge-motion.json")),
+    ("spede-replace", include_str!("../../../assets/comfy-templates/spede-replace.json")),
+    ("maxeditor-retouch", include_str!("../../../assets/comfy-templates/maxeditor-retouch.json")),
+    ("creativefield-edit", include_str!("../../../assets/comfy-templates/creativefield-edit.json")),
+    ("panorama-cutout", include_str!("../../../assets/comfy-templates/panorama-cutout.json")),
+    ("sonder-render", include_str!("../../../assets/comfy-templates/sonder-render.json")),
+    ("reshoot-4d", include_str!("../../../assets/comfy-templates/reshoot-4d.json")),
+    ("h3-audio-retake", include_str!("../../../assets/comfy-templates/h3-audio-retake.json")),
     ("smoke-test", include_str!("../../../assets/comfy-templates/smoke-test.json")),
 ];
 

@@ -10,8 +10,9 @@ const dir = fileURLToPath(new URL('../host/assets/comfy-templates/', import.meta
 const folders = [
   'checkpoints', 'configs', 'loras', 'vae', 'text_encoders', 'diffusion_models',
   'clip_vision', 'embeddings', 'controlnet', 'upscale_models', 'vae_approx',
+  'detection', 'background_removal', 'geometry_estimation',
 ]
-const kinds = ['text', 'number', 'integer', 'select', 'image', 'video', 'audio', 'seed', 'boolean']
+const kinds = ['text', 'number', 'integer', 'select', 'image', 'video', 'audio', 'file', 'seed', 'boolean']
 const outputs = ['image', 'video', 'audio', 'mesh']
 
 function placeholders(value, found = new Set()) {

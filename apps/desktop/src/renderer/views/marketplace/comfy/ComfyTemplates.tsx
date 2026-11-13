@@ -71,7 +71,7 @@ function Field({ input, value, picked, busy, onChange, onPick }: {
         />
       ) : input.type === 'boolean' ? (
         <Switch on={value === true} onChange={onChange} />
-      ) : input.type === 'image' || input.type === 'video' || input.type === 'audio' ? (
+      ) : input.type === 'image' || input.type === 'video' || input.type === 'audio' || input.type === 'file' ? (
         <HStack gap={8}>
           <Button kind="secondary" disabled={busy} onClick={onPick}>
             {tr(pickLabel(input.type, Boolean(picked)))}
@@ -233,9 +233,9 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
         {curated.length > 0 ? (
           <VStack gap={8} className="comfy-challenge">
             <Text size="caption" tone="secondary">
-              {tr('Open Source Higgsfield: each entry is its author\'s repository. Import its graph, nodes and models from there; it is not installed here.')}
+              {tr('Open Source Higgsfield: all fifteen ship as templates above. Each entry opens its author\'s repository, where its graph, nodes and models come from.')}
             </Text>
-            {curated.filter((entry) => !entry.imported).map((entry) => (
+            {curated.map((entry) => (
               <button key={entry.id} className="comfy-template curated" onClick={() => window.codync.app.openExternal(entry.repo)}>
                 <HStack gap={8}>
                   <Text weight="medium" tone="text" grow>{entry.name}</Text>
@@ -245,6 +245,7 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
                 <HStack gap={10} wrap>
                   <Text size="caption" tone="tertiary">{entry.author}</Text>
                   <Text size="caption" tone="tertiary">{entry.output.join(' · ')}</Text>
+                  {entry.imported ? <Text size="caption" tone="tertiary">{tr('Imported')}</Text> : null}
                 </HStack>
               </button>
             ))}

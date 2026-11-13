@@ -1,0 +1,339 @@
+{
+  "id": "henge-motion",
+  "name": "Henge: move a picture like a clip",
+  "version": "1.0.0",
+  "description": "The person in the clip moves, the character in the picture plays it. Imported from Henge (MIT) with its own H3 guide graph, its LoRA and its SAM 3.1 / SAM 3D picker.",
+  "tags": [
+    "video",
+    "henge",
+    "motion-transfer",
+    "needs-nodes",
+    "higgsfield"
+  ],
+  "license": "Henge is MIT (alisson-anjos) and needs its ComfyUI-Henge pack. Models: MiniMax H3 Community License, SAM License (Meta), and a Character Swap / Motion Transfer LoRA on mixed asset licences.",
+  "inputs": [
+    {
+      "key": "source",
+      "label": "The clip whose motion is copied",
+      "type": "video",
+      "required": true
+    },
+    {
+      "key": "reference",
+      "label": "The character to animate",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "What happens",
+      "type": "text",
+      "required": false,
+      "help": "Defaults to “Animate <Picture 1> with <Video 1>.”"
+    },
+    {
+      "key": "length",
+      "label": "Frames",
+      "type": "integer",
+      "default": 107,
+      "min": 32,
+      "max": 480,
+      "step": 1
+    },
+    {
+      "key": "width",
+      "label": "Width",
+      "type": "integer",
+      "default": 512,
+      "min": 256,
+      "max": 1920,
+      "step": 16
+    },
+    {
+      "key": "height",
+      "label": "Height",
+      "type": "integer",
+      "default": 288,
+      "min": 256,
+      "max": 1088,
+      "step": 16
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "folder": "diffusion_models",
+      "size": 20970379616,
+      "sha256": "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "folder": "text_encoders",
+      "size": 27141342152,
+      "sha256": "bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_video_vae_fp16.safetensors",
+      "folder": "vae",
+      "size": 5207808496,
+      "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_motion_transfer_v1.0_ref2va.safetensors",
+      "folder": "loras",
+      "size": 620286016,
+      "sha256": "9146684b9c1412d235bd3943e7fddbf3e3aec8dc127cfea82c6aa07cc54f311d",
+      "url": "https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/resolve/main/loras/base_loras_ignore/minimax_h3_motion_transfer_v1.0_ref2va.safetensors",
+      "license": "Mixed asset licences (Alissonerdx)"
+    },
+    {
+      "file": "sam3.1_multiplex_fp16.safetensors",
+      "folder": "checkpoints",
+      "size": 1745546848,
+      "sha256": "9ba99c92703c2e8b4f47de2d34a539bb8e18923049e238b780d70dbe6368eb03",
+      "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors",
+      "license": "SAM License (Meta)"
+    },
+    {
+      "file": "sam_3d_body_dinov3_bf16.safetensors",
+      "folder": "detection",
+      "size": 2830737652,
+      "sha256": "59fa45200c504c5b56625004d7d3385daf48c616613e88099e43bf83b3e249cf",
+      "url": "https://huggingface.co/Comfy-Org/sam-3d-body/resolve/main/detection/sam_3d_body_dinov3_bf16.safetensors",
+      "license": "SAM License (Meta)"
+    }
+  ],
+  "output": {
+    "type": "video",
+    "mime": "video/mp4"
+  },
+  "estimate": {
+    "seconds": 300,
+    "vram_gb": 24,
+    "output_gb": 1.2
+  },
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "3": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "lora_name": "minimax_h3_motion_transfer_v1.0_ref2va.safetensors",
+        "strength_model": 1
+      }
+    },
+    "4": {
+      "class_type": "MiniMaxH3SigmaShift",
+      "inputs": {
+        "model": [
+          "3",
+          0
+        ],
+        "shift_video": 12,
+        "shift_audio": 3
+      }
+    },
+    "5": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "type": "minimax",
+        "device": "default"
+      }
+    },
+    "6": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      }
+    },
+    "7": {
+      "class_type": "HengeLoadShot",
+      "inputs": {
+        "video": "{{source}}",
+        "pictures": "[\"{{reference}}\"]",
+        "width": "{{width}}",
+        "height": "{{height}}",
+        "length": "{{length}}"
+      }
+    },
+    "8": {
+      "class_type": "HengeGuide",
+      "inputs": {
+        "images": [
+          "7",
+          0
+        ],
+        "representation": "original",
+        "bindings": "[]",
+        "source_kind": "human",
+        "segment_start": 0,
+        "sam_checkpoint": "sam3.1_multiplex_fp16.safetensors",
+        "body_model": "sam_3d_body_dinov3_bf16.safetensors"
+      }
+    },
+    "9": {
+      "class_type": "HengeH3Conditioning",
+      "inputs": {
+        "clip": [
+          "5",
+          0
+        ],
+        "vae": [
+          "6",
+          0
+        ],
+        "guide": [
+          "8",
+          0
+        ],
+        "references": [
+          "7",
+          1
+        ],
+        "prompt": "{{prompt}}",
+        "width": "{{width}}",
+        "height": "{{height}}",
+        "length": "{{length}}",
+        "clip_video_fps": 2,
+        "reference_size": "match",
+        "guide_context": true,
+        "audio_conditioning": false,
+        "audio_video": "henge/validation/source.mp4"
+      }
+    },
+    "10": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "positive": [
+          "9",
+          0
+        ],
+        "negative": [
+          "9",
+          0
+        ],
+        "cfg": 1
+      }
+    },
+    "11": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": "{{seed}}"
+      }
+    },
+    "12": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "13": {
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 8,
+        "denoise": 1
+      }
+    },
+    "14": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "11",
+          0
+        ],
+        "guider": [
+          "10",
+          0
+        ],
+        "sampler": [
+          "12",
+          0
+        ],
+        "sigmas": [
+          "13",
+          0
+        ],
+        "latent_image": [
+          "9",
+          1
+        ]
+      }
+    },
+    "15": {
+      "class_type": "LTXVSeparateAVLatent",
+      "inputs": {
+        "av_latent": [
+          "14",
+          0
+        ]
+      }
+    },
+    "16": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "15",
+          0
+        ],
+        "vae": [
+          "6",
+          0
+        ]
+      }
+    },
+    "17": {
+      "class_type": "HengeSaveVideo",
+      "inputs": {
+        "images": [
+          "16",
+          0
+        ],
+        "filename": "henge/validation/source_result.mp4",
+        "trim_frames": "{{length}}",
+        "fps": 24
+      }
+    },
+    "18": {
+      "class_type": "HengeSaveVideo",
+      "inputs": {
+        "images": [
+          "8",
+          0
+        ],
+        "filename": "henge/validation/source_guide.mp4",
+        "trim_frames": "{{length}}",
+        "fps": 24
+      }
+    }
+  }
+}

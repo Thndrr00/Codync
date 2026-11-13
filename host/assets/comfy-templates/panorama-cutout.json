@@ -1,0 +1,240 @@
+{
+  "id": "panorama-cutout",
+  "name": "Panorama Stickers: picture to 360 cut-out",
+  "version": "1.0.0",
+  "description": "Turns a picture into an equirectangular 360 scene with a cut-out foreground you can orbit. Imported from Panorama Stickers (MIT); its published workflow was editor-only and is converted to API format.",
+  "tags": [
+    "image",
+    "panorama",
+    "360",
+    "needs-nodes",
+    "higgsfield"
+  ],
+  "license": "Panorama Stickers is MIT (nomadoor) and needs its ComfyUI-Panorama-Stickers pack. Models: Qwen-Image 2.1 Research License (non-commercial), non-commercial.",
+  "inputs": [
+    {
+      "key": "image",
+      "label": "The picture",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "What the panorama should show",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "qwen_image_2.1_int8_convrot.safetensors",
+      "folder": "diffusion_models",
+      "size": 7256783064,
+      "sha256": "cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen3vl_8b_int8_convrot.safetensors",
+      "folder": "text_encoders",
+      "size": 9350798360,
+      "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen_image_2.1_vae_bf16.safetensors",
+      "folder": "vae",
+      "size": 675509688,
+      "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    }
+  ],
+  "output": {
+    "type": "image",
+    "mime": "image/png"
+  },
+  "estimate": {
+    "seconds": 30,
+    "vram_gb": 16,
+    "output_gb": 0.02
+  },
+  "workflow": {
+    "3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          37,
+          0
+        ],
+        "positive": [
+          64,
+          0
+        ],
+        "negative": [
+          64,
+          1
+        ],
+        "latent_image": [
+          62,
+          0
+        ],
+        "seed": "{{seed}}",
+        "control_after_generate": "fixed",
+        "steps": 25,
+        "cfg": 1,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1
+      }
+    },
+    "8": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          3,
+          0
+        ],
+        "vae": [
+          39,
+          0
+        ]
+      }
+    },
+    "37": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "38": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "39": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "62": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": [
+          76,
+          0
+        ],
+        "height": [
+          76,
+          1
+        ],
+        "batch_size": 1
+      }
+    },
+    "64": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          38,
+          0
+        ],
+        "images.image_1": [
+          105,
+          1
+        ],
+        "vae": [
+          39,
+          0
+        ],
+        "prompt": "{{prompt}}",
+        "negative_prompt": "",
+        "resolution": 0
+      }
+    },
+    "76": {
+      "class_type": "GetImageSize",
+      "inputs": {
+        "image": [
+          105,
+          1
+        ]
+      }
+    },
+    "80": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{{image}}",
+        "upload": "image"
+      }
+    },
+    "103": {
+      "class_type": "PanoramaStudio",
+      "inputs": {
+        "scene": [
+          105,
+          0
+        ],
+        "sticker": [
+          8,
+          0
+        ],
+        "sticker_state": [
+          105,
+          4
+        ],
+        "background_color": "#00ff00",
+        "background_range": "360",
+        "megapixels": 4,
+        "multiple": 8,
+        "state_json": "{\"version\":2,\"id\":\"PeoiYIhMWU_OFwYG\",\"timeline\":{\"fps\":24,\"length\":null},\"camera\":null,\"scene\":{\"clip\":{\"start\":0,\"in\":0,\"duration\":null},\"position\":{\"value\":[0,0,0],\"keyframes\":[]},\"rotation\":{\"value\":{\"yaw_deg\":0,\"pitch_deg\":0,\"roll_deg\":0},\"keyframes\":[]},\"scale\":{\"value\":1,\"keyframes\":[]}},\"stickers\":[{\"id\":\"sticker_1\",\"placement\":\"sky\",\"source\":{\"kind\":\"port\"},\"clip\":{\"start\":0,\"in\":0,\"duration\":null},\"visible\":true,\"locked\":false,\"crop\":{\"x0\":0,\"y0\":0,\"x1\":1,\"y1\":1},\"direction\":{\"value\":{\"yaw_deg\":156.78037013731,\"pitch_deg\":-28.035274282663643},\"keyframes\":[]},\"roll\":{\"value\":0,\"keyframes\":[]},\"size\":{\"value\":{\"hFOV_deg\":30,\"vFOV_deg\":30},\"keyframes\":[]},\"opacity\":{\"value\":1,\"keyframes\":[]},\"z_index\":0}],\"painting\":{\"version\":1,\"groups\":[],\"paint\":{\"strokes\":[]},\"mask\":{\"strokes\":[]},\"raster_objects\":[]},\"painting_layer\":null}",
+        "$$comfy_animation_preview": ""
+      }
+    },
+    "104": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          8,
+          0
+        ],
+        "filename_prefix": "ComfyUI"
+      }
+    },
+    "105": {
+      "class_type": "PanoramaStudio",
+      "inputs": {
+        "background": [
+          80,
+          0
+        ],
+        "background_color": "#949494",
+        "background_range": "360",
+        "megapixels": 2,
+        "multiple": 8,
+        "state_json": "{\"version\":2,\"id\":\"8aJC4DbC1OSzxASZ\",\"timeline\":{\"fps\":24,\"length\":null},\"camera\":{\"aspect\":1,\"position\":{\"value\":[0,0,0],\"keyframes\":[]},\"rotation\":{\"value\":{\"yaw_deg\":156.78037013731,\"pitch_deg\":-28.035274282663643,\"roll_deg\":0},\"keyframes\":[]},\"fov\":{\"value\":54.3,\"keyframes\":[]}},\"scene\":{\"clip\":{\"start\":0,\"in\":0,\"duration\":null},\"position\":{\"value\":[0,0,0],\"keyframes\":[]},\"rotation\":{\"value\":{\"yaw_deg\":0,\"pitch_deg\":0,\"roll_deg\":0},\"keyframes\":[]},\"scale\":{\"value\":1,\"keyframes\":[]}},\"stickers\":[],\"painting\":{\"version\":1,\"groups\":[],\"paint\":{\"strokes\":[]},\"mask\":{\"strokes\":[]},\"raster_objects\":[]},\"painting_layer\":null}",
+        "$$comfy_animation_preview": ""
+      }
+    },
+    "106": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          103,
+          1
+        ],
+        "filename_prefix": "ComfyUI"
+      }
+    }
+  }
+}

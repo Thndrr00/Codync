@@ -1,0 +1,198 @@
+{
+  "id": "comfyart-edit",
+  "name": "ComfyArt: edit a picture",
+  "version": "1.0.0",
+  "description": "ComfyArt’s quick edit: describe the change and the picture is rebuilt with it. Imported from ComfyArt (MIT) with its own Qwen-Image 2.1 graph.",
+  "tags": [
+    "image",
+    "comfyart",
+    "edit",
+    "higgsfield"
+  ],
+  "license": "ComfyArt is MIT (jtydhr88). Models: Qwen-Image 2.1 Research License (non-commercial), which the cards mark as non-commercial.",
+  "inputs": [
+    {
+      "key": "image",
+      "label": "The picture to edit",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "The change",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "negative",
+      "label": "What to avoid",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "qwen_image_2.1_int8_convrot.safetensors",
+      "folder": "diffusion_models",
+      "size": 7256783064,
+      "sha256": "cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen3vl_8b_int8_convrot.safetensors",
+      "folder": "text_encoders",
+      "size": 9350798360,
+      "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen_image_2.1_vae_bf16.safetensors",
+      "folder": "vae",
+      "size": 675509688,
+      "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    }
+  ],
+  "output": {
+    "type": "image",
+    "mime": "image/png"
+  },
+  "estimate": {
+    "seconds": 18,
+    "vram_gb": 14,
+    "output_gb": 0.01
+  },
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "device": "auto",
+        "dtype": "default",
+        "model": [
+          "1",
+          0
+        ]
+      }
+    },
+    "3": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "4": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "prompt": "{{prompt}}",
+        "negative_prompt": "{{negative}}",
+        "resolution": 0,
+        "clip": [
+          "3",
+          0
+        ],
+        "vae": [
+          "4",
+          0
+        ],
+        "images.image_1": [
+          "11",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "@prompt"
+      }
+    },
+    "7": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": "{{seed}}",
+        "steps": 25,
+        "cfg": 1,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1,
+        "model": [
+          "2",
+          0
+        ],
+        "positive": [
+          "6",
+          0
+        ],
+        "negative": [
+          "6",
+          1
+        ],
+        "latent_image": [
+          "6",
+          2
+        ]
+      },
+      "_meta": {
+        "title": "@sampler"
+      }
+    },
+    "8": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "7",
+          0
+        ],
+        "vae": [
+          "4",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "@decode"
+      }
+    },
+    "9": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "comfyart/edit",
+        "images": [
+          "8",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "@save"
+      }
+    },
+    "11": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{{image}}"
+      },
+      "_meta": {
+        "title": "@image"
+      }
+    }
+  }
+}

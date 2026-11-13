@@ -6,7 +6,8 @@
     "license": "MIT",
     "output": ["image"],
     "summary": "Turns a picture into a 360 panorama and places stickers in it. Best Overall of the challenge.",
-    "author": "nomadoor"
+    "author": "nomadoor",
+    "imported": true
   },
   {
     "id": "paint-a-plate",
@@ -45,7 +46,8 @@
     "license": "MIT",
     "output": ["video", "audio"],
     "summary": "An audio and lip-sync retake studio for ComfyUI and MiniMax H3.",
-    "author": "Nebuluss"
+    "author": "Nebuluss",
+    "imported": true
   },
   {
     "id": "genobi",
@@ -64,7 +66,8 @@
     "license": "AGPL-3.0",
     "output": ["mesh"],
     "summary": "Click an object in a Gaussian splat, then remove, replace or extract it.",
-    "author": "Burgstall-labs"
+    "author": "Burgstall-labs",
+    "imported": true
   },
   {
     "id": "sonder",
@@ -73,7 +76,8 @@
     "license": "GPL-3.0",
     "output": ["video"],
     "summary": "A timeline-based video editor with scenes, keyframes, render staging and takes.",
-    "author": "SonderSaid"
+    "author": "SonderSaid",
+    "imported": true
   },
   {
     "id": "max-editor",
@@ -82,25 +86,28 @@
     "license": "Apache-2.0",
     "output": ["video", "audio"],
     "summary": "Musical edits with MiniMax H3 and a local model, inside ComfyUI.",
-    "author": "xentome"
+    "author": "xentome",
+    "imported": true
   },
   {
     "id": "blocksfield",
     "name": "Blocksfield",
     "repo": "https://github.com/Hcoder10/blocksfield",
     "license": "MIT",
-    "output": ["image", "mesh"],
+    "output": ["image"],
     "summary": "A pitch becomes a playable Roblox game: art, props and music from open weights.",
-    "author": "Hcoder10"
+    "author": "Hcoder10",
+    "imported": true
   },
   {
     "id": "creativefield",
     "name": "Creativefield",
     "repo": "https://github.com/rhymeas/Creativefield",
     "license": "GPL-3.0",
-    "output": ["image", "video", "mesh"],
+    "output": ["image"],
     "summary": "A creative studio: keyframe animation, grey-block scenes made real, character swap and 3D.",
-    "author": "rhymeas"
+    "author": "rhymeas",
+    "imported": true
   },
   {
     "id": "comfyart",
@@ -109,7 +116,8 @@
     "license": "MIT",
     "output": ["image"],
     "summary": "A fully local design canvas on top of ComfyUI.",
-    "author": "jtydhr88"
+    "author": "jtydhr88",
+    "imported": true
   },
   {
     "id": "reshoot-4d",
@@ -118,7 +126,8 @@
     "license": "AGPL-3.0",
     "output": ["video"],
     "summary": "A 4D camera editor inside ComfyUI, running on open weights.",
-    "author": "itsmetamike"
+    "author": "itsmetamike",
+    "imported": true
   },
   {
     "id": "freefield",
@@ -137,6 +146,7 @@
     "license": "MIT",
     "output": ["video"],
     "summary": "Motion transfer and video swaps with MiniMax H3 guide latents.",
-    "author": "alisson-anjos"
+    "author": "alisson-anjos",
+    "imported": true
   }
 ]

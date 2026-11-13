@@ -1,0 +1,229 @@
+{
+  "id": "blocksfield-art",
+  "name": "Blocksfield: game concept art",
+  "version": "1.0.0",
+  "description": "The concept-art step of Hcoder10’s Blocksfield: a pitch becomes painted game art, props and icons. Imported from Blocksfield (MIT) with its own Qwen-Image 2.1 graph.",
+  "tags": [
+    "image",
+    "blocksfield",
+    "concept-art",
+    "higgsfield"
+  ],
+  "license": "Blocksfield is MIT (Hcoder10). Models: Qwen-Image 2.1 Research License (non-commercial), which the cards mark as non-commercial.",
+  "inputs": [
+    {
+      "key": "prompt",
+      "label": "The game pitch",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "negative",
+      "label": "What to avoid",
+      "type": "text",
+      "required": false
+    },
+    {
+      "key": "width",
+      "label": "Width",
+      "type": "integer",
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "key": "height",
+      "label": "Height",
+      "type": "integer",
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "step": 16
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    },
+    {
+      "key": "sigmas",
+      "label": "Steps (sigma list)",
+      "type": "text",
+      "default": "1.0, 0.909091, 0.727273, 0.0"
+    }
+  ],
+  "models": [
+    {
+      "file": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "folder": "diffusion_models",
+      "size": 7256787829,
+      "sha256": "8144a0182964aa8403ad6dbc011db837304167d235161b9aabaa8532e967314c",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen3vl_8b_int8_convrot.safetensors",
+      "folder": "text_encoders",
+      "size": 9350798360,
+      "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    },
+    {
+      "file": "qwen_image_2.1_vae_bf16.safetensors",
+      "folder": "vae",
+      "size": 675509688,
+      "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+      "license": "Qwen-Image 2.1 Research License (non-commercial)"
+    }
+  ],
+  "output": {
+    "type": "image",
+    "mime": "image/png"
+  },
+  "estimate": {
+    "seconds": 12,
+    "vram_gb": 12,
+    "output_gb": 0.01
+  },
+  "workflow": {
+    "1": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "2": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "1",
+          0
+        ],
+        "device": "auto",
+        "dtype": "default"
+      }
+    },
+    "3": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "4": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "5": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "3",
+          0
+        ],
+        "prompt": "{{prompt}}",
+        "negative_prompt": "{{negative}}",
+        "resolution": 1024
+      }
+    },
+    "6": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": "{{width}}",
+        "height": "{{height}}",
+        "batch_size": 1
+      }
+    },
+    "7": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": "{{seed}}"
+      }
+    },
+    "8": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "2",
+          0
+        ],
+        "positive": [
+          "5",
+          0
+        ],
+        "negative": [
+          "5",
+          1
+        ],
+        "cfg": 1
+      }
+    },
+    "9": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "10": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "{{sigmas}}"
+      }
+    },
+    "11": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "7",
+          0
+        ],
+        "guider": [
+          "8",
+          0
+        ],
+        "sampler": [
+          "9",
+          0
+        ],
+        "sigmas": [
+          "10",
+          0
+        ],
+        "latent_image": [
+          "6",
+          0
+        ]
+      }
+    },
+    "12": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "11",
+          0
+        ],
+        "vae": [
+          "4",
+          0
+        ]
+      }
+    },
+    "13": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "12",
+          0
+        ],
+        "filename_prefix": "bf/image"
+      }
+    }
+  }
+}
