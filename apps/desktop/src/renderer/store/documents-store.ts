@@ -6,6 +6,8 @@ export interface DocumentSummary {
   revision: number; rev: number; createdAt: number; updatedAt: number
 }
 export interface Document extends DocumentSummary { body: string }
+/** A `[[title]]` a page names, and the page it is when one has that title. */
+export interface DocumentLink { target: string; documentId?: string }
 export interface DocumentDraft { id?: string; parentId?: string | null; title: string; body: string; ifRevision: number; clientNonce?: string }
 export interface DocumentReview {
   id: string; botId: string; title: string; documentId?: string; status: string; createdAt: number; expiresAt: number
@@ -28,6 +30,8 @@ export class DocumentsStore extends Observable {
   reviewCurrent: Document | null = null
   draft: DocumentDraft | null = null
   conflict: Document | null = null
+  links: DocumentLink[] = []
+  backlinks: DocumentSummary[] = []
   query = ''
   next: string | null = null
   loading = false
@@ -141,8 +145,10 @@ export class DocumentsStore extends Observable {
     this.conflict = null
     this.changed()
     try {
-      const { document } = await this.call<{ document: Document }>('getDocument', { id })
+      const { document, links, backlinks } = await this.call<{ document: Document; links: DocumentLink[]; backlinks: DocumentSummary[] }>('getDocument', { id })
       if (request !== this.sequence) return
+      this.links = links ?? []
+      this.backlinks = backlinks ?? []
       this.draft = this.drafts.get(id) ?? toDraft(document)
       this.dirty = this.drafts.has(id)
       if (this.dirty && this.draft.ifRevision !== document.revision) this.conflict = document
@@ -160,6 +166,8 @@ export class DocumentsStore extends Observable {
     this.draft.clientNonce ??= crypto.randomUUID()
     this.dirty = this.drafts.has('new')
     this.conflict = null
+    this.links = []
+    this.backlinks = []
     this.error = null
     this.changed()
   }
@@ -184,7 +192,9 @@ export class DocumentsStore extends Observable {
     if (this.busy || !this.draft) return
     ++this.sequence; ++this.editorSession; this.opening = false
     this.cancelTimer(); this.drafts.delete(this.draft.id ?? 'new'); this.persistDrafts()
-    this.draft = null; this.dirty = false; this.conflict = null; this.error = null; this.changed()
+    this.draft = null; this.dirty = false; this.conflict = null; this.error = null
+    this.links = []; this.backlinks = []
+    this.changed()
   }
 
   saveAsCopy() {
@@ -230,6 +240,7 @@ export class DocumentsStore extends Observable {
       this.persistDrafts()
       this.notice = this.dirty ? null : 'Saved'
       void this.load()
+      if (!this.dirty) void this.refreshLinks(result.document.id)
       this.cancelTimer()
       if (this.dirty && this.active) this.timer = setTimeout(() => { void this.save() }, 800)
     } catch (error) {
@@ -237,6 +248,17 @@ export class DocumentsStore extends Observable {
       if (!submitted.id) this.notice = 'Creation was not confirmed. Your draft is kept; retry Save to check the same request safely.'
     }
     finally { this.busy = false; this.changed() }
+  }
+
+  /** The page's links and the pages that link to it, after a save changes what it names. */
+  private async refreshLinks(id: string) {
+    try {
+      const { links, backlinks } = await this.call<{ links: DocumentLink[]; backlinks: DocumentSummary[] }>('getDocument', { id })
+      if (this.draft?.id !== id) return
+      this.links = links ?? []
+      this.backlinks = backlinks ?? []
+      this.changed()
+    } catch { /* the editor works without its links */ }
   }
 
   reloadConflict() {

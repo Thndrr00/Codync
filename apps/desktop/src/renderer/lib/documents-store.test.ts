@@ -224,3 +224,21 @@ test('recovering a draft supersedes an older open without leaving the editor loa
     assert.equal(store.draft?.title, 'Local draft')
   } finally { store.retire() }
 })
+
+test('opening a page keeps the links it names and the pages that link to it', async () => {
+  const store = model(async (method) => {
+    if (method === 'getDocument') return {
+      document,
+      links: [{ target: 'Roadmap', documentId: 'roadmap' }, { target: 'Missing' }],
+      backlinks: [{ ...document, id: 'other', title: 'Notes' }],
+    }
+    return { items: [], next: null }
+  })
+  try {
+    await store.open('page')
+    assert.equal(store.links.length, 2)
+    assert.equal(store.links[0].documentId, 'roadmap')
+    assert.equal(store.links[1].documentId, undefined, 'a title nobody has yet is still a link')
+    assert.equal(store.backlinks[0].title, 'Notes')
+  } finally { store.retire() }
+})

@@ -104,6 +104,26 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
           {documents.dirty && <Button kind="secondary" disabled={documents.busy} onClick={() => setConfirmDiscard({ store: documents, session: documents.editorSession })}>Discard draft</Button>}
         </HStack>
       </section>}
+      {!documents.opening && draft && (documents.links.length > 0 || documents.backlinks.length > 0) && <CardSection>
+        <Text size="headline">Links</Text>
+        {documents.links.length > 0 && <VStack gap={4}>
+          <Text size="caption" tone="secondary">This page names</Text>
+          {documents.links.map((link) => {
+            const id = link.documentId
+            return id
+              ? <button key={link.target} className="documents-row press" disabled={documents.busy} onClick={() => void documents.open(id)}>
+                <Text weight="semibold">{link.target}</Text>
+              </button>
+              : <Text key={link.target} size="caption" tone="secondary">{link.target} · no page with that title yet</Text>
+          })}
+        </VStack>}
+        {documents.backlinks.length > 0 && <VStack gap={4}>
+          <Text size="caption" tone="secondary">Linked from</Text>
+          {documents.backlinks.map((page) => <button key={page.id} className="documents-row press" disabled={documents.busy} onClick={() => void documents.open(page.id)}>
+            <Text weight="semibold">{page.title}</Text>
+          </button>)}
+        </VStack>}
+      </CardSection>}
     </> : section === 'reviews' ? <CardSection>
       <HStack><Text size="headline" grow>Proposed document changes</Text><IconButton title="Refresh reviews" icon="arrow.clockwise" onClick={() => void documents.refreshExtras()} /></HStack>
       {documents.extrasLoading && <Text as="div" tone="secondary">Loading reviews…</Text>}
