@@ -32,6 +32,10 @@ The three share one shape (agents with `key`, `name`, `title`, `description`, `a
 top-level folder is found too. An agent, group or routine that doesn't check out is left out with a
 warning; the rest imports.
 
+**Credentials never travel.** Nothing under `apiKey`, `apiKeys`, `keys`, `secrets`, `credentials`,
+`password`, `passwords` or `tokens` is read: the preview counts them and says how many were left out, so
+the person sees that no key came over.
+
 ## What each part becomes (`host/src/import/mod.rs`)
 
 - **Bot**: `createBot` with defaults; `description` = title, then instructions. A transfer file's

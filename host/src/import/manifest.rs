@@ -170,6 +170,7 @@ pub fn read(archive: &mut Archive, now: i64) -> Result<Plan> {
         }
     }
     sections(&manifest["settings"]["sidebarSections"], &mut plan.bots);
+    credentials(&manifest, &mut plan.warnings);
     for raw in manifest["channels"].as_array().into_iter().flatten().take(MAX_BOTS) {
         match group(raw, &plan.bots, now, &mut plan.warnings) {
             Ok(group) => plan.groups.push(group),
@@ -184,6 +185,40 @@ pub fn read(archive: &mut Archive, now: i64) -> Result<Plan> {
 
 fn first_warning(warnings: &[String]) -> String {
     warnings.first().map(|w| format!(" ({w})")).unwrap_or_default()
+}
+
+/// The names an export may carry credentials under. They are never read: this only counts them, so the
+/// preview can say what stayed behind.
+const SECRET_KEYS: [&str; 8] = ["apiKey", "apiKeys", "keys", "secrets", "credentials", "password", "passwords", "tokens"];
+
+/// Counts the credentials anywhere in the manifest and says they were left out. A key never leaves the
+/// app it belongs to, so the person importing sees that nothing was carried over by accident.
+fn credentials(value: &Value, warnings: &mut Vec<String>) {
+    fn count(value: &Value, found: &mut usize) {
+        match value {
+            Value::Object(map) => {
+                for (key, inner) in map {
+                    if !inner.is_null() && SECRET_KEYS.iter().any(|secret| secret.eq_ignore_ascii_case(key)) {
+                        *found += match inner {
+                            Value::Object(entries) => entries.len().max(1),
+                            Value::Array(items) => items.len().max(1),
+                            _ => 1,
+                        };
+                    }
+                    count(inner, found);
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|item| count(item, found)),
+            _ => {}
+        }
+    }
+    let mut found = 0;
+    count(value, &mut found);
+    if found > 0 {
+        warnings.push(format!(
+            "{found} credentials in the export were left out: a key never leaves the app it belongs to"
+        ));
+    }
 }
 
 fn label(raw: &Value) -> String {
@@ -316,4 +351,29 @@ fn checked_key(key: &str) -> Result<String> {
 
 fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credentials_are_counted_and_never_read() {
+        let manifest = serde_json::json!({
+            "agents": [{"name": "A", "apiKeys": {"openai": "sk-1", "github": "gh-2"}}],
+            "settings": {"secrets": ["one"]}
+        });
+        let mut warnings = Vec::new();
+        credentials(&manifest, &mut warnings);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].starts_with("3 credentials"), "{}", warnings[0]);
+    }
+
+    #[test]
+    fn an_export_without_credentials_says_nothing() {
+        let manifest = serde_json::json!({"agents": [{"name": "A", "description": "no keys here"}]});
+        let mut warnings = Vec::new();
+        credentials(&manifest, &mut warnings);
+        assert!(warnings.is_empty());
+    }
 }
