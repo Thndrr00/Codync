@@ -109,6 +109,7 @@ impl Rooms {
         let mut rooms = self.rooms.locked();
         let Some(room) = rooms.get_mut(group) else { return false };
         room.epoch += 1;
+        room.running = None;
         room.pending = None;
         room.late_turns = MAX_LATE_TURNS;
         true
@@ -124,9 +125,14 @@ impl Rooms {
     }
 
     /// A room turn is running in `lane`'s group.
+    pub(super) fn busy(&self, lane: &Lane) -> bool {
+        self.rooms.locked().get(&lane.chat).is_some_and(|room| room.running.is_some())
+    }
+
+    /// A room turn is running in `lane`'s group.
     #[cfg(test)]
     pub(super) fn running(&self, lane: &Lane) -> bool {
-        self.rooms.locked().get(&lane.chat).is_some_and(|room| room.running.is_some())
+        self.busy(lane)
     }
 
     /// A late answer in `lane`'s group waits for the running room turn to end.

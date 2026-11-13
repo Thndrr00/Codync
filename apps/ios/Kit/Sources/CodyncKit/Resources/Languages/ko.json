@@ -2564,5 +2564,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "위임된 작업을 조정하고 멤버가 멈추거나 실패하면 자동으로 개입합니다.",
   "Lead": "리드",
   "None (auto)": "없음(자동)",
-  "No": "아니요"
+  "No": "아니요",
+  "Waiting for sub-tasks": "하위 작업을 기다리는 중",
+  "The lead": "리드",
+  "Reassign": "담당 변경",
+  "waiting": "대기 중",
+  "working": "진행 중",
+  "done": "완료",
+  "failed": "실패",
+  "stopped": "중지됨",
+  "cancelled": "취소됨",
+  "sub-tasks": "하위 작업",
+  "W stops": "W 중지",
+  "O goes on · A reassigns · B cancels": "O 계속 · A 담당 변경 · B 취소",
+  "enter gives it · esc": "enter 로 넘김 · esc",
+  "Stop a sub-task before giving it to another member": "다른 멤버에게 넘기기 전에 하위 작업을 중지하세요"
 }

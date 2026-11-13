@@ -77,6 +77,10 @@ extension BotStore {
     }
 
     public func stop(_ botId: String) { perform(replay: true) { try await $0.stop(botId) } }
+    /// A channel sub-task's controls: `stop`, `continue`, `reassign` (with `owner`) or `cancel`.
+    public func groupTask(_ botId: String, task: String, action: String, owner: String? = nil) {
+        perform { try await $0.groupTask(botId, taskId: task, action: action, ownerId: owner) }
+    }
     /// A call's audio is on: the lead speaks first, on the call (an older host, which has no lead, never gets this).
     public func callStarted(_ botId: String, call: String) {
         guard bots[botId]?.lead == true else { return }

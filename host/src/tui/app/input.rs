@@ -213,6 +213,9 @@ impl App {
         if self.pick.is_some() && self.pick_key(k) {
             return;
         }
+        if self.tasks_key(k) {
+            return;
+        }
         match k.code {
             KeyCode::Char('c') if ctrl => self.flash("q quits"),
             KeyCode::Char('d') if ctrl => self.scroll_focused(-half),

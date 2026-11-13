@@ -26,13 +26,14 @@ pub mod roster_tools;
 mod rules;
 mod slash;
 mod steps;
+pub mod tasks;
 mod ui;
 mod usage_chooser;
 mod whats_new;
 
 pub use always::AlwaysSheet;
 pub use beliefs::BeliefsSheet;
-pub use bot::{AgentModel, Bot, ModelOption, OwnMemory};
+pub use bot::{AgentModel, Bot, ModelOption, OwnMemory, Task};
 pub use channels::ChannelsSheet;
 pub use editor::Editor;
 pub use exchange::{ConversationRow, Exchange, Item, Outcome, conversation, group, rows};
@@ -70,6 +71,8 @@ struct PendingSend {
 #[allow(clippy::struct_excessive_bools, reason = "independent UI flags, not a state machine")]
 pub struct App {
     pub roster_tools: roster_tools::RosterTools,
+    /// The channel's "Waiting for sub-tasks" band: its pick, and a reassign in progress.
+    pub tasks_band: tasks::TasksBand,
     pub client: Client,
     pub(super) tx: UnboundedSender<Msg>,
     pub url: String,
@@ -190,6 +193,7 @@ impl App {
     pub fn new(client: Client, tx: UnboundedSender<Msg>, url: String) -> Self {
         Self {
             roster_tools: roster_tools::RosterTools::default(),
+            tasks_band: tasks::TasksBand::default(),
             download: None,
             artifact_titles: super::manage::ArtifactTitles::default(),
             client,

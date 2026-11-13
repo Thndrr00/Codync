@@ -27,6 +27,8 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - 可從設定刪除聊天或頻道的歷史記錄，同時保留設定、記憶與例行程序。
 - 伺服器設定可選「自然」或「經典」更新、代理是否使用你的 Claude Code 設定，以及誰能控制這台電腦的螢幕（30 秒倒數與「全部停止」）。
 - 可從頻道設定開始新對話或壓縮上下文。
+- 頻道會顯示「等待子任務」清單：每一列是某個成員的子任務，可以先停止；停止後能繼續、改派給其他成員，或取消整段（訊息會保留）。
+- 可以請頻道的負責人放棄先前的請求：整輪連同執行中與排隊中的子任務一併取消，頻道會註明是誰要求的。
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
@@ -37,6 +39,8 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - A connector call that carries a key or password says it carries a credential, and unfolding it lists which argument holds it, without copying the value.
 - Voice settings add xAI and Groq: xAI reads replies aloud with your own key under Speech output, and Groq adds Whisper dictation beside the microphone; both keys stay on the computer.
 - When a voice request fails, the computer writes the reason, provider, model and turn to logs/voice.log, with any keys removed.
+- Channels show a "Waiting for sub-tasks" list: stop a member's sub-task, then continue it, give it to another member, or cancel it and keep the messages.
+- Ask a channel's lead to drop earlier work: it cancels that whole run, with its running and queued sub-tasks, and the channel notes who asked.
 
 ## 2.44.1
 ### zh-Hant

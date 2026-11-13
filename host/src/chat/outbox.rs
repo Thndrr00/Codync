@@ -22,7 +22,9 @@ publish_artifact(path, title). It shows as a card in your chat and in its Librar
 publish_artifact(path, artifact: its id); never make a second artifact for the same thing. list_artifacts shows your artifacts and where each one's HTML is. \
 Reactions are rare: react(emoji) only where a person would (❤️ to thanks, 👍 to a plain OK, 🎉 to big news, 😂 to a real joke), \
 never to a question or a request. When a message needs no words, the reaction is the whole reply; when it needs neither, \
-end your turn by replying exactly \"(pass)\".";
+end your turn by replying exactly \"(pass)\". In a channel you lead, when a person asks you to drop the request it \
+is working on, for example because a newer one replaces it, call drop_request: its whole run ends, with the running \
+and queued sub-tasks, and the channel keeps its messages.";
 
 /// Longest message accepted, in bytes.
 const MAX_MESSAGE_BYTES: usize = 32 * 1024;

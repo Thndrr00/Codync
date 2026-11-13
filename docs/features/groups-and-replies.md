@@ -40,7 +40,7 @@ quotes itself.
 | `deleteBot` | `botId` | A group's bots stay. A deleted bot leaves its groups. |
 | `reorderBots` | `ids` | The roster as the user dragged it, top first; groups count as rows. See [bot order](computer-order.md#bot-order). |
 | `renameSection` | `from, to` | Every row in section `from` moves to `to`, groups too; an existing name merges them, `null` removes the section. See [bot order](computer-order.md#bot-order). |
-| `stop` | `botId` | For a group: ends its room turn and stops members working in it. |
+| `stop` | `botId` | For a group: ends its room turn, stops members working in it, and pauses its request tree (Continue below resumes it). |
 | `react` | `entryId, emoji` | Toggles the user's reaction on a chat message (`data.reactions`, oldest first, at most 8). A reacted-to message never turns unread again. The bot isn't told, except in a group, where members see reactions on the room lines they're shown. Bots react themselves with the `chat` server's `react` ([bot reactions](chat-messages.md#bot-reactions)). |
 | `respondPermission` | `entryId, optionId?` | Routed to `data.author`, so cards in a group reach the bot that asked. |
 | `markRead` | `botId` | Reads the chat. A no-op when nothing there is unread, so clients call it whenever a chat is on screen. `send` marks its chat read. |
@@ -83,6 +83,54 @@ see the channel (not a member, creator or lead) is refused with what to do ("ask
 you to it, or to change it"); a bot without Manage the team is refused before anything else.
 A created group reaches every client through the ordinary `bot` roster event, with its title,
 members, lead and picture.
+
+## A request's sub-tasks (`host/src/chat/group/tasks.rs`)
+
+Every room turn is a small task tree, kept in the store (`group_tasks`, per group and lane): the
+request (the user's message), an assignment for each member it asks, and children for the members
+those assignments name. Each row has an owner, a state and the request's text (or the line that
+brought it in):
+
+| State | Meaning |
+|---|---|
+| `queued` | Waits its turn; a resumed branch is asked before anyone else. |
+| `running` | Its member is taking the turn now. |
+| `completed` | Its member took it (answered or passed). |
+| `failed` | Its turn couldn't finish; it waits for Continue or Reassign. |
+| `paused` | Stopped: nothing below this row runs until Continue or Reassign. |
+| `cancelled` | Cancelled or dropped: neither this row nor anything below it runs again. |
+
+The room turn checks the tree before every speaker (`tasks::next`), so a paused or cancelled
+branch never speaks. A newer message in the lane supersedes the earlier request: its open rows
+are cancelled, with the note "A newer request replaced it". A member that leaves the channel takes
+its open rows with it.
+
+Rows reach clients on the group's own `bot` JSON (`tasks`), so every client shows the same list
+without another call. `groupTask` acts on one row:
+
+| Method | Body | Notes |
+|---|---|---|
+| `groupTask` | `botId, taskId, action, ownerId?` | `stop` pauses the row and its branch (on the request: the whole tree, and the room turn ends); `continue` queues it and its paused children again; `reassign` gives it `ownerId` (a member) and resumes them with it; `cancel` ends the request from its root down, keeps the messages, and stops the members working there. Continue and Reassign start a resumed room turn when none runs, which asks only the rows that waited. |
+
+The apps show the rows above the composer as **Waiting for sub-tasks**: owner, state and line,
+with Stop on a row that waits or runs, and Continue, Reassign (a member picker) and Cancel on a
+stopped one. A row's key on the terminal: `,`/`.` pick, `W` stop, `O` continue, `A` reassign,
+`B` cancel (`groupTask` with the picked row).
+
+## The lead drops a run (`host/src/chat/group/drop.rs`)
+
+A person can ask the channel's lead to drop a request, for example when a newer one replaces it.
+The lead has the `drop_request` tool in the `codync-chat` MCP server (registered in
+`host/src/mcp.rs`):
+
+| Tool | Fields | Notes |
+|---|---|---|
+| `drop_request` | `channelId?` | The channel's id or name; omitted, the channel the lead is working in. Only that channel's lead (`chiefBotId`) may call it. The newest request's whole run ends, with its running and queued sub-tasks, and the channel keeps its messages. |
+
+Under Ask the call waits on the approval card `chat::manage::approve` uses for the team's changes;
+under Auto it applies at once. Either way the channel gets a notice naming who asked ("The user
+asked to drop this request: …") and the lead's lane a notice that it was dropped. `dropRequest`
+(`botId`, optional `by`) does the same from a client, with `by` naming the person.
 
 ## How a group answers (`host/src/chat/group.rs`, `group/rooms.rs`, Grok Bot's design)
 
@@ -155,7 +203,7 @@ placeholder reads "Reply…", and sending includes `replyTo`; leaving the chat c
 user message with `data.replyTo` shows the quote at the top of its bubble. Every client shows a
 quote as its first non-empty line without Markdown markers (the roster's message preview rule). Reactions under
 a message (the user's: tap to take back; the bots': emoji plus the avatars of who chose it),
-group create/edit (name, title, picture, lead, archive, members), Stop in a group calls `stop` with the group id.
+group create/edit (name, title, picture, lead, archive, members), Stop in a group calls `stop` with the group id and pauses its request tree. Every client also shows **Waiting for sub-tasks** above the composer while a request has rows: each row's owner, state and line, Stop on a row that waits or runs, and Continue, Reassign and Cancel on a stopped one (host `groupTask`).
 
 Slack-style reply threads were removed for quote replies; [threads for teams](../plans/threads-for-teams.md)
 lists where their code lived and how to bring it back.

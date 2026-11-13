@@ -48,6 +48,10 @@ public struct ThreadView: View {
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 } else {
+                    if let bot, bot.isGroup {
+                        GroupTasksCard(group: bot)
+                            .padding(.bottom, 6)
+                    }
                     Composer(botId: botId, replyingTo: $replyingTo,
                              queued: model.chat(botId).hidingCalls().queue(working: busy),
                              onCall: !calling && bot != nil ? { calling = true } : nil,

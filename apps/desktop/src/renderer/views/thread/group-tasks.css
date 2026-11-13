@@ -1,0 +1,42 @@
+/* A channel's "Waiting for sub-tasks" over the composer: one line per member's assignment and its controls. */
+.group-tasks {
+  padding: 0 16px 6px;
+}
+
+.group-tasks-card {
+  padding: 9px 10px 6px;
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+.group-task {
+  padding: 2px 0;
+}
+
+.group-task + .group-task {
+  border-top: 1px solid var(--border);
+}
+
+.group-task-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-task-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.group-task-action:hover {
+  color: var(--text);
+}

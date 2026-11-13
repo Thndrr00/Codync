@@ -2564,5 +2564,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "Координирует поручённые задачи и вмешивается, если участник застрял или ошибся.",
   "Lead": "Ведущий",
   "None (auto)": "Нет (авто)",
-  "No": "Нет"
+  "No": "Нет",
+  "Waiting for sub-tasks": "Ожидание подзадач",
+  "The lead": "Ведущий",
+  "Reassign": "Переназначить",
+  "waiting": "ожидает",
+  "working": "работает",
+  "done": "готово",
+  "failed": "сбой",
+  "stopped": "остановлено",
+  "cancelled": "отменено",
+  "sub-tasks": "подзадачи",
+  "W stops": "W останавливает",
+  "O goes on · A reassigns · B cancels": "O продолжает · A переназначает · B отменяет",
+  "enter gives it · esc": "Enter передаёт · Esc",
+  "Stop a sub-task before giving it to another member": "Остановите подзадачу, прежде чем передать её другому участнику"
 }

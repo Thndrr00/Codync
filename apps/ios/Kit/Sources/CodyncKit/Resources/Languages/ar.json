@@ -515,5 +515,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "ينسّق المهام المفوّضة ويتدخّل تلقائيًا إذا تعطّل عضو أو فشل.",
   "Lead": "القائد",
   "None (auto)": "بلا (تلقائي)",
-  "No": "لا"
+  "No": "لا",
+  "Waiting for sub-tasks": "في انتظار المهام الفرعية",
+  "The lead": "المسؤول",
+  "Reassign": "إعادة الإسناد",
+  "waiting": "في الانتظار",
+  "working": "يعمل",
+  "done": "تم",
+  "failed": "فشل",
+  "stopped": "متوقف",
+  "cancelled": "أُلغي",
+  "sub-tasks": "المهام الفرعية",
+  "W stops": "W يوقف",
+  "O goes on · A reassigns · B cancels": "O يتابع · A يعيد الإسناد · B يلغي",
+  "enter gives it · esc": "enter يمنحها · esc",
+  "Stop a sub-task before giving it to another member": "أوقف مهمة فرعية قبل منحها لعضو آخر"
 }

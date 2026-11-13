@@ -175,6 +175,8 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     }
 
     let strip_top = queue_band(buf, r, app, &b, box_top, typing);
+    // A channel's request tree shows over it: what waits for the members, and the keys that act on it.
+    let strip_top = super::tasks::tasks_band(buf, r, app, &b, strip_top, typing);
 
     // Transcript.
     let body = Rect::new(r.x, top + 1, r.width, strip_top.saturating_sub(top + 1));

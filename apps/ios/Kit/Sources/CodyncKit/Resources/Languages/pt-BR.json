@@ -2564,5 +2564,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "Coordena as tarefas delegadas e intervém automaticamente se um membro travar ou falhar.",
   "Lead": "Líder",
   "None (auto)": "Nenhum (automático)",
-  "No": "Não"
+  "No": "Não",
+  "Waiting for sub-tasks": "Aguardando as subtarefas",
+  "The lead": "O responsável",
+  "Reassign": "Reatribuir",
+  "waiting": "aguardando",
+  "working": "trabalhando",
+  "done": "concluído",
+  "failed": "falhou",
+  "stopped": "interrompido",
+  "cancelled": "cancelado",
+  "sub-tasks": "subtarefas",
+  "W stops": "W interrompe",
+  "O goes on · A reassigns · B cancels": "O continua · A reatribui · B cancela",
+  "enter gives it · esc": "enter entrega · esc",
+  "Stop a sub-task before giving it to another member": "Interrompa uma subtarefa antes de entregá-la a outro membro"
 }

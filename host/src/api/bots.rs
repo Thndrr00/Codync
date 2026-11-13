@@ -115,6 +115,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::artifacts::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::dev_servers::TOOLS.contains(&name) {
                 crate::dev_servers::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::group::drop::TOOLS.contains(&name) {
+                crate::chat::group::drop::call(hub, bot, name, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }
@@ -506,6 +508,26 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "stop" => {
             hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
+        }
+        // A channel request's sub-tasks: stop, continue, reassign or cancel one row of its tree.
+        "groupTask" => {
+            let action = str_arg(&b, "action")?;
+            crate::chat::group::tasks::act(
+                hub,
+                str_arg(&b, "botId")?,
+                str_arg(&b, "taskId")?,
+                action,
+                b["ownerId"].as_str(),
+            )?
+        }
+        // A person asked the lead to drop the channel's running request: its whole run ends.
+        "dropRequest" => {
+            let group = hub.store.bot(str_arg(&b, "botId")?)?.filter(|row| !row.deleted).context("Unknown bot.")?;
+            if !group.config.is_group() {
+                bail!("only a channel has requests to drop");
+            }
+            let by = b["by"].as_str().map(str::trim).filter(|by| !by.is_empty()).unwrap_or("The user");
+            json!({"dropped": crate::chat::group::tasks::drop_run(hub, &group.config, by)?})
         }
         "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
         "setTokenBudget" => {

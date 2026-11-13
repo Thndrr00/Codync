@@ -223,6 +223,17 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('stopAll', {}), true)
   }
 
+  /** A channel sub-task's controls: `stop`, `continue`, `reassign` (with `ownerId`) or `cancel`. */
+  async groupTask(botId: string, taskId: string, action: string, ownerId?: string): Promise<string | null> {
+    try {
+      const client = await this.ready()
+      await client.call('groupTask', { botId, taskId, action, ...(ownerId ? { ownerId } : {}) })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
   openMessageContext(entries: Entry[], hit: { botId: string; id: string; threadId: string | null }) {
     this.messageContext = { ...hit, entries: entries.filter((e) => !isInternalEntry(e)) }
     this.changed()

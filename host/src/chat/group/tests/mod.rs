@@ -1,4 +1,6 @@
 use super::*;
+
+mod tasks;
 use serde_json::{Value, json};
 
 fn bot(id: &str, name: &str) -> BotConfig {

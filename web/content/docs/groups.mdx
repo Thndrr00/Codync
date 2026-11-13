@@ -94,9 +94,26 @@ If a member fails while answering, the room counts it as a pass and shows the er
 
 ## Stop
 
-Press **Stop** in the group (the send button turns into Stop while members work; `s` in the terminal UI). It ends the current exchange and stops members working in the group.
+Press **Stop** in the group (the send button turns into Stop while members work; `s` in the terminal UI). It ends the current exchange, stops members working in the group, and keeps the exchange's sub-tasks stopped until you continue them (below).
 
 Sending a new message also ends the running exchange before the next member is asked, and starts a new one with your message.
+
+## Sub-tasks: stop, continue, reassign, cancel
+
+Every exchange you start is a small task tree: your request, an assignment for each member it asks, and the members those assignments bring in. While it has rows, every app shows **Waiting for sub-tasks** above the message box, one line per assignment with its member and its state: waiting, working, done, failed, stopped or cancelled.
+
+- **Stop** on a row pauses that row and everything below it, and stops the member working on it. On the request's own row it pauses the whole exchange, so no other member speaks.
+- A **stopped** row then offers **Continue**, **Reassign** and **Cancel**:
+  - **Continue** lets it go on, and the members that waited below it speak again.
+  - **Reassign** gives that row to another member, who carries on with what waited.
+  - **Cancel** ends the exchange from its request down, including every member's assignment, and keeps the messages. A member that was working stops.
+- The terminal UI lists the same rows over the composer: `,` and `.` pick one, `W` stops, `O` continues, `A` reassigns (then Enter), and `B` cancels.
+
+A newer message of yours replaces the earlier request: what was still waiting for it is cancelled, and its messages stay.
+
+## Drop earlier work
+
+When a newer request replaces one the group is still working on, ask its **Chief of Staff** to drop the old one: "drop that request, this one replaces it". The lead has a `drop_request` tool, and it ends that whole run — the running and queued sub-tasks included — while the channel keeps its messages. A line in the channel says who asked ("The user asked to drop this request: …"), and the lead's own chat records that it was dropped. Under **Asks before acting** the lead waits for your Allow first; under **Approves automatically** it applies at once.
 
 ## What each member remembers
 

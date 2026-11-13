@@ -14,6 +14,8 @@ data class Bot(
     val name: String = "",
     val kind: String = "agent",
     val members: List<String> = emptyList(),
+    /** A group's request tree: the request, its assignments to members, and their children (`chat/group/tasks.rs`). */
+    val tasks: List<GroupTask> = emptyList(),
     /** A group's short line under its name; empty for none. */
     val title: String = "",
     /** A group taken out of the open roster; its conversation stays. */

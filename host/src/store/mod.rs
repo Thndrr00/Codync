@@ -15,6 +15,7 @@ mod documents;
 mod entries;
 pub mod flow_steps;
 pub mod flows;
+mod group_tasks;
 mod history;
 mod inflight;
 pub(crate) mod mcp_policies;
@@ -47,6 +48,7 @@ pub use devices::{Device, DeviceAccount, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
+pub use group_tasks::{GroupTask, TaskKind, TaskState, branch as task_branch, new_task};
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,

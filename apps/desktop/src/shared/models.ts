@@ -26,12 +26,46 @@ export interface Personality {
   heartbeat: string
 }
 
+/** One row of a group's request tree: the request, or a member's assignment under it. */
+export interface GroupTask {
+  id: string
+  groupId: string
+  /** The lane's key: the chat, or its thread. */
+  lane: string
+  /** The user's message the tree answers. */
+  requestId: string
+  rootId: string
+  parentId: string | null
+  ownerId: string | null
+  /** The owner's name, as the host resolves it. */
+  ownerName?: string | null
+  kind: 'request' | 'assignment'
+  /** `queued`, `running`, `completed`, `failed`, `paused` or `cancelled`. */
+  state: string
+  instruction: string
+  note?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** Still part of the request's work: it may take a turn, or wait for one. */
+export function taskOpen(task: GroupTask): boolean {
+  return ['queued', 'running', 'paused', 'failed'].includes(task.state)
+}
+
+/** Stopped or failed: it offers Continue, Reassign and Cancel. */
+export function taskStopped(task: GroupTask): boolean {
+  return task.state === 'paused' || task.state === 'failed'
+}
+
 export interface Bot {
   id: string
   /** `agent`, or `group`: several bots and the user in one chat. */
   kind: string
   members: string[]
   chiefBotId?: string | null
+  /** A group's request tree: the request, its assignments to members, and their children (`chat/group/tasks.rs`). */
+  tasks?: GroupTask[]
   /** A group's short line under its name in the roster; null for none. */
   title?: string | null
   /** A group taken out of the open roster; its conversation stays and it can be restored. */
@@ -147,6 +181,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     id: raw.id,
     kind: raw.kind ?? 'agent',
     members: raw.members ?? [],
+    tasks: raw.tasks ?? [],
     name: raw.name ?? 'Bot',
     description: raw.description ?? '',
     avatarColor: raw.avatarColor ?? 'blue',

@@ -9,6 +9,17 @@ private extension String {
 // only carry them.
 
 public extension HostClient {
+    /// A channel sub-task: stop it, let it go on, give it another member, or cancel its branch.
+    func groupTask(_ botId: String, taskId: String, action: String, ownerId: String? = nil) async throws {
+        struct Body: Encodable {
+            var botId: String
+            var taskId: String
+            var action: String
+            var ownerId: String?
+        }
+        let _: Empty = try await call("groupTask", Body(botId: botId, taskId: taskId, action: action, ownerId: ownerId))
+    }
+
     struct TelegramBody: Encodable {
         var name: String
         var userId: Int64?

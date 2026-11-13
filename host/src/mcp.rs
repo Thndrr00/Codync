@@ -97,6 +97,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::skills::tools());
                 list.push(crate::chat::skills::tool());
                 list.extend(crate::dev_servers::tools());
+                list.extend(crate::chat::group::drop::tools().as_array().into_iter().flatten().cloned());
             }
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }

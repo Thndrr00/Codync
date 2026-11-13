@@ -32,6 +32,7 @@ import { WorkingTransition } from './WorkingTransition'
 import { RoutineNotice } from './RoutineNotice'
 import { Composer } from './Composer'
 import { QueuedMessages } from './QueuedMessages'
+import { GroupTasks } from './GroupTasks'
 import { fill } from '../../lib/fill.ts'
 import { outsideQueue } from './queued-messages'
 import { ChatSidePanel } from './ChatSidePanel'
@@ -262,6 +263,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
             // The artifact over the chat has its own box (two would both take the voice shortcut).
             <>
               <QueuedMessages botId={botId} />
+              {bot ? <GroupTasks bot={bot} /> : null}
               <Composer
                 botId={botId}
                 reply={replyTo}

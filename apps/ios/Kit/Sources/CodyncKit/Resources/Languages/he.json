@@ -2564,5 +2564,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "מתאם משימות שהואצלו ומתערב אוטומטית אם חבר נתקע או נכשל.",
   "Lead": "מוביל",
   "None (auto)": "אין (אוטומטי)",
-  "No": "לא"
+  "No": "לא",
+  "Waiting for sub-tasks": "ממתין למשימות המשנה",
+  "The lead": "המוביל",
+  "Reassign": "הקצה מחדש",
+  "waiting": "ממתין",
+  "working": "עובד",
+  "done": "הושלם",
+  "failed": "נכשל",
+  "stopped": "נעצר",
+  "cancelled": "בוטל",
+  "sub-tasks": "משימות משנה",
+  "W stops": "W עוצר",
+  "O goes on · A reassigns · B cancels": "O ממשיך · A מקצה מחדש · B מבטל",
+  "enter gives it · esc": "Enter מעניק · esc",
+  "Stop a sub-task before giving it to another member": "עצור משימת משנה לפני שתעביר אותה לחבר אחר"
 }

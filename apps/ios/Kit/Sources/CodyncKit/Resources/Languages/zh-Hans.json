@@ -2564,5 +2564,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "协调委派的任务，并在成员停滞或失败时自动介入。",
   "Lead": "负责人",
   "None (auto)": "无（自动）",
-  "No": "否"
+  "No": "否",
+  "Waiting for sub-tasks": "等待子任务",
+  "The lead": "主导者",
+  "Reassign": "改派",
+  "waiting": "等待中",
+  "working": "进行中",
+  "done": "完成",
+  "failed": "失败",
+  "stopped": "已停止",
+  "cancelled": "已取消",
+  "sub-tasks": "子任务",
+  "W stops": "W 停止",
+  "O goes on · A reassigns · B cancels": "O 继续 · A 改派 · B 取消",
+  "enter gives it · esc": "enter 交给它 · esc",
+  "Stop a sub-task before giving it to another member": "先停止子任务，才能交给其他成员"
 }

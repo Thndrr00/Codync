@@ -2564,5 +2564,19 @@
   "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.": "委任された作業を調整し、メンバーが停滞したり失敗したときに自動で介入します。",
   "Lead": "リード",
   "None (auto)": "なし（自動）",
-  "No": "いいえ"
+  "No": "いいえ",
+  "Waiting for sub-tasks": "サブタスクを待っています",
+  "The lead": "リード",
+  "Reassign": "担当を変更",
+  "waiting": "待機中",
+  "working": "実行中",
+  "done": "完了",
+  "failed": "失敗",
+  "stopped": "停止済み",
+  "cancelled": "キャンセル済み",
+  "sub-tasks": "サブタスク",
+  "W stops": "W 停止",
+  "O goes on · A reassigns · B cancels": "O 再開 · A 担当変更 · B キャンセル",
+  "enter gives it · esc": "enter で渡す · esc",
+  "Stop a sub-task before giving it to another member": "他のメンバーに渡す前にサブタスクを停止してください"
 }

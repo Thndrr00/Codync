@@ -196,6 +196,12 @@ fun AppStore.continueTurn(entry: Entry) = action("continue:" + entry.id) {
     ready().call("continueTurn", body("entryId" to entry.id))
 }
 
+/** A channel sub-task's controls: `stop`, `continue`, `reassign` (with [ownerId]) or `cancel`. */
+fun AppStore.groupTask(botId: String, taskId: String, action: String, ownerId: String? = null) =
+    this.action("groupTask:" + taskId) {
+        ready().call("groupTask", body("botId" to botId, "taskId" to taskId, "action" to action, "ownerId" to ownerId))
+    }
+
 /** Sends a message on to another chat; the host copies its files and marks it forwarded. */
 internal fun AppStore.forwardEntry(entry: Entry, toBotId: String, done: () -> Unit = {}) = action("forward:" + entry.id) {
     ready().call("forward", body("entryId" to entry.id, "botId" to toBotId))
