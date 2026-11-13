@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 pub(super) const METHODS: &[&str] = &[
     "listDocuments",
     "getDocument",
+    "documentGraph",
     "saveDocument",
     "moveDocument",
     "deleteDocument",
@@ -59,6 +60,7 @@ pub(super) fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
                 "backlinks": hub.store.document_backlinks(id)?,
             })
         }
+        "documentGraph" => hub.store.document_graph(str_arg(&body, "botId")?)?,
         "saveDocument" => {
             let bot = str_arg(&body, "botId")?.to_owned();
             let nonce = body

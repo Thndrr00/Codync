@@ -10,6 +10,7 @@ use crate::store::Store;
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
+use serde_json::{Value, json};
 
 /// The most links one document may have; the rest of a very long body is ignored.
 const MAX_LINKS: usize = 200;
@@ -114,6 +115,27 @@ impl Store {
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(backlinks)
+    }
+
+    /// Every page of `bot` and every link between two of them, for a graph view: nodes are pages,
+    /// edges are links that resolve to another page of the same bot.
+    pub fn document_graph(&self, bot: &str) -> Result<Value> {
+        let db = self.db.locked();
+        let mut pages = db.prepare("SELECT id, title FROM documents WHERE bot_id = ?1 AND deleted = 0 ORDER BY title")?;
+        let nodes: Vec<Value> = pages
+            .query_map([bot], |r| Ok(json!({"id": r.get::<_, String>(0)?, "title": r.get::<_, String>(1)?})))?
+            .collect::<rusqlite::Result<_>>()?;
+        drop(pages);
+        let mut links = db.prepare(
+            "SELECT l.from_id, d.id FROM document_links l
+             JOIN documents d ON d.bot_id = l.bot_id AND d.deleted = 0
+                              AND codync_lower(d.title) = codync_lower(l.target)
+             WHERE l.bot_id = ?1 AND d.id != l.from_id",
+        )?;
+        let edges: Vec<Value> = links
+            .query_map([bot], |r| Ok(json!({"from": r.get::<_, String>(0)?, "to": r.get::<_, String>(1)?})))?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(json!({"nodes": nodes, "edges": edges}))
     }
 }
 

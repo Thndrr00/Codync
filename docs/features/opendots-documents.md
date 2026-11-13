@@ -38,6 +38,11 @@ page never leaves a broken id behind, and a title that doesn't exist yet is a li
 page. A page shows at most 200 links; `getDocument` and `get_document` return the page's `links`
 and the `backlinks` of the pages that name it.
 
+`documentGraph {botId}` returns every page as a node (`{id, title}`) and every link that resolves to
+another page of the same bot as an edge (`{from, to}`); a link to a title nobody has yet is not an
+edge until that page exists, and a page is never its own edge. A client draws it; the host stores no
+graph.
+
 ## Agent proposals
 
 The bot-facing MCP tools are `list_documents`, `get_document`,

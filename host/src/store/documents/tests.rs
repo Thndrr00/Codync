@@ -274,3 +274,20 @@ fn deleting_a_page_forgets_its_links() {
     store.delete_document(&source.id, 1).unwrap();
     assert!(store.document_backlinks(&target.id).unwrap().is_empty());
 }
+
+#[test]
+fn the_graph_has_a_node_per_page_and_an_edge_per_resolved_link() {
+    let store = temp_store();
+    bot(&store, "a");
+    let roadmap = saved(store.save_document("a", draft("Roadmap", "the plan")).unwrap());
+    let notes = saved(store.save_document("a", draft("Notes", "see [[Roadmap]]")).unwrap());
+    saved(store.save_document("a", draft("Specs", "see [[Notes]] and [[Missing]]")).unwrap());
+
+    let graph = store.document_graph("a").unwrap();
+    assert_eq!(graph["nodes"].as_array().unwrap().len(), 3);
+    let edges = graph["edges"].as_array().unwrap();
+    assert_eq!(edges.len(), 2, "a link to a page that doesn't exist is not an edge");
+    let pairs: Vec<(&str, &str)> =
+        edges.iter().map(|e| (e["from"].as_str().unwrap(), e["to"].as_str().unwrap())).collect();
+    assert!(pairs.contains(&(notes.id.as_str(), roadmap.id.as_str())));
+}
