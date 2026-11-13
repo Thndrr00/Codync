@@ -100,6 +100,8 @@ export interface ComfyTemplate extends Omit<ComfyTemplateSummary, 'output' | 'es
   output: { type: 'image' | 'video' | 'audio' | 'mesh'; mime?: string | null }
   estimate: { seconds?: number | null; vram_gb?: number | null; secondsForThisGpu?: number | null; vramForThisGpu?: number | null }
   license?: string | null
+  /** The challenge family this template was imported from, when it came from one. */
+  source?: { author: string; repo: string }
   nodeCount: number
   preflight?: {
     ok: boolean
@@ -148,6 +150,8 @@ export interface ModelLibrary {
 /** One Open Source Higgsfield entry: its author's repository, not an installed template. */
 export interface CuratedTemplate {
   id: string
+  /** The template that carries this family's graph. */
+  template: string
   name: string
   repo: string
   license: string

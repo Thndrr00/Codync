@@ -233,22 +233,31 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
         {curated.length > 0 ? (
           <VStack gap={8} className="comfy-challenge">
             <Text size="caption" tone="secondary">
-              {tr('Open Source Higgsfield: all fifteen ship as templates above. Each entry opens its author\'s repository, where its graph, nodes and models come from.')}
+              {tr('Open Source Higgsfield: all fifteen ship as templates above. Each entry opens its template, and the template links back to its author\'s repository.')}
             </Text>
-            {curated.map((entry) => (
-              <button key={entry.id} className="comfy-template curated" onClick={() => window.codync.app.openExternal(entry.repo)}>
-                <HStack gap={8}>
-                  <Text weight="medium" tone="text" grow>{entry.name}</Text>
-                  <span className="comfy-badge">{entry.license}</span>
-                </HStack>
-                <Text size="caption" tone="secondary">{entry.summary}</Text>
-                <HStack gap={10} wrap>
-                  <Text size="caption" tone="tertiary">{entry.author}</Text>
-                  <Text size="caption" tone="tertiary">{entry.output.join(' · ')}</Text>
-                  {entry.imported ? <Text size="caption" tone="tertiary">{tr('Imported')}</Text> : null}
-                </HStack>
-              </button>
-            ))}
+            {curated.map((entry) => {
+              const imported = templates?.find((template) => template.id === entry.template)
+              return (
+                <button
+                  key={entry.id}
+                  className="comfy-template curated"
+                  onClick={() => (imported ? void open(entry.template) : window.codync.app.openExternal(entry.repo))}
+                >
+                  <HStack gap={8}>
+                    <Text weight="medium" tone="text" grow>{entry.name}</Text>
+                    <span className="comfy-badge">{entry.license}</span>
+                  </HStack>
+                  <Text size="caption" tone="secondary">{entry.summary}</Text>
+                  <HStack gap={10} wrap>
+                    <Text size="caption" tone="tertiary">{entry.author}</Text>
+                    <Text size="caption" tone="tertiary">{entry.output.join(' · ')}</Text>
+                    <Text size="caption" tone="tertiary">
+                      {imported ? tr('Imported as “{name}”').replace('{name}', imported.name) : tr('Imported')}
+                    </Text>
+                  </HStack>
+                </button>
+              )
+            })}
           </VStack>
         ) : null}
         {error ? <ErrorText text={error} /> : null}
@@ -267,6 +276,16 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
       </HStack>
       <Text size="caption" tone="secondary">{selected.description}</Text>
       {selected.license ? <Text size="caption" tone="secondary">{selected.license}</Text> : null}
+      {selected.source ? (
+        <HStack gap={8} wrap>
+          <Text size="caption" tone="secondary">
+            {tr('From the repository of {author}').replace('{author}', selected.source.author)}
+          </Text>
+          <Button kind="secondary" onClick={() => window.codync.app.openExternal(selected.source?.repo ?? '')}>
+            {tr('Open repository')}
+          </Button>
+        </HStack>
+      ) : null}
 
       <CardSection title="Form">
         <VStack gap={14}>

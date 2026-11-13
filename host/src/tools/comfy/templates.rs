@@ -42,10 +42,14 @@ const BASE: [(&str, &str); 20] = [
 /// templates: a graph and its models belong to its author, so the gallery lists them as imports.
 const CURATED: &str = include_str!("../../../assets/comfy-templates/curated.json");
 
-/// One challenge entry, as the gallery shows it before its graph is imported.
+/// One challenge entry: the author's repository, licence and the template its graph was imported
+/// into.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Curated {
     pub id: String,
+    /// The template that carries this family's graph, empty while it is not imported.
+    #[serde(default)]
+    pub template: String,
     pub name: String,
     pub repo: String,
     pub license: String,
@@ -61,6 +65,11 @@ pub struct Curated {
 /// The challenge catalogue; empty when the embedded list can't be read.
 pub fn curated() -> Vec<Curated> {
     serde_json::from_str(CURATED).unwrap_or_default()
+}
+
+/// The challenge entry a template was imported from, when it came from one.
+pub fn source(id: &str) -> Option<Curated> {
+    curated().into_iter().find(|entry| entry.template == id)
 }
 
 /// The folder every installed manifest lives in.
@@ -450,6 +459,9 @@ impl Template {
         value["estimate"]["vramForThisGpu"] = json!(self.estimate.vram_for(gpu));
         value["nodeCount"] = json!(self.workflow.as_object().map_or(0, Map::len));
         value["classes"] = json!(self.classes());
+        if let Some(source) = source(&self.id) {
+            value["source"] = json!({"author": source.author, "repo": source.repo});
+        }
         value
     }
 }
@@ -487,7 +499,10 @@ impl Input {
                 let number = as_f64(value).with_context(|| format!("`{}` must be a whole number", self.key))?;
                 ensure!(number.fract() == 0.0, "`{}` must be a whole number", self.key);
                 self.range(number)?;
-                #[allow(clippy::cast_possible_truncation, reason = "whole and within the range checked above, so it fits an i64")]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "whole and within the range checked above, so it fits an i64"
+                )]
                 let whole = number as i64;
                 Ok(json!(whole))
             }
@@ -862,6 +877,15 @@ mod tests {
             assert!(!entry.license.is_empty() && !entry.summary.is_empty(), "{}", entry.id);
             assert!(
                 entry.output.iter().all(|kind| ["image", "video", "audio", "mesh"].contains(&kind.as_str())),
+                "{}",
+                entry.id
+            );
+            // Every entry points at the template that carries its graph, and that graph exists.
+            assert!(BASE.iter().any(|(id, _)| *id == entry.template), "{}: {}", entry.id, entry.template);
+            assert_eq!(source(&entry.template).map(|found| found.id), Some(entry.id.clone()));
+            assert!(
+                serde_json::from_str::<Template>(BASE.iter().find(|(id, _)| *id == entry.template).expect("a base").1)
+                    .is_ok_and(|t| t.validate().is_ok()),
                 "{}",
                 entry.id
             );

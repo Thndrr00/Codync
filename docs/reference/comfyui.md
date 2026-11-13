@@ -67,7 +67,7 @@ The twenty base manifests are embedded from `host/assets/comfy-templates/` and c
 
 ### The other ten families
 
-All fifteen entries of `curated.json` are imported; each card still opens its author's repository and states its licence. A licence never blocks an import: the user accepts the author's pack licence by installing the pack.
+All fifteen entries of `curated.json` are imported and each names its manifest in `template`: the card opens that template and states the licence, and the template's page links back to the author's repository. A licence never blocks an import: the user accepts the author's pack licence by installing the pack.
 
 - **Blocksfield: a pitch into a game screenshot** (`blocksfield-art`, MIT), 13 core nodes on Qwen-Image 2.1 Turbo. **ComfyArt: restyle a picture** (`comfyart-edit`, MIT), 9 core nodes on the same model.
 - **Henge: move a picture like a clip** (`henge-motion`, MIT), 17 nodes on H3 with the author's motion LoRA and a SAM 3.1 / SAM 3D picker.

@@ -1,6 +1,7 @@
 [
   {
     "id": "panorama-stickers",
+    "template": "panorama-cutout",
     "name": "Panorama Stickers",
     "repo": "https://github.com/nomadoor/ComfyUI-Panorama-Stickers",
     "license": "MIT",
@@ -11,6 +12,7 @@
   },
   {
     "id": "paint-a-plate",
+    "template": "paint-a-plate",
     "name": "Paint a Plate",
     "repo": "https://github.com/AInVFX/ainvfx-paintaplate",
     "license": "Apache-2.0",
@@ -21,6 +23,7 @@
   },
   {
     "id": "h3-motion",
+    "template": "h3-motion-mask",
     "name": "H3 Motion",
     "repo": "https://github.com/PxTicks/h3-motion",
     "license": "AGPL-3.0",
@@ -31,6 +34,7 @@
   },
   {
     "id": "one-shot-mv",
+    "template": "oneshot-mv",
     "name": "OneShot MV",
     "repo": "https://github.com/VisualFrisson/ComfyUI-OneShotMV",
     "license": "MIT",
@@ -41,6 +45,7 @@
   },
   {
     "id": "h3-audio-retake",
+    "template": "h3-audio-retake",
     "name": "H3 AudioRetake",
     "repo": "https://github.com/Nebuluss/H3-AudioRetake-studio",
     "license": "MIT",
@@ -51,6 +56,7 @@
   },
   {
     "id": "genobi",
+    "template": "openjutsu-swap",
     "name": "Genobi",
     "repo": "https://github.com/koshimazaki/genobi",
     "license": "MIT",
@@ -61,6 +67,7 @@
   },
   {
     "id": "splat-edit-engine",
+    "template": "spede-replace",
     "name": "Splat Edit Engine",
     "repo": "https://github.com/Burgstall-labs/ComfyUI-SpEdE",
     "license": "AGPL-3.0",
@@ -71,6 +78,7 @@
   },
   {
     "id": "sonder",
+    "template": "sonder-render",
     "name": "Sonder",
     "repo": "https://github.com/SonderSaid/ComfyUI-Sonder-Editor",
     "license": "GPL-3.0",
@@ -81,6 +89,7 @@
   },
   {
     "id": "max-editor",
+    "template": "maxeditor-retouch",
     "name": "Max Editor",
     "repo": "https://github.com/xentome/EDITS-WITH-AI",
     "license": "Apache-2.0",
@@ -91,6 +100,7 @@
   },
   {
     "id": "blocksfield",
+    "template": "blocksfield-art",
     "name": "Blocksfield",
     "repo": "https://github.com/Hcoder10/blocksfield",
     "license": "MIT",
@@ -101,6 +111,7 @@
   },
   {
     "id": "creativefield",
+    "template": "creativefield-edit",
     "name": "Creativefield",
     "repo": "https://github.com/rhymeas/Creativefield",
     "license": "GPL-3.0",
@@ -111,6 +122,7 @@
   },
   {
     "id": "comfyart",
+    "template": "comfyart-edit",
     "name": "ComfyArt",
     "repo": "https://github.com/jtydhr88/ComfyArt",
     "license": "MIT",
@@ -121,6 +133,7 @@
   },
   {
     "id": "reshoot-4d",
+    "template": "reshoot-4d",
     "name": "Reshoot 4D",
     "repo": "https://github.com/itsmetamike/reshoot-4d",
     "license": "AGPL-3.0",
@@ -131,6 +144,7 @@
   },
   {
     "id": "freefield",
+    "template": "freefield-angles",
     "name": "Freefield",
     "repo": "https://github.com/neuregex/freefield",
     "license": "MIT",
@@ -141,6 +155,7 @@
   },
   {
     "id": "henge",
+    "template": "henge-motion",
     "name": "Henge",
     "repo": "https://github.com/alisson-anjos/Henge",
     "license": "MIT",

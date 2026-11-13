@@ -3,6 +3,7 @@
 // input types, model folders/sizes/hashes/URLs and the output kind. The Rust loader enforces the
 // same rules; this is the fast check while editing the JSON.
 import { readdir, readFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -56,6 +57,22 @@ for (const file of (await readdir(dir)).filter((name) => name.endsWith('.json') 
     if (model.gated && !model.url) fail(`gated model ${model.file} has no page`)
   }
   if (!outputs.includes(manifest.output?.type)) fail(`output ${manifest.output?.type} is invalid`)
+}
+
+// The challenge list: every entry names an installed template, and says so only while it is.
+const installed = new Set(
+  (await readdir(dir)).filter((name) => name.endsWith('.json') && name !== 'curated.json')
+    .map((name) => JSON.parse(readFileSync(join(dir, name), 'utf8'))?.id),
+)
+for (const entry of JSON.parse(await readFile(join(dir, 'curated.json'), 'utf8'))) {
+  const fail = (message) => { failures++; console.error(`curated ${entry.id}: ${message}`) }
+  for (const field of ['id', 'template', 'name', 'repo', 'license', 'summary', 'author']) {
+    if (!entry[field]) fail(`no ${field}`)
+  }
+  if (!entry.repo?.startsWith('https://github.com/')) fail(`repo ${entry.repo}`)
+  if (!entry.output?.length || !entry.output.every((kind) => outputs.includes(kind))) fail('bad output')
+  if (entry.imported && !installed.has(entry.template)) fail(`template ${entry.template} is not installed`)
+  if (!entry.imported && installed.has(entry.template)) fail(`template ${entry.template} is installed but not marked`)
 }
 
 if (failures > 0) process.exit(1)
