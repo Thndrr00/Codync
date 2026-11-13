@@ -34,6 +34,8 @@ pub enum Problem {
     DormantSkills,
     /// A connector the bot lists is no longer installed on this computer.
     MissingConnector,
+    /// An approval has waited more than a day.
+    StaleApproval,
 }
 
 impl Problem {
@@ -47,7 +49,8 @@ impl Problem {
             | Self::DuplicateName
             | Self::SkillLimit
             | Self::DormantSkills
-            | Self::MissingConnector => Severity::Warning,
+            | Self::MissingConnector
+            | Self::StaleApproval => Severity::Warning,
         }
     }
 
@@ -64,6 +67,7 @@ impl Problem {
             Self::SkillLimit => "has saved as many skills as a bot may keep",
             Self::DormantSkills => "has skills it saved that nobody used for 30 days",
             Self::MissingConnector => "lists a connector that is no longer installed",
+            Self::StaleApproval => "has an approval waiting for more than a day",
         }
     }
 }
@@ -86,6 +90,8 @@ pub struct Probe<'a> {
     pub written_skills: &'a dyn Fn(&str) -> (usize, usize),
     /// Whether this computer still installs the connector with this id.
     pub connector_known: &'a dyn Fn(&str) -> bool,
+    /// Whether an approval for this bot has waited more than a day.
+    pub stale_approval: &'a dyn Fn(&str) -> bool,
 }
 
 pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
@@ -141,6 +147,9 @@ pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
                 if bot.connectors.iter().any(|connector| !(probe.connector_known)(connector)) {
                     add(Problem::MissingConnector);
                 }
+                if (probe.stale_approval)(&bot.id) {
+                    add(Problem::StaleApproval);
+                }
             }
         }
     }
@@ -151,11 +160,18 @@ pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
 pub fn report(hub: &Hub) -> anyhow::Result<Value> {
     let bots: Vec<BotConfig> = hub.store.bots()?.into_iter().filter(|r| !r.deleted).map(|r| r.config).collect();
     let installed: std::collections::HashSet<String> = crate::market::connector_ids(&hub.store)?.into_iter().collect();
+    let now = crate::store::now_ms();
     let probe = Probe {
         folder_exists: &|path| Path::new(path).is_dir(),
         agent_known: &crate::agent::backends::is_known,
         written_skills: &|bot| crate::market::written_skills(&hub.store, bot, crate::store::now_ms()),
         connector_known: &|id| installed.contains(id),
+        stale_approval: &|bot| {
+            hub.store
+                .pending_approvals(bot)
+                .ok()
+                .is_some_and(|cards| cards.iter().any(|card| now - card.created_at > 86_400_000))
+        },
     };
     let findings = inspect(&bots, &probe);
     let errors = findings.iter().filter(|f| f.severity == Severity::Error).count();
@@ -183,8 +199,23 @@ mod tests {
             agent_known: &|id| id == "claude",
             written_skills: &move |_| skills,
             connector_known: &|_| true,
+            stale_approval: &|_| false,
         };
         inspect(bots, &probe).into_iter().map(|f| f.problem).collect()
+    }
+
+    #[test]
+    fn an_approval_waiting_over_a_day_is_a_warning() {
+        let probe = Probe {
+            folder_exists: &|_| true,
+            agent_known: &|id| id == "claude",
+            written_skills: &|_| (0, 0),
+            connector_known: &|_| true,
+            stale_approval: &|bot| bot == "x",
+        };
+        let findings = inspect(&[bot(json!({}))], &probe);
+        assert_eq!(findings.len(), 1);
+        assert_eq!((findings[0].problem, findings[0].severity), (Problem::StaleApproval, Severity::Warning));
     }
 
     #[test]
@@ -194,6 +225,7 @@ mod tests {
             agent_known: &|id| id == "claude",
             written_skills: &|_| (0, 0),
             connector_known: &|id| id == "github",
+            stale_approval: &|_| false,
         };
         assert!(inspect(&[bot(json!({"connectors": ["github"]}))], &probe).is_empty());
         let findings = inspect(&[bot(json!({"connectors": ["github", "slack"]}))], &probe);

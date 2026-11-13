@@ -375,6 +375,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 b["botId"].as_str().filter(|id| !id.is_empty()),
                 b["routineId"].as_str().filter(|id| !id.is_empty()),
                 b["dueAt"].as_i64(),
+                b["repeat"].as_str().filter(|repeat| !repeat.is_empty()),
                 now,
             )?;
             json!({"task": task})
@@ -461,6 +462,36 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"message": message})
         }
         "cancelScheduled" => json!({"cancelled": hub.store.cancel_scheduled(str_arg(&b, "id")?)?}),
+        "rescheduleScheduled" => json!({
+            "rescheduled": hub.store.reschedule_message(
+                str_arg(&b, "id")?,
+                b["text"].as_str(),
+                b["sendAt"].as_i64(),
+                crate::store::now_ms(),
+            )?
+        }),
+        // A page anyone with the link can read until it expires or is revoked.
+        "publishShare" => {
+            let token = crate::share::publish(hub, b["title"].as_str().unwrap_or("Codync"), str_arg(&b, "html")?)?;
+            json!({"token": token, "url": format!("http://localhost:{}/share/{token}", hub.port)})
+        }
+        "sharedLinks" => {
+            let links: Vec<Value> = crate::share::list(hub)?
+                .into_iter()
+                .map(|link| {
+                    json!({
+                        "token": link.token,
+                        "title": link.title,
+                        "createdAt": link.created_at,
+                        "expiresAt": link.expires_at,
+                        "bytes": link.html.len(),
+                        "url": format!("http://localhost:{}/share/{}", hub.port, link.token),
+                    })
+                })
+                .collect();
+            json!({"links": links})
+        }
+        "revokeShare" => json!({"revoked": crate::share::revoke(hub, str_arg(&b, "token")?)?}),
         "send" => {
             let bot = str_arg(&b, "botId")?;
             let text = b["text"].as_str().unwrap_or_default().trim();
@@ -617,12 +648,42 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "searchAll" => {
             let query = b["query"].as_str().unwrap_or_default().trim();
             if query.chars().count() < 2 {
-                return Ok(ControlFlow::Break(json!({"messages": [], "documents": []})));
+                return Ok(ControlFlow::Break(json!({"messages": [], "documents": [], "tasks": [], "scheduled": []})));
             }
             let limit = b["limit"].as_u64().unwrap_or(20).clamp(1, 50);
             let messages = hub.store.search_messages(query, limit)?;
             let documents = hub.store.search_documents(query, limit)?;
-            json!({"messages": messages, "documents": documents})
+            let tasks: Vec<Value> = hub
+                .store
+                .search_board(query, i64::try_from(limit).unwrap_or(20))?
+                .into_iter()
+                .map(|task| {
+                    json!({
+                        "id": task.id,
+                        "botId": task.bot_id,
+                        "title": task.title,
+                        "status": task.status,
+                        "updatedAt": task.updated_at,
+                    })
+                })
+                .collect();
+            let needle = query.to_lowercase();
+            let scheduled: Vec<Value> = hub
+                .store
+                .scheduled_messages()?
+                .into_iter()
+                .filter(|message| message.text.to_lowercase().contains(&needle))
+                .take(usize::try_from(limit).unwrap_or(20))
+                .map(|message| {
+                    json!({
+                        "id": message.id,
+                        "botId": message.bot_id,
+                        "text": message.text,
+                        "sendAt": message.send_at,
+                    })
+                })
+                .collect();
+            json!({"messages": messages, "documents": documents, "tasks": tasks, "scheduled": scheduled})
         }
         "retentionPreview" => {
             let days = b["days"].as_u64().filter(|d| (1..=3650).contains(d)).context("days must be 1 to 3650")?;

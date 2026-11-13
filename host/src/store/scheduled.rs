@@ -104,6 +104,30 @@ impl Store {
         Ok(message)
     }
 
+    /// Changes a waiting message's time or text. `false` when it is gone (sent or cancelled).
+    pub fn reschedule_message(&self, id: &str, text: Option<&str>, send_at: Option<i64>, now: i64) -> Result<bool> {
+        let c = self.db.locked();
+        let mut messages = read(&c)?;
+        let Some(message) = messages.iter_mut().find(|message| message.id == id) else { return Ok(false) };
+        if let Some(text) = text {
+            let text = text.trim();
+            ensure!(!text.is_empty(), "a scheduled message needs text");
+            ensure!(
+                text.chars().count() <= MAX_TEXT_CHARS,
+                "a scheduled message is at most {MAX_TEXT_CHARS} characters"
+            );
+            message.text = text.to_owned();
+        }
+        if let Some(send_at) = send_at {
+            ensure!(send_at >= now - GRACE_MS, "that time has already passed");
+            ensure!(send_at <= now + MAX_AHEAD_MS, "a message can be scheduled at most a year ahead");
+            message.send_at = send_at;
+        }
+        messages.sort_by_key(|message| message.send_at);
+        write(&c, &messages)?;
+        Ok(true)
+    }
+
     /// Removes one message; `true` when it was still waiting.
     pub fn cancel_scheduled(&self, id: &str) -> Result<bool> {
         let c = self.db.locked();

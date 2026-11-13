@@ -49,6 +49,12 @@ is bigger than one release.
 | Document diff (revision vs now) | done (desktop) |
 | Board search, bot filter, drag between columns | done (desktop) |
 | Activity: approve or deny in place | done (desktop) |
+| Read-only links (chat and document) with revocation | done |
+| Scheduled message editing | done (desktop) |
+| Board repeating cards | done |
+| Doctor: stale approvals | done |
+| Document presentation and Markdown export | done (desktop) |
+| Global search: board cards and scheduled messages | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -171,7 +177,22 @@ Goal: a bot can run without an account.
   person reads it. Diagnostics › Notifications edits the rules.
 - Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
 
-## Board that moves itself, inbox answers — done
+## Links, repeats and smaller answers — done
+
+- **Read-only links**: `share::publish` keeps a self-contained HTML page under a 128-bit token for a
+  week; `GET /share/{token}` serves it without a sign-in, and `sharedLinks` / `revokeShare` list and
+  revoke them (Diagnostics › Read-only links). The chat's share menu and the document's share menu
+  create one and copy it; the page has no scripts and no link back to Codync.
+- **Scheduled messages** can be edited (text and time) in Diagnostics, not just cancelled.
+- **Repeating cards**: a board card can repeat daily or weekly; finishing it creates the next one in To
+  do with the due date moved on. `chat::board_auto` reminders then apply to it as well.
+- **Doctor**: a warning when an approval has waited more than a day.
+- **Documents**: a Present button shows the document alone, full window (Esc returns), and Share saves
+  it as Markdown as well as publishing a link.
+- **Global search** now includes board cards (which open the board) and scheduled messages, next to
+  messages and documents.
+
+## Board that moves itself, inbox answers - done
 
 - A card in **Doing** can name a routine (`chat::board_auto`): when that routine's next run finishes
   after the card was moved, the card goes to **Done** on success or **Waiting** on failure. The board's

@@ -22,27 +22,29 @@ export function matchBots(items: RosterItem[], query: string, filter: RosterFilt
   return items.filter(({ bot }) => matchesRoster(bot, q, filter))
 }
 
-/** One result of the global search: a message or a document. */
+/** One result of the global search: a message, document, board card or scheduled message. */
 export interface SearchHit {
   computerId: string
   botId: string
   entryId?: string
   documentId?: string
+  taskId?: string
+  scheduledId?: string
   kind: string
   text: string
   createdAt: number
 }
 
 /** Grok Bot's bot search: a floating list over the window, arrows/Enter or ⌘1-9 to open a bot. */
-export function SearchPalette({ open, items, onPick, onClose, actions = [], onSearch }: { open: boolean; items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions?: SearchAction[]; onSearch?: (query: string) => Promise<SearchHit[]> }) {
+export function SearchPalette({ open, items, onPick, onClose, actions = [], onSearch, onBoard }: { open: boolean; items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions?: SearchAction[]; onSearch?: (query: string) => Promise<SearchHit[]>; onBoard?: () => void }) {
   return (
     <Sheet open={open} onClose={onClose} width={640} dismissOnDim>
-      {open ? <PaletteBody items={items} onPick={onPick} onClose={onClose} actions={actions} onSearch={onSearch} /> : null}
+      {open ? <PaletteBody items={items} onPick={onPick} onClose={onClose} actions={actions} onSearch={onSearch} onBoard={onBoard} /> : null}
     </Sheet>
   )
 }
 
-function PaletteBody({ items, onPick, onClose, actions, onSearch }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions: SearchAction[]; onSearch?: (query: string) => Promise<SearchHit[]> }) {
+function PaletteBody({ items, onPick, onClose, actions, onSearch, onBoard }: { items: RosterItem[]; onPick: (ref: BotRef) => void; onClose: () => void; actions: SearchAction[]; onSearch?: (query: string) => Promise<SearchHit[]>; onBoard?: () => void }) {
   const [query, setQuery] = useState('')
   const [mode, setMode] = useState<'bots' | 'messages' | 'history' | 'actions'>('bots')
   const [filter, setFilter] = useState<RosterFilter>('all')
@@ -126,20 +128,21 @@ function PaletteBody({ items, onPick, onClose, actions, onSearch }: { items: Ros
             const item = items.find((it) => it.ref.botId === hit.botId && it.ref.computerId === hit.computerId)
             return (
               <button
-                key={`${hit.computerId}-${hit.botId}-${hit.entryId ?? hit.documentId}`}
+                key={`${hit.computerId}-${hit.botId}-${hit.entryId ?? hit.documentId ?? hit.taskId ?? hit.scheduledId}`}
                 role="option"
                 aria-selected={false}
                 className="palette-row"
                 onClick={() => {
-                  onPick({ computerId: hit.computerId, botId: hit.botId })
+                  if (hit.taskId && onBoard) onBoard()
+                  else onPick({ computerId: hit.computerId, botId: hit.botId })
                   onClose()
                 }}
               >
-                {item ? <AvatarWithStatus bot={item.bot} members={isGroup(item.bot) ? item.store.members(item.bot) : []} size={32} /> : <Icon name={hit.documentId ? 'doc.text' : 'bubble.left'} size={20} />}
+                {item ? <AvatarWithStatus bot={item.bot} members={isGroup(item.bot) ? item.store.members(item.bot) : []} size={32} /> : <Icon name={hit.taskId ? 'checklist' : hit.scheduledId ? 'clock' : hit.documentId ? 'doc.text' : 'bubble.left'} size={20} />}
                 <VStack as="span" gap={2} grow>
                   <Text size="body" tone="text" truncate>{hit.text}</Text>
                   <Text size="subheadline" tone="secondary" truncate>
-                    {item?.bot.name ?? hit.botId} · {hit.documentId ? 'Document' : 'Message'}
+                    {item?.bot.name ?? hit.botId} · {hit.taskId ? 'Board card' : hit.scheduledId ? 'Scheduled message' : hit.documentId ? 'Document' : 'Message'}
                   </Text>
                 </VStack>
               </button>

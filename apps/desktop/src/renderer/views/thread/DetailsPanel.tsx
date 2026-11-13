@@ -18,7 +18,9 @@ import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ComputerPanel } from '../bots/ComputerPanel'
 import { BotActivityCard } from './BotActivityCard'
-import { shareTranscript } from './transcript'
+import { shareTranscript, transcriptHtml } from './transcript'
+import { publishPage } from '../share-link'
+import { ToastContainer, useToasts } from '../../components/ToastContainer'
 import { RoutinesView } from '../routines/RoutinesView'
 import { LibraryView } from '../library/LibraryView'
 import { MacChatButton } from './MacChatButton'
@@ -55,6 +57,7 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
   const store = useStore()
   const bot = store.bots.get(botId) ?? null
   const group = !!bot && isGroup(bot)
+  const toasts = useToasts()
   useScreenViewed('bot_details')
   return (
     <div className="details-panel">
@@ -64,6 +67,13 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
           <DropdownMenu className="mac-chat-button ringed" title="Share transcript" items={() => [
             { title: 'Save as HTML', icon: 'arrow.down.to.line', action: () => void shareTranscript(store, botId, 'save').catch((error: unknown) => store.setError(error instanceof Error ? error.message : String(error))) },
             { title: 'Open in browser', icon: 'safari', action: () => void shareTranscript(store, botId, 'open').catch((error: unknown) => store.setError(error instanceof Error ? error.message : String(error))) },
+            { title: 'Create a read-only link', icon: 'link', action: () => {
+              const chat = store.bots.get(botId)
+              if (!chat) return
+              void publishPage(store, `${chat.name} — Codync chat`, transcriptHtml(chat, store.chatEntries(botId)))
+                .then((url) => toasts.push(`Read-only link copied: ${url}`, 'success', 6000))
+                .catch((error: unknown) => toasts.push(error instanceof Error ? error.message : String(error), 'danger'))
+            } },
           ]}>
             <Icon name="doc.on.doc" size={16} weight="medium" />
           </DropdownMenu>
@@ -104,6 +114,7 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
           </>
         )}
       </div>
+      <ToastContainer toasts={toasts.toasts} onDismiss={toasts.dismiss} />
     </div>
   )
 }

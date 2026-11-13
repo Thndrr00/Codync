@@ -627,6 +627,8 @@ function ChatSplitView() {
             const answer = await client.call<{
               messages: { entryId: string; botId: string; kind: string; text?: string; createdAt: number }[]
               documents: { id: string; botId: string; title: string; updatedAt: number }[]
+              tasks: { id: string; botId?: string; title: string; status: string; updatedAt: number }[]
+              scheduled: { id: string; botId: string; text: string; sendAt: number }[]
             }>('searchAll', { query, limit: 20 })
             return [
               ...answer.messages.map((message): SearchHit => ({
@@ -645,10 +647,32 @@ function ChatSplitView() {
                 text: document.title,
                 createdAt: document.updatedAt,
               })),
+              ...(answer.tasks ?? []).map((task): SearchHit => ({
+                computerId: store.computer.id,
+                botId: task.botId ?? '',
+                taskId: task.id,
+                kind: 'task',
+                text: `${task.title} · ${task.status}`,
+                createdAt: task.updatedAt,
+              })),
+              ...(answer.scheduled ?? []).map((message): SearchHit => ({
+                computerId: store.computer.id,
+                botId: message.botId,
+                scheduledId: message.id,
+                kind: 'scheduled',
+                text: message.text.slice(0, 180),
+                createdAt: message.sendAt,
+              })),
             ]
           }),
         )
         return found.flat().sort((a, b) => b.createdAt - a.createdAt).slice(0, 40)
+      }} onBoard={() => {
+        setSettings(null)
+        setMarketplace(null)
+        setCanvasBot(null)
+        setInboxPage(false)
+        setBoardPage(true)
       }} actions={[
         ...(onlineStores.length ? [
           { id: 'new-bot', title: 'New bot', icon: 'plus', run: () => { setSearching(false); create('bot') } },

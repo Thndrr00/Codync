@@ -39,6 +39,16 @@ export interface ScheduledMessage {
   createdAt: number
 }
 
+/** A page anyone with its link can read, until it expires or is revoked. */
+export interface SharedLink {
+  token: string
+  title: string
+  createdAt: number
+  expiresAt: number
+  bytes: number
+  url: string
+}
+
 /** The host's upkeep calls the diagnostics page makes: bot check, daily token limits, failed runs, bot bundles. */
 export class MaintenanceStore extends Observable {
   report: DoctorReport | null = null
@@ -46,6 +56,7 @@ export class MaintenanceStore extends Observable {
   retention: { days: number; messages: number } | null = null
   rules: NotificationRules | null = null
   scheduled: ScheduledMessage[] = []
+  links: SharedLink[] = []
   compare: ModelCompareResult[] = []
   busy = false
   error: string | null = null
@@ -125,11 +136,39 @@ export class MaintenanceStore extends Observable {
     })
   }
 
-  /** Takes a waiting message back before its time. */  async cancelScheduled(id: string) {
+  /** Changes a waiting message's time, and its text when given. */
+  async rescheduleScheduled(id: string, text: string, sendAt: number) {
+    await this.run(async (c) => {
+      const { rescheduled } = await c.call<{ rescheduled: boolean }>('rescheduleScheduled', { id, text, sendAt })
+      if (rescheduled) {
+        this.scheduled = (await c.call<{ messages: ScheduledMessage[] }>('scheduledMessages', {})).messages
+      }
+      this.notice = rescheduled ? 'Scheduled message updated.' : 'That message was already sent.'
+    })
+  }
+
+  /** Takes a waiting message back before its time. */
+  async cancelScheduled(id: string) {
     await this.run(async (c) => {
       const { cancelled } = await c.call<{ cancelled: boolean }>('cancelScheduled', { id })
       if (cancelled) this.scheduled = this.scheduled.filter((message) => message.id !== id)
       this.notice = cancelled ? 'Scheduled message cancelled.' : 'That message was already sent.'
+    })
+  }
+
+  /** The read-only links this computer still serves. */
+  async loadLinks() {
+    await this.run(async (c) => {
+      this.links = (await c.call<{ links: SharedLink[] }>('sharedLinks', {})).links
+    })
+  }
+
+  /** Stops serving a link now; its page is gone for everyone. */
+  async revokeLink(token: string) {
+    await this.run(async (c) => {
+      const { revoked } = await c.call<{ revoked: boolean }>('revokeShare', { token })
+      if (revoked) this.links = this.links.filter((link) => link.token !== token)
+      this.notice = revoked ? 'Link revoked.' : 'That link was already gone.'
     })
   }
 

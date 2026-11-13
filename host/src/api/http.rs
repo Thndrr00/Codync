@@ -34,6 +34,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/agui/{bot}", post(agui))
         .route("/.well-known/agent.json", get(agent_card))
         .route("/a2a", post(a2a))
+        .route("/share/{token}", get(shared_page))
         .route("/api/setIcon", post(icon_command).layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)))
         .route("/term/{id}", get(term_stream))
         .route("/ingest/statusline", post(statusline))
@@ -165,6 +166,24 @@ async fn a2a(
         }),
     };
     Ok(Json(json!({"jsonrpc": "2.0", "id": id, "result": result})))
+}
+
+/// `GET /share/{token}`: the page a read-only link stands for. No login: the token is the secret.
+async fn shared_page(State(hub): State<Arc<Hub>>, Path(token): Path<String>) -> Response {
+    match crate::share::get(&hub, &token) {
+        Ok(Some(link)) => {
+            let mut response = axum::response::Html(link.html).into_response();
+            if let Ok(value) = axum::http::HeaderValue::from_str("no-store") {
+                response.headers_mut().insert(axum::http::header::CACHE_CONTROL, value);
+            }
+            response
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, "This link is gone.").into_response(),
+        Err(error) => {
+            tracing::warn!(error = format!("{error:#}"), "couldn't read a shared page");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Couldn't open the link.").into_response()
+        }
+    }
 }
 
 async fn icon_command(

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { Bot } from '@shared/models'
 import { Button, CardSection, DropdownMenu, IconButton, TabChoice } from '../../components/Controls'
 import { Dialog, ModalHeader, Sheet } from '../../components/Overlay'
+import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
@@ -13,6 +14,8 @@ import { DocumentMarkdownEditor } from './DocumentMarkdownEditor'
 import { MarkdownText } from '../thread/Markdown'
 import { RepliesView } from '../thread/RepliesView'
 import { relativeTime } from '../thread/chat-items'
+import { documentHtml, publishPage, saveTextFile } from '../share-link'
+import { ToastContainer, useToasts } from '../../components/ToastContainer'
 
 type Section = 'documents' | 'reviews' | 'activity'
 type EditorMode = 'visual' | 'markdown' | 'preview'
@@ -33,6 +36,8 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const [history, setHistory] = useState<DocumentRevision[] | null>(null)
   const [historyBusy, setHistoryBusy] = useState(false)
   const [compare, setCompare] = useState<{ revision: number; lines: DocDiffLine[] | null } | null>(null)
+  const [presenting, setPresenting] = useState(false)
+  const toasts = useToasts()
   useEffect(() => {
     documents.resume()
     void documents.load()
@@ -44,6 +49,14 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
     return () => { clearInterval(refresh); documents.dispose() }
   }, [documents])
   const draft = documents.draft
+  useEffect(() => {
+    if (!presenting) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPresenting(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [presenting])
   const current = documents.items.find((item) => item.id === draft?.id)
   const descendants = useMemo(() => documentDescendants(documents.items, draft?.id ?? ''), [documents.items, draft?.id])
   const openHistory = async () => {
@@ -118,6 +131,19 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
               onClick={() => { if (draft.id) setConversation({ botId: bot.id, documentId: draft.id }) }} />
             <IconButton icon="clock.arrow.circlepath" title="Revision history" disabled={historyBusy || !!documents.conflict}
               onClick={() => void openHistory()} />
+            <IconButton icon="arrow.down.right.and.arrow.up.left" title="Present" disabled={!draft.body.trim()}
+              onClick={() => setPresenting(true)} />
+            <DropdownMenu className="styled-button secondary" title="Share document" items={() => [
+              { title: 'Create a read-only link', icon: 'link', action: () => {
+                void publishPage(store, draft.title || 'Codync document', documentHtml(draft.title, draft.body))
+                  .then((url) => toasts.push(`Read-only link copied: ${url}`, 'success', 6000))
+                  .catch((error: unknown) => toasts.push(error instanceof Error ? error.message : String(error), 'danger'))
+              } },
+              { title: 'Save as Markdown', icon: 'arrow.down.to.line', action: () => {
+                const name = `${(draft.title || 'document').replace(/[/\\\x00-\x1f\x7f]/g, '-').slice(0, 150)}.md`
+                void saveTextFile(name, draft.body).then(() => toasts.push('Saved.', 'success')).catch((error: unknown) => toasts.push(error instanceof Error ? error.message : String(error), 'danger'))
+              } },
+            ]}>Share</DropdownMenu>
             <IconButton icon="doc.badge.plus" title="Create child document" disabled={documents.busy} onClick={() => documents.create(draft.id)} />
             {!documents.busy && !documents.dirty && <DropdownMenu title="Move document" className="styled-button secondary" items={() => [
               { title: 'Move to library root', action: () => void documents.move(null) },
@@ -227,5 +253,17 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
         ) : null}
       </VStack>
     </Sheet>
+    {presenting && draft ? (
+      <div className="documents-present">
+        <button type="button" className="press documents-present-exit" title="Exit presentation" onClick={() => setPresenting(false)}>
+          <Icon name="xmark" size={15} weight="medium" />
+        </button>
+        <article className="documents-present-page">
+          <Text as="h1" size={30} weight="semibold">{draft.title}</Text>
+          <MarkdownText text={draft.body} />
+        </article>
+      </div>
+    ) : null}
+    <ToastContainer toasts={toasts.toasts} onDismiss={toasts.dismiss} />
   </div>
 }

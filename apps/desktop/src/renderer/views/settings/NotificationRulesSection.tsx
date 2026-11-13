@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Button, CardSection } from '../../components/Controls'
+import { ModalHeader, Sheet } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
-import type { MaintenanceStore, NotificationRules } from '../../store/maintenance-store'
+import type { MaintenanceStore, NotificationRules, ScheduledMessage } from '../../store/maintenance-store'
 import { SwitchRow } from '../bots/parts'
 import { Field } from '../marketplace/pieces'
 
@@ -30,6 +31,9 @@ export function NotificationRulesSection({ store, online, nameOf }: {
   const [quietStart, setQuietStart] = useState('0')
   const [quietEnd, setQuietEnd] = useState('0')
   const [zone, setZone] = useState('')
+  const [editing, setEditing] = useState<ScheduledMessage | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editAt, setEditAt] = useState('')
 
   // The host's rules fill the form the first time, and again after a save.
   useEffect(() => {
@@ -49,6 +53,20 @@ export function NotificationRulesSection({ store, online, nameOf }: {
   }
   type AlertKey = 'done' | 'needsInput' | 'failed' | 'paused'
   const set = (key: AlertKey, on: boolean) => setDraft((current) => (current ? { ...current, [key]: on } as NotificationRules : current))
+
+  const openEdit = (message: ScheduledMessage) => {
+    setEditing(message)
+    setEditText(message.text)
+    const at = new Date(message.sendAt)
+    const pad = (value: number) => String(value).padStart(2, '0')
+    setEditAt(`${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`)
+  }
+  const saveEdit = () => {
+    if (!editing) return
+    const sendAt = new Date(editAt).getTime()
+    if (!Number.isFinite(sendAt) || !editText.trim()) return
+    void store.rescheduleScheduled(editing.id, editText, sendAt).then(() => setEditing(null))
+  }
 
   return (
     <>
@@ -96,7 +114,10 @@ export function NotificationRulesSection({ store, online, nameOf }: {
                 <Text size="caption" tone="secondary">{when(message.sendAt)}</Text>
               </HStack>
               <Text size="caption" tone="secondary" className="scheduled-text">{message.text}</Text>
-              <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.cancelScheduled(message.id)}>Cancel</Button>
+              <HStack gap={6}>
+                <Button kind="secondary" disabled={!online || store.busy} onClick={() => openEdit(message)}>Edit</Button>
+                <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.cancelScheduled(message.id)}>Cancel</Button>
+              </HStack>
             </VStack>
           ))
         )}
@@ -104,6 +125,23 @@ export function NotificationRulesSection({ store, online, nameOf }: {
       </CardSection>
       {store.notice ? <Text size="caption" tone="secondary">{store.notice}</Text> : null}
       {store.error ? <Text size="caption" tone="danger">{store.error}</Text> : null}
+      <Sheet open={editing !== null} onClose={() => setEditing(null)} width={460}>
+        <VStack gap={12}>
+          <ModalHeader icon="clock" title="Edit scheduled message" onClose={() => setEditing(null)} />
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">Message</Text>
+            <Field label="Message" value={editText} onChange={setEditText} lines={[3, 8]} />
+          </VStack>
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">When (year-month-day and hour:minute)</Text>
+            <Field label="When" value={editAt} onChange={setEditAt} placeholder="2026-11-20T09:00" />
+          </VStack>
+          <HStack justify="end" gap={8}>
+            <Button kind="secondary" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button disabled={store.busy || !editText.trim() || !editAt.trim()} onClick={saveEdit}>Save</Button>
+          </HStack>
+        </VStack>
+      </Sheet>
     </>
   )
 }

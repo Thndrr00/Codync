@@ -48,6 +48,7 @@ mod secret_prompt;
 mod send_cli;
 mod sentinel;
 mod service;
+mod share;
 mod shell;
 mod slack;
 mod store;

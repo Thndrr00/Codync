@@ -73,3 +73,41 @@ button.documents-row:hover { background: var(--surface); border-radius: var(--ra
   flex: 1;
   min-width: 0;
 }
+
+/* Presentation: the document alone on the page, no editor and no panels. Esc comes back. */
+.documents-present {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: auto;
+  background: var(--background);
+}
+.documents-present-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 64px 28px 120px;
+}
+.documents-present-page h1 {
+  margin: 0 0 24px;
+}
+.documents-present-exit {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 41;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-s);
+  cursor: pointer;
+  opacity: 0.55;
+}
+.documents-present-exit:hover {
+  opacity: 1;
+}

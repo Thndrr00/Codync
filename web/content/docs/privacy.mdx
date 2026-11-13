@@ -33,6 +33,15 @@ The relay can't add a device to your computer. A new device needs either a pairi
 
 **codync-network**, your computers' network ([bots on your other computers](/docs/teamwork#bots-on-your-other-computers)) doesn't use the Codync relay. Your computers connect to each other directly, encrypted end to end. When two can't, the default connector sends their encrypted traffic through iroh's public relays, run by n0, and they find each other through n0's address lookup; these see your computers' IP addresses and when they connect, not what they say. With your own `iroh-relay` or the private connector, nothing reaches n0.
 
+## Read-only links
+
+When you choose **Create a read-only link** for a chat or a document, the host stores that one page
+locally and serves it at a random address (`/share/<128 random bits>`) to anyone who has the link and
+can reach the computer. There is no sign-in on that page and no list of links on the web. Links expire
+after seven days and can be revoked at any time in **Settings › System diagnostics › Read-only
+links**, which deletes the page immediately. The page has no scripts of its own and no link back to
+Codync.
+
 ## Push notifications
 
 On the iPhone, a bot can notify you when it needs you, when it's done, or when it failed. Your computer encrypts each notification's text (the bot's name and a short preview) to a key that only your iPhone holds. Codync's push service, a separate Cloudflare Worker, forwards it to Apple's push service with only a generic text such as "Your task is complete. Open Codync to read the result." Your iPhone decrypts the real text on the device. If it can't (for example before you first unlock the phone after a restart), you see the generic text.

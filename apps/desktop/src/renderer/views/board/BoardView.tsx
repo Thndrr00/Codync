@@ -20,6 +20,7 @@ interface BoardTask {
   botId?: string
   routineId?: string
   dueAt?: number
+  repeat?: string
   createdAt: number
   updatedAt: number
 }
@@ -61,6 +62,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
   const [editTitle, setEditTitle] = useState('')
   const [editDetail, setEditDetail] = useState('')
   const [editDue, setEditDue] = useState('')
+  const [editRepeat, setEditRepeat] = useState('')
 
   useEffect(() => {
     if (!store) return
@@ -162,6 +164,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
     const due = task.dueAt ? new Date(task.dueAt) : null
     const pad = (value: number) => String(value).padStart(2, '0')
     setEditDue(due ? `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}` : '')
+    setEditRepeat(task.repeat ?? '')
   }
 
   const saveEdit = async () => {
@@ -186,6 +189,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
         botId: editing.botId ?? null,
         routineId: editing.routineId ?? null,
         dueAt,
+        repeat: editRepeat || null,
       })
       setEditing(null)
       await reload()
@@ -307,6 +311,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
                           </button>
                         ) : null}
                         {task.routineId ? <Text size="caption" tone="tertiary">↻ {tr('Routine')}</Text> : null}
+                        {task.repeat ? <Text size="caption" tone="tertiary">↻ {task.repeat === 'daily' ? tr('Daily') : tr('Weekly')}</Text> : null}
                         {due ? <Text size="caption" tone={due.late ? 'danger' : 'tertiary'}>{due.text}</Text> : null}
                       </HStack>
                     </article>
@@ -332,6 +337,18 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
           <VStack gap={4}>
             <Text size="caption" tone="secondary">{tr('Due date (year-month-day, optional)')}</Text>
             <Field label="Due date" value={editDue} onChange={setEditDue} placeholder="2026-11-20" />
+          </VStack>
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">{tr('Repeat')}</Text>
+            <ChoicePicker
+              selection={editRepeat}
+              options={[
+                { id: '', label: tr('Once') },
+                { id: 'daily', label: tr('Every day') },
+                { id: 'weekly', label: tr('Every week') },
+              ]}
+              onChange={setEditRepeat}
+            />
           </VStack>
           <HStack justify="end" gap={8}>
             <Button kind="secondary" onClick={() => setEditing(null)}>{tr('Cancel')}</Button>
