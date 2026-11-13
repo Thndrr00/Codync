@@ -202,7 +202,7 @@ pub fn routines(buf: &mut Buffer, area: Rect, app: &App, l: &RoutineList) {
         buf,
         inner,
         None,
-        "n new · c ask the bot · ↵ edit · space on/off · r run now · f flow · w copy webhook · W new key · x delete · esc",
+        "n new · c ask the bot · ↵ edit · space on/off · r run now · f flow · w copy webhook · W new key · s secret · x delete · esc",
     );
 }
 

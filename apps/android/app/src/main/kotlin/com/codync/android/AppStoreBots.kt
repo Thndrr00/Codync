@@ -242,8 +242,10 @@ suspend fun AppStore.routineSchedule(draft: RoutineScheduleDraft): RoutineSchedu
     val response = hostQuery("routineSchedule", buildJsonObject { put("draft", WireJson.encodeToJsonElement(draft)) })
     return WireJson.decodeFromJsonElement(response)
 }
-suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean = false): RoutineWebhook {
-    val response = hostQuery("routineWebhook", buildJsonObject { put("botId", botId); put("id", id); put("rotate", rotate) })
+suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean = false, key: String? = null): RoutineWebhook {
+    val response = hostQuery("routineWebhook", buildJsonObject {
+        put("botId", botId); put("id", id); put("rotate", rotate); if (key != null) put("key", key)
+    })
     return WireJson.decodeFromJsonElement(response)
 }
 

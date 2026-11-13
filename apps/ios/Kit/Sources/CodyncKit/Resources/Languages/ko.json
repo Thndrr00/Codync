@@ -2427,5 +2427,8 @@
   "Private": "비공개",
   "Creating…": "만드는 중…",
   "Create repository": "저장소 만들기",
-  "The workspace origin now points here.": "이 작업 공간의 origin이 이제 여기를 가리킵니다."
+  "The workspace origin now points here.": "이 작업 공간의 origin이 이제 여기를 가리킵니다.",
+  "Sender's signing secret": "보낸 사람의 서명 비밀",
+  "Use it": "이것 사용",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Composio나 Svix처럼 Standard Webhooks로 서명하는 보낸 사람은 고유한 비밀을 가집니다. 여기에 붙여 넣으면 위의 키가 그 비밀이 됩니다."
 }

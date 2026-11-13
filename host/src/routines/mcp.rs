@@ -24,9 +24,13 @@ pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value
             }
             hub.routines.enqueue(&hub.store, bot, id, json!({"source":"test"}), None, true)
         }
-        "routine_webhook" => {
-            hub.routines.credentials(hub, bot, required(args, "id")?, args["rotate"].as_bool().unwrap_or(false))
-        }
+        "routine_webhook" => hub.routines.credentials(
+            hub,
+            bot,
+            required(args, "id")?,
+            args["rotate"].as_bool().unwrap_or(false),
+            args["key"].as_str(),
+        ),
         n if super::flow::TOOLS.contains(&n) => super::flow::tool_call(hub, bot, n, args),
         _ => bail!("unknown routine tool"),
     }
@@ -53,14 +57,17 @@ pub fn tools() -> Value {
         ("run_routine", "Start a test run of one of your routines, including a paused one."),
         (
             "routine_webhook",
-            "Get the routine's webhook: its public url (through the Codync cloud; null when the cloud is off, then only localUrl on this computer works), localUrl and per-routine key. Senders POST with Authorization: Bearer <key>; for GitHub, set the webhook's content type to application/json and its secret to the key (deliveries are verified by X-Hub-Signature-256) and they become events {source:github, event:<event>.<action>, repo, sender, text, url, payload} that event triggers can filter. Deliveries made while the computer is offline wait up to 72 hours in the cloud, which sees their contents (not end-to-end encrypted). rotate:true replaces the key; the old one stops working at once. This doesn't register a provider subscription: set that up with the user, and report the webhook as awaiting connection until then.",
+            "Get the routine's webhook: its public url (through the Codync cloud; null when the cloud is off, then only localUrl on this computer works), localUrl and per-routine key. Senders POST with Authorization: Bearer <key>, a Standard Webhooks signature, or X-Hub-Signature-256; for GitHub, set the webhook's content type to application/json and its secret to the key (deliveries are verified by X-Hub-Signature-256) and they become events {source:github, event:<event>.<action>, repo, sender, text, url, payload} that event triggers can filter. Deliveries made while the computer is offline wait up to 72 hours in the cloud, which sees their contents (not end-to-end encrypted). rotate:true replaces the key; the old one stops working at once; key:<secret> adopts a Standard Webhooks sender's own signing secret (such as Composio's or Svix's whsec_…) instead. This doesn't register a provider subscription: set that up with the user, and report the webhook as awaiting connection until then.",
         ),
     ] {
         let required = if name == "set_routine_enabled" { vec!["id", "enabled"] } else { vec!["id"] };
         let mut properties = json!({"id": id});
         match name {
             "set_routine_enabled" => properties["enabled"] = json!({"type":"boolean"}),
-            "routine_webhook" => properties["rotate"] = json!({"type":"boolean"}),
+            "routine_webhook" => {
+                properties["rotate"] = json!({"type":"boolean"});
+                properties["key"] = json!({"type":"string","description":"The sender's own Standard Webhooks signing secret; it becomes the routine's key."});
+            }
             _ => {}
         }
         tools.push(json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required}}));

@@ -372,6 +372,12 @@ pub enum Submit {
     /// One app through Composio, as its sheet steps through the host's answers.
     Composio(Box<composio::Composio>),
     Import,
+    /// The sender's own signing secret (a Standard Webhooks sender's `whsec_…`), which becomes the
+    /// routine's webhook key.
+    RoutineKey {
+        bot: String,
+        id: String,
+    },
     /// A handoff card's text (the card's entry id).
     Handoff(String),
     VoiceDecisions {

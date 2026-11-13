@@ -25,6 +25,13 @@ async function hmac(key: string, body: string): Promise<string> {
   return `sha256=${[...mac].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** Raw HMAC-SHA256 of `message` with a string or byte key. */
+async function sign(key: string | Uint8Array, message: string): Promise<Uint8Array> {
+  const raw = typeof key === "string" ? new TextEncoder().encode(key) : key;
+  const k = await crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(message)));
+}
+
 /** A ready host that registered `hooks`. */
 async function withHooks(hooks: { id: string; key?: string; enabled?: boolean }[], o: { ready?: boolean } = {}) {
   const host = await newHost();
@@ -58,6 +65,44 @@ describe("ingress", () => {
     expect((await post(host, "r1", { body: `${body} `, headers: { "X-Hub-Signature-256": await hmac(KEY, body) } })).status).toBe(401);
     expect((await post(host, "r1", { body, headers: { "X-Hub-Signature-256": await hmac("y".repeat(64), body) } })).status).toBe(401);
     expect((await post(host, "r1", { body, headers: { "X-Hub-Signature-256": "sha256=zz" } })).status).toBe(401);
+  });
+
+  it("accepts a Standard Webhooks delivery signed with the routine's key", async () => {
+    const { host } = await withHooks([{ id: "r1" }]);
+    const body = '{"type":"composio.trigger.message"}';
+    const signed = (key: string | Uint8Array, stamp = Math.floor(Date.now() / 1000)) => {
+      const message = `msg_1.${stamp}.${body}`;
+      return sign(key, message).then((mac) => ({
+        "webhook-id": "msg_1",
+        "webhook-timestamp": String(stamp),
+        "webhook-signature": `v1,${btoa(String.fromCharCode(...mac))}`,
+      }));
+    };
+    expect((await post(host, "r1", { body, headers: await signed(KEY) })).status).toBe(202);
+    expect((await post(host, "r1", { body: `${body} `, headers: await signed(KEY) })).status).toBe(401);
+    const stale = Math.floor(Date.now() / 1000) - 6 * 60;
+    expect((await post(host, "r1", { body, headers: await signed(KEY, stale) })).status).toBe(401);
+    expect((await post(host, "r1", { body, headers: await signed("y".repeat(64)) })).status).toBe(401);
+    const noId = (await signed(KEY)) as Record<string, string>;
+    delete noId["webhook-id"];
+    expect((await post(host, "r1", { body, headers: noId })).status).toBe(401);
+    const empty = await signed(KEY);
+    empty["webhook-signature"] = "v2,abc";
+    expect((await post(host, "r1", { body, headers: empty })).status).toBe(401);
+  });
+
+  it("accepts a whsec_ sender secret as typed or decoded", async () => {
+    const raw = "0123456789abcdef0123456789abcdef";
+    const secret = `whsec_${btoa(raw)}`;
+    const { host } = await withHooks([{ id: "r1", key: secret }]);
+    const body = '{"type":"invoice.paid"}';
+    const entry = async (key: string | Uint8Array) => {
+      const stamp = Math.floor(Date.now() / 1000);
+      const mac = await sign(key, `msg_2.${stamp}.${body}`);
+      return { "webhook-id": "msg_2", "webhook-timestamp": String(stamp), "webhook-signature": `v1,${btoa(String.fromCharCode(...mac))}` };
+    };
+    expect((await post(host, "r1", { body, headers: await entry(secret) })).status).toBe(202);
+    expect((await post(host, "r1", { body, headers: await entry(raw) })).status).toBe(202);
   });
 
   it("refuses paused hooks, oversized bodies and unusable delivery ids", async () => {

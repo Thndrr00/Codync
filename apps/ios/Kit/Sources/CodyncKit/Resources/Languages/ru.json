@@ -2427,5 +2427,8 @@
   "Private": "Приватный",
   "Creating…": "Создание…",
   "Create repository": "Создать репозиторий",
-  "The workspace origin now points here.": "Origin рабочей папки теперь указывает сюда."
+  "The workspace origin now points here.": "Origin рабочей папки теперь указывает сюда.",
+  "Sender's signing secret": "Секрет подписи отправителя",
+  "Use it": "Использовать",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Отправитель, который подписывает через Standard Webhooks, например Composio или Svix, имеет собственный секрет: вставьте его здесь, и ключ выше станет этим секретом."
 }

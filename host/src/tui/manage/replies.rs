@@ -157,6 +157,11 @@ impl App {
                 self.refresh_sheets();
             }
             Reply::Webhook => {
+                // A pasted secret comes from the fields sheet: it has done its job.
+                if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Fields(_))) {
+                    self.overlays.truncate(i);
+                    self.refresh_sheets();
+                }
                 let url = v["url"].as_str().or_else(|| v["localUrl"].as_str()).unwrap_or_default();
                 let text = format!(
                     "curl -X POST '{url}' -H 'Authorization: Bearer {}' -H 'Content-Type: application/json' -d '{{}}'",

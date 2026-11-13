@@ -75,6 +75,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             str_arg(&b, "botId")?,
             str_arg(&b, "id")?,
             b["rotate"].as_bool().unwrap_or(false),
+            b["key"].as_str(),
         )?,
         "routineCall" => crate::routines::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"])?,
         "memoryCall" => {

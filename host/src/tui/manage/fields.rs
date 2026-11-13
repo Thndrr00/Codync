@@ -104,6 +104,9 @@ impl App {
             }
             Submit::ComposioKey => self.submit_composio_key(&values),
             Submit::Composio(_) => self.submit_composio(f, &values),
+            Submit::RoutineKey { bot, id } => {
+                self.sheet("routineWebhook", json!({"botId": bot, "id": id, "key": values["key"]}), Reply::Webhook);
+            }
             Submit::Handoff(entry) => {
                 self.sheet("editHandoff", json!({"entryId": entry, "text": values["text"]}), Reply::FieldsSaved);
             }
@@ -136,6 +139,31 @@ pub fn protected_fill_fields(id: &str, code: bool) -> Fields {
         cursor:0,error:None,saving:false,submit:Submit::ProtectedFill{id:id.into(),code},
     }
 }
+/// The sender's own signing secret of a webhook routine (`s` in its list): a Standard Webhooks
+/// sender such as Composio or Svix signs with it, so the routine's key becomes it.
+pub fn routine_key_fields(bot: &str, id: &str, name: &str) -> Fields {
+    Fields {
+        title: format!("Webhook secret of {name}"),
+        note: "Paste the signing secret the sender shows (it starts whsec_). Senders using the old key stop working."
+            .into(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![Input {
+            name: "key".into(),
+            label: "Signing secret".into(),
+            secret: true,
+            required: true,
+            multiline: false,
+            placeholder: "whsec_…".into(),
+            ed: Editor::default(),
+        }],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::RoutineKey { bot: bot.into(), id: id.into() },
+    }
+}
+
 pub fn voice_decision_fields(bot: &str, receipt: &str) -> Fields {
     Fields {
         title: "Confirm call decisions".into(),

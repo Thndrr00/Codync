@@ -2427,5 +2427,8 @@
   "Private": "私人",
   "Creating…": "建立中…",
   "Create repository": "建立儲存庫",
-  "The workspace origin now points here.": "工作區的 origin 現在指向這裡。"
+  "The workspace origin now points here.": "工作區的 origin 現在指向這裡。",
+  "Sender's signing secret": "傳送方的簽章密鑰",
+  "Use it": "使用",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "用 Standard Webhooks 簽章的傳送方（例如 Composio 或 Svix）有自己的密鑰：貼到這裡，上面的金鑰就會變成該密鑰。"
 }

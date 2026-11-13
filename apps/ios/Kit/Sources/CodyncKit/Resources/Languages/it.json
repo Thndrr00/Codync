@@ -2427,5 +2427,8 @@
   "Creating…": "Creazione…",
   "Create repository": "Crea repository",
   "The workspace origin now points here.": "L’origine dell’area di lavoro ora punta qui.",
-  "Reviewed by CopilotKit": "Revisionato da CopilotKit"
+  "Reviewed by CopilotKit": "Revisionato da CopilotKit",
+  "Sender's signing secret": "Segreto di firma del mittente",
+  "Use it": "Usalo",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Un mittente che firma con Standard Webhooks, come Composio o Svix, ha un proprio segreto: incollalo qui e la chiave sopra diventa quel segreto."
 }

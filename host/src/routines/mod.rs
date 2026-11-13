@@ -562,16 +562,22 @@ impl Routines {
 
     /// The routine's webhook: the public URL through the Codync cloud (when it's on; a private
     /// relay doesn't deliver them), the local one, and the key. `rotate` replaces the key first,
-    /// cutting off the old one.
-    pub fn credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool) -> Result<Value> {
-        if rotate {
+    /// cutting off the old one; `key` sets it instead, for the sender's own signing secret.
+    pub fn credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool, key: Option<&str>) -> Result<Value> {
+        let pasted = key.map(str::trim).filter(|key| !key.is_empty());
+        if let Some(key) = pasted
+            && (!(16..=1024).contains(&key.len()) || !key.bytes().all(|b| b.is_ascii_graphic()))
+        {
+            bail!("The signing secret is 16 to 1024 characters, without spaces.");
+        }
+        if rotate || pasted.is_some() {
             self.change(&hub.store, |s| {
                 let r = s
                     .routines
                     .iter_mut()
                     .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
                     .context("routine not found")?;
-                r.webhook_key = webhook_key();
+                r.webhook_key = pasted.map_or_else(webhook_key, str::to_owned);
                 r.updated_at = now_ms();
                 Ok(())
             })?;
@@ -625,7 +631,7 @@ impl Routines {
     /// queues a run when the event matches. Retries of a delivery id return its first run.
     pub fn receive(&self, hub: &Hub, id: &str, headers: &hooks::Headers, body: &[u8]) -> Result<Value, Refused> {
         let r = self.state.locked().routines.iter().find(|r| r.id == id && !r.deleted).cloned();
-        let Some(r) = r.filter(|r| hooks::authorized(&r.webhook_key, headers, body)) else {
+        let Some(r) = r.filter(|r| hooks::authorized(&r.webhook_key, headers, body, crate::store::now_ms())) else {
             return Err(Refused::Unauthorized);
         };
         let delivery = hooks::delivery_id(headers)?;

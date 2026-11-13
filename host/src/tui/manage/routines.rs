@@ -124,11 +124,21 @@ impl App {
                 self.sheet("runRoutine", json!({"botId": bot, "id": r["id"]}), Reply::Routines(bot.clone()));
                 self.flash(&format!("Running {} now", s(&r, "name")));
             }
-            (KeyCode::Char('w' | 'W'), Some(r)) if !has_webhook(&r) => {
+            (KeyCode::Char('w' | 'W' | 's'), Some(r)) if !has_webhook(&r) => {
                 self.flash("Only a routine that runs on a webhook has a URL and key");
             }
             (KeyCode::Char('w'), Some(r)) => {
                 self.sheet("routineWebhook", json!({"botId": bot, "id": r["id"]}), Reply::Webhook);
+            }
+            (KeyCode::Char('s'), Some(r)) => {
+                // The sender's own signing secret replaces the key, as a Standard Webhooks sender needs.
+                self.overlays.push(Overlay::Routines(l));
+                self.overlays.push(Overlay::Fields(Box::new(super::fields::routine_key_fields(
+                    &bot,
+                    &s(&r, "id"),
+                    &s(&r, "name"),
+                ))));
+                return None;
             }
             (KeyCode::Char('W'), Some(r)) => {
                 let c = Confirm {

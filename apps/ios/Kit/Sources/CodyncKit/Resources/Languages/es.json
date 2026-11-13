@@ -2427,5 +2427,8 @@
   "Private": "Privado",
   "Creating…": "Creando…",
   "Create repository": "Crear repositorio",
-  "The workspace origin now points here.": "El origen del espacio de trabajo ahora apunta aquí."
+  "The workspace origin now points here.": "El origen del espacio de trabajo ahora apunta aquí.",
+  "Sender's signing secret": "Secreto de firma del remitente",
+  "Use it": "Usarlo",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Un remitente que firma con Standard Webhooks, como Composio o Svix, tiene su propio secreto: pégalo aquí y la clave de arriba pasa a ser ese secreto."
 }

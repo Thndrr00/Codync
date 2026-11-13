@@ -2427,5 +2427,8 @@
   "Private": "プライベート",
   "Creating…": "作成中…",
   "Create repository": "リポジトリを作成",
-  "The workspace origin now points here.": "ワークスペースの origin は今後ここを指します。"
+  "The workspace origin now points here.": "ワークスペースの origin は今後ここを指します。",
+  "Sender's signing secret": "送信者の署名シークレット",
+  "Use it": "これを使う",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Composio や Svix など Standard Webhooks で署名する送信者は独自のシークレットを持ちます。ここに貼り付けると、上のキーがそのシークレットになります。"
 }

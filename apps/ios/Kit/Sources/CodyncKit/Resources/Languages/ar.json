@@ -376,5 +376,8 @@
   "Creating…": "جارٍ الإنشاء…",
   "Create repository": "إنشاء مستودع",
   "Created": "أُنشئ",
-  "The workspace origin now points here.": "أصبح أصل مساحة العمل يشير إلى هنا."
+  "The workspace origin now points here.": "أصبح أصل مساحة العمل يشير إلى هنا.",
+  "Sender's signing secret": "السرّ الذي يوقّع به المُرسل",
+  "Use it": "استخدمه",
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "المُرسل الذي يوقّع بـ Standard Webhooks، مثل Composio أو Svix، له سرّه الخاص: الصقه هنا وسيصبح المفتاح أعلاه هو ذلك السرّ."
 }
