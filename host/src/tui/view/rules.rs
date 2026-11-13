@@ -94,9 +94,14 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
         );
     }
     let tester = if s.mode == Mode::Test { s.editor.text.as_str() } else { "" };
-    let prompt =
-        if s.mode == Mode::Test { format!("{} {tester}", tr("Try:")) } else { tr("Try a command: T").into_owned() };
-    put(buf, inner.x, test_y, inner.width, &prompt, if s.mode == Mode::Test { t.bold } else { t.dim }.patch(t.panel));
+    let prompt = match s.mode {
+        Mode::Test => format!("{} {tester}", tr("Try:")),
+        // Typing the database path: the line shows what is being typed, as the tester does.
+        Mode::Database => format!("{} {}", tr("Database:"), s.editor.text),
+        _ => tr("Try a command: T").into_owned(),
+    };
+    let active = matches!(s.mode, Mode::Test | Mode::Database);
+    put(buf, inner.x, test_y, inner.width, &prompt, if active { t.bold } else { t.dim }.patch(t.panel));
     if let Some(answer) = &s.answer {
         put(
             buf,
@@ -134,14 +139,19 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
         };
         put(buf, inner.x, bottom - 2, inner.width, &truncate(&line, usize::from(inner.width)), t.dim.patch(t.panel));
     }
+    if let Some(path) = &s.database {
+        let line = format!("Database (B changes it): {path}");
+        put(buf, inner.x, bottom - 3, inner.width, &truncate(&line, usize::from(inner.width)), t.dim.patch(t.panel));
+    }
     let footer = match s.mode {
         Mode::Pattern => "↵ keep the pattern · esc cancel",
         Mode::Test => "↵ test · esc back",
+        Mode::Database => "↵ save the path · esc cancel",
         Mode::List if s.saving => "saving…",
         Mode::List if s.quick_on.is_some() => {
             "a add · ↵ edit · d del · K J move · m t · P profile · Q quick · 1 2 3 · T try · ^s save"
         }
-        Mode::List => "a add · ↵ edit · d delete · K J move · m decision · t tool · P profile · T try · ^s save",
+        Mode::List => "a add · ↵ edit · d delete · K J move · m decision · t tool · P profile · B database · T try · ^s save",
     };
     put(buf, inner.x, bottom - 1, inner.width, &truncate(&tr(footer), usize::from(inner.width)), t.dim.patch(t.panel));
 }

@@ -24,6 +24,8 @@ pub enum Mode {
     Pattern,
     /// Typing a command to try.
     Test,
+    /// Typing the database this bot may only read.
+    Database,
 }
 
 /// The quick rules approvals enforce: wire class and label (the host's table, `approval_rules::QUICK_KINDS`).
@@ -51,6 +53,8 @@ pub struct RulesSheet {
     pub lessons: Vec<Value>,
     /// The newest decisions on its approval cards (`approvalHistory`).
     pub history: Vec<Value>,
+    /// The SQLite file this bot may only read (`botDatabase`), when it has one.
+    pub database: Option<String>,
 }
 
 impl RulesSheet {
@@ -81,6 +85,7 @@ impl RulesSheet {
             profile_changed: false,
             lessons: Vec::new(),
             history: Vec::new(),
+            database: None,
         }
     }
 
@@ -212,6 +217,7 @@ impl App {
         // What the bot learned from refusals and what it was allowed to do: both are the host's.
         self.call("approvalLessons", json!({"botId": &bot.id}), After::RulesExtras);
         self.call("approvalHistory", json!({"botId": &bot.id}), After::RulesExtras);
+        self.call("botDatabase", json!({"botId": &bot.id}), After::RulesExtras);
         self.overlays.push(Overlay::Rules(Box::new(sheet)));
     }
 
@@ -257,6 +263,16 @@ impl App {
                     s.answer = None;
                 }
             },
+            Mode::Database => match k.code {
+                KeyCode::Enter => {
+                    let path = s.editor.text.trim().to_owned();
+                    let value = if path.is_empty() { Value::Null } else { Value::String(path) };
+                    self.call("setBotDatabase", json!({"botId": &s.bot_id, "path": value}), After::RulesExtras);
+                    s.mode = Mode::List;
+                }
+                KeyCode::Esc => s.mode = Mode::List,
+                _ => s.editor.key(k),
+            },
             Mode::List => match k.code {
                 KeyCode::Esc | KeyCode::Char('q') => return None,
                 KeyCode::Char('s') if k.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -281,6 +297,11 @@ impl App {
                     s.sel = s.sel.min(s.rules.len().saturating_sub(1));
                 }
                 KeyCode::Char('Q') => s.quick_on = s.quick_on.map(|on| !on),
+                // The database this bot may only read: B types its path.
+                KeyCode::Char('B') => {
+                    s.editor = Editor::with(s.database.as_deref().unwrap_or(""));
+                    s.mode = Mode::Database;
+                }
                 // A lesson the bot proposes: keep it as a rule, or dismiss it.
                 KeyCode::Char('Y') if !s.lessons.is_empty() => {
                     let id = s.lessons[0]["id"].as_str().unwrap_or_default().to_owned();
@@ -348,6 +369,9 @@ impl App {
         }
         if let Some(approvals) = v["approvals"].as_array() {
             s.history = approvals.clone();
+        }
+        if let Some(path) = v.get("database") {
+            s.database = path.as_str().map(str::to_owned);
         }
         // A decided lesson leaves the list without asking the host again.
         if let Some(id) = v["lesson"]["id"].as_str() {
