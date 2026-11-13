@@ -586,6 +586,11 @@ export class BotStore extends BotSync {
     await (await this.ready()).call('installSkill', { name, description, instructions, enableFor: botId }, 120_000)
   }
 
+  /** A text roundtable in a group: its members answer a topic in turn, in throwaway sessions. */
+  async runMeeting(botId: string, topic: string): Promise<{ turns: { name: string; text: string }[]; minutes: string }> {
+    return (await this.ready()).call('teamMeeting', { botId, topic }, 900_000)
+  }
+
   /** Groups saved as reusable teams on this computer. */
   async teamTemplates(): Promise<TeamTemplate[]> {
     return (await (await this.ready()).call<{ templates: TeamTemplate[] }>('teamTemplates', {})).templates

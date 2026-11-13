@@ -3,12 +3,14 @@ import { isGroup, type ActionClass, type Bot, type RulePolicy, type TeamSettings
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { Button, ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { Dialog, ModalHeader, SheetPage, useDismiss } from '../../components/Overlay'
+import { Dialog, ModalHeader, Sheet, SheetPage, useDismiss } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText } from './drafts'
 import { AutoTextArea } from './parts'
+import { Field } from './parts'
+import { MarkdownText } from '../thread/Markdown'
 import { TeamStructureEditor, reconcileTeam } from './TeamStructureEditor'
 import './bots.css'
 import { useTr } from '../../lib/use-language'
@@ -47,6 +49,10 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Bot | null>(null)
   const [templateNotice, setTemplateNotice] = useState<string | null>(null)
+  const [meetingOpen, setMeetingOpen] = useState(false)
+  const [meetingTopic, setMeetingTopic] = useState('')
+  const [meetingBusy, setMeetingBusy] = useState(false)
+  const [meetingMinutes, setMeetingMinutes] = useState<string | null>(null)
 
   // One set of permission rules per role: every member with that role gets the same four classes.
   const roles = [...new Set(team.members.map((m) => m.role.trim()).filter(Boolean))]
@@ -83,6 +89,21 @@ export function GroupEditorView({ group }: { group: Bot }) {
       setTemplateNotice('Saved as a team template.')
     } catch (e) {
       setError(errorText(e))
+    }
+  }
+
+  const runMeeting = async () => {
+    if (!meetingTopic.trim()) return
+    setMeetingBusy(true)
+    setError(null)
+    setMeetingMinutes(null)
+    try {
+      const result = await store.runMeeting(group.id, meetingTopic.trim())
+      setMeetingMinutes(result.minutes)
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setMeetingBusy(false)
     }
   }
 
@@ -232,6 +253,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
           {templateNotice ? <Text size="footnote" tone="secondary" className="fade-in">{templateNotice}</Text> : null}
           <Button kind="secondary" onClick={() => void saveTemplate()}>{tr('Save as team template')}</Button>
+          <Button kind="secondary" onClick={() => setMeetingOpen(true)}>{tr('Run a meeting')}</Button>
           {current ? (
             <button className="press group-delete" onClick={() => setConfirmDelete(current)}>
               Delete group chat
@@ -240,6 +262,23 @@ export function GroupEditorView({ group }: { group: Bot }) {
         </div>
       </div>
       <DeleteBotDialog bot={confirmDelete} onClose={() => setConfirmDelete(null)} onDeleted={dismiss} />
+      <Sheet open={meetingOpen} onClose={() => setMeetingOpen(false)} width={620} maxHeight="82vh">
+        <VStack gap={12}>
+          <ModalHeader icon="person.2" title="Run a meeting" subtitle="Each member answers in turn, in a throwaway session; nothing is posted in the group." onClose={() => setMeetingOpen(false)} />
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">{tr('Topic')}</Text>
+            <Field label="Topic" value={meetingTopic} onChange={setMeetingTopic} placeholder={tr('What should the team discuss?')} />
+          </VStack>
+          <HStack gap={8}>
+            <Button disabled={meetingBusy || !meetingTopic.trim()} onClick={() => void runMeeting()}>
+              {meetingBusy ? tr('Meeting…') : tr('Start')}
+            </Button>
+          </HStack>
+          {meetingMinutes ? (
+            <div className="documents-preview"><MarkdownText text={meetingMinutes} /></div>
+          ) : null}
+        </VStack>
+      </Sheet>
     </SheetPage>
   )
 }

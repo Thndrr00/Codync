@@ -17,6 +17,7 @@ pub mod instruction_history;
 pub mod lead;
 pub mod library;
 pub mod manage;
+pub mod meeting;
 pub mod memory;
 pub mod messages;
 pub mod naming;

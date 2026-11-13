@@ -421,6 +421,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let bot = crate::chat::team_templates::install(hub, str_arg(&b, "id")?).await?;
             json!({"bot": bot})
         }
+        // A short roundtable in a group, in throwaway sessions; the turns and draft minutes come back.
+        "teamMeeting" => crate::chat::meeting::run(hub, str_arg(&b, "botId")?, str_arg(&b, "topic")?).await?,
         "deleteTeamTemplate" => json!({"deleted": crate::chat::team_templates::remove(hub, str_arg(&b, "id")?)?}),
         "deleteBot" => {
             let bot = str_arg(&b, "botId")?;

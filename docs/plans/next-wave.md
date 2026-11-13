@@ -10,14 +10,14 @@ is bigger than one release.
 | SBOM for every release | done |
 | Local models (chat, embeddings, voice) | next |
 | Workspace search with citations | done (lexical) |
-| Team meeting: minutes (`/minutes`) done; voice roundtable next |
+| Team meeting: minutes (`/minutes`) done; text roundtable done, voice next |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop) |
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | A2UI (with choices and forms) and AG-UI server done |
 | Agent evaluations harness (text, tools, `--bots` comparison) | done (CI wiring next) |
-| Policies by role and tool | next |
+| Policies by role and tool | done (desktop) |
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | next |
 | Desktop global shortcut done; agent dock next |
@@ -64,7 +64,7 @@ is bigger than one release.
 | Database backup from Diagnostics | done |
 | Approval rules as JSON (copy/apply) | done (desktop) |
 | Share-to-bot on Android and iOS | next |
-| Real offline mode | next |
+| Real offline mode | text outbox on desktop done; encrypted full cache next |
 | Marketplace reputation and updates | later |
 | Skills that improve themselves | later |
 | Multi-user server | later |
@@ -184,6 +184,22 @@ Goal: a bot can run without an account.
   asking the relay. An approval ignores quiet hours: a bot waiting for an answer is stuck until the
   person reads it. Diagnostics › Notifications edits the rules.
 - Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
+
+## Reserves, policy, offline and a roundtable — done
+
+- **Budget reservations**: `Budgets::reserve` holds 4,000 tokens for a turn and refuses it when the
+  bot or the fleet has no room; the reservation is released when usage is counted and expires after
+  ten minutes if a turn never reports. User turns and scheduled messages both go through it.
+- **Tool policy**: a bot's `blockedTools` (comma-separated names, `*` for every chat tool) is checked
+  before cache and rate limits, so a blocked tool never runs.
+- **Offline text**: a message typed while its computer is offline waits in a device outbox
+  (`store/outbox.ts`), shows "Waiting for the computer to come online", and sends with the same nonce
+  when the connection returns. Files still need the computer online.
+- **AG-UI**: the finished reply is emitted as 160-character `TEXT_MESSAGE_CONTENT` deltas instead of
+  one content event.
+- **Roundtable**: `teamMeeting` asks each group member in turn, in a throwaway session, with the
+  earlier turns in its prompt, and returns the turns and draft minutes; the group editor opens it with
+  a topic. Voice is still the phone's job.
 
 ## Teams, skills and upkeep — done
 

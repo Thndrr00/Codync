@@ -28,7 +28,7 @@ Each chat keeps its own draft on each device, and the draft comes back when you 
 
 **While the bot works**, the box reads "Queue a message for" followed by the bot's name. Messages you send then show **Queued until this response finishes**, and they reach the agent together as its next turn.
 
-**When the computer is offline**, the iPhone can still take a text message: it shows **Waiting for the computer to come online** and goes out when the computer is back. It waits in the Codync relay, encrypted for your computer, for up to 24 hours; after that it shows **Failed to send**. Tap the cancel button beside it to take it back. A message with files can't wait; its send button stays off until the computer is online.
+**When the computer is offline**, the iPhone can still take a text message: it shows **Waiting for the computer to come online** and goes out when the computer is back. It waits in the Codync relay, encrypted for your computer, for up to 24 hours; after that it shows **Failed to send**. Tap the cancel button beside it to take it back. A message with files can't wait; its send button stays off until the computer is online. On the desktop, a text message typed while its computer is offline waits on that device and sends itself when the computer is back.
 
 If a message fails to send, it shows **Failed to send** with buttons to resend or delete it.
 
@@ -112,6 +112,9 @@ The answers come from the agent, usually:
 The desktop's **Inbox** (tray icon in the rail) collects the approvals waiting across every bot, with
 **Deny** and **Allow** beside each one, so a card can be answered without opening its chat. The same
 buttons sit on approval rows in a bot's **Activity** tab, and the rail shows how many approvals wait.
+
+A bot's settings also have **Blocked tools**: names separated by commas, checked before the tool runs,
+so the agent gets an error instead of the tool. `*` turns off every chat tool for that bot.
 
 In the terminal UI, press `y` to allow once, `a` to always allow, `n` to reject, `N` to reject and say why, or `1`…`9` to pick an option.
 

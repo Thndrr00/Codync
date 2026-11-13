@@ -3,6 +3,7 @@ Codync keeps your work on your computer. The phone and desktop apps are windows 
 ## What stays on your computer
 
 - **Bots, conversations, routines and memory** are kept by the host in `~/.codync` on your computer. Your phone keeps a cache so the app opens quickly.
+- **Messages waiting for an offline computer** stay on the device where they were typed: the desktop keeps its text outbox in the app's local storage and sends it when the computer is reachable.
 - **Security decisions have an audit log.** Pairing, revoked access, cloud, network and approval decisions are recorded on the computer with the ids they name and no chat content, kept for 90 days, and shown under **Settings → Diagnostics** (desktop) or **Settings** (Android). It can be cleared there.
 - **Agents run with their own logins.** Claude Code, Codex and the other agents use the sign-ins you set up on the computer. Your prompts go from the agent to its provider, as they would without Codync.
 - **Secrets are encrypted.** Connector credentials, voice API keys and other keys you enter in Codync are stored encrypted on the computer. The encryption key is held by the system's credential store (Keychain on macOS, Secret Service on Linux, Credential Manager on Windows). They're never sent to Codync's cloud.
