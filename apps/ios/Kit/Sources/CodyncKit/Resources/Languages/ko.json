@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "{name}에서 키가 필요함",
   "Open {name}’s page": "{name} 페이지 열기",
   "The sign-in stays on {name}’s own page.": "로그인은 {name}의 페이지에서 합니다.",
-  "needs a key": "키 필요"
+  "needs a key": "키 필요",
+  "Carries a credential": "자격 증명 포함",
+  "Could not check the arguments for a credential": "인수에 자격 증명이 있는지 확인하지 못했습니다"
 }

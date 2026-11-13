@@ -25,6 +25,7 @@ mod compaction;
 mod fallback;
 mod fast_mode;
 mod files;
+mod governance;
 mod launch;
 mod lifecycle;
 mod model_override;

@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "{name} のキーが必要",
   "Open {name}’s page": "{name} のページを開く",
   "The sign-in stays on {name}’s own page.": "サインインは {name} のページで行います。",
-  "needs a key": "キーが必要"
+  "needs a key": "キーが必要",
+  "Carries a credential": "認証情報を含む",
+  "Could not check the arguments for a credential": "引数に認証情報がないか確認できませんでした"
 }

@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "需要来自 {name} 的密钥",
   "Open {name}’s page": "打开 {name} 的页面",
   "The sign-in stays on {name}’s own page.": "登录在 {name} 自己的页面上进行。",
-  "needs a key": "需要密钥"
+  "needs a key": "需要密钥",
+  "Carries a credential": "带有凭据",
+  "Could not check the arguments for a credential": "无法检查参数中是否带有凭据"
 }

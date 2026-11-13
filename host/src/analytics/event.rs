@@ -48,6 +48,8 @@ pub enum Event {
     AgentRetired,
     /// Codync started summarizing a bot's chat (`agent::bot::compaction`).
     ContextCompacted,
+    /// A tool call's arguments carry a credential (`agent::bot::governance`).
+    ToolCaution,
     UsageReadFailed,
     SessionReset,
     PermissionAnswered,
@@ -171,6 +173,7 @@ impl Event {
             Self::AgentFellBack => "agent_fell_back",
             Self::AgentRetired => "agent_retired",
             Self::ContextCompacted => "context_compacted",
+            Self::ToolCaution => "tool_caution",
             Self::UsageReadFailed => "usage_read_failed",
             Self::SessionReset => "session_reset",
             Self::PermissionAnswered => "permission_answered",

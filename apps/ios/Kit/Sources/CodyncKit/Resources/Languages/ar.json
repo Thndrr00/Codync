@@ -367,5 +367,7 @@
   "Needs a key from {name}": "يحتاج إلى مفتاح من {name}",
   "Open {name}’s page": "افتح صفحة {name}",
   "The sign-in stays on {name}’s own page.": "يتم تسجيل الدخول على صفحة {name} نفسها.",
-  "needs a key": "يحتاج إلى مفتاح"
+  "needs a key": "يحتاج إلى مفتاح",
+  "Carries a credential": "يحمل بيانات اعتماد",
+  "Could not check the arguments for a credential": "تعذّر فحص الوسائط بحثًا عن بيانات اعتماد"
 }

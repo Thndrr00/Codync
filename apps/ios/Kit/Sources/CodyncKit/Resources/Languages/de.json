@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "Braucht einen Schlüssel von {name}",
   "Open {name}’s page": "{name}s Seite öffnen",
   "The sign-in stays on {name}’s own page.": "Die Anmeldung bleibt auf der Seite von {name}.",
-  "needs a key": "braucht einen Schlüssel"
+  "needs a key": "braucht einen Schlüssel",
+  "Carries a credential": "Trägt ein Zugangsmerkmal",
+  "Could not check the arguments for a credential": "Die Argumente konnten nicht auf ein Zugangsmerkmal geprüft werden"
 }

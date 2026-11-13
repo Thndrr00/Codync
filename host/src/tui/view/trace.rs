@@ -178,11 +178,35 @@ fn push_tool(out: &mut Vec<Line<'static>>, app: &App, e: &Entry, width: usize, f
         label(&kind),
         Span::styled(truncate(&title, text_rest(width)), t.text),
     ]));
+    if let Some(caution) = e.data.get("caution") {
+        push_caution(out, caution, width, full);
+    }
     let (diff_max, out_max) = if full { (400, 400) } else { (14, 6) };
     for d in e.data["diffs"].as_array().into_iter().flatten() {
         push_diff(out, app, d, width, diff_max);
     }
     push_output(out, e.data["output"].as_str().unwrap_or_default(), width, out_max);
+}
+
+/// The warning a call carries when its arguments hold a credential, with the paths in full.
+fn push_caution(out: &mut Vec<Line<'static>>, caution: &serde_json::Value, width: usize, full: bool) {
+    let t = theme();
+    let text = if caution["reason"] == "inspection_limit" {
+        tr("Could not check the arguments for a credential")
+    } else {
+        tr("Carries a credential")
+    };
+    out.push(Line::from(vec![
+        Span::raw("   "),
+        Span::styled("⚿ ", t.amber),
+        Span::styled(truncate(&text, width.saturating_sub(5)), t.secondary),
+    ]));
+    if !full {
+        return;
+    }
+    for path in caution["findings"].as_array().into_iter().flatten().filter_map(|f| f["path"].as_str()) {
+        out.push(Line::from(Span::styled(format!("     {path}"), t.dim)));
+    }
 }
 
 /// A file's diff: its path and counts, then its first `max` patch lines.

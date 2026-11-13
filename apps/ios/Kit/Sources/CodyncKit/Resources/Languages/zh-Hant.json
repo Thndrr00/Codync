@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "需要來自 {name} 的金鑰",
   "Open {name}’s page": "開啟 {name} 的頁面",
   "The sign-in stays on {name}’s own page.": "登入在 {name} 自己的頁面上進行。",
-  "needs a key": "需要金鑰"
+  "needs a key": "需要金鑰",
+  "Carries a credential": "帶有憑證",
+  "Could not check the arguments for a credential": "無法檢查參數中是否帶有憑證"
 }

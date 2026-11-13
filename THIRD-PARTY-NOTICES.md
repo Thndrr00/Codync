@@ -35,7 +35,9 @@ Used in: `host/src/market/copilotkit/apps.json` (the reviewed connector catalogu
 design from `server/src/plugins/`) and `host/src/market/guide/key_guides.json` (the connection
 guides, the plain field labels and the "needs a key" wording, from `server/src/plugins/key-guides.ts`,
 `server/src/plugins/app-names.ts` and `app/src/lib/enablement-notes.ts`, with the copy changed to
-name Composio as the broker and without the approvals clause).
+name Composio as the broker and without the approvals clause). `host/src/agent/bot/governance.rs`
+(the credential inspection behind a tool call's caution) is a port of the server's
+`content-governance.ts`.
 
 Source: https://github.com/CopilotKit/OpenBot
 

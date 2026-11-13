@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "Нужен ключ от {name}",
   "Open {name}’s page": "Открыть страницу {name}",
   "The sign-in stays on {name}’s own page.": "Вход остаётся на странице {name}.",
-  "needs a key": "нужен ключ"
+  "needs a key": "нужен ключ",
+  "Carries a credential": "Содержит учётные данные",
+  "Could not check the arguments for a credential": "Не удалось проверить аргументы на учётные данные"
 }

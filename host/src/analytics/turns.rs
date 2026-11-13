@@ -111,6 +111,19 @@ pub fn context_compacted(hub: &Hub, agent: &str, idle: bool, threshold: codync_m
     capture(hub, Event::ContextCompacted, p.as_object().cloned().unwrap_or_default());
 }
 
+/// `tool_caution`: a call's arguments carry a credential, its reason and the distinct categories found
+/// (never the argument paths or values).
+pub fn tool_caution(hub: &Hub, caution: &serde_json::Value) {
+    let mut categories: Vec<&str> = Vec::new();
+    for category in caution["findings"].as_array().into_iter().flatten().filter_map(|f| f["category"].as_str()) {
+        if !categories.contains(&category) {
+            categories.push(category);
+        }
+    }
+    let p = json!({"reason": caution["reason"], "categories": categories});
+    capture(hub, Event::ToolCaution, p.as_object().cloned().unwrap_or_default());
+}
+
 /// What became of a queued message the user had handled now (`message_steered`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

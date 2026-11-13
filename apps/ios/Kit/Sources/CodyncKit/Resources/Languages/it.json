@@ -2418,5 +2418,7 @@
   "Needs a key from {name}": "Richiede una chiave da {name}",
   "Open {name}’s page": "Apri la pagina di {name}",
   "The sign-in stays on {name}’s own page.": "L’accesso resta sulla pagina di {name}.",
-  "needs a key": "richiede una chiave"
+  "needs a key": "richiede una chiave",
+  "Carries a credential": "Porta una credenziale",
+  "Could not check the arguments for a credential": "Non è stato possibile controllare gli argomenti per una credenziale"
 }

@@ -2419,5 +2419,7 @@
   "Needs a key from {name}": "Nécessite une clé de {name}",
   "Open {name}’s page": "Ouvrir la page de {name}",
   "The sign-in stays on {name}’s own page.": "La connexion reste sur la page de {name}.",
-  "needs a key": "nécessite une clé"
+  "needs a key": "nécessite une clé",
+  "Carries a credential": "Contient un identifiant",
+  "Could not check the arguments for a credential": "Les arguments n’ont pas pu être vérifiés pour un identifiant"
 }

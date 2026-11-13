@@ -31,7 +31,7 @@ pub use observe::{answered, failed, observe_call};
 pub use reported::track;
 pub use turns::{
     Retired, Steer, TurnOutcome, TurnSource, agent_fell_back, agent_retired, context_compacted, message_steered,
-    turn_finished, turn_queued,
+    tool_caution, turn_finished, turn_queued,
 };
 
 const KV_ENABLED: &str = "analytics_enabled";
