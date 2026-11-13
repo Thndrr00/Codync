@@ -101,6 +101,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::apps::call(hub, bot, name, arguments)?
             } else if crate::chat::open_items::TOOLS.contains(&name) {
                 crate::chat::open_items::call(hub, bot, name, arguments)?
+            } else if name == crate::chat::workspace::SEMANTIC_TOOL {
+                crate::chat::workspace::semantic_search(hub, bot, arguments).await?
             } else if crate::chat::workspace::TOOLS.contains(&name) {
                 crate::chat::workspace::call(hub, bot, name, arguments)?
             } else if name == crate::chat::skills::TOOL {
@@ -803,6 +805,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"turnedOff": turned_off})
         }
         "doctor" => crate::doctor::report(hub)?,
+        // What a local Ollama offers, if it is running (semantic search uses its embeddings).
+        "localModels" => crate::local_models::status().await?,
         "stopAll" => json!({"stopped": hub.stop_all()?}),
         "switchBack" => {
             hub.send_cmd(str_arg(&b, "botId")?, Cmd::SwitchBack)?;

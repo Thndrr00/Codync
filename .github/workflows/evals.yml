@@ -1,0 +1,58 @@
+name: Agent evaluations
+
+# Runs evals/*.json against a fresh host with one Claude bot. Needs the ANTHROPIC_API_KEY secret;
+# without it the job builds the harness and skips the cases.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CODYNC_HOME: ${{ runner.temp }}/codync-eval-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: host
+      - name: Build the host and the eval harness
+        run: |
+          cargo build --manifest-path host/Cargo.toml
+          node --check tools/eval-bots.mjs
+      - name: Start a host and seed a bot
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mkdir -p "$CODYNC_HOME"
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "No ANTHROPIC_API_KEY secret: skipping the model run."
+            exit 0
+          fi
+          npm install -g @anthropic-ai/claude-code
+          host/target/debug/codync-host serve --port 19223 --bind 127.0.0.1 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:19223/health >/dev/null && break
+            sleep 1
+          done
+          TOKEN=$(node -e "const {execSync}=require('node:child_process');const info=JSON.parse(execSync('host/target/debug/codync-host info --port 19223 --json'));console.log(info.token)")
+          BOT=$(curl -sf -X POST http://127.0.0.1:19223/api/createBot \
+            -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+            -d "{\"name\":\"Eval\",\"backend\":\"claude\",\"cwd\":\"$GITHUB_WORKSPACE\",\"permission\":\"auto\"}")
+          BOT_ID=$(node -e "const b=JSON.parse(process.argv[1]);console.log((b.bot??b).id)" "$BOT")
+          echo "BOT_ID=$BOT_ID" >> "$GITHUB_ENV"
+          echo "Seeded bot $BOT_ID"
+      - name: Run the cases
+        run: |
+          if [ -z "${BOT_ID:-}" ]; then
+            echo "Skipped: no bot was seeded."
+            exit 0
+          fi
+          if ! ls evals/*.json >/dev/null 2>&1; then
+            echo "No eval cases in evals/*.json yet."
+            exit 0
+          fi
+          node tools/eval-bots.mjs --home "$CODYNC_HOME" --port 19223 --bots "$BOT_ID" evals/*.json

@@ -32,5 +32,9 @@ Without files it reads every `evals/*.json`. A file is an array (or `{ "cases": 
 - `expectTools`: every named tool must have been called during the turn.
 - The script exits 1 when any case fails, so CI can run it against a seeded host.
 
+`.github/workflows/evals.yml` does that on a schedule (and by hand): it builds the host, seeds one
+Claude bot, and runs every case against it when the `ANTHROPIC_API_KEY` secret is set. Without the
+secret it builds and skips the model run.
+
 Keep cases about observable behavior ("answers with a citation", "calls search_workspace"), not exact
 wording, so a prompt tweak does not rewrite every case.

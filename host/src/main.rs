@@ -33,6 +33,7 @@ mod icons;
 mod import;
 mod import_cli;
 mod local_api;
+mod local_models;
 mod market;
 mod mcp;
 mod n8n;

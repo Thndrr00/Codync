@@ -37,7 +37,7 @@ fn per_minute(name: &str) -> u32 {
         // These reach the network or run an agent of their own.
         "research_sources" => 8,
         // Walking a workspace can be expensive on a big folder.
-        "search_workspace" | "read_workspace_file" => 40,
+        "search_workspace" | "read_workspace_file" | "semantic_search" => 40,
         // Every one of these shows up in the chat; a model sending more is looping.
         "send_message" | "send_file" | "react" => 60,
         "publish_artifact" => 30,
@@ -47,7 +47,10 @@ fn per_minute(name: &str) -> u32 {
 
 /// Tools whose answer depends only on their arguments and the files at this instant.
 fn read_only(name: &str) -> bool {
-    matches!(name, "list_artifacts" | "instruction_history" | "search_workspace" | "read_workspace_file")
+    matches!(
+        name,
+        "list_artifacts" | "instruction_history" | "search_workspace" | "read_workspace_file" | "semantic_search"
+    )
 }
 
 /// Refuses a tool this bot's policy turns off. `*` blocks every chat tool.

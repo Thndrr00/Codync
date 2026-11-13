@@ -8,15 +8,15 @@ is bigger than one release.
 | Decisions inbox (approvals, unread threads, failed runs) | done (desktop) |
 | Team templates with seeded roles and hierarchy | done |
 | SBOM for every release | done |
-| Local models (chat, embeddings, voice) | next |
-| Workspace search with citations | done (lexical) |
+| Local models (chat, embeddings, voice) | embeddings status + semantic rerank done; local chat next |
+| Workspace search with citations | done (lexical + optional semantic rerank) |
 | Team meeting: minutes (`/minutes`) done; text roundtable done, voice next |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop) |
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | A2UI (with choices and forms) and AG-UI server done |
-| Agent evaluations harness (text, tools, `--bots` comparison) | done (CI wiring next) |
+| Agent evaluations harness (text, tools, `--bots` comparison) | done (nightly workflow) |
 | Policies by role and tool | done (desktop) |
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | next |
@@ -66,7 +66,7 @@ is bigger than one release.
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | text outbox on desktop done; encrypted full cache next |
 | Marketplace reputation and updates | later |
-| Skills that improve themselves | later |
+| Skills that improve themselves | done for proposals after turns; review UI exists |
 | Multi-user server | later |
 
 ## Decisions inbox — done
@@ -184,6 +184,19 @@ Goal: a bot can run without an account.
   asking the relay. An approval ignores quiet hours: a bot waiting for an answer is stuck until the
   person reads it. Diagnostics › Notifications edits the rules.
 - Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
+
+## Local models, semantic search and evals — partly done
+
+- **Ollama**: `localModels` reports whether `{CODYNC_OLLAMA_URL or 127.0.0.1:11434}/api/tags` answers,
+  with the models installed; Diagnostics › Local models shows it.
+- **Semantic workspace search**: the `semantic_search` tool runs the lexical pass and reranks the
+  matches with Ollama embeddings (`CODYNC_EMBED_MODEL`, default `nomic-embed-text`), returning a
+  `score` per match. Without Ollama it returns the lexical order with `semantic: false`.
+- **Local chat models** are still next: the chat runs through an ACP harness, and a local one needs its
+  own agent.
+- **Evals in CI**: `.github/workflows/evals.yml` builds the host, seeds a Claude bot with the
+  `ANTHROPIC_API_KEY` secret and runs `evals/*.json` through `tools/eval-bots.mjs`; without the secret it
+  skips the model run.
 
 ## Reserves, policy, offline and a roundtable — done
 

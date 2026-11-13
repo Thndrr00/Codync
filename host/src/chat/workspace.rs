@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
 pub const TOOLS: &[&str] = &["search_workspace", "read_workspace_file"];
+/// Search that reranks the lexical matches with Ollama embeddings when Ollama is running.
+pub const SEMANTIC_TOOL: &str = "semantic_search";
 const MAX_FILES: usize = 4_000;
 const MAX_BYTES: u64 = 512 * 1024;
 const MAX_MATCHES: usize = 40;
@@ -45,6 +47,20 @@ pub fn tools() -> Value {
                 "required": ["path"]
             },
             "annotations": {"readOnlyHint": true}
+        },
+        {
+            "name": "semantic_search",
+            "description": "Like search_workspace, but reranks the matches by meaning with a local Ollama embedding model when Ollama is running; otherwise it returns the lexical order. Use it when the words in the question may not match the words in the files. Cite file:line from the result.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "minLength": 1, "maxLength": 200, "description": "What you are looking for, in a sentence if the exact words are unknown."},
+                    "path": {"type": "string", "description": "A subfolder or file, relative to the bot's folder (optional)."},
+                    "caseSensitive": {"type": "boolean", "description": "Match case exactly for the lexical pass (default false)."}
+                },
+                "required": ["query"]
+            },
+            "annotations": {"readOnlyHint": true}
         }
     ])
 }
@@ -60,6 +76,46 @@ pub fn call(hub: &Hub, bot: &str, name: &str, arguments: &Value) -> Result<Value
         "read_workspace_file" => read(&root, arguments),
         other => bail!("unknown workspace tool {other}"),
     }
+}
+
+/// Lexical candidates reranked by meaning with a local Ollama embedding model. Without Ollama it is
+/// the lexical search with `semantic: false`, so the tool always answers.
+pub async fn semantic_search(hub: &Hub, bot: &str, arguments: &Value) -> Result<Value> {
+    let row = hub.store.bot(bot)?.filter(|b| !b.deleted).context("unknown bot")?;
+    let root = PathBuf::from(&row.config.cwd);
+    if root.as_os_str().is_empty() || !root.is_dir() {
+        bail!("this bot has no folder to search");
+    }
+    let mut value = search(&root, arguments)?;
+    let matches = value["matches"].as_array().cloned().unwrap_or_default();
+    let Some(query) = arguments["query"].as_str().map(str::trim).filter(|q| !q.is_empty()) else {
+        bail!("query is required");
+    };
+    let Some(query_vector) = crate::chat::embeddings::embed(query).await else {
+        value["semantic"] = false.into();
+        return Ok(value);
+    };
+    let vectors = futures::future::join_all(
+        matches.iter().map(|item| crate::chat::embeddings::embed(item["snippet"].as_str().unwrap_or_default())),
+    )
+    .await;
+    let mut scored: Vec<(f32, Value)> = matches
+        .into_iter()
+        .zip(vectors)
+        .map(|(item, vector)| {
+            let score = vector.as_deref().map_or(0.0, |vector| crate::chat::embeddings::cosine(&query_vector, vector));
+            (score, item)
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let matches: Vec<Value> = scored
+        .into_iter()
+        .map(|(score, mut item)| {
+            item["score"] = json!(score);
+            item
+        })
+        .collect();
+    Ok(json!({"matches": matches, "semantic": true}))
 }
 
 fn inside(root: &Path, relative: &str) -> Result<PathBuf> {

@@ -49,6 +49,14 @@ export interface SharedLink {
   url: string
 }
 
+/** What a local Ollama offers, when one is running. */
+export interface LocalModels {
+  available: boolean
+  url: string
+  models: string[]
+  embeddingModel?: string
+}
+
 /** The host's upkeep calls the diagnostics page makes: bot check, daily token limits, failed runs, bot bundles. */
 export class MaintenanceStore extends Observable {
   report: DoctorReport | null = null
@@ -58,6 +66,7 @@ export class MaintenanceStore extends Observable {
   scheduled: ScheduledMessage[] = []
   links: SharedLink[] = []
   backupPath: string | null = null
+  localModels: LocalModels | null = null
   compare: ModelCompareResult[] = []
   busy = false
   error: string | null = null
@@ -163,6 +172,13 @@ export class MaintenanceStore extends Observable {
       const { path } = await c.call<{ path: string }>('backupDatabase', {}, 120_000)
       this.backupPath = path
       this.notice = 'Backup saved.'
+    })
+  }
+
+  /** What a local Ollama offers, for semantic search and the models page. */
+  async loadLocalModels() {
+    await this.run(async (c) => {
+      this.localModels = await c.call<LocalModels>('localModels', {}, 10_000)
     })
   }
 

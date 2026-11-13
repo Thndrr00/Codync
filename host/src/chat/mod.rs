@@ -8,6 +8,7 @@ pub mod budget_gate;
 pub mod calls;
 pub mod context;
 pub mod decider;
+pub mod embeddings;
 pub mod fallbacks;
 pub mod files;
 pub mod forward;

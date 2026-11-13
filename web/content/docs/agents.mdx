@@ -4,6 +4,14 @@ Codync uses the agents with the accounts they're already signed in to on your co
 
 If an agent's login stops working (for example, signing in somewhere else revoked it), the bot first tries your message again on a fresh start of the agent, which picks up a newer login on the computer. If that fails too, the chat shows the agent's sign-in card: **Sign in** opens the agent's sign-in options, and your message goes out again once you've signed in.
 
+## Local models (Ollama)
+
+Codync can use a local [Ollama](https://ollama.com) for embeddings, and Diagnostics › **Local models**
+shows whether one is running and which models it has. Semantic workspace search uses
+`nomic-embed-text` (or `CODYNC_EMBED_MODEL`) to rerank results; set `CODYNC_OLLAMA_URL` to point at
+another install. The chat itself still runs through an agent harness: choosing a local model for the
+conversation is not available yet.
+
 ## Usage limits
 
 On desktop, open **Settings > Usage** to see the limits reported by your connected computers, including Cursor. The host refreshes usage every five minutes. Unified Cursor plans, including Super, show one **Weekly** allowance with its next reset. Older Cursor plans retain their monthly usage readings.
