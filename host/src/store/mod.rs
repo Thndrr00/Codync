@@ -15,6 +15,7 @@ mod documents;
 mod entries;
 pub mod flow_steps;
 pub mod flows;
+mod history;
 mod inflight;
 pub(crate) mod mcp_policies;
 mod memory;

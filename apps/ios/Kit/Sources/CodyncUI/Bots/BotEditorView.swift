@@ -298,6 +298,10 @@ struct BotSettingsForm: View {
                 HermesRuntimeCard(botId: id).id(id)
             }
 
+            if part == .all, let bot {
+                HistoryActions(bot: bot)
+            }
+
             CardSection("Activity") {
                 SwitchRow("Notifications", detail: "Get notified when this bot finishes or needs you",
                           isOn: Binding(get: { draft.notify ?? true }, set: { draft.notify = $0 }))

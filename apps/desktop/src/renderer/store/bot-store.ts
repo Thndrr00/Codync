@@ -39,12 +39,13 @@ import { FileDownloads } from './file-downloads'
 import { BotSections } from './bot-sections'
 import { DevServerCommands } from './dev-servers'
 import { BotSync, sleep } from './bot-sync'
+import type { ServerSettings } from './bot-mirror'
 import { DocumentsStore } from './documents-store'
 import type { VoiceTranscript } from '../lib/voice-transcript'
 import { createAppShareLink } from '../lib/app-links'
 import { filesToResend, type OutgoingFile } from './outgoing-files.ts'
 
-export { builtInBackendName, type Connection } from './bot-mirror'
+export { builtInBackendName, type Connection, type ServerSettings } from './bot-mirror'
 
 /** What a message carries besides its text; `replyTo` shows on the bubble until the computer's own quote replaces it. */
 export interface SendOptions {
@@ -234,6 +235,16 @@ export class BotStore extends BotSync {
 
   newSession(botId: string) {
     this.perform((c) => c.call('newSession', { botId }))
+  }
+
+  /** Removes this chat's messages and turns; its setup, memories, routines, artifacts and files stay. */
+  async deleteHistory(botId: string) {
+    await this.withLink((c) => c.call('deleteHistory', { botId }))
+  }
+
+  /** Asks the chat's agent (or every member of a group) to summarize what it keeps. */
+  async compactContext(botId: string) {
+    await this.withLink((c) => c.call('compactContext', { botId }))
   }
 
   /** Back to the bot's own agent from a fallback: now if it's idle, else from its next turn. The host posts the chat line. */
@@ -946,6 +957,38 @@ export class BotStore extends BotSync {
     const saved = await this.client.call<{ afterMs: number | null }>('setPlanStart', { afterMs })
     this.planStart = { ...(this.planStart ?? { presets: [], min: 5_000, max: 840_000 }), afterMs: saved.afterMs }
     this.changed()
+  }
+
+  /** Reads this computer's server settings; an older host keeps what was there (nothing). */
+  async refreshServerSettings() {
+    if (this.retired || !this.client) return
+    try {
+      this.serverSettings = await this.client.call<ServerSettings>('serverSettings', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes the response style, the Claude Code setup switch or the remote control policy. */
+  async setServerSettings(patch: Partial<ServerSettings>) {
+    const saved = await (await this.ready()).call<{ settings: ServerSettings }>('setServerSettings', patch)
+    this.serverSettings = saved.settings
+    this.changed()
+  }
+
+  /** Only this computer stops every remote control session. */
+  async stopAllRemoteControl() {
+    const saved = await (await this.ready()).call<{ closed: number; screen: ScreenState }>('screenStopAll', {})
+    this.screen = saved.screen
+    this.changed()
+    return saved.closed
+  }
+
+  /** Only this computer answers a remote control request. */
+  async answerScreenRequest(id: string, allow: boolean) {
+    const saved = await (await this.ready()).call<{ answered: boolean; screen: ScreenState }>('answerScreenRequest', { id, allow })
+    this.screen = saved.screen
+    this.changed()
+    return saved.answered
   }
 
   async refreshUsage() {

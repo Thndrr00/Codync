@@ -112,6 +112,8 @@ pub enum Cmd {
         reply: tokio::sync::oneshot::Sender<bool>,
     },
     NewSession,
+    /// The user asked to compact the conversation now (the chat's settings): summarize it at once.
+    CompactNow,
     Reconfigure(Box<BotConfig>),
     /// The user wants the bot's own agent again (`switchBack`).
     SwitchBack,

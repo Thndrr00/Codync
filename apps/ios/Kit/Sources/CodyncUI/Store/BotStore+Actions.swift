@@ -392,6 +392,24 @@ extension BotStore {
         perform(replay: true) { try await $0.deleteBot(bot.id) }
     }
 
+    /// Starts the bot's agent over with a fresh context; the chat keeps its messages (the host marks where).
+    public func newSession(_ botId: String) {
+        perform { try await $0.newSession(botId: botId) }
+    }
+
+    /// Removes the chat's messages and turns; its setup, memories, routines, artifacts and files stay.
+    public func deleteHistory(_ bot: Bot) {
+        entries[bot.id] = nil
+        windowFloors[bot.id] = nil
+        historyComplete.remove(bot.id)
+        perform { try await $0.deleteHistory(botId: bot.id) }
+    }
+
+    /// Asks the chat's agent (or every member of a group) to summarize what it keeps.
+    public func compactContext(_ bot: Bot) {
+        perform { try await $0.compactContext(botId: bot.id) }
+    }
+
     /// Creates a group chat (or opens the one these bots already share) and selects it.
     public func createGroup(name: String, description: String = "", members: [String]) async throws -> Bot {
         let group = putHostBot(try await ready().createGroup(GroupDraft(name: name, description: description, members: members)))

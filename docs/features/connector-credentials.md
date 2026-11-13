@@ -244,3 +244,17 @@ remote tool calls and live provider checks, see
 The credential warning is covered by unit tests for its categories, field spellings,
 provider formats, path masking and limits, and by `host/tests/caution_e2e.rs`, which runs a real
 turn: the MCP call is flagged and the local edit next to it stays quiet.
+
+## Who owns an MCP server
+
+Every MCP server is installed on the computer and handed to a bot by its `connectors` list; the
+person who owns the computer chooses that list in the bot's settings. Codync has one owner per
+computer and no member roles: `enterprise` members are SCIM directory records, not people who sign in
+to the computer, so "a member manages their own MCP servers" cannot be narrower than "the owner
+manages every server". OpenBot's member-owned servers (0.64) are therefore represented by the
+owner's per-bot lists plus the `manage` server: a bot with `manageTeam` can create bots and change the
+setup of the bots it created, never another bot's connectors.
+
+An agent can read and search its other chats: `search_history` and `read_history` cover its own chat,
+its side threads and the group chats it answers in ([context and memory](context-and-memory.md)).
+Another bot's chats stay out of reach.

@@ -7,6 +7,8 @@ public enum HostEvent: Sendable {
     case bot(Bot)
     case botDeleted(id: String, rev: Int64)
     case entry(Entry)
+    /// A chat's or group's messages and turns went; its side threads and setup stay.
+    case historyCleared(botId: String, rev: Int64)
     case usage(Usage)
     case screen(ScreenState)
     /// An artifact published or renamed (the catch-up replays it too).
@@ -131,6 +133,10 @@ public struct HostClient: Sendable {
             return (try? d.decode(BotWrap.self, from: data)).map { .bot($0.bot) } ?? .undecodable(type: "bot")
         case "entry":
             return (try? d.decode(EntryWrap.self, from: data)).map { .entry($0.entry) } ?? .undecodable(type: "entry")
+        case "historyCleared":
+            struct Cleared: Decodable { var botId: String; var rev: Int64? }
+            return (try? d.decode(Cleared.self, from: data)).map { .historyCleared(botId: $0.botId, rev: $0.rev ?? 0) }
+                ?? .undecodable(type: "historyCleared")
         case "usage":
             return (try? d.decode(UsageWrap.self, from: data)).map { .usage($0.usage) }
         case "screen":
@@ -265,6 +271,11 @@ public extension HostClient {
 
     func deleteBot(_ id: String) async throws {
         let _: Empty = try await call("deleteBot", ["botId": id])
+    }
+
+    /// Starts the bot's agent over with a fresh context; the host posts the line that marks it.
+    func newSession(botId: String) async throws {
+        let _: Empty = try await call("newSession", ["botId": botId])
     }
 
     /// The roster as the user dragged it, top first.
@@ -478,7 +489,7 @@ public extension HostClient {
 
     func screenPrepare() async throws -> ScreenConnection {
         let relay = if let channel = transport as? ChannelTransport { try await channel.screenRelayRequired() } else { false }
-        return try await call("screenPrepare", ["relay": relay, "trickle": true])
+        return try await call("screenPrepare", ["relay": relay, "trickle": true], timeout: 45)
     }
 
     /// Sends the offer using the prepared session’s negotiated ICE mode.
@@ -495,6 +506,42 @@ public extension HostClient {
     /// Takes control from bots (they can still look) or hands it back.
     func screenTakeover(_ on: Bool) async throws -> ScreenState {
         try await call("screenTakeover", ["on": on])
+    }
+
+    /// Only this computer stops every remote control session; returns how many ran and the new state.
+    func screenStopAll() async throws -> (closed: Int, screen: ScreenState) {
+        struct Res: Decodable { var closed: Int; var screen: ScreenState }
+        let res: Res = try await call("screenStopAll")
+        return (res.closed, res.screen)
+    }
+
+    /// Only this computer answers a remote control request (the "Ask on this computer" policy).
+    func answerScreenRequest(id: String, allow: Bool) async throws -> ScreenState {
+        struct Body: Encodable { var id: String; var allow: Bool }
+        struct Res: Decodable { var screen: ScreenState }
+        let res: Res = try await call("answerScreenRequest", Body(id: id, allow: allow))
+        return res.screen
+    }
+
+    /// This computer's server settings: Personality, the Claude Code setup switch and the remote control policy.
+    public func serverSettings() async throws -> ServerSettings {
+        try await call("serverSettings")
+    }
+
+    public func setServerSettings(_ settings: ServerSettings) async throws -> ServerSettings {
+        struct Res: Decodable { var settings: ServerSettings }
+        let res: Res = try await call("setServerSettings", settings)
+        return res.settings
+    }
+
+    /// Removes a chat's or group's messages and turns; its setup, memories, routines, artifacts and files stay.
+    func deleteHistory(botId: String) async throws {
+        let _: Empty = try await call("deleteHistory", ["botId": botId], timeout: 60)
+    }
+
+    /// Asks the chat's agent (or every member of a group) to summarize what it keeps.
+    func compactContext(botId: String) async throws {
+        let _: Empty = try await call("compactContext", ["botId": botId], timeout: 60)
     }
 
 }

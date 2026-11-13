@@ -227,10 +227,13 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   line: what the user said counts as their own words (spoken, not typed), the voice's lines and what it relayed to
   the bot (`from: voice`) are context only ([voice call](voice-call.md#the-call-on-the-host)). Group rooms don't
   feed dreaming.
-- `search_history` covers the bot's own chat, not group chats it took part in. It finds messages by words, or
-  reads back from a message id (`from`, then each page's `next`); `search_memory` gives each `MEMORY.md` line's
-  source message, so a bot can check where a memory came from.
+- `search_history` covers the bot's own chat, its side threads and the group chats it answers in; a result from
+  another chat names it. It finds messages by words, or reads back from a message id (`from`, then each page's
+  `next`); `search_memory` gives each `MEMORY.md` line's source message, so a bot can check where a memory came
+  from. Another bot's chats stay private.
 - A bot told by something it read in the user's own turn (a web page, a file) can still change or take out
   memory; routines, rooms and other bots can't.
 
 A reply stays in its chat's session, and its quote stays out of what memory takes as the user's words; see [groups and replies](groups-and-replies.md). Group and delegated requests don't feed dreaming.
+
+A chat's settings can also delete its history, start a new conversation or compact it now without touching memory, routines, artifacts or files: [chat history actions](chat-history.md). The update style between steps is a server setting: [server settings](server-settings.md).

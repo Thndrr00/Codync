@@ -10,7 +10,7 @@ use super::buffer::{centered, frame_box, put, u};
 use super::overlay::field_line;
 use super::style::theme;
 
-const HELP: [(&str, &str, &str); 74] = [
+const HELP: [(&str, &str, &str); 76] = [
     ("MOVE", "j k  ↑ ↓", "next / previous bot"),
     ("MOVE", "[ ]", "previous / next bot"),
     ("MOVE", "1…9", "jump to bot 1–9"),
@@ -62,6 +62,8 @@ const HELP: [(&str, &str, &str); 74] = [
     ("BOTS", "p", "pin / unpin"),
     ("BOTS", "J K", "move bot down / up"),
     ("BOTS", "S", "new session"),
+    ("BOTS", "X", "delete this chat's history (its setup, memories and routines stay)"),
+    ("BOTS", "Z", "compact the conversation now"),
     ("BOTS", "M", "memory"),
     ("BOTS", "R", "details: routines, computer"),
     ("BOTS", "B", "details: switch back to the bot's own agent"),

@@ -25,7 +25,7 @@ The user reads memory in the app but can't edit it: they ask you. Project and co
 keeping goes in a note on that project, not MEMORY.md; don't make the project's CLAUDE.md or AGENTS.md your memory \
 unless the user asks. Only in a turn the user started in your own chat can memory lose or change a line; at other \
 times you can only add. search_memory finds lines of your memory files; search_history finds what was actually \
-said in your past chats, and read_history reads the surrounding conversation around any message id. When the user says a note still holds, call confirm_memory; when they correct a note, call correct_memory (the chat shows them one line, \"I learned …\", with an Undo); to forget a whole note, call forget_memory instead of deleting it with edit_memory.";
+said in your past chats, side threads and the group chats you answer in, and read_history reads the surrounding conversation around any message id. When the user says a note still holds, call confirm_memory; when they correct a note, call correct_memory (the chat shows them one line, \"I learned …\", with an Undo); to forget a whole note, call forget_memory instead of deleting it with edit_memory.";
 
 pub fn tools() -> Value {
     let mut tools = json!([
@@ -41,7 +41,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "search_history",
-            "description": "Read your full chat history with the user, newest first: messages containing every given word (case-insensitive), or without a query, every message. Returns dated messages with ids, and next: pass it as from for the page before.",
+            "description": "Read your full chat history with the user, newest first: messages containing every given word (case-insensitive), or without a query, every message. It covers your own chat, its side threads and the group chats you answer in; each result names the chat when it isn't your own. Returns dated messages with ids, and next: pass it as from for the page before.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -56,7 +56,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "read_history",
-            "description": "Read the conversation window surrounding a specific message id (from search_history) in chronological order.",
+            "description": "Read the conversation window surrounding a specific message id (from search_history) in chronological order, in whichever of your chats it was said.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -136,8 +136,9 @@ async fn search_memory(hub: &Arc<Hub>, cfg: &BotConfig, query: &str) -> Result<V
             Ok((hits, sources))
         })?;
         // A shared fact may come from another bot's chat, which search_history can't open.
+        let chats = std::iter::once(cfg.id.clone()).chain(hub.store.groups_with(&cfg.id)?).collect::<Vec<_>>();
         sources.retain(|(layer, _), message| {
-            layer.is_some() || hub.store.entry(message).is_some_and(|e| e.bot_id == cfg.id)
+            layer.is_some() || hub.store.entry(message).is_some_and(|e| chats.contains(&e.bot_id))
         });
         Ok(hits
             .into_iter()
@@ -170,19 +171,28 @@ async fn search_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result
     }
     let hub = hub.clone();
     let bot = cfg.id.clone();
+    // The bot's own chat, its side threads (same chat id) and the group chats it answers in.
+    let chats = std::iter::once(bot.clone()).chain(hub.store.groups_with(&bot)?).collect::<Vec<_>>();
+    let search = hub.clone();
     let (rows, next) = tokio::task::spawn_blocking(move || -> Result<_> {
         let from = match from {
             Some(id) => Some(
-                hub.store
+                search
+                    .store
                     .entry(&id)
-                    .filter(|e| e.bot_id == bot)
-                    .ok_or_else(|| anyhow!("no message {id} in your chat"))?
+                    .filter(|e| chats.contains(&e.bot_id))
+                    .ok_or_else(|| anyhow!("no message {id} in your chats"))?
                     .seq,
             ),
             None => None,
         };
-        // One more than asked tells whether there is a page before.
-        let mut rows = hub.store.search_messages_between(&bot, &terms, from, limit + 1, since..until)?;
+        // One more than asked tells whether there is a page before. Sequence numbers are global, so one
+        // page can span several chats.
+        let mut rows = Vec::new();
+        for chat in &chats {
+            rows.extend(search.store.search_messages_between(chat, &terms, from, limit + 1, since..until)?);
+        }
+        rows.sort_by_key(|e| std::cmp::Reverse(e.seq));
         let next = if rows.len() > usize::try_from(limit)? { rows.pop().map(|e| e.id) } else { None };
         Ok((rows, next))
     })
@@ -190,12 +200,16 @@ async fn search_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result
     let results: Vec<Value> = rows
         .iter()
         .map(|e| {
-            json!({
+            let mut value = json!({
                 "id": e.id,
                 "date": ymd(e.created_at),
                 "from": if e.kind == crate::store::EntryKind::User.as_str() { "user" } else { "you" },
                 "text": acp::truncate(e.data["text"].as_str().unwrap_or_default(), SEARCH_TEXT_CHARS),
-            })
+            });
+            if e.bot_id != bot {
+                value["chat"] = json!(hub.bot_name(&e.bot_id));
+            }
+            value
         })
         .collect();
     Ok(json!({"results": results, "next": next}))
@@ -213,10 +227,15 @@ async fn read_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<V
     let around = usize::try_from(args["around"].as_i64().unwrap_or(4).clamp(1, 15)).unwrap_or(4);
     let hub = hub.clone();
     let bot = cfg.id.clone();
+    let chats = std::iter::once(bot.clone()).chain(hub.store.groups_with(&bot)?).collect::<Vec<_>>();
     let messages = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
-        let anchor =
-            hub.store.entry(&id).filter(|e| e.bot_id == bot).ok_or_else(|| anyhow!("no message {id} in your chat"))?;
-        let mut all = hub.store.search_messages(&bot, &[], None, 500)?;
+        let anchor = hub
+            .store
+            .entry(&id)
+            .filter(|e| chats.contains(&e.bot_id))
+            .ok_or_else(|| anyhow!("no message {id} in your chats"))?;
+        let elsewhere = (anchor.bot_id != bot).then(|| hub.bot_name(&anchor.bot_id));
+        let mut all = hub.store.search_messages(&anchor.bot_id, &[], None, 500)?;
         all.reverse();
         let pos = all.iter().position(|e| e.id == anchor.id).unwrap_or(0);
         let start = pos.saturating_sub(around);
@@ -224,13 +243,17 @@ async fn read_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<V
         Ok(all[start..end]
             .iter()
             .map(|e| {
-                json!({
+                let mut value = json!({
                     "id": e.id,
                     "date": ymd(e.created_at),
                     "from": if e.kind == crate::store::EntryKind::User.as_str() { "user" } else { "you" },
                     "anchor": e.id == anchor.id,
                     "text": acp::truncate(e.data["text"].as_str().unwrap_or_default(), SEARCH_TEXT_CHARS),
-                })
+                });
+                if let Some(chat) = &elsewhere {
+                    value["chat"] = json!(chat);
+                }
+                value
             })
             .collect())
     })

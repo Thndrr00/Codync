@@ -261,6 +261,17 @@ export class BotSync extends BotMirror {
         this.bump(event.rev)
         this.changed()
         break
+      case 'historyCleared':
+        this.entries.delete(event.botId)
+        this.floors.delete(event.botId)
+        this.historyComplete.delete(event.botId)
+        this.bump(event.rev)
+        this.changed()
+        break
+      case 'serverSettings':
+        this.serverSettings = event.settings
+        this.changed()
+        break
       case 'icons':
         this.applyIcons(event.icons, event.iconsRevision)
         break

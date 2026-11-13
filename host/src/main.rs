@@ -51,6 +51,7 @@ mod routines;
 mod screen;
 mod send_cli;
 mod sentinel;
+mod server_settings;
 mod service;
 mod shell;
 mod slack;

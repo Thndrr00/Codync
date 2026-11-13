@@ -314,7 +314,11 @@ impl Actor {
             self.hub.set_runtime(&self.cfg.id, |r| r.activity = "Resuming session…".into());
             let mut params = self.session_params(&servers, Some(&sid));
             if let Some(s) = &snapshot {
-                params["_meta"] = claude_meta(&self.cfg, &s.system);
+                params["_meta"] = claude_meta(
+                    &self.cfg,
+                    &s.system,
+                    crate::server_settings::Settings::load(&self.hub.store).claude_user_setup,
+                );
             }
             if instructions == Instructions::SystemPrompt {
                 params["systemPrompt"] = system_prompt(&self.snapshot(&sid).await?.system);
@@ -362,7 +366,13 @@ impl Actor {
         };
         let mut params = self.session_params(&servers, None);
         match instructions {
-            Instructions::ClaudeMeta => params["_meta"] = claude_meta(&self.cfg, &system),
+            Instructions::ClaudeMeta => {
+                params["_meta"] = claude_meta(
+                    &self.cfg,
+                    &system,
+                    crate::server_settings::Settings::load(&self.hub.store).claude_user_setup,
+                );
+            }
             Instructions::SystemPrompt => params["systemPrompt"] = system_prompt(&system),
             Instructions::FirstMessage => {}
         }

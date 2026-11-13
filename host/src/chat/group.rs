@@ -437,7 +437,7 @@ fn member_prompt(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotCo
     ));
     out.push(String::new());
 
-    let seen = hub.store.last_spoke(lane, &me.id);
+    let seen = hub.store.last_spoke(lane, &me.id).max(hub.store.conversation_start(&lane.chat));
     let mut lines: Vec<String> = vec![];
     let header = format!("[Group chat: \"{}\" - with {peer_names}]", group.name);
     for e in hub.store.messages_after(lane, seen, HISTORY_LINES)? {

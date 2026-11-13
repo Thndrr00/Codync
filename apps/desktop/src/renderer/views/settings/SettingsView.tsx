@@ -42,6 +42,7 @@ import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 import { LocalScriptsSection } from './LocalScriptsSection'
 import { PlanStartSection } from './PlanStartSection'
+import { ServerSettingsSection } from './ServerSettingsSection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
@@ -222,6 +223,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <SwitchRow title="Show agent logos" detail="Marks each bot with its agent's logo when your bots use more than one agent." on={agentLogos} onChange={setAgentLogos} />
       </CardSection>
       <EnterpriseSection />
+      <ServerSettingsSection />
       <ChatAppearanceSection />
       <ThemePaletteSection />
       <CardSection

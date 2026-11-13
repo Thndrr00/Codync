@@ -118,7 +118,7 @@ class ScreenSession(private val store: AppStore, display: ScreenDisplay?) {
         val connection = WireJson.decodeFromJsonElement<ScreenConnection>(active.call("screenPrepare", buildJsonObject {
             put("relay", relay)
             put("trickle", true)
-        }))
+        }, timeoutMillis = 45_000))
         if (generation != preparing || phase == Phase.Closed) {
             closeRemote(connection.session)
             throw Superseded()

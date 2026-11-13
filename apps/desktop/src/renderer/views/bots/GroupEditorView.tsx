@@ -8,6 +8,7 @@ import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText } from './drafts'
+import { HistoryActions } from './HistoryActions'
 import { AutoTextArea } from './parts'
 import './bots.css'
 import { useTr } from '../../lib/use-language'
@@ -121,6 +122,9 @@ export function GroupEditorView({ group }: { group: Bot }) {
             ) : null}
           </VStack>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
+          {current ? (
+            <HistoryActions bot={current} />
+          ) : null}
           {current ? (
             <button className="press group-delete" onClick={() => setConfirmDelete(current)}>
               Delete group chat

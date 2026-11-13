@@ -108,6 +108,7 @@ public struct GroupEditorView: View {
                         Text(L10n.tr(error)).font(.footnote).foregroundStyle(Palette.danger).transition(.opacity)
                     }
                     if let group = model.bots[groupId] {
+                        HistoryActions(bot: group)
                         Button(L10n.tr("Delete group chat"), role: .destructive) { confirmDelete = group }
                             .foregroundStyle(Palette.danger)
                             .buttonStyle(PressScale())

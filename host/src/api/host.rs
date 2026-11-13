@@ -50,6 +50,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::theme::select(&hub.store, b["name"].as_str())?;
             crate::theme::active(&hub.store)
         }
+        "serverSettings" => crate::server_settings::Settings::load(&hub.store).to_json(),
+        "setServerSettings" => {
+            let mut settings = crate::server_settings::Settings::load(&hub.store);
+            settings.apply(&b)?;
+            settings.save(&hub.store)?;
+            let _ = hub.events.send(json!({"type": "serverSettings", "settings": settings.to_json()}));
+            json!({"settings": settings.to_json()})
+        }
         "setHealthThresholds" => {
             let thresholds = crate::health::Thresholds {
                 warn: u8::try_from(b["warn"].as_u64().unwrap_or(0)).unwrap_or(0),
@@ -357,9 +365,38 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "screenStatus" => hub.screen.state(),
         "requestScreenPermission" => hub.screen.request_permission(&b).await?,
+        "answerScreenRequest" => {
+            if !matches!(caller, Caller::Local) {
+                return Err(anyhow::anyhow!("Only this computer answers a remote control request."));
+            }
+            let id = str_arg(&b, "id")?;
+            let allow = b["allow"].as_bool().unwrap_or(false);
+            json!({"answered": hub.screen.answer_consent(id, allow)?, "screen": hub.screen.state()})
+        }
+        "screenStopAll" => {
+            if !matches!(caller, Caller::Local) {
+                return Err(anyhow::anyhow!("Only this computer stops every remote control session."));
+            }
+            json!({"closed": hub.screen.stop_all().await?, "screen": hub.screen.state()})
+        }
         "screenPrepare" => {
             if !hub.screen.enabled() {
                 bail!("Remote screen is turned off on this computer.");
+            }
+            // Who may control this computer, and whether the person here allows each session.
+            let policy = crate::server_settings::Settings::load(&hub.store).remote_control;
+            let role = match caller {
+                Caller::Local => crate::server_settings::RemoteRole::Owner,
+                _ => crate::server_settings::RemoteRole::Device,
+            };
+            if !crate::server_settings::allows_remote(policy.access, role) {
+                bail!("This computer only allows remote control from itself.");
+            }
+            if policy.ask_on_host
+                && role == crate::server_settings::RemoteRole::Device
+                && !hub.screen.take_approval(caller.device_key())
+            {
+                hub.screen.await_consent(caller.device_key()).await?;
             }
             let ice = if b["relay"].as_bool().unwrap_or(false) {
                 crate::remote::cloud::screen_ice(hub, caller.device_key()).await?

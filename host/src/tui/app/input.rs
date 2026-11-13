@@ -361,9 +361,7 @@ impl App {
                 self.steer_next();
             }
             KeyCode::Char('S') => {
-                if self.bot().is_some_and(|b| b.group) {
-                    self.flash("A group has no session of its own");
-                } else if let Some(b) = self.bot() {
+                if let Some(b) = self.bot() {
                     let c = Confirm {
                         title: format!("Start a new session for {}?", b.name),
                         detail: "The agent forgets this conversation's context.".into(),
@@ -372,6 +370,25 @@ impl App {
                         act: ConfirmAct::NewSession(b.id.clone()),
                     };
                     self.overlays.push(Overlay::Confirm(c));
+                }
+            }
+            KeyCode::Char('X') => {
+                if let Some(b) = self.bot() {
+                    let c = Confirm {
+                        title: format!("Delete {}'s history?", b.name),
+                        detail: "Its messages and turns go.".into(),
+                        note: "Its setup, memories, routines, artifacts and files stay.".into(),
+                        button: "Delete history",
+                        act: ConfirmAct::DeleteHistory(b.id.clone()),
+                    };
+                    self.overlays.push(Overlay::Confirm(c));
+                }
+            }
+            KeyCode::Char('Z') => {
+                if let Some(b) = self.bot() {
+                    let id = b.id.clone();
+                    self.call("compactContext", json!({"botId": id}), After::Nothing);
+                    self.flash("Compacting the conversation…");
                 }
             }
             KeyCode::Char('x') => {

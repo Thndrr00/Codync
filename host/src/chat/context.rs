@@ -273,6 +273,11 @@ pub fn render(store: &Store, cfg: &BotConfig) -> String {
         lines.push(String::new());
         lines.push(cfg.personality.render());
     }
+    let style = crate::server_settings::Settings::load(store).style_section();
+    if !style.is_empty() {
+        lines.push(String::new());
+        lines.push(style.to_owned());
+    }
     lines.push(String::new());
     lines.push(codync_mem::compaction::KEEP.to_owned());
     let mut out = lines.join("\n");

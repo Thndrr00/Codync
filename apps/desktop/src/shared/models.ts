@@ -714,6 +714,8 @@ export interface ScreenState {
   /** Bots with computer use can act here (Windows: always; elsewhere Remote screen is on). */
   computerUse: boolean
   viewers: number
+  /** "Ask on this computer": the question waiting for the person here, with its 30 s window. */
+  consent?: { id: string; device: string; expiresAt: number; seconds: number } | null
 }
 
 export function normalizeScreen(raw: Partial<ScreenState> | undefined | null): ScreenState | null {
@@ -730,6 +732,7 @@ export function normalizeScreen(raw: Partial<ScreenState> | undefined | null): S
     agentBot: raw.agentBot ?? null,
     computerUse: raw.computerUse ?? false,
     viewers: raw.viewers ?? 0,
+    consent: raw.consent ?? null,
   }
 }
 

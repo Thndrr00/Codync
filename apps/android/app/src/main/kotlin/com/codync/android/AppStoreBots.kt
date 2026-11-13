@@ -71,6 +71,12 @@ fun AppStore.deleteBot(bot: Bot, onDeleted: () -> Unit) = action("delete:" + bot
     onDeleted()
 }
 
+/** Removes the chat's messages and turns; its setup, memories, routines, artifacts and files stay. */
+fun AppStore.deleteHistory(bot: Bot) = command("deleteHistory", body("botId" to bot.id), "delete-history:" + bot.id)
+
+/** Asks the chat's agent (or every member of a group) to summarize what it keeps. */
+fun AppStore.compactContext(bot: Bot) = command("compactContext", body("botId" to bot.id), "compact:" + bot.id)
+
 /** A refusal shows; the bot's next update shows the rest. */
 fun AppStore.devServerAction(action: DevServerAction, botId: String, id: String) = command(action.method, body("botId" to botId, "id" to id), action.method + ":" + id)
 

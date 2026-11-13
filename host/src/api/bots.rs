@@ -60,6 +60,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             b["enabled"].as_bool().context("enabled is required")?,
         )?,
         "deleteEntry" => json!({"deleted": hub.delete_entry(str_arg(&b, "entryId")?)?}),
+        "deleteHistory" => hub.delete_history(str_arg(&b, "botId")?)?,
+        "compactContext" => hub.compact_context(str_arg(&b, "botId")?)?,
         "deleteRoutine" => hub.routines.remove(hub, str_arg(&b, "botId")?, str_arg(&b, "id")?)?,
         "runRoutine" => hub.routines.enqueue(
             &hub.store,
@@ -543,9 +545,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "newSession" => {
             let bot = str_arg(&b, "botId")?;
-            if !hub.store.bot(bot)?.is_some_and(|r| crate::external::is_external(&r.config)) {
-                hub.send_cmd(bot, Cmd::NewSession)?;
-            }
+            hub.new_conversation(bot)?;
             json!({})
         }
         "memory" | "memoryFile" => crate::chat::memory::call(hub, method, &b).await?,

@@ -208,6 +208,23 @@ impl Screen {
         self.emit();
         Ok(())
     }
+
+    /// "Stop all remote control": ends every viewer session without turning remote screen off, so a
+    /// later session can start again under the same setting. Returns how many were running.
+    pub async fn stop_all(&self) -> Result<usize> {
+        let running = self.sessions.locked().values().filter(|v| v.started()).count();
+        self.snapshots.locked().invalidate();
+        let link = self.link.locked().clone();
+        if let Some(link) = link
+            && let Err(error) = link.request("closeAll", json!({})).await
+        {
+            tracing::warn!(error = format!("{error:#}"), "couldn't close screen sessions");
+        }
+        self.sessions.locked().clear();
+        *self.control.locked() = Control::default();
+        self.emit();
+        Ok(running)
+    }
 }
 
 /// Media bypasses the API, so keep checking the device lease while a viewer is connected.

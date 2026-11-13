@@ -270,6 +270,14 @@ struct BotListView: View {
             }]
         }
         .sectionNameDialog($naming)
+        .codyncDialog("Start a new session?",
+                      isPresented: Binding(get: { confirmNewSession != nil }, set: { if !$0 { confirmNewSession = nil } }),
+                      message: "The bot starts fresh. Earlier messages stay in the chat, and its setup, memories and routines do not change.") {
+            let item = confirmNewSession
+            return [DialogAction("New session") {
+                if let item { accounts.store(for: item.ref.computerId)?.newSession(item.bot.id) }
+            }]
+        }
     }
 
     /// A row the system's reordering dropped. A heading moves its computer and its bots (an order

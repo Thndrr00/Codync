@@ -121,3 +121,7 @@ The bot's chat, its memory and the agent's session are separate things.
 - Memory search looks for the words you give it, so a fact worded differently won't match.
 - What you say on a call reaches dreaming as speech recognition heard it, so a misheard word counts as said.
 - In your own chat, a bot can still change memory because of something it read along the way, such as a web page or a file. Outside your own chat, it can only add.
+
+## Your other chats
+
+Ask a bot what you did today, or where you said something, and it can look across its own chat, its side threads and the group chats it answers in: `search_history` finds the messages and `read_history` reads around one. A result from a group names the group. It never sees another bot's chats.

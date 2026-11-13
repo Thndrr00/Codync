@@ -95,6 +95,13 @@ impl App {
                     self.entries.entry(bot).or_default().insert(e.seq, e);
                 }
             }
+            Some("historyCleared") => {
+                if let Some(bot) = v["botId"].as_str() {
+                    self.entries.remove(bot);
+                    self.floors.remove(bot);
+                    self.history_done.remove(bot);
+                }
+            }
             _ => {}
         }
     }

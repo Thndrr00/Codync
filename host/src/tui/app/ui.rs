@@ -126,6 +126,8 @@ pub struct Goto {
 pub enum ConfirmAct {
     Delete(String),
     NewSession(String),
+    /// Removes a chat's or group's messages and turns, keeping its setup, memories, routines and files.
+    DeleteHistory(String),
     /// Keeps a bot's harness's own memory on beside Codync's.
     KeepHarnessMemory(String),
     DeleteRoutine(String, String),

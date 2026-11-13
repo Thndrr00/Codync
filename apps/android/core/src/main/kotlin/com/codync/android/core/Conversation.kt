@@ -178,6 +178,8 @@ etwork` is null from hosts before the network view (or one this app can't read).
     data class EntryChanged(val entry: Entry) : MirrorEvent
     /** One message was deleted; its id and the deletion's rev. */
     data class EntryDeleted(val id: String, val rev: Long) : MirrorEvent
+    /** A chat's or group's messages and turns went; its side threads and setup stay. */
+    data class HistoryCleared(val botId: String, val rev: Long) : MirrorEvent
     data class Usage(val value: JsonObject) : MirrorEvent
     data class Screen(val value: JsonObject) : MirrorEvent
     /** An artifact was published, updated or renamed (the catch-up replays it too), never a checkpoint. */
@@ -209,6 +211,7 @@ etwork` is null from hosts before the network view (or one this app can't read).
             "bot" -> BotChanged(HostClient.decode(value.getValue("bot").jsonObject))
             "entry" -> EntryChanged(Entry.decode(value.getValue("entry").jsonObject))
             "entryDeleted" -> EntryDeleted(value.getValue("id").jsonPrimitive.content, value["rev"]?.jsonPrimitive?.longOrNull ?: 0)
+            "historyCleared" -> HistoryCleared(value.getValue("botId").jsonPrimitive.content, value["rev"]?.jsonPrimitive?.longOrNull ?: 0)
             "usage" -> Usage(value.getValue("usage").jsonObject)
             "screen" -> Screen(value.getValue("screen").jsonObject)
             // One this app can't read is passed over rather than fetching everything again: a card or the Library reads it again.

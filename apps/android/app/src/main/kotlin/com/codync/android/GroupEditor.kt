@@ -101,6 +101,7 @@ import com.codync.android.design.*
                 Text(state.error.orEmpty(), style = Type.footnote, color = Palette.danger)
             }
             draft.id?.let { DocumentsCard(it, state, store) }
+            draft.id?.let { id -> state.bots.firstOrNull { it.id == id }?.let { HistoryActions(it, store) } }
             if (draft.id != null) LinkButton("Delete group chat", color = Palette.danger) { confirmDelete = true }
         }
     }

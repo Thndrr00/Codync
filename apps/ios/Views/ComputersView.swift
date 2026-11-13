@@ -166,6 +166,7 @@ private struct ComputerRows: View {
     @State private var whatsapp = false
     @State private var localScripts = false
     @State private var planCards = false
+    @State private var serverSettings = false
 
     var body: some View {
         summary
@@ -189,6 +190,8 @@ private struct ComputerRows: View {
             Button { localScripts = true } label: { RowLabel("Local scripts", systemImage: "terminal", chevron: true) }
                 .buttonStyle(.plain)
             Button { planCards = true } label: { RowLabel("Plan cards", systemImage: "list.bullet.rectangle", chevron: true) }
+                .buttonStyle(.plain)
+            Button { serverSettings = true } label: { RowLabel("Personality & remote control", systemImage: "slider.horizontal.3", chevron: true) }
                 .buttonStyle(.plain)
         }
         ComputerNotificationsRow(store: store)
@@ -259,6 +262,7 @@ private struct ComputerRows: View {
         .codyncSheet(isPresented: $whatsapp) { WhatsAppSheet().environment(store) }
         .codyncSheet(isPresented: $localScripts) { LocalScriptsSheet().environment(store) }
         .codyncSheet(isPresented: $planCards) { PlanStartSheet().environment(store) }
+        .codyncSheet(isPresented: $serverSettings) { ServerSettingsSheet().environment(store) }
         .codyncOverlay(isPresented: $coloring) { close in
             ZStack {
                 Color.black.opacity(0.35).ignoresSafeArea().onTapGesture(perform: close)

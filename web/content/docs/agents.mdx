@@ -152,6 +152,13 @@ On desktop and iPhone, the collapsed Agent row summarizes the harness, model, ef
 
 Changing the model or its options starts a new agent session; the chat history stays. Switching the bot to a different agent starts it on that agent's default model.
 
+## Personality and the Claude Code setup
+
+Two settings belong to the computer, not to one bot. On the desktop they're in **Settings**; on the iPhone and Android, in the computer's management screen under **Personality & remote control**.
+
+- **Personality** chooses how agents post updates between their steps. **Natural** (the default) writes a short note only when a finding changes the plan or before a long step, then answers with the verdict first. **Classic** shows the agent's own text as it comes. In the terminal, type `/natural` or `/classic` in the message box.
+- **Use my Claude Code setup** is off by default. Off, Claude agents don't load your `~/.claude` CLAUDE.md, skills, agents, hooks or plugins, so each turn sends a shorter prompt; your sign-in settings still apply and the bot's workspace files still load. Turn it on to give them your setup. In the terminal, `/claude-setup` turns it on and `/claude-setup-off` turns it off.
+
 ## The agent for a new bot
 
 There's no separate default-agent setting. A new bot gets Claude Code when Claude Code can run on the computer. Otherwise it gets the first agent Codync knows by name that can. A registry agent is never picked on its own. Change the agent in the bot's settings after you create it.

@@ -118,3 +118,11 @@ group create/edit (name, members), Stop in a group calls `stop` with the group i
 
 Slack-style reply threads were removed for quote replies; [threads for teams](../plans/threads-for-teams.md)
 lists where their code lived and how to bring it back.
+
+## A group's history settings
+
+A group's settings have **Delete history**, **New conversation** and **Compact context**
+([chat history actions](chat-history.md)). New conversation posts a divider and sets
+`conversation.start.<group>`; a member's prompt reads the room only after it. Compact context queues
+`Cmd::CompactNow` for every member, and because a member keeps one conversation across its chats, its
+own chat is compacted too; the apps say so.

@@ -20,6 +20,7 @@ import { BotUsageRows } from './BotUsageRows'
 import { HermesRuntimeCard } from './HermesRuntimeCard'
 import { AgentModelPicker } from './AgentModelPicker'
 import { CompactionRow } from './CompactionRow'
+import { HistoryActions } from './HistoryActions'
 import { agentChoice, AgentStepBanner, FallbacksRow } from './Fallbacks'
 import { useAgentSetup } from './agent-status'
 import { lastPathComponent } from '../../lib/path'
@@ -365,6 +366,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
           {/* Only a row when a bot made it: CardSection gives every child a row. */}
           {saved?.createdBy ? <CreatedBy bot={saved} creator={saved.createdBy} /> : null}
         </CardSection>
+        {part === 'all' && saved ? <HistoryActions bot={saved} /> : null}
 
         {/* In the inspector the agent and its model are on the Details tab; what's left is where it works. */}
         <CardSection title={part === 'all' ? 'Agent' : 'Workspace'}>

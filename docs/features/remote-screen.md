@@ -141,3 +141,12 @@ Live acceptance requires the configured Worker and fresh host/helper/phone build
 - Verify LAN/direct-only mode without internet access, and the explicit error when relay secrets are absent.
 
 See [Cloudflare testing](../guides/cloudflare-testing.md) for transport checks and [architecture](../architecture/overview.md) for data flow.
+
+## Policy
+
+Who may control this computer, and whether each session is allowed here first, are server settings
+([server settings](server-settings.md#remote-desktop-policy)): `everyone`, `admins` (the same as
+everyone until member roles exist) or `owner` (this computer only), plus "Ask on this computer". With
+the question on, a device's `screenPrepare` waits up to 30 seconds for an answer at the computer and
+does not start if nobody answers. `screenStopAll` ends every viewer session without turning Remote
+screen off. Only this computer's own app may answer the question or stop all.

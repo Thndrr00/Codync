@@ -105,6 +105,10 @@ export type HostEvent =
   | { type: 'botDeleted'; id: string; rev: number }
   | { type: 'entry'; entry: Entry }
   | { type: 'entryDeleted'; id: string; rev: number }
+  /** A chat's or group's messages and turns went; its side threads and setup stay. */
+  | { type: 'historyCleared'; botId: string; deleted: number; rev: number }
+  /** This computer's server settings changed: response style, Claude Code setup, remote control policy. */
+  | { type: 'serverSettings'; settings: import('../store/bot-mirror').ServerSettings }
   /** A thread's root line says how many of its replies are unread, and carries its summary for the chip under it
    * (`thread` is null once the thread has nothing left, as after deleting it). */
   | { type: 'thread'; threadId: string; botId: string; unread: number; thread: import('@shared/models').ThreadSummary | null }
@@ -165,6 +169,12 @@ export function parseEvent(line: string): HostEvent | null {
     }
     case 'entryDeleted':
       return typeof raw.id === 'string' && typeof raw.rev === 'number' ? { type, id: raw.id, rev: raw.rev } : { type: 'undecodable', kind: 'entryDeleted' }
+    case 'historyCleared':
+      return typeof raw.botId === 'string' && typeof raw.rev === 'number'
+        ? { type, botId: raw.botId, deleted: Number(raw.deleted ?? 0), rev: raw.rev }
+        : { type: 'undecodable', kind: 'historyCleared' }
+    case 'serverSettings':
+      return raw.settings ? { type, settings: raw.settings as import('../store/bot-mirror').ServerSettings } : null
     case 'entry': {
       const entry = raw.entry as Entry | undefined
       if (!entry || typeof entry.id !== 'string' || typeof entry.botId !== 'string') return { type: 'undecodable', kind: 'entry' }

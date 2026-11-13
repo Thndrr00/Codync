@@ -28,6 +28,13 @@ import { canLoadHistory } from '@shared/mirror-window'
 import { loadIconCache, saveIconCache } from '../lib/icon-cache'
 import { trNow } from '../lib/l10n.ts'
 
+/** Server-wide settings every client reads (`serverSettings`). */
+export interface ServerSettings {
+  responseStyle: 'natural' | 'classic'
+  claudeUserSetup: boolean
+  remoteControl: { access: 'everyone' | 'admins' | 'owner'; askOnHost: boolean }
+}
+
 /** The first host where the user picks the lead and may delete it. */
 const LEAD_CHOICE_HOST = '2.33.0'
 
@@ -96,6 +103,9 @@ export class BotMirror extends Observable {
   scriptLimit: { perHour: number; choices: number[] } | null = null
   /** When a plan card starts the work by itself (`planStart`); null until read, or from an older host. */
   planStart: { afterMs: number | null; presets: number[]; min: number; max: number } | null = null
+  /** How the agents' updates read, whether Claude uses the person's setup, and who may control this computer
+   * (`serverSettings`); null until read, or from an older host. */
+  serverSettings: ServerSettings | null = null
   screen: ScreenState | null = null
   /** This computer's n8n instance; null on a host that predates it. */
   n8n: N8nState | null = null
