@@ -371,14 +371,14 @@ mod tests {
 
     #[test]
     fn only_declared_models_can_be_started() {
-        let downloads = Arc::new(Downloads::new(tokio::sync::broadcast::channel(4).0));
+        let downloads = Arc::new(Downloads::new(broadcast::channel(4).0));
         let error = downloads.start("checkpoints", "never-declared.safetensors").expect_err("not declared").to_string();
         assert!(error.contains("not declared"), "{error}");
     }
 
     #[test]
     fn a_model_a_template_needs_asks_before_deleting() {
-        let downloads = Downloads::new(tokio::sync::broadcast::channel(4).0);
+        let downloads = Downloads::new(broadcast::channel(4).0);
         // The base manifests are not installed in an empty data folder, so this uses the literal
         // check: an undeclared file is deletable, and deleting never leaves the models folder.
         assert!(downloads.delete("checkpoints", "../escape.safetensors", true).is_err());

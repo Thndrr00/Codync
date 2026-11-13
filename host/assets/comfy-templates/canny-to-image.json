@@ -70,6 +70,7 @@
       "file": "v1-5-pruned-emaonly-fp16.safetensors",
       "folder": "checkpoints",
       "size": 2132696762,
+      "sha256": "e9476a13728cd75d8279f6ec8bad753a66a1957ca375a1464dc63b37db6e3916",
       "url": "https://huggingface.co/Comfy-Org/stable-diffusion-1.5/resolve/main/v1-5-pruned-emaonly-fp16.safetensors",
       "license": "CreativeML OpenRAIL-M"
     },
@@ -77,6 +78,7 @@
       "file": "control_v11p_sd15_canny.pth",
       "folder": "controlnet",
       "size": 1445234681,
+      "sha256": "f99cfe4c70910e38e3fece9918a4979ed7d3dcf9b81cee293e1755363af5406a",
       "url": "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_canny.pth",
       "license": "Apache-2.0"
     }

@@ -319,7 +319,7 @@ fn options(info: &Value, class: &str, input: &str) -> Value {
 }
 
 async fn upload(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
-    let path = std::path::PathBuf::from(args["path"].as_str().context("`path` is required")?);
+    let path = PathBuf::from(args["path"].as_str().context("`path` is required")?);
     anyhow::ensure!(results::ingestible(&path), "upload takes a picture, an audio file or a video");
     let meta = tokio::fs::metadata(&path).await.with_context(|| format!("reading {}", path.display()))?;
     anyhow::ensure!(meta.is_file() && meta.len() <= MAX_UPLOAD, "the input must be a file of at most 100 MB");

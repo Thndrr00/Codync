@@ -2,7 +2,7 @@
 //! whether a job runs and what it made, but not how far it got; this listener fills the card and the
 //! phone in while it works, and stops as soon as the job ends.
 
-use super::comfy_job::Jobs;
+use crate::tools::comfy_job::Jobs;
 use futures::StreamExt as _;
 use serde_json::Value;
 use std::sync::Arc;

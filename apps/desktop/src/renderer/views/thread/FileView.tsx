@@ -4,7 +4,7 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
 import { useStore } from '../../store/context'
-import { AttachmentImage, AttachmentMedia, attachmentSymbol, byteCount, isAudioName, isVideoName } from './Attachments'
+import { AttachmentImage, AttachmentMedia, AttachmentMesh, attachmentSymbol, byteCount, isAudioName, isMeshName, isVideoName } from './Attachments'
 import { downloadAction, downloadDetail } from './FileDownloadCard'
 
 /** A shared file full size over the chat: its picture, its player, or its name and size, and the download action. */
@@ -26,6 +26,8 @@ export function FileView({ entryId, file, close }: { entryId: string; file: Shar
           <AttachmentMedia source={source} kind="video" />
         ) : isAudioName(file.name) ? (
           <AttachmentMedia source={source} kind="audio" />
+        ) : isMeshName(file.name) && file.name.toLowerCase().endsWith('.glb') ? (
+          <AttachmentMesh source={source} />
         ) : showsAsImage(file) ? (
           <div className="file-view-image"><AttachmentImage source={source} fit="full" /></div>
         ) : (

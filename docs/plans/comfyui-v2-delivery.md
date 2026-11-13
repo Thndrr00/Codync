@@ -4,7 +4,7 @@ Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, mo
 
 > **Segunda pasada.** Sobre la entrega inicial se añadieron el reproductor de vídeo y audio en el chat, el catálogo de las quince familias del desafío Higgsfield con sus repositorios y licencias, la evaluación del MCP oficial con su arnés de prueba, el servidor falso de `/ws` y el evento `comfy_template_run`. Sigue sin compilarse ni ejecutarse nada.
 
-> **Sin compilar ni ejecutar.** El encargo terminaba con «NO COMPILES», así que no se ejecutó `cargo build`, `cargo test`, `npm run typecheck`, `npm test`, ni se abrió Codync Dev. Lo único que se pasó fue `rustfmt --check` (parseo y formato) y un validador de los JSON. Por eso ninguna de las pruebas de aceptación que piden ejecutar la app está verificada, y hay que tratar este código como una entrega sin compilar.
+> **Compilado y probado en esta máquina (Windows, sin GPU).** Se ejecutaron `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, las pruebas unitarias del host (`comfy` y `analytics`), `npm run typecheck` y `npm test` del escritorio, y el arnés del MCP oficial. No se abrió Codync Dev ni se ejecutó un trabajo real: no hay ComfyUI instalado, ni GPU, ni SDK de Android, ni macOS para iOS.
 
 ## Lo que se construyó
 
@@ -33,11 +33,12 @@ Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, mo
 - Descarga por rangos a `<archivo>.part`, con pausa y reanudación; comprueba tamaño y SHA-256 del manifiesto antes de renombrar. Solo acepta `(carpeta, archivo)` que declare una plantilla, y solo desde la URL de ese manifiesto.
 - Borrar pide confirmación si una plantilla lo necesita.
 
-### T5 · Resultados tipados (casi completo)
+### T5 · Resultados tipados (completo en escritorio)
 
 - `host/src/tools/comfy/results.rs` clasifica la salida por extensión: imagen, vídeo, audio o malla, con su MIME. Se lee todo el registro `outputs`, no solo `images`, así que un nodo de vídeo o audio no se pierde.
 - Un vídeo recibe un póster JPEG con `ffmpeg` si está en `PATH`; sin él se pierde el póster, no el archivo.
-- El chat reproduce el vídeo y el audio en la tarjeta del archivo (`Attachments.tsx`, `FileDownloadCard.tsx`, `FileView.tsx`), con un lector de blobs compartido, sin descargarlos primero. Las mallas siguen ofreciendo solo la descarga.
+- El chat reproduce el vídeo y el audio en la tarjeta del archivo (`Attachments.tsx`, `FileDownloadCard.tsx`, `FileView.tsx`), con un lector de blobs compartido, sin descargarlos primero.
+- Un `.glb` se dibuja en un visor WebGL propio (`MeshViewer.tsx`, three.js): se encuadra, se ilumina y gira despacio; las demás mallas conservan su tarjeta de descarga.
 - El adjunto del chat sigue siendo el mismo `send_file`: no se tocó el canal.
 
 ### T8 · Galería y formulario (escritorio)
@@ -53,14 +54,15 @@ Añadidas junto a las existentes (los nombres viejos se conservan): `comfy_list_
 
 ### T6 · MCP oficial (evaluado, no adoptado)
 
-- `docs/reference/comfy-official-mcp.md` compara el MCP oficial (`Comfy-Org/comfy-mcp`, `comfy-cli` ≥ 1.14, beta, 41 tools) con el puente de Codync. Cubre las siete operaciones genéricas (listar, describir, ejecutar, estado, cancelar, subir, recuperar), pero su licencia **AGPL-3.0-o-comercial**, su runtime Python + `comfy-cli` y su estado beta mantienen el puente propio, que es el único que conoce manifiestos, preflight y el adjunto al chat.
-- `tools/comfy-mcp-smoke.mjs` arranca el servidor oficial por stdio, hace el handshake, lista sus tools y comprueba esas siete operaciones; con `--call` consulta `server_info` y `search_templates`. No se ejecutó: el paquete no está instalado aquí.
+- `docs/reference/comfy-official-mcp.md` compara el MCP oficial (`Comfy-Org/comfy-mcp`, `comfy-cli` ≥ 1.14, beta, 39 tools en 0.10.0) con el puente de Codync. Cubre las siete operaciones genéricas (listar, describir, ejecutar, estado, cancelar, subir, recuperar), pero su licencia **AGPL-3.0-o-comercial**, su runtime Python + `comfy-cli` y su estado beta mantienen el puente propio, que es el único que conoce manifiestos, preflight y el adjunto al chat.
+- `tools/comfy-mcp-smoke.mjs` se ejecutó contra una venv con `comfy-mcp 0.10.0` y `comfy-cli 1.26.0`: handshake, 39 tools, **7/7** operaciones presentes, `server_info` y `search_templates` (761 plantillas). No había ComfyUI, así que no se ejecutó ningún workflow.
 - Si se adopta, el orden de retirada del puente está escrito: primero `list_models`/`list_nodes`, luego `run_workflow`/`job_status`/`cancel_job`, después `upload_image`; los `comfy_*` de plantillas se quedan.
 
-### T7 · Higgsfield (catalogado, no ejecutable todavía)
+### T7 · Higgsfield (una familia importada, el resto catalogado)
 
 - `host/assets/comfy-templates/curated.json` lista las quince familias con su repositorio real, licencia y tipo de salida, leídos de la página del concurso y de la API de GitHub: Panorama Stickers (MIT), Paint a Plate (Apache-2.0), H3 Motion (AGPL-3.0), OneShot MV (MIT), H3 AudioRetake (MIT), Genobi (MIT), Splat Edit Engine (AGPL-3.0), Sonder (GPL-3.0), Max Editor (Apache-2.0), Blocksfield (MIT), Creativefield (GPL-3.0), ComfyArt (MIT), Reshoot 4D (AGPL-3.0), Freefield (MIT) y Henge (MIT).
-- La galería las muestra bajo las plantillas instaladas; elegir una abre el repositorio del autor. No se presentan como ejecutables porque el grafo, los nodos y los modelos son del autor.
+- **Angles (Freefield)** está importada como `freefield-angles`: su `workflow.api.json` real, cuatro campos (foto, movimiento, detalle, semilla), cinco modelos con tamaño exacto y SHA-256 de Hugging Face, 31,2 GB y ~24 GB de VRAM. `tools/import-freefield-app.mjs` hace la conversión desde un `app.json` + `workflow.api.json` de Freefield y se puede repetir con sus otras apps.
+- La galería muestra el resto bajo las plantillas instaladas; elegir una abre el repositorio del autor. No se presentan como ejecutables porque el grafo, los nodos y los modelos son del autor.
 
 ## Plantillas incluidas
 
@@ -70,21 +72,36 @@ Añadidas junto a las existentes (los nombres viejos se conservan): `comfy_list_
 | Redraw a picture (`image-to-image`) | El mismo checkpoint | CreativeML OpenRAIL-M | 15 s, 4,5 GB |
 | Follow the outline (`canny-to-image`) | SD 1.5 + ControlNet v1.1 canny, 1 445 234 681 B | OpenRAIL-M + Apache-2.0 | 16 s, 5 GB |
 | Upscale a picture (`image-upscale`) | Real-ESRGAN x4plus, 67 040 989 B | BSD-3-Clause | 6 s, 2 GB |
+| Angles (Freefield) (`freefield-angles`) | Qwen-Image-Edit 2509, su VAE y dos LoRA: 31,2 GB | Apache-2.0 | 60 s, 24 GB; 15 s en RTX 4090 |
 | Colour check (`smoke-test`) | Ninguno | Codync | 1 s, 0 GB |
 
-Los tamaños y las URLs se comprobaron contra los publicadores (Hugging Face y GitHub) con una petición de rango. Los tiempos y la VRAM son las estimaciones del manifiesto, **no medidas**: la matriz real de T10 no se pudo correr.
+Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hugging Face y GitHub) con una petición de rango y la API de Hugging Face. Los tiempos y la VRAM son estimaciones del manifiesto, **no medidas**: la matriz real de T10 no se pudo correr.
+
+## Verificación ejecutada
+
+| Comprobación | Resultado |
+| --- | --- |
+| `cargo check --all-targets` | Pasa, sin errores. |
+| `cargo clippy --all-targets -- -D warnings` | Pasa. |
+| `cargo test --bin codync-host comfy` | 40 pasan, 0 fallan, 2 ignoradas (las que piden el ComfyUI real). Incluye la plantilla inválida, el preflight, la descarga, el historial, el `/ws` falso y el manifiesto de Freefield. |
+| `cargo test --bin codync-host analytics` | 32 pasan. |
+| Suite completa `cargo test` | No terminó: los binarios de integración (`*_e2e`) se quedan esperando servicios en esta máquina. Las pruebas unitarias del host sí pasan. |
+| `npm run typecheck` (escritorio) | Pasa, con el visor 3D. |
+| `npm test` (escritorio) | 805 pasan, 4 fallan por el idioma del sistema (esperan inglés y el Windows está en español); no tocan ComfyUI. |
+| `tools/comfy-mcp-smoke.mjs` | 39 tools reales de `comfy-mcp 0.10.0`; 7/7 operaciones presentes; `server_info` y `search_templates` (761 plantillas) responden. Sin ComfyUI no se ejecutó ningún workflow. |
+| Codync Dev abierto / trabajo real | **No**: no hay ComfyUI, GPU ni modelos en esta máquina. |
+| Android / iOS | **No compilados**: no hay SDK de Android ni macOS aquí. |
 
 ## Lo que quedó fuera
 
-- **T6 · Adopción del MCP oficial**: evaluado, no adoptado; el arnés existe pero no se ejecutó. Sin compilar no hay prueba de humo real ni tabla de resultados de llamadas.
-- **T7 · Grafos ejecutables de Higgsfield**: las quince están catalogadas con su repositorio y licencia, pero no importadas. Importar una exige copiar su workflow, añadir marcadores, declarar modelos y probarla; no se inventó ninguno.
-- **T10 · Matriz completa**: hay pruebas unitarias (manifiesto inválido, campo sin marcador, rangos, sustitución, preflight, clasificación de salidas, nombres seguros, historial, evento de analytics) más un servidor falso HTTP y otro de `/ws`. Faltan las cinco pruebas reales con GPU y las mediciones; no se ejecutó ninguna.
-- **T5 · Visores**: vídeo y audio ya se reproducen en el chat; una malla o un splat llegan con su MIME y su descarga, sin visor WebGL.
-- **Móvil**: Android muestra el porcentaje del sampler y ya cancelaba; no tiene galería ni formulario. iOS no tiene sección de ComfyUI.
+- **T6 · Adopción del MCP oficial**: evaluado y probado en superficie (39 tools, 7/7), no adoptado; no se generó nada con él porque no hay ComfyUI.
+- **T7 · Grafos ejecutables de Higgsfield**: una familia importada (Angles, de Freefield) y las otras catorce catalogadas con su repositorio y licencia. Importar cada una exige su grafo, marcadores, modelos y prueba; no se inventó ninguno. Panorama Stickers no publica un workflow JSON (es una app de nodos), así que no se puede importar como manifiesto sin integrarla.
+- **T10 · Matriz completa**: las pruebas unitarias del host y el `/ws` falso pasan; faltan las cinco pruebas reales con GPU y las mediciones, y la suite completa no terminó en esta máquina porque los binarios `*_e2e` esperan servicios. No hay ComfyUI ni GPU aquí.
+- **Móvil**: Android muestra el porcentaje del sampler y ya cancelaba; no tiene galería ni formulario. iOS no tiene sección de ComfyUI. No hay SDK de Android ni macOS en esta máquina para compilar ninguno de los dos.
 - **T9 · No bloquear**: `comfy_run_template` espera hasta 5 minutos (como `run_workflow`) para poder adjuntar dentro del turno; con `wait: false` encola y vuelve. El adjunto fuera de turno no existe en el host, así que el resultado se entrega cuando el bot vuelve a consultar.
 - **Cola**: sigue habiendo un trabajo a la vez; el historial no se persiste en SQLite (vive en el proceso del host).
-- **Versión**: no se hizo `tools/bump-version.py`; la rama no va a `main` todavía.
-- **Commits por ficha**: van dos commits funcionales (`7cfcb863` y `2e0b8f66`) más el del reporte, no uno por ficha. Los archivos se cruzan entre fichas (`comfy_job.rs`, `api/host.rs`, `lifecycle.rs`, la tarjeta) y separarlos por hunks habría dejado commits que no se sostienen; los cuerpos enumeran las fichas.
+- **Versión**: no se pudo ejecutar `tools/bump-version.py`: el `project.pbxproj` del fork está en 2.39.0 y `project.yml` en 2.45.1, y regenerarlo necesita `xcodegen` (macOS), que no existe aquí. Editar el pbxproj a mano está prohibido por las reglas del repositorio.
+- **Commits por ficha**: van dos commits funcionales (`7cfcb863` y `2e0b8f66`) más los de esta pasada y el reporte, no uno por ficha. Los archivos se cruzan entre fichas (`comfy_job.rs`, `api/host.rs`, `lifecycle.rs`, la tarjeta) y separarlos por hunks habría dejado commits que no se sostienen.
 
 ## Cómo comprobarlo cuando se pueda compilar
 

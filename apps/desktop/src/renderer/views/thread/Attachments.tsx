@@ -5,6 +5,7 @@ import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStoreRef } from '../../store/context'
+import { MeshViewer } from './MeshViewer'
 import './attachments.css'
 
 /** The symbol for a file by its extension. */
@@ -153,4 +154,17 @@ export function AttachmentMedia({ source, kind }: { source: ImageSource; kind: '
   ) : (
     <audio className="attachment-media audio" src={url} controls preload="metadata" />
   )
+}
+
+/** A GLB drawn in the chat; other mesh formats keep their download card. */
+export function AttachmentMesh({ source }: { source: ImageSource }) {
+  const url = useObjectUrl(source, 'model/gltf-binary')
+  if (!url) {
+    return (
+      <div className="attachment-placeholder media">
+        <Icon name="shippingbox" size={18} color="var(--tertiary)" />
+      </div>
+    )
+  }
+  return <MeshViewer url={url} />
 }

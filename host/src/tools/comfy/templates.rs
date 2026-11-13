@@ -15,11 +15,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The manifests that ship with Codync, by id: their manifest is embedded in the binary.
-const BASE: [(&str, &str); 5] = [
+const BASE: [(&str, &str); 6] = [
     ("text-to-image", include_str!("../../../assets/comfy-templates/text-to-image.json")),
     ("image-to-image", include_str!("../../../assets/comfy-templates/image-to-image.json")),
     ("canny-to-image", include_str!("../../../assets/comfy-templates/canny-to-image.json")),
     ("image-upscale", include_str!("../../../assets/comfy-templates/image-upscale.json")),
+    ("freefield-angles", include_str!("../../../assets/comfy-templates/freefield-angles.json")),
     ("smoke-test", include_str!("../../../assets/comfy-templates/smoke-test.json")),
 ];
 
@@ -390,7 +391,9 @@ impl Input {
         match self.kind {
             InputKind::Text | InputKind::Image => {
                 let text = value.as_str().with_context(|| format!("`{}` must be text", self.key))?.trim().to_owned();
-                ensure!(!text.is_empty(), "`{}` can't be empty", self.key);
+                if self.required {
+                    ensure!(!text.is_empty(), "`{}` can't be empty", self.key);
+                }
                 if self.kind == InputKind::Image {
                     ensure!(
                         !text.contains(['/', '\\']) || Path::new(&text).is_file(),

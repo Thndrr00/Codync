@@ -244,7 +244,7 @@ impl Jobs {
         *self.current.locked() = Some(job.clone());
         self.announce(&job);
         tokio::spawn(self.clone().follow(hub.clone(), id.clone()));
-        tokio::spawn(super::progress::follow(hub.tools.comfy_port(), id, self.clone()));
+        tokio::spawn(comfy::progress::follow(hub.tools.comfy_port(), id, self.clone()));
         Ok(job.public())
     }
 
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn a_finished_job_is_archived_once() {
-        let jobs = Jobs::new(tokio::sync::broadcast::channel(8).0);
+        let jobs = Jobs::new(broadcast::channel(8).0);
         *jobs.current.locked() = Some(Job::queued("p1", "b", Some("text-to-image"), BTreeMap::new()));
         jobs.update("p1", |j| j.phase = Phase::Running);
         jobs.update("p1", |j| j.phase = Phase::Done);

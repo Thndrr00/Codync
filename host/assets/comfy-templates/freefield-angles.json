@@ -1,0 +1,368 @@
+{
+  "id": "freefield-angles",
+  "name": "Angles (Freefield)",
+  "version": "1.0.0",
+  "description": "The same scene from another camera position: move, rotate, look down (Multiple Angles LoRA on Qwen-Image-Edit). Imported from Freefield (https://github.com/neuregex/freefield), MIT; its models keep their own licences.",
+  "tags": [
+    "higgsfield",
+    "freefield",
+    "image",
+    "high-vram"
+  ],
+  "license": "Freefield is MIT. Models: Apache-2.0, Apache-2.0, Apache-2.0, Apache-2.0, Apache-2.0",
+  "inputs": [
+    {
+      "key": "image",
+      "label": "Your photo",
+      "type": "image",
+      "required": true,
+      "help": "Up to 20 MB."
+    },
+    {
+      "key": "move",
+      "label": "Camera move",
+      "type": "select",
+      "required": false,
+      "options": [
+        "将镜头向前移动 Move the camera forward.",
+        "将镜头向后移动 Move the camera backward.",
+        "将镜头向左移动 Move the camera left.",
+        "将镜头向右移动 Move the camera right.",
+        "将镜头向上移动 Move the camera up.",
+        "将镜头向下移动 Move the camera down.",
+        "将镜头向左旋转45度 Rotate the camera 45 degrees to the left.",
+        "将镜头向右旋转45度 Rotate the camera 45 degrees to the right.",
+        "将镜头转为俯视 Turn the camera to a top-down view.",
+        "将镜头转为仰视 Turn the camera to a low-angle view looking up."
+      ],
+      "default": "将镜头向左旋转45度 Rotate the camera 45 degrees to the left."
+    },
+    {
+      "key": "details",
+      "label": "Extra direction",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "help": "Added at the end of the app's prompt."
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed",
+      "required": false,
+      "help": "-1 picks a random seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+      "folder": "diffusion_models",
+      "size": 20430698424,
+      "sha256": "318568f61951ab9da21100c7b896e3c1da67f0d2efad6421545e022cfaa2b2b4",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "folder": "text_encoders",
+      "size": 9384670680,
+      "sha256": "cb5636d852a0ea6a9075ab1bef496c0db7aef13c02350571e388aea959c5c0b4",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "qwen_image_vae.safetensors",
+      "folder": "vae",
+      "size": 253806246,
+      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+      "folder": "loras",
+      "size": 849608296,
+      "sha256": "2a32ce938ec71db2b49a817b4844ae86995569518dea56ee0ddc209cbe8e1377",
+      "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "镜头转换.safetensors",
+      "folder": "loras",
+      "size": 236117032,
+      "sha256": "e0cea9508025a39e41f50da0e7d10fbd9db182d057c745136a42ef8829914c8f",
+      "url": "https://huggingface.co/dx8152/Qwen-Edit-2509-Multiple-angles/resolve/main/镜头转换.safetensors",
+      "license": "Apache-2.0"
+    }
+  ],
+  "output": {
+    "type": "image",
+    "mime": "image/png"
+  },
+  "estimate": {
+    "seconds": 60,
+    "vram_gb": 24,
+    "output_gb": 0.2,
+    "byGpu": {
+      "rtx-4090": {
+        "seconds": 15,
+        "vram_gb": 24
+      },
+      "default": {
+        "seconds": 60,
+        "vram_gb": 24
+      }
+    }
+  },
+  "workflow": {
+    "11": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{{image}}"
+      },
+      "_meta": {
+        "title": "Load Image"
+      }
+    },
+    "12": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "10:8",
+          0
+        ],
+        "filename_prefix": "freefield/angles"
+      },
+      "_meta": {
+        "title": "Save Image"
+      }
+    },
+    "14": {
+      "class_type": "StringConcatenate",
+      "inputs": {
+        "string_b": [
+          "15",
+          0
+        ],
+        "string_a": "",
+        "delimiter": ""
+      },
+      "_meta": {
+        "title": "LoRA trigger word"
+      }
+    },
+    "15": {
+      "class_type": "PrimitiveStringMultiline",
+      "inputs": {
+        "value": "{{move}} {{details}}"
+      },
+      "_meta": {
+        "title": "Prompt"
+      }
+    },
+    "10:3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": [
+          "10:75",
+          0
+        ],
+        "positive": [
+          "10:111",
+          0
+        ],
+        "negative": [
+          "10:110",
+          0
+        ],
+        "latent_image": [
+          "10:88",
+          0
+        ],
+        "seed": "{{seed}}",
+        "steps": 4,
+        "cfg": 1,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1
+      },
+      "_meta": {
+        "title": "KSampler"
+      }
+    },
+    "10:8": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "10:3",
+          0
+        ],
+        "vae": [
+          "10:39",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "VAE Decode"
+      }
+    },
+    "10:37": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+        "weight_dtype": "default"
+      },
+      "_meta": {
+        "title": "Load Diffusion Model"
+      }
+    },
+    "10:38": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      },
+      "_meta": {
+        "title": "Load CLIP"
+      }
+    },
+    "10:39": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_vae.safetensors"
+      },
+      "_meta": {
+        "title": "Load VAE"
+      }
+    },
+    "10:66": {
+      "class_type": "ModelSamplingAuraFlow",
+      "inputs": {
+        "model": [
+          "10:118",
+          0
+        ],
+        "shift": 3
+      },
+      "_meta": {
+        "title": "ModelSamplingAuraFlow"
+      }
+    },
+    "10:75": {
+      "class_type": "CFGNorm",
+      "inputs": {
+        "model": [
+          "10:66",
+          0
+        ],
+        "strength": 1,
+        "pre_cfg": false
+      },
+      "_meta": {
+        "title": "CFGNorm"
+      }
+    },
+    "10:88": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "10:117",
+          0
+        ],
+        "vae": [
+          "10:39",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "VAE Encode"
+      }
+    },
+    "10:89": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "model": [
+          "10:37",
+          0
+        ],
+        "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+        "strength_model": 1
+      },
+      "_meta": {
+        "title": "Load LoRA"
+      }
+    },
+    "10:110": {
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "inputs": {
+        "clip": [
+          "10:38",
+          0
+        ],
+        "vae": [
+          "10:39",
+          0
+        ],
+        "image1": [
+          "10:117",
+          0
+        ],
+        "prompt": ""
+      },
+      "_meta": {
+        "title": "Text Encode Qwen Image Edit Plus"
+      }
+    },
+    "10:111": {
+      "class_type": "TextEncodeQwenImageEditPlus",
+      "inputs": {
+        "clip": [
+          "10:38",
+          0
+        ],
+        "vae": [
+          "10:39",
+          0
+        ],
+        "image1": [
+          "10:117",
+          0
+        ],
+        "prompt": [
+          "14",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "Text Encode Qwen Image Edit Plus"
+      }
+    },
+    "10:117": {
+      "class_type": "FluxKontextImageScale",
+      "inputs": {
+        "image": [
+          "11",
+          0
+        ]
+      },
+      "_meta": {
+        "title": "FluxKontextImageScale"
+      }
+    },
+    "10:118": {
+      "class_type": "LoraLoaderModelOnly",
+      "inputs": {
+        "model": [
+          "10:89",
+          0
+        ],
+        "lora_name": "镜头转换.safetensors",
+        "strength_model": 1
+      },
+      "_meta": {
+        "title": "Load LoRA"
+      }
+    }
+  }
+}

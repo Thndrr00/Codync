@@ -12,7 +12,7 @@ The card shows the state, the ComfyUI version that ships with your Codync, the s
 
 **Templates** is the gallery of named workflows. Each card says what it makes (image, video, audio or 3D), about how long it takes and how many models it needs. Pick one and its form appears: the fields come from the template's own manifest (text, numbers with their limits, choices, a picture, a seed), so you never touch a node. **Run** queues it and takes you to **Jobs**.
 
-Five templates ship with Codync: **Text to image** and **Redraw a picture** (Stable Diffusion 1.5), **Follow the outline** (ControlNet), **Upscale a picture** (Real-ESRGAN) and **Colour check**, which needs no model and proves the engine works. Each names the models it needs and their licence; a download only ever comes from the template's manifest.
+Six templates ship with Codync: **Text to image** and **Redraw a picture** (Stable Diffusion 1.5), **Follow the outline** (ControlNet), **Upscale a picture** (Real-ESRGAN), **Angles** (imported from Freefield, Qwen-Image-Edit with 31 GB of models and a 24 GB graphics-memory estimate) and **Colour check**, which needs no model and proves the engine works. Each names the models it needs and their licence; a download only ever comes from the template's manifest.
 
 Before a run is queued, Codync checks that ComfyUI is running, that the template's nodes are installed, that every model is on disk at the right size, that the graphics card has the memory the template asks for, and that the disk has room. A problem appears with the button that fixes it (**Download**, **Start**, **Open ComfyUI**); **Run** stays disabled until nothing is missing.
 
@@ -28,7 +28,7 @@ If port 8188 is taken, ComfyUI uses the next free one; the card and the log say 
 
 ## Jobs
 
-**Jobs** shows the current job with the node ComfyUI is on and the sampler's step (`12/20`), a bar, and **Cancel**. The poster of a finished video is shown; a video or audio ComfyUI made plays right in the chat, before any download, and the file keeps the type it really has. The last twenty jobs stay in the list after the card closes, and the phone reads the same state from your computer.
+**Jobs** shows the current job with the node ComfyUI is on and the sampler's step (`12/20`), a bar, and **Cancel**. The poster of a finished video is shown; a video or audio ComfyUI made plays right in the chat, before any download, a `.glb` turns in a small 3D viewer, and the file keeps the type it really has. The last twenty jobs stay in the list after the card closes, and the phone reads the same state from your computer.
 
 ## From your phone and the terminal
 

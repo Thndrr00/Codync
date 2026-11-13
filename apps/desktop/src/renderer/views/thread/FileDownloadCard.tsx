@@ -6,7 +6,7 @@ import { Icon } from '../../components/Icon'
 import { IconButtonBase } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
-import { AttachmentImage, AttachmentMedia, AttachmentViewer, attachmentSymbol, byteCount, isAudioName, isVideoName, type ImageSource } from './Attachments'
+import { AttachmentImage, AttachmentMedia, AttachmentMesh, AttachmentViewer, attachmentSymbol, byteCount, isAudioName, isMeshName, isVideoName, type ImageSource } from './Attachments'
 import { trNow } from '../../lib/l10n.ts'
 import './attachments.css'
 
@@ -38,13 +38,16 @@ export function FileDownloadCard({ entry, file, onOpen }: { entry: Entry; file: 
   const playable = file.size <= MEDIA_PREVIEW_MAX
   const video = playable && isVideoName(file.name)
   const audio = playable && isAudioName(file.name)
+  const mesh = playable && isMeshName(file.name) && file.name.toLowerCase().endsWith('.glb')
+  const otherMesh = isMeshName(file.name) && !mesh
   return <VStack gap={12} className="file-card">
-    {video || audio ? <AttachmentMedia source={source} kind={video ? 'video' : 'audio'} /> : showsAsImage(file) ? <>
+    {video || audio ? <AttachmentMedia source={source} kind={video ? 'video' : 'audio'} /> : mesh ? <AttachmentMesh source={source} /> : showsAsImage(file) ? <>
       <button className="file-card-image" aria-label={file.name} onClick={() => setViewing(true)}>
         <AttachmentImage source={source} fit="thumbnail" />
       </button>
       <AttachmentViewer source={viewing ? source : null} close={() => setViewing(false)} />
     </> : null}
+    {otherMesh ? <Text size="caption" tone="secondary">{trNow('3D model: download it to open it in a 3D viewer.')}</Text> : null}
     <HStack gap={12}>
       <Icon name={attachmentSymbol(file.name)} size={24} color="var(--secondary)" />
       <VStack grow>

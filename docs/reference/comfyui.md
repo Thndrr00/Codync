@@ -51,7 +51,9 @@ The host registers a `comfyui` connector while ComfyUI runs (`lifecycle::offer_t
 
 Validation happens before anything is listed or run: ids, ranges, select options, model folders, sizes, hashes and URLs, and that the placeholder set equals the input set (a form field the graph never uses is refused, and a placeholder with no field is refused). The graph is data, never code: only placeholder substitution is applied, and every node class is checked against the running server's `/object_info` (`comfy_job::validate`). `{{key}}` as a whole string keeps its JSON type (a number stays a number); inside a longer string it is joined as text.
 
-The five base manifests are embedded from `host/assets/comfy-templates/` and copied on startup. An untouched base manifest is updated in place; one the user edited is left alone and the new version is written beside it as `template.json.new`. Their model URLs were checked against the publishers: Stable Diffusion 1.5 fp16 (`2,132,696,762` bytes, CreativeML OpenRAIL-M), ControlNet v1.1 canny (`1,445,234,681` bytes, Apache-2.0) and Real-ESRGAN x4plus (`67,040,989` bytes, BSD-3-Clause). Hashes are optional and left out until the curated list has them.
+The six base manifests are embedded from `host/assets/comfy-templates/` and copied on startup. An untouched base manifest is updated in place; one the user edited is left alone and the new version is written beside it as `template.json.new`. Their model URLs were checked against the publishers and their sizes and SHA-256 come from the repositories: Stable Diffusion 1.5 fp16 (`2,132,696,762` bytes, CreativeML OpenRAIL-M), ControlNet v1.1 canny (`1,445,234,681` bytes, Apache-2.0), Real-ESRGAN x4plus (`67,040,989` bytes, BSD-3-Clause) and the five Qwen-Image-Edit files of Freefield's Angles (Apache-2.0, 31.2 GB in total, exact LFS sizes and hashes).
+
+`tools/import-freefield-app.mjs` turns a Freefield `app.json` and `workflow.api.json` into a manifest: it binds each declared input to its graph slot, merges template bindings (`{move} {details}` becomes `{{move}} {{details}}`), keeps the models the app declares, and fills their size and SHA-256 from the Hugging Face tree. `freefield-angles` is the first one imported; the rest of the fifteen stay catalogued until their author's graph is imported.
 
 ## Preflight
 
@@ -69,8 +71,8 @@ A job is `queued → running → done | cancelled | error`, with the node and st
 
 ## Not covered here yet
 
-- **The official ComfyUI MCP** was evaluated from its published tool list, not run: see [comfy-official-mcp.md](comfy-official-mcp.md) for the coverage table and why Codync keeps its bridge (AGPL/commercial licence, a Python + `comfy-cli` runtime, beta). `tools/comfy-mcp-smoke.mjs` is the harness for a later adoption.
-- **The Higgsfield challenge pack** is catalogued, not imported: `host/assets/comfy-templates/curated.json` lists the fifteen entries with their authors' repositories, licences and output types (from the contest's winner page and the GitHub API), and the gallery shows them as imports. A graph, its custom nodes and its models belong to its author; importing one means copying its workflow with markers and checking its models, not inventing it.
+- **The official ComfyUI MCP** was evaluated and its tool surface checked: [comfy-official-mcp.md](comfy-official-mcp.md) has the coverage table, the actual 39-tool smoke run and why Codync keeps its bridge (AGPL/commercial licence, a Python + `comfy-cli` runtime, beta). `tools/comfy-mcp-smoke.mjs` is the harness.
+- **The Higgsfield challenge pack** is catalogued and one family is imported: `host/assets/comfy-templates/curated.json` lists the fifteen entries with their authors' repositories, licences and output types, and **Angles (Freefield)** ships as a manifest with its API graph, five models and exact hashes. The other fourteen keep their repository as the import source.
 - **One job at a time**, no parallel queue, and the twenty-entry history lives in the host process (not SQLite).
 - **The gallery, form and model manager are on the desktop**; Android shows the job, its percentage and cancel, and iOS has no ComfyUI section yet. The host owns the state, so those screens can follow without host changes.
 - **Audio has a player in the chat; meshes and splats do not**: a `.glb` arrives with its type and a download, with no WebGL viewer yet.

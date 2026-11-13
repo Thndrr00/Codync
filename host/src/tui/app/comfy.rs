@@ -27,10 +27,10 @@ pub fn header(status: &Value) -> Option<String> {
             .into(),
         (Some("unpacking"), ..) => tr("Unpacking {name}…").replace("{name}", "ComfyUI").into(),
         (_, "running", Some("running")) => with_percent(&tr("Making an image…"), status),
-        (_, "running", Some("queued")) => tr("Waiting in the queue"),
-        (_, "running", _) => tr("Running"),
-        (_, "starting", _) => tr("Starting…"),
-        (Some("failed"), ..) | (_, "error", _) => tr("Stopped with an error"),
+        (_, "running", Some("queued")) => tr("Waiting in the queue").into(),
+        (_, "running", _) => tr("Running").into(),
+        (_, "starting", _) => tr("Starting…").into(),
+        (Some("failed"), ..) | (_, "error", _) => tr("Stopped with an error").into(),
         _ => return None,
     };
     Some(format!("ComfyUI · {phrase}"))

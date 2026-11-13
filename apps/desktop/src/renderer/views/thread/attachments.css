@@ -80,3 +80,6 @@
 .attachment-media.audio { background: var(--background); }
 .file-view .attachment-media.video { max-height: 70vh; }
 .attachment-placeholder.media { height: 120px; border-radius: var(--radius-m); }
+.attachment-mesh { width: 100%; height: 360px; border-radius: var(--radius-m); overflow: hidden; background: #111; }
+.attachment-mesh canvas { width: 100%; height: 100%; display: block; }
+.file-view .attachment-mesh { height: 70vh; }

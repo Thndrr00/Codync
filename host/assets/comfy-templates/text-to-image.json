@@ -64,6 +64,7 @@
       "file": "v1-5-pruned-emaonly-fp16.safetensors",
       "folder": "checkpoints",
       "size": 2132696762,
+      "sha256": "e9476a13728cd75d8279f6ec8bad753a66a1957ca375a1464dc63b37db6e3916",
       "url": "https://huggingface.co/Comfy-Org/stable-diffusion-1.5/resolve/main/v1-5-pruned-emaonly-fp16.safetensors",
       "license": "CreativeML OpenRAIL-M"
     }

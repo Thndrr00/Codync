@@ -1,14 +1,31 @@
 # The official Comfy MCP, evaluated against Codync's bridge
 
-Comfy ships a local MCP server, [`Comfy-Org/comfy-mcp`](https://github.com/Comfy-Org/comfy-mcp) (PyPI `comfy-mcp`, AGPL-3.0-or-later OR commercial). This note records what it covers, what Codync's `comfyui` bridge still owns, and why the bridge was not replaced in this change. It is a documentation-and-harness evaluation: the server was read at its published `main` README on 13 November 2026, not run (the change was made under “no compiles”, with no ComfyUI running).
+Comfy ships a local MCP server, [`Comfy-Org/comfy-mcp`](https://github.com/Comfy-Org/comfy-mcp) (PyPI `comfy-mcp`, AGPL-3.0-or-later OR commercial). This note records what it covers, what Codync's `comfyui` bridge still owns, and why the bridge was not replaced in this change. Its tool surface was checked by `tools/comfy-mcp-smoke.mjs` against 0.10.0; no workflow ran, because this machine has no ComfyUI and no GPU.
 
 ## What it is
 
 - A **stdio** MCP server that wraps **`comfy-cli` ≥ 1.14.0**, which is the engine behind every tool. It needs Python ≥ 3.10 and a ComfyUI workspace that `comfy-cli` manages (`comfy install` or `comfy set-default`).
-- Version 0.10.0 at the time of writing; its own README calls it **beta** (41 tools, core loop validated against a live local ComfyUI).
+- Version 0.10.0 at the time of writing; its own README calls it **beta** (41 tools in the README, **39** in the installed 0.10.0).
 - Default target `127.0.0.1:8188`; `COMFY_LOCAL_URL` moves a local server on another port, `COMFYUI_URL`/`COMFYUI_HOST` submit runs to another machine.
 - Every tool shells out to `comfy --where local --json` and unwraps `envelope/1`. It is a thin wrapper, not an HTTP client of its own.
 - Licensing: **AGPL-3.0-or-later OR commercial**. Using it as a separate, user-installed connector is one thing; bundling or shipping it inside Codync would pull AGPL obligations into the distribution.
+
+## The smoke run
+
+On 13 November 2026, `tools/comfy-mcp-smoke.mjs` ran against `comfy-mcp 0.10.0` + `comfy-cli 1.26.0` in a throwaway Python 3.14 venv on this Windows machine, with no ComfyUI workspace and no GPU:
+
+```
+Official Comfy MCP: 39 tools
+list templates     search_templates    ok
+describe template  get_template        ok
+run by name        run_template        ok
+run a graph        run_workflow        ok
+job status         job                 ok
+fetch outputs      fetch_outputs       ok
+upload input       upload_file         ok
+```
+
+`server_info` answered with `workspace.exists: false`, `server.running: false`, `gpu: null` and a `workspace_not_found` warning; `search_templates` returned 761 gallery templates. That is the tool surface verified, not a generation: with no ComfyUI running, no workflow was executed.
 
 ## Coverage of what T1–T9 needed
 
