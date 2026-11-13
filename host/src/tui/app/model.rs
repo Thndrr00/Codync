@@ -37,6 +37,8 @@ pub enum After {
     Hello,
     /// `testApprovalRule`: what the host says about a command tried in the rules sheet.
     RuleTest,
+    /// The lessons and the recent decisions that go with a bot's rules.
+    RulesExtras,
     /// `securityProfiles`.
     Profiles,
     /// `hostHealth`: the header's memory word; a host without it says nothing.

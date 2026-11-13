@@ -110,6 +110,30 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
     if let Some(error) = &s.error {
         put(buf, inner.x, test_y + 2, inner.width, &truncate(error, usize::from(inner.width)), t.amber.patch(t.panel));
     }
+    // What the bot learned from refusals, and what it was allowed to do lately.
+    if !s.lessons.is_empty() || !s.history.is_empty() {
+        let learned = s.lessons.iter().filter_map(|lesson| lesson["subject"].as_str()).collect::<Vec<_>>().join(", ");
+        let recent = s
+            .history
+            .iter()
+            .take(3)
+            .map(|record| {
+                let what = match record["decision"].as_str() {
+                    Some("allow") => "allowed",
+                    Some("deny") => "denied",
+                    _ => "cancelled",
+                };
+                format!("{what} {}", record["subject"].as_str().unwrap_or_default())
+            })
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let line = if learned.is_empty() {
+            format!("Recent: {recent}")
+        } else {
+            format!("Learned (Y keep · N dismiss): {learned} · Recent: {recent}")
+        };
+        put(buf, inner.x, bottom - 2, inner.width, &truncate(&line, usize::from(inner.width)), t.dim.patch(t.panel));
+    }
     let footer = match s.mode {
         Mode::Pattern => "↵ keep the pattern · esc cancel",
         Mode::Test => "↵ test · esc back",

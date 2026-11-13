@@ -47,6 +47,10 @@ pub struct RulesSheet {
     /// The security profile the bot follows (`None`: its own rules), and whether `P` changed it in this sheet.
     pub profile: Option<String>,
     pub profile_changed: bool,
+    /// The rules the bot proposes after a refusal (`approvalLessons`), newest first.
+    pub lessons: Vec<Value>,
+    /// The newest decisions on its approval cards (`approvalHistory`).
+    pub history: Vec<Value>,
 }
 
 impl RulesSheet {
@@ -75,6 +79,8 @@ impl RulesSheet {
             policies: serde_json::Map::new(),
             profile: None,
             profile_changed: false,
+            lessons: Vec::new(),
+            history: Vec::new(),
         }
     }
 
@@ -203,6 +209,9 @@ impl App {
         if self.profiles.is_empty() {
             self.call("securityProfiles", json!({}), After::Profiles);
         }
+        // What the bot learned from refusals and what it was allowed to do: both are the host's.
+        self.call("approvalLessons", json!({"botId": &bot.id}), After::RulesExtras);
+        self.call("approvalHistory", json!({"botId": &bot.id}), After::RulesExtras);
         self.overlays.push(Overlay::Rules(Box::new(sheet)));
     }
 
@@ -272,6 +281,15 @@ impl App {
                     s.sel = s.sel.min(s.rules.len().saturating_sub(1));
                 }
                 KeyCode::Char('Q') => s.quick_on = s.quick_on.map(|on| !on),
+                // A lesson the bot proposes: keep it as a rule, or dismiss it.
+                KeyCode::Char('Y') if !s.lessons.is_empty() => {
+                    let id = s.lessons[0]["id"].as_str().unwrap_or_default().to_owned();
+                    self.call("decideApprovalLesson", json!({"lessonId": id, "accept": true}), After::RulesExtras);
+                }
+                KeyCode::Char('N') if !s.lessons.is_empty() => {
+                    let id = s.lessons[0]["id"].as_str().unwrap_or_default().to_owned();
+                    self.call("decideApprovalLesson", json!({"lessonId": id, "accept": false}), After::RulesExtras);
+                }
                 KeyCode::Char('P') => self.next_sheet_profile(&mut s),
                 KeyCode::Char(digit @ '1'..='3') if s.quick_on.is_some() => {
                     s.cycle_quick(usize::from(digit as u8 - b'1'));
@@ -319,6 +337,21 @@ impl App {
     pub(super) fn rules_tested(&mut self, v: &Value) {
         if let Some(Overlay::Rules(s)) = self.overlays.last_mut() {
             s.answer = Some(describe(&v["evaluation"]));
+        }
+    }
+
+    /// The lessons a bot proposes, the newest decisions on its cards, or the one it just decided.
+    pub(super) fn rules_extras(&mut self, v: &Value) {
+        let Some(Overlay::Rules(s)) = self.overlays.last_mut() else { return };
+        if let Some(lessons) = v["lessons"].as_array() {
+            s.lessons = lessons.clone();
+        }
+        if let Some(approvals) = v["approvals"].as_array() {
+            s.history = approvals.clone();
+        }
+        // A decided lesson leaves the list without asking the host again.
+        if let Some(id) = v["lesson"]["id"].as_str() {
+            s.lessons.retain(|lesson| lesson["id"].as_str() != Some(id));
         }
     }
 
