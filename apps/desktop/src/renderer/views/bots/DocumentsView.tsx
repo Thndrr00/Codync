@@ -6,19 +6,19 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
 import type { BotStore } from '../../store/bot-store'
-import type { DocumentsStore } from '../../store/documents-store'
+import type { DocumentsStore, DocumentEdge, DocumentNode } from '../../store/documents-store'
 import { documentTree, documentDescendants } from '../../lib/document-tree'
 import { DocumentMarkdownEditor } from './DocumentMarkdownEditor'
 import { MarkdownText } from '../thread/Markdown'
 import { RepliesView } from '../thread/RepliesView'
 import { relativeTime } from '../thread/chat-items'
 
-type Section = 'documents' | 'reviews' | 'activity'
+type Section = 'documents' | 'reviews' | 'activity' | 'graph'
 type EditorMode = 'visual' | 'markdown' | 'preview'
 type DraftPrompt = { store: DocumentsStore; session: number }
 const DocumentVisualEditor = lazy(() => import('./DocumentVisualEditor'))
 const SECTIONS: { id: Section; label: string }[] = [
-  { id: 'documents', label: 'Documents' }, { id: 'reviews', label: 'Review' }, { id: 'activity', label: 'Activity' },
+  { id: 'documents', label: 'Documents' }, { id: 'reviews', label: 'Review' }, { id: 'activity', label: 'Activity' }, { id: 'graph', label: 'Graph' },
 ]
 
 /** One bot's document library, immutable proposed changes, and computer activity. */
@@ -39,6 +39,7 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
     }, 5_000)
     return () => { clearInterval(refresh); documents.dispose() }
   }, [documents])
+  useEffect(() => { if (section === 'graph') void documents.loadGraph() }, [section, documents])
   const draft = documents.draft
   const current = documents.items.find((item) => item.id === draft?.id)
   const descendants = useMemo(() => documentDescendants(documents.items, draft?.id ?? ''), [documents.items, draft?.id])
@@ -131,6 +132,11 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
       {documents.reviews.map((review) => <button key={review.id} className="documents-row press" disabled={documents.busy} onClick={() => void documents.inspectReview(review.id)}>
         <VStack gap={2}><Text weight="semibold">{review.title}</Text><Text size="caption" tone="secondary">{review.status} · {relativeTime.day(review.createdAt)}</Text></VStack>
       </button>)}
+    </CardSection> : section === 'graph' ? <CardSection>
+      <HStack><Text size="headline" grow>Links between pages</Text><IconButton title="Refresh graph" icon="arrow.clockwise" disabled={documents.graphLoading} onClick={() => void documents.loadGraph()} /></HStack>
+      {documents.graphLoading && <Text as="div" tone="secondary">Reading the graph…</Text>}
+      {!documents.graphLoading && !(documents.graph?.nodes.length) && <Text as="div" tone="secondary">No pages yet.</Text>}
+      {documents.graph && documents.graph.nodes.length > 0 && <GraphView graph={documents.graph} open={(id) => void documents.open(id)} />}
     </CardSection> : <CardSection>
       <HStack><Text size="headline" grow>Computer activity</Text><IconButton title="Copy activity CSV" icon="doc.on.doc" onClick={() => void documents.copyActivity()} /><IconButton title="Refresh activity" icon="arrow.clockwise" onClick={() => void documents.refreshExtras()} /></HStack>
       {documents.extrasLoading && <Text as="div" tone="secondary">Loading activity…</Text>}
@@ -164,4 +170,33 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
       </VStack>}
     </Sheet>
   </div>
+}
+
+/** Every page on a circle, with a line for each link that resolves to another page. Clicking one opens it. */
+function GraphView({ graph, open }: { graph: { nodes: DocumentNode[]; edges: DocumentEdge[] }; open: (id: string) => void }) {
+  const size = 360
+  const center = size / 2
+  const radius = center - 60
+  const at = new Map(graph.nodes.map((node, index) => [node.id, {
+    x: center + radius * Math.cos((2 * Math.PI * index) / graph.nodes.length),
+    y: center + radius * Math.sin((2 * Math.PI * index) / graph.nodes.length),
+  }]))
+  return <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${graph.nodes.length} pages and ${graph.edges.length} links`}
+    style={{ width: '100%', maxWidth: 420, height: 'auto' }}>
+    {graph.edges.map((edge, index) => {
+      const from = at.get(edge.from)
+      const to = at.get(edge.to)
+      return from && to ? <line key={index} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="var(--border)" strokeWidth={1} /> : null
+    })}
+    {graph.nodes.map((node) => {
+      const point = at.get(node.id)
+      if (!point) return null
+      return <g key={node.id} onClick={() => open(node.id)} style={{ cursor: 'pointer' }}>
+        <circle cx={point.x} cy={point.y} r={6} fill="var(--accent)" />
+        <text x={point.x} y={point.y - 10} textAnchor="middle" fontSize={10} fill="var(--secondary)">
+          {node.title.length > 18 ? `${node.title.slice(0, 17)}...` : node.title}
+        </text>
+      </g>
+    })}
+  </svg>
 }

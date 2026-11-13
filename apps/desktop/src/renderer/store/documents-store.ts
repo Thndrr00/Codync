@@ -9,6 +9,9 @@ export interface Document extends DocumentSummary { body: string }
 /** A `[[title]]` a page names, and the page it is when one has that title. */
 export interface DocumentLink { target: string; documentId?: string }
 export interface DocumentDraft { id?: string; parentId?: string | null; title: string; body: string; ifRevision: number; clientNonce?: string }
+/** A page in the graph, and a link between two of them (`documentGraph`). */
+export interface DocumentNode { id: string; title: string }
+export interface DocumentEdge { from: string; to: string }
 export interface DocumentReview {
   id: string; botId: string; title: string; documentId?: string; status: string; createdAt: number; expiresAt: number
 }
@@ -32,6 +35,9 @@ export class DocumentsStore extends Observable {
   conflict: Document | null = null
   links: DocumentLink[] = []
   backlinks: DocumentSummary[] = []
+  /** Every page and the links between them, when the graph was read. */
+  graph: { nodes: DocumentNode[]; edges: DocumentEdge[] } | null = null
+  graphLoading = false
   query = ''
   next: string | null = null
   loading = false
@@ -154,6 +160,22 @@ export class DocumentsStore extends Observable {
       if (this.dirty && this.draft.ifRevision !== document.revision) this.conflict = document
     } catch (error) { if (request === this.sequence) this.error = message(error) }
     finally { if (request === this.sequence) { this.opening = false; this.changed() } }
+  }
+
+  /** Every page of this bot and the links between them, for the graph view. */
+  async loadGraph() {
+    this.graphLoading = true
+    this.changed()
+    try {
+      const { nodes, edges } = await this.call<{ nodes: DocumentNode[]; edges: DocumentEdge[] }>('documentGraph', { botId: this.botId })
+      this.graph = { nodes: nodes ?? [], edges: edges ?? [] }
+      this.error = null
+    } catch (error) {
+      this.error = message(error)
+    } finally {
+      this.graphLoading = false
+      this.changed()
+    }
   }
 
   create(parentId: string | null = null) {
