@@ -83,6 +83,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     .await?
             } else if crate::documents::TOOLS.contains(&name) {
                 crate::documents::call(hub, bot, name, &b["arguments"]).await?
+            } else if name == "query_database" {
+                crate::sql::call(hub, bot, &b["arguments"])?
             } else if crate::chat::profile::TOOLS.contains(&name) {
                 crate::chat::profile::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::scratchpad::TOOLS.contains(&name) {
@@ -510,6 +512,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             hub.set_entry(entry_id, &done);
             json!({"entry": hub.store.entry(entry_id)})
+        }
+        "botDatabase" => {
+            let bot = str_arg(&b, "botId")?;
+            json!({"database": crate::sql::database(hub, bot)})
+        }
+        "setBotDatabase" => {
+            let bot = str_arg(&b, "botId")?;
+            hub.store.bot(bot)?.filter(|row| !row.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            crate::sql::set_database(&hub.store, bot, b["path"].as_str())?;
+            json!({"database": crate::sql::database(hub, bot)})
         }
         "approvalLessons" => {
             let bot = str_arg(&b, "botId")?;

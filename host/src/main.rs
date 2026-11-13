@@ -50,6 +50,7 @@ mod sentinel;
 mod service;
 mod shell;
 mod slack;
+mod sql;
 mod store;
 mod telegram;
 mod theme;
