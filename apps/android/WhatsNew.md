@@ -18,7 +18,15 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - 呼叫連接器時如果夾帶金鑰或密碼，這次呼叫底下會標示「帶有憑證」，展開後列出金鑰在哪個參數，不必把值抄出來。
 - 語音設定新增 xAI 與 Groq：xAI 用你自己的金鑰在「語音輸出」朗讀回覆，Groq 則在麥克風旁提供 Whisper 聽寫；兩者的金鑰都只留在電腦上。
 - 語音請求出錯時，電腦會在 logs/voice.log 記下原因、提供者、模型與回合，並移除任何金鑰。
-
+- 終端代理的計畫可以依你選的時間自行開始，「開始」按鈕會倒數。
+- 呼叫這台電腦例行程序的本機腳本共用你設定的每小時上限，迴圈不會花光你的額度。
+- Codync 支援希伯來文，版面會鏡像、程式碼維持由左至右；阿拉伯文同樣由右至左。
+- 聊天顏色與聊天背景各為淺色和深色主題選一次。
+- 代理的問題一次顯示一題，附「返回」，送出前有摘要。
+- 「用量」新增「技能」分頁：每個技能的載入次數、權杖、費用與使用它的代理。
+- 可從設定刪除聊天或頻道的歷史記錄，同時保留設定、記憶與例行程序。
+- 伺服器設定可選「自然」或「經典」更新、代理是否使用你的 Claude Code 設定，以及誰能控制這台電腦的螢幕（30 秒倒數與「全部停止」）。
+- 可從頻道設定開始新對話或壓縮上下文。
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
@@ -101,7 +109,15 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 ### en-US
 - Bots can now keep a dev server running on your computer, even when the bot goes idle or restarts. Its port shows under the chat title; tap the bot's name to read its logs, restart or stop it, and to open it when your phone can reach it.
 - Choose and arrange which agents show in Usage: by default it lists the ones your bots run, and you can turn others on, hide them or drag them into order. Usage now also reads Google Antigravity's and GitHub Copilot's limits.
-
+- A plan from a terminal agent can start by itself after a time you choose, and its Start button counts down.
+- Local scripts that call routines on this computer share an hourly ceiling you set, so a loop can't spend your quota.
+- Codync speaks Hebrew, with the layout mirrored and code left to right; Arabic is right to left too.
+- Pick a chat colour and a chat background once for light and once for dark.
+- An agent's questions show one at a time, with Back and a summary before you send.
+- Usage has a Skill tab: how often each skill loaded, its tokens, cost and the agents that used it.
+- Delete a chat's or channel's history from its settings, keeping its settings, memories and routines.
+- Server settings choose Natural or Classic updates, whether agents use your Claude Code setup, and who may control this computer's screen, with a 30-second warning and Stop all.
+- Start a new conversation or compact the context from a channel's settings.
 ## 2.39.0
 
 ### zh-Hant
