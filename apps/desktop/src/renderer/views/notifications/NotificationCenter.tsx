@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, Sheet } from '../../components/Overlay'
@@ -38,6 +38,9 @@ export function NotificationCenter({ stores, open, onClose, onOpen }: {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rev, setRev] = useState(0)
+  const storeKey = stores.map((store) => store.computer.id).join('|')
+  const storesRef = useRef(stores)
+  storesRef.current = stores
 
   useEffect(() => {
     if (!open) return
@@ -46,7 +49,7 @@ export function NotificationCenter({ stores, open, onClose, onOpen }: {
       setLoading(true)
       try {
         const found = await Promise.all(
-          stores.map(async (store) => {
+          storesRef.current.map(async (store) => {
             if (store.connection.kind !== 'online' || store.mismatch) return []
             const result = await (await store.ready()).call<{ notices: Notice[] }>('recentNotices', { days: 14, limit: 80 })
             return result.notices.map((notice): Row => ({
@@ -69,7 +72,7 @@ export function NotificationCenter({ stores, open, onClose, onOpen }: {
     return () => {
       stopped = true
     }
-  }, [open, stores, rev])
+  }, [open, storeKey, rev])
 
   return (
     <Sheet open={open} onClose={onClose} width={540} maxHeight="80vh">
