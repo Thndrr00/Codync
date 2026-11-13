@@ -4,7 +4,7 @@ import { hasLibrary } from '@shared/artifacts'
 import { isGroup, isWorking, type Bot } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
-import { IconButton, RowLabel, Switch, TabChoice } from '../../components/Controls'
+import { DropdownMenu, IconButton, RowLabel, Switch, TabChoice } from '../../components/Controls'
 import { LeadAgentBadge } from '../../components/LeadAgentBadge'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
@@ -18,6 +18,7 @@ import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ComputerPanel } from '../bots/ComputerPanel'
 import { BotActivityCard } from './BotActivityCard'
+import { shareTranscript } from './transcript'
 import { RoutinesView } from '../routines/RoutinesView'
 import { LibraryView } from '../library/LibraryView'
 import { MacChatButton } from './MacChatButton'
@@ -59,6 +60,14 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
     <div className="details-panel">
       <div className="details-drag" />
       <div className="details-actions">
+        {bot && !group ? (
+          <DropdownMenu className="mac-chat-button ringed" title="Share transcript" items={() => [
+            { title: 'Save as HTML', icon: 'arrow.down.to.line', action: () => void shareTranscript(store, botId, 'save').catch((error: unknown) => store.setError(error instanceof Error ? error.message : String(error))) },
+            { title: 'Open in browser', icon: 'safari', action: () => void shareTranscript(store, botId, 'open').catch((error: unknown) => store.setError(error instanceof Error ? error.message : String(error))) },
+          ]}>
+            <Icon name="doc.on.doc" size={16} weight="medium" />
+          </DropdownMenu>
+        ) : null}
         {bot && !group ? <MacChatButton className="ringed" title="Create template" icon="square.and.arrow.up" onClick={share} /> : null}
         <MacChatButton className="ringed" title="Close details" icon="xmark" onClick={close} />
       </div>

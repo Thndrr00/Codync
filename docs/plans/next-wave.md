@@ -34,6 +34,7 @@ is bigger than one release.
 | Presentation mode for artifacts | done (desktop) |
 | Bot activity timeline | done (desktop) |
 | Policies by role (group editor) | done (desktop) |
+| Share a chat as a read-only HTML file | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -189,6 +190,9 @@ Goal: a bot can run without an account.
   role (`updateBot` with `actionRules` and `actionRulesOn`); only roles whose pickers were touched are
   written, so opening and saving a group changes nothing by itself. Unset classes show Ask.
 - The same decision is tested per bot in the rule editor (`testApprovalRule`).
+- **Share transcript** in the inspector writes the loaded chat as one HTML file (native Save dialog) or
+  opens it in the browser: messages, cards and notices, styled plainly, with no scripts and no link
+  back to Codync. Only the window already loaded on this device is included; tool steps stay out.
 
 ## Policies, retention, budgets — retention and the user-turn gate done; policies and reservations next
 
