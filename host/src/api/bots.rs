@@ -96,6 +96,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             // model gets an error instead of spending the person's tokens again.
             if let Some(answer) = crate::chat::tool_limits::cached(bot, name, arguments) {
                 return Ok(ControlFlow::Break(answer));
+            }
             crate::chat::tool_limits::check(bot, name)?;
             let answer = if name == "research_sources" {
                 crate::research::sources(hub, bot, str_arg(arguments, "objective")?, arguments.get("urls")).await?
@@ -434,7 +435,15 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"bot": bot})
         }
         // A short roundtable in a group, in throwaway sessions; the turns and draft minutes come back.
-        "teamMeeting" => crate::chat::meeting::run(hub, str_arg(&b, "botId")?, str_arg(&b, "topic")?).await?,
+        "teamMeeting" => {
+            crate::chat::meeting::run(
+                hub,
+                str_arg(&b, "botId")?,
+                str_arg(&b, "topic")?,
+                b["voice"].as_bool().unwrap_or(true),
+            )
+            .await?
+        }
         "deleteTeamTemplate" => json!({"deleted": crate::chat::team_templates::remove(hub, str_arg(&b, "id")?)?}),
         "deleteBot" => {
             let bot = str_arg(&b, "botId")?;

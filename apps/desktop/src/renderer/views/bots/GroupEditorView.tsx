@@ -53,6 +53,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [meetingTopic, setMeetingTopic] = useState('')
   const [meetingBusy, setMeetingBusy] = useState(false)
   const [meetingMinutes, setMeetingMinutes] = useState<string | null>(null)
+  const [meetingTurns, setMeetingTurns] = useState<{ name: string; text: string; audio?: string; audioFormat?: string }[]>([])
 
   // One set of permission rules per role: every member with that role gets the same four classes.
   const roles = [...new Set(team.members.map((m) => m.role.trim()).filter(Boolean))]
@@ -97,9 +98,11 @@ export function GroupEditorView({ group }: { group: Bot }) {
     setMeetingBusy(true)
     setError(null)
     setMeetingMinutes(null)
+    setMeetingTurns([])
     try {
       const result = await store.runMeeting(group.id, meetingTopic.trim())
       setMeetingMinutes(result.minutes)
+      setMeetingTurns(result.turns)
     } catch (e) {
       setError(errorText(e))
     } finally {
@@ -274,6 +277,19 @@ export function GroupEditorView({ group }: { group: Bot }) {
               {meetingBusy ? tr('Meeting…') : tr('Start')}
             </Button>
           </HStack>
+          {meetingTurns.length > 0 ? (
+            <VStack gap={8}>
+              {meetingTurns.map((turn, index) => (
+                <VStack key={`${turn.name}:${index}`} gap={3} className="meeting-turn">
+                  <Text weight="semibold">{turn.name}</Text>
+                  <Text size="callout">{turn.text}</Text>
+                  {turn.audio ? (
+                    <audio controls src={`data:audio/${turn.audioFormat ?? 'aac'};base64,${turn.audio}`} />
+                  ) : null}
+                </VStack>
+              ))}
+            </VStack>
+          ) : null}
           {meetingMinutes ? (
             <div className="documents-preview"><MarkdownText text={meetingMinutes} /></div>
           ) : null}

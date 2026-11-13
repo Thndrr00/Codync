@@ -207,6 +207,17 @@ async fn mint(p: Provider, key: &str, model: &str, voice: &str) -> Result<String
         .ok_or_else(|| anyhow!("{} sent no session credential.", p.name()))
 }
 
+/// The first keyed provider and its speech model and default voice, for text to speech without a
+/// client choosing: the meeting uses it to read each turn aloud.
+pub fn speech_defaults(store: &Store) -> Option<(Provider, String, String)> {
+    let keys = load(store).ok()?;
+    Provider::ALL.iter().copied().find(|provider| !keys.get(*provider).is_empty()).map(|provider| {
+        let defaults = defaults(store, provider);
+        let voice = if provider == Provider::OpenAi { "marin" } else { "Kore" };
+        (provider, defaults.speech, voice.to_owned())
+    })
+}
+
 /// Which providers have a key here, with their default models.
 pub fn status(store: &Store) -> Result<Value> {
     let keys = load(store)?;

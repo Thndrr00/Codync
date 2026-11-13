@@ -11,12 +11,13 @@ use std::sync::Arc;
 const MAX_TURNS: usize = 8;
 const MAX_TOPIC_CHARS: usize = 500;
 
-pub async fn run(hub: &Arc<Hub>, group_id: &str, topic: &str) -> Result<Value> {
+pub async fn run(hub: &Arc<Hub>, group_id: &str, topic: &str, with_voice: bool) -> Result<Value> {
     let topic = topic.trim();
     ensure!(!topic.is_empty(), "a meeting needs a topic");
     ensure!(topic.chars().count() <= MAX_TOPIC_CHARS, "a meeting topic is at most {MAX_TOPIC_CHARS} characters");
     let group = hub.store.bot(group_id)?.filter(|row| !row.deleted).context("unknown group")?.config;
     ensure!(group.is_group(), "only a group can hold a meeting");
+    let speech = if with_voice { crate::voice::speech_defaults(&hub.store) } else { None };
     let mut turns: Vec<Value> = Vec::new();
     for id in group.members.iter().take(MAX_TURNS) {
         let Some(row) = hub.store.bot(id)?.filter(|row| !row.deleted && !row.config.is_group()) else { continue };
@@ -42,7 +43,19 @@ pub async fn run(hub: &Arc<Hub>, group_id: &str, topic: &str) -> Result<Value> {
             Ok(text) => text.trim().to_owned(),
             Err(error) => format!("(couldn't answer: {error:#})"),
         };
-        turns.push(json!({"botId": id, "name": name, "text": text}));
+        let mut turn = json!({"botId": id, "name": name, "text": text});
+        if let Some((provider, model, voice)) = &speech {
+            match crate::voice::speak(&hub.store, *provider, model, voice, &text).await {
+                Ok(audio) => {
+                    turn["audio"] = audio["audio"].clone();
+                    turn["audioFormat"] = audio["format"].clone();
+                }
+                Err(error) => {
+                    tracing::warn!(bot = %id, error = format!("{error:#}"), "couldn't speak a meeting turn");
+                }
+            }
+        }
+        turns.push(turn);
     }
     ensure!(!turns.is_empty(), "this group has no agent members to ask");
     let minutes = turns

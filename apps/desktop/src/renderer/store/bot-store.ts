@@ -587,8 +587,8 @@ export class BotStore extends BotSync {
   }
 
   /** A text roundtable in a group: its members answer a topic in turn, in throwaway sessions. */
-  async runMeeting(botId: string, topic: string): Promise<{ turns: { name: string; text: string }[]; minutes: string }> {
-    return (await this.ready()).call('teamMeeting', { botId, topic }, 900_000)
+  async runMeeting(botId: string, topic: string): Promise<{ turns: { name: string; text: string; audio?: string; audioFormat?: string }[]; minutes: string }> {
+    return (await this.ready()).call('teamMeeting', { botId, topic, voice: true }, 900_000)
   }
 
   /** Groups saved as reusable teams on this computer. */

@@ -347,3 +347,9 @@ button.member-row:hover {
   padding: 8px 0;
   border-top: 1px solid var(--border);
 }
+
+/* One speaker in a meeting's turns, with their audio when voice is configured. */
+.meeting-turn {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
