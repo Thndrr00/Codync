@@ -101,11 +101,12 @@ Each run has a time limit: one hour unless you change it under **Run settings �
 
 ## Webhooks
 
-Choose **Webhook** under **When to run** and save. The editor then shows the routine's URL and key, with buttons to copy them, show the key, and **Replace key**. In the terminal UI, `w` copies a ready-made curl command and `W` replaces the key.
+Choose **Webhook** under **When to run** and save. The editor then shows the routine's URL and key, with buttons to copy them, show the key, and **Replace key**. In the terminal UI, `w` copies a ready-made curl command, `W` replaces the key and `s` takes a sender's own signing secret.
 
 Codync doesn't register the webhook with the other service. You (or the bot, with you) paste the URL and key into it. Until a real delivery has arrived, the bot reports the webhook as waiting to be connected.
 
 - **Any sender:** send a POST with the header `Authorization: Bearer <key>`. A JSON body reaches the routine as it is; any other body arrives as text.
+- **Services that sign with Standard Webhooks** (such as Composio and Svix): paste the signing secret the service shows into **Sender's signing secret** — it starts with `whsec_` — and the key becomes that secret. Deliveries signed with it (`webhook-id`, `webhook-timestamp` and `webhook-signature` headers) are accepted for five minutes.
 - **GitHub:** set the Payload URL to the routine's URL, the content type to `application/json`, and the secret to the key. GitHub's test ping succeeds without running the routine. Each delivery reaches the routine with its event (such as `pull_request.opened`), repository and sender, so the bot can set up an event trigger for just the events you want.
 - **Other services:** an event trigger can also match a JSON delivery by its `source` and `event` fields. Codync recognizes GitHub's deliveries by itself; for other senders, the JSON they post has to carry those fields.
 - A delivery that arrives twice with the same delivery ID runs once. Bodies can be up to 64 KB.

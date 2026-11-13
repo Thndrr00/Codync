@@ -70,7 +70,7 @@ A routine has an OR list of triggers:
 - `interval`: `seconds` (1 second through 365 days).
 - `once`: `at` (Unix milliseconds, in the future when created).
 - `cron`: a five-field `expression` and IANA `timeZone`, including DST.
-- `webhook`: every authenticated JSON delivery runs the routine. The public address needs the computer in an account (`needsAccount` in `routine_webhook`); otherwise only the local address works.
+- `webhook`: every authenticated JSON delivery runs the routine. The public address needs the computer in an account (`needsAccount` in `routine_webhook`); otherwise only the local address works. Besides the bearer key and a GitHub signature, `routine_webhook` takes the sender's own `whsec_…` Standard Webhooks secret (`key`), which becomes the routine's key.
 - `event`: `source`, `event` (`*` matches all), and optional exact-match `filters`.
   `messageContains` matches a substring of `text`. Source names are `slack`,
   `github`, `origin`, `microsoftTeams`, `linear`, `sentry`, `pagerduty`, and `email`.
@@ -186,11 +186,21 @@ cloud is off) and the local `http://127.0.0.1:<port>/hooks/routines/<id>`. Both 
 the same checks (`host/src/routines/hooks.rs`); the protocol is
 [spec §7.8](../reference/remote-relay.md).
 
-- **Authentication**: `Authorization: Bearer <key>`, or `X-Hub-Signature-256` (an
-  HMAC-SHA256 of the body with the key). For GitHub: payload URL = the public URL,
-  content type `application/json`, secret = the key. `routineWebhook` with
-  `rotate: true` replaces the key; the old one stops working at once, including in
-  the cloud.
+- **Authentication**: any one of `Authorization: Bearer <key>`,
+  `X-Hub-Signature-256: sha256=<hex HMAC-SHA256(key, body)>`, or a
+  [Standard Webhooks](https://www.standardwebhooks.com/) signature
+  (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256>`
+  over `<webhook-id>.<webhook-timestamp>.<body>`, timestamp within five minutes).
+  For GitHub: payload URL = the public URL, content type `application/json`,
+  secret = the key. `routineWebhook` with `rotate: true` replaces the key; the old
+  one stops working at once, including in the cloud. `routineWebhook` with a
+  `key` adopts the sender's own signing secret instead (a Standard Webhooks sender
+  such as Composio or Svix hands out a `whsec_…` value to paste).
+- **Standard Webhooks**: ported from `CopilotKit/OpenBot`'s `webhook-security.ts` (Apache-2.0);
+  the checks keep OpenBot's header names, signature form and five-minute window. A
+  `whsec_` secret is accepted as typed and decoded (base64 or base64url, at least 16
+  bytes) before the HMAC is computed, so either reading of the secret verifies. A pasted key is 16 to 1024 characters
+  without spaces.
 - **Events**: a JSON object is the event as-is; a GitHub delivery becomes
   `{source:"github", event:"<event>.<action>", repo, sender, text, url, payload}`
   (GitHub `ping` succeeds without running); other bodies become `{text}`. Event
@@ -200,8 +210,9 @@ the same checks (`host/src/routines/hooks.rs`); the protocol is
 {"source":"github","event":"pull_request.opened","repo":"owner/repo","text":"A PR opened"}
 ```
 
-- **Delivery**: `X-Delivery-Id`, `X-GitHub-Delivery` or `Idempotency-Key`
-  deduplicates retries against retained run records. Bodies are limited to 64 KB.
+- **Delivery**: `X-Delivery-Id`, `X-GitHub-Delivery`, `webhook-id` or
+  `Idempotency-Key` deduplicates retries against retained run records. Bodies are
+  limited to 64 KB.
   A paused routine refuses (`409`); a non-matching event is accepted and ignored.
   While the routine has a run under way or queued (a retry waiting for its time
   doesn't count), the local endpoint answers `409` and the cloud
@@ -277,7 +288,8 @@ the retry ladder, a queued scheduled fire standing in for the retry, paused rout
 keeping only the latest failure's event, the user retry's busy/paused refusals and
 deleting the routine (`routines/retry.rs`), waiting retries vs. Stop, the tick and a
 scheduled fire (`routines/runner.rs`), timezone calculation, invalid schedules, event filters,
-persistence, pause/resume, bot ownership, bearer/HMAC checks, GitHub event mapping and
+persistence, pause/resume, bot ownership, bearer/HMAC checks, Standard Webhooks
+signatures and their clock window, the decoded `whsec_` secret, GitHub event mapping and
 the relay's hook registration, acks and retries. `cloud/test/hooks.test.ts` covers the
 edge checks, queue limits, deduplication, ordering, retry and expiry; the cloud e2e
 (`npm run e2e`, step 5b) delivers through a real Worker and host, including a signed

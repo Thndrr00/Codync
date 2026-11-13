@@ -469,11 +469,11 @@ Close code 總表：`1000` 正常、`1011` 內部錯誤／逾時、`4001 unautho
 
 - **網址**：`POST {cloud}/v1/hooks/{computerId}/{routineId}`。Worker 檢查兩個 id 的格式、body ≤ 64 KiB（否則 `413 tooLarge`）、`HOOK_LIMITER`（每「來源 IP + hook」每分鐘 60 次 → `429`）、computer 存在且 `active`（否則 `404`，不為隨機 id 建 DO），再把原 request 轉給該 computer 的 DO `/internal/hook`。
 - **註冊**：host 在 `ready` 後送 `hooks`，之後每當集合改變（新增／刪除 webhook routine、暫停／恢復、換 key）就重送整個集合。只含有 `webhook` 或 `event` trigger 的 routine。
-- **驗證（DO 一次、host 再一次）**：`Authorization: Bearer <key>`（常數時間比較），或 `X-Hub-Signature-256: sha256=<hex HMAC-SHA256(key, 原始 body)>`（GitHub 與相容服務）。未知 hook 與錯誤 key 一律 `401 unauthorized`，無法探測 id。已暫停 → `409 paused`。host 是最終權威：DO 的集合過期或被竄改時，host 仍會拒絕。
-- **去重**：delivery id 取 `X-Delivery-Id`、`X-GitHub-Delivery` 或 `Idempotency-Key`（可列印 ASCII、≤ 200；不合法 → `400 badDeliveryId`；都沒有 → DO 產生 UUID）。DO 以 `(hook, delivery)` 唯一；佇列中的重送回 `202 {"duplicate":true}`。已投遞後的重送由 host 以保留中的 run 紀錄去重。
+- **驗證（DO 一次、host 再一次）**：`Authorization: Bearer <key>`（常數時間比較）、`X-Hub-Signature-256: sha256=<hex HMAC-SHA256(key, 原始 body)>`（GitHub 與相容服務），或 Standard Webhooks 簽章（`webhook-id`、`webhook-timestamp`、`webhook-signature: v1,<base64 HMAC-SHA256>` 對 `<webhook-id>.<webhook-timestamp>.<body>`，時間須在五分鐘內；`whsec_` 秘密另外以其解碼後的位元組（base64／base64url，≥ 16 bytes）驗證）。未知 hook 與錯誤 key 一律 `401 unauthorized`，無法探測 id。已暫停 → `409 paused`。host 是最終權威：DO 的集合過期或被竄改時，host 仍會拒絕。
+- **去重**：delivery id 取 `X-Delivery-Id`、`X-GitHub-Delivery`、`webhook-id` 或 `Idempotency-Key`（可列印 ASCII、≤ 200；不合法 → `400 badDeliveryId`；都沒有 → DO 產生 UUID）。DO 以 `(hook, delivery)` 唯一；佇列中的重送回 `202 {"duplicate":true}`。已投遞後的重送由 host 以保留中的 run 紀錄去重。
 - **佇列（DO `hookbox`）**：每 hook ≤ 100、每 computer ≤ 1000 則、總計 ≤ 16 MiB（滿 → `429 full`，`Retry-After: 60`）；TTL 72 小時。成功入列 → `202 {"delivery","queued":true}`。
 - **投遞**：host `ready` 時，DO 依 `seq` 一次送一則 `hook.item`（狀態 `delivering`），跳過 `not_before` 未到的；host 斷線時退回 `queued`。alarm 清除過期項目，並在最早的 `not_before` 喚醒。
-- **轉給 host 的 header 白名單**：`authorization`、`content-type`、`user-agent`、`x-delivery-id`、`idempotency-key`、`x-github-event`、`x-github-delivery`、`x-github-hook-id`、`x-hub-signature-256`。
+- **轉給 host 的 header 白名單**：`authorization`、`content-type`、`user-agent`、`x-delivery-id`、`idempotency-key`、`x-github-event`、`x-github-delivery`、`x-github-hook-id`、`x-hub-signature-256`、`webhook-id`、`webhook-timestamp`、`webhook-signature`。
 - **Host 處理**（`routines::hooks`）：驗證 → GitHub `ping` 回 ok 不執行 → 暫停回 `paused` → 轉成 event（JSON 物件原樣；GitHub → `{source:"github", event:"<event>.<action>", repo, sender, text, url, payload}`；其他 → `{text}`）→ trigger 不符回 ok（忽略）→ 排入 run。routine 正在執行 → `retry:true`。
 - **信任邊界**：webhook 內容在 Cloudflare 以 HTTPS 解開，雲端看得到明文，也存著 key（用來驗 HMAC）。這不是 §6 的端對端加密；App 與文件都需明講。
 
