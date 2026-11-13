@@ -2414,5 +2414,10 @@
   "Use the one Codync downloads": "使用 Codync 下載的版本",
   "Downloading Node.js for n8n…": "正在為 n8n 下載 Node.js…",
   "Unpacking Node.js…": "正在解壓縮 Node.js…",
-  "Installing n8n… the first time takes a few minutes.": "正在安裝 n8n… 第一次需要幾分鐘。"
+  "Installing n8n… the first time takes a few minutes.": "正在安裝 n8n… 第一次需要幾分鐘。",
+  "How to connect": "如何連接",
+  "Needs a key from {name}": "需要來自 {name} 的金鑰",
+  "Open {name}’s page": "開啟 {name} 的頁面",
+  "The sign-in stays on {name}’s own page.": "登入在 {name} 自己的頁面上進行。",
+  "needs a key": "需要金鑰"
 }

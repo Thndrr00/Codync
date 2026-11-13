@@ -2414,5 +2414,10 @@
   "Use the one Codync downloads": "Die von Codync heruntergeladene Version nutzen",
   "Downloading Node.js for n8n…": "Node.js für n8n wird heruntergeladen…",
   "Unpacking Node.js…": "Node.js wird entpackt…",
-  "Installing n8n… the first time takes a few minutes.": "n8n wird installiert… beim ersten Mal dauert es einige Minuten."
+  "Installing n8n… the first time takes a few minutes.": "n8n wird installiert… beim ersten Mal dauert es einige Minuten.",
+  "How to connect": "So verbindest du",
+  "Needs a key from {name}": "Braucht einen Schlüssel von {name}",
+  "Open {name}’s page": "{name}s Seite öffnen",
+  "The sign-in stays on {name}’s own page.": "Die Anmeldung bleibt auf der Seite von {name}.",
+  "needs a key": "braucht einen Schlüssel"
 }

@@ -25,6 +25,7 @@ pub mod catalog;
 pub mod composio;
 pub mod connector_update;
 pub mod copilotkit;
+pub mod guide;
 pub mod hermes;
 pub mod hermes_apps;
 pub mod login;

@@ -167,13 +167,15 @@ pub fn installed(catalogs: &[String]) -> Vec<String> {
 
 /// An app's public fields, `installed` when a connector holds it.
 pub fn app_public(a: &App, installed: bool) -> Value {
+    let fields = serde_json::to_value(&a.fields).unwrap_or_default();
+    let fields = super::guide::plain_fields(&a.id, fields.as_array().map_or(&[], Vec::as_slice));
     json!({
         "id": a.id, "name": a.name, "tagline": a.tagline, "description": a.description,
         "category": a.category, "creator": a.creator, "version": a.version, "updated": a.updated, "icon": a.icon,
         "website": a.website, "featured": a.featured, "setup": a.setup, "builtin": a.builtin,
-        "server": a.server, "fields": a.fields, "steps": a.steps, "docsUrl": a.docs_url,
-        "docsLabel": a.docs_label, "prompts": a.prompts, "writeTools": a.write_tools,
-        "readTools": a.read_tools, "installed": installed,
+        "server": a.server, "fields": fields, "steps": a.steps, "docsUrl": a.docs_url,
+        "docsLabel": a.docs_label, "guide": super::guide::catalog_app(a), "prompts": a.prompts,
+        "writeTools": a.write_tools, "readTools": a.read_tools, "installed": installed,
     })
 }
 
@@ -253,7 +255,11 @@ mod tests {
                 assert!(
                     !matches!(
                         key.as_str(),
-                        "client_id" | "redirect_uri" | "response_type" | "state" | "code_challenge"
+                        "client_id"
+                            | "redirect_uri"
+                            | "response_type"
+                            | "state"
+                            | "code_challenge"
                             | "code_challenge_method"
                     ),
                     "{} rewrites {key}",

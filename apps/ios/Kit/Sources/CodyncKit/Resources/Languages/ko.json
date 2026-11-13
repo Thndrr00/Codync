@@ -2414,5 +2414,10 @@
   "Use the one Codync downloads": "Codync가 다운로드한 것 사용",
   "Downloading Node.js for n8n…": "n8n용 Node.js 다운로드 중…",
   "Unpacking Node.js…": "Node.js 압축 해제 중…",
-  "Installing n8n… the first time takes a few minutes.": "n8n 설치 중… 처음에는 몇 분 걸립니다."
+  "Installing n8n… the first time takes a few minutes.": "n8n 설치 중… 처음에는 몇 분 걸립니다.",
+  "How to connect": "연결 방법",
+  "Needs a key from {name}": "{name}에서 키가 필요함",
+  "Open {name}’s page": "{name} 페이지 열기",
+  "The sign-in stays on {name}’s own page.": "로그인은 {name}의 페이지에서 합니다.",
+  "needs a key": "키 필요"
 }

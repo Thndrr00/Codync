@@ -16,6 +16,7 @@ mod dev_servers;
 pub(in crate::tui) mod documents;
 mod fields;
 mod flow;
+mod guide;
 mod hermes_routes;
 pub(super) mod hermes_runtime;
 mod library;

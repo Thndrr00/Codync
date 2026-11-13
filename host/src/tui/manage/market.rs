@@ -157,11 +157,8 @@ impl App {
                 if !configured {
                     return apps.chain(key).collect();
                 }
-                let composio = m
-                    .composio_apps
-                    .iter()
-                    .filter(|v| hit(v, &["name", "description", "slug"]))
-                    .map(Row::ComposioApp);
+                let composio =
+                    m.composio_apps.iter().filter(|v| hit(v, &["name", "description", "slug"])).map(Row::ComposioApp);
                 apps.chain(composio).chain(key).collect()
             }
             Tab::Skills => {
@@ -397,6 +394,7 @@ impl App {
                     note.push_str("\n\n");
                     note.push_str(&tr(hint));
                 }
+                super::guide::append(&mut note, &item["guide"]);
                 let inputs = fields
                     .iter()
                     .map(|f| Input {

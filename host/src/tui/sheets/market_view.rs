@@ -80,7 +80,13 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
             Row::Registry(c) => ("↓", s(c, "title").into(), s(c, "description").into(), String::new()),
             Row::App(v) => {
                 let on = v["installed"] == true || v["builtin"] == true;
-                let right = if on { tr("installed").into_owned() } else { String::new() };
+                let right = if on {
+                    tr("installed").into_owned()
+                } else if v["guide"]["kind"] == "key" {
+                    tr("needs a key").into_owned()
+                } else {
+                    String::new()
+                };
                 (if on { "✓" } else { "↓" }, s(v, "name").into(), s(v, "tagline").into(), right)
             }
             Row::ComposioKey => {
@@ -95,7 +101,12 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
             Row::ComposioApp(v) => {
                 let on = v["connection"]["status"] == "active";
                 let right = if on { tr("connected").into_owned() } else { tr("↵ connect").into_owned() };
-                (if on { "✓" } else { "↓" }, s(v, "name").into(), s(v, "description").into(), right)
+                let mut detail = s(v, "description");
+                if let Some(note) = v["keyNote"].as_str() {
+                    detail.push_str(" · ");
+                    detail.push_str(&tr(note));
+                }
+                (if on { "✓" } else { "↓" }, s(v, "name").into(), detail, right)
             }
             Row::OwnSkill(v) => ("✓", s(v, "name").into(), s(v, "description").into(), tr("installed").into_owned()),
             Row::Skill(v) => ("↓", s(v, "name").into(), s(v, "description").into(), String::new()),
@@ -137,7 +148,8 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
         Tab::Apps => m.composio_loading && !rows.is_empty(),
         _ => false,
     };
-    let busy: String = if m.tab == Tab::Apps { tr("Loading the apps…") } else { tr("Loading the registry…") }.into_owned();
+    let busy: String =
+        if m.tab == Tab::Apps { tr("Loading the apps…") } else { tr("Loading the registry…") }.into_owned();
     let error = if m.tab == Tab::Apps { m.composio_error.as_deref() } else { m.error.as_deref() };
     footer(buf, inner, error.or(loading.then_some(busy.as_str())), &keys);
 }

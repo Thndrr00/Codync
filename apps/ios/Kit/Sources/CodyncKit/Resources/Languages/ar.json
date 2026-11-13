@@ -362,5 +362,10 @@
   "Nothing installed": "لا شيء مثبَّت",
   "After a minute": "بعد دقيقة",
   "Disconnect Slack": "فصل Slack",
-  "Plush is shaded and rounded; Flat is even dots.": "«ناعم» مظلَّل ومستدير؛ «مسطَّح» نقاط متساوية."
+  "Plush is shaded and rounded; Flat is even dots.": "«ناعم» مظلَّل ومستدير؛ «مسطَّح» نقاط متساوية.",
+  "How to connect": "كيفية الاتصال",
+  "Needs a key from {name}": "يحتاج إلى مفتاح من {name}",
+  "Open {name}’s page": "افتح صفحة {name}",
+  "The sign-in stays on {name}’s own page.": "يتم تسجيل الدخول على صفحة {name} نفسها.",
+  "needs a key": "يحتاج إلى مفتاح"
 }

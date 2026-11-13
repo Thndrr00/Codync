@@ -2414,5 +2414,10 @@
   "Use the one Codync downloads": "Codync がダウンロードしたものを使う",
   "Downloading Node.js for n8n…": "n8n 用の Node.js をダウンロード中…",
   "Unpacking Node.js…": "Node.js を展開中…",
-  "Installing n8n… the first time takes a few minutes.": "n8n をインストール中… 初回は数分かかります。"
+  "Installing n8n… the first time takes a few minutes.": "n8n をインストール中… 初回は数分かかります。",
+  "How to connect": "接続方法",
+  "Needs a key from {name}": "{name} のキーが必要",
+  "Open {name}’s page": "{name} のページを開く",
+  "The sign-in stays on {name}’s own page.": "サインインは {name} のページで行います。",
+  "needs a key": "キーが必要"
 }

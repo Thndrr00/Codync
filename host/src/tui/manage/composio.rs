@@ -73,9 +73,11 @@ pub(super) fn key_fields(status: Option<&Value>, host: &str) -> Fields {
 
 /// Connecting one app: Composio's page, or the fields a key-based app declares.
 pub(super) fn app_fields(app: &Value) -> Fields {
+    let mut note = s(app, "description");
+    super::guide::append(&mut note, &app["guide"]);
     Fields {
         title: format!("{} {}", tr("Connect"), s(app, "name")),
-        note: s(app, "description"),
+        note,
         choices: vec![],
         choice: 0,
         inputs: vec![],
@@ -163,7 +165,8 @@ impl App {
                 f.cursor = 0;
                 let Submit::Composio(c) = &mut f.submit else { return };
                 c.step = Step::Done;
-                f.note = tr("Turn {name} on for a bot in the bot's settings, under Connectors.").replace("{name}", &name);
+                f.note =
+                    tr("Turn {name} on for a bot in the bot's settings, under Connectors.").replace("{name}", &name);
             }
             return;
         }
@@ -197,7 +200,12 @@ impl App {
                         })
                         .collect();
                     f.cursor = 0;
-                    f.note = tr("Keys are saved on {name} only.").replace("{name}", &host);
+                    f.note = String::new();
+                    super::guide::append(&mut f.note, &value["guide"]);
+                    if !f.note.is_empty() {
+                        f.note.push_str("\n\n");
+                    }
+                    f.note.push_str(&tr("Keys are saved on {name} only.").replace("{name}", &host));
                     f.note.push_str("\n");
                     f.note.push_str(&tr("Save"));
                     f.note.push_str(": ↵");
@@ -207,7 +215,12 @@ impl App {
                     f.inputs.clear();
                     f.cursor = 0;
                     url = value["url"].as_str().map(str::to_owned);
-                    f.note = tr("Sign-in link copied: open it in a browser, then ↵ checks.").into_owned();
+                    f.note = String::new();
+                    super::guide::append(&mut f.note, &value["guide"]);
+                    if !f.note.is_empty() {
+                        f.note.push_str("\n\n");
+                    }
+                    f.note.push_str(&tr("Sign-in link copied: open it in a browser, then ↵ checks."));
                     if let Some(url) = &url {
                         f.note.push_str("\n\n");
                         f.note.push_str(url);

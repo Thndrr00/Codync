@@ -28,6 +28,34 @@ WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEM
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## CopilotKit OpenBot
+
+Used in: `host/src/market/copilotkit/apps.json` (the reviewed connector catalogue, ported from
+`server/src/plugins/catalogue.ts`), `host/src/market/copilotkit/install.rs` (the per-app bridge, in
+design from `server/src/plugins/`) and `host/src/market/guide/key_guides.json` (the connection
+guides, the plain field labels and the "needs a key" wording, from `server/src/plugins/key-guides.ts`,
+`server/src/plugins/app-names.ts` and `app/src/lib/enablement-notes.ts`, with the copy changed to
+name Composio as the broker and without the approvals clause).
+
+Source: https://github.com/CopilotKit/OpenBot
+
+MIT License
+
+Copyright (c) 2025 CopilotKit
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## Rakazo
 
 Used in: `apps/desktop/src/shared/agent-import.ts` and `host/src/chat/memory/agent_import.rs` (importing the folder of an

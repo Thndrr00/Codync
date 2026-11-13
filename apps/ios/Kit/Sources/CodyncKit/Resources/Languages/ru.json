@@ -2414,5 +2414,10 @@
   "Use the one Codync downloads": "Использовать загруженный Codync",
   "Downloading Node.js for n8n…": "Загрузка Node.js для n8n…",
   "Unpacking Node.js…": "Распаковка Node.js…",
-  "Installing n8n… the first time takes a few minutes.": "Установка n8n… в первый раз это займёт несколько минут."
+  "Installing n8n… the first time takes a few minutes.": "Установка n8n… в первый раз это займёт несколько минут.",
+  "How to connect": "Как подключить",
+  "Needs a key from {name}": "Нужен ключ от {name}",
+  "Open {name}’s page": "Открыть страницу {name}",
+  "The sign-in stays on {name}’s own page.": "Вход остаётся на странице {name}.",
+  "needs a key": "нужен ключ"
 }
