@@ -489,7 +489,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
-            hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;
+            let actor = Some(crate::api::devices::actor(hub, caller));
+            hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id, actor })?;
             json!({})
         }
         _ => return Ok(ControlFlow::Continue(b)),

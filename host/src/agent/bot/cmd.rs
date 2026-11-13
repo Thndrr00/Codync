@@ -65,6 +65,8 @@ pub enum Cmd {
     Permission {
         entry_id: String,
         option_id: Option<String>,
+        /// Who answered: a device's name, or this computer, for the approval record.
+        actor: Option<String>,
     },
     /// A Codync tool asks the user before it acts (`chat::manage`), on the agent's kind of approval card.
     Approve {

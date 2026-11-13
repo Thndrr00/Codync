@@ -144,11 +144,33 @@ The card is the effect's key: the first decision is the one that happens.
   another choice".
 - A card that is `cancelled` (its turn ended or was stopped) is refused: "This approval is closed".
 - A card whose agent no longer waits on it (its process went away) is closed when someone answers
-  it, instead of looking answered.
+  it, instead of looking answered; a card the person already answered keeps its answer from the
+  record, even after a restart.
 - Anything that isn't a permission entry is refused.
 
 Two answers that arrive at the same moment both see a pending card; the bot's actor applies the
 first and drops the second, so only one reaches the agent.
+
+## The record of an approval
+
+Every card leaves a durable record (`approval_decisions`, `host/src/store/approvals.rs`): its
+nonce, the fingerprint of what it asked for, the decision, who answered and when, and the one
+moment the answer reached the agent. The fingerprint hashes the tool kind, the command (or the
+title), the folder and the diffs (`host/src/agent/approval_ledger.rs`), so an approval covers the
+action the person saw and not another one.
+
+- The first decision is written once; a later one changes nothing and reaches no agent, from
+  another device or after a restart.
+- An answer is claimed once (`approval_consume`): a replay of the same card never authorizes the
+  same action a second time.
+- The card carries `approvedBy` (a device's name, "This computer", or "A voice call") and
+  `approvedAt`.
+- A card answered before the record existed is adopted when it is answered, so its answer still
+  leaves one.
+- Records keep 90 days, like the audit log.
+
+Idea from agentes.chat's single-use approvals (`packages/engine`, AGPL-3.0-only): the behavior,
+not the code.
 
 Ideas from rakazo's `action-approval.ts`, `approval-effect-key.ts` and `answerable-ask.ts`
 (Apache-2.0); no code copied. Rakazo's channel receipts and message commands need messaging

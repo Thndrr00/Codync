@@ -89,7 +89,7 @@ impl Actor {
             self.remind_approval(&id);
         }
         for id in due.close {
-            self.answer_permission(&id, None).await;
+            self.answer_permission(&id, None, None).await;
         }
     }
 

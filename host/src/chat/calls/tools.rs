@@ -121,7 +121,10 @@ fn answer(hub: &Hub, cfg: &BotConfig, option: &str) -> Result<Value> {
     // A card in a group belongs to the bot that asked.
     let owner = card.data["author"].as_str().unwrap_or(&card.bot_id).to_owned();
     let option_id = pick["optionId"].as_str().map(str::to_owned);
-    hub.send_cmd(&owner, Cmd::Permission { entry_id: card.id.clone(), option_id })?;
+    hub.send_cmd(
+        &owner,
+        Cmd::Permission { entry_id: card.id.clone(), option_id, actor: Some("A voice call".to_owned()) },
+    )?;
     Ok(json!({"answered": pick["name"]}))
 }
 

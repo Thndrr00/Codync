@@ -6,6 +6,7 @@ use super::stall::ToolOutcome;
 use super::tool_entry::{activity, mark_bookkeeping, merge_tool_content};
 use super::{Actor, Reacted, Seg, SegKind};
 use crate::agent::acp::{self, Incoming};
+use crate::agent::approval_ledger;
 use crate::hub::BotStatus;
 use crate::remote::push::{self, AlertKind};
 use crate::store::{EntryKind, Permission};
@@ -278,6 +279,15 @@ impl Actor {
         if let Some(e) = &created {
             self.perms.insert(e.id.clone(), answer);
             self.waiting.asked(&e.id, Instant::now());
+            if let Err(error) = self.hub.store.approval_asked(
+                &e.id,
+                &self.cfg.id,
+                e.data["toolKind"].as_str().unwrap_or("other"),
+                &approval_ledger::subject(&e.data),
+                &approval_ledger::fingerprint(&e.data),
+            ) {
+                tracing::warn!(error = format!("{error:#}"), "couldn't record the approval card");
+            }
         }
         self.hub.set_runtime(&self.cfg.id, |r| {
             r.status = BotStatus::NeedsInput;
@@ -319,15 +329,19 @@ impl Actor {
             .map(|(id, _)| id.clone())
             .collect();
         for id in gone {
-            self.answer_permission(&id, None).await;
+            self.answer_permission(&id, None, None).await;
         }
     }
 
-    pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>) {
+    pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>, actor: Option<&str>) {
         self.waiting.answered(entry_id);
         let Some(answer) = self.perms.remove(entry_id) else {
-            // No agent waits on it any more (its process went away): close the card, so it
-            // can't be answered as if it still mattered.
+            // No agent waits on it any more. A card the person already answered keeps its answer:
+            // the ledger remembers it, even after a restart.
+            if self.hub.store.approval(entry_id).is_some_and(|a| a.decision.is_some()) {
+                return;
+            }
+            // Otherwise close the card, so it can't be answered as if it still mattered.
             if let Some(mut e) = self.hub.store.entry(entry_id)
                 && e.data["status"] == "pending"
             {
@@ -336,6 +350,17 @@ impl Actor {
             }
             return;
         };
+        let card = self.hub.store.entry(entry_id).map_or(Value::Null, |e| e.data);
+        let decision = approval_ledger::decision(&card, option_id.as_deref());
+        // The first answer is the one that happens; a later one changes nothing and reaches no agent.
+        match self.hub.store.approval_decide(entry_id, &self.cfg.id, decision, option_id.as_deref(), actor) {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                tracing::warn!(entry_id, "an approval card was answered twice; the first answer stands");
+                return;
+            }
+            Err(error) => tracing::warn!(error = format!("{error:#}"), "couldn't record the approval decision"),
+        }
         let mut status = if option_id.is_some() { "answered" } else { "cancelled" };
         match answer {
             Answer::Agent(rpc_id) => {
@@ -344,7 +369,13 @@ impl Actor {
                     None => json!({"outcome": {"outcome": "cancelled"}}),
                 };
                 if let Some(conn) = &self.conn {
-                    let _ = conn.acp.respond(rpc_id, outcome).await;
+                    // The answer reaches the agent once: a replay of the same card never authorizes it again.
+                    if self.hub.store.approval_consume(entry_id).unwrap_or(true) {
+                        let _ = conn.acp.respond(rpc_id, outcome).await;
+                    } else {
+                        tracing::warn!(entry_id, "this approval was already used; not answering the agent again");
+                        status = "expired";
+                    }
                 }
             }
             Answer::Codync(reply) => {
@@ -357,6 +388,12 @@ impl Actor {
         if let Some(mut e) = self.hub.store.entry(entry_id) {
             e.data["status"] = status.into();
             e.data["selected"] = option_id.into();
+            if status == "answered" {
+                if let Some(actor) = actor {
+                    e.data["approvedBy"] = actor.into();
+                }
+                e.data["approvedAt"] = crate::store::now_ms().into();
+            }
             self.hub.set_entry(entry_id, &e.data);
         }
         if self.perms.is_empty() && self.turn.is_some() {

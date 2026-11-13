@@ -28,6 +28,18 @@ impl Caller {
     }
 }
 
+/// Who answered an approval, for its record: this computer, or the device's own name.
+pub fn actor(hub: &Hub, caller: &Caller) -> String {
+    if matches!(caller, Caller::Local) {
+        return "This computer".to_owned();
+    }
+    hub.store
+        .device(caller.device_key())
+        .map(|d| d.name)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "A device".to_owned())
+}
+
 /// Methods only this computer may call.
 const LOCAL_ONLY: &[&str] = &[
     "hostUpdateStatus",

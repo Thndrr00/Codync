@@ -68,7 +68,9 @@ impl Actor {
                 let _ = reply.send(self.post_artifact(data));
             }
             Cmd::Stop => self.stop().await,
-            Cmd::Permission { entry_id, option_id } => self.answer_permission(&entry_id, option_id).await,
+            Cmd::Permission { entry_id, option_id, actor } => {
+                self.answer_permission(&entry_id, option_id, actor.as_deref()).await;
+            }
             Cmd::Approve { title, detail, reply } => self.ask_approval(&title, &detail, reply),
             Cmd::NewSession => {
                 if self.turn.is_some() {
@@ -180,7 +182,7 @@ impl Actor {
         self.files.cancel();
         let ids: Vec<String> = self.perms.keys().cloned().collect();
         for id in ids {
-            self.answer_permission(&id, None).await;
+            self.answer_permission(&id, None, None).await;
         }
         if let (Some(c), Some(sid)) = (&self.conn, &self.turn_session) {
             let _ = c.acp.notify("session/cancel", json!({"sessionId": sid})).await;
