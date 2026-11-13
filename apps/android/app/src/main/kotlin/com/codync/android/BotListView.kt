@@ -503,9 +503,14 @@ internal class RosterReorder {
     }
 }
 
-/** Roster order: the lead, then pinned bots, then where the user dragged them, then most recent activity. */
-internal fun roster(bots: List<Bot>): List<Bot> = bots.filter { !it.deleted && !it.hidden }
+/** Roster order: the lead, then pinned bots, then where the user dragged them, then most recent activity.
+ *  An archived group stays out of the open list (`archivedGroups`). */
+internal fun roster(bots: List<Bot>): List<Bot> = bots.filter { !it.deleted && !it.hidden && !(it.kind == "group" && it.archived) }
     .sortedWith(compareBy<Bot> { it.band }.thenBy { it.position }.thenByDescending { it.lastAt })
+
+/** Groups taken out of the open roster, by name: what Computer management offers to restore. */
+internal fun archivedGroups(bots: List<Bot>): List<Bot> =
+    bots.filter { !it.deleted && !it.hidden && it.kind == "group" && it.archived }.sortedBy { it.name }
 
 /** The roster order with a bot one place up (-1) or down (+1) within its band (`Bot.band`), or null when it can't move. */
 internal fun moved(roster: List<Bot>, id: String, offset: Int): List<String>? {

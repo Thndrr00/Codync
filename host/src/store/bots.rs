@@ -292,6 +292,8 @@ mod tests {
             auto_name: false,
             is_chief: false,
             chief_bot_id: None,
+            title: None,
+            archived: false,
             created_at: 0,
             verify_command: None,
             background_model: None,

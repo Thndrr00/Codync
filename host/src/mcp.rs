@@ -101,7 +101,13 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }
         Server::Team => ("codync-team", crate::chat::team::INSTRUCTIONS, crate::chat::team::tools()),
-        Server::Manage => ("codync-manage", crate::chat::manage::INSTRUCTIONS, crate::chat::manage::tools()),
+        Server::Manage => {
+            let mut tools = crate::chat::manage::tools();
+            if let Some(list) = tools.as_array_mut() {
+                list.extend(crate::chat::group::tools::tools().as_array().into_iter().flatten().cloned());
+            }
+            ("codync-manage", crate::chat::manage::INSTRUCTIONS, tools)
+        }
         Server::Memory => ("codync-memory", crate::chat::memory::INSTRUCTIONS, crate::chat::memory::tools()),
         Server::Comfy => ("codync-comfyui", crate::tools::comfy_mcp::INSTRUCTIONS, crate::tools::comfy_mcp::tools()),
         Server::Composio => {

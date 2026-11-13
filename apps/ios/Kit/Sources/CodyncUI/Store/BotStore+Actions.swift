@@ -421,6 +421,13 @@ extension BotStore {
         putHostBot(try await ready().updateGroup(draft))
     }
 
+    /// Takes a group out of the open roster, or brings it back; its conversation stays.
+    public func setGroupArchived(_ group: Bot, archived: Bool) async throws {
+        var draft = GroupDraft(group)
+        draft.archived = archived
+        putHostBot(try await ready().updateGroup(draft))
+    }
+
     /// What a voice call carried, for its conversation. Never `upsert`ed, like `botConversation`.
     public func callEntries(_ botId: String, call: String) async throws -> [Entry] {
         try await ready().callEntries(botId: botId, call: call).visibleEntries()

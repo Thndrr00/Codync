@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Grok-Bot-style character drawn like the app icon: an even grid of dots,
 /// shaded as if the silhouette were a ball, with the eyes left hollow (two
@@ -281,17 +282,27 @@ public struct GroupAvatar: View {
     let members: [Bot]
     let size: CGFloat
     let animated: Bool
+    /// The channel picture, drawn instead of the members' faces.
+    let photo: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(members: [Bot], size: CGFloat = 40, animated: Bool = true) {
+    public init(members: [Bot], size: CGFloat = 40, animated: Bool = true, photo: String? = nil) {
         self.members = members
         self.size = size
         self.animated = animated
+        self.photo = photo
     }
 
     public var body: some View {
         Group {
-            if animated && members.count > 1 && !reduceMotion {
+            if let photo, let data = Data(base64Encoded: String(photo.split(separator: ",", maxSplits: 1).last ?? "")),
+               let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else if animated && members.count > 1 && !reduceMotion {
                 TimelineView(.animation) { timeline in
                     cluster(timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3600))
                 }
@@ -365,7 +376,7 @@ public struct BotAvatar: View {
 
     public var body: some View {
         if bot.isGroup && bot.customIcon == nil {
-            GroupAvatar(members: members, size: size, animated: animated)
+            GroupAvatar(members: members, size: size, animated: animated, photo: bot.avatarPhoto)
         } else {
             CharacterAvatar(bot: bot, size: size, animated: animated)
         }

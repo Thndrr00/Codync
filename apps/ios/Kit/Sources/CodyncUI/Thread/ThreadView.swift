@@ -239,7 +239,7 @@ public struct ThreadView: View {
         HStack(spacing: 7) {
             if let bot {
                 let size: CGFloat = 22
-                if bot.isGroup { GroupAvatar(members: model.members(of: bot), size: size) } else { CharacterAvatar(bot: bot, size: size) }
+                if bot.isGroup { GroupAvatar(members: model.members(of: bot), size: size, photo: bot.avatarPhoto) } else { CharacterAvatar(bot: bot, size: size) }
             }
             Text(bot?.name ?? "")
                 .font(.system(size: 13, weight: .semibold))
@@ -312,7 +312,7 @@ struct GroupIntroCard: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            GroupAvatar(members: model.members(of: group), size: 72)
+            GroupAvatar(members: model.members(of: group), size: 72, photo: group.avatarPhoto)
             Text(group.name).font(.title2.weight(.semibold)).foregroundStyle(Palette.text)
             let names = model.members(of: group).map(\.name)
             if group.name != names.joined(separator: ", ") {

@@ -88,6 +88,10 @@ import kotlinx.serialization.json.put
             if (hidden.isNotEmpty()) CardSection("Hidden bots") {
                 for (bot in hidden) row { HiddenBotRow(state, store, bot) }
             }
+            val archived = archivedGroups(state.bots)
+            if (archived.isNotEmpty()) CardSection(tr("Archived groups")) {
+                for (bot in archived) row { ArchivedGroupRow(state, store, bot) }
+            }
             CardSection(footer = if (signedIn) "Computers in your account need your OK on the computer before this phone can use them."
                 else "Each bot runs on its own computer. Sign in to see the computers in your account.") {
                 row {
@@ -280,6 +284,21 @@ private const val NETWORK_ICON = "point.3.connected.trianglepath.dotted"
         }
         IconButton("Unhide", "eye") {
             store.command("updateBot", buildJsonObject { put("id", bot.id); put("hidden", false) }, "roster:" + bot.id)
+        }
+    }
+}
+
+/** A group out of the open roster: its picture, name and title, and Restore. */
+@Composable private fun ArchivedGroupRow(state: AppState, store: AppStore, bot: Bot) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BotAvatar(bot, state.bots, 28.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(bot.name, style = Type.body, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(bot.title.ifEmpty { state.hello?.text("name") ?: state.computers.firstOrNull()?.name.orEmpty() },
+                style = Type.caption, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton(tr("Restore"), "tray.and.arrow.up") {
+            store.command("updateBot", buildJsonObject { put("id", bot.id); put("archived", false) }, "roster:" + bot.id)
         }
     }
 }

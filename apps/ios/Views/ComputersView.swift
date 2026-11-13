@@ -57,6 +57,24 @@ struct ComputersView: View {
                     }
                 }
             }
+            if !archivedGroups.isEmpty {
+                CardSection("Archived groups") {
+                    ForEach(archivedGroups) { item in
+                        let store = item.store, bot = item.bot
+                        HStack {
+                            GroupAvatar(members: store.members(of: bot), size: 28, animated: false, photo: bot.avatarPhoto)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(bot.name)
+                                Text(bot.title ?? store.hostName).font(.caption).foregroundStyle(Palette.tertiary)
+                            }
+                            Spacer()
+                            IconButton("Restore", systemImage: "tray.and.arrow.up") {
+                                Task { try? await store.setGroupArchived(bot, archived: false) }
+                            }
+                        }
+                    }
+                }
+            }
             CardSection(footer: app.account.isSignedIn
                         ? "Computers in your account need your OK on the computer before this iPhone can use them."
                         : "Each bot runs on its own computer. Sign in to see the computers in your account.") {
@@ -132,6 +150,13 @@ struct ComputersView: View {
     private var hiddenBots: [HiddenBot] {
         accounts.computers.compactMap { accounts.store(for: $0.id) }.flatMap { store in
             store.hiddenBots.map { HiddenBot(store: store, bot: $0, id: "\(store.computer.id)/\($0.id)") }
+        }
+    }
+
+    /// Groups taken out of the open roster, on every computer.
+    private var archivedGroups: [HiddenBot] {
+        accounts.computers.compactMap { accounts.store(for: $0.id) }.flatMap { store in
+            store.archivedGroups.map { HiddenBot(store: store, bot: $0, id: "\(store.computer.id)/\($0.id)") }
         }
     }
 

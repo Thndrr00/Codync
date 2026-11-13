@@ -14,6 +14,10 @@ data class Bot(
     val name: String = "",
     val kind: String = "agent",
     val members: List<String> = emptyList(),
+    /** A group's short line under its name; empty for none. */
+    val title: String = "",
+    /** A group taken out of the open roster; its conversation stays. */
+    val archived: Boolean = false,
     val description: String = "",
     val avatarColor: String = "blue",
     val avatarShape: String = "blob",

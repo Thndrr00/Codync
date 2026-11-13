@@ -246,9 +246,10 @@ export class BotMirror extends Observable {
     return this.hostUpdate?.kind === 'requested' ? this.hostUpdate.at + HOST_UPDATE_WAIT : null
   }
 
-  /** Roster order: the lead, then pinned bots, then where the user dragged them, then most recent activity. */
+  /** Roster order: the lead, then pinned bots, then where the user dragged them, then most recent activity.
+   *  An archived group stays out of the open list (`archivedBots`). */
   get roster(): Bot[] {
-    return [...this.bots.values()].filter((b) => !b.hidden).sort(rosterOrder)
+    return [...this.bots.values()].filter((b) => !b.hidden && !(b.kind === 'group' && b.archived)).sort(rosterOrder)
   }
 
   /** The visible bots run more than one agent, so the roster marks each with its agent's logo. Not before
@@ -259,6 +260,13 @@ export class BotMirror extends Observable {
 
   get hiddenBots(): Bot[] {
     return [...this.bots.values()].filter((b) => b.hidden).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** Groups taken out of the open roster, by name: what the settings offer to restore. */
+  get archivedBots(): Bot[] {
+    return [...this.bots.values()]
+      .filter((b) => b.kind === 'group' && b.archived && !b.hidden)
+      .sort((a, b) => a.name.localeCompare(b.name))
   }
 
   backendName(id: string) {

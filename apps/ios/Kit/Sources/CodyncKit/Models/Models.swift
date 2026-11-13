@@ -348,7 +348,8 @@ public struct DirItem: Codable, Hashable, Sendable, Identifiable {
     public var id: String { path }
 }
 
-/// Create / update payload for a group chat.
+/// Create / update payload for a group chat. Optional setup is encoded as null when it is nil, so
+/// emptying the title, the picture or the lead in the editor clears it on the host.
 public struct GroupDraft: Codable, Hashable, Sendable {
     public var id: String?
     public var kind = "group"
@@ -357,6 +358,14 @@ public struct GroupDraft: Codable, Hashable, Sendable {
     public var description = ""
     public var members: [String]
     public var pinned: Bool?
+    /// A short line under the name; nil for none.
+    public var title: String?
+    /// Out of the open roster.
+    public var archived = false
+    /// The channel picture as a data URL; nil for none.
+    public var avatarPhoto: String?
+    /// The member that leads the channel; nil for none.
+    public var chiefBotId: String?
 
     public init(name: String, description: String = "", members: [String]) {
         self.name = name
@@ -370,6 +379,28 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         description = group.description
         members = group.members
         pinned = group.pinned
+        title = group.title
+        archived = group.archived
+        avatarPhoto = group.avatarPhoto
+        chiefBotId = group.chiefBotId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, name, description, members, pinned, title, archived, avatarPhoto, chiefBotId
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(name, forKey: .name)
+        try c.encode(description, forKey: .description)
+        try c.encode(members, forKey: .members)
+        try c.encodeIfPresent(pinned, forKey: .pinned)
+        try c.encode(title, forKey: .title)
+        try c.encode(archived, forKey: .archived)
+        try c.encode(avatarPhoto, forKey: .avatarPhoto)
+        try c.encode(chiefBotId, forKey: .chiefBotId)
     }
 }
 

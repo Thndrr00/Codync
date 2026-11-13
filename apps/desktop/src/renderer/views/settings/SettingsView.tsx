@@ -40,6 +40,7 @@ import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
+import { ArchivedGroupsSection } from './ArchivedGroupsSection'
 import { LocalScriptsSection } from './LocalScriptsSection'
 import { PlanStartSection } from './PlanStartSection'
 import { ServerSettingsSection } from './ServerSettingsSection'
@@ -273,6 +274,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <PlanStartSection />
       <DemoSection />
       <HiddenBotsSection />
+      <ArchivedGroupsSection />
     </CardForm>
   )
 }

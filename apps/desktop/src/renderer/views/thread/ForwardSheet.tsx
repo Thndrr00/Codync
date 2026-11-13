@@ -44,7 +44,7 @@ export function ForwardSheet({ entry, close }: { entry: Entry; close: () => void
               disabled={busy !== null}
               onClick={() => void send(bot)}
             >
-              {isGroup(bot) ? <GroupAvatar members={members(bot)} size={32} /> : <BotAvatar bot={bot} size={32} animated={false} />}
+              {isGroup(bot) ? <GroupAvatar members={members(bot)} size={32} photo={bot.avatarPhoto ?? null} /> : <BotAvatar bot={bot} size={32} animated={false} />}
               <div className="member-name">
                 <Text truncate>{bot.name}</Text>
                 {isGroup(bot) ? <Text size="caption" tone="tertiary">{tr('Group chat')}</Text> : null}

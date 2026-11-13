@@ -12,6 +12,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var description: String
     public var avatarColor: String
     public var avatarShape: String
+    /// The channel picture as a data URL, drawn instead of the members' faces; nil for none.
+    public var avatarPhoto: String?
     public var customIcon: CustomIcon?
     public var backend: String
     public var command: String?
@@ -47,6 +49,12 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     /// The user's section in the roster ("Work"); nil in none.
     public var section: String?
     public var hidden: Bool
+    /// For a group, its short line under the name in the roster; nil for none.
+    public var title: String?
+    /// For a group, whether it is out of the open roster (its conversation stays).
+    public var archived: Bool = false
+    /// For a group, the member that leads it (its Chief of Staff); nil for none.
+    public var chiefBotId: String?
     public var notify: Bool?
     /// Installed connector / skill ids this bot uses (see `Market.swift`).
     public var connectors: [String]
@@ -128,6 +136,7 @@ extension Bot {
         description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
         avatarColor = try c.decodeIfPresent(String.self, forKey: .avatarColor) ?? "blue"
         avatarShape = try c.decodeIfPresent(String.self, forKey: .avatarShape) ?? "blob"
+        avatarPhoto = try c.decodeIfPresent(String.self, forKey: .avatarPhoto)
         customIcon = try c.decodeIfPresent(CustomIcon.self, forKey: .customIcon)
         backend = try c.decodeIfPresent(String.self, forKey: .backend) ?? "custom"
         command = try c.decodeIfPresent(String.self, forKey: .command)
@@ -149,6 +158,9 @@ extension Bot {
         position = try c.decodeIfPresent(Int.self, forKey: .position) ?? 0
         section = try c.decodeIfPresent(String.self, forKey: .section)
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+        chiefBotId = try c.decodeIfPresent(String.self, forKey: .chiefBotId)
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify)
         connectors = try c.decodeIfPresent([String].self, forKey: .connectors) ?? []
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []

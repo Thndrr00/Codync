@@ -142,7 +142,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"id":entry.id,"botId":entry.bot_id,"threadId":entry.thread_id,"status":entry.data["status"],"result":entry.data["turnResult"]})
         }
         "manageCall" => {
-            crate::chat::manage::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?
+            let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
+            if crate::chat::group::tools::TOOLS.contains(&name) {
+                crate::chat::group::tools::call(hub, bot, name, &b["arguments"]).await?
+            } else {
+                crate::chat::manage::call(hub, bot, name, &b["arguments"]).await?
+            }
         }
         "history" => {
             let bot = str_arg(&b, "botId")?;

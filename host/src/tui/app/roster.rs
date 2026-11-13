@@ -159,7 +159,7 @@ impl App {
             let section = b.shown_section().map(section_key);
             let name = b.shown_section().unwrap_or("");
             let order = self.section_order.iter().position(|s| s == name).unwrap_or(self.section_order.len());
-            (b.band(), order, section.is_none(), section, b.position, Reverse(b.last_at), b.name.clone())
+            (b.archived, b.band(), order, section.is_none(), section, b.position, Reverse(b.last_at), b.name.clone())
         });
         v
     }

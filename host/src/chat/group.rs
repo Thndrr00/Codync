@@ -14,6 +14,7 @@
 //! ([`rooms`]).
 
 mod rooms;
+pub mod tools;
 
 use crate::agent::bot::{Cmd, NoticeStyle};
 use crate::hub::{BotStatus, Hub};
@@ -37,6 +38,24 @@ const HISTORY_LINES: i64 = 24;
 /// A bot's line in another member's prompt is clipped (the user's never is).
 const LINE_CHARS: usize = 2000;
 const PASS: &str = "(pass)";
+/// Longest title a channel shows under its name, in characters.
+pub const MAX_TITLE_CHARS: usize = 120;
+
+/// A channel title, trimmed and checked; `None` for an empty one.
+pub fn checked_title(raw: &str) -> Result<Option<String>> {
+    let title = raw.trim();
+    if title.chars().count() > MAX_TITLE_CHARS {
+        bail!("a channel's title is at most {MAX_TITLE_CHARS} characters");
+    }
+    Ok((!title.is_empty()).then(|| title.to_owned()))
+}
+
+/// Whether `bot` may see (and so change) `group`: it is a member, made it, or leads it.
+pub fn visible_to(group: &BotConfig, bot: &str) -> bool {
+    group.members.iter().any(|m| m == bot)
+        || group.created_by.as_deref() == Some(bot)
+        || group.chief_bot_id.as_deref() == Some(bot)
+}
 
 /// One member's turn in a room, queued on its actor like any other turn.
 pub struct GroupTurn {
@@ -75,14 +94,14 @@ pub fn valid_members(store: &Store, group_id: &str, ids: &[String]) -> Result<Ve
     Ok(out)
 }
 
-/// A group whose members are exactly `members`.
+/// A group whose members are exactly `members`, out of the open list (an archived one stays archived).
 pub fn with_members(store: &Store, members: &[String]) -> Result<Option<String>> {
     let mut wanted = members.to_vec();
     wanted.sort();
     Ok(store.bots()?.into_iter().find_map(|row| {
         let mut have = row.config.members.clone();
         have.sort();
-        (!row.deleted && row.config.is_group() && have == wanted).then_some(row.config.id)
+        (!row.deleted && !row.config.archived && row.config.is_group() && have == wanted).then_some(row.config.id)
     }))
 }
 

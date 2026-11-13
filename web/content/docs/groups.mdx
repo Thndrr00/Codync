@@ -12,7 +12,7 @@ Pick the bots to add, type a name if you like, and choose **Create**. Without a 
 
 - A group needs at least one bot.
 - A group can't contain another group.
-- If a group with exactly the same bots already exists, you get that group instead of a second one.
+- If an open group with exactly the same bots already exists, you get that group instead of a second one.
 
 ## Edit, remove members, delete
 
@@ -22,7 +22,11 @@ Open the group's settings to change it:
 - **Desktop:** click the group's name at the top of the chat. The details panel lists the members, with **Add Member** and an X to remove each one.
 - **Terminal UI:** select the group and press `e`.
 
-In the editor you can rename the group, add or remove members, and fill in **What this group works on**. Every member reads that line, so use it to say what the room is for.
+In the editor you can rename the group, add or remove members, fill in **What this group works on**, give it a short **title** under its name, choose a **picture**, pick its **Chief of Staff** (the member that leads it) and **archive** it. Every member reads the "What this group works on" line, so use it to say what the room is for.
+
+The picture is a small image shown in place of the members' faces everywhere the group appears. On iPhone and Android choose one from your photos; on the desktop choose a PNG, JPEG or WebP file of 300 KB or less. The terminal shows a `▣` next to a group with a picture and can remove it.
+
+**Archived** takes the group out of the open list and stops what it is working on. Its conversation, members and files stay, and you can bring it back from **Archived groups** (desktop: Settings; iPhone and Android: Computer management) or, in the terminal UI, by selecting it under `ARCHIVED` and pressing `e`.
 
 **Delete group chat** removes the group and its conversation. Its bots stay. If you delete a bot, it leaves every group it was in.
 
@@ -31,6 +35,24 @@ The same editor has three history actions, which never touch the members, their 
 - **Delete history** removes the group's messages and turns after you type the group's name. In the terminal press `X` while the group is selected.
 - **New conversation** keeps the messages and marks where the room starts fresh: members see only what is said after it in their next turns. In the terminal press `S`.
 - **Compact context** asks every member to summarize what it keeps. A member shares one conversation across its chats, so its own chat is compacted too.
+
+## Let a bot create and change channels
+
+A bot whose settings turn on **Manage the team** can create and change channels for you. Ask it in
+its own chat, for example: "Make a channel called Ship room for Alice and Ben, with Ben as the
+lead, and say it ships 2.0." It gets a `create_channel` tool (name, title, what the channel is for,
+members, lead, picture, archived) and an `update_channel` one (the same, plus adding and removing
+members). A picture is a PNG, JPEG or WebP file of 300 KB or less.
+
+- Under **Asks before acting**, each change waits for your Allow on an approval card in that bot's
+  chat, which lists the members, lead, title, archive state and whether a picture changes.
+- Under **Approves automatically**, the change applies at once. Either way the bot's chat gets a
+  line saying what changed.
+- A bot can only change a channel it can see: one it is in, made, or leads. Otherwise it is told
+  to ask you to add it or to change the channel.
+- A created channel appears on every device like one you made yourself, with its title, members,
+  lead and picture. If an open channel with exactly those bots already exists, the bot is told so
+  and asked to change that one instead.
 
 ## Who answers
 

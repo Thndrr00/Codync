@@ -155,7 +155,8 @@ pub struct BotConfig {
     /// Optional geometric robot avatar look (`BOT_AVATAR_LOOKS`, Idea 21).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_look: Option<String>,
-    /// A small square photo as a data URL (PNG, JPEG or WebP), shown instead of the generated face.
+    /// A small square photo as a data URL (PNG, JPEG or WebP), shown instead of the generated face;
+    /// for a group, the channel picture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_photo: Option<String>,
     /// Empty for a group.
@@ -280,6 +281,12 @@ pub struct BotConfig {
     /// For a group chat, the member bot ID designated as Chief of Staff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chief_bot_id: Option<String>,
+    /// A group's short line under its name in the roster; empty for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// A group taken out of the open roster; its conversation stays and it can be restored.
+    #[serde(default)]
+    pub archived: bool,
     #[serde(default)]
     pub created_at: i64,
 }

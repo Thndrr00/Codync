@@ -17,7 +17,9 @@ quotes itself.
 ## Data (all over the existing sync: `bot` and `entry` events)
 
 - Bot: `kind` (`agent` | `group`), `members` (group: one or more distinct agent bot IDs on the
-  same computer; no nested groups), `workingChat` (where the running turn talks). A group's
+  same computer; no nested groups), `workingChat` (where the running turn talks). A group also has
+  `title` (a short line under its name, `null` for none), `archived` (out of the open roster) and
+  `avatarPhoto` (the channel picture as a data URL: PNG, JPEG or WebP, at most 300 KB). A group's
   `status` / `activity` are its busy member's (`"Alice: Writing a reply…"`); its `lastMessage`
   names who spoke (`"Alice: …"`).
 - Entry: `data.author` (the bot that wrote it; every agent-made entry has one); on a reply,
@@ -33,8 +35,8 @@ quotes itself.
 | Method | Body | Notes |
 |---|---|---|
 | `send` | `botId, text, clientNonce, replyTo?` | `botId` is a bot or a group. `replyTo`: the id of a user message or final reply in that chat; anything else is refused. Works in the relay mailbox too. |
-| `createBot` | `{kind:"group", name, description?, members}` | Returns the existing group when these exact bots already share one. |
-| `updateBot` | `{id, name?, members?, pinned?, hidden?, section?}` | A group can't become a bot or the reverse. `section`: a name, or `null` for none. |
+| `createBot` | `{kind:"group", name, description?, title?, members, chiefBotId?, archived?, avatarPhoto?}` | Returns the existing open group when these exact bots already share one. |
+| `updateBot` | `{id, name?, description?, title?, members?, chiefBotId?, pinned?, hidden?, archived?, avatarPhoto?, section?}` | A group can't become a bot or the reverse. `title`: a short line, `null` clears it. `archived`: out of the open roster, `false` restores. `avatarPhoto`: a data URL picture, `null` clears it. `section`: a name, or `null` for none. |
 | `deleteBot` | `botId` | A group's bots stay. A deleted bot leaves its groups. |
 | `reorderBots` | `ids` | The roster as the user dragged it, top first; groups count as rows. See [bot order](computer-order.md#bot-order). |
 | `renameSection` | `from, to` | Every row in section `from` moves to `to`, groups too; an existing name merges them, `null` removes the section. See [bot order](computer-order.md#bot-order). |
@@ -42,6 +44,45 @@ quotes itself.
 | `react` | `entryId, emoji` | Toggles the user's reaction on a chat message (`data.reactions`, oldest first, at most 8). A reacted-to message never turns unread again. The bot isn't told, except in a group, where members see reactions on the room lines they're shown. Bots react themselves with the `chat` server's `react` ([bot reactions](chat-messages.md#bot-reactions)). |
 | `respondPermission` | `entryId, optionId?` | Routed to `data.author`, so cards in a group reach the bot that asked. |
 | `markRead` | `botId` | Reads the chat. A no-op when nothing there is unread, so clients call it whenever a chat is on screen. `send` marks its chat read. |
+
+## A channel's title, picture and archive
+
+A group is also a channel, and its editor carries the fields the agent tools use:
+
+- **Title**: one short line under the name in the roster (`BotConfig::title`, at most 120
+  characters). The roster shows it where the last message would go, and the apps' editors have a
+  field for it.
+- **Picture**: `avatarPhoto`, a data URL of a PNG, JPEG or WebP image at most 300 KB. The
+  clients draw it instead of the members' cluster (`GroupAvatar` on iOS, Android and the desktop),
+  the group editor offers Choose/Change/Remove Picture, and the terminal marks a group with a
+  picture (`▣`) and can remove it. The same field is a bot's photo, so the validation in
+  `host/src/hub/validate.rs` covers both.
+- **Archived**: `archived: true` takes a group out of the open roster and stops its running turn; its
+  conversation, members and files stay. `with_members` only reopens an open group, so making a channel with an archived
+  group's exact members creates a new one. Every client's open list hides archived groups
+  (desktop `BotStore.roster`, iOS `BotStore.roster`, Android `roster()`, TUI `App::roster`) and
+  offers them where hidden bots live: **Archived groups** in the desktop's Settings, the iPhone's
+  and Android's Computer management, and the terminal's `ARCHIVED` roster section (its editor has
+  an Archived switch, so selecting one and pressing `e` restores it).
+
+## An agent creates and changes channels (`host/src/chat/group/tools.rs`)
+
+A bot whose settings turn on **Manage the team** gets two more tools in the `codync-manage` MCP
+server (registered in `host/src/mcp.rs`, dispatched by `manageCall` in `host/src/api/bots.rs`):
+
+| Tool | Fields | Notes |
+|---|---|---|
+| `create_channel` | `name`, `title`, `instructions`, `memberAgentIds`, `leadAgentId`, `archived`, `picture` | `instructions` is the group's `description`. The lead is the first member unless named. `picture` is a data URL or a PNG/JPEG/WebP file path (absolute or relative to the bot's folder), read into a data URL. An open channel with the same members is refused, naming it and `update_channel`. |
+| `update_channel` | `channelId` (an id or a name), plus any of the create fields, `addMemberAgentIds`, `removeMemberAgentIds` | Only what is passed changes; `null` clears the title, lead or picture. Removing the lead clears it. A call naming no change is refused. |
+
+Under Ask, both wait on the approval card `chat::manage::approve` uses for bots, listing the
+channel's members, lead, title, archive state and picture (never the picture itself). Under Auto
+the change applies at once. Either way a notice in the calling bot's chat says what happened
+("Created channel Ship room", "Updated Ship room: title, members"). A call from a bot that cannot
+see the channel (not a member, creator or lead) is refused with what to do ("ask the user to add
+you to it, or to change it"); a bot without Manage the team is refused before anything else.
+A created group reaches every client through the ordinary `bot` roster event, with its title,
+members, lead and picture.
 
 ## How a group answers (`host/src/chat/group.rs`, `group/rooms.rs`, Grok Bot's design)
 
@@ -114,7 +155,7 @@ placeholder reads "Reply…", and sending includes `replyTo`; leaving the chat c
 user message with `data.replyTo` shows the quote at the top of its bubble. Every client shows a
 quote as its first non-empty line without Markdown markers (the roster's message preview rule). Reactions under
 a message (the user's: tap to take back; the bots': emoji plus the avatars of who chose it),
-group create/edit (name, members), Stop in a group calls `stop` with the group id.
+group create/edit (name, title, picture, lead, archive, members), Stop in a group calls `stop` with the group id.
 
 Slack-style reply threads were removed for quote replies; [threads for teams](../plans/threads-for-teams.md)
 lists where their code lived and how to bring it back.

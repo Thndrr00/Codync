@@ -46,7 +46,8 @@ impl App {
             Overlay::Group(g) => match g.field {
                 GroupField::Name => Some(&mut g.name),
                 GroupField::About => Some(&mut g.about),
-                GroupField::Bots => None,
+                GroupField::Title => Some(&mut g.title),
+                GroupField::Picture | GroupField::Archived | GroupField::Lead | GroupField::Bots => None,
             },
             Overlay::Form(f) => {
                 let field = f.current();

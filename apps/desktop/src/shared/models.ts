@@ -32,6 +32,10 @@ export interface Bot {
   kind: string
   members: string[]
   chiefBotId?: string | null
+  /** A group's short line under its name in the roster; null for none. */
+  title?: string | null
+  /** A group taken out of the open roster; its conversation stays and it can be restored. */
+  archived: boolean
   customIcon?: import('./custom-icons').CustomIcon
   name: string
   description: string
@@ -198,6 +202,8 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     memoryRev: raw.memoryRev ?? 0,
     isChief: raw.isChief ?? false,
     chiefBotId: raw.chiefBotId ?? null,
+    title: raw.title ?? null,
+    archived: raw.archived ?? false,
     autoName: raw.autoName ?? false,
     createdAt,
     rev: raw.rev ?? 0,
@@ -1049,6 +1055,12 @@ export interface GroupDraft {
   description: string
   members: string[]
   chiefBotId?: string | null
+  /** A short line under the name; null or empty for none. */
+  title?: string | null
+  /** Out of the open roster. */
+  archived?: boolean
+  /** The channel picture as a data URL; null removes it. */
+  avatarPhoto?: string | null
   customIcon?: import('./custom-icons').CustomIcon
   pinned?: boolean
 }

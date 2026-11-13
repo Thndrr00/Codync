@@ -247,7 +247,7 @@ public final class BotStore {
 
         /// Roster order: the lead, pinned bots, then where the user dragged them, then most recent activity.
     public var roster: [Bot] {
-        bots.values.filter { !$0.hidden }.sorted {
+        bots.values.filter { !$0.hidden && !($0.isGroup && $0.archived) }.sorted {
             if $0.band != $1.band { return $0.band < $1.band }
             if $0.position != $1.position { return $0.position < $1.position }
             return $0.lastAt > $1.lastAt
@@ -299,6 +299,11 @@ public final class BotStore {
     }
 
     public var hiddenBots: [Bot] { bots.values.filter(\.hidden).sorted { $0.name < $1.name } }
+
+    /// Groups taken out of the open roster, by name: what Computer management offers to restore.
+    public var archivedGroups: [Bot] {
+        bots.values.filter { $0.isGroup && $0.archived && !$0.hidden }.sorted { $0.name < $1.name }
+    }
 
     /// Everything in a bot's or group's chat this device has, oldest first (trace included).
     public func chat(_ botId: String) -> [Entry] { (entries[botId] ?? []).visibleEntries() }
