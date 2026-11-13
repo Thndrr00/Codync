@@ -35,6 +35,7 @@ pub mod skills;
 pub mod takeover;
 pub mod teach;
 pub mod team;
+pub mod team_templates;
 pub mod tool_limits;
 pub mod uploads;
 pub mod workspace;

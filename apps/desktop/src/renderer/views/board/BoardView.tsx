@@ -3,13 +3,14 @@ import { isGroup } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { Button, ChoicePicker, DropdownMenu, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { ModalHeader, Sheet } from '../../components/Overlay'
+import { Dialog, ModalHeader, Sheet } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
 import type { BotStore } from '../../store/bot-store'
 import { errorText } from '../bots/drafts'
 import { Field } from '../marketplace/pieces'
+import { saveTextFile } from '../share-link'
 import './board.css'
 
 interface BoardTask {
@@ -43,7 +44,7 @@ const dueText = (ms?: number) => {
  * the cards, so every window sees the same board. Moving a card and adding one are the person's
  * actions; a card opens its bot's chat so the work itself happens there.
  */
-export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (computerId: string, botId: string) => void }) {
+export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; onOpen: (computerId: string, botId: string) => void; memberIds?: string[] }) {
   const tr = useTr()
   const online = stores.filter((store) => store.connection.kind === 'online' && !store.mismatch)
   const [computer, setComputer] = useState(() => online[0]?.computer.id ?? '')
@@ -63,6 +64,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
   const [editDetail, setEditDetail] = useState('')
   const [editDue, setEditDue] = useState('')
   const [editRepeat, setEditRepeat] = useState('')
+  const [confirmClear, setConfirmClear] = useState(false)
 
   useEffect(() => {
     if (!store) return
@@ -87,7 +89,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
     }
   }, [store])
 
-  const bots = useMemo(() => (store ? [...store.bots.values()].filter((bot) => !isGroup(bot) && !bot.hidden) : []), [store])
+  const bots = useMemo(() => (store ? [...store.bots.values()].filter((bot) => !isGroup(bot) && !bot.hidden && (!memberIds || memberIds.includes(bot.id))) : []), [store, memberIds])
   useEffect(() => {
     setRoutine('')
     if (!store || !owner) {
@@ -109,6 +111,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
   }, [store, owner])
   const q = query.trim().toLowerCase()
   const visible = tasks.filter((task) => {
+    if (memberIds && (!task.botId || !memberIds.includes(task.botId))) return false
     if (ownerFilter && task.botId !== ownerFilter) return false
     return !q || `${task.title}\n${task.detail}`.toLowerCase().includes(q)
   })
@@ -143,6 +146,47 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
     } catch (e) {
       setError(errorText(e))
       await reload().catch(() => {})
+    }
+  }
+
+  const runRoutineNow = async (task: BoardTask) => {
+    if (!store || !task.botId || !task.routineId) return
+    try {
+      await (await store.ready()).call('runRoutine', { botId: task.botId, id: task.routineId }, 60_000)
+      setError(null)
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
+
+  const exportCsv = () => {
+    const cell = (value: string | number | null | undefined) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const rows = [
+      ['Title', 'Status', 'Bot', 'Due', 'Repeat', 'Detail'],
+      ...visible.map((task) => [
+        task.title,
+        task.status,
+        task.botId ? store?.bots.get(task.botId)?.name ?? task.botId : '',
+        task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 10) : '',
+        task.repeat ?? '',
+        task.detail,
+      ]),
+    ]
+    const csv = rows.map((row) => row.map(cell).join(',')).join('\n')
+    void saveTextFile('board.csv', csv).catch((e: unknown) => setError(errorText(e)))
+  }
+
+  const clearDone = async () => {
+    if (!store) return
+    setConfirmClear(false)
+    const done = visible.filter((task) => task.status === 'done')
+    setTasks((list) => list.filter((task) => !done.some((item) => item.id === task.id)))
+    for (const task of done) {
+      try {
+        await (await store.ready()).call('deleteBoardTask', { id: task.id })
+      } catch (e) {
+        setError(errorText(e))
+      }
     }
   }
 
@@ -228,6 +272,8 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
             onChange={setComputer}
           />
         ) : null}
+        <Button kind="secondary" onClick={exportCsv}>{tr('Export CSV')}</Button>
+        <Button kind="secondary" disabled={!visible.some((task) => task.status === 'done')} onClick={() => setConfirmClear(true)}>{tr('Clear done')}</Button>
       </header>
 
       {error ? <Text size="caption" tone="danger">{error}</Text> : null}
@@ -296,6 +342,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
                         <Text size="callout" grow className="board-card-title">{task.title}</Text>
                         <DropdownMenu className="board-card-menu" title={tr('Card actions')} items={() => [
                           { title: tr('Edit card…'), icon: 'pencil', action: () => openEdit(task) },
+                          ...(task.routineId ? [{ title: tr('Run its routine now'), icon: 'arrow.clockwise', action: () => void runRoutineNow(task) }] : []),
                           ...COLUMNS.filter((c) => c.id !== task.status).map((c) => ({ title: tr(`Move to ${c.label}`), icon: 'arrow.right', action: () => void move(task, c.id) })),
                           { title: tr('Delete'), icon: 'trash', action: () => void remove(task) },
                         ]}>
@@ -323,6 +370,12 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
           </div>
         </>
       )}
+      <Dialog
+        open={confirmClear}
+        title={tr('Clear the cards in Done?')}
+        onClose={() => setConfirmClear(false)}
+        actions={[{ title: tr('Clear'), destructive: true, action: () => void clearDone() }]}
+      />
       <Sheet open={editing !== null} onClose={() => setEditing(null)} width={480}>
         <VStack gap={12}>
           <ModalHeader icon="checklist" title="Edit card" onClose={() => setEditing(null)} />

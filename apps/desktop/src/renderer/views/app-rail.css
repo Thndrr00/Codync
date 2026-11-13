@@ -145,3 +145,25 @@ html[data-platform='darwin'] .app-rail {
   line-height: 14px;
   text-align: center;
 }
+
+/* The notifications bell and the count of notices it has not shown yet. */
+.bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--warning);
+  color: var(--on-warning);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}

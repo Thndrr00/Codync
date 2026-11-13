@@ -18,6 +18,7 @@ import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ComputerPanel } from '../bots/ComputerPanel'
 import { BotActivityCard } from './BotActivityCard'
+import { BoardView } from '../board/BoardView'
 import { shareTranscript, transcriptHtml } from './transcript'
 import { publishPage } from '../share-link'
 import { ToastContainer, useToasts } from '../../components/ToastContainer'
@@ -84,7 +85,11 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
       <div className="details-scroll">
         {bot ? <Identity bot={bot} /> : null}
         {bot && group ? (
-          <><GroupMembersList group={bot} editGroup={editGroup} /><div className="details-tab"><DocumentsCard bot={bot} store={store} /></div></>
+          <>
+            <GroupMembersList group={bot} editGroup={editGroup} />
+            <div className="details-tab"><BoardView stores={[store]} memberIds={bot.members} onOpen={(_, botId) => store.setSelection(botId)} /></div>
+            <div className="details-tab"><DocumentsCard bot={bot} store={store} /></div>
+          </>
         ) : (
           <>
             <TabChoice label="Conversation details" selection={tab} options={hasLibrary(store.hostVersion?.version) ? TABS : TABS.filter((t) => t.id !== 'library')} onChange={setTab} />

@@ -6,8 +6,8 @@ use crate::agent::bot::Cmd;
 use crate::hub::Hub;
 use crate::market;
 use crate::market::openbot;
-use crate::market::{Installed, connector_ids, enable_new};
-use anyhow::{Result, anyhow, bail};
+use crate::market::{Installed, connector_ids, enable_new, turn_on};
+use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -192,17 +192,27 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         },
         "installSkill" => {
             let before = Installed::Skills.ids(&hub.store)?;
-            let s = if b["source"].as_str().is_some_and(|s| s.starts_with(openbot::SOURCE)) {
+            let skill: Value = if b["source"].as_str().is_some_and(|s| s.starts_with(openbot::SOURCE)) {
                 serde_json::to_value(openbot::install(&hub.store, str_arg(&b, "source")?)?)?
             } else if b["source"].is_string() {
-                market::install_skill(&hub.store, str_arg(&b, "source")?).await?
+                serde_json::to_value(market::install_skill(&hub.store, str_arg(&b, "source")?).await?)?
             } else {
                 let text = |k: &str| b[k].as_str().unwrap_or_default();
-                market::add_custom_skill(&hub.store, text("name"), text("description"), text("instructions"), None)?
-                    .public()
+                serde_json::to_value(market::add_custom_skill(
+                    &hub.store,
+                    text("name"),
+                    text("description"),
+                    text("instructions"),
+                    None,
+                )?)?
             };
-            enable_new(hub, Installed::Skills, &before)?;
-            json!({"skill": s})
+            // A skill saved from one chat belongs to that bot until the person turns it on elsewhere.
+            let id = skill["id"].as_str().context("the installed skill has an id")?.to_owned();
+            match b["enableFor"].as_str().filter(|bot| !bot.is_empty()) {
+                Some(bot) => turn_on(hub, Installed::Skills, &[id], Some(bot))?,
+                None => enable_new(hub, Installed::Skills, &before)?,
+            }
+            json!({"skill": skill})
         }
         "removeSkill" => {
             market::remove_skill(&hub.store, str_arg(&b, "id")?)?;

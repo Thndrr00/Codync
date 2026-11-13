@@ -17,6 +17,7 @@ import { RetentionSection } from './RetentionSection'
 import { NotificationRulesSection } from './NotificationRulesSection'
 import { WorkspaceExportSection } from './WorkspaceExportSection'
 import { SharedLinksSection } from './SharedLinksSection'
+import { BackupSection } from './BackupSection'
 import { AuditLogSection } from './AuditLogSection'
 import { errorText } from './parts'
 
@@ -152,6 +153,7 @@ export function DiagnosticsView() {
       <NotificationRulesSection store={maintenance} online={running} nameOf={(id) => local?.bots.get(id)?.name ?? id} />
       <WorkspaceExportSection store={maintenance} online={running} />
       <SharedLinksSection store={maintenance} online={running} />
+      <BackupSection store={maintenance} online={running} />
       <BotBundleSection store={maintenance} bots={bots} online={running} />
       <AuditLogSection />
     </CardForm>

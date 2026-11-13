@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isGroup, type ActionClass, type Bot, type RulePolicy, type TeamSettings } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
-import { ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
+import { Button, ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, SheetPage, useDismiss } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
@@ -46,6 +46,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Bot | null>(null)
+  const [templateNotice, setTemplateNotice] = useState<string | null>(null)
 
   // One set of permission rules per role: every member with that role gets the same four classes.
   const roles = [...new Set(team.members.map((m) => m.role.trim()).filter(Boolean))]
@@ -73,6 +74,17 @@ export function GroupEditorView({ group }: { group: Bot }) {
   // "Alice, Bob" when no name is typed.
   const defaultName = picked.length ? picked.map((b) => b.name).join(', ') : 'Name'
   const current = store.bots.get(group.id)
+
+  const saveTemplate = async () => {
+    setTemplateNotice(null)
+    setError(null)
+    try {
+      await store.saveTeamTemplate(group.id, name.trim() || defaultName)
+      setTemplateNotice('Saved as a team template.')
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
 
   const toggle = (id: string) => {
     setMembers((list) => (list.includes(id) ? list.filter((m) => m !== id) : [...list, id]))
@@ -218,6 +230,8 @@ export function GroupEditorView({ group }: { group: Bot }) {
             ) : null}
           </VStack>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
+          {templateNotice ? <Text size="footnote" tone="secondary" className="fade-in">{templateNotice}</Text> : null}
+          <Button kind="secondary" onClick={() => void saveTemplate()}>{tr('Save as team template')}</Button>
           {current ? (
             <button className="press group-delete" onClick={() => setConfirmDelete(current)}>
               Delete group chat

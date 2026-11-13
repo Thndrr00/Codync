@@ -78,6 +78,8 @@ export const prefs = {
   density: pref<'comfortable' | 'compact'>('interfaceDensity', 'comfortable'),
   /** Prompts the person saved from the message box, in the prompt library. */
   customPrompts: pref<{ title: string; text: string }[]>('customPrompts', []),
+  /** When the notification center was last opened: notices after this wait for a look. */
+  notificationsReadAt: pref('notificationsReadAt', Date.now()),
   extensionsMovedTipSeen: pref('extensionsMovedTipSeen', false),
 }
 

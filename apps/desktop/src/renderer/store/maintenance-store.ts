@@ -57,6 +57,7 @@ export class MaintenanceStore extends Observable {
   rules: NotificationRules | null = null
   scheduled: ScheduledMessage[] = []
   links: SharedLink[] = []
+  backupPath: string | null = null
   compare: ModelCompareResult[] = []
   busy = false
   error: string | null = null
@@ -156,8 +157,16 @@ export class MaintenanceStore extends Observable {
     })
   }
 
-  /** The read-only links this computer still serves. */
-  async loadLinks() {
+  /** Writes a consistent copy of the database under the host's data folder. */
+  async backupDatabase() {
+    await this.run(async (c) => {
+      const { path } = await c.call<{ path: string }>('backupDatabase', {}, 120_000)
+      this.backupPath = path
+      this.notice = 'Backup saved.'
+    })
+  }
+
+  /** The read-only links this computer still serves. */  async loadLinks() {
     await this.run(async (c) => {
       this.links = (await c.call<{ links: SharedLink[] }>('sharedLinks', {})).links
     })

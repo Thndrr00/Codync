@@ -107,6 +107,12 @@ impl Store {
         Ok(())
     }
 
+    /// Writes a consistent copy of the whole database to `path` (SQLite's `VACUUM INTO`).
+    pub fn backup_to(&self, path: &str) -> Result<()> {
+        self.db.locked().execute(&format!("VACUUM INTO '{}'", path.replace('\'', "''")), [])?;
+        Ok(())
+    }
+
     /// Keys starting with `prefix`.
     pub fn kv_prefix(&self, prefix: &str) -> Vec<String> {
         let c = self.db.locked();

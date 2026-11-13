@@ -64,6 +64,17 @@ export const MAX_FILE_SIZE = 100 * 1024 * 1024
 
 export const QUICK_REACTIONS = ['Ã°Å¸â€˜Â', 'Ã¢ÂÂ¤Ã¯Â¸Â', 'Ã°Å¸Ëœâ€š', 'Ã°Å¸Å½â€°', 'Ã°Å¸â€˜â‚¬', 'Ã¢Å“â€¦']
 
+/** A group saved as a reusable team. */
+export interface TeamTemplate {
+  id: string
+  name: string
+  description: string
+  createdAt: number
+  mode: string
+  voice: string
+  members: string[]
+}
+
 /**
  * One computer's mirror (bots, transcripts), kept by one events stream (catch-up since
  * `rev`, then live). Port of kit's `BotStore`.
@@ -537,6 +548,30 @@ export class BotStore extends BotSync {
     const res = await (await this.ready()).call<{ bot: Bot }>('updateBot', draft)
     this.putHostBot(normalizeBot(res.bot))
     this.changed()
+  }
+
+  /** A skill saved from one message: its steps become a skill for that bot alone. */
+  async saveMessageAsSkill(botId: string, name: string, description: string, instructions: string): Promise<void> {
+    await (await this.ready()).call('installSkill', { name, description, instructions, enableFor: botId }, 120_000)
+  }
+
+  /** Groups saved as reusable teams on this computer. */
+  async teamTemplates(): Promise<TeamTemplate[]> {
+    return (await (await this.ready()).call<{ templates: TeamTemplate[] }>('teamTemplates', {})).templates
+  }
+
+  /** Saves `botId` (a group) with its members as a template. */
+  async saveTeamTemplate(botId: string, name: string): Promise<void> {
+    await (await this.ready()).call('saveTeamTemplate', { botId, name })
+  }
+
+  /** Creates a template's bots and its group; returns the new group. */
+  async installTeamTemplate(id: string): Promise<Bot> {
+    const res = await (await this.ready()).call<{ bot: Bot }>('installTeamTemplate', { id }, 120_000)
+    const bot = normalizeBot(res.bot)
+    this.putHostBot(bot)
+    this.changed()
+    return bot
   }
 
   /** The host's ready-made bots and coordinator teams. */

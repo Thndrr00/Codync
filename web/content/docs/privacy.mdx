@@ -94,6 +94,13 @@ Each phone and each computer has its own switch, **Share usage analytics**. Turn
 
 The info button next to the switch (**About usage analytics…** in the terminal UI) lists the same details. What you do from the phone on a computer, such as sending a message, is recorded by that computer. To stop all of it, turn the switch off on both.
 
+## Backups
+
+**Settings › System diagnostics › Backup** writes a consistent copy of the whole database (bots, chats,
+documents, routines, board and memory) under the host's data folder in `backups/`. It is a plain SQLite
+file; keep it somewhere safe and restore by stopping the host and putting it back in place. Nothing is
+uploaded.
+
 ## Removing your data
 
 Delete a bot to remove its conversation. To remove everything from a computer, see "Uninstalling" in [Updates](/docs/updates). On the iPhone, **Start over** on the **Settings** tab signs out and forgets every computer; your computers keep their bots and chats. Deleting the iPhone app removes its cache.

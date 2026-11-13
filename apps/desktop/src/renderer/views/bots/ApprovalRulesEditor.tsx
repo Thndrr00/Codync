@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button, ChoicePicker, IconButton } from '../../components/Controls'
 import { Switch } from '../../components/Controls'
+import { ModalHeader, Sheet } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import {
@@ -39,6 +40,9 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
 }) {
   const [command, setCommand] = useState('')
   const [answer, setAnswer] = useState<string | null>(null)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferText, setTransferText] = useState('')
+  const [transferError, setTransferError] = useState<string | null>(null)
   const replace = (index: number, patch: Partial<ApprovalRule>) =>
     onChange(rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)))
   const run = async () => {
@@ -46,7 +50,29 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
     const evaluation = await test(command, rules)
     setAnswer(evaluation ? describeEvaluation(evaluation) : "This computer's host can't test rules.")
   }
+  const openTransfer = () => {
+    setTransferText(JSON.stringify(rules, null, 2))
+    setTransferError(null)
+    setTransferOpen(true)
+  }
+  const applyTransfer = () => {
+    try {
+      const parsed: unknown = JSON.parse(transferText)
+      if (!Array.isArray(parsed)) throw new Error('The rules are a JSON list.')
+      const next: ApprovalRule[] = parsed.map((item, index) => {
+        if (!item || typeof item !== 'object') throw new Error(`Rule ${index + 1} is not an object.`)
+        const rule = item as Partial<ApprovalRule>
+        if (!['allow', 'ask', 'deny'].includes(String(rule.decision))) throw new Error(`Rule ${index + 1} has an unknown decision.`)
+        return { pattern: String(rule.pattern ?? ''), decision: rule.decision as RuleDecision, kind: rule.kind ?? null }
+      })
+      onChange(next)
+      setTransferOpen(false)
+    } catch (e) {
+      setTransferError(e instanceof Error ? e.message : String(e))
+    }
+  }
   return (
+    <>
     <Field label="Approval rules" detail={`The first rule that matches decides, before the Approvals setting. ${CHAINING_WARNING} A * matches any text.`}>
       <VStack gap={8}>
         {rules.length === 0 ? <Text tone="secondary" size="footnote">No rules: the Approvals setting decides everything.</Text> : null}
@@ -64,6 +90,7 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
         ))}
         <HStack gap={8}>
           <Button kind="secondary" onClick={() => onChange([...rules, { pattern: '', decision: 'ask', kind: null }])}>Add rule</Button>
+          <Button kind="secondary" onClick={openTransfer}>Copy or import rules</Button>
         </HStack>
         {quick && onQuick ? (
           <VStack gap={6}>
@@ -97,5 +124,18 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
         {answer ? <Text size="footnote" tone="secondary">{answer}</Text> : null}
       </VStack>
     </Field>
+    <Sheet open={transferOpen} onClose={() => setTransferOpen(false)} width={560} maxHeight="82vh">
+      <VStack gap={12}>
+        <ModalHeader icon="doc.on.doc" title="Rules as JSON" subtitle="Copy these to another bot, or paste another bot's rules and apply them." onClose={() => setTransferOpen(false)} />
+        <Field label="Rules" value={transferText} onChange={setTransferText} lines={[10, 20]} mono />
+        {transferError ? <Text size="caption" tone="danger">{transferError}</Text> : null}
+        <HStack justify="end" gap={8}>
+          <Button kind="secondary" onClick={() => void window.codync.app.copy(transferText)}>Copy</Button>
+          <Button kind="secondary" onClick={() => setTransferOpen(false)}>Close</Button>
+          <Button onClick={applyTransfer}>Apply</Button>
+        </HStack>
+      </VStack>
+    </Sheet>
+    </>
   )
 }

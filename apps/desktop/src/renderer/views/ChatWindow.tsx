@@ -22,6 +22,7 @@ import { InboxView } from './inbox/InboxView'
 import { BoardView } from './board/BoardView'
 import { ShortcutsSheet } from './ShortcutsSheet'
 import { NotificationCenter } from './notifications/NotificationCenter'
+import { SaveSkillSheet } from './SaveSkillSheet'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -269,6 +270,9 @@ function ChatSplitView() {
   const [boardPage, setBoardPage] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [readAt, setReadAt] = usePref(prefs.notificationsReadAt)
+  const [unreadNotices, setUnreadNotices] = useState(0)
+  const [skillDraft, setSkillDraft] = useState<{ botId: string; text: string } | null>(null)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
@@ -292,6 +296,30 @@ function ChatSplitView() {
   const stores = app.computers.map((c) => app.store(c.id)).filter((s): s is BotStore => !!s)
   const shown = new Set(computerSelection(app.computers.map((c) => c.id), hidden).shown)
   const onlineStores = stores.filter((s) => shown.has(s.computer.id) && s.connection.kind === 'online' && !s.mismatch)
+  const noticeStore = onlineStores[0]
+  useEffect(() => {
+    if (!noticeStore) return
+    let stopped = false
+    const load = async () => {
+      try {
+        const result = await (await noticeStore.ready()).call<{ notices: { at: number }[] }>('recentNotices', { days: 14, limit: 100 })
+        if (!stopped) setUnreadNotices(result.notices.filter((notice) => notice.at > readAt).length)
+      } catch {
+        // An older host has no notification center; the bell simply shows nothing.
+      }
+    }
+    void load()
+    const timer = setInterval(load, 60_000)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+  }, [noticeStore, readAt])
+  const openNotifications = () => {
+    setReadAt(Date.now())
+    setUnreadNotices(0)
+    setNotificationsOpen(true)
+  }
   const selectedStore = app.selectedStore
   const createStore = creating ? app.store(creating.computerId) : null
   const localOnline = !!app.local && onlineStores.includes(app.local)
@@ -440,6 +468,15 @@ function ChatSplitView() {
     window.addEventListener('codync:a2ui', onReply)
     return () => window.removeEventListener('codync:a2ui', onReply)
   }, [app, selected])
+  // A message's menu asks for the Save-as-a-skill sheet.
+  useEffect(() => {
+    const onSaveSkill = (event: Event) => {
+      const detail = (event as CustomEvent<{ botId?: string; text?: string }>).detail
+      if (detail?.botId && detail.text) setSkillDraft({ botId: detail.botId, text: detail.text })
+    }
+    window.addEventListener('codync:save-skill', onSaveSkill)
+    return () => window.removeEventListener('codync:save-skill', onSaveSkill)
+  }, [])
   const selectedBot = selected && selectedStore?.bots.get(selected.botId)
 
   let detail: ReactNode
@@ -531,7 +568,10 @@ function ChatSplitView() {
           />
           {compact ? (
             <div className="sidebar-rail-actions">
-              <IconButton title="Notifications" icon="bell.badge" onClick={() => setNotificationsOpen(true)} />
+              <span className="bell-wrap">
+                <IconButton title="Notifications" icon="bell.badge" onClick={openNotifications} />
+                {unreadNotices > 0 ? <span className="bell-badge">{unreadNotices > 99 ? '99+' : unreadNotices}</span> : null}
+              </span>
               <IconButton title="Search" icon="magnifyingglass" onClick={() => setSearching(true)} />
               <IconButton title="New" icon="plus" size={36} buttonRef={railNewButton} menuOpen={railNewMenu} disabled={!onlineStores.length} onClick={() => setRailNewMenu((o) => !o)} />
               <AnchoredMenu open={railNewMenu} onClose={() => setRailNewMenu(false)} anchor={railNewButton} items={newItems} />
@@ -545,7 +585,10 @@ function ChatSplitView() {
           <Spacer />
           <HStack gap={6} className="no-drag">
             <ComputerFilterHeader hidden={hidden} setHidden={setHidden} manage={() => setSettings('computers')} compact />
-            <IconButton title="Notifications" icon="bell.badge" size={32} className="sidebar-header-action" onClick={() => setNotificationsOpen(true)} />
+            <span className="bell-wrap">
+              <IconButton title="Notifications" icon="bell.badge" size={32} className="sidebar-header-action" onClick={openNotifications} />
+              {unreadNotices > 0 ? <span className="bell-badge">{unreadNotices > 99 ? '99+' : unreadNotices}</span> : null}
+            </span>
             <IconButton title="Search" icon="magnifyingglass" size={32} className="sidebar-header-action" onClick={() => setSearching(true)} />
             <IconButton title="New" icon="plus" size={32} className="sidebar-header-action" buttonRef={newButton} menuOpen={newMenu} onClick={() => setNewMenu((o) => !o)} disabled={!onlineStores.length} />
           </HStack>
@@ -613,6 +656,13 @@ function ChatSplitView() {
         </div>
       ) : null}
 
+      <SaveSkillSheet
+        open={skillDraft !== null}
+        botId={skillDraft?.botId ?? ''}
+        text={skillDraft?.text ?? ''}
+        store={skillDraft ? stores.find((s) => !!skillDraft && s.bots.has(skillDraft.botId)) ?? null : null}
+        onClose={() => setSkillDraft(null)}
+      />
       <NotificationCenter
         stores={stores}
         open={notificationsOpen}
@@ -691,7 +741,7 @@ function ChatSplitView() {
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
         { id: 'access', title: 'Computer access', icon: 'lock.shield', run: () => { setSearching(false); setSettings('access') } },
         { id: 'shortcuts', title: 'Keyboard shortcuts', icon: 'keyboard.chevron.compact.down', run: () => { setSearching(false); setShortcutsOpen(true) } },
-        { id: 'notifications', title: 'Notifications', icon: 'bell.badge', run: () => { setSearching(false); setNotificationsOpen(true) } },
+        { id: 'notifications', title: 'Notifications', icon: 'bell.badge', run: () => { setSearching(false); openNotifications() } },
         { id: 'board', title: 'Board', icon: 'checklist', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false); setBoardPage(true) } },
         { id: 'scheduled', title: 'Scheduled messages', icon: 'clock', run: () => { setSearching(false); setSettings('diagnostics') } },
       ]} />

@@ -388,6 +388,38 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             )?
         }),
         "deleteBoardTask" => json!({"deleted": hub.store.delete_board_task(str_arg(&b, "id")?)?}),
+        // Groups saved as reusable teams: their bots, roles and hierarchy travel together.
+        "teamTemplates" => {
+            let templates: Vec<Value> = crate::chat::team_templates::list(hub)?
+                .into_iter()
+                .map(|template| {
+                    json!({
+                        "id": template.id,
+                        "name": template.name,
+                        "description": template.description,
+                        "createdAt": template.created_at,
+                        "mode": template.mode,
+                        "voice": template.voice,
+                        "members": template.members.iter().filter_map(|member| member["name"].as_str()).collect::<Vec<_>>(),
+                    })
+                })
+                .collect();
+            json!({"templates": templates})
+        }
+        "saveTeamTemplate" => {
+            let template = crate::chat::team_templates::save(
+                hub,
+                str_arg(&b, "botId")?,
+                b["name"].as_str().unwrap_or_default(),
+                crate::store::now_ms(),
+            )?;
+            json!({"template": {"id": template.id, "name": template.name, "description": template.description}})
+        }
+        "installTeamTemplate" => {
+            let bot = crate::chat::team_templates::install(hub, str_arg(&b, "id")?).await?;
+            json!({"bot": bot})
+        }
+        "deleteTeamTemplate" => json!({"deleted": crate::chat::team_templates::remove(hub, str_arg(&b, "id")?)?}),
         "deleteBot" => {
             let bot = str_arg(&b, "botId")?;
             hub.delete_bot(bot)?;
@@ -492,6 +524,17 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"links": links})
         }
         "revokeShare" => json!({"revoked": crate::share::revoke(hub, str_arg(&b, "token")?)?}),
+        // A consistent copy of the database, under the host's data folder.
+        "backupDatabase" => {
+            let dir = crate::service::data_dir().join("backups");
+            std::fs::create_dir_all(&dir)?;
+            let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+            let path = dir.join(format!("codync-{stamp}.db"));
+            let text = path.to_string_lossy().into_owned();
+            let hub = hub.clone();
+            tokio::task::spawn_blocking(move || hub.store.backup_to(&text)).await??;
+            json!({"path": path.to_string_lossy()})
+        }
         "send" => {
             let bot = str_arg(&b, "botId")?;
             let text = b["text"].as_str().unwrap_or_default().trim();

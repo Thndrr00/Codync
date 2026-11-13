@@ -115,6 +115,7 @@ export function NotificationRulesSection({ store, online, nameOf }: {
               </HStack>
               <Text size="caption" tone="secondary" className="scheduled-text">{message.text}</Text>
               <HStack gap={6}>
+                <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.rescheduleScheduled(message.id, message.text, Date.now())}>Send now</Button>
                 <Button kind="secondary" disabled={!online || store.busy} onClick={() => openEdit(message)}>Edit</Button>
                 <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.cancelScheduled(message.id)}>Cancel</Button>
               </HStack>

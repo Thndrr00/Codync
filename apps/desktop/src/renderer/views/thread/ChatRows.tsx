@@ -24,6 +24,12 @@ import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
 import { VoiceReceipt } from './VoiceReceipt'
 
+/** Sends a message to the window's Save-as-a-skill sheet, for its bot. */
+const saveAsSkill = (entry: Entry) => {
+  const text = typeof entry.data.text === 'string' ? entry.data.text.trim() : ''
+  if (text) window.dispatchEvent(new CustomEvent('codync:save-skill', { detail: { botId: entry.botId, text } }))
+}
+
 export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
   return { emoji: QUICK_REACTIONS, chosen: entry.data.reactions ?? [], toggle: (e) => store.react(entry, e) }
 }
@@ -337,6 +343,7 @@ export function UserBubble({ entry, botWorking, reply, forward }: { entry: Entry
             { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
               { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? 'user', entry.threadId ?? null) },
               ...(entry.data.text ? [{ title: 'Add to the board', icon: 'checklist', action: () => void store.addBoardTask(entry.data.text) }] : []),
+              ...(entry.data.text ? [{ title: 'Save as a skill…', icon: 'book.pages', action: () => saveAsSkill(entry) }] : []),
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(forward ? [{ title: 'Send to a channel…', icon: 'arrowshape.turn.up.right', action: forward }] : []),
               { title: 'Delete', icon: 'trash', destructive: true, action: () => void store.deleteEntry(entry.id) },
@@ -392,6 +399,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
             { title: 'Copy', icon: 'square.on.square', action: copy },
               { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
               ...(entry.data.text ? [{ title: 'Add to the board', icon: 'checklist', action: () => void store.addBoardTask(entry.data.text) }] : []),
+              ...(entry.data.text ? [{ title: 'Save as a skill…', icon: 'book.pages', action: () => saveAsSkill(entry) }] : []),
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(forward ? [{ title: 'Send to a channel…', icon: 'arrowshape.turn.up.right', action: forward }] : []),
               { title: 'Delete', icon: 'trash', destructive: true, action: () => void store.deleteEntry(entry.id) },

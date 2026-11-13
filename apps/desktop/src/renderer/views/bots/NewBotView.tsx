@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { isGroup, type Bot, type BotDraft } from '@shared/models'
 import { fromProfile } from '@shared/catalog'
 import { BotAvatar, CharacterAvatar, GroupAvatar } from '../../components/Avatar'
@@ -7,6 +7,7 @@ import { ModalHeader, useDismiss } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
+import type { TeamTemplate } from '../../store/bot-store'
 import { useTr } from '../../lib/use-language'
 import { errorText, fillDefaults, newDraft } from './drafts'
 import { AvatarPicker } from './parts'
@@ -67,16 +68,42 @@ export function NewBotView({ computer }: { computer: ComputerChoice | null }) {
 export function NewGroupView({ computer }: { computer: ComputerChoice | null }) {
   const tr = useTr()
   const store = useStore()
+  const dismiss = useDismiss()
   const [name, setName] = useState('')
   const [members, setMembers] = useState<string[]>([])
+  const [templates, setTemplates] = useState<TeamTemplate[]>([])
+  const [installing, setInstalling] = useState<string | null>(null)
+  const [templateError, setTemplateError] = useState<string | null>(null)
   const bots = store.roster.filter((b) => !isGroup(b))
   const picked = members.map((id) => store.bots.get(id)).filter((b): b is Bot => !!b)
   // "Alice, Bob" when no name is typed.
   const defaultName = picked.map((b) => b.name).join(', ')
 
+  useEffect(() => {
+    let stopped = false
+    void store.teamTemplates().then((found) => {
+      if (!stopped) setTemplates(found)
+    }).catch(() => {})
+    return () => {
+      stopped = true
+    }
+  }, [store])
+
   const toggle = (id: string) => setMembers((list) => (list.includes(id) ? list.filter((m) => m !== id) : [...list, id]))
   const create = async () => {
     await store.createGroup(name.trim() || defaultName, '', members)
+  }
+  const install = async (template: TeamTemplate) => {
+    setInstalling(template.id)
+    setTemplateError(null)
+    try {
+      await store.installTeamTemplate(template.id)
+      dismiss()
+    } catch (e) {
+      setTemplateError(errorText(e))
+    } finally {
+      setInstalling(null)
+    }
   }
 
   return (
@@ -108,6 +135,19 @@ export function NewGroupView({ computer }: { computer: ComputerChoice | null }) 
         <Text tone="secondary">{tr(`No bots yet. Create a bot first.`)}</Text>
       )}
       <Text as="div" size="caption" tone="tertiary">{tr(`Everyone answers in turn unless you @mention someone.`)}</Text>
+      {templates.length > 0 ? (
+        <VStack gap={6} align="center">
+          <Text size="caption" tone="tertiary">{tr('Or start from a team template')}</Text>
+          <HStack wrap justify="center" gap={6}>
+            {templates.map((template) => (
+              <Button key={template.id} kind="secondary" disabled={installing !== null} onClick={() => void install(template)}>
+                {installing === template.id ? tr('Installing…') : template.name}
+              </Button>
+            ))}
+          </HStack>
+          {templateError ? <Text size="footnote" tone="danger">{templateError}</Text> : null}
+        </VStack>
+      ) : null}
     </CreateLayout>
   )
 }

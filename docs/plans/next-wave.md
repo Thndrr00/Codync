@@ -55,6 +55,14 @@ is bigger than one release.
 | Doctor: stale approvals | done |
 | Document presentation and Markdown export | done (desktop) |
 | Global search: board cards and scheduled messages | done (desktop) |
+| Team templates (save and install a group) | done |
+| Board in a group's details | done (desktop) |
+| Board: run its routine, CSV export, clear done | done (desktop) |
+| Scheduled message "Send now" | done (desktop) |
+| Notification bell count | done (desktop) |
+| Save a message as a skill | done (desktop) |
+| Database backup from Diagnostics | done |
+| Approval rules as JSON (copy/apply) | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -176,6 +184,22 @@ Goal: a bot can run without an account.
   asking the relay. An approval ignores quiet hours: a bot waiting for an answer is stuck until the
   person reads it. Diagnostics › Notifications edits the rules.
 - Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
+
+## Teams, skills and upkeep — done
+
+- **Team templates**: a group can be saved as a template (`saveTeamTemplate`), listing its members,
+  roles and hierarchy. The New group sheet offers them; installing creates the bots and the group with
+  the same roles remapped to the new ids. Up to 30 templates.
+- **Group board**: a group's inspector shows the board filtered to its members.
+- **Board**: a card can run its linked routine now, the board exports CSV, and **Clear done** removes
+  the finished cards after a confirmation.
+- **Scheduled messages**: **Send now** moves a waiting message to the next tick.
+- **Notifications**: the bell shows how many notices arrived since it was last opened.
+- **Save as a skill** on a message opens a sheet (name, when to use it, instructions); the skill is
+  installed and turned on for that bot only (`installSkill` now takes `enableFor`).
+- **Backup**: Diagnostics writes a consistent copy of the database with `VACUUM INTO` under
+  `backups/` and copies the path.
+- **Approval rules**: a sheet copies them as JSON and applies a pasted list back.
 
 ## Links, repeats and smaller answers — done
 
