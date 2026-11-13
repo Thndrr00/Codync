@@ -159,17 +159,17 @@ impl Store {
         let finished = status == "done" && task.status != "done";
         task.status = status.to_owned();
         task.updated_at = now;
+        let repeat = task.repeat.clone();
         let next = if finished {
-            task.repeat.as_deref().map(|repeat| {
+            repeat.map(|repeat| {
                 let step = if repeat == "weekly" { 7 * 86_400_000 } else { 86_400_000 };
-                BoardTask {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    status: "todo".into(),
-                    due_at: task.due_at.map(|due| due + step),
-                    created_at: now,
-                    updated_at: now,
-                    ..task.clone()
-                }
+                let mut next = task.clone();
+                next.id = uuid::Uuid::new_v4().to_string();
+                next.status = "todo".into();
+                next.due_at = next.due_at.map(|due| due + step);
+                next.created_at = now;
+                next.updated_at = now;
+                next
             })
         } else {
             None
