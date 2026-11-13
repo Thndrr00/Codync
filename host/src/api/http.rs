@@ -341,10 +341,11 @@ async fn routine_hook(
     }
     let headers =
         headers.iter().filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned()))).collect();
-    hub.routines.receive(&hub, &id, &headers, &body).map(Json).map_err(|e| {
+    hub.routines.receive(&hub, &id, &headers, &body, true).map(Json).map_err(|e| {
         let status = match e {
             Refused::Unauthorized => StatusCode::UNAUTHORIZED,
             Refused::Paused | Refused::Busy => StatusCode::CONFLICT,
+            Refused::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
             Refused::Invalid(_) => StatusCode::BAD_REQUEST,
         };
         ApiError(status, e.to_string())

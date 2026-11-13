@@ -379,5 +379,21 @@
   "The workspace origin now points here.": "أصبح أصل مساحة العمل يشير إلى هنا.",
   "Sender's signing secret": "السرّ الذي يوقّع به المُرسل",
   "Use it": "استخدمه",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "المُرسل الذي يوقّع بـ Standard Webhooks، مثل Composio أو Svix، له سرّه الخاص: الصقه هنا وسيصبح المفتاح أعلاه هو ذلك السرّ."
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "المُرسل الذي يوقّع بـ Standard Webhooks، مثل Composio أو Svix، له سرّه الخاص: الصقه هنا وسيصبح المفتاح أعلاه هو ذلك السرّ.",
+  "Local scripts": "سكربتات محلية",
+  "Requests an hour": "طلبات في الساعة",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "كم طلبًا في الساعة يمكن لسكربت على هذا الحاسوب أن يرسله إلى الروتينات، لكل الوكلاء معًا. بعد الحد يرد العنوان بالرمز 429 ويعيد السكربت المحاولة لاحقًا.",
+  "Plan cards": "بطاقات الخطة",
+  "Start the work": "بدء العمل",
+  "When I press Start": "عندما أضغط بدء",
+  "After {time}": "بعد {time}",
+  "Custom time…": "وقت مخصص…",
+  "The plan waits until you press Start. You get a notification.": "تنتظر الخطة حتى تضغط بدء. ستصلك إشعارات.",
+  "The work starts after {time}, or when you press Start.": "يبدأ العمل بعد {time}، أو عندما تضغط بدء.",
+  "Time before the work starts": "الوقت قبل بدء العمل",
+  "sec": "ث",
+  "min": "د",
+  "At least 5 seconds.": "5 ثوانٍ على الأقل.",
+  "Enter a whole number of at least 5 seconds.": "أدخل عددًا صحيحًا لا يقل عن 5 ثوانٍ.",
+  "Set": "تعيين"
 }

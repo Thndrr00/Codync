@@ -2430,5 +2430,21 @@
   "Reviewed by CopilotKit": "Revisionato da CopilotKit",
   "Sender's signing secret": "Segreto di firma del mittente",
   "Use it": "Usalo",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Un mittente che firma con Standard Webhooks, come Composio o Svix, ha un proprio segreto: incollalo qui e la chiave sopra diventa quel segreto."
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Un mittente che firma con Standard Webhooks, come Composio o Svix, ha un proprio segreto: incollalo qui e la chiave sopra diventa quel segreto.",
+  "Local scripts": "Script locali",
+  "Requests an hour": "Richieste all'ora",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "Quante richieste all'ora può inviare uno script di questo computer alle routine, per tutti gli agenti insieme. Oltre, l'indirizzo risponde 429 e lo script riprova più tardi.",
+  "Plan cards": "Schede del piano",
+  "Start the work": "Avvia il lavoro",
+  "When I press Start": "Quando premo Avvia",
+  "After {time}": "Dopo {time}",
+  "Custom time…": "Tempo personalizzato…",
+  "The plan waits until you press Start. You get a notification.": "Il piano attende che tu prema Avvia. Ricevi una notifica.",
+  "The work starts after {time}, or when you press Start.": "Il lavoro inizia dopo {time}, o quando premi Avvia.",
+  "Time before the work starts": "Tempo prima dell'inizio del lavoro",
+  "sec": "s",
+  "min": "min",
+  "At least 5 seconds.": "Almeno 5 secondi.",
+  "Enter a whole number of at least 5 seconds.": "Inserisci un numero intero di almeno 5 secondi.",
+  "Set": "Imposta"
 }

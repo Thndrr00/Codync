@@ -300,7 +300,7 @@ async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Re
         }
     };
     match handoff(hub, request, attach).await {
-        Ok(text) if crate::chat::group::is_pass(&text) => {
+        Ok(text) if crate::chat::group::is_pass(&text) || text.trim().is_empty() => {
             settle(hub, &step, StepStatus::Succeeded, None, None);
             Outcome::Nothing
         }
@@ -354,7 +354,11 @@ pub fn start_for(
 ) -> Option<Start> {
     let routine = routine?;
     let root = match status {
-        Status::Succeeded => Root::Replied(text.filter(|t| !crate::chat::group::is_pass(t))?.to_owned()),
+        // Nothing to report: no pass token and no text at all. The agents linked after the
+        // routine are skipped, as they are after a step that answered nothing.
+        Status::Succeeded => {
+            Root::Replied(text.filter(|t| !crate::chat::group::is_pass(t) && !t.trim().is_empty())?.to_owned())
+        }
         Status::Failed | Status::Interrupted => Root::Failed(detail.unwrap_or("The routine's run failed").to_owned()),
         Status::Cancelled => Root::Cancelled("The routine's run was cancelled".to_owned()),
         Status::Pending | Status::Starting | Status::Running | Status::Recovering => return None,

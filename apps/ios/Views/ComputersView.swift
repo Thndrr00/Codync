@@ -164,6 +164,8 @@ private struct ComputerRows: View {
     @State private var networkSheet = false
     @State private var channels = false
     @State private var whatsapp = false
+    @State private var localScripts = false
+    @State private var planCards = false
 
     var body: some View {
         summary
@@ -184,6 +186,10 @@ private struct ComputerRows: View {
                 Button { networkSheet = true } label: { RowLabel("Network", image: .codyncNetwork, chevron: true) }
                     .buttonStyle(.plain)
             }
+            Button { localScripts = true } label: { RowLabel("Local scripts", systemImage: "terminal", chevron: true) }
+                .buttonStyle(.plain)
+            Button { planCards = true } label: { RowLabel("Plan cards", systemImage: "list.bullet.rectangle", chevron: true) }
+                .buttonStyle(.plain)
         }
         ComputerNotificationsRow(store: store)
         ComputerConnectionRow(store: store)
@@ -235,6 +241,10 @@ private struct ComputerRows: View {
             if store.connection == .online, showsNetwork {
                 items.append(MenuItem("Network", image: .codyncNetwork) { networkSheet = true })
             }
+            if store.connection == .online {
+                items.append(MenuItem("Local scripts", icon: "terminal") { localScripts = true })
+                items.append(MenuItem("Plan cards", icon: "list.bullet.rectangle") { planCards = true })
+            }
             if let revoke {
                 items.append(MenuItem("Revoke this iPhone's access", icon: "lock.slash", destructive: true, divider: true, action: revoke))
             }
@@ -247,6 +257,8 @@ private struct ComputerRows: View {
         .codyncSheet(isPresented: $networkSheet) { NetworkSheet().environment(store) }
         .codyncSheet(isPresented: $channels) { ChannelsSheet().environment(store) }
         .codyncSheet(isPresented: $whatsapp) { WhatsAppSheet().environment(store) }
+        .codyncSheet(isPresented: $localScripts) { LocalScriptsSheet().environment(store) }
+        .codyncSheet(isPresented: $planCards) { PlanStartSheet().environment(store) }
         .codyncOverlay(isPresented: $coloring) { close in
             ZStack {
                 Color.black.opacity(0.35).ignoresSafeArea().onTapGesture(perform: close)

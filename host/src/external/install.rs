@@ -71,7 +71,7 @@ pub fn install(settings: &Path, exe: &Path) -> Result<bool> {
         groups.push(json!({"hooks": [{"type": "command", "command": command(exe), "timeout": timeout}]}));
         if *event == "PreToolUse" {
             let ask = format!("{} {ASK_FLAG}", command(exe));
-            groups.push(json!({"matcher": ASK_MATCHER, "hooks": [{"type": "command", "command": ask, "timeout": PERMISSION_TIMEOUT}]}));
+            groups.push(json!({"matcher": ASK_MATCHER, "hooks": [{"type": "command", "command": ask, "timeout": super::plan::HOOK_SECONDS}]}));
         }
     }
     if root == before {
@@ -145,7 +145,7 @@ mod tests {
         let ask = &v["hooks"]["PreToolUse"][2];
         assert_eq!(ask["matcher"], ASK_MATCHER);
         assert!(ask["hooks"][0]["command"].as_str().unwrap().ends_with(" hook --ask"));
-        assert_eq!(ask["hooks"][0]["timeout"], PERMISSION_TIMEOUT);
+        assert_eq!(ask["hooks"][0]["timeout"], super::super::plan::HOOK_SECONDS);
         assert_eq!(v["hooks"]["PreToolUse"][0]["hooks"][0]["command"], "lint");
         assert_eq!(v["hooks"]["PermissionRequest"][0]["hooks"][0]["timeout"], PERMISSION_TIMEOUT);
         assert!(installed(&file).unwrap());

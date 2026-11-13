@@ -9,6 +9,7 @@ pub mod events;
 mod failed;
 pub mod flow;
 mod idle;
+pub mod limits;
 pub(crate) use editor::days_in_month;
 pub use editor::{ScheduleDraft, preview as schedule_preview};
 pub mod hooks;
@@ -184,6 +185,8 @@ pub struct Routines {
     state: Mutex<State>,
     /// How many runs each bot has in flight (at most `Hub::MAX_SIDE`).
     active: Mutex<std::collections::HashMap<String, usize>>,
+    /// The local script requests each bot made in the last hour (`limits`).
+    scripts: limits::Slots,
     scheduler: Mutex<Option<tokio::task::JoinHandle<()>>>,
     stopping: std::sync::atomic::AtomicBool,
     /// Bumped whenever the webhook set the relay registers (`hooks()`) changes.
@@ -198,6 +201,7 @@ impl Default for Routines {
             output_workers: Arc::new(tokio::sync::Semaphore::new(4)),
             state: Mutex::default(),
             active: Mutex::default(),
+            scripts: limits::Slots::default(),
             scheduler: Mutex::default(),
             stopping: std::sync::atomic::AtomicBool::default(),
             hooks_rev: tokio::sync::watch::channel(0).0,
@@ -629,7 +633,15 @@ impl Routines {
 
     /// One delivery from the local endpoint or the cloud: checks the key or signature, then
     /// queues a run when the event matches. Retries of a delivery id return its first run.
-    pub fn receive(&self, hub: &Hub, id: &str, headers: &hooks::Headers, body: &[u8]) -> Result<Value, Refused> {
+    /// `local` deliveries spend a slot of the bot's hourly script ceiling (`limits`).
+    pub fn receive(
+        &self,
+        hub: &Hub,
+        id: &str,
+        headers: &hooks::Headers,
+        body: &[u8],
+        local: bool,
+    ) -> Result<Value, Refused> {
         let r = self.state.locked().routines.iter().find(|r| r.id == id && !r.deleted).cloned();
         let Some(r) = r.filter(|r| hooks::authorized(&r.webhook_key, headers, body, crate::store::now_ms())) else {
             return Err(Refused::Unauthorized);
@@ -643,6 +655,12 @@ impl Routines {
         }
         if !r.triggers.iter().any(|t| matches!(t, Trigger::Webhook) || t.matches(&event)) {
             return Ok(json!({"ignored": "event does not match this routine"}));
+        }
+        // A retry of a delivery already queued returns its run, so it spends no second slot.
+        let known = delivery.is_some()
+            && self.state.locked().runs.iter().any(|run| run.routine_id == id && run.delivery_id == delivery);
+        if local && !known {
+            self.scripts.take(&hub.store, &r.bot_id, crate::store::now_ms())?;
         }
         self.enqueue(&hub.store, &r.bot_id, id, event, delivery, false).map_err(|e| match e.downcast::<Refused>() {
             Ok(refused) => refused,

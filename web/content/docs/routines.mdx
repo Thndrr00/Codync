@@ -64,7 +64,7 @@ A routine can have several triggers; it runs when any of them fires.
 
 A run posts in the bot's chat: a line with the routine's name, such as "Routine · Morning summary", then the bot's reply, which is the result. The run's steps are in **Full conversation**. Tap the routine line to open the routine.
 
-Turn on **Run in a thread** under **Run settings** and its runs post in one thread of the bot's chat instead, keeping the main chat clean; the thread stays for every later run. Its line in the chat shows a dot while the thread has unread replies, and opens it.
+Turn on **Run in a thread** under **Run settings** (the **Thread** row, with space, in the terminal UI's editor) and its runs post in one thread of the bot's chat instead, keeping the main chat clean; the thread stays for every later run. Its line in the chat shows a dot while the thread has unread replies, and opens it.
 
 - A successful run sends you a notification with its reply.
 - If there's nothing to report and the instruction allows silence, the run finishes without a message.
@@ -128,6 +128,8 @@ A routine's public URL goes through the Codync cloud, so services can reach your
 - If your computer is off or offline, the cloud keeps deliveries for up to 72 hours and hands them over once the host is back.
 
 If **Reach from anywhere** is off for your computer, the routine has only a local URL starting with `http://127.0.0.1`, which only senders on the same computer can use. A public URL you gave a sender earlier still takes deliveries in the cloud: they wait there, readable, for up to 72 hours and run if you turn **Reach from anywhere** back on within that time. To stop them, remove the URL from the sender, or delete the routine or replace its key while **Reach from anywhere** is on. See [Remote access](/docs/remote-access) and [Privacy](/docs/privacy).
+
+Deliveries to a routine's **local** URL are capped per computer, so a script that loops can't spend your quota: 30, 60, 120, 300 or 1000 an hour, for all bots together, set under **Local scripts** in the computer's settings. Past it the local URL answers `429` and the script should try again later. Deliveries through the public URL don't count, and a retry of the same delivery doesn't spend a second slot. The counts reset when the host restarts.
 
 ## Keep the host running and awake
 

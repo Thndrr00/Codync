@@ -103,6 +103,17 @@ pub(super) fn permission_card(out: &mut Built, app: &App, e: &Entry, b: &Bot, wi
             out.lines.push(row(l.spans));
         }
     }
+    if let Some(at) = e.data["autoApproveAt"].as_i64().filter(|_| e.data["status"] == "pending") {
+        // A plan card that starts by itself in a minute or more counts down, as the apps' Start button does.
+        let remaining = (at - crate::store::now_ms()).max(0);
+        let total = remaining / 1_000 + i64::from(remaining % 1_000 > 0);
+        if total >= 60 {
+            out.lines.push(row(vec![Span::styled(
+                format!("Starts by itself in {}:{:02}", total / 60, total % 60),
+                t.amber,
+            )]));
+        }
+    }
     out.lines.push(row(vec![]));
     // Buttons, wrapping onto more lines when narrow.
     let mut opts = e.options();

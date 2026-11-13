@@ -202,6 +202,32 @@ async fn a_failure_in_the_middle_skips_what_hangs_below_it() {
 }
 
 #[tokio::test]
+async fn a_step_that_answers_nothing_skips_what_hangs_below_it() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.link(&r, "a", "b", "EMPTY");
+    f.link(&r, "b", "c", "Never reached");
+    execute(f.hub.clone(), f.start(&r, "run-empty", Root::Replied("seed".into()))).await;
+    assert_eq!(
+        f.steps("run-empty"),
+        [("a".into(), StepStatus::Succeeded), ("b".into(), StepStatus::Succeeded), ("c".into(), StepStatus::Skipped)]
+    );
+    assert_eq!(f.step("run-empty", "b").output, None, "no text to hand on");
+    assert!(f.prompts_of("c").is_empty(), "a skipped step sends nothing");
+    f.shutdown().await;
+}
+
+#[test]
+fn a_run_with_no_text_starts_no_flow() {
+    let routine = crate::routines::tests::routine();
+    let run = crate::routines::new_run(&routine, json!({}), None);
+    let starts = |text: &str| engine::start_for(Some(&routine), &run, Status::Succeeded, None, Some(text)).is_some();
+    assert!(!starts("  \n "), "a run that reported nothing hands nothing on");
+    assert!(!starts("[[no-update]]"), "nor does a pass token");
+    assert!(starts("Seven items today"));
+}
+
+#[tokio::test]
 async fn a_routine_run_that_failed_skips_the_whole_flow() {
     let f = Fixture::new();
     let r = f.routine("a");

@@ -2430,5 +2430,21 @@
   "The workspace origin now points here.": "A origem do espaço de trabalho agora aponta para aqui.",
   "Sender's signing secret": "Segredo de assinatura do remetente",
   "Use it": "Usar",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Um remetente que assina com Standard Webhooks, como Composio ou Svix, tem o próprio segredo: cole aqui e a chave acima passa a ser esse segredo."
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Um remetente que assina com Standard Webhooks, como Composio ou Svix, tem o próprio segredo: cole aqui e a chave acima passa a ser esse segredo.",
+  "Local scripts": "Scripts locais",
+  "Requests an hour": "Requisições por hora",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "Quantas requisições por hora um script deste computador pode enviar às rotinas, somando todos os agentes. Passando disso, o endereço responde 429 e o script tenta de novo mais tarde.",
+  "Plan cards": "Cartões de plano",
+  "Start the work": "Iniciar o trabalho",
+  "When I press Start": "Quando eu pressionar Iniciar",
+  "After {time}": "Depois de {time}",
+  "Custom time…": "Tempo personalizado…",
+  "The plan waits until you press Start. You get a notification.": "O plano espera até você pressionar Iniciar. Você recebe uma notificação.",
+  "The work starts after {time}, or when you press Start.": "O trabalho começa depois de {time}, ou quando você pressiona Iniciar.",
+  "Time before the work starts": "Tempo antes do trabalho começar",
+  "sec": "s",
+  "min": "min",
+  "At least 5 seconds.": "Pelo menos 5 segundos.",
+  "Enter a whole number of at least 5 seconds.": "Digite um número inteiro de pelo menos 5 segundos.",
+  "Set": "Definir"
 }

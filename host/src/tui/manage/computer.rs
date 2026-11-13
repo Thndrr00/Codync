@@ -203,6 +203,44 @@ impl App {
                     self.computer_request(&mut sheet, "updateBot", body, ComputerResult::Changed);
                 }
                 KeyCode::Char('p') => sheet.mode = ComputerMode::Site,
+                KeyCode::Char(step @ (',' | '.')) => {
+                    let choices = sheet.state["scriptLimit"]["choices"].as_array().cloned().unwrap_or_default();
+                    let per_hour = sheet.state["scriptLimit"]["perHour"].as_u64().unwrap_or_default();
+                    let index = choices.iter().position(|choice| choice.as_u64() == Some(per_hour)).unwrap_or(0);
+                    let next = if step == ',' {
+                        index.saturating_sub(1)
+                    } else {
+                        (index + 1).min(choices.len().saturating_sub(1))
+                    };
+                    if let Some(value) = choices.get(next).and_then(Value::as_u64).filter(|value| *value != per_hour) {
+                        self.computer_request(
+                            &mut sheet,
+                            "setScriptLimit",
+                            json!({"perHour":value}),
+                            ComputerResult::Changed,
+                        );
+                    }
+                }
+                KeyCode::Char(step @ ('[' | ']')) => {
+                    // When I press Start, then the presets: the same choices the apps offer, without a typed time.
+                    let mut choices = vec![Value::Null];
+                    choices.extend(sheet.state["planStart"]["presets"].as_array().cloned().unwrap_or_default());
+                    let current = sheet.state["planStart"]["afterMs"].clone();
+                    let index = choices.iter().position(|choice| *choice == current).unwrap_or(0);
+                    let next = if step == '[' {
+                        index.saturating_sub(1)
+                    } else {
+                        (index + 1).min(choices.len().saturating_sub(1))
+                    };
+                    if let Some(value) = choices.get(next).filter(|value| **value != current) {
+                        self.computer_request(
+                            &mut sheet,
+                            "setPlanStart",
+                            json!({"afterMs":value}),
+                            ComputerResult::Changed,
+                        );
+                    }
+                }
                 KeyCode::Char('b')
                     if sheet.state["protectedBrowserAvailable"] == true
                         && sheet.state["screen"]["protectedEntry"].is_object() =>

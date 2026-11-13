@@ -91,6 +91,12 @@ struct PermissionCard: View {
         }
     }
 
+    private func optionText(_ o: PermissionOption, suffix: String) -> some View {
+        Text(label(o) + suffix)
+            .font(.body.weight(o.kind == "allow_once" ? .semibold : .regular))
+            .foregroundStyle(o.kind.hasPrefix("allow") ? Palette.text : Palette.danger)
+    }
+
     private var buttons: some View {
         let options = ordered
         return VStack(spacing: 0) {
@@ -98,9 +104,13 @@ struct PermissionCard: View {
                 if i > 0 { Rectangle().fill(Palette.border).frame(height: 0.5) }
                 Button { respond(o.optionId) } label: {
                     HStack(spacing: 8) {
-                        Text(label(o))
-                            .font(.body.weight(o.kind == "allow_once" ? .semibold : .regular))
-                            .foregroundStyle(o.kind.hasPrefix("allow") ? Palette.text : Palette.danger)
+                        if o.kind == "allow_once", let at = d.autoApproveAt {
+                            TimelineView(.periodic(from: .now, by: 1)) { context in
+                                optionText(o, suffix: planCountdown(at, now: context.date))
+                            }
+                        } else {
+                            optionText(o, suffix: "")
+                        }
                         Spacer(minLength: 0)
                         if answering == o.optionId { Spinner(size: 14) }
                     }

@@ -27,7 +27,12 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
     let (bot, config) = target(hub, ev)?;
     if ev.tool == "ExitPlanMode" {
         let data = plan_card(ev, &bot, &config.cwd);
-        return match wait_card(hub, ev, &bot, &config, &data, "Approve the plan").await? {
+        // The plan starts the work by itself after the computer's time, or waits for the person.
+        let after = super::plan::saved(&hub.store);
+        let starts_at = after.map(|ms| crate::store::now_ms() + ms);
+        return match wait_card(hub, ev, &bot, &config, &data, "Approve the plan", starts_at, super::plan::wait(after))
+            .await?
+        {
             Decision::Allow => Some(json!({"permissionDecision": "allow", "updatedInput": ev.input})),
             Decision::Deny => {
                 Some(json!({"permissionDecision": "deny", "reason": "The plan was rejected from Codync."}))
@@ -39,7 +44,9 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
     let mut answers = Map::new();
     for question in &questions {
         let data = question_card(question, &bot, &config.cwd);
-        let Decision::Pick(index) = wait_card(hub, ev, &bot, &config, &data, &question.text).await? else {
+        let Decision::Pick(index) =
+            wait_card(hub, ev, &bot, &config, &data, &question.text, None, super::DECISION_WAIT).await?
+        else {
             return None;
         };
         answers.insert(question.text.clone(), question.options.get(index)?.label.clone().into());

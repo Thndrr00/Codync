@@ -217,6 +217,13 @@ the same checks (`host/src/routines/hooks.rs`); the protocol is
   While the routine has a run under way or queued (a retry waiting for its time
   doesn't count), the local endpoint answers `409` and the cloud
   queue retries later (30 s doubling to 15 min).
+- **Local scripts ceiling**: a delivery to the local address takes a slot of its
+  bot's hour before it queues a run (`host/src/routines/limits.rs`, ported from
+  `CopilotKit/OpenBot`'s per-agent hourly limit): 30, 60, 120, 300 or 1000 requests
+  an hour, chosen for the computer (`scriptLimit` / `setScriptLimit`) and shared by
+  every bot. Past it the local endpoint answers `429`; public deliveries through the
+  cloud don't count, and a retry of a delivery id already queued spends no second
+  slot. The counts live in memory, so a restart forgets them.
 - **Offline**: the cloud keeps public deliveries for up to 72 hours and hands them
   over one at a time once the host is back; the host acknowledges each.
 - **Trust**: deliveries are not end-to-end encrypted. The cloud terminates HTTPS,
@@ -241,6 +248,7 @@ All normal methods use the existing authenticated host API / authorized E2E chan
 | `runRoutine` | `botId`, `id` (a waiting retry runs now instead) |
 | `retryRoutineRun` | `botId`, `runId` of a failed run whose notice offers a retry; returns the new `run` |
 | `routineWebhook` | `botId`, `id`, optional `rotate`; returns `url` (public or null), `localUrl`, `key`, `connected` |
+| `scriptLimit` / `setScriptLimit` | Computer-wide hourly ceiling on local script deliveries; `setScriptLimit` takes `perHour` (30, 60, 120, 300 or 1000) and returns it |
 | `routineFlowCanvas` and seven more | A routine's flow of bot-to-bot hand-offs: canvas, node positions, connect, disconnect, test. See [routine flows](routine-flows.md#host-api). |
 
 The local-only `routineCall` backs the MCP tools. Each MCP instance is scoped to

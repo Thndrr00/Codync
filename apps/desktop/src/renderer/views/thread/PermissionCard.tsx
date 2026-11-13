@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ApprovalRule, RuleProposal } from '@shared/approval-rules'
 import type { Entry, FileDiff, PermissionOption } from '@shared/models'
 import { Button, Disclosure, Spinner } from '../../components/Controls'
@@ -37,6 +37,12 @@ export const permissionHeadline = (toolKind?: string) => {
 
 const rank: Record<string, number> = { allow_once: 0, allow_always: 1, reject_once: 2, reject_always: 3 }
 
+/** " · 4:59" on a plan card's Start button when the plan starts by itself in a minute or more. */
+export const countdownLabel = (ms: number) => {
+  const total = Math.ceil(ms / 1_000)
+  return total < 60 ? '' : ` · ${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
 /** Allow before deny, once before always. */
 export const sortedOptions = (options: PermissionOption[]) => [...options].sort((a, b) => (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9))
 
@@ -70,6 +76,15 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
   const [always, setAlways] = useState<{ option: PermissionOption; proposal: RuleProposal; pattern: string } | null>(null)
   const d = entry.data
   const pending = d.status === 'pending'
+  // A plan card with a start time counts down on its allow button once a minute or more is left.
+  const startsAt = typeof d.autoApproveAt === 'number' ? d.autoApproveAt : null
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!pending || startsAt === null) return
+    const timer = setInterval(() => setNow(Date.now()), 1_000)
+    return () => clearInterval(timer)
+  }, [pending, startsAt])
+  const countdown = startsAt === null ? null : Math.max(0, startsAt - now)
   const hasDetail = !!d.command || !!d.detail || !!d.diffs?.length
   const options = sortedOptions(d.options ?? [])
   const once = options.find((o) => o.kind === 'allow_once')
@@ -119,7 +134,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
                   disabled={answering !== null}
                   onClick={() => void choose(o)}
                 >
-                  <Text size="body" weight={o.kind === 'allow_once' ? 'semibold' : 'regular'} tone={o.kind.startsWith('allow') ? 'text' : 'danger'} className="permission-option-label">{optionLabel(o)}</Text>
+                  <Text size="body" weight={o.kind === 'allow_once' ? 'semibold' : 'regular'} tone={o.kind.startsWith('allow') ? 'text' : 'danger'} className="permission-option-label">{optionLabel(o)}{o.kind === 'allow_once' && countdown !== null ? countdownLabel(countdown) : ''}</Text>
                   {answering === o.optionId ? <Spinner size={14} /> : null}
                 </button>
               </div>

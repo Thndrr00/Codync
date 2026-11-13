@@ -905,6 +905,40 @@ export class BotStore extends BotSync {
     this.changed()
   }
 
+  /** Reads the hourly ceiling on local script requests; an older host keeps what was there (nothing). */
+  async refreshScriptLimit() {
+    if (this.retired || !this.client) return
+    try {
+      this.scriptLimit = await this.client.call<{ perHour: number; choices: number[] }>('scriptLimit', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that ceiling; throws the host's reason when the value isn't one of the choices. */
+  async setScriptLimit(perHour: number) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ perHour: number }>('setScriptLimit', { perHour })
+    this.scriptLimit = { perHour: saved.perHour, choices: this.scriptLimit?.choices ?? [] }
+    this.changed()
+  }
+
+  /** Reads when a plan card starts the work by itself; an older host keeps what was there (nothing). */
+  async refreshPlanStart() {
+    if (this.retired || !this.client) return
+    try {
+      this.planStart = await this.client.call<{ afterMs: number | null; presets: number[]; min: number; max: number }>('planStart', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that time (`null` = when the person presses Start); throws the host's reason when it is too short. */
+  async setPlanStart(afterMs: number | null) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ afterMs: number | null }>('setPlanStart', { afterMs })
+    this.planStart = { ...(this.planStart ?? { presets: [], min: 5_000, max: 840_000 }), afterMs: saved.afterMs }
+    this.changed()
+  }
+
   async refreshUsage() {
     if (this.retired || !this.client) return
     try {

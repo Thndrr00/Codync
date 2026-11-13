@@ -36,6 +36,8 @@ pub enum Refused {
     Paused,
     /// The routine is already running; the sender (or the cloud queue) tries again later.
     Busy,
+    /// The computer's hourly ceiling on local script requests is spent (`limits`).
+    RateLimited(u32),
     Invalid(String),
 }
 
@@ -45,12 +47,13 @@ impl Refused {
             Self::Unauthorized => "unauthorized",
             Self::Paused => "paused",
             Self::Busy => "busy",
+            Self::RateLimited(_) => "rateLimited",
             Self::Invalid(_) => "invalid",
         }
     }
 
     pub fn retry(&self) -> bool {
-        matches!(self, Self::Busy)
+        matches!(self, Self::Busy | Self::RateLimited(_))
     }
 }
 
@@ -60,6 +63,7 @@ impl std::fmt::Display for Refused {
             Self::Unauthorized => f.write_str("invalid webhook key or signature"),
             Self::Paused => f.write_str("routine is paused"),
             Self::Busy => f.write_str("routine already has an active run"),
+            Self::RateLimited(limit) => f.write_str(&format!("the limit of {limit} local requests an hour is spent")),
             Self::Invalid(why) => f.write_str(why),
         }
     }

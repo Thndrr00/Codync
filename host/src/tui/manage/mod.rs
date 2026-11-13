@@ -240,6 +240,7 @@ pub enum RoutineField {
     Instruction,
     When,
     Outputs,
+    Thread,
 }
 
 pub struct RoutineForm {
@@ -249,6 +250,8 @@ pub struct RoutineForm {
     pub instruction: Editor,
     pub when: Editor,
     pub outputs: Editor,
+    /// Runs post in a thread of the bot's chat instead of its main one.
+    pub thread: bool,
     /// None preserves outputs that the host cannot express in the text editor.
     pub original_outputs: Option<String>,
     pub original_output_values: Value,

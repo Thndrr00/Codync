@@ -2430,5 +2430,21 @@
   "The workspace origin now points here.": "이 작업 공간의 origin이 이제 여기를 가리킵니다.",
   "Sender's signing secret": "보낸 사람의 서명 비밀",
   "Use it": "이것 사용",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Composio나 Svix처럼 Standard Webhooks로 서명하는 보낸 사람은 고유한 비밀을 가집니다. 여기에 붙여 넣으면 위의 키가 그 비밀이 됩니다."
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Composio나 Svix처럼 Standard Webhooks로 서명하는 보낸 사람은 고유한 비밀을 가집니다. 여기에 붙여 넣으면 위의 키가 그 비밀이 됩니다.",
+  "Local scripts": "로컬 스크립트",
+  "Requests an hour": "시간당 요청",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "이 컴퓨터의 스크립트가 한 시간에 루틴으로 보낼 수 있는 요청 수입니다(모든 에이전트 합계). 넘으면 주소가 429를 돌려주고 스크립트는 나중에 다시 시도합니다.",
+  "Plan cards": "계획 카드",
+  "Start the work": "작업 시작",
+  "When I press Start": "시작을 누를 때",
+  "After {time}": "{time} 후",
+  "Custom time…": "사용자 지정 시간…",
+  "The plan waits until you press Start. You get a notification.": "계획은 시작을 누를 때까지 기다립니다. 알림을 받습니다.",
+  "The work starts after {time}, or when you press Start.": "작업은 {time} 후에 또는 시작을 누르면 시작됩니다.",
+  "Time before the work starts": "작업 시작까지의 시간",
+  "sec": "초",
+  "min": "분",
+  "At least 5 seconds.": "최소 5초입니다.",
+  "Enter a whole number of at least 5 seconds.": "5초 이상의 정수를 입력하세요.",
+  "Set": "설정"
 }

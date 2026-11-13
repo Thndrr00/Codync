@@ -2430,5 +2430,21 @@
   "The workspace origin now points here.": "ワークスペースの origin は今後ここを指します。",
   "Sender's signing secret": "送信者の署名シークレット",
   "Use it": "これを使う",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Composio や Svix など Standard Webhooks で署名する送信者は独自のシークレットを持ちます。ここに貼り付けると、上のキーがそのシークレットになります。"
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Composio や Svix など Standard Webhooks で署名する送信者は独自のシークレットを持ちます。ここに貼り付けると、上のキーがそのシークレットになります。",
+  "Local scripts": "ローカルスクリプト",
+  "Requests an hour": "1時間あたりのリクエスト",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "このコンピュータのスクリプトが1時間にルーティンへ送れるリクエスト数です（全エージェント合計）。超えるとアドレスは429を返し、スクリプトは後で再試行します。",
+  "Plan cards": "プランカード",
+  "Start the work": "作業を開始",
+  "When I press Start": "「開始」を押したとき",
+  "After {time}": "{time}後",
+  "Custom time…": "カスタム時間…",
+  "The plan waits until you press Start. You get a notification.": "プランは「開始」を押すまで待機します。通知が届きます。",
+  "The work starts after {time}, or when you press Start.": "作業は{time}後に始まるか、「開始」を押すと始まります。",
+  "Time before the work starts": "作業開始までの時間",
+  "sec": "秒",
+  "min": "分",
+  "At least 5 seconds.": "5秒以上にしてください。",
+  "Enter a whole number of at least 5 seconds.": "5秒以上の整数を入力してください。",
+  "Set": "設定"
 }

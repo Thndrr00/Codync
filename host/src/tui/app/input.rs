@@ -56,12 +56,13 @@ impl App {
             Overlay::Rules(s) => (s.mode != super::rules::Mode::List).then_some(&mut s.editor),
             Overlay::Always(s) => s.refusal.is_none().then_some(&mut s.editor),
             Overlay::Fields(f) => f.current().map(|i| &mut i.ed),
-            Overlay::Routine(f) => Some(match f.field {
-                super::super::manage::RoutineField::Name => &mut f.name,
-                super::super::manage::RoutineField::Instruction => &mut f.instruction,
-                super::super::manage::RoutineField::When => &mut f.when,
-                super::super::manage::RoutineField::Outputs => &mut f.outputs,
-            }),
+            Overlay::Routine(f) => match f.field {
+                super::super::manage::RoutineField::Name => Some(&mut f.name),
+                super::super::manage::RoutineField::Instruction => Some(&mut f.instruction),
+                super::super::manage::RoutineField::When => Some(&mut f.when),
+                super::super::manage::RoutineField::Outputs => Some(&mut f.outputs),
+                super::super::manage::RoutineField::Thread => None,
+            },
             _ => None,
         }
     }

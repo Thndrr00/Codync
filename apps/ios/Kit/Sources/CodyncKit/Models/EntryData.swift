@@ -42,6 +42,8 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var locations: [Location]?
     public var options: [PermissionOption]?
     public var selected: String?
+    /// A plan card the host starts by itself: when (epoch ms). `nil` when it waits for the person.
+    public var autoApproveAt: Int64?
     public var command: String?
     public var detail: String?
     public var cwd: String?

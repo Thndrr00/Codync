@@ -2430,5 +2430,21 @@
   "The workspace origin now points here.": "工作區的 origin 現在指向這裡。",
   "Sender's signing secret": "傳送方的簽章密鑰",
   "Use it": "使用",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "用 Standard Webhooks 簽章的傳送方（例如 Composio 或 Svix）有自己的密鑰：貼到這裡，上面的金鑰就會變成該密鑰。"
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "用 Standard Webhooks 簽章的傳送方（例如 Composio 或 Svix）有自己的密鑰：貼到這裡，上面的金鑰就會變成該密鑰。",
+  "Local scripts": "本機腳本",
+  "Requests an hour": "每小時請求數",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "這台電腦上的腳本每小時可以向例行程序送出多少請求（所有代理合計）。超過後位址會回傳 429，腳本稍後重試。",
+  "Plan cards": "計畫卡片",
+  "Start the work": "開始工作",
+  "When I press Start": "當我按下「開始」時",
+  "After {time}": "{time}後",
+  "Custom time…": "自訂時間…",
+  "The plan waits until you press Start. You get a notification.": "計畫會等你按下「開始」。你會收到通知。",
+  "The work starts after {time}, or when you press Start.": "工作會在{time}後開始，或在你按下「開始」時開始。",
+  "Time before the work starts": "工作開始前的時間",
+  "sec": "秒",
+  "min": "分鐘",
+  "At least 5 seconds.": "至少 5 秒。",
+  "Enter a whole number of at least 5 seconds.": "請輸入至少 5 秒的整數。",
+  "Set": "設定"
 }

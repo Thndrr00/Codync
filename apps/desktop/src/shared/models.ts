@@ -482,6 +482,8 @@ export interface EntryData {
   locations?: { path: string; line?: number }[]
   options?: PermissionOption[]
   selected?: string
+  /** A plan card the host will start by itself: when (epoch ms). Absent when it waits for the person. */
+  autoApproveAt?: number | null
   command?: string
   detail?: string
   cwd?: string

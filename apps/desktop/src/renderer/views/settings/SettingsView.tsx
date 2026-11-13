@@ -39,6 +39,8 @@ import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
+import { LocalScriptsSection } from './LocalScriptsSection'
+import { PlanStartSection } from './PlanStartSection'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
@@ -263,6 +265,8 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <ChannelsSection onExtensions={onExtensions} />
       <GitHubSection />
       <AgentImportSection />
+      <LocalScriptsSection />
+      <PlanStartSection />
       <DemoSection />
       <HiddenBotsSection />
     </CardForm>

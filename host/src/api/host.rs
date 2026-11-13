@@ -56,6 +56,27 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.health.set_thresholds(&hub.store, thresholds)?;
             crate::health::value(hub)
         }
+        "scriptLimit" => json!({
+            "perHour": crate::routines::limits::saved(&hub.store),
+            "choices": crate::routines::limits::CHOICES,
+        }),
+        "setScriptLimit" => {
+            let per_hour = u32::try_from(b["perHour"].as_u64().context("perHour is required")?).unwrap_or(u32::MAX);
+            json!({"perHour": crate::routines::limits::set(&hub.store, per_hour)?})
+        }
+        "planStart" => json!({
+            "afterMs": crate::external::plan::saved(&hub.store),
+            "presets": crate::external::plan::PRESETS,
+            "min": crate::external::plan::MIN,
+            "max": crate::external::plan::MAX,
+        }),
+        "setPlanStart" => {
+            let after = match b.get("afterMs") {
+                None | Some(Value::Null) => None,
+                Some(value) => Some(value.as_i64().context("afterMs must be a number of milliseconds or null")?),
+            };
+            json!({"afterMs": crate::external::plan::set(&hub.store, after)?})
+        }
         "weekSummary" => {
             let days = b["days"].as_i64().unwrap_or(7).clamp(1, 31);
             let since = crate::store::now_ms() - days * 24 * 60 * 60 * 1000;

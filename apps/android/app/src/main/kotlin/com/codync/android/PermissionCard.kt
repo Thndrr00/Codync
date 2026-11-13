@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -46,6 +48,16 @@ import kotlinx.serialization.json.jsonPrimitive
     val pending = d.text("status") == "pending"
     var expanded by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
+    // A plan card with a start time counts down on its allow button once a minute or more is left.
+    val startsAt = d["autoApproveAt"]?.jsonPrimitive?.longOrNull
+    var now by remember(entry.id) { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(entry.id, pending, startsAt) {
+        if (!pending || startsAt == null) return@LaunchedEffect
+        while (true) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1_000)
+        }
+    }
     val headline = when (d.text("toolKind")) {
         "execute" -> "Wants to run a command"
         "edit", "delete", "move" -> "Wants to change files"
@@ -95,10 +107,8 @@ import kotlinx.serialization.json.jsonPrimitive
                         .clickable(enabled = !answering, role = Role.Button) { chosen = id; respond(id) }
                         .graphicsLayer { alpha = if (!waiting || chosen == id) 1f else 0.4f }
                         .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(when (kind) {
-                            "allow_once" -> "Allow once"; "allow_always" -> "Always allow"; "reject_once" -> "Deny"; "reject_always" -> "Never"
-                            else -> option.text("name").orEmpty()
-                        }, Modifier.weight(1f), style = if (kind == "allow_once") Type.body.semibold else Type.body,
+                        Text(label(kind, option.text("name").orEmpty()) + (if (kind == "allow_once") countdownSuffix(startsAt, now) else ""),
+                            Modifier.weight(1f), style = if (kind == "allow_once") Type.body.semibold else Type.body,
                             color = if (kind.startsWith("allow")) Palette.text else Palette.danger)
                         if (answering && chosen == id) Spinner(14.dp)
                     }
@@ -106,6 +116,22 @@ import kotlinx.serialization.json.jsonPrimitive
             }
         } else Text(outcome(d), style = Type.caption.medium, color = Palette.secondary)
     }
+}
+
+/** "Allow once", "Always allow", "Deny", "Never", or the agent's own name for the option. */
+private fun label(kind: String, name: String): String = when (kind) {
+    "allow_once" -> "Allow once"
+    "allow_always" -> "Always allow"
+    "reject_once" -> "Deny"
+    "reject_always" -> "Never"
+    else -> name
+}
+
+/** " · 4:59" when the plan starts by itself in a minute or more. */
+internal fun countdownSuffix(startsAt: Long?, now: Long): String {
+    val remaining = (startsAt ?: return "") - now
+    val total = ((remaining + 999) / 1_000).coerceAtLeast(0)
+    return if (total < 60) "" else " · %d:%02d".format(total / 60, total % 60)
 }
 
 private fun outcome(d: JsonObject): String = when (d.text("status")) {

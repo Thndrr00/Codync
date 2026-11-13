@@ -475,6 +475,7 @@ Close code 總表：`1000` 正常、`1011` 內部錯誤／逾時、`4001 unautho
 - **投遞**：host `ready` 時，DO 依 `seq` 一次送一則 `hook.item`（狀態 `delivering`），跳過 `not_before` 未到的；host 斷線時退回 `queued`。alarm 清除過期項目，並在最早的 `not_before` 喚醒。
 - **轉給 host 的 header 白名單**：`authorization`、`content-type`、`user-agent`、`x-delivery-id`、`idempotency-key`、`x-github-event`、`x-github-delivery`、`x-github-hook-id`、`x-hub-signature-256`、`webhook-id`、`webhook-timestamp`、`webhook-signature`。
 - **Host 處理**（`routines::hooks`）：驗證 → GitHub `ping` 回 ok 不執行 → 暫停回 `paused` → 轉成 event（JSON 物件原樣；GitHub → `{source:"github", event:"<event>.<action>", repo, sender, text, url, payload}`；其他 → `{text}`）→ trigger 不符回 ok（忽略）→ 排入 run。routine 正在執行 → `retry:true`。
+- **本機端點的上限**：本機 `http://127.0.0.1:<port>/hooks/routines/<id>` 的投遞先扣掉該 bot 這一小時的腳本額度（`routines::limits`；30／60／120／300／1000，依電腦設定、所有 bot 共用），用完 → `429`；經雲端的公開投遞不佔額度，已排入的 delivery id 重試也不佔第二格。計數只在記憶體，重啟即清空。
 - **信任邊界**：webhook 內容在 Cloudflare 以 HTTPS 解開，雲端看得到明文，也存著 key（用來驗 HMAC）。這不是 §6 的端對端加密；App 與文件都需明講。
 
 ### 7.9 Cloud assistant（MCP connector）

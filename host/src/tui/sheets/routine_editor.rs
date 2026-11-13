@@ -6,8 +6,8 @@ use ratatui::style::Modifier;
 
 pub fn draw(buf: &mut Buffer, area: Rect, f: &RoutineForm) {
     let t = theme();
-    let r = centered(area, 84, 20);
-    if r.height < 20 || r.width < 60 {
+    let r = centered(area, 84, 22);
+    if r.height < 22 || r.width < 60 {
         compact(buf, r, f);
         return;
     }
@@ -64,6 +64,24 @@ pub fn draw(buf: &mut Buffer, area: Rect, f: &RoutineForm) {
         "Separate outputs with ; · quote titles · none clears outputs",
         t.dim.patch(t.panel),
     );
+    let on = f.field == RoutineField::Thread;
+    put(buf, inner.x, inner.y + 16, 9, "Thread", label(on));
+    put(
+        buf,
+        vx,
+        inner.y + 16,
+        vw,
+        if f.thread { "[x] on · space toggles" } else { "[ ] off · space toggles" },
+        if on { t.bold } else { t.secondary }.patch(t.panel),
+    );
+    put(
+        buf,
+        vx,
+        inner.y + 17,
+        vw,
+        "Its runs post in a thread of the bot chat instead of the main one.",
+        t.dim.patch(t.panel),
+    );
     let by = inner.bottom() - 1;
     if let Some(e) = &f.error {
         put(buf, inner.x, by - 1, inner.width, e, t.red.patch(t.panel));
@@ -90,9 +108,29 @@ fn compact(buf: &mut Buffer, area: Rect, form: &RoutineForm) {
         RoutineField::Outputs => {
             ("Outputs", &form.outputs, "whatsapp recipient@s.whatsapp.net from sender@s.whatsapp.net")
         }
+        RoutineField::Thread => ("Thread", &form.name, ""),
     };
     put(buf, inner.x, inner.y, inner.width, tr(label).as_ref(), t.bold);
-    multiline(buf, Rect::new(inner.x, inner.y + 1, inner.width, inner.height.saturating_sub(3)), editor, hint, true);
+    if form.field == RoutineField::Thread {
+        let value = if form.thread { "[x] on" } else { "[ ] off" };
+        put(buf, inner.x, inner.y + 1, inner.width, &format!("{value} · space toggles"), t.bold);
+        put(
+            buf,
+            inner.x,
+            inner.y + 2,
+            inner.width,
+            "Its runs post in a thread of the bot chat instead of the main one.",
+            t.secondary,
+        );
+    } else {
+        multiline(
+            buf,
+            Rect::new(inner.x, inner.y + 1, inner.width, inner.height.saturating_sub(3)),
+            editor,
+            hint,
+            true,
+        );
+    }
     if let Some(error) = &form.error {
         put(buf, inner.x, inner.bottom() - 2, inner.width, error, t.red);
     }
@@ -113,6 +151,7 @@ mod tests {
             instruction: Editor::default(),
             when: Editor::default(),
             outputs: Editor::default(),
+            thread: false,
             original_outputs: Some(String::new()),
             original_output_values: serde_json::json!([]),
             original: serde_json::Value::Null,
@@ -121,7 +160,13 @@ mod tests {
             error: None,
             saving: false,
         };
-        for field in [RoutineField::Name, RoutineField::Instruction, RoutineField::When, RoutineField::Outputs] {
+        for field in [
+            RoutineField::Name,
+            RoutineField::Instruction,
+            RoutineField::When,
+            RoutineField::Outputs,
+            RoutineField::Thread,
+        ] {
             form.field = field;
             for (width, height) in [(0, 0), (8, 3), (30, 10), (80, 18), (100, 30)] {
                 let area = Rect::new(0, 0, width, height);

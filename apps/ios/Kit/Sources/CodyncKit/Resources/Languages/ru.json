@@ -2430,5 +2430,21 @@
   "The workspace origin now points here.": "Origin рабочей папки теперь указывает сюда.",
   "Sender's signing secret": "Секрет подписи отправителя",
   "Use it": "Использовать",
-  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Отправитель, который подписывает через Standard Webhooks, например Composio или Svix, имеет собственный секрет: вставьте его здесь, и ключ выше станет этим секретом."
+  "A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.": "Отправитель, который подписывает через Standard Webhooks, например Composio или Svix, имеет собственный секрет: вставьте его здесь, и ключ выше станет этим секретом.",
+  "Local scripts": "Локальные скрипты",
+  "Requests an hour": "Запросов в час",
+  "How many requests a script on this computer may send to routines each hour, for every agent together. Past it the address answers 429 and the script tries again later.": "Сколько запросов в час скрипт на этом компьютере может отправить в рутины, суммарно по всем агентам. Сверх этого адрес отвечает 429, а скрипт повторит позже.",
+  "Plan cards": "Карточки плана",
+  "Start the work": "Начать работу",
+  "When I press Start": "Когда я нажму «Начать»",
+  "After {time}": "Через {time}",
+  "Custom time…": "Своё время…",
+  "The plan waits until you press Start. You get a notification.": "План ждёт, пока вы нажмёте «Начать». Вы получите уведомление.",
+  "The work starts after {time}, or when you press Start.": "Работа начнётся через {time} или когда вы нажмёте «Начать».",
+  "Time before the work starts": "Время до начала работы",
+  "sec": "с",
+  "min": "мин",
+  "At least 5 seconds.": "Не меньше 5 секунд.",
+  "Enter a whole number of at least 5 seconds.": "Введите целое число не меньше 5 секунд.",
+  "Set": "Задать"
 }
