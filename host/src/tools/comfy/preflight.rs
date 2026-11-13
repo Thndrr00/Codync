@@ -8,7 +8,10 @@ use crate::tools::comfy;
 use serde_json::{Value, json};
 
 /// What a run needs and what is missing, for the card and the bot.
-#[allow(clippy::cast_precision_loss, reason = "a megabyte count never needs the 52 bits a f64 keeps, and the GB figure is only shown")]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "a megabyte count never needs the 52 bits a f64 keeps, and the GB figure is only shown"
+)]
 pub fn check(template: &Template, running: bool, info: Option<&Value>) -> Value {
     let gpu = comfy::gpu();
     let gpu_name = gpu.as_ref().map(|g| g.name.as_str());

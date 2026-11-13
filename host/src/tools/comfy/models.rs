@@ -37,7 +37,10 @@ struct Entry {
 }
 
 impl Entry {
-    #[allow(clippy::cast_precision_loss, reason = "a byte count never needs the 52 bits a f64 keeps, and it is only shown as a percentage")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "a byte count never needs the 52 bits a f64 keeps, and it is only shown as a percentage"
+    )]
     fn public(&self) -> Value {
         json!({
             "folder": self.folder,

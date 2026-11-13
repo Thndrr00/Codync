@@ -58,7 +58,10 @@ struct Progress {
 }
 
 impl Progress {
-    #[allow(clippy::cast_precision_loss, reason = "a step count never needs the 52 bits a f64 keeps, and it is only shown as a percentage")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "a step count never needs the 52 bits a f64 keeps, and it is only shown as a percentage"
+    )]
     fn public(&self) -> Value {
         json!({
             "node": self.node,
