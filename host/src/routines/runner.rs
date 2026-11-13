@@ -571,6 +571,39 @@ mod tests {
     }
 
     #[test]
+    fn a_due_run_waits_or_skips_at_the_limit_and_a_test_run_never_does() {
+        let dir = std::env::temp_dir().join(format!("codync-budget-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let identity = crate::remote::identity::Identity::load_or_create(&dir).unwrap();
+        let hub = Hub::new(store, "h".into(), identity, "t".into(), 0);
+        let config = serde_json::from_value(json!({"id": "bot", "name": "B", "backend": "claude"})).unwrap();
+        hub.store.save_bot(&config).unwrap();
+        hub.budget.set_limit(&hub.store, "bot", Some(100)).unwrap();
+        hub.budget.record(&hub.store, "bot", now_ms(), 200);
+
+        let routines = Routines::default();
+        let mut wait = super::super::tests::routine();
+        wait.limit_policy = "wait".into();
+        let mut skip = super::super::tests::routine();
+        skip.id = "skip".into();
+        skip.limit_policy = "skip".into();
+        routines
+            .change(&hub.store, |s| {
+                s.routines.extend([wait.clone(), skip.clone()]);
+                Ok(())
+            })
+            .unwrap();
+
+        let now = now_ms();
+        assert_eq!(routines.held_at_limit(&hub, &new_run(&wait, Value::Null, None), now), Some(true));
+        assert_eq!(routines.held_at_limit(&hub, &new_run(&skip, Value::Null, None), now), Some(false));
+        let test = new_run(&wait, json!({"source": "test"}), None);
+        assert_eq!(routines.held_at_limit(&hub, &test, now), None, "a test run is the person at the keyboard");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_run_held_at_the_limit_waits_for_the_reset() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let routines = Routines::default();
