@@ -4,8 +4,9 @@
 //!   (<https://registry.modelcontextprotocol.io>) or added by hand. They're
 //!   installed once per computer and handed to the agent as `mcpServers` when a
 //!   bot that has them turned on starts or resumes its session.
-//! - **Apps** are connected through Composio and listed as `composio-*`
-//!   connectors; see `composio`.
+//! - **Apps** are MCP servers built from the reviewed `CopilotKit/OpenBot` catalogue
+//!   (`copilotkit`, through its `install.rs` bridge), connected through Composio as
+//!   `composio-*` connectors (`composio`), or added from the nightly app list (`openbot`).
 //! - **Skills** are instruction folders (a `SKILL.md` plus any files it uses),
 //!   from <https://github.com/anthropics/skills> or written in Codync (by the
 //!   user, or by a bot with `chat::skills`), kept in
@@ -23,6 +24,7 @@ pub mod bot_secrets;
 pub mod catalog;
 pub mod composio;
 pub mod connector_update;
+pub mod copilotkit;
 pub mod hermes;
 pub mod hermes_apps;
 pub mod login;
@@ -335,16 +337,20 @@ pub fn update_connectors<T>(
     Ok(result)
 }
 
-fn add_connector(store: &crate::store::Store, mut c: Connector) -> Result<Value> {
+pub(crate) fn add_connector(store: &crate::store::Store, mut c: Connector) -> Result<Value> {
     update_connectors(store, |all| {
-        if c.registry_name.is_none() {
+        if c.registry_name.is_none() && c.catalog.is_none() {
             // Recheck under the write lock: another install may have finished during OAuth discovery.
             ensure_name_available(&c.name, all)?;
         }
-        // A registry server is installed once: installing it again replaces it under the id the bots know.
-        if let Some(name) = c.registry_name.as_deref()
-            && let Some(existing) = all.iter_mut().find(|x| x.registry_name.as_deref() == Some(name))
-        {
+        // A registry server, or a catalogue app, is installed once: installing it again replaces it
+        // under the id the bots know. Add after a failure is the way to repair one.
+        let existing = match (c.registry_name.as_deref(), c.catalog.as_deref()) {
+            (Some(name), _) => all.iter_mut().find(|x| x.registry_name.as_deref() == Some(name)),
+            (None, Some(app)) => all.iter_mut().find(|x| x.catalog.as_deref() == Some(app)),
+            (None, None) => None,
+        };
+        if let Some(existing) = existing {
             c.id.clone_from(&existing.id);
             *existing = c;
             return Ok(existing.public());
@@ -354,6 +360,17 @@ fn add_connector(store: &crate::store::Store, mut c: Connector) -> Result<Value>
         all.push(c);
         Ok(public)
     })
+}
+
+/// Installs the app `id` from whichever catalogue ships it, with the values the user typed.
+///
+/// The reviewed `CopilotKit/OpenBot` catalogue has its own bridge; the nightly list's apps are
+/// servers the user's fields configure, added like a custom connector.
+pub(crate) async fn install_app(store: &crate::store::Store, id: &str, values: &Value) -> Result<Value> {
+    if copilotkit::app(id).is_ok() {
+        return copilotkit::install_app(store, id, values).await;
+    }
+    openbot::install_app(store, id, values).await
 }
 
 /// A custom connector can't take an installed connector's name. Names are compared as
@@ -367,7 +384,7 @@ fn ensure_name_available(name: &str, all: &[Connector]) -> Result<()> {
     Ok(())
 }
 
-fn unique_id(base: &str, taken: &[String]) -> String {
+pub(crate) fn unique_id(base: &str, taken: &[String]) -> String {
     let base = slug(base);
     let mut id = base.clone();
     let mut n = 2;
@@ -411,6 +428,14 @@ async fn get(policy: Policy, url: &str, timeout: Duration) -> Result<reqwest::Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One method installs from either catalogue, and an id neither ships still says so.
+    #[tokio::test]
+    async fn an_app_install_finds_the_catalogue_that_ships_it() {
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("store");
+        let error = install_app(&store, "nope", &json!({})).await.unwrap_err();
+        assert!(error.to_string().contains("Unknown app"), "{error}");
+    }
 
     #[test]
     fn slugs_are_safe() {

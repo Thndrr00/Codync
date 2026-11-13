@@ -23,6 +23,8 @@ impl App {
         self.call("connectors", json!({}), After::Connectors);
         self.call("skills", json!({}), After::Skills);
         self.sheet("marketSkills", json!({}), Reply::Skills);
+        self.sheet("marketApps", json!({"search": ""}), Reply::Apps);
+        self.sheet("composioStatus", json!({}), Reply::ComposioStatus);
         self.sheet(
             "marketConnectors",
             json!({"search": "", "includeBundledApps":true}),
@@ -36,6 +38,14 @@ impl App {
             registry: vec![],
             next: None,
             skills: None,
+            apps: None,
+            composio: None,
+            composio_apps: vec![],
+            composio_next: None,
+            composio_searched: None,
+            composio_request: 0,
+            composio_loading: false,
+            composio_error: None,
             catalog: Value::Null,
             added: vec![],
             loading: true,
@@ -58,9 +68,46 @@ impl App {
     /// arrive while it stays near it (a page can have nothing to install). A page that failed is asked for
     /// again on the next move.
     pub(super) fn load_near_end(&self, m: &mut Market) {
-        if m.tab == Tab::Connectors && m.cursor + AHEAD >= self.market_rows(m).len() {
-            self.load_more_connectors(m);
+        if m.cursor + AHEAD >= self.market_rows(m).len() {
+            if m.tab == Tab::Connectors {
+                self.load_more_connectors(m);
+            }
+            if m.tab == Tab::Apps {
+                self.load_more_composio(m);
+            }
         }
+    }
+
+    /// The Composio apps' next page, for the search the list shows.
+    fn load_more_composio(&self, m: &mut Market) {
+        if m.composio_loading || m.composio_next.is_none() {
+            return;
+        }
+        m.composio_loading = true;
+        m.composio_request += 1;
+        let search = m.composio_searched.clone().unwrap_or_default();
+        let body = json!({"search": search, "cursor": m.composio_next});
+        let reply = Reply::ComposioApps { request: m.composio_request, append: true };
+        self.sheet("composioToolkits", body, reply);
+    }
+
+    /// Asks for the apps again, from the first page of `search`.
+    fn search_composio(&self, m: &mut Market, search: String) {
+        m.composio_apps.clear();
+        m.composio_next = None;
+        m.composio_loading = true;
+        m.composio_error = None;
+        m.composio_request += 1;
+        m.composio_searched = Some(search.clone());
+        let reply = Reply::ComposioApps { request: m.composio_request, append: false };
+        self.sheet("composioToolkits", json!({"search": search}), reply);
+    }
+
+    /// Opens the key sheet on top of the marketplace.
+    fn open_composio_key(&mut self, m: Box<Market>) {
+        let fields = super::composio::key_fields(m.composio.as_ref(), &self.host);
+        self.overlays.push(Overlay::Market(m));
+        self.overlays.push(Overlay::Fields(Box::new(fields)));
     }
 
     /// The marketplace's rows on its current tab, filtered by the query.
@@ -93,6 +140,30 @@ impl App {
                 );
                 rows
             }
+            Tab::Apps => {
+                let installed: Vec<String> =
+                    self.plugins.0.iter().filter_map(|c| c["catalog"].as_str()).map(str::to_owned).collect();
+                // A builtin stays listed (it is always on); the rest drop out once their connector exists.
+                let apps = m
+                    .apps
+                    .iter()
+                    .flatten()
+                    .filter(|v| v["builtin"] == true || !installed.contains(&s(v, "id")))
+                    .filter(|v| hit(v, &["name", "tagline"]))
+                    .map(Row::App);
+                let status = m.composio.as_ref();
+                let configured = status.is_some_and(|c| c["configured"] == true);
+                let key = std::iter::once(Row::ComposioKey);
+                if !configured {
+                    return apps.chain(key).collect();
+                }
+                let composio = m
+                    .composio_apps
+                    .iter()
+                    .filter(|v| hit(v, &["name", "description", "slug"]))
+                    .map(Row::ComposioApp);
+                apps.chain(composio).chain(key).collect()
+            }
             Tab::Skills => {
                 let installed: Vec<String> = self.plugins.1.iter().map(|v| s(v, "id").to_lowercase()).collect();
                 let mut rows: Vec<Row> =
@@ -110,9 +181,17 @@ impl App {
         }
     }
 
-    /// The query no longer matches what the registry list shows: ↵ searches first.
+    /// The query no longer matches what the list shows: ↵ searches first.
     pub fn market_stale(m: &Market) -> bool {
-        m.tab == Tab::Connectors && m.searched.as_deref().is_some_and(|s| s != m.query.text.trim())
+        let typed = m.query.text.trim();
+        match m.tab {
+            Tab::Connectors => m.searched.as_deref().is_some_and(|s| s != typed),
+            Tab::Apps => {
+                m.composio.as_ref().is_some_and(|c| c["configured"] == true)
+                    && m.composio_searched.as_deref().is_some_and(|s| s != typed)
+            }
+            _ => false,
+        }
     }
 
     pub(in crate::tui) fn market_key(&mut self, mut m: Box<Market>, k: KeyEvent) -> Option<Overlay> {
@@ -144,19 +223,28 @@ impl App {
                 self.call("connectors", json!({}), After::Connectors);
                 self.call("skills", json!({}), After::Skills);
                 self.call("refreshBackends", json!({}), After::Backends);
+                self.sheet("composioStatus", json!({}), Reply::ComposioStatus);
+            }
+            KeyCode::Char('k') if ctrl(k) && m.tab == Tab::Apps => {
+                self.open_composio_key(m);
+                return None;
             }
             KeyCode::Enter if Self::market_stale(&m) => {
                 let search = m.query.text.trim().to_owned();
-                m.loading = true;
                 m.cursor = 0;
-                m.registry.clear();
-                m.next = None;
-                self.sheet(
-                    "marketConnectors",
-                    json!({"search": search, "includeBundledApps":true}),
-                    Reply::Registry { search: search.clone(), cursor: None },
-                );
-                m.searched = Some(search);
+                if m.tab == Tab::Apps {
+                    self.search_composio(&mut m, search);
+                } else {
+                    m.loading = true;
+                    m.registry.clear();
+                    m.next = None;
+                    self.sheet(
+                        "marketConnectors",
+                        json!({"search": search, "includeBundledApps":true}),
+                        Reply::Registry { search: search.clone(), cursor: None },
+                    );
+                    m.searched = Some(search);
+                }
             }
             KeyCode::Enter => return self.market_enter(m),
             KeyCode::Char('x') if ctrl(k) => {
@@ -198,6 +286,9 @@ impl App {
             SignIn(String),
             Custom,
             Install(Value),
+            App(Value),
+            ComposioKey,
+            Composio(Value),
             Skill(Value, bool),
             Catalog(Value, bool),
             None,
@@ -208,6 +299,9 @@ impl App {
             Some(Row::Installed(c)) if c["auth"] == "signedOut" => Act::SignIn(s(c, "id")),
             Some(Row::Custom) => Act::Custom,
             Some(Row::Registry(c)) => Act::Install((*c).clone()),
+            Some(Row::App(v)) => Act::App((*v).clone()),
+            Some(Row::ComposioKey) => Act::ComposioKey,
+            Some(Row::ComposioApp(v)) => Act::Composio((*v).clone()),
             Some(Row::Skill(v)) => Act::Skill((*v).clone(), true),
             Some(Row::OwnSkill(v)) => Act::Skill((*v).clone(), false),
             Some(Row::Profile(v)) if !m.added.contains(&s(v, "id")) => Act::Catalog((*v).clone(), false),
@@ -292,9 +386,56 @@ impl App {
                 self.overlays.push(Overlay::Fields(Box::new(f)));
                 return None;
             }
+            // The app's sheet: its key fields, then ↵ installs it (and starts any sign-in).
+            Act::App(item) => {
+                let fields = item["fields"].as_array().cloned().unwrap_or_default();
+                let mut note = s(&item, "tagline");
+                if item["builtin"] == true {
+                    note = tr("Always on, already part of {name}.").replace("{name}", &self.host);
+                }
+                if let Some(hint) = fields.iter().find_map(|f| f["hint"].as_str().filter(|h| !h.is_empty())) {
+                    note.push_str("\n\n");
+                    note.push_str(&tr(hint));
+                }
+                let inputs = fields
+                    .iter()
+                    .map(|f| Input {
+                        name: s(f, "id"),
+                        label: tr(&s(f, "label")).into_owned(),
+                        secret: true,
+                        required: f["required"] == true,
+                        multiline: false,
+                        placeholder: s(f, "placeholder"),
+                        ed: Editor::default(),
+                    })
+                    .collect();
+                let f = Fields {
+                    title: s(&item, "name"),
+                    note,
+                    choices: vec![],
+                    choice: 0,
+                    inputs,
+                    cursor: 0,
+                    error: None,
+                    saving: false,
+                    submit: Submit::App(item),
+                };
+                self.overlays.push(Overlay::Market(m));
+                self.overlays.push(Overlay::Fields(Box::new(f)));
+                return None;
+            }
             Act::Skill(v, catalog) => {
                 self.overlays.push(Overlay::Market(m));
                 self.open_skill(&v, catalog);
+                return None;
+            }
+            Act::ComposioKey => {
+                self.open_composio_key(m);
+                return None;
+            }
+            Act::Composio(app) => {
+                self.overlays.push(Overlay::Market(m));
+                self.connect_composio(app);
                 return None;
             }
             Act::Catalog(item, team) => self.add_from_catalog(&item, team),

@@ -291,14 +291,16 @@ export const market = {
   importConnectors: async (c: HostClient, config: string) => (await c.call<{ items: InstalledConnector[] }>('importConnectors', { config }, s(60))).items,
   // `showsCode`: this app shows a device sign-in's code, so the host may answer with one.
   connectorSignIn: (c: HostClient, id: string) => c.call<ConnectorSignIn>('connectorSignIn', { id, showsCode: true }, s(60)),
-  finishConnectorSignIn: async (c: HostClient, state: string, code: string | null, error: string | null) =>
-    (await c.call<{ connector: InstalledConnector }>('connectorSignInFinish', { state, code, error }, s(60))).connector,
+  finishConnectorSignIn: async (c: HostClient, state: string, code: string | null, error: string | null, iss: string | null = null) =>
+    (await c.call<{ connector: InstalledConnector }>('connectorSignInFinish', { state, code, error, iss }, s(60))).connector,
   removeConnector: (c: HostClient, id: string) => c.call('removeConnector', { id }),
   composioStatus: (c: HostClient) => c.call<ComposioStatus>('composioStatus'),
   /** Checks the key with Composio before keeping it; an empty key forgets Composio. */
   setComposioKey: (c: HostClient, key: string) => c.call<ComposioStatus>('setComposioKey', { key }, s(60)),
-  composioApps: (c: HostClient, search: string, cursor = '') =>
-    c.call<{ items: ComposioApp[]; nextCursor: string | null }>('composioToolkits', { search, cursor }, s(60)),
+  composioApps: async (c: HostClient, search: string, cursor: string | null = null) => {
+    const res = await c.call<{ items: ComposioApp[]; nextCursor?: string | null }>('composioToolkits', { search, cursor: cursor ?? '' }, s(60))
+    return { items: res.items, next: res.nextCursor || null }
+  },
   composioConnect: (c: HostClient, app: string) => c.call<ComposioConnect>('composioConnect', { toolkit: app }, s(60)),
   composioConnectFields: (c: HostClient, app: string, mode: string, fields: Record<string, string>) =>
     c.call<ComposioConnectionState>('composioConnectFields', { toolkit: app, mode, fields }, s(60)),
@@ -312,6 +314,9 @@ export const market = {
   /** Adds the agent's bot with its look, instructions, skills and routines. */
   installAgent: async (c: HostClient, id: string) => (await c.call<{ bot: { id: string } }>('installAgent', { id }, s(120))).bot,
   marketApps: async (c: HostClient, search = '') => (await c.call<{ items: MarketApp[] }>('marketApps', { search })).items,
+  /** Installs a catalogue app with the sheet's values: the host builds the connector and its auth. */
+  installMarketApp: async (c: HostClient, id: string, values: Record<string, string>) =>
+    (await c.call<{ connector: InstalledConnector }>('installMarketApp', { id, values }, s(45))).connector,
   installSkill: (c: HostClient, source: string) => c.call('installSkill', { source }, s(60)),
   addSkill: (c: HostClient, name: string, description: string, instructions: string) => c.call('installSkill', { name, description, instructions }),
   removeSkill: (c: HostClient, id: string) => c.call('removeSkill', { id }),
@@ -367,7 +372,7 @@ export type ExtensionSection = 'apps' | 'channels' | 'agents' | 'clis' | 'skills
 
 /** Each section with the line saying where its items come from. */
 export const EXTENSION_SECTIONS: { id: ExtensionSection; label: string; source: string }[] = [
-  { id: 'apps', label: 'Apps', source: 'Apps connect a service to {name} with its own sign-in or key. Custom connectors add any MCP server.' },
+  { id: 'apps', label: 'Apps', source: 'Apps connect a service to {name} with its own sign-in or key; Composio adds 1,000 more. Custom connectors add any MCP server.' },
   { id: 'channels', label: 'Channels', source: 'WhatsApp, Telegram, Slack and Discord: talk to a bot from the places you already write, with only the people you allow.' },
   { id: 'agents', label: 'Agents', source: 'Ready-made agents come with their own instructions, skills and routines. Add one to {name}.' },
   { id: 'clis', label: 'CLIs', source: 'The coding agents (ACPs) that run bots on {name}. Install one and sign in.' },

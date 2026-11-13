@@ -5,7 +5,6 @@ import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
 import { AgentTile, NodeNotice } from './AgentSheet'
-import { ComposioSection } from './ComposioSection'
 import type { ConnectorCatalog } from './connector-catalog'
 import { CATEGORIES, CATEGORY_LABELS, EXTENSION_SECTIONS, type ExtensionSection, type MarketAgent, type MarketApp, type MarketConnector, type MarketSkill } from './market-models'
 import { ItemGrid, LoadMoreRow, MarketRow, MarketSection, ServiceLogo, SkeletonGrid, SkillGlyph, TileIcon } from './pieces'
@@ -30,7 +29,7 @@ function grouped<T extends { category: string; featured: boolean }>(items: T[]):
   return [{ title: 'Featured', items: featured }, ...groups].filter((g) => g.items.length > 0)
 }
 
-export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, onAddConnector, onInstallConnector, onViewConnector }: {
+export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, onAddConnector, onInstallConnector, onViewConnector, children }: {
   apps: MarketApp[]
   query: string
   catalog: ConnectorCatalog<MarketConnector>
@@ -40,6 +39,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
   onAddConnector: () => void
   onInstallConnector: (connector: MarketConnector) => void
   onViewConnector: (connector: MarketConnector) => void
+  children?: ReactNode
 }) {
   const tr = useTr()
   const rows = catalog.items.items
@@ -66,7 +66,6 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
       ) : query ? (
         <Text tone="secondary">{tr('No apps match “{query}”.').replaceAll('{query}', query)}</Text>
       ) : null}
-      <ComposioSection query={query} />
       <MarketSection title={tr('Custom connector')}>
         <MarketRow
           title={tr('Any MCP server')}
@@ -101,6 +100,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
           </>
         )}
       </MarketSection>
+      {children}
     </div>
   )
 }
