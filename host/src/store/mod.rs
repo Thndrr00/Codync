@@ -6,6 +6,7 @@
 //! client's catch-up) is capped per bot, and the history search runs through `spawn_blocking`.
 
 mod analytics;
+pub mod approval_lessons;
 pub mod approvals;
 pub mod apps;
 mod bots;

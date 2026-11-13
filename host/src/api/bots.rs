@@ -493,6 +493,26 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id, actor })?;
             json!({})
         }
+        "approvalLessons" => {
+            let bot = str_arg(&b, "botId")?;
+            json!({"lessons": hub.store.approval_lessons(bot, None)})
+        }
+        "decideApprovalLesson" => {
+            let lesson = hub.store.approval_lesson(str_arg(&b, "lessonId")?).ok_or_else(|| anyhow!("unknown lesson"))?;
+            let accept = b["accept"].as_bool().ok_or_else(|| anyhow!("`accept` is required"))?;
+            if accept {
+                // The rule only exists once the person keeps it; a refused save leaves the lesson waiting.
+                let row = hub.store.bot(&lesson.bot_id)?.ok_or_else(|| anyhow!("unknown bot"))?;
+                let rule: crate::agent::approval_rules::ApprovalRule = serde_json::from_value(lesson.rule.clone())?;
+                let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
+                hub.update_bot(&json!({"id": lesson.bot_id, "approvalRules": rules}))?;
+            }
+            let status = if accept { "accepted" } else { "dismissed" };
+            if !hub.store.decide_approval_lesson(&lesson.id, status)? {
+                bail!("This lesson was already decided");
+            }
+            json!({"lesson": hub.store.approval_lesson(&lesson.id)})
+        }
         _ => return Ok(ControlFlow::Continue(b)),
     }))
 }

@@ -172,6 +172,23 @@ action the person saw and not another one.
 Idea from agentes.chat's single-use approvals (`packages/engine`, AGPL-3.0-only): the behavior,
 not the code.
 
+## Learning from a no
+
+A denial is a lesson. The host counts denials per bot by kind of action (its tool kind and its
+command, or its title, with case and spacing ignored). The second denial of the same action
+(`PROPOSE_AFTER`) becomes a lesson: a `deny` rule for that action, which the person may widen in
+the rules editor before keeping it (`host/src/agent/approval_lessons.rs`,
+`host/src/store/approval_lessons.rs`). The bot says so in its chat once.
+
+Nothing is applied on its own: `approvalLessons {botId}` lists them and
+`decideApprovalLesson {lessonId, accept}` keeps or dismisses one. Keeping it appends the rule to
+the bot's `approvalRules` through `updateBot`, so it goes through the same validation and reaches
+the bot like any other edit; dismissing it keeps it from being proposed again, and the denials it
+counted stay as they were.
+
+Idea from agentes.chat's memory that learns from rejected approvals (AGPL-3.0-only): the behavior,
+not the code.
+
 Ideas from rakazo's `action-approval.ts`, `approval-effect-key.ts` and `answerable-ask.ts`
 (Apache-2.0); no code copied. Rakazo's channel receipts and message commands need messaging
 channels, which Codync doesn't have.

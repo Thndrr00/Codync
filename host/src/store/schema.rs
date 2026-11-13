@@ -196,6 +196,7 @@ impl Store {
         super::apps::open(&c)?;
         super::open_items::open(&c)?;
         super::approvals::open(&c)?;
+        super::approval_lessons::open(&c)?;
         super::flows::open(&c)?;
         codync_mem::schema::migrate(&c)?;
         let secret_key = if path == Path::new(":memory:") {

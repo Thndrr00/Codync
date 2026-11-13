@@ -4,7 +4,7 @@ use super::approval_age;
 use super::fast_mode::Listing;
 use super::stall::ToolOutcome;
 use super::tool_entry::{activity, mark_bookkeeping, merge_tool_content};
-use super::{Actor, Reacted, Seg, SegKind};
+use super::{Actor, NoticeStyle, Reacted, Seg, SegKind};
 use crate::agent::acp::{self, Incoming};
 use crate::agent::approval_ledger;
 use crate::hub::BotStatus;
@@ -361,6 +361,9 @@ impl Actor {
             }
             Err(error) => tracing::warn!(error = format!("{error:#}"), "couldn't record the approval decision"),
         }
+        if decision == "deny" {
+            self.learn_from_denial(&card);
+        }
         let mut status = if option_id.is_some() { "answered" } else { "cancelled" };
         match answer {
             Answer::Agent(rpc_id) => {
@@ -401,6 +404,30 @@ impl Actor {
                 r.status = BotStatus::Working;
                 r.activity = "Continuing…".into();
             });
+        }
+    }
+
+    /// A denial is a lesson: the second one for the same action becomes a rule the person may keep.
+    /// The rule is never applied on its own (see `approvalLessons` and `decideApprovalLesson`).
+    fn learn_from_denial(&mut self, card: &Value) {
+        use crate::agent::approval_lessons;
+        let kind = card["toolKind"].as_str().unwrap_or("other");
+        let subject = approval_ledger::subject(card);
+        if subject.is_empty() {
+            return;
+        }
+        let family = approval_lessons::family(kind, &subject);
+        let rule = approval_lessons::rule(&subject, kind);
+        match self.hub.store.approval_denied(&self.cfg.id, kind, &subject, &family, &rule) {
+            Ok(Some(lesson)) => self.notice(
+                &format!(
+                    "You denied \"{}\" twice. A rule can deny it without asking; it waits for you in this bot's approval rules.",
+                    lesson.subject
+                ),
+                NoticeStyle::Info,
+            ),
+            Ok(None) => {}
+            Err(error) => tracing::warn!(error = format!("{error:#}"), "couldn't record the denied approval"),
         }
     }
 
