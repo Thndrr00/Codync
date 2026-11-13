@@ -13,6 +13,7 @@ import { HealthSection } from './HealthSection'
 import { TeamRunSection } from './TeamRunSection'
 import { TokenBudgetSection } from './TokenBudgetSection'
 import { RetentionSection } from './RetentionSection'
+import { WorkspaceExportSection } from './WorkspaceExportSection'
 import { AuditLogSection } from './AuditLogSection'
 import { errorText } from './parts'
 
@@ -139,6 +140,7 @@ export function DiagnosticsView() {
       <TeamRunSection bots={bots} online={running} send={(text, botId) => local?.send(text, botId)} />
       <TokenBudgetSection store={maintenance} bots={bots} online={running} />
       <RetentionSection store={maintenance} online={running} />
+      <WorkspaceExportSection store={maintenance} online={running} />
       <BotBundleSection store={maintenance} bots={bots} online={running} />
       <AuditLogSection />
     </CardForm>

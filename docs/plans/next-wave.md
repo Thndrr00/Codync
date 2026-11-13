@@ -22,6 +22,7 @@ is bigger than one release.
 | Approvals from the phone notification | next |
 | Desktop global shortcut done; agent dock next |
 | Global search across chats and documents | done |
+| Workspace export (bots + documents) | done |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |

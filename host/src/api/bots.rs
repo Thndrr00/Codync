@@ -452,6 +452,30 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let row = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
             crate::bundle::export(&[row.config])?
         }
+        // Everything a person needs to keep or move: bots, their documents and routines, in one file.
+        "exportWorkspace" => {
+            let mut bots = Vec::new();
+            let mut documents = Vec::new();
+            for row in hub.store.bots()?.into_iter().filter(|r| !r.deleted) {
+                let bot = row.config;
+                let page = hub.store.documents(&bot.id, "", None, 100)?;
+                for summary in page.items {
+                    if let Some(document) = hub.store.document(&summary.id)? {
+                        documents.push(json!({
+                            "id": document.id, "botId": document.bot_id, "parentId": document.parent_id,
+                            "title": document.title, "body": document.body, "updatedAt": document.updated_at,
+                        }));
+                    }
+                }
+                bots.push(bot);
+            }
+            json!({
+                "version": 1,
+                "exportedAt": crate::store::now_ms(),
+                "bots": crate::bundle::export(&bots)?,
+                "documents": documents,
+            })
+        }
         "retireDormantSkills" => {
             let hub = hub.clone();
             let turned_off =

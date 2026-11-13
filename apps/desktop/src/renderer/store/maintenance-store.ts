@@ -73,6 +73,17 @@ export class MaintenanceStore extends Observable {
     return text
   }
 
+  /** Bots and their documents as one JSON file, copied to the clipboard. */
+  async exportWorkspace(): Promise<string | null> {
+    let text: string | null = null
+    await this.run(async (c) => {
+      text = JSON.stringify(await c.call('exportWorkspace', {}), null, 2)
+      await window.codync.app.copy(text)
+      this.notice = 'Workspace export copied to the clipboard.'
+    })
+    return text
+  }
+
   async importBots(bundleText: string, cwd: string) {
     await this.run(async (c) => {
       let bundle: BotBundle
