@@ -77,7 +77,7 @@ internal fun LazyListScope.composio(state: AppState, composio: ComposioState, qu
         }
         else -> {
             items(composio.catalog.items.items, key = { "composio:${it.slug}" }) { app ->
-                MarketRow(app.name, app.description ?: app.slug, app.connected, addLabel = "Connect",
+                MarketRow(app.name, app.description ?: app.slug, app.connected, note = app.keyNote, addLabel = "Connect",
                     icon = { AppLogo(app.logo, app.name) }) { composio.connecting = app }
             }
             composio.catalog.cursor?.let { cursor ->
@@ -193,6 +193,7 @@ internal fun LazyListScope.composio(state: AppState, composio: ComposioState, qu
                     }
                 }
             }
+            if (!connected) ConnectionGuideCard(plan?.guide ?: app.guide, app.name, state.hostName)
             when {
                 connected -> CardSection(footer = "Turn ${app.name} on for a bot in the bot's settings, under Connectors.") {
                     row { IconLabel("Connected", "checkmark.circle.fill", Palette.added, style = Type.body) }

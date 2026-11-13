@@ -60,7 +60,7 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** One catalog item: its icon, name and line, then Add (or a check once added). */
-@Composable internal fun MarketRow(title: String, subtitle: String, added: Boolean, busy: Boolean = false, addLabel: String = "Add",
+@Composable internal fun MarketRow(title: String, subtitle: String, added: Boolean, note: String? = null, busy: Boolean = false, addLabel: String = "Add",
     open: (() -> Unit)? = null, icon: @Composable () -> Unit, add: () -> Unit) {
     // The whole row opens the item's details; without it the row does what its button does.
     val rowAction = open ?: if (added || busy) null else add
@@ -70,6 +70,7 @@ import com.kyant.shapes.RoundedRectangle
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(tr(title), style = Type.body.medium, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(tr(subtitle), style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            note?.let { KeyNote(it) }
         }
         when {
             busy -> Box(Modifier.width(60.dp), contentAlignment = Alignment.Center) { ThinkingOrb(size = 18.dp, color = Palette.secondary) }

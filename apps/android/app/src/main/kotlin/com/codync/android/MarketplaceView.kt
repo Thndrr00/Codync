@@ -246,6 +246,7 @@ import kotlinx.coroutines.launch
                     item(key = "app:$title") { MarketSection(title) {} }
                     items(group, key = { it.id }) { app ->
                         MarketRow(app.name, app.tagline, app.installed || app.id in appsAdded,
+                            note = if (app.guide?.kind == "key") tr("Needs a key from {name}").replace("{name}", app.name) else null,
                             icon = { ServiceLogo(app.website, app.name, null) }, open = { viewingApp = app }) { viewingApp = app }
                     }
                 }

@@ -7,18 +7,22 @@ released version's section; a version without one gets the PRs' "What's New: And
 else a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
-## 2.47.0
+## 2.48.0
 ### zh-Hant
 - 應用程式分頁換成 CopilotKit 審核過的連接器目錄：Google Drive、Notion、Linear、Sentry、Exa、Firecrawl 等服務，各自保留原廠的授權方式。
 - 需要登入的應用程式在瀏覽器完成授權，金鑰型的應用程式則填入自己的金鑰；兩者都只留在你的電腦上。
 - 登入回來時會核對發出的服務，移除連接器時也會一併撤銷授權。
 - 應用程式分頁也加入 Composio：在電腦上填一次 Platform 金鑰，就能瀏覽並連接 Gmail、Slack、GitHub、Notion 等 1,000 多個應用程式，金鑰只留在這台電腦上。
+- 應用程式現在會說明金鑰要到哪裡取得：逐步指引、前往該應用程式自己頁面的按鈕，表單欄位也改用白話說明。
+- 需要登入的應用程式排在前面，需要金鑰的列會先標明，再讓你打開。
 
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
 - A sign-in that comes back is checked against the service that issued it, and removing a connector revokes its grant.
 - The Apps tab also browses more than 1,000 apps through Composio: paste a Platform API key once, on your computer, and each app connects with its own sign-in.
+- Apps now say where to get the key they need: steps, a button to the app’s own page, and the form’s boxes in plain words.
+- Apps you sign in to are listed first, and a row that needs a key says so before you open it.
 
 ## 2.44.1
 ### zh-Hant
