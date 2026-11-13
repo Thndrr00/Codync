@@ -27,6 +27,7 @@ import { useDictation } from './dictation-platform'
 import { DictationEngineMenu } from './DictationEngineMenu'
 import { builtInCommand, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
 import { useVoiceShortcut } from './voice-shortcut-keys'
+import { parseQuickCommand } from './quick-commands'
 import { PromptLibrarySheet } from '../PromptLibrarySheet'
 
 type Trailing = 'interrupt' | 'stop' | 'call' | 'send'
@@ -173,6 +174,9 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
       case 'skill':
         setDraft(`/${command.action.id} `)
         break
+      case 'template':
+        setDraft(command.action.text)
+        break
     }
     field.current?.focus()
   }
@@ -238,6 +242,32 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   }
 
   const submit = () => {
+    const quick = files.length ? null : parseQuickCommand(draft, Date.now())
+    if (quick) {
+      if (quick.kind === 'error') {
+        store.setError(quick.message)
+        return
+      }
+      dictation.cancel()
+      if (quick.kind === 'task') {
+        void store.addBoardTask(quick.title).then((added) => {
+          if (!added) return
+          setDraft('')
+          field.current?.focus()
+        })
+        return
+      }
+      if (thread || about) {
+        store.setError('Schedule a message in the bot’s chat, not in a document.')
+        return
+      }
+      void store.scheduleMessage(botId, quick.text, quick.sendAt).then((scheduled) => {
+        if (!scheduled) return
+        setDraft('')
+        field.current?.focus()
+      })
+      return
+    }
     const command = files.length ? null : builtInCommand(bot, draft, members)
     if (!command && !canSend) return
     // Words still on their way would land in the emptied box (and the shortcut's tap would send them again).
@@ -403,7 +433,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
           </div>
         </div>
       </div>
-      <PromptLibrarySheet open={promptsOpen} onClose={() => setPromptsOpen(false)} onPick={(text) => {
+      <PromptLibrarySheet open={promptsOpen} draft={draft} onClose={() => setPromptsOpen(false)} onPick={(text) => {
         setDraft(draft.trim() ? `${draft}\n${text}` : text)
         setPromptsOpen(false)
         field.current?.focus()

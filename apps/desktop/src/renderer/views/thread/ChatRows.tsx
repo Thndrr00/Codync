@@ -336,6 +336,7 @@ export function UserBubble({ entry, botWorking, reply, forward }: { entry: Entry
               { title: 'Copy', icon: 'square.on.square', action: copy },
             { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
               { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? 'user', entry.threadId ?? null) },
+              ...(entry.data.text ? [{ title: 'Add to the board', icon: 'checklist', action: () => void store.addBoardTask(entry.data.text) }] : []),
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(forward ? [{ title: 'Send to a channel…', icon: 'arrowshape.turn.up.right', action: forward }] : []),
               { title: 'Delete', icon: 'trash', destructive: true, action: () => void store.deleteEntry(entry.id) },
@@ -390,6 +391,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
           items={() => [
             { title: 'Copy', icon: 'square.on.square', action: copy },
               { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+              ...(entry.data.text ? [{ title: 'Add to the board', icon: 'checklist', action: () => void store.addBoardTask(entry.data.text) }] : []),
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(forward ? [{ title: 'Send to a channel…', icon: 'arrowshape.turn.up.right', action: forward }] : []),
               { title: 'Delete', icon: 'trash', destructive: true, action: () => void store.deleteEntry(entry.id) },

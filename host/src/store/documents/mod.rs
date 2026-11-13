@@ -7,7 +7,9 @@ mod tests;
 mod types;
 
 pub use reviews::{ReviewDecision, ReviewStatus};
-pub use types::{Document, DocumentDelete, DocumentDraft, DocumentPage, DocumentSummary, DocumentWrite};
+pub use types::{
+    Document, DocumentDelete, DocumentDraft, DocumentPage, DocumentRevision, DocumentSummary, DocumentWrite,
+};
 
 use super::{Store, next_rev, now_ms};
 use crate::LockExt;
@@ -16,6 +18,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use std::collections::HashSet;
 
 const MAX_DOCUMENTS_PER_BOT: i64 = 1_000;
+/// Revisions of one document kept for its history.
+const MAX_REVISIONS: i64 = 10;
 const COLS: &str = "id, bot_id, parent_id, title, body, revision, rev, created_at, updated_at";
 
 pub(super) use schema::open;
@@ -97,6 +101,24 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         if current.revision != draft.if_revision {
             return Ok(DocumentWrite::Conflict(current));
         }
+        // Keep the text being replaced as this revision's history entry, then drop the oldest.
+        let prefix = format!("doc-revision:{id}:");
+        db.execute(
+            "INSERT INTO kv(k, v) VALUES(?1, ?2) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+            params![
+                format!("{prefix}{}", current.revision),
+                serde_json::to_string(&DocumentRevision {
+                    revision: current.revision,
+                    title: current.title.clone(),
+                    body: current.body.clone(),
+                    at: current.updated_at,
+                })?
+            ],
+        )?;
+        db.execute(
+            "DELETE FROM kv WHERE substr(k, 1, length(?1)) = ?1 AND CAST(substr(k, length(?1) + 1) AS INTEGER) <= ?2",
+            params![prefix, current.revision - MAX_REVISIONS],
+        )?;
         let rev = next_rev(db)?;
         db.execute("UPDATE documents SET title = ?2, body = ?3, revision = revision + 1, rev = ?4, updated_at = ?5 WHERE id = ?1",
             params![id, draft.title, draft.body, rev, now])?;
@@ -278,5 +300,24 @@ impl Store {
         }
         tx.commit()?;
         Ok(DocumentDelete::Deleted { ids, rev })
+    }
+
+    /// The kept revisions of a document, newest first.
+    pub fn document_revisions(&self, id: &str) -> Result<Vec<DocumentRevision>> {
+        let mut revisions: Vec<DocumentRevision> = self
+            .kv_prefix(&format!("doc-revision:{id}:"))
+            .into_iter()
+            .filter_map(|key| self.kv_read(&key).ok().flatten())
+            .filter_map(|value| serde_json::from_str(&value).ok())
+            .collect();
+        revisions.sort_by_key(|revision| -revision.revision);
+        Ok(revisions)
+    }
+
+    /// One kept revision, with the text it had.
+    pub fn document_revision(&self, id: &str, revision: i64) -> Result<Option<DocumentRevision>> {
+        self.kv_read(&format!("doc-revision:{id}:{revision}"))?
+            .map(|value| serde_json::from_str(&value).map_err(Into::into))
+            .transpose()
     }
 }

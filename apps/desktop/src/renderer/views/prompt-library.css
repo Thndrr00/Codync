@@ -32,3 +32,41 @@
   background: color-mix(in srgb, var(--text) 7%, transparent);
   color: var(--secondary);
 }
+
+/* Prompts saved from the message box: the card is a row with a pick area and Remove. */
+.prompt-group-title {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.prompt-custom {
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+}
+.prompt-pick {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.prompt-remove {
+  flex: none;
+  align-self: center;
+  margin-right: 8px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.prompt-remove:hover {
+  color: var(--danger);
+}

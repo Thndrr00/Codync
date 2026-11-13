@@ -19,20 +19,20 @@ test('a leading slash opens the list until the name ends', () => {
 
 test('built-in commands come first, then only the bot\'s own skills, by name or title', () => {
   const bot = normalizeBot({ id: 'b', skills: ['pdf', 'code-review'], fastModeSupport: 'offered' })
-  assert.deepEqual(slashCommands(bot, '', installed).map((c) => c.name), ['fast', 'pdf', 'code-review'])
+  assert.deepEqual(slashCommands(bot, '', installed).map((c) => c.name), ['task', 'schedule', 'fast', 'pdf', 'code-review'])
   assert.deepEqual(slashCommands(bot, 'review', installed).map((c) => c.name), ['code-review'])
   assert.deepEqual(slashCommands(bot, 'new', installed), [], 'a new session is in the bot\'s menu')
   assert.deepEqual(slashCommands(normalizeBot({ id: 'b', skills: ['pdf'] }), 'xl', installed), [])
-  assert.deepEqual(slashCommands(normalizeBot({ id: 'b' }), '', []).map((c) => c.name), ['fast'], 'offered until the agent says otherwise')
-  assert.deepEqual(slashCommands(normalizeBot({ id: 'b', fastModeSupport: 'unsupported' }), '', []), [], 'no Fast mode on offer')
+  assert.deepEqual(slashCommands(normalizeBot({ id: 'b' }), '', []).map((c) => c.name), ['task', 'schedule', 'fast'], 'offered until the agent says otherwise')
+  assert.deepEqual(slashCommands(normalizeBot({ id: 'b', fastModeSupport: 'unsupported' }), '', []).map((c) => c.name), ['task', 'schedule'], 'no Fast mode on offer')
 })
 
 test('a group lists its bots\' commands: Fast mode for all of them, then every skill one of them has', () => {
   const group = normalizeBot({ id: 'g', kind: 'group', members: ['a', 'b'] })
   const a = normalizeBot({ id: 'a', name: 'Ada', skills: ['pdf'], fastModeSupport: 'offered' })
   const b = normalizeBot({ id: 'b', name: 'Bo', skills: ['pdf', 'xlsx'], fastModeSupport: 'unsupported' })
-  assert.deepEqual(slashCommands(group, '', installed, [a, b]).map((c) => c.name), ['fast', 'pdf', 'xlsx'])
-  assert.deepEqual(slashCommands(group, '', installed, [b]).map((c) => c.name), ['pdf', 'xlsx'], 'no bot here has Fast mode')
+  assert.deepEqual(slashCommands(group, '', installed, [a, b]).map((c) => c.name), ['task', 'schedule', 'fast', 'pdf', 'xlsx'])
+  assert.deepEqual(slashCommands(group, '', installed, [b]).map((c) => c.name), ['task', 'schedule', 'pdf', 'xlsx'], 'no bot here has Fast mode')
   assert.equal(builtInCommand(group, '/fast', [a, b])?.action.kind, 'fast')
   assert.equal(builtInCommand(group, '/fast', [b]), null)
 
@@ -57,8 +57,10 @@ test('sending just a built-in command runs it; anything else is a message', () =
 
 test('Return runs the highlighted command, but sends a skill already typed out', () => {
   const bot = normalizeBot({ id: 'b', skills: ['pdf'], fastModeSupport: 'offered' })
-  const [fast, pdf] = slashCommands(bot, '', installed)
-  assert.equal(returnRuns(fast!, '/'), true)
-  assert.equal(returnRuns(pdf!, '/pd'), true)
-  assert.equal(returnRuns(pdf!, '/pdf'), false)
+  const commands = slashCommands(bot, '', installed)
+  const fast = commands.find((command) => command.name === 'fast')!
+  const pdf = commands.find((command) => command.name === 'pdf')!
+  assert.equal(returnRuns(fast, '/'), true)
+  assert.equal(returnRuns(pdf, '/pd'), true)
+  assert.equal(returnRuns(pdf, '/pdf'), false)
 })

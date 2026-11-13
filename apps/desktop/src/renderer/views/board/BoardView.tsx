@@ -3,6 +3,7 @@ import { isGroup } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { Button, ChoicePicker, DropdownMenu, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
+import { ModalHeader, Sheet } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
@@ -51,6 +52,10 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
   const [title, setTitle] = useState('')
   const [owner, setOwner] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState<BoardTask | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDetail, setEditDetail] = useState('')
+  const [editDue, setEditDue] = useState('')
 
   useEffect(() => {
     if (!store) return
@@ -122,6 +127,46 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
     }
   }
 
+  const openEdit = (task: BoardTask) => {
+    setEditing(task)
+    setEditTitle(task.title)
+    setEditDetail(task.detail)
+    const due = task.dueAt ? new Date(task.dueAt) : null
+    const pad = (value: number) => String(value).padStart(2, '0')
+    setEditDue(due ? `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}` : '')
+  }
+
+  const saveEdit = async () => {
+    if (!store || !editing || !editTitle.trim()) return
+    let dueAt: number | null = null
+    if (editDue.trim()) {
+      const at = new Date(`${editDue.trim()}T12:00`).getTime()
+      if (!Number.isFinite(at)) {
+        setError('The due date is a day, like 2026-11-20.')
+        return
+      }
+      dueAt = at
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await (await store.ready()).call('saveBoardTask', {
+        id: editing.id,
+        title: editTitle.trim(),
+        detail: editDetail.trim(),
+        status: editing.status,
+        botId: editing.botId ?? null,
+        dueAt,
+      })
+      setEditing(null)
+      await reload()
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="board-page">
       <header className="board-header">
@@ -177,6 +222,7 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
                       <HStack gap={6} align="start">
                         <Text size="callout" grow className="board-card-title">{task.title}</Text>
                         <DropdownMenu className="board-card-menu" title={tr('Card actions')} items={() => [
+                          { title: tr('Edit card…'), icon: 'pencil', action: () => openEdit(task) },
                           ...COLUMNS.filter((c) => c.id !== task.status).map((c) => ({ title: tr(`Move to ${c.label}`), icon: 'arrow.right', action: () => void move(task, c.id) })),
                           { title: tr('Delete'), icon: 'trash', action: () => void remove(task) },
                         ]}>
@@ -202,6 +248,27 @@ export function BoardView({ stores, onOpen }: { stores: BotStore[]; onOpen: (com
           </div>
         </>
       )}
+      <Sheet open={editing !== null} onClose={() => setEditing(null)} width={480}>
+        <VStack gap={12}>
+          <ModalHeader icon="checklist" title="Edit card" onClose={() => setEditing(null)} />
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">{tr('Title')}</Text>
+            <Field label="Title" value={editTitle} onChange={setEditTitle} placeholder={tr('What needs doing?')} />
+          </VStack>
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">{tr('Detail')}</Text>
+            <Field label="Detail" value={editDetail} onChange={setEditDetail} lines={[3, 8]} placeholder={tr('Anything worth keeping with the card')} />
+          </VStack>
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">{tr('Due date (year-month-day, optional)')}</Text>
+            <Field label="Due date" value={editDue} onChange={setEditDue} placeholder="2026-11-20" />
+          </VStack>
+          <HStack justify="end" gap={8}>
+            <Button kind="secondary" onClick={() => setEditing(null)}>{tr('Cancel')}</Button>
+            <Button disabled={busy || !editTitle.trim()} onClick={() => void saveEdit()}>{tr('Save')}</Button>
+          </HStack>
+        </VStack>
+      </Sheet>
     </div>
   )
 }

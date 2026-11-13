@@ -21,6 +21,7 @@ import { AppRail } from './AppRail'
 import { InboxView } from './inbox/InboxView'
 import { BoardView } from './board/BoardView'
 import { ShortcutsSheet } from './ShortcutsSheet'
+import { NotificationCenter } from './notifications/NotificationCenter'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -267,6 +268,7 @@ function ChatSplitView() {
   // The board takes the same window: the computer's tasks.
   const [boardPage, setBoardPage] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
@@ -309,6 +311,13 @@ function ChatSplitView() {
     () =>
       window.codync.app.onCommand((c) => {
         if (c.kind === 'newBot' && onlineStores.length) create('bot')
+        if (c.kind === 'board') {
+          setSettings(null)
+          setMarketplace(null)
+          setCanvasBot(null)
+          setInboxPage(false)
+          setBoardPage(true)
+        }
         if (c.kind === 'search') setSearching(true)
         if (c.kind === 'networkSettings') setSettings('network')
         if (c.kind === 'toggleSidebar') setCompact(!prefs.sidebarCompact.get())
@@ -521,6 +530,7 @@ function ChatSplitView() {
           />
           {compact ? (
             <div className="sidebar-rail-actions">
+              <IconButton title="Notifications" icon="bell.badge" onClick={() => setNotificationsOpen(true)} />
               <IconButton title="Search" icon="magnifyingglass" onClick={() => setSearching(true)} />
               <IconButton title="New" icon="plus" size={36} buttonRef={railNewButton} menuOpen={railNewMenu} disabled={!onlineStores.length} onClick={() => setRailNewMenu((o) => !o)} />
               <AnchoredMenu open={railNewMenu} onClose={() => setRailNewMenu(false)} anchor={railNewButton} items={newItems} />
@@ -534,6 +544,7 @@ function ChatSplitView() {
           <Spacer />
           <HStack gap={6} className="no-drag">
             <ComputerFilterHeader hidden={hidden} setHidden={setHidden} manage={() => setSettings('computers')} compact />
+            <IconButton title="Notifications" icon="bell.badge" size={32} className="sidebar-header-action" onClick={() => setNotificationsOpen(true)} />
             <IconButton title="Search" icon="magnifyingglass" size={32} className="sidebar-header-action" onClick={() => setSearching(true)} />
             <IconButton title="New" icon="plus" size={32} className="sidebar-header-action" buttonRef={newButton} menuOpen={newMenu} onClick={() => setNewMenu((o) => !o)} disabled={!onlineStores.length} />
           </HStack>
@@ -601,6 +612,12 @@ function ChatSplitView() {
         </div>
       ) : null}
 
+      <NotificationCenter
+        stores={stores}
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        onOpen={(computerId, botId) => app.select({ computerId, botId })}
+      />
       <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <SearchPalette open={searching} items={visibleRoster} onPick={(ref) => app.select(ref)} onClose={() => setSearching(false)} onSearch={async (query): Promise<SearchHit[]> => {
         const found = await Promise.all(
@@ -649,6 +666,7 @@ function ChatSplitView() {
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
         { id: 'access', title: 'Computer access', icon: 'lock.shield', run: () => { setSearching(false); setSettings('access') } },
         { id: 'shortcuts', title: 'Keyboard shortcuts', icon: 'keyboard.chevron.compact.down', run: () => { setSearching(false); setShortcutsOpen(true) } },
+        { id: 'notifications', title: 'Notifications', icon: 'bell.badge', run: () => { setSearching(false); setNotificationsOpen(true) } },
       ]} />
       <Sheet open={editing !== null} onClose={() => setEditing(null)} width={520} height={Math.min(680, sheetHeight)}>
         {editing ? (

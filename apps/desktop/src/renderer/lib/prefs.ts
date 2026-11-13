@@ -76,6 +76,8 @@ export const prefs = {
   thinkingDetails: pref('showThinkingDetails', false),
   /** Comfortable keeps the app's spacing; compact fits more conversations on screen. */
   density: pref<'comfortable' | 'compact'>('interfaceDensity', 'comfortable'),
+  /** Prompts the person saved from the message box, in the prompt library. */
+  customPrompts: pref<{ title: string; text: string }[]>('customPrompts', []),
   extensionsMovedTipSeen: pref('extensionsMovedTipSeen', false),
 }
 

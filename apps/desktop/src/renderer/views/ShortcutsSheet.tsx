@@ -15,6 +15,7 @@ const groups: { title: string; items: [string, string][] }[] = [
       [key('Ctrl+Shift+N'), 'New group'],
       [key('Ctrl+,'), 'Settings'],
       [key('Ctrl+Shift+Space'), 'Bring the chat back, or hide it'],
+      [key('Ctrl+Shift+B'), 'Open the board'],
       ['?', 'This list'],
       ['Esc', 'Close what is open'],
     ],

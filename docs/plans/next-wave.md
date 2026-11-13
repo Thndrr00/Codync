@@ -37,6 +37,13 @@ is bigger than one release.
 | Share a chat as a read-only HTML file | done (desktop) |
 | Task board (four columns, bot per card) | done (desktop) |
 | Connector health in the doctor | done |
+| A2A server (agent card + `message/send`) | done |
+| Notification center | done (desktop) |
+| Quick commands `/task` and `/schedule` | done (desktop) |
+| Board cards in the workspace export | done |
+| Document revision history | done (desktop) |
+| Custom prompts in the prompt library | done (desktop) |
+| Board from anywhere (`Ctrl+Shift+B`) | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -181,6 +188,26 @@ Goal: a bot can run without an account.
 - Identical read-only calls (`list_artifacts`, `instruction_history`, `search_workspace`,
   `read_workspace_file`) are answered from memory for 20 seconds, capped at 64 KiB and 256 entries.
   Nothing that writes is cached. Both live in memory and vanish with the host.
+
+## A2A, notifications and quick capture — done (desktop)
+
+- **A2A**: `GET /.well-known/agent.json` publishes one skill per agent bot; `POST /a2a` takes JSON-RPC
+  `message/send`, reads the text from `params.message.parts`, names the bot with `params.metadata.botId`
+  (its skill id) and answers with a `task` whose artifact carries the reply. It runs through
+  `chat::oneshot`, so nothing appears in the person's chats and nothing is remembered. Same bearer token
+  as the local API; loopback needs none. Streaming is not offered.
+- **Notification center**: `recentNotices` returns the last two weeks of notice entries across bots;
+  the bell in the sidebar (and the palette) lists them newest first, with the bot and computer, and a row
+  opens that chat.
+- **Quick commands**: `/task <title>` adds a board card and `/schedule 30m <text>` schedules a message
+  from any chat (not from a document's side conversation); the slash menu lists both. A message's menu
+  also has **Add to the board**.
+- **Board**: cards can be edited (title, detail and due date), the board has its own global shortcut
+  (`Ctrl+Shift+B`), and it is part of the workspace export.
+- **Documents**: each save keeps the replaced text as a revision (ten per document); the editor's history
+  sheet lists them and puts one back in the editor to save.
+- **Prompt library**: the message box's text can be saved as a prompt of the person's own (device only,
+  up to 50) and removed from the same sheet.
 
 ## Connector health — done
 

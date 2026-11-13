@@ -17,6 +17,16 @@ pub struct Document {
     pub updated_at: i64,
 }
 
+/// Text a document had before a save, kept for the history. `revision` is the revision this text was.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentRevision {
+    pub revision: i64,
+    pub title: String,
+    pub body: String,
+    pub at: i64,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSummary {

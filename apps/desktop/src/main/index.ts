@@ -142,6 +142,7 @@ function menu() {
         { type: 'separator' },
         { label: 'New Bot', accelerator: 'CmdOrCtrl+N', click: () => send({ kind: 'newBot' }) },
         { label: 'Search Bots', accelerator: 'CmdOrCtrl+F', click: () => send({ kind: 'search' }) },
+        { label: 'Board', click: () => send({ kind: 'board' }) },
         { label: 'Toggle Sidebar', accelerator: 'Ctrl+CmdOrCtrl+S', click: () => send({ kind: 'toggleSidebar' }, false) },
         { label: 'Conversation Details', accelerator: 'Alt+CmdOrCtrl+I', click: () => send({ kind: 'toggleDetails' }, false) },
         { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => send({ kind: 'refresh' }, false) },
@@ -339,6 +340,10 @@ if (yieldsToInstall()) {
       }
     })) {
       console.warn(`Could not register ${summonKey}; another app may use it.`)
+    }
+    // The board from anywhere: same window, the board page.
+    if (!globalShortcut.register('CommandOrControl+Shift+B', () => send({ kind: 'board' }))) {
+      console.warn('Could not register CommandOrControl+Shift+B; another app may use it.')
     }
     openChat()
     jumpList.request(process.argv)

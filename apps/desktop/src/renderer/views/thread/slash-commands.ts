@@ -5,7 +5,7 @@
 import { fastModeDetail, fastModeShown, fastModeState, groupFastMode, type FastModeState } from '../../../shared/fast-mode.ts'
 import type { Bot } from '../../../shared/models.ts'
 
-export type SlashAction = { kind: 'fast' } | { kind: 'skill'; id: string }
+export type SlashAction = { kind: 'fast' } | { kind: 'skill'; id: string } | { kind: 'template'; text: string }
 
 export interface SlashCommand {
   /** What follows the `/`. */
@@ -25,7 +25,12 @@ export function slashQuery(draft: string): string | null {
 /** The bot's built-in commands; a group's Fast mode is its members' (`groupFastMode`). */
 function builtIn(bot: Bot, members: Bot[]): SlashCommand[] {
   const fast = bot.kind === 'group' ? groupFastMode(members) : ownFastMode(bot)
-  return fast ? [{ name: 'fast', icon: 'bolt', title: 'Fast mode', detail: fast.detail, warning: fast.state === 'refused', action: { kind: 'fast' } }] : []
+  const commands: SlashCommand[] = [
+    { name: 'task', icon: 'checklist', title: 'Add to the board', detail: 'A card in To do: /task Review the pull request', warning: false, action: { kind: 'template', text: '/task ' } },
+    { name: 'schedule', icon: 'clock', title: 'Send this later', detail: 'A message at a time: /schedule 30m Remember to reply', warning: false, action: { kind: 'template', text: '/schedule 30m ' } },
+  ]
+  if (fast) commands.unshift({ name: 'fast', icon: 'bolt', title: 'Fast mode', detail: fast.detail, warning: fast.state === 'refused', action: { kind: 'fast' } })
+  return commands
 }
 
 /** A bot's own Fast mode, while it shows it. */

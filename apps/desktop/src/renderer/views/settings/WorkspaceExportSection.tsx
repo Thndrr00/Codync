@@ -8,7 +8,7 @@ export function WorkspaceExportSection({ store, online }: { store: MaintenanceSt
   useModel(store)
   return (
     <CardSection title="Workspace export"
-      footer="Includes each bot's setup, skills, connectors and Markdown documents; its routines; the messages still scheduled; and the newest 300 messages of each chat. API keys, sign-ins and connector secrets are not included. Paste it into a file to keep it.">
+      footer="Includes each bot's setup, skills, connectors and Markdown documents; its routines; the messages still scheduled; the newest 300 messages of each chat; and the board's cards. API keys, sign-ins and connector secrets are not included. Paste it into a file to keep it.">
       <Button kind="secondary" disabled={!online || store.busy} onClick={() => void store.exportWorkspace()}>
         Copy workspace export
       </Button>

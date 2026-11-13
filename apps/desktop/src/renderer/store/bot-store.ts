@@ -427,6 +427,19 @@ export class BotStore extends BotSync {
     this.patchBot(bot, { pinned })
   }
 
+  /** A card from `/task` or a message's menu: this computer's board, in its first column. */
+  async addBoardTask(title: string): Promise<boolean> {
+    const trimmed = title.trim()
+    if (!trimmed) return false
+    try {
+      await (await this.ready()).call('saveBoardTask', { title: trimmed.slice(0, 200), detail: '', status: 'todo' })
+      return true
+    } catch (error) {
+      this.setError(error instanceof Error ? error.message : String(error))
+      return false
+    }
+  }
+
   /** Role rules from a group editor: the four action classes this member shares with its role. */
   setActionRules(bot: Bot, policies: Partial<Record<ActionClass, RulePolicy>>) {
     this.patchBot(bot, { actionRules: policies, actionRulesOn: true })

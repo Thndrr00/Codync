@@ -109,6 +109,7 @@ export type WindowCommand =
   | { kind: 'computerAccess' }
   | { kind: 'networkSettings' }
   | { kind: 'newBot' }
+  | { kind: 'board' }
   | { kind: 'search' }
   | { kind: 'toggleSidebar' }
   | { kind: 'openMarketplace'; section: 'apps' | 'agents' | 'skills'; id: string }

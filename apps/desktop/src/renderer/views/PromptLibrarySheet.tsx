@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Button } from '../components/Controls'
 import { ModalHeader, Sheet } from '../components/Overlay'
 import { Icon } from '../components/Icon'
 import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
+import { prefs, usePref } from '../lib/prefs'
 import { Field } from './marketplace/pieces'
 import './prompt-library.css'
 
@@ -94,21 +96,58 @@ const prompts: Prompt[] = [
 ]
 
 /** The prompt library: a sheet of starting points that fill the composer. */
-export function PromptLibrarySheet({ open, onClose, onPick }: {
+export function PromptLibrarySheet({ open, onClose, onPick, draft = '' }: {
   open: boolean
   onClose: () => void
   onPick: (text: string) => void
+  /** What the message box holds: it can be saved here as a prompt of the person's own. */
+  draft?: string
 }) {
   const [query, setQuery] = useState('')
+  const [custom, setCustom] = usePref(prefs.customPrompts)
   const q = query.trim().toLowerCase()
+  const saved = custom
+    .filter((prompt) => !q || prompt.title.toLowerCase().includes(q) || prompt.text.toLowerCase().includes(q))
+    .map((prompt) => ({ ...prompt, detail: prompt.text.split('\n')[0] ?? '' }))
   const shown = prompts.filter((prompt) => !q || prompt.title.toLowerCase().includes(q) || prompt.detail.toLowerCase().includes(q))
+  const saveDraft = () => {
+    const text = draft.trim()
+    if (!text) return
+    const title = (text.split('\n')[0] ?? '').trim().slice(0, 60) || 'My prompt'
+    setCustom([{ title, text }, ...custom.filter((prompt) => prompt.text !== text)].slice(0, 50))
+  }
   return (
     <Sheet open={open} onClose={onClose} width={620} maxHeight="82vh" dismissOnDim>
       <VStack gap={14}>
-        <ModalHeader icon="text.book.closed" title="Prompt library" subtitle="Pick one to fill the message box; edit it before sending." onClose={onClose} />
+        <ModalHeader icon="book.closed" title="Prompt library" subtitle="Pick one to fill the message box; edit it before sending." onClose={onClose} />
         <Field label="Search prompts" value={query} onChange={setQuery} placeholder="Search prompts" />
+        <HStack gap={8} align="center">
+          <Text size="caption" tone="secondary" grow>Save what the message box holds now as a prompt of your own.</Text>
+          <Button kind="secondary" disabled={!draft.trim()} onClick={saveDraft}>Save as a prompt</Button>
+        </HStack>
         <div className="prompt-library-scroll">
-          {shown.length === 0 ? (
+          {saved.length > 0 ? (
+            <VStack gap={8}>
+              <Text size="caption" tone="secondary" className="prompt-group-title">Your prompts</Text>
+              {saved.map((prompt) => (
+                <div key={prompt.text} className="prompt-card prompt-custom">
+                  <button type="button" className="prompt-pick press" onClick={() => onPick(prompt.text)}>
+                    <HStack gap={10} align="start">
+                      <span className="prompt-icon"><Icon name="pencil" size={14} /></span>
+                      <VStack gap={2} grow>
+                        <Text weight="semibold">{prompt.title}</Text>
+                        <Text size="caption" tone="secondary">{prompt.detail}</Text>
+                      </VStack>
+                    </HStack>
+                  </button>
+                  <button type="button" className="prompt-remove press" title="Remove this prompt" onClick={() => setCustom(custom.filter((item) => item.text !== prompt.text))}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </VStack>
+          ) : null}
+          {shown.length === 0 && saved.length === 0 ? (
             <Text size="callout" tone="secondary">No prompt matches that.</Text>
           ) : (
             shown.map((prompt) => (

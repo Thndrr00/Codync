@@ -17,6 +17,8 @@ pub(super) const METHODS: &[&str] = &[
     "getDocumentReview",
     "reviewDocument",
     "resolveAction",
+    "listDocumentRevisions",
+    "getDocumentRevision",
 ];
 
 fn document(hub: &Hub, id: &str) -> Result<Document> {
@@ -84,6 +86,17 @@ pub(super) fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
             serde_json::to_value(
                 hub.change_documents(&doc.bot_id, |store| store.delete_document(id, revision(&body)?))?,
             )?
+        }
+        "listDocumentRevisions" => {
+            let id = str_arg(&body, "id")?;
+            document(hub, id)?;
+            json!({"revisions": hub.store.document_revisions(id)?})
+        }
+        "getDocumentRevision" => {
+            let id = str_arg(&body, "id")?;
+            document(hub, id)?;
+            let revision = body["revision"].as_i64().context("revision must be an integer")?;
+            json!({"revision": hub.store.document_revision(id, revision)?.context("unknown revision")?})
         }
         "listDocumentReviews" => json!({"items": hub.store.document_reviews(str_arg(&body, "botId")?)?}),
         "getDocumentReview" => {

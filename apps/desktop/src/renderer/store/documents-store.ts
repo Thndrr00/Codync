@@ -17,6 +17,10 @@ export interface Activity {
   id: number; botId: string; action: string; actorKind: string; actorId: string
   result: 'success' | 'failed'; createdAt: number
 }
+/** Text a document had at a revision, kept so a change can be undone. */
+export interface DocumentRevision {
+  revision: number; title: string; body: string; at: number
+}
 type Saved = { status: 'saved' | 'conflict'; document: Document }
 
 /** Host-owned documents and reviews. Failed saves keep the editable draft. */
@@ -107,8 +111,17 @@ export class DocumentsStore extends Observable {
 
   search(query: string) { this.query = query; void this.load() }
 
-  async refreshExtras() {
-    const request = ++this.extrasSequence
+  /** The kept revisions of a saved document, newest first; empty when it was written once. */
+  async revisions(id: string): Promise<DocumentRevision[]> {
+    return (await this.call<{ revisions: DocumentRevision[] }>('listDocumentRevisions', { id })).revisions
+  }
+
+  /** One revision's text, to put back in the editor. */
+  async revision(id: string, revision: number): Promise<DocumentRevision> {
+    return (await this.call<{ revision: DocumentRevision }>('getDocumentRevision', { id, revision })).revision
+  }
+
+  async refreshExtras() {    const request = ++this.extrasSequence
     this.extrasLoading = true
     this.changed()
     try {

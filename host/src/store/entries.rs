@@ -374,6 +374,16 @@ impl Store {
         logged("last health notice", row.optional()).flatten()
     }
 
+    /// A chat's recent notices across every bot, newest first: the notification center's rows.
+    pub fn recent_notices(&self, since: i64, limit: i64) -> Result<Vec<Entry>> {
+        let c = self.db.locked();
+        let mut st = c.prepare(&format!(
+            "SELECT {ENTRY_COLS} FROM entries WHERE kind = 'notice' AND created_at >= ?1 AND thread_id IS NULL
+             ORDER BY created_at DESC LIMIT ?2"
+        ))?;
+        Ok(st.query_map(params![since, limit], row_entry)?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// The `seq` of `bot`'s last reply in `lane` (0 if it hasn't spoken there).
     pub fn last_spoke(&self, lane: &Lane, bot: &str) -> i64 {
         let c = self.db.locked();
@@ -470,7 +480,8 @@ impl Store {
     /// How many messages are older than `cutoff` (a retention preview).
     pub fn count_entries_before(&self, cutoff: i64) -> Result<u64> {
         let c = self.db.locked();
-        let count: i64 = c.query_row("SELECT COUNT(*) FROM entries WHERE created_at < ?1", [cutoff], |row| row.get(0))?;
+        let count: i64 =
+            c.query_row("SELECT COUNT(*) FROM entries WHERE created_at < ?1", [cutoff], |row| row.get(0))?;
         Ok(u64::try_from(count).unwrap_or(0))
     }
 

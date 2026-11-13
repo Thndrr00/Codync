@@ -80,6 +80,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Have a bot do work on a schedule or when a webhook arrives: set it up in the routine editor or by asking the bot.",
       },
       {
+        slug: "a2a",
+        title: "Other agents (A2A)",
+        description:
+          "Let another A2A agent call a bot on this computer: its agent card, the message/send call and the token it needs.",
+      },
+      {
         slug: "n8n",
         title: "n8n",
         description:

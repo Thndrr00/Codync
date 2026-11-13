@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Spinner } from '../../components/Controls'
+import { Button, ChoicePicker, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
@@ -43,6 +43,7 @@ export function BotActivityCard({ botId }: { botId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [rev, setRev] = useState(0)
+  const [filter, setFilter] = useState<'all' | 'messages' | 'approvals' | 'routines'>('all')
 
   useEffect(() => {
     let stopped = false
@@ -70,8 +71,14 @@ export function BotActivityCard({ botId }: { botId: string }) {
   const rows = useMemo(() => {
     const items = (data?.items ?? []).map((item) => ({ ...item, row: 'item' as const }))
     const runs = (data?.runs ?? []).map((run) => ({ id: run.id, kind: 'run' as const, text: run.detail ?? `${run.status}`, at: run.at ?? 0, row: 'run' as const }))
-    return [...items, ...runs].sort((a, b) => b.at - a.at).slice(0, 140)
-  }, [data])
+    const all = [...items, ...runs].sort((a, b) => b.at - a.at).slice(0, 140)
+    return all.filter((row) => {
+      if (filter === 'all') return true
+      if (filter === 'routines') return row.row === 'run'
+      if (filter === 'approvals') return row.kind === 'permission'
+      return row.kind === 'user' || row.kind === 'agent'
+    })
+  }, [data, filter])
 
   return (
     <VStack gap={8} className="activity-card">
@@ -79,6 +86,16 @@ export function BotActivityCard({ botId }: { botId: string }) {
         <Text size="callout" weight="semibold" grow>Recent activity</Text>
         {loading ? <Spinner size={12} /> : null}
       </HStack>
+      <ChoicePicker
+        selection={filter}
+        options={[
+          { id: 'all', label: 'Everything' },
+          { id: 'messages', label: 'Messages' },
+          { id: 'approvals', label: 'Approvals' },
+          { id: 'routines', label: 'Routines' },
+        ]}
+        onChange={setFilter}
+      />
       {error ? <Text size="caption" tone="danger">{error}</Text> : null}
       {!loading && rows.length === 0 ? <Text size="caption" tone="secondary">Nothing yet. Messages and routine runs show here.</Text> : null}
       <div className="activity-scroll">

@@ -1,0 +1,54 @@
+/* The notification center: one row per notice the host wrote in a chat. */
+.notifications-scroll {
+  display: flex;
+  flex-direction: column;
+  max-height: 56vh;
+  overflow: auto;
+}
+.notification-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.notification-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.notification-row:last-child {
+  border-bottom: none;
+}
+.notification-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--secondary);
+}
+.notification-icon.attention {
+  color: var(--attention);
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+}
+.notification-icon.error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.notification-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

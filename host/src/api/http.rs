@@ -32,6 +32,8 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .route("/scim/v2/Users/{id}", axum::routing::delete(scim_delete))
         .route("/api/{method}", post(command))
         .route("/agui/{bot}", post(agui))
+        .route("/.well-known/agent.json", get(agent_card))
+        .route("/a2a", post(a2a))
         .route("/api/setIcon", post(icon_command).layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)))
         .route("/term/{id}", get(term_stream))
         .route("/ingest/statusline", post(statusline))
@@ -44,6 +46,125 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .merge(main)
         .merge(super::apps_runtime::router().layer(axum::middleware::from_fn(super::rebinding::guard)))
         .with_state(hub)
+}
+
+/// What another agent is told when it asks a Codync bot for work over A2A.
+const A2A_SYSTEM: &str = "You are answering an agent that called this computer's Codync host over the A2A \
+protocol. Reply directly in plain text, in the caller's language. You have no tools, no memory of this call and no \
+access to the person's chat; if the request needs one of those, say what to do in the Codync chat instead.";
+
+fn rpc_error(id: &Value, code: i64, message: &str) -> Json<Value> {
+    Json(json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}}))
+}
+
+/// `GET /.well-known/agent.json`: one A2A skill per agent bot on this computer.
+async fn agent_card(
+    State(hub): State<Arc<Hub>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    let mut skills = Vec::new();
+    for row in hub.store.bots().unwrap_or_default().into_iter().filter(|row| !row.deleted && !row.config.is_group()) {
+        let config = row.config;
+        let name = config.name;
+        let description = if config.description.trim().is_empty() {
+            format!("{name} answers in its Codync chat.")
+        } else {
+            config.description
+        };
+        skills.push(json!({
+            "id": config.id,
+            "name": name,
+            "description": description,
+            "tags": ["codync", config.backend],
+        }));
+    }
+    Ok(Json(json!({
+        "protocolVersion": "0.3.0",
+        "name": "Codync",
+        "description": "Agents that run on this computer, in Codync.",
+        "url": format!("http://{peer}/a2a"),
+        "version": env!("CARGO_PKG_VERSION"),
+        "capabilities": {"streaming": false, "pushNotifications": false, "stateTransitionHistory": false},
+        "defaultInputModes": ["text/plain"],
+        "defaultOutputModes": ["text/plain"],
+        "skills": skills,
+    })))
+}
+
+/// `POST /a2a`: A2A JSON-RPC `message/send`. The caller names the bot in `params.metadata.botId`
+/// (its A2A skill id); without one, the first agent bot answers. It runs in a throwaway session, so
+/// nothing appears in the person's chats and nothing is remembered.
+async fn a2a(
+    State(hub): State<Arc<Hub>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    let id = body.get("id").cloned().unwrap_or(Value::Null);
+    let method = body["method"].as_str().unwrap_or_default();
+    if method != "message/send" {
+        return Ok(rpc_error(&id, -32601, &format!("unsupported method: {method}")));
+    }
+    let params = &body["params"];
+    let text = params["message"]["parts"]
+        .as_array()
+        .map(|parts| parts.iter().filter_map(|part| part["text"].as_str()).collect::<Vec<_>>().join("\n"))
+        .unwrap_or_default();
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(rpc_error(&id, -32602, "message.parts needs a text part"));
+    }
+    let wanted = params["metadata"]["botId"]
+        .as_str()
+        .or_else(|| params["message"]["metadata"]["botId"].as_str())
+        .map(str::to_owned);
+    let row = match wanted {
+        Some(bot) => hub.store.bot(&bot).ok().flatten().filter(|row| !row.deleted),
+        None => {
+            hub.store.bots().ok().and_then(|rows| rows.into_iter().find(|row| !row.deleted && !row.config.is_group()))
+        }
+    };
+    let Some(row) = row else {
+        return Ok(rpc_error(&id, -32602, "unknown bot; name one with params.metadata.botId"));
+    };
+    if row.config.is_group() {
+        return Ok(rpc_error(&id, -32602, "a group has no single agent; ask one of its members"));
+    }
+    let task_id = format!("task-{}", uuid::Uuid::new_v4());
+    let context_id =
+        params["contextId"].as_str().filter(|c| !c.is_empty()).map(str::to_owned).unwrap_or_else(|| task_id.clone());
+    let result = match crate::chat::oneshot::one_shot(&hub, &row.config, A2A_SYSTEM, text).await {
+        Ok(answer) => json!({
+            "kind": "task",
+            "id": task_id,
+            "contextId": context_id,
+            "status": {"state": "completed", "timestamp": crate::store::now_ms()},
+            "artifacts": [{
+                "artifactId": format!("artifact-{task_id}"),
+                "name": "reply",
+                "parts": [{"kind": "text", "text": answer}],
+            }],
+        }),
+        Err(error) => json!({
+            "kind": "task",
+            "id": task_id,
+            "contextId": context_id,
+            "status": {
+                "state": "failed",
+                "timestamp": crate::store::now_ms(),
+                "message": {"role": "agent", "parts": [{"kind": "text", "text": format!("{error:#}")}]},
+            },
+            "artifacts": [],
+        }),
+    };
+    Ok(Json(json!({"jsonrpc": "2.0", "id": id, "result": result})))
 }
 
 async fn icon_command(
@@ -387,7 +508,8 @@ async fn agui(
 }
 
 #[derive(Deserialize)]
-struct EventsQuery {    since: Option<i64>,
+struct EventsQuery {
+    since: Option<i64>,
     client: Option<String>,
 }
 

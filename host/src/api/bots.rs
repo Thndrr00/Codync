@@ -573,6 +573,29 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
         // Which alerts reach the phone, and the quiet hours around them.
         "notificationRules" => json!({"rules": hub.store.notification_rules()?}),
+        "recentNotices" => {
+            let days = b["days"].as_i64().unwrap_or(7).clamp(1, 90);
+            let limit = b["limit"].as_i64().unwrap_or(100).clamp(1, 500);
+            let since = crate::store::now_ms() - days * 86_400_000;
+            let notices: Vec<Value> = hub
+                .store
+                .recent_notices(since, limit)?
+                .into_iter()
+                .map(|entry| {
+                    let name = hub.store.bot(&entry.bot_id).ok().flatten().map(|row| row.config.name);
+                    json!({
+                        "id": entry.id,
+                        "botId": entry.bot_id,
+                        "botName": name,
+                        "text": crate::store::message_text(&entry.data),
+                        "style": entry.data["style"],
+                        "health": entry.data["health"],
+                        "at": entry.created_at,
+                    })
+                })
+                .collect();
+            json!({"notices": notices})
+        }
         "setNotificationRules" => {
             let rules: crate::store::NotificationRules =
                 serde_json::from_value(b["rules"].clone()).context("invalid notification rules")?;
@@ -658,6 +681,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 "routines": routines,
                 "scheduled": scheduled,
                 "chats": chats,
+                "board": hub.store.board_tasks()?,
             })
         }
         "retireDormantSkills" => {

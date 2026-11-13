@@ -1,0 +1,40 @@
+Codync speaks the [A2A](https://a2a-protocol.org) protocol on the host's local API, so another agent can
+discover the bots on your computer and ask one of them for a short piece of work. It is off except for
+whoever already knows this computer's local API token: the same bearer token your apps use.
+
+## The agent card
+
+```bash
+curl -H "Authorization: Bearer $CODYNC_TOKEN" http://127.0.0.1:19223/.well-known/agent.json
+```
+
+The card names the host and lists one skill per agent bot: the skill id is the bot id, its name is the
+bot's name, its description is the bot's description, and its tags include the agent. Groups have no
+skill: they have no single agent to answer.
+
+## Sending a message
+
+```bash
+curl -X POST http://127.0.0.1:19223/a2a \
+  -H "Authorization: Bearer $CODYNC_TOKEN" -H 'content-type: application/json' \
+  -d '{
+    "jsonrpc": "2.0", "id": 1, "method": "message/send",
+    "params": {
+      "message": {"role": "user", "parts": [{"kind": "text", "text": "Summarize this: ..."}]},
+      "metadata": {"botId": "<a skill id from the card>"}
+    }
+  }'
+```
+
+The answer is a `task` with state `completed` and one artifact whose part holds the reply as text. A
+failed turn comes back as a `task` with state `failed` and the error in `status.message`. Without
+`metadata.botId`, the first agent bot answers.
+
+Streaming and push notifications are not offered. The bot answers in a throwaway session of its own
+agent: nothing appears in its Codync chat, it has no tools or saved memory, and it does not see earlier
+A2A calls. If the work needs your chat, its tools or its memory, ask for that in Codync instead.
+
+## Turning it off
+
+Requests reach the host only from this computer (loopback) or with the local API token; there is no
+public address. To stop it entirely, stop the host: nothing listens while it is off.

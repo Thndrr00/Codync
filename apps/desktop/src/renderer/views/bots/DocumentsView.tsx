@@ -6,7 +6,7 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
 import type { BotStore } from '../../store/bot-store'
-import type { DocumentsStore } from '../../store/documents-store'
+import type { DocumentsStore, DocumentRevision } from '../../store/documents-store'
 import { documentTree, documentDescendants } from '../../lib/document-tree'
 import { DocumentMarkdownEditor } from './DocumentMarkdownEditor'
 import { MarkdownText } from '../thread/Markdown'
@@ -29,6 +29,8 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const [confirmDelete, setConfirmDelete] = useState<DraftPrompt | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState<DraftPrompt | null>(null)
   const [conversation, setConversation] = useState<{ botId: string; documentId: string } | null>(null)
+  const [history, setHistory] = useState<DocumentRevision[] | null>(null)
+  const [historyBusy, setHistoryBusy] = useState(false)
   useEffect(() => {
     documents.resume()
     void documents.load()
@@ -42,6 +44,31 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
   const draft = documents.draft
   const current = documents.items.find((item) => item.id === draft?.id)
   const descendants = useMemo(() => documentDescendants(documents.items, draft?.id ?? ''), [documents.items, draft?.id])
+  const openHistory = async () => {
+    if (!draft?.id) return
+    setHistoryBusy(true)
+    try {
+      setHistory(await documents.revisions(draft.id))
+    } catch (error) {
+      setHistory(null)
+      documents.error = error instanceof Error ? error.message : String(error)
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
+  const restore = async (revision: number) => {
+    if (!draft?.id) return
+    setHistoryBusy(true)
+    try {
+      const found = await documents.revision(draft.id, revision)
+      documents.edit({ title: found.title, body: found.body })
+      setHistory(null)
+    } catch (error) {
+      documents.error = error instanceof Error ? error.message : String(error)
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
   return <div className="documents-panel">
     <TabChoice label="Document library" selection={section} options={SECTIONS} onChange={setSection} />
     {documents.error && <p role="alert" className="memory-error">{documents.error}</p>}
@@ -74,6 +101,8 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
           {draft.id && <>
             <IconButton icon="bubble.left.and.bubble.right" title="Discuss saved document" disabled={documents.busy || documents.dirty || !!documents.conflict}
               onClick={() => { if (draft.id) setConversation({ botId: bot.id, documentId: draft.id }) }} />
+            <IconButton icon="clock.arrow.circlepath" title="Revision history" disabled={historyBusy || !!documents.conflict}
+              onClick={() => void openHistory()} />
             <IconButton icon="doc.badge.plus" title="Create child document" disabled={documents.busy} onClick={() => documents.create(draft.id)} />
             {!documents.busy && !documents.dirty && <DropdownMenu title="Move document" className="styled-button secondary" items={() => [
               { title: 'Move to library root', action: () => void documents.move(null) },
@@ -142,6 +171,24 @@ export function DocumentsCard({ bot, store }: { bot: Bot; store: BotStore }) {
           <Button disabled={documents.busy} onClick={() => void documents.resolve('approve')}>Approve exact proposal</Button>
         </HStack>}
       </VStack>}
+    </Sheet>
+    <Sheet open={history !== null} onClose={() => setHistory(null)} width={480} maxHeight="70vh">
+      <VStack gap={12}>
+        <ModalHeader icon="clock.arrow.circlepath" title="Revision history" subtitle="The last ten versions, newest first. Using one puts its text in the editor; save to keep it." onClose={() => setHistory(null)} />
+        {(history ?? []).length === 0 ? (
+          <Text size="callout" tone="secondary">No earlier versions yet. One is kept each time the document is saved.</Text>
+        ) : (
+          (history ?? []).map((revision) => (
+            <HStack key={revision.revision} gap={10} align="center" className="documents-history-row">
+              <VStack gap={2} grow>
+                <Text weight="semibold">Revision {revision.revision} · {revision.title}</Text>
+                <Text size="caption" tone="secondary">{relativeTime.day(revision.at)} · {revision.body.length.toLocaleString()} characters</Text>
+              </VStack>
+              <Button kind="secondary" disabled={historyBusy} onClick={() => void restore(revision.revision)}>Use this text</Button>
+            </HStack>
+          ))
+        )}
+      </VStack>
     </Sheet>
   </div>
 }
