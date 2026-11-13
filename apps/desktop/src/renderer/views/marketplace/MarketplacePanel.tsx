@@ -54,6 +54,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
                   key={app.id}
                   title={app.name}
                   subtitle={app.tagline}
+                  note={app.guide?.kind === 'key' ? tr('Needs a key from {name}').replaceAll('{name}', app.name) : undefined}
                   added={added.includes(app.id) || app.installed}
                   icon={<ServiceLogo website={app.website} name={app.name} />}
                   onAdd={() => onAddApp(app)}

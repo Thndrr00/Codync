@@ -559,6 +559,13 @@ textarea.market-field {
   gap: 6px;
 }
 
+/* "Needs a key from …" under an app's row. */
+.market-key-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 
 .whatsapp-qr{border-radius:12px;background:#fff;padding:8px;align-self:center}
 .comfy-thumb{max-width:100%;max-height:220px;border-radius:12px;align-self:flex-start}

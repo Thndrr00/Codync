@@ -38,11 +38,24 @@ export interface ComposioStatus {
   keyUrl: string
 }
 
+/** How to connect an app: what to do at the vendor, and the vendor's page to do it on. */
+export interface ConnectionGuide {
+  /** `signIn`, `key`, `nothing` or `install`. */
+  kind: string
+  steps: string[]
+  url?: string | null
+}
+
 export interface ComposioApp {
   slug: string
   name: string
   description?: string | null
   logo?: string | null
+  /** Whether connecting means typing a key from the app; `null` when Composio doesn't publish it. */
+  needsKey?: boolean | null
+  /** The row's line when it does ("Needs a key from …"). */
+  keyNote?: string | null
+  guide?: ConnectionGuide | null
   /** Composio's status: `active`, `initiated`, `failed`, `expired`… */
   connection?: { id: string; status: string } | null
 }
@@ -65,6 +78,7 @@ export interface ComposioConnect {
   connection?: string | null
   mode?: string | null
   fields?: ComposioField[] | null
+  guide?: ConnectionGuide | null
 }
 
 export interface ComposioConnectionState {
@@ -175,6 +189,8 @@ export interface MarketApp {
   steps: string[]
   docsUrl?: string | null
   docsLabel?: string | null
+  /** How to connect: what to do at the app, and its own page to do it on. */
+  guide?: ConnectionGuide | null
   prompts: { id: string; text: string }[]
   installed: boolean
 }

@@ -7,6 +7,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText, type MarketApp } from './market-models'
 import { ErrorText, Field, ItemRow, MarketSection, ServiceLogo, WebLink } from './pieces'
+import { ConnectionGuideCard } from './ConnectionGuide'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
 
@@ -65,17 +66,17 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
             </dl>
           </VStack>
         </CardSection>
-        {app.setup === 'local' && app.steps.length ? (
+        {app.guide ? <ConnectionGuideCard guide={app.guide} name={app.name} /> : null}
+        {app.setup === 'local' && !app.guide && app.steps.length ? (
           <CardSection title={tr('Setup')} footer={tr('Runs on {name}.').replaceAll('{name}', store.hostName)}>
             <ol className="market-steps">
               {app.steps.map((step) => <li key={step}>{step}</li>)}
             </ol>
-            {app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Open the guide')} url={app.docsUrl} className="small" /> : null}
           </CardSection>
         ) : null}
         {app.setup === 'key' ? (
           <CardSection title={tr('Setup')} footer={tr('Keys are saved on {name} only.').replaceAll('{name}', store.hostName)}>
-            {app.steps.length ? (
+            {!app.guide && app.steps.length ? (
               <ol className="market-steps">
                 {app.steps.map((step) => <li key={step}>{step}</li>)}
               </ol>
@@ -92,7 +93,7 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
                 {field.hint ? <Text size="caption" tone="secondary">{field.hint}</Text> : null}
               </VStack>
             ))}
-            {app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Get a key')} url={app.docsUrl} className="small" /> : null}
+            {!app.guide && app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Get a key')} url={app.docsUrl} className="small" /> : null}
           </CardSection>
         ) : null}
         {app.setup === 'link' || app.setup === 'open' ? (
@@ -112,7 +113,7 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
                 {field.hint ? <Text size="caption" tone="secondary">{field.hint}</Text> : null}
               </VStack>
             ))}
-            {app.fields.length && app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Open the guide')} url={app.docsUrl} className="small" /> : null}
+            {!app.guide && app.fields.length && app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Open the guide')} url={app.docsUrl} className="small" /> : null}
           </CardSection>
         ) : null}
         {app.prompts.length ? (

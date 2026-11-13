@@ -13,6 +13,7 @@ import {
   AppLogo, ErrorText, Field, FormSheet, ItemGrid, LoadMoreRow, MarketRow, MarketSection, SkeletonGrid, TileIcon, WebLink, filled,
 } from './pieces'
 import { usePlugins } from './plugins'
+import { ConnectionGuideCard } from './ConnectionGuide'
 import { useTr } from '../../lib/use-language'
 import { fill } from '../../lib/fill.ts'
 
@@ -90,6 +91,7 @@ export function ComposioSection({ query, onError }: { query: string; onError: (m
                 key={app.slug}
                 title={app.name}
                 subtitle={app.description ?? app.slug}
+                note={app.keyNote ?? undefined}
                 added={appConnected(app)}
                 addLabel={tr('Connect')}
                 icon={<AppLogo url={app.logo} name={app.name} />}
@@ -311,6 +313,7 @@ export function ComposioConnectSheet({ app, requestId, done }: { app: ComposioAp
             </VStack>
           </HStack>
         </CardSection>
+        {connected ? null : <ConnectionGuideCard guide={plan?.guide ?? app.guide} name={app.name} />}
         {connected ? (
           <CardSection footer={tr("Turn {name} on for a bot in the bot's settings, under Connectors.").replaceAll('{name}', () => app.name)}>
             <HStack as="span" gap={6} className="composio-connected">

@@ -26,9 +26,11 @@ export function ItemGrid({ children }: { children: ReactNode }) {
   return <div className="item-grid">{children}</div>
 }
 
-export function MarketRow({ title, subtitle, added, busy = false, addLabel = 'Add', icon, onAdd, onOpen }: {
+export function MarketRow({ title, subtitle, note, added, busy = false, addLabel = 'Add', icon, onAdd, onOpen }: {
   title: string
   subtitle: string
+  /** A line under the subtitle, such as "Needs a key from …". */
+  note?: string
   added: boolean
   busy?: boolean
   addLabel?: string
@@ -43,6 +45,7 @@ export function MarketRow({ title, subtitle, added, busy = false, addLabel = 'Ad
     <ItemRow
       title={title}
       subtitle={subtitle}
+      note={note}
       icon={icon}
       onOpen={onOpen ?? (added || busy ? undefined : onAdd)}
       trailing={busy ? (
@@ -69,14 +72,16 @@ export function MarketRow({ title, subtitle, added, busy = false, addLabel = 'Ad
 }
 
 /** An `ItemGrid` row: icon, title and subtitle, then `trailing`; `onOpen` makes the whole row a button. */
-export function ItemRow({ title, subtitle, icon, trailing, onOpen }: {
+export function ItemRow({ title, subtitle, note, icon, trailing, onOpen }: {
   title: string
   subtitle: string
+  note?: string
   icon: ReactNode
   /** Buttons here stop the click so it doesn't also open the row. */
   trailing?: ReactNode
   onOpen?: () => void
 }) {
+  const tr = useTr()
   return (
     <div
       className={`market-row ${onOpen ? 'openable' : ''}`}
@@ -94,6 +99,12 @@ export function ItemRow({ title, subtitle, icon, trailing, onOpen }: {
       <VStack gap={2} grow>
         <Text size="body" weight="medium" tone="text" truncate title={title}>{title}</Text>
         <Text size="subheadline" tone="secondary" truncate title={subtitle}>{subtitle}</Text>
+        {note ? (
+          <Text size="footnote" tone="tertiary" truncate className="market-key-note">
+            <Icon name="key" size={9} />
+            {tr(note)}
+          </Text>
+        ) : null}
       </VStack>
       {trailing}
     </div>
