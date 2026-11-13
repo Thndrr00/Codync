@@ -23,9 +23,8 @@ pub fn header(status: &Value) -> Option<String> {
         (Some("downloading"), ..) => tr("Downloading {name}… {done} of {total}")
             .replace("{name}", "ComfyUI")
             .replace("{done}", &size(install["done"].as_u64().unwrap_or_default()))
-            .replace("{total}", &size(install["total"].as_u64().unwrap_or_default()))
-            .into(),
-        (Some("unpacking"), ..) => tr("Unpacking {name}…").replace("{name}", "ComfyUI").into(),
+            .replace("{total}", &size(install["total"].as_u64().unwrap_or_default())),
+        (Some("unpacking"), ..) => tr("Unpacking {name}…").replace("{name}", "ComfyUI"),
         (_, "running", Some("running")) => with_percent(&tr("Making an image…"), status),
         (_, "running", Some("queued")) => tr("Waiting in the queue").into(),
         (_, "running", _) => tr("Running").into(),
@@ -37,6 +36,7 @@ pub fn header(status: &Value) -> Option<String> {
 }
 
 /// "Making an image… 42%" while a sampler reports how far it got.
+#[allow(clippy::cast_possible_truncation, reason = "a percentage is a whole number on screen")]
 fn with_percent(phrase: &str, status: &Value) -> String {
     match status["job"]["progress"]["percent"].as_f64() {
         Some(percent) => format!("{phrase} {}%", (percent * 100.0).round() as i64),

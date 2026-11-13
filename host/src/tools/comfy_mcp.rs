@@ -196,10 +196,7 @@ pub async fn describe_template(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
     let template = templates::load(args["id"].as_str().context("`id` is required")?)?;
     let gpu = comfy::gpu();
     let running = hub.tools.comfy_running();
-    let info = match running {
-        true => api(hub)?.object_info().await.ok(),
-        false => None,
-    };
+    let info = if running { api(hub)?.object_info().await.ok() } else { None };
     let report = preflight::check(&template, running, info.as_ref());
     let mut described = template.describe(gpu.as_ref().map(|g| g.name.as_str()));
     described["preflight"] = report;

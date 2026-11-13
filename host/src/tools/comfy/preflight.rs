@@ -8,6 +8,7 @@ use crate::tools::comfy;
 use serde_json::{Value, json};
 
 /// What a run needs and what is missing, for the card and the bot.
+#[allow(clippy::cast_precision_loss, reason = "a megabyte count never needs the 52 bits a f64 keeps, and the GB figure is only shown")]
 pub fn check(template: &Template, running: bool, info: Option<&Value>) -> Value {
     let gpu = comfy::gpu();
     let gpu_name = gpu.as_ref().map(|g| g.name.as_str());
@@ -18,7 +19,7 @@ pub fn check(template: &Template, running: bool, info: Option<&Value>) -> Value 
         problems.push(problem(
             "serverStopped",
             "ComfyUI is not running. Start it from Extensions › Apps.",
-            json!({"kind": "start"}),
+            &json!({"kind": "start"}),
         ));
     }
     if let Some(info) = info {
@@ -27,7 +28,7 @@ pub fn check(template: &Template, running: bool, info: Option<&Value>) -> Value 
                 problems.push(problem(
                     "nodeMissing",
                     format!("This template needs the node `{class}`, which is not installed. Install it in ComfyUI, then try again."),
-                    json!({"kind": "installNode", "node": class}),
+                    &json!({"kind": "installNode", "node": class}),
                 ));
             }
         }
@@ -52,14 +53,14 @@ pub fn check(template: &Template, running: bool, info: Option<&Value>) -> Value 
                 gpu.name,
                 gpu.free_mb as f64 / 1024.0
             ),
-            json!({"kind": "lowerResolution"}),
+            &json!({"kind": "lowerResolution"}),
         ));
     }
     if gpu.is_none() && vram.is_some_and(|need| need > 0.0) {
         warnings.push(problem(
             "cpu",
             "No NVIDIA graphics card was found: this runs on the processor, which takes minutes instead of seconds.",
-            json!({"kind": "useCpu"}),
+            &json!({"kind": "useCpu"}),
         ));
     }
 
@@ -70,7 +71,7 @@ pub fn check(template: &Template, running: bool, info: Option<&Value>) -> Value 
         problems.push(problem(
             "disk",
             format!("This output needs about {output_gb:.1} GB and the disk has {:.1} GB free.", free as f64 / 1e9),
-            json!({"kind": "freeSpace"}),
+            &json!({"kind": "freeSpace"}),
         ));
     }
 
@@ -112,7 +113,7 @@ fn model_issue(model: &Model) -> Option<Value> {
     } else {
         download_action(model)
     };
-    Some(problem(code, message, action))
+    Some(problem(code, message, &action))
 }
 
 fn download_action(model: &Model) -> Value {
@@ -127,7 +128,7 @@ fn download_action(model: &Model) -> Value {
     })
 }
 
-fn problem(code: &str, message: impl Into<String>, action: Value) -> Value {
+fn problem(code: &str, message: impl Into<String>, action: &Value) -> Value {
     json!({"code": code, "message": message.into(), "action": action})
 }
 

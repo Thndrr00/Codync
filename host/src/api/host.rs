@@ -443,7 +443,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "comfyJobs" => hub.tools.comfy_jobs().history(),
         "comfyTemplates" => json!({
-            "templates": crate::tools::comfy::templates::list().iter().map(|t| t.summary()).collect::<Vec<_>>(),
+            "templates": crate::tools::comfy::templates::list().iter().map(crate::tools::comfy::templates::Template::summary).collect::<Vec<_>>(),
             "curated": crate::tools::comfy::templates::curated(),
             "problems": crate::tools::comfy::templates::problems(),
         }),

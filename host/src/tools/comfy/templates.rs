@@ -276,7 +276,7 @@ impl Estimate {
     }
 }
 
-/// "NVIDIA GeForce RTX 4090" → "rtx-4090": a manifest names a family, not the whole model string.
+/// "NVIDIA `GeForce` RTX 4090" → "rtx-4090": a manifest names a family, not the whole model string.
 fn family(gpu: &str) -> String {
     let lower = gpu.to_lowercase();
     if lower.contains("a100") {
@@ -487,7 +487,9 @@ impl Input {
                 let number = as_f64(value).with_context(|| format!("`{}` must be a whole number", self.key))?;
                 ensure!(number.fract() == 0.0, "`{}` must be a whole number", self.key);
                 self.range(number)?;
-                Ok(json!(number as i64))
+                #[allow(clippy::cast_possible_truncation, reason = "whole and within the range checked above, so it fits an i64")]
+                let whole = number as i64;
+                Ok(json!(whole))
             }
             InputKind::Select => {
                 let choice = value.as_str().with_context(|| format!("`{}` must be one of its options", self.key))?;
@@ -621,11 +623,13 @@ fn scalar(value: &Value) -> String {
     }
 }
 
+/// The seed the form starts from: the process id above the nanosecond clock, inside a sampler's
+/// positive range. `as i64` masks off the sign bit right after, so the wrap is intended.
 fn random_seed() -> i64 {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.subsec_nanos() as u64);
-    (((std::process::id() as u64) << 32) | nanos) as i64 & 0x7fff_ffff
+        .map_or(0, |elapsed| u64::from(elapsed.subsec_nanos()));
+    ((u64::from(std::process::id()) << 32) | nanos).cast_signed() & 0x7fff_ffff
 }
 
 /// Copies the embedded manifests into the user's folder. A manifest the user edited stays as it is,
@@ -683,7 +687,7 @@ pub fn list() -> Vec<Template> {
             found.push(template);
         }
     }
-    found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    found.sort_by_key(|t| t.name.to_lowercase());
     found
 }
 

@@ -37,6 +37,7 @@ struct Entry {
 }
 
 impl Entry {
+    #[allow(clippy::cast_precision_loss, reason = "a byte count never needs the 52 bits a f64 keeps, and it is only shown as a percentage")]
     fn public(&self) -> Value {
         json!({
             "folder": self.folder,
@@ -74,7 +75,8 @@ impl Downloads {
             if let Ok(files) = std::fs::read_dir(&dir) {
                 for file in files.filter_map(Result::ok) {
                     let name = file.file_name().to_string_lossy().into_owned();
-                    if name.ends_with(".part") || !file.file_type().is_ok_and(|t| t.is_file()) {
+                    let partial = Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("part"));
+                    if partial || !file.file_type().is_ok_and(|t| t.is_file()) {
                         continue;
                     }
                     let size = file.metadata().map_or(0, |m| m.len());
@@ -134,7 +136,7 @@ impl Downloads {
         let Some((template, model)) = templates::declaring(folder, file).into_iter().next() else {
             bail!("`{file}` is not declared by any template, so it cannot be downloaded here");
         };
-        ensure!(model.url.is_some(), "`{file}` has no download URL in `{}`", template);
+        ensure!(model.url.is_some(), "`{file}` has no download URL in `{template}`");
         ensure!(
             !model.gated,
             "`{file}` comes from a gated repository: open its page, sign in, and put the file in the {} folder",
@@ -327,7 +329,7 @@ async fn finish(
     part: &Path,
     model: &Model,
 ) -> Result<()> {
-    let size = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
+    let size = tokio::fs::metadata(part).await.map_or(0, |m| m.len());
     if model.size > 0 {
         ensure!(size == model.size, "`{}` arrived with {size} bytes, not {}", model.file, model.size);
     }

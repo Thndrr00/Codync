@@ -58,6 +58,7 @@ struct Progress {
 }
 
 impl Progress {
+    #[allow(clippy::cast_precision_loss, reason = "a step count never needs the 52 bits a f64 keeps, and it is only shown as a percentage")]
     fn public(&self) -> Value {
         json!({
             "node": self.node,
@@ -468,11 +469,12 @@ fn walk_outputs(dir: &std::path::Path, depth: usize, since: i64, files: &mut Vec
         match entry.file_type() {
             Ok(kind) if kind.is_dir() => walk_outputs(&path, depth + 1, since, files),
             Ok(kind) if kind.is_file() => {
-                let touched = std::fs::metadata(&path).and_then(|meta| meta.modified()).ok();
-                let touched = touched
+                let touched = std::fs::metadata(&path)
+                    .and_then(|meta| meta.modified())
+                    .ok()
                     .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_millis() as i64)
-                    .unwrap_or(0);
+                    // Millis since 1970 fit an `i64` for the next 292 million years.
+                    .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
                 if touched >= since && results::ingestible(&path) {
                     files.push(path);
                 }
@@ -604,7 +606,7 @@ mod tests {
         let files = recent_outputs(&root, 0);
         assert_eq!(files.len(), 2);
         assert_eq!(files.last().and_then(|p| p.file_name()).and_then(|n| n.to_str()), Some("film.mp4"));
-        assert!(recent_outputs(&root, chrono::Utc::now().timestamp_millis() + 60_000).is_empty());
+        assert_eq!(recent_outputs(&root, chrono::Utc::now().timestamp_millis() + 60_000), Vec::<PathBuf>::new());
         let _ = std::fs::remove_dir_all(root);
     }
 

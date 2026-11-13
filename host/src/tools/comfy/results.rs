@@ -65,9 +65,7 @@ pub fn mime_of(path: &Path) -> &'static str {
         "glb" => "model/gltf-binary",
         "gltf" => "model/gltf+json",
         "obj" => "model/obj",
-        "ply" => "application/octet-stream",
         "stl" => "model/stl",
-        "splat" | "ksplat" | "spz" => "application/octet-stream",
         _ => "application/octet-stream",
     }
 }
