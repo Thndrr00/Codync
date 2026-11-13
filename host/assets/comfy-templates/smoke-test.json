@@ -1,0 +1,48 @@
+{
+  "id": "smoke-test",
+  "name": "Colour check",
+  "version": "1.0.0",
+  "description": "Writes a plain picture of one colour with no model at all. It proves the engine, the queue and the chat work before a download.",
+  "tags": ["image", "test"],
+  "license": "Codync's.",
+  "inputs": [
+    {
+      "key": "color",
+      "label": "Colour",
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "max": 16777215,
+      "help": "One packed RGB number: 0 is black, 16777215 white."
+    },
+    {
+      "key": "size",
+      "label": "Size",
+      "type": "integer",
+      "default": 512,
+      "min": 64,
+      "max": 2048,
+      "step": 64
+    }
+  ],
+  "models": [],
+  "output": {"type": "image", "mime": "image/png"},
+  "estimate": {
+    "seconds": 1,
+    "vram_gb": 0.0,
+    "output_gb": 0.05,
+    "byGpu": {
+      "default": {"seconds": 1, "vram_gb": 0.0}
+    }
+  },
+  "workflow": {
+    "1": {
+      "class_type": "EmptyImage",
+      "inputs": {"width": "{{size}}", "height": "{{size}}", "batch_size": 1, "color": "{{color}}"}
+    },
+    "2": {
+      "class_type": "SaveImage",
+      "inputs": {"images": ["1", 0], "filename_prefix": "codync/smoke"}
+    }
+  }
+}

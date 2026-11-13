@@ -136,4 +136,73 @@ mod tests {
             "Prompt outputs failed validation; node 3 (KSampler): Required input is missing: model"
         );
     }
+
+    /// The same routes the host calls, served by a fake on a free port: the HTTP layer is checked
+    /// without ComfyUI, a model or a graphics card.
+    #[tokio::test]
+    async fn a_fake_server_answers_every_route_a_job_uses() {
+        use axum::Router;
+        use axum::extract::State;
+        use axum::routing::{get, post};
+        use serde_json::Value;
+        use std::sync::{Arc, Mutex};
+
+        async fn object_info() -> axum::Json<Value> {
+            axum::Json(json!({
+                "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["a.safetensors"]]}}},
+                "KSampler": {},
+                "SaveImage": {},
+            }))
+        }
+        async fn prompt(
+            State(seen): State<Arc<Mutex<Vec<Value>>>>,
+            axum::Json(body): axum::Json<Value>,
+        ) -> axum::Json<Value> {
+            seen.lock().expect("the fake's list").push(body);
+            axum::Json(json!({"prompt_id": "p1"}))
+        }
+        async fn history() -> axum::Json<Value> {
+            axum::Json(json!({"p1": {
+                "status": {"status_str": "success"},
+                "outputs": {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}},
+            }}))
+        }
+        async fn queue() -> axum::Json<Value> {
+            axum::Json(json!({"queue_running": [], "queue_pending": []}))
+        }
+        async fn interrupt() -> axum::Json<Value> {
+            axum::Json(json!({}))
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let app = Router::new()
+            .route("/object_info", get(object_info))
+            .route("/prompt", post(prompt))
+            .route("/history/p1", get(history))
+            .route("/queue", get(queue))
+            .route("/interrupt", post(interrupt))
+            .with_state(seen.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a fake server");
+        let port = listener.local_addr().expect("its port").port();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let api = Api::new(port);
+        let info = loop {
+            match api.object_info().await {
+                Ok(info) => break info,
+                Err(_) => tokio::time::sleep(Duration::from_millis(50)).await,
+            }
+        };
+        assert!(info.get("KSampler").is_some());
+        let graph = json!({"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}}});
+        assert_eq!(api.submit(&graph, "codync").await.expect("queued"), "p1");
+        assert_eq!(seen.lock().expect("the fake's list")[0]["prompt"], graph);
+        assert!(api.queue().await.expect("queue")["queue_running"].as_array().is_some_and(Vec::is_empty));
+        let record = api.history("p1").await.expect("history");
+        let files = crate::tools::comfy_job::output_files(&record);
+        assert_eq!(files, vec![crate::tools::comfy::output_dir().join("a.png")]);
+        api.interrupt().await.expect("interrupt");
+    }
 }

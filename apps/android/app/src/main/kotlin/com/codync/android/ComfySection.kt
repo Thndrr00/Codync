@@ -20,6 +20,7 @@ import com.codync.android.design.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** How often the section looks at the computer again while it shows: a job moves along in seconds. */
 private const val REFRESH_MILLIS = 3_000L
@@ -94,8 +95,9 @@ private const val REFRESH_MILLIS = 3_000L
                     }
                 }
                 current?.jobLabel?.let { label ->
+                    val percent = current.jobPercent?.let { " ${(it * 100).roundToInt()}%" } ?: ""
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(tr(label), style = Type.caption, color = Palette.secondary, modifier = Modifier.weight(1f))
+                        Text(tr(label) + percent, style = Type.caption, color = Palette.secondary, modifier = Modifier.weight(1f))
                         if (current.jobActive) {
                             SecondaryButton(tr("Cancel"), enabled = !busy) { run { store.comfyCancel(); status = store.comfyStatus() } }
                         }

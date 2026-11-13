@@ -1,0 +1,160 @@
+{
+  "id": "canny-to-image",
+  "name": "Follow the outline",
+  "version": "1.0.0",
+  "description": "Keeps the lines of a picture and paints inside them from a description. Good for turning a sketch, a photo or a diagram into a finished image.",
+  "tags": ["image", "stable-diffusion", "controlnet"],
+  "license": "The graph is Codync's; Stable Diffusion 1.5 is CreativeML OpenRAIL-M and ControlNet v1.1 is Apache-2.0.",
+  "inputs": [
+    {
+      "key": "image",
+      "label": "Picture to follow",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "What it should become",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "negative",
+      "label": "What to avoid",
+      "type": "text",
+      "default": "blurry, low quality, watermark, text"
+    },
+    {
+      "key": "strength",
+      "label": "How strictly to follow the outline",
+      "type": "number",
+      "default": 0.8,
+      "min": 0.05,
+      "max": 2.0,
+      "step": 0.05
+    },
+    {
+      "key": "width",
+      "label": "Width",
+      "type": "integer",
+      "default": 512,
+      "min": 256,
+      "max": 1536,
+      "step": 64
+    },
+    {
+      "key": "height",
+      "label": "Height",
+      "type": "integer",
+      "default": 512,
+      "min": 256,
+      "max": 1536,
+      "step": 64
+    },
+    {
+      "key": "steps",
+      "label": "Steps",
+      "type": "integer",
+      "default": 24,
+      "min": 1,
+      "max": 60
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "v1-5-pruned-emaonly-fp16.safetensors",
+      "folder": "checkpoints",
+      "size": 2132696762,
+      "url": "https://huggingface.co/Comfy-Org/stable-diffusion-1.5/resolve/main/v1-5-pruned-emaonly-fp16.safetensors",
+      "license": "CreativeML OpenRAIL-M"
+    },
+    {
+      "file": "control_v11p_sd15_canny.pth",
+      "folder": "controlnet",
+      "size": 1445234681,
+      "url": "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_canny.pth",
+      "license": "Apache-2.0"
+    }
+  ],
+  "output": {"type": "image", "mime": "image/png"},
+  "estimate": {
+    "seconds": 16,
+    "vram_gb": 5.0,
+    "output_gb": 0.1,
+    "byGpu": {
+      "rtx-4090": {"seconds": 4, "vram_gb": 5.0},
+      "rtx-3060": {"seconds": 15, "vram_gb": 5.0},
+      "default": {"seconds": 18, "vram_gb": 5.0}
+    }
+  },
+  "workflow": {
+    "1": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {"ckpt_name": "v1-5-pruned-emaonly-fp16.safetensors"}
+    },
+    "2": {
+      "class_type": "LoadImage",
+      "inputs": {"image": "{{image}}"}
+    },
+    "3": {
+      "class_type": "Canny",
+      "inputs": {"image": ["2", 0], "low_threshold": 100, "high_threshold": 200}
+    },
+    "4": {
+      "class_type": "ControlNetLoader",
+      "inputs": {"control_net_name": "control_v11p_sd15_canny.pth"}
+    },
+    "5": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {"text": "{{prompt}}", "clip": ["1", 1]}
+    },
+    "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {"text": "{{negative}}", "clip": ["1", 1]}
+    },
+    "7": {
+      "class_type": "ControlNetApplyAdvanced",
+      "inputs": {
+        "positive": ["5", 0],
+        "negative": ["6", 0],
+        "control_net": ["4", 0],
+        "image": ["3", 0],
+        "strength": "{{strength}}",
+        "start_percent": 0.0,
+        "end_percent": 1.0
+      }
+    },
+    "8": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {"width": "{{width}}", "height": "{{height}}", "batch_size": 1}
+    },
+    "9": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": "{{seed}}",
+        "steps": "{{steps}}",
+        "cfg": 7.0,
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "denoise": 1.0,
+        "model": ["1", 0],
+        "positive": ["7", 0],
+        "negative": ["7", 1],
+        "latent_image": ["8", 0]
+      }
+    },
+    "10": {
+      "class_type": "VAEDecode",
+      "inputs": {"samples": ["9", 0], "vae": ["1", 2]}
+    },
+    "11": {
+      "class_type": "SaveImage",
+      "inputs": {"images": ["10", 0], "filename_prefix": "codync/canny"}
+    }
+  }
+}

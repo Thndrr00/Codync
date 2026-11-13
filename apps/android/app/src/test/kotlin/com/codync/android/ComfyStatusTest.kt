@@ -14,10 +14,11 @@ class ComfyStatusTest {
     @Test fun aRunningComfyWithAJobReadsAsTheCardDoes() {
         val status = decode("""{"id":"comfy","state":"running","error":null,"port":8188,
             "comfy":{"bundled":true,"notice":"No NVIDIA graphics card was found, so ComfyUI runs on the processor. Images take minutes instead of seconds."},
-            "job":{"id":"p1","phase":"running","error":null,"files":[]}}""")
+            "job":{"id":"p1","phase":"running","error":null,"files":[],"progress":{"node":"5","class":"KSampler","step":6,"total":20,"percent":0.3}}}""")
         assertTrue(status.active)
         assertEquals("Running", status.stateLabel)
         assertEquals("Making an image…", status.jobLabel)
+        assertEquals(0.3, status.jobPercent!!, 0.0001)
         assertTrue(status.jobActive)
         assertTrue(status.notice!!.startsWith("No NVIDIA"))
     }

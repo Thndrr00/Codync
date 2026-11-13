@@ -1,0 +1,54 @@
+{
+  "id": "image-upscale",
+  "name": "Upscale a picture",
+  "version": "1.0.0",
+  "description": "Makes a picture four times wider and taller with Real-ESRGAN, which invents the missing detail instead of stretching pixels.",
+  "tags": ["image", "upscale"],
+  "license": "Real-ESRGAN is BSD-3-Clause (Xintao Wang); the graph is Codync's.",
+  "inputs": [
+    {
+      "key": "image",
+      "label": "Picture",
+      "type": "image",
+      "required": true
+    }
+  ],
+  "models": [
+    {
+      "file": "RealESRGAN_x4plus.pth",
+      "folder": "upscale_models",
+      "size": 67040989,
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+      "license": "BSD-3-Clause"
+    }
+  ],
+  "output": {"type": "image", "mime": "image/png"},
+  "estimate": {
+    "seconds": 6,
+    "vram_gb": 2.0,
+    "output_gb": 0.2,
+    "byGpu": {
+      "rtx-4090": {"seconds": 2, "vram_gb": 2.0},
+      "rtx-3060": {"seconds": 6, "vram_gb": 2.0},
+      "default": {"seconds": 8, "vram_gb": 2.0}
+    }
+  },
+  "workflow": {
+    "1": {
+      "class_type": "LoadImage",
+      "inputs": {"image": "{{image}}"}
+    },
+    "2": {
+      "class_type": "UpscaleModelLoader",
+      "inputs": {"model_name": "RealESRGAN_x4plus.pth"}
+    },
+    "3": {
+      "class_type": "ImageUpscaleWithModel",
+      "inputs": {"upscaler": ["2", 0], "image": ["1", 0]}
+    },
+    "4": {
+      "class_type": "SaveImage",
+      "inputs": {"images": ["3", 0], "filename_prefix": "codync/upscale"}
+    }
+  }
+}

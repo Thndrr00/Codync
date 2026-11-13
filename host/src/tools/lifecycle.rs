@@ -1,7 +1,7 @@
 //! When tools run: the ones switched on start with the host, every one stops with it, and a
 //! switch survives restarts in the store. ComfyUI also offers its MCP tools to the bots while it runs.
 
-use super::comfy::{self, CONNECTOR_ID};
+use super::comfy::{self, CONNECTOR_ID, models, templates};
 use super::comfy_install::Installer;
 use super::comfy_job::Jobs;
 use super::log::Log;
@@ -22,6 +22,8 @@ pub struct Tools {
     jobs: Arc<Jobs>,
     /// Fetches ComfyUI's program the first time it starts.
     installer: Arc<Installer>,
+    /// The model library and its resumable downloads.
+    models: Arc<models::Downloads>,
 }
 
 impl Tools {
@@ -32,10 +34,16 @@ impl Tools {
     }
 
     fn with_engines(engines: &[&'static Engine], logs: &Path, events: &broadcast::Sender<Value>) -> Self {
+        // The named templates are part of the tool, not the program: they are tiny, and the card
+        // must list them before ComfyUI's first download finishes.
+        if let Err(e) = templates::install_base() {
+            tracing::warn!(error = format!("{e:#}"), "installing ComfyUI's templates");
+        }
         Self {
             runners: engines.iter().map(|e| Arc::new(Runner::new(e, Log::open(logs, e.id), events.clone()))).collect(),
             jobs: Arc::new(Jobs::new(events.clone())),
             installer: Arc::new(Installer::new(events.clone())),
+            models: Arc::new(models::Downloads::new(events.clone())),
         }
     }
 
@@ -45,6 +53,10 @@ impl Tools {
 
     pub fn comfy_jobs(&self) -> &Arc<Jobs> {
         &self.jobs
+    }
+
+    pub fn comfy_models(&self) -> &Arc<models::Downloads> {
+        &self.models
     }
 
     pub fn comfy_running(&self) -> bool {
@@ -72,7 +84,9 @@ impl Tools {
         if id == COMFY.id {
             status["comfy"] = tokio::task::spawn_blocking(comfy::card).await?;
             status["job"] = self.jobs.status();
+            status["jobs"] = self.jobs.history();
             status["install"] = self.installer.status();
+            status["downloads"] = self.models.status();
         }
         Ok(status)
     }

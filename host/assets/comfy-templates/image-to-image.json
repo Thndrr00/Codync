@@ -1,0 +1,116 @@
+{
+  "id": "image-to-image",
+  "name": "Redraw a picture",
+  "version": "1.0.0",
+  "description": "Takes a photo or a drawing and redraws it, guided by a description. A low strength keeps the original; a high one reinvents it.",
+  "tags": ["image", "stable-diffusion", "edit"],
+  "license": "The graph is Codync's; the checkpoint keeps its own licence (CreativeML OpenRAIL-M).",
+  "inputs": [
+    {
+      "key": "image",
+      "label": "Picture",
+      "type": "image",
+      "required": true,
+      "help": "The original. It is uploaded to this computer's ComfyUI, never to the network."
+    },
+    {
+      "key": "prompt",
+      "label": "What it should become",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "negative",
+      "label": "What to avoid",
+      "type": "text",
+      "default": "blurry, low quality, watermark, text"
+    },
+    {
+      "key": "strength",
+      "label": "How much to change it",
+      "type": "number",
+      "default": 0.55,
+      "min": 0.05,
+      "max": 1.0,
+      "step": 0.05
+    },
+    {
+      "key": "steps",
+      "label": "Steps",
+      "type": "integer",
+      "default": 24,
+      "min": 1,
+      "max": 60
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "v1-5-pruned-emaonly-fp16.safetensors",
+      "folder": "checkpoints",
+      "size": 2132696762,
+      "url": "https://huggingface.co/Comfy-Org/stable-diffusion-1.5/resolve/main/v1-5-pruned-emaonly-fp16.safetensors",
+      "license": "CreativeML OpenRAIL-M"
+    }
+  ],
+  "output": {"type": "image", "mime": "image/png"},
+  "estimate": {
+    "seconds": 15,
+    "vram_gb": 4.5,
+    "output_gb": 0.1,
+    "byGpu": {
+      "rtx-4090": {"seconds": 4, "vram_gb": 4.5},
+      "rtx-3060": {"seconds": 14, "vram_gb": 4.5},
+      "default": {"seconds": 18, "vram_gb": 4.5}
+    }
+  },
+  "workflow": {
+    "1": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {"ckpt_name": "v1-5-pruned-emaonly-fp16.safetensors"}
+    },
+    "2": {
+      "class_type": "LoadImage",
+      "inputs": {"image": "{{image}}"}
+    },
+    "3": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {"text": "{{prompt}}", "clip": ["1", 1]}
+    },
+    "4": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {"text": "{{negative}}", "clip": ["1", 1]}
+    },
+    "5": {
+      "class_type": "VAEEncode",
+      "inputs": {"pixels": ["2", 0], "vae": ["1", 2]}
+    },
+    "6": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": "{{seed}}",
+        "steps": "{{steps}}",
+        "cfg": 7.0,
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "denoise": "{{strength}}",
+        "model": ["1", 0],
+        "positive": ["3", 0],
+        "negative": ["4", 0],
+        "latent_image": ["5", 0]
+      }
+    },
+    "7": {
+      "class_type": "VAEDecode",
+      "inputs": {"samples": ["6", 0], "vae": ["1", 2]}
+    },
+    "8": {
+      "class_type": "SaveImage",
+      "inputs": {"images": ["7", 0], "filename_prefix": "codync/i2i"}
+    }
+  }
+}

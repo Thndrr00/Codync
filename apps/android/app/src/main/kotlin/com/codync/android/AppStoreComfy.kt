@@ -16,6 +16,8 @@ internal data class ComfyStatus(
     val notice: String?,
     /** `queued`, `running`, `done`, `cancelled` or `error`; null before the first job. */
     val jobPhase: String?,
+    /** How far the sampler got, 0...1, while `/ws` reports it. */
+    val jobPercent: Double? = null,
     /** Whether its program is on the computer; the first start downloads it. */
     val installed: Boolean = true,
     /** The download's size, for the line that offers it. */
@@ -56,12 +58,14 @@ internal data class ComfyStatus(
             val card = json["comfy"] as? JsonObject
             val job = json["job"] as? JsonObject
             val install = json["install"] as? JsonObject
+            val progress = job?.get("progress") as? JsonObject
             return ComfyStatus(
                 state = text(json["state"]) ?: "stopped",
                 error = text(json["error"]),
                 bundled = card?.get("bundled")?.jsonPrimitive?.content != "false",
                 notice = text(card?.get("notice")),
                 jobPhase = text(job?.get("phase")),
+                jobPercent = (progress?.get("percent") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull(),
                 // An older host has no download: its ComfyUI is either there or not offered.
                 installed = card?.get("installed")?.jsonPrimitive?.content != "false",
                 downloadBytes = number(card?.get("downloadBytes")),

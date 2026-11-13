@@ -1,14 +1,17 @@
-//! ComfyUI jobs: one at a time. A job is a workflow queued with `POST /prompt`, followed through
-//! `/queue` and `/history`, and cancelled with `/interrupt` (or removed from the queue). Its images go to
-//! the chat of the bot that asked, from inside that bot's turn: `send_file` only works while a turn runs,
-//! so the bot's own `run_workflow` / `wait_for_job` call waits for the job and attaches them, once.
+//! ComfyUI jobs: what was queued, how far it got, and what it made. A job is a graph queued with
+//! `POST /prompt`, followed through `/queue` and `/history` and, while it runs, through `/ws` for the
+//! node and the step. Its outputs go to the chat of the bot that asked, from inside that bot's turn:
+//! `send_file` only works while a turn runs, so the bot's own `run_workflow` / `run_template` call
+//! waits for the job and attaches them, once.
 
+use super::comfy::results;
 use super::comfy::{self, MODELS_URL};
 use super::comfy_api::Api;
 use crate::LockExt;
 use crate::hub::Hub;
 use anyhow::{Result, bail, ensure};
 use serde_json::{Value, json};
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -17,6 +20,8 @@ use tokio::sync::broadcast;
 const POLL_EVERY: Duration = Duration::from_secs(1);
 /// A job that runs longer than this is stopped.
 const MAX_RUN: Duration = Duration::from_mins(30);
+/// How many finished jobs the card and the phone keep.
+const KEEP_HISTORY: usize = 20;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
@@ -43,36 +48,71 @@ impl Phase {
     }
 }
 
+/// The node and the step the engine reported on `/ws`.
+#[derive(Clone, Debug, Default)]
+struct Progress {
+    node: String,
+    class: String,
+    step: u64,
+    total: u64,
+}
+
+impl Progress {
+    fn public(&self) -> Value {
+        json!({
+            "node": self.node,
+            "class": self.class,
+            "step": self.step,
+            "total": self.total,
+            "percent": (self.total > 0).then(|| self.step as f64 / self.total as f64),
+        })
+    }
+}
+
 #[derive(Clone)]
 struct Job {
     id: String,
     bot: String,
+    /// The template that built the graph, when a template did.
+    template: Option<String>,
     phase: Phase,
     error: Option<String>,
     files: Vec<PathBuf>,
     /// The images went to the bot's chat already.
     delivered: bool,
+    progress: Option<Progress>,
+    /// Node id to class, for naming the node `/ws` reports.
+    classes: BTreeMap<String, String>,
+    created: i64,
 }
 
 impl Job {
-    fn queued(id: &str, bot: &str) -> Self {
+    fn queued(id: &str, bot: &str, template: Option<&str>, classes: BTreeMap<String, String>) -> Self {
         Self {
             id: id.to_owned(),
             bot: bot.to_owned(),
+            template: template.map(str::to_owned),
             phase: Phase::Queued,
             error: None,
             files: vec![],
             delivered: false,
+            progress: None,
+            classes,
+            created: chrono::Utc::now().timestamp_millis(),
         }
     }
 
     fn public(&self) -> Value {
         json!({
             "id": self.id,
+            "template": self.template,
             "phase": self.phase.name(),
             "error": self.error,
             "files": self.files.iter().map(|f| f.to_string_lossy()).collect::<Vec<_>>(),
+            "outputs": self.files.iter().map(|f| results::Output::describe(f).public()).collect::<Vec<_>>(),
             "delivered": self.delivered,
+            "progress": self.progress.as_ref().map(Progress::public),
+            "createdAt": self.created,
         })
     }
 }
@@ -106,12 +146,19 @@ pub struct Jobs {
     /// Held while a job is validated and queued, so two bots asking at once can't both get the slot.
     gate: tokio::sync::Mutex<()>,
     current: Mutex<Option<Job>>,
+    /// Finished jobs, newest first, so the phone and the card see what was made.
+    history: Mutex<VecDeque<Job>>,
     events: broadcast::Sender<Value>,
 }
 
 impl Jobs {
     pub fn new(events: broadcast::Sender<Value>) -> Self {
-        Self { gate: tokio::sync::Mutex::new(()), current: Mutex::new(None), events }
+        Self {
+            gate: tokio::sync::Mutex::new(()),
+            current: Mutex::new(None),
+            history: Mutex::new(VecDeque::new()),
+            events,
+        }
     }
 
     /// The last job (finished or not), for the card and the `job_status` tool.
@@ -119,7 +166,12 @@ impl Jobs {
         self.current.locked().as_ref().map_or(Value::Null, Job::public)
     }
 
-    /// The first image of the last finished job.
+    /// The finished jobs, newest first.
+    pub fn history(&self) -> Value {
+        Value::Array(self.history.locked().iter().map(Job::public).collect())
+    }
+
+    /// The first output of the last finished job, whatever its type.
     pub fn first_file(&self) -> Option<PathBuf> {
         self.current.locked().as_ref().filter(|j| j.phase == Phase::Done).and_then(|j| j.files.first().cloned())
     }
@@ -128,40 +180,79 @@ impl Jobs {
         self.current.locked().as_ref().filter(|j| j.id == id).map(|j| j.phase)
     }
 
+    /// Whether the `/ws` listener still has work to report.
+    pub(crate) fn is_current(&self, id: &str) -> bool {
+        self.phase_of(id).is_some_and(Phase::active)
+    }
+
     fn announce(&self, job: &Job) {
         let _ = self.events.send(json!({ "type": "toolJob", "tool": "comfy", "job": job.public() }));
     }
 
     /// Changes the job while it is still active: a cancellation or a finish already recorded stays.
+    /// A job that reaches a final phase is copied to the history.
     fn update(&self, id: &str, change: impl FnOnce(&mut Job)) {
         let mut guard = self.current.locked();
         let Some(job) = guard.as_mut().filter(|j| j.id == id && j.phase.active()) else { return };
         change(job);
+        if !job.phase.active() {
+            let mut history = self.history.locked();
+            history.retain(|old| old.id != job.id);
+            history.push_front(job.clone());
+            history.truncate(KEEP_HISTORY);
+        }
         self.announce(job);
+    }
+
+    /// `/ws`: the node that started and the sampler's step, while the job runs.
+    pub(crate) fn progress(&self, id: &str, node: &str, step: u64, total: u64) {
+        let mut guard = self.current.locked();
+        let Some(job) = guard.as_mut().filter(|j| j.id == id && j.phase.active()) else { return };
+        let class = job.classes.get(node).cloned().unwrap_or_default();
+        let changed = job.progress.as_ref().is_none_or(|old| old.node != node || old.step != step);
+        job.progress = Some(Progress { node: node.to_owned(), class, step, total });
+        if changed {
+            let public = job.public();
+            drop(guard);
+            let _ = self.events.send(json!({ "type": "toolJob", "tool": "comfy", "job": public }));
+        }
     }
 
     /// Validates and queues `graph` for `bot`; the job is followed in the background.
     pub async fn submit(self: &Arc<Self>, hub: &Arc<Hub>, bot: &str, graph: &Value) -> Result<Value> {
+        self.submit_for(hub, bot, None, graph).await
+    }
+
+    /// [`Self::submit`] for a graph a named template built.
+    pub async fn submit_for(
+        self: &Arc<Self>,
+        hub: &Arc<Hub>,
+        bot: &str,
+        template: Option<&str>,
+        graph: &Value,
+    ) -> Result<Value> {
         let _slot = self.gate.lock().await;
         ensure!(
             !self.current.locked().as_ref().is_some_and(|j| j.phase.active()),
             "ComfyUI runs one job at a time: wait for the current one or cancel it"
         );
         let api = running_api(hub)?;
-        validate(graph, &api.object_info().await?)?;
+        let info = api.object_info().await?;
+        validate(graph, &info)?;
         let id = api.submit(graph, "codync").await?;
-        let job = Job::queued(&id, bot);
+        let job = Job::queued(&id, bot, template, classes(graph));
         *self.current.locked() = Some(job.clone());
         self.announce(&job);
-        tokio::spawn(self.clone().follow(hub.clone(), id));
+        tokio::spawn(self.clone().follow(hub.clone(), id.clone()));
+        tokio::spawn(super::progress::follow(hub.tools.comfy_port(), id, self.clone()));
         Ok(job.public())
     }
 
     /// Waits up to `limit` for the current job, from inside `bot`'s turn. When it is done and `bot` asked
-    /// for it, its images go to `bot`'s chat (once). A wait that is abandoned (the turn stopped) cancels it.
+    /// for it, its outputs go to `bot`'s chat (once). A wait that is abandoned (the turn stopped) cancels it.
     pub async fn wait(self: &Arc<Self>, hub: &Arc<Hub>, bot: &str, limit: Duration) -> Result<Value> {
         let Some((id, owner)) = self.current.locked().as_ref().map(|j| (j.id.clone(), j.bot.clone())) else {
-            bail!("there is no ComfyUI job: start one with run_workflow");
+            bail!("there is no ComfyUI job: start one with run_workflow or comfy_run_template");
         };
         // Only the bot that asked for the job stops it by stopping its turn.
         let mut guard = CancelOnDrop { jobs: self.clone(), hub: hub.clone(), id: id.clone(), armed: owner == bot };
@@ -187,7 +278,7 @@ impl Jobs {
         Ok(status)
     }
 
-    /// The images of a finished job of `bot` that are not in its chat yet, marked as sent.
+    /// The outputs of a finished job of `bot` that are not in its chat yet, marked as sent.
     fn claim_delivery(&self, id: &str, bot: &str) -> Vec<PathBuf> {
         let mut guard = self.current.locked();
         let Some(job) = guard.as_mut().filter(|j| j.id == id && j.bot == bot && j.phase == Phase::Done && !j.delivered)
@@ -291,6 +382,16 @@ fn running_api(hub: &Hub) -> Result<Api> {
     Ok(Api::new(hub.tools.comfy_port()))
 }
 
+/// The numbered nodes and their classes, so `/ws` can name the one that started.
+fn classes(graph: &Value) -> BTreeMap<String, String> {
+    graph
+        .as_object()
+        .into_iter()
+        .flat_map(|nodes| nodes.iter())
+        .filter_map(|(id, node)| Some((id.clone(), node["class_type"].as_str()?.to_owned())))
+        .collect()
+}
+
 /// The server's error text from a failed run's `status.messages`.
 fn failure(record: &Value) -> String {
     record["status"]["messages"]
@@ -304,21 +405,34 @@ fn failure(record: &Value) -> String {
         .to_owned()
 }
 
-/// The saved images of a finished run, as paths inside ComfyUI's output folder.
+/// Every saved output of a finished run, as paths inside ComfyUI's output folder. A node may save
+/// images, videos, audio or meshes under any key, so the whole `outputs` record is walked for files
+/// marked `output` instead of only reading `images`.
 pub(super) fn output_files(record: &Value) -> Vec<PathBuf> {
     let root = comfy::output_dir();
-    record["outputs"]
-        .as_object()
-        .into_iter()
-        .flat_map(|nodes| nodes.values())
-        .flat_map(|node| node["images"].as_array().into_iter().flatten())
-        .filter(|image| image["type"] == "output")
-        .filter_map(|image| {
-            let (name, sub) = (image["filename"].as_str()?, image["subfolder"].as_str().unwrap_or_default());
-            let unsafe_part = |s: &str| s.split(['/', '\\']).any(|p| p == "..") || s.contains(':');
-            (!unsafe_part(name) && !unsafe_part(sub)).then(|| root.join(sub).join(name))
-        })
-        .collect()
+    let mut files = Vec::new();
+    collect_outputs(&record["outputs"], &root, &mut files);
+    files.sort();
+    files.dedup();
+    files
+}
+
+fn collect_outputs(value: &Value, root: &std::path::Path, files: &mut Vec<PathBuf>) {
+    match value {
+        Value::Object(map) => {
+            if let Some(name) = map.get("filename").and_then(Value::as_str) {
+                let kind = map.get("type").and_then(Value::as_str).unwrap_or("output");
+                let sub = map.get("subfolder").and_then(Value::as_str).unwrap_or_default();
+                let unsafe_part = |s: &str| s.split(['/', '\\']).any(|p| p == "..") || s.contains(':');
+                if kind == "output" && !unsafe_part(name) && !unsafe_part(sub) {
+                    files.push(root.join(sub).join(name));
+                }
+            }
+            map.values().for_each(|item| collect_outputs(item, root, files));
+        }
+        Value::Array(items) => items.iter().for_each(|item| collect_outputs(item, root, files)),
+        _ => {}
+    }
 }
 
 /// Checks a graph against the node classes the server knows, for a message better than a bare 400:
@@ -394,13 +508,33 @@ mod tests {
     }
 
     #[test]
-    fn output_paths_stay_inside_the_output_folder() {
-        let record = json!({"outputs": {"9": {"images": [
-            {"filename": "ok.png", "subfolder": "", "type": "output"},
-            {"filename": "..\\evil.png", "subfolder": "", "type": "output"},
-            {"filename": "temp.png", "subfolder": "", "type": "temp"},
-        ]}}});
+    fn output_paths_stay_inside_the_output_folder_and_keep_every_type() {
+        let record = json!({"outputs": {
+            "9": {"images": [{"filename": "ok.png", "subfolder": "", "type": "output"}]},
+            "10": {"gifs": [{"filename": "clip.mp4", "subfolder": "video", "type": "output"}]},
+            "11": {"audio": [{"filename": "voice.wav", "subfolder": "", "type": "output"}]},
+            "12": {"files": [{"filename": "..\\evil.png", "subfolder": "", "type": "output"}]},
+            "13": {"images": [{"filename": "temp.png", "subfolder": "", "type": "temp"}]},
+        }});
         let files = output_files(&record);
-        assert_eq!(files, vec![comfy::output_dir().join("").join("ok.png")]);
+        assert_eq!(
+            files,
+            vec![
+                comfy::output_dir().join("ok.png"),
+                comfy::output_dir().join("video").join("clip.mp4"),
+                comfy::output_dir().join("voice.wav")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_finished_job_is_archived_once() {
+        let jobs = Jobs::new(tokio::sync::broadcast::channel(8).0);
+        *jobs.current.locked() = Some(Job::queued("p1", "b", Some("text-to-image"), BTreeMap::new()));
+        jobs.update("p1", |j| j.phase = Phase::Running);
+        jobs.update("p1", |j| j.phase = Phase::Done);
+        jobs.update("p1", |j| j.phase = Phase::Done);
+        assert_eq!(jobs.history().as_array().map(Vec::len), Some(1));
+        assert_eq!(jobs.status()["phase"], "done");
     }
 }

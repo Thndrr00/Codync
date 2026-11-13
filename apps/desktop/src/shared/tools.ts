@@ -21,10 +21,127 @@ export type ToolRunState = 'stopped' | 'starting' | 'running' | 'error'
 
 export interface ToolJob {
   id: string
+  /** The template that built the graph, when a named template did. */
+  template?: string | null
   phase: 'queued' | 'running' | 'done' | 'cancelled' | 'error'
   error: string | null
   files: string[]
+  /** The same files with their real type: a video is not an oddly named PNG. */
+  outputs?: ToolOutput[]
+  progress?: ToolProgress | null
+  createdAt?: number
 }
+
+export interface ToolOutput {
+  path: string
+  kind: 'image' | 'video' | 'audio' | 'mesh' | 'file'
+  mime: string
+  /** A JPEG poster for a video; null when ffmpeg is not installed. */
+  thumbnail: string | null
+}
+
+export interface ToolProgress {
+  node: string
+  class: string
+  step: number
+  total: number
+  percent: number | null
+}
+
+/** One form field of a template (`host/src/tools/comfy/templates.rs`). */
+export interface TemplateInput {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'integer' | 'select' | 'image' | 'seed' | 'boolean'
+  default?: unknown
+  min?: number | null
+  max?: number | null
+  step?: number | null
+  options?: string[]
+  required?: boolean
+  help?: string | null
+}
+
+export interface TemplateModel {
+  file: string
+  folder: string
+  size: number
+  sha256?: string | null
+  url?: string | null
+  license?: string | null
+}
+
+export interface TemplatePreflightProblem {
+  code: string
+  message: string
+  action: { kind: 'start' | 'download' | 'installNode' | 'lowerResolution' | 'freeSpace' | 'useCpu'; [key: string]: unknown }
+}
+
+/** A gallery row (`comfyTemplates`). */
+export interface ComfyTemplateSummary {
+  id: string
+  name: string
+  version: string
+  description: string
+  output: 'image' | 'video' | 'audio' | 'mesh'
+  tags: string[]
+  estimateSeconds: number | null
+  vramGb: number | null
+  inputs: number
+  models: number
+}
+
+/** One template's full form (`comfyTemplate`). */
+export interface ComfyTemplate extends Omit<ComfyTemplateSummary, 'output' | 'estimateSeconds' | 'vramGb' | 'inputs' | 'models'> {
+  inputs: TemplateInput[]
+  models: TemplateModel[]
+  output: { type: 'image' | 'video' | 'audio' | 'mesh'; mime?: string | null }
+  estimate: { seconds?: number | null; vram_gb?: number | null; secondsForThisGpu?: number | null; vramForThisGpu?: number | null }
+  license?: string | null
+  nodeCount: number
+  preflight?: {
+    ok: boolean
+    problems: TemplatePreflightProblem[]
+    warnings: TemplatePreflightProblem[]
+    estimate: { seconds: number | null; vramGb: number | null; gpu: string | null; outputGb: number }
+  }
+}
+
+export interface ModelFile {
+  file: string
+  size: number
+  present: boolean
+  declared: boolean
+  usedBy: string[]
+  url?: string | null
+  license?: string | null
+}
+
+export interface ModelFolder {
+  folder: string
+  path: string
+  bytes: number
+  models: ModelFile[]
+}
+
+export interface ModelDownload {
+  folder: string
+  file: string
+  done: number
+  total: number
+  phase: 'downloading' | 'paused' | 'done' | 'failed'
+  error: string | null
+  percent: number | null
+}
+
+export interface ModelLibrary {
+  folders: ModelFolder[]
+  totalBytes: number
+  diskBytes: number
+  freeBytes: number
+  downloads: ModelDownload[]
+}
+
 
 /** What the host shows on ComfyUI's card. */
 export interface ComfyCard {
@@ -55,6 +172,9 @@ export interface ToolState {
   logTail: string
   comfy?: ComfyCard
   job?: ToolJob | null
+  /** Finished jobs, newest first, so the card keeps what was made. */
+  jobs?: ToolJob[]
+  downloads?: ModelDownload[]
   install?: ToolInstall
 }
 

@@ -34,7 +34,45 @@ Data: `~/.codync/comfy/{user,models,custom_nodes,input,output,temp}` (`~/.codync
 
 ## Bots
 
-The host registers a `comfyui` connector while ComfyUI runs (`lifecycle::offer_to_bots`); a bot gets the `codync-host mcp comfy` server only when its owner turned that connector on (`agent/bot/session.rs`). Tools: `list_models`, `list_nodes`, `example_workflow`, `run_workflow`, `wait_for_job`, `upload_image`, `job_status`, `cancel_job`. The host follows each job (`/history`, `/queue`, 30 minute limit) for the card. The images reach the bot's chat with `send_file`, which only works while the bot's turn runs, so the bot's own call delivers them: `run_workflow` queues and waits up to 5 minutes; a longer job returns still running and `wait_for_job` (or a `job_status` look) delivers it later, once. A wait abandoned because the asking bot's turn stopped cancels the job (`comfy_job::CancelOnDrop`); another bot's wait never does. One job at a time. Host API: `toolStatus|toolStart|toolStop` (`{id}`), `comfyCancel`, `comfyJobImage`; `comfyCall` (the MCP bridge) is loopback-only, like the other bridges.
+The host registers a `comfyui` connector while ComfyUI runs (`lifecycle::offer_to_bots`); a bot gets the `codync-host mcp comfy` server only when its owner turned that connector on (`agent/bot/session.rs`). Tools: `comfy_list_templates`, `comfy_describe_template`, `comfy_run_template`, `comfy_job_status`, `comfy_cancel_job`, `comfy_upload_input`, `comfy_result`, plus the original `list_models`, `list_nodes`, `example_workflow`, `run_workflow`, `wait_for_job`, `upload_image`, `job_status`, `cancel_job`. The host follows each job (`/history`, `/queue`, `/ws`, 30 minute limit) for the card. The files reach the bot's chat with `send_file`, which only works while the bot's turn runs, so the bot's own call delivers them: `comfy_run_template` queues and waits up to 5 minutes; a longer job returns still running and `comfy_result` (or a `comfy_job_status` look) delivers it later, once. A wait abandoned because the asking bot's turn stopped cancels the job (`comfy_job::CancelOnDrop`); another bot's wait never does. One job at a time. Host API: `toolStatus|toolStart|toolStop` (`{id}`), `comfyCancel`, `comfyJobImage`, `comfyJobOutput`, `comfyJobs`, `comfyTemplates`, `comfyTemplate`, `comfyRunTemplate`, `comfyModels`, `comfyModelDownload`, `comfyModelPause`, `comfyModelDelete`, `comfyUploadImage`; `comfyCall` (the MCP bridge) is loopback-only, like the other bridges.
+
+## Templates
+
+`host/src/tools/comfy/templates.rs` loads one manifest per folder under `<data>/comfy/templates/<id>/template.json`:
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `name`, `version`, `description`, `tags`, `license` | what the gallery and the bot show |
+| `workflow` | the graph in ComfyUI's API format, with `{{input}}` placeholders in its strings |
+| `inputs` | the form: `key`, `label`, `type` (`text`, `number`, `integer`, `select`, `image`, `seed`, `boolean`), `default`, `min`, `max`, `step`, `options`, `required`, `help` |
+| `models` | `file`, `folder` (a key of `extra_model_paths.yaml`), `size`, `sha256`, `url`, `license` |
+| `output` | `image`, `video`, `audio` or `mesh`, and an optional MIME override |
+| `estimate` | seconds, VRAM and output GB, overall and per GPU family under `byGpu` (`rtx-4090`, `default`…) |
+
+Validation happens before anything is listed or run: ids, ranges, select options, model folders, sizes, hashes and URLs, and that the placeholder set equals the input set (a form field the graph never uses is refused, and a placeholder with no field is refused). The graph is data, never code: only placeholder substitution is applied, and every node class is checked against the running server's `/object_info` (`comfy_job::validate`). `{{key}}` as a whole string keeps its JSON type (a number stays a number); inside a longer string it is joined as text.
+
+The five base manifests are embedded from `host/assets/comfy-templates/` and copied on startup. An untouched base manifest is updated in place; one the user edited is left alone and the new version is written beside it as `template.json.new`. Their model URLs were checked against the publishers: Stable Diffusion 1.5 fp16 (`2,132,696,762` bytes, CreativeML OpenRAIL-M), ControlNet v1.1 canny (`1,445,234,681` bytes, Apache-2.0) and Real-ESRGAN x4plus (`67,040,989` bytes, BSD-3-Clause). Hashes are optional and left out until the curated list has them.
+
+## Preflight
+
+`host/src/tools/comfy/preflight.rs` checks, before queueing: the server is running; each class the graph uses exists in `/object_info`; each declared model is on disk at its declared size; the GPU has the estimated free VRAM; and the output disk has room. Each problem has an action the card and the bot can act on: `start`, `installNode`, `download` (folder, file, URL, size, licence), `lowerResolution`, `freeSpace`. A run with any unresolved problem is refused; no job enters the queue. A missing NVIDIA card is a warning (`useCpu`), not a blocker.
+
+## Jobs, progress and typed outputs
+
+A job is `queued → running → done | cancelled | error`, with the node and step `/ws` reports (`{"progress": {"node", "class", "step", "total", "percent"}}`), its template id and when it started. Finished jobs stay in a twenty-entry history in the host, so the phone and the card read the same state after the desktop closes. Cancelling a running job interrupts it, a queued one is dequeued; a bot's stopped turn cancels the job it was waiting for.
+
+`outputs` is read from the whole `outputs` record (not only `images`): image, video, audio and mesh keep their own extension and MIME (`comfy/results.rs`), and a video gets a JPEG poster made with `ffmpeg` when it is on `PATH`. A missing `ffmpeg` costs the poster, not the output. The chat attachment path is unchanged: `send_file` copies any type, and the apps already show images and video.
+
+## Models
+
+`host/src/tools/comfy/models.rs` lists every models folder with present and declared files, the templates that need each one, bytes per folder and the disk's free space. Downloads are HTTP range requests into `<file>.part`, only for a `(folder, file)` a manifest declares and only from that manifest's URL, so a bot or a client can't point the downloader at arbitrary text. Pause stops after the chunk in flight; start resumes at the `.part` size. A finished file is checked against the manifest's size and SHA-256 before it is renamed. Deleting a model a template needs asks for confirmation.
+
+## Not covered here yet
+
+- **The official ComfyUI MCP, CLI and Agent** were not evaluated: that needs the pinned server and a network run, and this change was written without compiling or running the app (see the delivery report). The bridge keeps its own names until that comparison exists.
+- **The Higgsfield challenge pack** (Panorama Stickers, Paint a Plate, H3 Motion, OneShot MV, H3 AudioRetake, Genobi, Splat Edit Engine, Sonder, Max Editor, Blocksfield, Creativefield, ComfyArt, Reshoot 4D, Freefield, Henge) is not included: those graphs belong to their authors, come with their own licences and custom nodes, and must be imported with their markers and models checked, not invented. The manifest format and importer are ready for them.
+- **One job at a time**, no parallel queue.
+- **The gallery, form and model manager are on the desktop**; Android shows the job and its percentage and cancels it, and iOS has no ComfyUI section yet. The host owns the state, so those screens can follow without host changes.
 
 ## Known limits
 

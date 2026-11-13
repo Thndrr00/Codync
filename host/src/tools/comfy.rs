@@ -8,6 +8,12 @@
 //! Source: Comfy-Org/ComfyUI at the commit pinned in `packaging/comfy/version.json`; the flags used
 //! here are those of `comfy/cli_args.py` and the folder keys those of `extra_model_paths.yaml.example`.
 
+pub mod models;
+pub mod preflight;
+pub(crate) mod progress;
+pub(crate) mod results;
+pub mod templates;
+
 use super::runner::Launch;
 use crate::LockExt;
 use crate::service;
@@ -53,7 +59,7 @@ pub fn pin() -> &'static Pin {
 }
 
 /// Model folders ComfyUI is pointed at, relative to [`data_dir`] (keys of `extra_model_paths.yaml.example`).
-const MODEL_FOLDERS: [(&str, &str); 12] = [
+pub(crate) const MODEL_FOLDERS: [(&str, &str); 12] = [
     ("checkpoints", "models/checkpoints/"),
     ("configs", "models/configs/"),
     ("loras", "models/loras/"),
@@ -77,8 +83,58 @@ pub fn checkpoints_dir() -> PathBuf {
     data_dir().join("models").join("checkpoints")
 }
 
+/// Every models folder ComfyUI is pointed at, without the custom nodes.
+pub fn model_folders() -> Vec<&'static str> {
+    MODEL_FOLDERS.iter().map(|(key, _)| *key).filter(|key| *key != "custom_nodes").collect()
+}
+
+/// The folder a model's manifest names, as a key of `extra_model_paths.yaml`.
+pub fn model_folder(key: &str) -> Option<PathBuf> {
+    MODEL_FOLDERS.iter().find(|(name, _)| *name == key).map(|(_, folder)| data_dir().join(*folder))
+}
+
+/// One model's path, with both the folder and the file checked so a manifest can't write outside
+/// the models folders.
+pub fn model_path(folder: &str, file: &str) -> Result<PathBuf> {
+    let root = model_folder(folder).ok_or_else(|| anyhow::anyhow!("unknown model folder `{folder}`"))?;
+    let name = crate::chat::files::name(file).map_err(|_| anyhow::anyhow!("invalid model file `{file}`"))?;
+    Ok(root.join(name))
+}
+
 pub fn output_dir() -> PathBuf {
     data_dir().join("output")
+}
+
+/// Posters for videos and big pictures, made once and kept beside the outputs.
+pub fn thumbs_dir() -> PathBuf {
+    data_dir().join("thumbs")
+}
+
+/// The graphics card, when `nvidia-smi` names one: its name and its memory in megabytes.
+#[derive(Clone, Debug)]
+pub struct Gpu {
+    pub name: String,
+    pub total_mb: u64,
+    pub free_mb: u64,
+}
+
+/// Asked per preflight: memory free changes while other programs run.
+pub fn gpu() -> Option<Gpu> {
+    let output = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=name,memory.total,memory.free", "--format=csv,noheader,nounits"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line = text.lines().next()?;
+    let mut parts = line.split(',').map(str::trim);
+    let name = parts.next()?.to_owned();
+    let total_mb = parts.next()?.parse().ok()?;
+    let free_mb = parts.next()?.parse().ok()?;
+    (!name.is_empty()).then_some(Gpu { name, total_mb, free_mb })
 }
 
 /// Whether this computer can run the portable: it is built for Windows on x64.
@@ -121,12 +177,7 @@ impl Compute {
     }
 
     fn detect() -> Self {
-        let found = std::process::Command::new("nvidia-smi")
-            .arg("-L")
-            .stdin(std::process::Stdio::null())
-            .output()
-            .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("GPU"));
-        if found { Self::Gpu } else { Self::Cpu }
+        if gpu().is_some() { Self::Gpu } else { Self::Cpu }
     }
 
     pub fn notice(self) -> Option<&'static str> {
@@ -161,13 +212,18 @@ fn prepare_data(data: &Path) -> Result<PathBuf> {
 
 /// Free bytes on the disk that holds `path`.
 pub(crate) fn free_space(path: &Path) -> Option<u64> {
+    disk_space(path).map(|(_, free)| free)
+}
+
+/// Total and free bytes on the disk that holds `path`.
+pub(crate) fn disk_space(path: &Path) -> Option<(u64, u64)> {
     let disks = sysinfo::Disks::new_with_refreshed_list();
     disks
         .list()
         .iter()
         .filter(|d| path.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len())
-        .map(sysinfo::Disk::available_space)
+        .map(|d| (d.total_space(), d.available_space()))
 }
 
 /// Checks before the first start, then the process to run on `port`.

@@ -1,4 +1,4 @@
-ComfyUI makes images on your computer. It runs as a window of Codync: the host starts and stops it for you, and your bots can use it when you turn it on for them.
+ComfyUI makes images, video, audio and 3D on your computer. It runs as a window of Codync: the host starts and stops it for you, and your bots can use it when you turn it on for them.
 
 It is the official [ComfyUI](https://github.com/Comfy-Org/ComfyUI) portable for Windows. It is too big for the installer, so Codync downloads it (about 2 GB) the first time you start it, checks that it is exactly the pinned release, and keeps it with your ComfyUI files. You don't install Python or Git, and nothing leaves your computer while it runs: it listens only on `127.0.0.1`.
 
@@ -6,9 +6,39 @@ It is the official [ComfyUI](https://github.com/Comfy-Org/ComfyUI) portable for 
 
 In **Extensions → Apps → ComfyUI** (or the **ComfyUI** button in the sidebar), choose **Start** and then **Open**. The very first time the button says **Download and start**: the window and the card show the download and the unpacking as they go, and a failed download says why, with **Try again**. The first start can take a few minutes; the window shows the last lines of the log while it waits and opens the editor by itself once ComfyUI answers. There is no sign-in.
 
-The card shows the state, the ComfyUI version that ships with your Codync, the space your ComfyUI data uses, and the job a bot is running. **Stop** stops it, **Log** opens its log, and **Models** opens the folder where models go.
+The card shows the state, the ComfyUI version that ships with your Codync, the space your ComfyUI data uses, and the job a bot is running. Its tabs are **Templates**, **Models**, **Jobs** and **Settings**. **Stop** stops it, **Log** opens its log, and **Models folder** opens the folder where models go.
+
+## Templates
+
+**Templates** is the gallery of named workflows. Each card says what it makes (image, video, audio or 3D), about how long it takes and how many models it needs. Pick one and its form appears: the fields come from the template's own manifest (text, numbers with their limits, choices, a picture, a seed), so you never touch a node. **Run** queues it and takes you to **Jobs**.
+
+Five templates ship with Codync: **Text to image** and **Redraw a picture** (Stable Diffusion 1.5), **Follow the outline** (ControlNet), **Upscale a picture** (Real-ESRGAN) and **Colour check**, which needs no model and proves the engine works. Each names the models it needs and their licence; a download only ever comes from the template's manifest.
+
+Before a run is queued, Codync checks that ComfyUI is running, that the template's nodes are installed, that every model is on disk at the right size, that the graphics card has the memory the template asks for, and that the disk has room. A problem appears with the button that fixes it (**Download**, **Start**, **Open ComfyUI**); **Run** stays disabled until nothing is missing.
+
+Your own templates go in `~/.codync/comfy/templates/<id>/template.json`; a manifest that doesn't validate never appears in the gallery.
 
 If port 8188 is taken, ComfyUI uses the next free one; the card and the log say which.
+
+## Models
+
+**Models** lists every folder (checkpoints, LoRAs, VAEs, upscalers…), each file's size, which templates need it and its licence, plus the space used and free. A file a template needs but you don't have offers **Download**: it resumes where it stopped after **Pause**, checks the size and hash its manifest declares, and only then takes its final name. **Delete** asks first when a template still needs the file.
+
+## Jobs
+
+**Jobs** shows the current job with the node ComfyUI is on and the sampler's step (`12/20`), a bar, and **Cancel**. The poster of a finished video is shown; the file itself, with the type it really has, arrives in the bot's chat. The last twenty jobs stay in the list after the card closes, and the phone reads the same state from your computer.
+
+## From your phone and the terminal
+
+On Android, **Settings → ComfyUI** shows whether ComfyUI runs on the computer, starts and stops it, and shows the job a bot is making with its percentage and **Cancel**. The editor itself opens on the computer.
+
+In the terminal app (`codync-host tui`), the header says what ComfyUI is doing while it starts, runs or makes an image (with the percentage while the sampler reports it), and says nothing while it is off.
+
+## Your models and files
+
+Everything you add lives in `~/.codync/comfy` and survives updates: `models/` (checkpoints, LoRAs, VAEs…), `custom_nodes/`, `input/`, `output/`, `templates/` and the editor's settings in `user/`. Uninstalling Codync asks whether to delete them too; the default is to keep them. Codync ships no models: download one from a template's **Models** tab, or put a checkpoint in `models/checkpoints` (the **Models folder** button opens it) and it appears in the editor.
+
+A workflow that names a checkpoint you don't have fails with a message that says where to put the file and where to download one; the rest of Codync keeps working.
 
 The sidebar's **ComfyUI** button carries ComfyUI's mark, in the sidebar's own color like its other icons, with a dot under it: lit while ComfyUI runs, pulsing while it starts, red after an error. On a Codync that doesn't include ComfyUI, its window says so.
 
@@ -32,4 +62,4 @@ With an NVIDIA card, ComfyUI uses it. With AMD, Intel or no graphics card, it ru
 
 In any chat, start a message with `/comfy` and say what you want, for example `/comfy a red fox in the snow`: the bot makes it with ComfyUI. Typing `/` lists the command with the others, on the desktop, the phone and the terminal.
 
-Turn on the **ComfyUI** connector for a bot in its setup (it appears once ComfyUI runs). Nothing is generated unless the bot asks. The bot can list your models and nodes, run a workflow, send an input picture, check the job and cancel it. One job runs at a time; when it finishes, the images arrive in the bot's chat as attachments. A long job keeps going after the bot's reply, and the bot sends its images when it checks again. To cancel, use the card, ask the bot, or stop the bot's turn from your phone or the desktop while it waits.
+Turn on the **ComfyUI** connector for a bot in its setup (it appears once ComfyUI runs). Nothing is generated unless the bot asks. The bot starts from the template list: it reads a template's form, fills it, runs it, checks the job and cancels it. It can also list your models and nodes and run a whole graph of its own. One job runs at a time; when it finishes, the files arrive in the bot's chat as attachments with the type they really have (image, video, audio or 3D). A long job keeps going after the bot's reply, and the bot sends its files when it checks again. To cancel, use the card, ask the bot, or stop the bot's turn from your phone or the desktop while it waits.

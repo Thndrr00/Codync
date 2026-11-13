@@ -26,7 +26,7 @@ pub fn header(status: &Value) -> Option<String> {
             .replace("{total}", &size(install["total"].as_u64().unwrap_or_default()))
             .into(),
         (Some("unpacking"), ..) => tr("Unpacking {name}…").replace("{name}", "ComfyUI").into(),
-        (_, "running", Some("running")) => tr("Making an image…"),
+        (_, "running", Some("running")) => with_percent(&tr("Making an image…"), status),
         (_, "running", Some("queued")) => tr("Waiting in the queue"),
         (_, "running", _) => tr("Running"),
         (_, "starting", _) => tr("Starting…"),
@@ -34,6 +34,14 @@ pub fn header(status: &Value) -> Option<String> {
         _ => return None,
     };
     Some(format!("ComfyUI · {phrase}"))
+}
+
+/// "Making an image… 42%" while a sampler reports how far it got.
+fn with_percent(phrase: &str, status: &Value) -> String {
+    match status["job"]["progress"]["percent"].as_f64() {
+        Some(percent) => format!("{phrase} {}%", (percent * 100.0).round() as i64),
+        None => phrase.to_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -50,6 +58,11 @@ mod tests {
         assert_eq!(
             header(&json!({"state": "running", "job": {"phase": "running"}})),
             Some("ComfyUI · Making an image…".into())
+        );
+        assert_eq!(
+            header(&json!({"state": "running", "job": {"phase": "running", "progress": {"percent": 0.42}}})),
+            Some("ComfyUI · Making an image… 42%".into()),
+            "the sampler's step shows while it runs"
         );
         assert_eq!(
             header(&json!({"state": "running", "job": {"phase": "queued"}})),

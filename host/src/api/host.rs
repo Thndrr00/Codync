@@ -433,6 +433,37 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "comfyCancel" => hub.tools.comfy_jobs().cancel(hub).await?,
         "comfyJobImage" => crate::tools::comfy_mcp::job_image(hub).await?,
+        "comfyJobOutput" => crate::tools::comfy_mcp::job_preview(hub).await?,
+        "comfyUploadImage" => {
+            use base64::Engine as _;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(str_arg(&b, "data")?)
+                .context("the picture is not base64")?;
+            crate::tools::comfy_mcp::upload_bytes(hub, str_arg(&b, "name")?, bytes).await?
+        }
+        "comfyJobs" => hub.tools.comfy_jobs().history(),
+        "comfyTemplates" => json!({
+            "templates": crate::tools::comfy::templates::list().iter().map(|t| t.summary()).collect::<Vec<_>>(),
+            "problems": crate::tools::comfy::templates::problems(),
+        }),
+        "comfyTemplate" => crate::tools::comfy_mcp::describe_template(hub, &b).await?,
+        "comfyRunTemplate" => {
+            // The card queues and polls; it must not hold one API call for the whole job.
+            let mut args = b.clone();
+            args["wait"] = json!(false);
+            crate::tools::comfy_mcp::run_template(hub, "", &args).await?
+        }
+        "comfyModels" => hub.tools.comfy_models().list(),
+        "comfyModelDownload" => hub.tools.comfy_models().start(str_arg(&b, "folder")?, str_arg(&b, "file")?)?,
+        "comfyModelPause" => hub.tools.comfy_models().pause(str_arg(&b, "folder")?, str_arg(&b, "file")?)?,
+        "comfyModelDelete" => {
+            hub.tools.comfy_models().delete(
+                str_arg(&b, "folder")?,
+                str_arg(&b, "file")?,
+                b["force"].as_bool().unwrap_or(false),
+            )?;
+            json!({"deleted": true})
+        }
         "computerTools" => crate::screen::computer_tools(hub).await,
         "computerCall" => {
             let args = b.get("arguments").filter(|a| a.is_object()).cloned().unwrap_or_else(|| json!({}));
