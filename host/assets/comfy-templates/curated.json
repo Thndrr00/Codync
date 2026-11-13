@@ -25,7 +25,8 @@
     "license": "AGPL-3.0",
     "output": ["video"],
     "summary": "Motion and camera work on MiniMax H3 guide latents.",
-    "author": "PxTicks"
+    "author": "PxTicks",
+    "imported": true
   },
   {
     "id": "one-shot-mv",
@@ -34,7 +35,8 @@
     "license": "MIT",
     "output": ["video", "audio"],
     "summary": "A lip-synced music video from a song and one line about its world.",
-    "author": "VisualFrisson"
+    "author": "VisualFrisson",
+    "imported": true
   },
   {
     "id": "h3-audio-retake",
@@ -52,7 +54,8 @@
     "license": "MIT",
     "output": ["image", "video", "audio"],
     "summary": "A voice-first, harness-first generative studio.",
-    "author": "koshimazaki"
+    "author": "koshimazaki",
+    "imported": true
   },
   {
     "id": "splat-edit-engine",

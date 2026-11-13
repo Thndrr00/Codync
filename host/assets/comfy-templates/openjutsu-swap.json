@@ -1,0 +1,699 @@
+{
+  "id": "openjutsu-swap",
+  "name": "Swap the person in a clip",
+  "version": "1.0.0",
+  "description": "Give a performance clip and one picture of a character: the person in the clip is replaced by the character while the scene, the performance and the sound stay. Imported from Genobi’s copy of Comfy Openjutsu (MIT) and Akatz Labs’ H3 Character Swap (MIT).",
+  "tags": [
+    "video",
+    "higgsfield",
+    "genobi",
+    "character-swap",
+    "needs-nodes"
+  ],
+  "license": "Comfy Openjutsu and Akatz Labs’ H3 Character Swap are MIT (Genobi, MIT). The graph needs Akatz Labs’ h3_character_swap pack (GPL-3.0), which needs its GPL patch to the pack. Models: MiniMax H3, Akatz LoRA (MiniMax H3 Community License), SAM 3.1 (SAM License), lightx2v Turbo (Apache-2.0).",
+  "inputs": [
+    {
+      "key": "source",
+      "label": "Performance clip",
+      "type": "video",
+      "required": true,
+      "help": "Five to fifteen seconds of one person."
+    },
+    {
+      "key": "character",
+      "label": "Character picture",
+      "type": "image",
+      "required": true
+    },
+    {
+      "key": "prompt",
+      "label": "What to keep",
+      "type": "text",
+      "required": true,
+      "default": "Replace the selected person with the reference character. Preserve source performance, scene and audio timing."
+    },
+    {
+      "key": "start",
+      "label": "Start at (seconds)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 600,
+      "step": 0.1
+    },
+    {
+      "key": "duration",
+      "label": "Length (seconds)",
+      "type": "number",
+      "default": 5,
+      "min": 2,
+      "max": 15,
+      "step": 0.5
+    },
+    {
+      "key": "steps",
+      "label": "Steps",
+      "type": "integer",
+      "default": 8,
+      "min": 4,
+      "max": 30
+    },
+    {
+      "key": "memory",
+      "label": "Activation memory (GiB)",
+      "type": "integer",
+      "default": 17,
+      "min": 8,
+      "max": 64
+    },
+    {
+      "key": "expand",
+      "label": "Grow the body mask (px)",
+      "type": "integer",
+      "default": 64,
+      "min": 0,
+      "max": 160
+    },
+    {
+      "key": "anchor",
+      "label": "Keep the reference framing",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "mask",
+      "label": "Keep only the tracked body",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "folder": "diffusion_models",
+      "size": 20970379616,
+      "sha256": "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "folder": "text_encoders",
+      "size": 15687142551,
+      "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_video_vae_fp16.safetensors",
+      "folder": "vae",
+      "size": 5207808496,
+      "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_audio_vae_fp32.safetensors",
+      "folder": "vae",
+      "size": 605254808,
+      "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "sam3.1_multiplex_fp16.safetensors",
+      "folder": "checkpoints",
+      "size": 1745546848,
+      "sha256": "9ba99c92703c2e8b4f47de2d34a539bb8e18923049e238b780d70dbe6368eb03",
+      "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors",
+      "license": "SAM License"
+    },
+    {
+      "file": "h3_character_swap_v1.5.safetensors",
+      "folder": "loras",
+      "size": 155110792,
+      "sha256": "8f2c3c3eba161df8d0c6099598b4730f641f5ce01e04cd16d2427cff8a35218f",
+      "url": "https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/main/h3_character_swap_v1.5.safetensors",
+      "license": "MiniMax H3 Community License"
+    },
+    {
+      "file": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "folder": "loras",
+      "size": 1956193000,
+      "sha256": "08cfe946033af7d27719b964b6e0a0e50c32138daabbd6ce4137e23df6bf9980",
+      "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "license": "Apache-2.0"
+    }
+  ],
+  "output": {
+    "type": "video",
+    "mime": "video/mp4"
+  },
+  "estimate": {
+    "seconds": 300,
+    "vram_gb": 24,
+    "output_gb": 1.5,
+    "byGpu": {
+      "rtx-4090": {
+        "seconds": 120,
+        "vram_gb": 24
+      },
+      "default": {
+        "seconds": 300,
+        "vram_gb": 24
+      }
+    }
+  },
+  "workflow": {
+    "1": {
+      "inputs": {
+        "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      },
+      "class_type": "UNETLoader",
+      "_meta": {
+        "title": "H3 Ref2VA · INT8"
+      }
+    },
+    "2": {
+      "inputs": {
+        "shift_video": 12,
+        "shift_audio": 3,
+        "model": [
+          "1",
+          0
+        ]
+      },
+      "class_type": "MiniMaxH3SigmaShift",
+      "_meta": {
+        "title": "H3 sampling shift"
+      }
+    },
+    "3": {
+      "inputs": {
+        "attention": "comfy kitchen attention",
+        "model": [
+          "2",
+          0
+        ]
+      },
+      "class_type": "ModelAttentionBackend",
+      "_meta": {
+        "title": "Optimized attention"
+      }
+    },
+    "4": {
+      "inputs": {
+        "lora_name": "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+        "strength_model": 1,
+        "model": [
+          "3",
+          0
+        ]
+      },
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": {
+        "title": "FL2V Turbo · 8-step LoRA"
+      }
+    },
+    "6": {
+      "inputs": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      },
+      "class_type": "CLIPLoader",
+      "_meta": {
+        "title": "Qwen · H3 text encoder"
+      }
+    },
+    "7": {
+      "inputs": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      },
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "H3 video VAE"
+      }
+    },
+    "8": {
+      "inputs": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      },
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "H3 audio VAE"
+      }
+    },
+    "9": {
+      "inputs": {
+        "image": "{{character}}"
+      },
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "2 · Character reference"
+      }
+    },
+    "30": {
+      "inputs": {
+        "file": "{{source}}"
+      },
+      "class_type": "LoadVideo",
+      "_meta": {
+        "title": "1 · Source performance video"
+      }
+    },
+    "31": {
+      "inputs": {
+        "resolution": 768,
+        "duration_seconds": "{{duration}}",
+        "video": [
+          "trim",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapPrepareVideo",
+      "_meta": {
+        "title": "Prepare · 24 fps / pixel budget"
+      }
+    },
+    "58": {
+      "inputs": {
+        "device": "gpu:0",
+        "clip": [
+          "6",
+          0
+        ]
+      },
+      "class_type": "SelectCLIPDevice",
+      "_meta": {
+        "title": "Text encoder device"
+      }
+    },
+    "100": {
+      "inputs": {
+        "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+      },
+      "class_type": "CheckpointLoaderSimple",
+      "_meta": {
+        "title": "SAM 3.1 · model"
+      }
+    },
+    "101": {
+      "inputs": {
+        "text": "person",
+        "clip": [
+          "100",
+          1
+        ]
+      },
+      "class_type": "CLIPTextEncode",
+      "_meta": {
+        "title": "4 · Find the subject"
+      }
+    },
+    "102": {
+      "inputs": {
+        "batch_index": 0,
+        "length": 1,
+        "image": [
+          "31",
+          0
+        ]
+      },
+      "class_type": "ImageFromBatch",
+      "_meta": {
+        "title": "Detection frame · first frame"
+      }
+    },
+    "103": {
+      "inputs": {
+        "threshold": 0.35,
+        "refine_iterations": 2,
+        "individual_masks": true,
+        "model": [
+          "100",
+          0
+        ],
+        "image": [
+          "102",
+          0
+        ],
+        "conditioning": [
+          "101",
+          0
+        ]
+      },
+      "class_type": "SAM3_Detect",
+      "_meta": {
+        "title": "Detect individual people"
+      }
+    },
+    "104": {
+      "inputs": {
+        "selection": "largest",
+        "index": 0,
+        "masks": [
+          "103",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapSelectSubject",
+      "_meta": {
+        "title": "Select the person to replace"
+      }
+    },
+    "105": {
+      "inputs": {
+        "detection_threshold": 0.5,
+        "max_objects": 1,
+        "detect_interval": 1,
+        "images": [
+          "31",
+          0
+        ],
+        "model": [
+          "100",
+          0
+        ],
+        "initial_mask": [
+          "104",
+          0
+        ],
+        "conditioning": [
+          "101",
+          0
+        ]
+      },
+      "class_type": "SAM3_VideoTrack",
+      "_meta": {
+        "title": "Track selected person"
+      }
+    },
+    "106": {
+      "inputs": {
+        "object_indices": "",
+        "track_data": [
+          "105",
+          0
+        ]
+      },
+      "class_type": "SAM3_TrackToMask",
+      "_meta": {
+        "title": "Selected track → mask"
+      }
+    },
+    "107": {
+      "inputs": {
+        "source_frames": [
+          "31",
+          5
+        ],
+        "recover_empty_frames": true,
+        "masks": [
+          "106",
+          0
+        ],
+        "images": [
+          "31",
+          0
+        ],
+        "model": [
+          "100",
+          0
+        ],
+        "conditioning": [
+          "101",
+          0
+        ],
+        "selection": [
+          "104",
+          1
+        ]
+      },
+      "class_type": "H3CharacterSwapRecoverMasks",
+      "_meta": {
+        "title": "Recover empty frames · same as app"
+      }
+    },
+    "110": {
+      "inputs": {
+        "source_frames": [
+          "31",
+          5
+        ],
+        "expansion_px": "{{expand}}",
+        "masks": [
+          "107",
+          0
+        ],
+        "images": [
+          "31",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapExpandMask",
+      "_meta": {
+        "title": "Expand mask · matches the app"
+      }
+    },
+    "800": {
+      "inputs": {
+        "model": [
+          "850",
+          0
+        ],
+        "clip": [
+          "58",
+          0
+        ],
+        "video_vae": [
+          "7",
+          0
+        ],
+        "audio_vae": [
+          "8",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapModels",
+      "_meta": {
+        "title": "Shared models"
+      }
+    },
+    "801": {
+      "inputs": {
+        "prompt": "{{prompt}}",
+        "seed": "{{seed}}",
+        "audio_guide": true,
+        "steps": "{{steps}}",
+        "cfg": 1,
+        "sampler_name": "er_sde",
+        "scheduler": "normal",
+        "activation_memory_gib": "{{memory}}"
+      },
+      "class_type": "H3CharacterSwapSettings",
+      "_meta": {
+        "title": "5 · Prompt & audio guide"
+      }
+    },
+    "803": {
+      "inputs": {
+        "source_frames": [
+          "31",
+          5
+        ],
+        "fps": [
+          "31",
+          6
+        ],
+        "use_anchor": "{{anchor}}",
+        "use_mask": "{{mask}}",
+        "shot_id": "character-swap",
+        "source_video": [
+          "trim",
+          0
+        ],
+        "source": [
+          "31",
+          0
+        ],
+        "source_audio": [
+          "31",
+          1
+        ],
+        "reference": [
+          "9",
+          0
+        ],
+        "anchor": [
+          "anchor_fit",
+          0
+        ],
+        "body_mask": [
+          "110",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapShot",
+      "_meta": {
+        "title": "Prepare swap inputs"
+      }
+    },
+    "805": {
+      "inputs": {
+        "window_frames": "124",
+        "history_frames": "18",
+        "shot": [
+          "803",
+          0
+        ],
+        "settings": [
+          "801",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapWindowPlan",
+      "_meta": {
+        "title": "Continuation · window / history"
+      }
+    },
+    "806": {
+      "inputs": {
+        "models": [
+          "800",
+          0
+        ],
+        "shot": [
+          "803",
+          0
+        ],
+        "plan": [
+          "805",
+          0
+        ]
+      },
+      "class_type": "H3CharacterSwapController",
+      "_meta": {
+        "title": "6 · Generate character swap"
+      }
+    },
+    "807": {
+      "inputs": {
+        "filename_prefix": "character-swap",
+        "state": [
+          "806",
+          0
+        ],
+        "shot": [
+          "806",
+          1
+        ]
+      },
+      "class_type": "H3CharacterSwapAssemble",
+      "_meta": {
+        "title": "7 · Result with source audio"
+      }
+    },
+    "808": {
+      "class_type": "CreateVideo",
+      "_meta": {
+        "title": "Video for the app"
+      },
+      "inputs": {
+        "images": [
+          "807",
+          0
+        ],
+        "audio": [
+          "807",
+          1
+        ],
+        "fps": 24,
+        "bit_depth": 8,
+        "color_space": "sRGB",
+        "codec": "none"
+      }
+    },
+    "809": {
+      "class_type": "SaveVideo",
+      "_meta": {
+        "title": "Save result"
+      },
+      "inputs": {
+        "video": [
+          "808",
+          0
+        ],
+        "filename_prefix": "openjutsu/result",
+        "format": "mp4",
+        "format.codec": "h264"
+      }
+    },
+    "850": {
+      "inputs": {
+        "lora_name": "h3_character_swap_v1.5.safetensors",
+        "strength_model": 1,
+        "model": [
+          "4",
+          0
+        ]
+      },
+      "class_type": "LoraLoaderModelOnly",
+      "_meta": {
+        "title": "Character Swap · V1 LoRA"
+      }
+    },
+    "trim": {
+      "class_type": "Video Slice",
+      "_meta": {
+        "title": "The chosen part"
+      },
+      "inputs": {
+        "video": [
+          "30",
+          0
+        ],
+        "start_time": "{{start}}",
+        "duration": "{{duration}}",
+        "strict_duration": false
+      }
+    },
+    "anchor_image": {
+      "class_type": "LoadImage",
+      "_meta": {
+        "title": "First frame made by the app"
+      },
+      "inputs": {
+        "image": "anchor.png"
+      }
+    },
+    "anchor_fit": {
+      "class_type": "ImageScale",
+      "_meta": {
+        "title": "Anchor at the video's exact size"
+      },
+      "inputs": {
+        "image": [
+          "anchor_image",
+          0
+        ],
+        "upscale_method": "lanczos",
+        "width": [
+          "31",
+          2
+        ],
+        "height": [
+          "31",
+          3
+        ],
+        "crop": "center"
+      }
+    }
+  }
+}

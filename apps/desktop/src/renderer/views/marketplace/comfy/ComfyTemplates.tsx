@@ -6,6 +6,7 @@ import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
 import { analytics } from '../../../store/analytics'
 import { ErrorText } from '../pieces'
+import { accepts, pickLabel, type MediaInput } from './media'
 import { ProblemRow, type ToolCall } from './parts'
 
 /** What a template makes, in one word for the badge. */
@@ -70,9 +71,11 @@ function Field({ input, value, picked, busy, onChange, onPick }: {
         />
       ) : input.type === 'boolean' ? (
         <Switch on={value === true} onChange={onChange} />
-      ) : input.type === 'image' ? (
+      ) : input.type === 'image' || input.type === 'video' || input.type === 'audio' ? (
         <HStack gap={8}>
-          <Button kind="secondary" disabled={busy} onClick={onPick}>{tr(picked ? 'Choose another picture' : 'Choose a picture')}</Button>
+          <Button kind="secondary" disabled={busy} onClick={onPick}>
+            {tr(pickLabel(input.type, Boolean(picked)))}
+          </Button>
           {picked ? <Text size="caption" tone="secondary">{picked}</Text> : text ? <Text size="caption" tone="secondary">{text}</Text> : null}
         </HStack>
       ) : input.type === 'seed' ? (
@@ -147,10 +150,10 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
     setError(null)
     try {
       const files = await window.codync.app.pickFiles()
-      const file = files.find((candidate) => /\.(png|jpe?g|webp|bmp|gif|wav|mp3|flac|ogg|mp4|webm|mov)$/i.test(candidate.name))
+      const file = files.find((candidate) => accepts(input.type as MediaInput, candidate.name))
       if (!file) return
       setBusy(true)
-      const stored = await call<{ name: string }>('comfyUploadImage', { name: file.name, data: base64(file.data) }, 120_000)
+      const stored = await call<{ name: string }>('comfyUploadImage', { name: file.name, data: base64(file.data) }, 300_000)
       setValues((current) => ({ ...current, [input.key]: stored.name }))
       setPicked((current) => ({ ...current, [input.key]: file.name }))
     } catch (e) {

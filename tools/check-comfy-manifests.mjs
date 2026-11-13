@@ -11,7 +11,7 @@ const folders = [
   'checkpoints', 'configs', 'loras', 'vae', 'text_encoders', 'diffusion_models',
   'clip_vision', 'embeddings', 'controlnet', 'upscale_models', 'vae_approx',
 ]
-const kinds = ['text', 'number', 'integer', 'select', 'image', 'seed', 'boolean']
+const kinds = ['text', 'number', 'integer', 'select', 'image', 'video', 'audio', 'seed', 'boolean']
 const outputs = ['image', 'video', 'audio', 'mesh']
 
 function placeholders(value, found = new Set()) {

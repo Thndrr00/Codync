@@ -1,0 +1,224 @@
+{
+  "id": "oneshot-mv",
+  "name": "OneShot MV: a song into a music video",
+  "version": "1.0.0",
+  "description": "Give a song and one line about its world: OneShot MV invents the cast, plans the cut by the song’s energy, renders and lip-syncs every shot and edits the video with the drums. Imported from VisualFrisson’s OneShot MV (MIT).",
+  "tags": [
+    "video",
+    "higgsfield",
+    "oneshot-mv",
+    "music-video",
+    "needs-nodes",
+    "high-vram"
+  ],
+  "license": "OneShot MV is MIT (VisualFrisson) and needs its own node pack. Models: Krea 2 (Krea 2 Community License), LTX-2.3 and its LoRAs (LTX-2 Community License), Gemma text encoder, two community LoRAs.",
+  "inputs": [
+    {
+      "key": "song",
+      "label": "Song",
+      "type": "audio",
+      "required": true
+    },
+    {
+      "key": "world",
+      "label": "The world in a line or two",
+      "type": "text",
+      "required": true,
+      "help": "Sets the people, their clothes, the places and the light, e.g. “a 1965 airline: pilots, stewardesses and passengers, warm cabin light”."
+    },
+    {
+      "key": "seconds",
+      "label": "Length (seconds, 0 = the whole song)",
+      "type": "number",
+      "default": 30,
+      "min": 0,
+      "max": 600,
+      "step": 0.5
+    },
+    {
+      "key": "format",
+      "label": "Shape",
+      "type": "select",
+      "default": "16:9",
+      "options": [
+        "16:9",
+        "9:16",
+        "1:1"
+      ]
+    },
+    {
+      "key": "quality",
+      "label": "Quality",
+      "type": "select",
+      "default": "quality",
+      "options": [
+        "quality",
+        "fast"
+      ]
+    },
+    {
+      "key": "models",
+      "label": "Model set",
+      "type": "select",
+      "default": "auto",
+      "options": [
+        "auto",
+        "24gb",
+        "full"
+      ]
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "seed"
+    }
+  ],
+  "models": [
+    {
+      "file": "krea2_turbo_fp8_scaled.safetensors",
+      "folder": "diffusion_models",
+      "size": 13141730784,
+      "sha256": "eb4dd8c612cfd10f64f25b057e6e6bbcb5737c94a7372177e456dbf7579502f1",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+      "license": "Krea 2 Community License"
+    },
+    {
+      "file": "qwen3vl_4b_fp8_scaled.safetensors",
+      "folder": "text_encoders",
+      "size": 5242467968,
+      "sha256": "54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+      "license": "Krea 2 Community License"
+    },
+    {
+      "file": "qwen_image_vae.safetensors",
+      "folder": "vae",
+      "size": 253806246,
+      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors",
+      "license": "Krea 2 Community License"
+    },
+    {
+      "file": "krea2_turbo_lora_rank_64_bf16.safetensors",
+      "folder": "loras",
+      "size": 469423778,
+      "sha256": "db8c5bae0a415d448da9d842111d6e51f7d32e47143a3118eb267e5c4773de87",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_turbo_lora_rank_64_bf16.safetensors",
+      "license": "Krea 2 Community License"
+    },
+    {
+      "file": "ltx-2.3-22b-dev-fp8.safetensors",
+      "folder": "checkpoints",
+      "size": 29145431166,
+      "sha256": "28606c5b5a06ce56f896d4dfcb20f212739e07a68fbe48e53638188449d26450",
+      "url": "https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-dev-fp8.safetensors",
+      "license": "LTX-2 Community License"
+    },
+    {
+      "file": "gemma_3_12B_it_fp8_scaled.safetensors",
+      "folder": "text_encoders",
+      "size": 13205434827,
+      "sha256": "60216ce97c01c3a8753c2dfd0a89fc76e16fbe446d1a32ef8f1b528ac8bae466",
+      "url": "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp8_scaled.safetensors",
+      "license": "LTX-2 Community License"
+    },
+    {
+      "file": "ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+      "folder": "loras",
+      "size": 7605507256,
+      "sha256": "f5d4953f3386197a4b4f5abdb17616ff256171e8075c111d6e7d2dfa6e823b3a",
+      "url": "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-22b-distilled-lora-384-1.1.safetensors",
+      "license": "LTX-2 Community License"
+    },
+    {
+      "file": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "folder": "upscale_models",
+      "size": 995743560,
+      "sha256": "5f416311fa8172b65af67530758964708d29a317b830d689a51143b7f91913ed",
+      "url": "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "license": "LTX-2 Community License"
+    },
+    {
+      "file": "ltx-2-19b-ic-lora-detailer.safetensors",
+      "folder": "loras",
+      "size": 2617401920,
+      "sha256": "05efdae9e472e06d168e122f5ebb890e7ef348cc047cf9876da6504c36d7d0e2",
+      "url": "https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Detailer/resolve/main/ltx-2-19b-ic-lora-detailer.safetensors",
+      "license": "LTX-2 Community License"
+    },
+    {
+      "file": "LTX2.3_Crisp_Enhance.safetensors",
+      "folder": "loras",
+      "size": 705198392,
+      "sha256": "020529377ce07b1235d8050505dd38adc3bc9dc49a191f318a7ccf3921354053",
+      "url": "https://huggingface.co/vrgamedevgirl84/LTX_2.3_Crisp_Enhance_Style_LoRa/resolve/main/LTX2.3_Crisp_Enhance.safetensors",
+      "license": "LTX-2 Community License"
+    },
+    {
+      "file": "LTX2.3_Soft_Enhance.safetensors",
+      "folder": "loras",
+      "size": 352679864,
+      "sha256": "47681fb3c11a90d95f826838400c69d5dfe210721ea277cc7872f7c98903d12a",
+      "url": "https://huggingface.co/vrgamedevgirl84/LTX_2.3_Soft_Enhance_Style_LoRa/resolve/main/LTX2.3_Soft_Enhance.safetensors",
+      "license": "LTX-2 Community License"
+    }
+  ],
+  "output": {
+    "type": "video",
+    "mime": "video/mp4"
+  },
+  "estimate": {
+    "seconds": 1800,
+    "vram_gb": 24,
+    "output_gb": 3,
+    "byGpu": {
+      "rtx-4090": {
+        "seconds": 900,
+        "vram_gb": 24
+      },
+      "default": {
+        "seconds": 1800,
+        "vram_gb": 24
+      }
+    }
+  },
+  "workflow": {
+    "1": {
+      "class_type": "LoadAudio",
+      "inputs": {
+        "audio": "{{song}}"
+      }
+    },
+    "2": {
+      "class_type": "FVDirector",
+      "inputs": {
+        "audio": [
+          "1",
+          0
+        ],
+        "world": "{{world}}",
+        "world_images": "",
+        "image_order": "in order",
+        "image_fit": "crop",
+        "cast": "crowd",
+        "seconds": "{{seconds}}",
+        "start": -1,
+        "format": "{{format}}",
+        "quality": "{{quality}}",
+        "models": "{{models}}",
+        "preview_only": false,
+        "seed": "{{seed}}",
+        "cuts_low": "every 2 bars",
+        "cuts_medium": "every bar",
+        "cuts_high": "to the music (subtle)",
+        "audio_fx": "subtle",
+        "crowd": "auto",
+        "cast_order": "as written",
+        "broll_share": 0.125,
+        "qc_retries": 2,
+        "run_name": "",
+        "review_images": false
+      }
+    }
+  }
+}

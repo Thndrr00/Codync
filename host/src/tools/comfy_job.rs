@@ -171,6 +171,11 @@ impl Jobs {
         Value::Array(self.history.locked().iter().map(Job::public).collect())
     }
 
+    /// When the job `id` was queued, for the fallback that takes the files a run wrote by itself.
+    fn created_of(&self, id: &str) -> i64 {
+        self.current.locked().as_ref().filter(|job| job.id == id).map_or(0, |job| job.created)
+    }
+
     /// The first output of the last finished job, whatever its type.
     pub fn first_file(&self) -> Option<PathBuf> {
         self.current.locked().as_ref().filter(|j| j.phase == Phase::Done).and_then(|j| j.files.first().cloned())
@@ -356,7 +361,13 @@ impl Jobs {
             return Ok(Some(if record["status"]["status_str"] == "error" {
                 (Phase::Error, Some(failure(&record)), vec![])
             } else {
-                (Phase::Done, None, output_files(&record))
+                let mut files = output_files(&record);
+                // A graph made of one wrapper node (OneShot MV's director) saves its film in the
+                // output folder and returns no file of its own: take what the run touched.
+                if files.is_empty() {
+                    files = recent_outputs(&comfy::output_dir(), self.created_of(id));
+                }
+                (Phase::Done, None, files)
             }));
         }
         let running = api.queue().await?["queue_running"]
@@ -428,6 +439,47 @@ pub(super) fn output_files(record: &Value) -> Vec<PathBuf> {
     files.sort();
     files.dedup();
     files
+}
+
+/// Output files touched since `since` (milliseconds), newest last, at most five. A wrapper node can
+/// write a film and its sidecars without reporting them, so a run's own files are the fallback.
+fn recent_outputs(root: &std::path::Path, since: i64) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    walk_outputs(root, 0, since, &mut files);
+    files.sort_by_key(|path| std::fs::metadata(path).and_then(|meta| meta.modified()).ok());
+    if files.len() > 5 {
+        files.drain(..files.len() - 5);
+    }
+    files
+}
+
+fn walk_outputs(dir: &std::path::Path, depth: usize, since: i64, files: &mut Vec<PathBuf>) {
+    if depth > 3 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with('.') || name.ends_with(".part") {
+            continue;
+        }
+        match entry.file_type() {
+            Ok(kind) if kind.is_dir() => walk_outputs(&path, depth + 1, since, files),
+            Ok(kind) if kind.is_file() => {
+                let touched = std::fs::metadata(&path).and_then(|meta| meta.modified()).ok();
+                let touched = touched
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                if touched >= since && results::ingestible(&path) {
+                    files.push(path);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn collect_outputs(value: &Value, root: &std::path::Path, files: &mut Vec<PathBuf>) {
@@ -538,6 +590,22 @@ mod tests {
                 comfy::output_dir().join("voice.wav")
             ]
         );
+    }
+
+    #[test]
+    fn a_run_that_saves_by_itself_still_reports_its_file() {
+        let root = std::env::temp_dir().join(format!("codync-outputs-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("run")).expect("dir");
+        std::fs::write(root.join("old.png"), b"x").expect("old");
+        std::thread::sleep(Duration::from_millis(20));
+        std::fs::write(root.join("run").join("film.mp4"), b"x").expect("film");
+        std::fs::write(root.join("notes.txt"), b"x").expect("notes");
+
+        let files = recent_outputs(&root, 0);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files.last().and_then(|p| p.file_name()).and_then(|n| n.to_str()), Some("film.mp4"));
+        assert!(recent_outputs(&root, chrono::Utc::now().timestamp_millis() + 60_000).is_empty());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

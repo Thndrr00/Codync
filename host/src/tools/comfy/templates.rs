@@ -15,13 +15,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The manifests that ship with Codync, by id: their manifest is embedded in the binary.
-const BASE: [(&str, &str); 7] = [
+const BASE: [(&str, &str); 10] = [
     ("text-to-image", include_str!("../../../assets/comfy-templates/text-to-image.json")),
     ("image-to-image", include_str!("../../../assets/comfy-templates/image-to-image.json")),
     ("canny-to-image", include_str!("../../../assets/comfy-templates/canny-to-image.json")),
     ("image-upscale", include_str!("../../../assets/comfy-templates/image-upscale.json")),
     ("freefield-angles", include_str!("../../../assets/comfy-templates/freefield-angles.json")),
     ("paint-a-plate", include_str!("../../../assets/comfy-templates/paint-a-plate.json")),
+    ("h3-motion-mask", include_str!("../../../assets/comfy-templates/h3-motion-mask.json")),
+    ("openjutsu-swap", include_str!("../../../assets/comfy-templates/openjutsu-swap.json")),
+    ("oneshot-mv", include_str!("../../../assets/comfy-templates/oneshot-mv.json")),
     ("smoke-test", include_str!("../../../assets/comfy-templates/smoke-test.json")),
 ];
 
@@ -124,8 +127,44 @@ pub enum InputKind {
     Select,
     /// A picture the host uploads to ComfyUI's input folder; the value is its name there.
     Image,
+    /// A clip the host uploads the same way: a `LoadVideo` node, or the mask video of an inpaint
+    /// graph, reads it by name.
+    Video,
+    /// A sound the host uploads the same way: a `LoadAudio` node reads it by name.
+    Audio,
     Seed,
     Boolean,
+}
+
+impl InputKind {
+    /// The kinds whose value is a file in ComfyUI's input folder, uploaded before a run.
+    pub fn is_media(self) -> bool {
+        matches!(self, Self::Image | Self::Video | Self::Audio)
+    }
+
+    /// The extensions a loader of this kind reads, and the name the form uses for a file.
+    fn media(self) -> &'static [&'static str] {
+        match self {
+            Self::Video => &["mp4", "webm", "mov", "mkv", "gif"],
+            Self::Audio => &["wav", "mp3", "flac", "ogg", "m4a"],
+            _ => &["png", "jpg", "jpeg", "webp", "bmp", "gif"],
+        }
+    }
+
+    /// The word the form and the errors use for the kind.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Video => "video",
+            Self::Audio => "sound",
+            _ => "picture",
+        }
+    }
+
+    /// Whether `file` (a path or a stored name) has an extension a loader of this kind reads.
+    pub fn reads(self, file: &str) -> bool {
+        let extension = Path::new(file).extension().and_then(|e| e.to_str()).unwrap_or_default().to_lowercase();
+        self.media().contains(&extension.as_str())
+    }
 }
 
 /// A model the template needs, with where to get it. The URL is the only place a download comes
@@ -403,16 +442,23 @@ impl Template {
 impl Input {
     fn coerce(&self, value: &Value) -> Result<Value> {
         match self.kind {
-            InputKind::Text | InputKind::Image => {
+            InputKind::Text | InputKind::Image | InputKind::Video | InputKind::Audio => {
                 let text = value.as_str().with_context(|| format!("`{}` must be text", self.key))?.trim().to_owned();
                 if self.required {
                     ensure!(!text.is_empty(), "`{}` can't be empty", self.key);
                 }
-                if self.kind == InputKind::Image {
+                if self.kind.is_media() && !text.is_empty() {
+                    // Either a path the host uploads, or a name the server already has.
                     ensure!(
                         !text.contains(['/', '\\']) || Path::new(&text).is_file(),
-                        "`{}` must be an image in ComfyUI's input folder",
+                        "`{}` must be a file in ComfyUI's input folder",
                         self.key
+                    );
+                    ensure!(
+                        self.kind.reads(&text),
+                        "`{}` can't read `{text}`: it wants a {} file",
+                        self.key,
+                        self.kind.name()
                     );
                 }
                 Ok(json!(text))
@@ -462,7 +508,7 @@ impl Input {
     /// What an omitted, optional value becomes.
     fn empty(&self) -> Value {
         match self.kind {
-            InputKind::Text | InputKind::Select | InputKind::Image => json!(""),
+            InputKind::Text | InputKind::Select | InputKind::Image | InputKind::Video | InputKind::Audio => json!(""),
             InputKind::Number => json!(self.default.as_ref().and_then(Value::as_f64).unwrap_or(0.0)),
             InputKind::Integer | InputKind::Seed => json!(0),
             InputKind::Boolean => json!(false),
@@ -745,6 +791,24 @@ mod tests {
         assert_eq!(render(&json!("{{n}}"), &values).expect("number"), json!(5));
         assert_eq!(render(&json!("a {{who}} and {{n}}"), &values).expect("text"), json!("a cat and 5"));
         assert!(render(&json!("{{missing}}"), &values).is_err());
+    }
+
+    #[test]
+    fn a_clip_input_takes_only_a_clip() {
+        let mut t = template();
+        t.inputs.push(
+            serde_json::from_value(json!({"key": "clip", "label": "Clip", "type": "video", "required": true}))
+                .expect("an input"),
+        );
+        t.workflow["2"]["inputs"]["filename_prefix"] = json!("{{clip}}");
+        let mut given = Map::new();
+        given.insert("width".into(), json!(64));
+        given.insert("clip".into(), json!("source.mp4"));
+        assert_eq!(t.values(&given).expect("a clip")["clip"], json!("source.mp4"));
+
+        given.insert("clip".into(), json!("song.wav"));
+        let error = t.values(&given).expect_err("a sound").to_string();
+        assert!(error.contains("wants a video file"), "{error}");
     }
 
     #[test]

@@ -5,7 +5,7 @@
 //! Templates are the intended way in: a bot asks for a named template and fills its form, instead of
 //! writing a graph of twenty nodes. `run_workflow` stays for graphs the bot already has.
 
-use super::comfy::templates::{InputKind, Template};
+use super::comfy::templates::Template;
 use super::comfy::{self, CONNECTOR_ID, preflight, results, templates};
 use super::comfy_api::Api;
 use crate::hub::Hub;
@@ -31,7 +31,7 @@ pub const CALL_TIMEOUT: Duration = Duration::from_mins(6);
 
 /// The example graph: the default workflow of the repo's `script_examples/basic_api_example.py`.
 const EXAMPLE: &str = include_str!("comfy_example.json");
-const MAX_UPLOAD: u64 = 100 * 1024 * 1024;
+const MAX_UPLOAD: u64 = 300 * 1024 * 1024;
 
 pub fn tools() -> Value {
     json!([
@@ -92,7 +92,7 @@ pub fn tools() -> Value {
         ),
         tool(
             "upload_image",
-            "Copy a local image into ComfyUI's inputs; returns the name for a LoadImage node.",
+            "Copy a local picture, clip or sound into ComfyUI's inputs; returns the name a LoadImage or LoadVideo node uses.",
             &json!({"path": {"type": "string"}, "name": {"type": "string"}}),
             &["path"],
         ),
@@ -248,13 +248,13 @@ pub async fn run_template(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Val
     Ok(status)
 }
 
-/// Replaces each image input's local path with the name ComfyUI stored it under.
+/// Replaces each picture, clip or sound input's local path with the name ComfyUI stored it under.
 async fn upload_inputs(
     api: &Api,
     template: &Template,
     values: &mut std::collections::BTreeMap<String, Value>,
 ) -> Result<()> {
-    for input in template.inputs.iter().filter(|i| i.kind == InputKind::Image) {
+    for input in template.inputs.iter().filter(|i| i.kind.is_media()) {
         let Some(value) = values.get(&input.key).and_then(Value::as_str) else { continue };
         let path = PathBuf::from(value);
         if !path.is_file() {
@@ -265,9 +265,9 @@ async fn upload_inputs(
             .file_name()
             .and_then(|n| n.to_str())
             .and_then(|n| crate::chat::files::name(n).ok())
-            .context("the image needs a file name")?;
+            .with_context(|| format!("`{}` needs a file name", input.key))?;
         let meta = tokio::fs::metadata(&path).await?;
-        anyhow::ensure!(meta.len() <= MAX_UPLOAD, "the input must be at most 100 MB");
+        anyhow::ensure!(meta.len() <= MAX_UPLOAD, "`{}` must be at most 300 MB", input.key);
         let stored = api.upload_image(&name, tokio::fs::read(&path).await?).await?;
         values.insert(input.key.clone(), json!(stored));
     }
@@ -322,7 +322,7 @@ async fn upload(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
     let path = PathBuf::from(args["path"].as_str().context("`path` is required")?);
     anyhow::ensure!(results::ingestible(&path), "upload takes a picture, an audio file or a video");
     let meta = tokio::fs::metadata(&path).await.with_context(|| format!("reading {}", path.display()))?;
-    anyhow::ensure!(meta.is_file() && meta.len() <= MAX_UPLOAD, "the input must be a file of at most 100 MB");
+    anyhow::ensure!(meta.is_file() && meta.len() <= MAX_UPLOAD, "the input must be a file of at most 300 MB");
     let name = match args["name"].as_str() {
         Some(name) => crate::chat::files::name(name)?,
         None => path.file_name().and_then(|n| n.to_str()).context("the path has no file name")?.to_owned(),
@@ -335,7 +335,7 @@ async fn upload(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
 pub async fn upload_bytes(hub: &Arc<Hub>, name: &str, bytes: Vec<u8>) -> Result<Value> {
     anyhow::ensure!(
         !bytes.is_empty() && bytes.len() as u64 <= MAX_UPLOAD,
-        "the input must be a file of at most 100 MB"
+        "the input must be a file of at most 300 MB"
     );
     let name = crate::chat::files::name(name)?;
     let stored = api(hub)?.upload_image(&name, bytes).await?;
