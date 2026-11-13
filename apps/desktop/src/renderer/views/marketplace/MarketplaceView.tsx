@@ -16,6 +16,7 @@ import { AgentSheet } from './AgentSheet'
 import { AgentStoreSidebar } from './AgentStoreSidebar'
 import { AppSheet } from './AppSheet'
 import { CatalogPanel } from './CatalogPanel'
+import { ComposioSection } from './ComposioViews'
 import { CredentialsView } from './CredentialsView'
 import { CustomConnectorSheet, InstallConnectorSheet, NewSkillSheet } from './ConnectorSheets'
 import { MarketAgentSheet } from './MarketAgentSheet'
@@ -266,7 +267,9 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
               onAddConnector={() => setAddingConnector(true)}
               onInstallConnector={setInstalling}
               onViewConnector={setViewingConnector}
-            />
+            >
+              <ComposioSection query={query} onError={setError} />
+            </AppsPanel>
             </>
           ) : section === 'channels' ? (
             <>
