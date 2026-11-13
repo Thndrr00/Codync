@@ -28,6 +28,33 @@ export interface RuleProposal {
   reason?: string
 }
 
+/** A rule the bot proposes after the same action was denied twice (`approvalLessons`). */
+export interface ApprovalLesson {
+  id: string
+  botId: string
+  /** What was denied, as the person saw it. */
+  subject: string
+  kind: string
+  denials: number
+  status: 'proposed' | 'accepted' | 'dismissed'
+  rule: ApprovalRule
+}
+
+/** One recorded decision on an approval card (`approvalHistory`). */
+export interface ApprovalRecord {
+  entryId: string
+  botId: string
+  /** What the card asked for. */
+  subject: string
+  kind: string
+  decision?: 'allow' | 'deny' | 'cancelled'
+  /** Who answered: a device's name, "This computer" or "A voice call". */
+  actor?: string
+  askedAt: number
+  decidedAt?: number
+  consumedAt?: number
+}
+
 /** The quick rules ("by kind of action") approvals can enforce, with the tool kinds each covers (the host's table). */
 export const QUICK_CLASSES = [
   { id: 'files', label: 'Files', kinds: 'read, search, edit, delete, move' },

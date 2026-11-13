@@ -295,6 +295,14 @@ export interface Attachment {
 
 export interface SharedFile extends Attachment { sha256: string }
 
+/** One snapshot of a file a bot published (`fileVersions`): the same name, an older version. */
+export interface SharedFileVersion {
+  at: number
+  /** The message that carries it, for `readFile`. */
+  entryId: string
+  file: SharedFile
+}
+
 export const isImageName = (name: string) =>
   ['png', 'jpg', 'jpeg', 'heic', 'gif', 'webp', 'tiff', 'bmp', 'svg'].includes(name.split('.').pop()?.toLowerCase() ?? '')
 

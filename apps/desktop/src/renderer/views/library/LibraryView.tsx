@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Artifact, LibraryItem } from '@shared/artifacts'
-import { isImageName, type Attachment, type SharedFile } from '@shared/models'
+import { isImageName, type Attachment, type SharedFile, type SharedFileVersion } from '@shared/models'
 import { DropdownMenu, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { HStack, VStack } from '../../components/Stack'
@@ -53,7 +53,7 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
                 item.kind === 'artifact' ? (
                   <ArtifactRow key={item.artifact.id} artifact={store.artifacts.byId.get(item.artifact.id) ?? item.artifact} open={() => openArtifact(item.artifact.id)} onError={setError} />
                 ) : item.kind === 'file' ? (
-                  <FileRow key={item.file.id} entryId={item.entryId} file={item.file} />
+                  <FileRow key={item.file.id} botId={botId} entryId={item.entryId} file={item.file} />
                 ) : (
                   <AttachmentRow key={item.file.id} botId={botId} file={item.file} view={() => setViewing(item.file)} />
                 ),
@@ -121,18 +121,40 @@ function ArtifactRow({ artifact, open, onError }: { artifact: Artifact; open: ()
   )
 }
 
-/** A file the bot shared: saved like its card in the chat. */
-function FileRow({ entryId, file }: { entryId: string; file: SharedFile }) {
+/** A file the bot shared: saved like its card in the chat. Clicking its name lists its older versions. */
+function FileRow({ botId, entryId, file }: { botId: string; entryId: string; file: SharedFile }) {
   const store = useStore()
   const state = store.fileDownloads.states.get(file.id)
   const busy = state?.kind === 'downloading'
+  const [versions, setVersions] = useState<SharedFileVersion[] | null>(null)
+  const [open, setOpen] = useState(false)
+  const showVersions = async () => {
+    const next = !open
+    setOpen(next)
+    if (next && versions === null) setVersions(await store.fileVersions(botId, file.name))
+  }
   return (
-    <Row
-      leading={<Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />}
-      trailing={<IconButton title={downloadAction(state)} icon={busy ? 'xmark' : 'arrow.down.to.line'} onClick={() => (busy ? store.fileDownloads.cancel(file.id) : void store.fileDownloads.save(store.client, entryId, file))} />}
-    >
-      <Name name={file.name} detail={downloadDetail(state, file)} failed={state?.kind === 'failed'} />
-    </Row>
+    <VStack gap={4}>
+      <Row
+        leading={<Icon name={attachmentSymbol(file.name)} size={16} color="var(--secondary)" />}
+        trailing={<IconButton title={downloadAction(state)} icon={busy ? 'xmark' : 'arrow.down.to.line'} onClick={() => (busy ? store.fileDownloads.cancel(file.id) : void store.fileDownloads.save(store.client, entryId, file))} />}
+      >
+        <button className="library-row-open" onClick={() => void showVersions()}>
+          <Name name={file.name} detail={downloadDetail(state, file)} failed={state?.kind === 'failed'} />
+        </button>
+      </Row>
+      {open && versions !== null && versions.length > 1 ? (
+        <VStack gap={2}>
+          {versions.map((version, index) => (
+            <HStack key={version.entryId} gap={8}>
+              <Text size="caption2" tone="tertiary" grow>{index === 0 ? 'Newest' : 'Older'} · {byteCount(version.file.size)}</Text>
+              <IconButton title="Download this version" icon="arrow.down.to.line"
+                onClick={() => void store.fileDownloads.save(store.client, version.entryId, version.file)} />
+            </HStack>
+          ))}
+        </VStack>
+      ) : null}
+    </VStack>
   )
 }
 

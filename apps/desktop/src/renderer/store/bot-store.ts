@@ -19,12 +19,13 @@ import {
   type ScreenState,
   type SentinelReport,
   type SharedFile,
+  type SharedFileVersion,
   type Usage,
   type WeekSummary,
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
-import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
+import { cleanRules, type ApprovalEvaluation, type ApprovalLesson, type ApprovalRecord, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostHealth } from '@shared/health'
 import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
@@ -353,6 +354,46 @@ export class BotStore extends BotSync {
       return (await (await this.ready()).call<{ evaluation: ApprovalEvaluation }>('testApprovalRule', body)).evaluation
     } catch {
       return null
+    }
+  }
+
+  /** The rules a bot proposes after the person denied the same action twice. */
+  async approvalLessons(botId: string): Promise<ApprovalLesson[]> {
+    try {
+      const { lessons } = await (await this.ready()).call<{ lessons: ApprovalLesson[] }>('approvalLessons', { botId })
+      return lessons ?? []
+    } catch {
+      return []
+    }
+  }
+
+  /** Keeps or dismisses a proposed rule. Keeping it saves the rule on the host and reconfigures the bot. */
+  async decideApprovalLesson(lessonId: string, accept: boolean): Promise<string | null> {
+    try {
+      await (await this.ready()).call('decideApprovalLesson', { lessonId, accept })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  /** What a bot was allowed to do, who said so and when; the newest 100. */
+  async approvalHistory(botId: string): Promise<ApprovalRecord[]> {
+    try {
+      const { approvals } = await (await this.ready()).call<{ approvals: ApprovalRecord[] }>('approvalHistory', { botId })
+      return approvals ?? []
+    } catch {
+      return []
+    }
+  }
+
+  /** Every snapshot a bot published under `name`, newest first: an older one is read like the newest. */
+  async fileVersions(botId: string, name: string): Promise<SharedFileVersion[]> {
+    try {
+      const { versions } = await (await this.ready()).call<{ versions: SharedFileVersion[] }>('fileVersions', { botId, name })
+      return versions ?? []
+    } catch {
+      return []
     }
   }
 

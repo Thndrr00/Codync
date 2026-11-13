@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fastModeRefusal, fastModeShown } from '@shared/fast-mode'
+import type { ApprovalLesson, ApprovalRecord } from '@shared/approval-rules'
 import { restLine, restOf, withBackend } from '@shared/fallbacks'
 import { draftOf, type Bot, type BotDraft, type Personality } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
@@ -132,10 +133,32 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const setup = useAgentSetup()
   const [pickingAvatar, setPickingAvatar] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
+  const [lessons, setLessons] = useState<ApprovalLesson[]>([])
+  const [history, setHistory] = useState<ApprovalRecord[]>([])
   const [viewingSkill, setViewingSkill] = useState<SkillRef | null>(null)
   const [proxy, setProxy] = useState<{ proxy: string | null; authenticated: boolean } | null>(null)
   const [proxyInput, setProxyInput] = useState('')
   const [proxyError, setProxyError] = useState<string | null>(null)
+  // What the bot learned from refusals, and what was approved lately: both are the host's, read when the bot opens.
+  const settingsBot = draft.id
+  useEffect(() => {
+    if (!settingsBot) return
+    let live = true
+    void store.approvalLessons(settingsBot).then((found) => { if (live) setLessons(found) })
+    void store.approvalHistory(settingsBot).then((found) => { if (live) setHistory(found) })
+    return () => { live = false }
+  }, [settingsBot, store])
+  const decideLesson = async (id: string, accept: boolean) => {
+    await store.decideApprovalLesson(id, accept)
+    if (settingsBot) setLessons(await store.approvalLessons(settingsBot))
+    const lesson = lessons.find((one) => one.id === id)
+    // The host saved the rule already; showing it here keeps the list honest until the next reload.
+    if (accept && lesson) onChange((d) => {
+      const rules = d.approvalRules ?? []
+      const same = rules.some((r) => r.pattern === lesson.rule.pattern && r.kind === lesson.rule.kind && r.decision === lesson.rule.decision)
+      return same ? d : { ...d, approvalRules: [...rules, lesson.rule] }
+    })
+  }
   const avatarRef = useRef<HTMLButtonElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
@@ -430,6 +453,9 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             }
             quick={draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} }}
             onQuick={(next) => onChange((d) => ({ ...d, actionRulesOn: next.on, actionRules: next.policies }))}
+            lessons={lessons}
+            onDecideLesson={(id, accept) => void decideLesson(id, accept)}
+            history={history}
           />
         </CardSection>
 

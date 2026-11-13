@@ -10,6 +10,8 @@ import {
   QUICK_CLASSES,
   RULE_KINDS,
   type ApprovalEvaluation,
+  type ApprovalLesson,
+  type ApprovalRecord,
   type ApprovalRule,
   type QuickPolicy,
   type RuleDecision,
@@ -36,6 +38,11 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
   /** The quick rules by kind of action; absent from a host that has none. */
   quick?: { on: boolean; policies: Partial<Record<string, QuickPolicy>> }
   onQuick?: (next: { on: boolean; policies: Partial<Record<string, QuickPolicy>> }) => void
+  /** Rules the bot proposes after the same action was denied twice; absent when the host has none. */
+  lessons?: ApprovalLesson[]
+  onDecideLesson?: (id: string, accept: boolean) => void
+  /** The newest decisions on this bot's approval cards, newest first. */
+  history?: ApprovalRecord[]
 }) {
   const [command, setCommand] = useState('')
   const [answer, setAnswer] = useState<string | null>(null)
@@ -49,6 +56,19 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
   return (
     <Field label="Approval rules" detail={`The first rule that matches decides, before the Approvals setting. ${CHAINING_WARNING} A * matches any text.`}>
       <VStack gap={8}>
+        {lessons && lessons.length > 0 ? (
+          <VStack gap={6}>
+            <Text weight="semibold">Learned from your refusals</Text>
+            <Text size="footnote" tone="secondary">You denied these twice. Keep the rule and the bot stops asking.</Text>
+            {lessons.map((lesson) => (
+              <HStack key={lesson.id} gap={8}>
+                <Text grow>{lesson.rule.pattern}{lesson.rule.kind ? ` · ${lesson.rule.kind}` : ''}</Text>
+                <Button onClick={() => onDecideLesson?.(lesson.id, true)}>Keep rule</Button>
+                <Button kind="secondary" onClick={() => onDecideLesson?.(lesson.id, false)}>Dismiss</Button>
+              </HStack>
+            ))}
+          </VStack>
+        ) : null}
         {rules.length === 0 ? <Text tone="secondary" size="footnote">No rules: the Approvals setting decides everything.</Text> : null}
         {rules.map((rule, index) => (
           <HStack key={index} gap={6} className="rule-row">
@@ -95,6 +115,18 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
           <Button kind="secondary" disabled={!command.trim()} onClick={() => void run()}>Test</Button>
         </HStack>
         {answer ? <Text size="footnote" tone="secondary">{answer}</Text> : null}
+        {history && history.length > 0 ? (
+          <VStack gap={4}>
+            <Text weight="semibold">Recent decisions</Text>
+            {history.slice(0, 10).map((record) => (
+              <Text key={record.entryId} size="caption" tone="secondary">
+                {record.decision === 'allow' ? 'Allowed' : record.decision === 'deny' ? 'Denied' : 'Cancelled'}
+                {` · ${record.subject}`}
+                {record.actor ? ` · ${record.actor}` : ''}
+              </Text>
+            ))}
+          </VStack>
+        ) : null}
       </VStack>
     </Field>
   )
