@@ -35,6 +35,7 @@ import { BotFilesSheet } from './bots/BotFilesSheet'
 import { MarketplaceView } from './marketplace/MarketplaceView'
 import { SignInCodeDialog } from './marketplace/ConnectorSheets'
 import { SettingsView, type SettingsPage } from './settings/SettingsView'
+import { ServerLibraryView } from './library/ServerLibraryView'
 import { ApprovalSheet } from './settings/ApprovalSheet'
 import { SearchPalette } from './SearchPalette'
 import { AccountWelcomeView, useWelcomeGate } from './AccountWelcomeView'
@@ -266,6 +267,7 @@ function ChatSplitView() {
   const [marketplaceLink, setMarketplaceLink] = useState<{ section: ExtensionSection; id?: string; installedConnectorId?: string; requestId?: string } | null>(null)
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
   const [showAccount, setShowAccount] = useState(false)
@@ -454,7 +456,7 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const railActive = canvasBot !== null ? 'canvas' : libraryOpen ? 'library' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
   const width = compact ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
@@ -462,8 +464,9 @@ function ChatSplitView() {
         <div className="sidebar-rail">
           <AppRail
             active={railActive}
-            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null) }}
+            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(false) }}
             onCanvas={() => {
+              setLibraryOpen(false)
               if (selectedBot && selectedStore) {
                 setCanvasBot(selectedBot.id)
                 setCanvasStore(selectedStore)
@@ -475,13 +478,14 @@ function ChatSplitView() {
               setCanvasBot(first.bot.id)
               setCanvasStore(first.store)
             }}
-            onUsage={() => setSettings('usage')}
+            onUsage={() => { setLibraryOpen(false); setSettings('usage') }}
+            onLibrary={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(true) }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
             onComfy={() => void window.codync.tools.open('comfy')}
             comfy={comfyTool.state}
-            onExtensions={() => openMarketplace()}
-            onSettings={() => setSettings('general')}
+            onExtensions={() => { setLibraryOpen(false); openMarketplace() }}
+            onSettings={() => { setLibraryOpen(false); setSettings('general') }}
             onAccount={() => setShowAccount((s) => !s)}
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
@@ -582,6 +586,7 @@ function ChatSplitView() {
         { id: 'agents', title: 'Agents', icon: 'terminal', run: () => { setSearching(false); openMarketplace('agents') } },
         { id: 'skills', title: 'Skills', icon: 'book.pages', run: () => { setSearching(false); openMarketplace('skills') } },
         { id: 'usage', title: 'Usage', icon: 'gauge.with.dots.needle.33percent', run: () => { setSearching(false); setSettings('usage') } },
+        { id: 'library', title: 'Server Library', icon: 'books.vertical', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(true) } },
         { id: 'network', title: 'Network', icon: 'network', run: () => { setSearching(false); setSettings('network') } },
         { id: 'voice', title: 'Voice', icon: 'waveform', run: () => { setSearching(false); setSettings('voice') } },
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
@@ -639,6 +644,9 @@ function ChatSplitView() {
       </Sheet>
       <Sheet open={settings !== null} onClose={() => setSettings(null)} width={Math.min(800, windowSize.width - 80)} height={Math.min(620, sheetHeight)}>
         {settings ? <SettingsView page={settings} setPage={setSettings} onExtensions={() => { setSettings(null); openMarketplace('channels') }} /> : null}
+      </Sheet>
+      <Sheet open={libraryOpen} onClose={() => setLibraryOpen(false)} width={Math.min(800, windowSize.width - 80)} height={Math.min(680, sheetHeight)}>
+        {libraryOpen ? <ServerLibraryView /> : null}
       </Sheet>
       <Dialog
         open={confirmDelete !== null}

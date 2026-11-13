@@ -29,6 +29,17 @@ fun AppStore.loadLibrary(botId: String) = action("library:$botId") {
 }
 
 /**
+ * The server's Library, fetched when its sheet shows: every bot's artifacts join the artifact cache (events keep them
+ * current), the files stay listed for the sheet. The filter is applied on the phone, so switching it reads nothing again.
+ */
+fun AppStore.loadServerLibrary() = action("server-library") {
+    val response = ready().call("serverLibrary", body()).jsonObject
+    val items = response.getValue("items").jsonArray.mapNotNull { (it as? JsonObject)?.let(ServerLibraryItem::decode) }
+    val artifacts = items.mapNotNull { (it.item as? LibraryItem.ArtifactItem)?.artifact }
+    mutableState.update { it.copy(serverLibrary = items, artifacts = artifacts.fold(it.artifacts, ArtifactCache::upsert)) }
+}
+
+/**
  * Reads an artifact's HTML unless the newest version known (`announced`: the one its card names) is here already; one
  * published while it was read is read next. A failure stays with the artifact, for its card and viewer to show.
  */

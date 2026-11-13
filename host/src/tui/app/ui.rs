@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use super::super::manage::{
     AgentSetup, AnalyticsSheet, BotChatSheet, DevServersSheet, DocumentSheet, Fields, FlowSheet, Library, Market,
-    MemorySheet, NetworkSheet, RoutineForm, RoutineList, SkillSheet, ThreadSheet, ThreadsSheet,
+    MemorySheet, NetworkSheet, RoutineForm, RoutineList, ServerLibrary, SkillSheet, ThreadSheet, ThreadsSheet,
 };
 use super::{Editor, Mark, WhatsNew};
 
@@ -56,6 +56,7 @@ pub enum Action {
     Computer,
     N8n,
     Library,
+    ServerLibrary,
     RefreshAgents,
     Pair,
     Network,
@@ -77,7 +78,7 @@ pub enum Action {
     ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 30] = [
+pub const ACTIONS: [(&str, &str, Action); 31] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -87,6 +88,7 @@ pub const ACTIONS: [(&str, &str, Action); 30] = [
     ("Computer: permissions, files, terminal and activity…", "", Action::Computer),
     ("n8n: workflows and runs…", "", Action::N8n),
     ("Library of this bot: artifacts and files…", "L", Action::Library),
+    ("Library of every bot: artifacts and files…", "", Action::ServerLibrary),
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
     ("Network: your other computers…", "N", Action::Network),
@@ -445,6 +447,7 @@ pub enum Overlay {
     Flow(Box<FlowSheet>),
     Routine(Box<RoutineForm>),
     Library(Library),
+    ServerLibrary(ServerLibrary),
     Market(Box<Market>),
     Agent(AgentSetup),
     Fields(Box<Fields>),

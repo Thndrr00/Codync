@@ -41,6 +41,7 @@ private data class RosterQuickAction(val label: String, val invoke: () -> Unit)
     manage: () -> Unit,
     newBot: () -> Unit,
     newGroup: () -> Unit,
+    library: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember(query.isBlank()) { mutableStateOf(false) }
@@ -52,6 +53,7 @@ private data class RosterQuickAction(val label: String, val invoke: () -> Unit)
             add(RosterQuickAction("New group", newGroup))
         }
         add(RosterQuickAction("Computers", manage))
+        add(RosterQuickAction("Library", library))
         add(RosterQuickAction("Account", account))
     }.filter { action -> terms.all { action.label.contains(it, ignoreCase = true) } }
     if (actions.isEmpty()) return

@@ -6,14 +6,17 @@ public struct RosterFilterControls: View {
     @Binding var filter: RosterFilter
     @Binding var byProject: Bool
     @Binding var showHistory: Bool
+    @Binding var showLibrary: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(query: Binding<String>, filter: Binding<RosterFilter>, byProject: Binding<Bool>, showHistory: Binding<Bool>) {
+    public init(query: Binding<String>, filter: Binding<RosterFilter>, byProject: Binding<Bool>, showHistory: Binding<Bool>,
+                showLibrary: Binding<Bool>) {
         _query = query
         _filter = filter
         _byProject = byProject
         _showHistory = showHistory
+        _showLibrary = showLibrary
     }
 
     public var body: some View {
@@ -31,6 +34,8 @@ public struct RosterFilterControls: View {
                 Button(byProject ? "By project" : "Manual order") { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { byProject.toggle() } }
                     .buttonStyle(.secondary)
                 Button { withAnimation(Motion.reduced(Motion.layout, reduceMotion)) { showHistory = true } } label: { Image(systemName: "magnifyingglass").accessibilityLabel("Search history") }
+                    .buttonStyle(.secondary)
+                Button { showLibrary = true } label: { Image(systemName: "books.vertical").accessibilityLabel(L10n.tr("Server Library")) }
                     .buttonStyle(.secondary)
             }
         }.padding(.vertical, 8)

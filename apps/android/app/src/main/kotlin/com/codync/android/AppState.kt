@@ -69,6 +69,8 @@ data class AppState(
     val artifacts: ArtifactCache = ArtifactCache(),
     /** Each chat's Library as last fetched, by chat ID (its artifacts as `artifacts` has them). */
     val library: Map<String, List<LibraryItem>> = emptyMap(),
+    /** The server's Library as last fetched (`serverLibrary`): every bot's artifacts and files; null until read. */
+    val serverLibrary: List<ServerLibraryItem>? = null,
     val plugins: PluginListing? = null,
     val voice: VoiceCallViewState? = null,
     /** The computer's remote screen (`null`: the host predates it). */

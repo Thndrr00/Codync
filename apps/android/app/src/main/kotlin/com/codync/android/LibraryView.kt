@@ -28,6 +28,7 @@ import com.codync.android.core.Bot
 import com.codync.android.core.LibraryItem
 import com.codync.android.core.LibraryPeriod
 import com.codync.android.core.LinkState
+import com.codync.android.core.hasServerLibrary
 import com.codync.android.core.Artifact
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
@@ -43,7 +44,11 @@ import com.kyant.shapes.RoundedRectangle
     val items = state.artifacts.library(bot.id, state.library[bot.id].orEmpty())
     var naming by remember { mutableStateOf<Naming?>(null) }
     var image by remember { mutableStateOf<Attachment?>(null) }
+    var serverLibrary by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
+        if (hasServerLibrary(state.hello?.text("version"))) {
+            SecondaryButton(tr("Server Library"), Modifier.padding(bottom = 16.dp)) { serverLibrary = true }
+        }
         when {
             items.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 for ((period, members) in LibraryPeriod.sections(items)) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -72,10 +77,11 @@ import com.kyant.shapes.RoundedRectangle
     }
     NameDialog(naming, "Artifact title", { naming = null })
     AttachmentImageSheet(image, bot.id, state, store) { image = null }
+    CodyncSheet(serverLibrary, { serverLibrary = false }) { ServerLibrarySheet(state, store) }
 }
 
 /** One row of the Library: what it is on the left, its name and detail. */
-@Composable private fun LibraryRow(modifier: Modifier, leading: @Composable () -> Unit, content: @Composable RowScope.() -> Unit) {
+@Composable internal fun LibraryRow(modifier: Modifier, leading: @Composable () -> Unit, content: @Composable RowScope.() -> Unit) {
     Row(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { leading() }
@@ -113,7 +119,7 @@ import com.kyant.shapes.RoundedRectangle
     }
 }
 
-@Composable private fun RowScope.NameAndDetail(name: String, detail: String) {
+@Composable internal fun RowScope.NameAndDetail(name: String, detail: String) {
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(name, style = Type.system(13f), color = Palette.text, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
         Text(detail, style = Type.caption2, color = Palette.secondary)

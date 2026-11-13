@@ -31,6 +31,7 @@ mod pages;
 mod replies;
 mod routines;
 mod scroll;
+mod server_library;
 mod skill;
 mod threads;
 mod voice;
@@ -48,6 +49,7 @@ pub use network_rules::{RuleField, RuleForm};
 pub use network_setup::{CONNECTORS, Setup, SetupField};
 pub use pages::Page;
 pub use scroll::Scroll;
+pub use server_library::{Preview, ServerFilter, ServerLibrary, ServerLibraryItem};
 pub use skill::SkillSheet;
 pub use voice::VoiceSheet;
 pub use when::complete_zone;
@@ -81,6 +83,10 @@ pub enum Reply {
     RoutineSaved,
     /// A bot's Library (`library {botId}`).
     Library(String),
+    /// The server's Library (`serverLibrary`): every bot's artifacts and files.
+    ServerLibrary,
+    /// A file's first chunk for the server Library's preview (`readFile` or `readUpload`).
+    ServerLibraryPreview,
     /// A routine's webhook URL and key: copied as a ready-to-run curl.
     Webhook,
     /// A bot conversation's fetched history.

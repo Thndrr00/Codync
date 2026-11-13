@@ -17,6 +17,8 @@ struct BotListView: View {
     @State private var query = ""
     @State private var filter = RosterFilter.all
     @State private var showHistory = false
+    /// The server's Library of the computers shown (every bot's artifacts and files).
+    @State private var showLibrary = false
     @AppStorage("rosterByProject") private var byProject = false
     @AppStorage("collapsedRosterProjects") private var collapsedProjects = "[]"
     /// A bot whose agent starts over with a fresh context, once confirmed.
@@ -141,7 +143,7 @@ struct BotListView: View {
                 // A newer app release (dismissible; everything still works). Computers update
                 // themselves, so a newer host gets no reminder here.
                 AppUpdateReminder()
-                RosterFilterControls(query: $query, filter: $filter, byProject: $byProject, showHistory: $showHistory)
+                RosterFilterControls(query: $query, filter: $filter, byProject: $byProject, showHistory: $showHistory, showLibrary: $showLibrary)
                 if !roster.isEmpty && !roster.contains(where: { filter.matches($0.bot, query: query) }) {
                     VStack {
                         Text("No bots match these filters").foregroundStyle(Palette.secondary)
@@ -222,6 +224,10 @@ struct BotListView: View {
             RosterHistoryView(stores: shownStores) { store, hit in
                 accounts.selection = BotReference(accountId: accounts.accountId, computerId: store.computer.id, botId: hit.botId)
             }.id(accounts.accountId)
+        }
+        .codyncSheet(isPresented: $showLibrary) {
+            ServerLibraryView(stores: shownStores.filter(\.hasServerLibrary))
+                .id(accounts.accountId)
         }
         .codyncSheet(item: $creating) { target in
             if let store = accounts.store(for: target.computerId) {

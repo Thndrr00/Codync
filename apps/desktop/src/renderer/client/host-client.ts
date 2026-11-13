@@ -13,7 +13,7 @@ import {
   type ThreadInfo,
   type Usage,
 } from '@shared/models'
-import type { Artifact, ArtifactChunk, LibraryItem } from '@shared/artifacts'
+import type { Artifact, ArtifactChunk, LibraryItem, ServerLibraryFilter, ServerLibraryItem } from '@shared/artifacts'
 import { parseCallCue, type CallCue } from '@shared/calls'
 import type { NetworkView } from '@shared/network'
 import { trNow } from '../lib/l10n.ts'
@@ -244,6 +244,11 @@ export class HostClient {
 
   library(botId: string): Promise<{ items: LibraryItem[] }> {
     return this.call('library', { botId })
+  }
+
+  /** Every bot's Library on this computer, newest first; `all` sends no filter. */
+  serverLibrary(filter: ServerLibraryFilter = 'all'): Promise<{ items: ServerLibraryItem[] }> {
+    return this.call('serverLibrary', filter === 'all' ? {} : { filter })
   }
 
   readArtifact(botId: string, artifactId: string, offset: number): Promise<ArtifactChunk> {

@@ -28,6 +28,22 @@ with `readUpload`.
 and id (a file forwarded to two bots shows once), sorted newest first, and a bot that was deleted
 is left out. The list is built from `library` for each bot, so the per-chat limits apply.
 
-The method is host-side only for now: the clients still open a chat's Library. A server page in the
-window bar (desktop), a screen beside a chat's artifacts (phones) and a terminal sheet can use it
-as it stands, with the same empty, loading and error states as a chat's Library.
+The clients show it as one page, with a group a computer on the desktop, newest first by day, and
+an **All / Images / Files** filter. The page only exists on a host from 2.48.0 (`hasServerLibrary`
+on each client).
+
+- iPhone: `ServerLibraryView` (`apps/ios/Kit/Sources/CodyncUI/Artifacts/ServerLibraryView.swift`),
+  opened from the book button beside the roster's filters or from a chat's Library page; its rows
+  use the chat's viewers and share sheet, and a computer picker appears when several are shown.
+- Android: `ServerLibrarySheet` (`apps/android/app/.../ServerLibrarySheet.kt`), opened from
+  **Library** among the roster's actions or from a chat's Library page.
+- Desktop: `ServerLibraryView` (`apps/desktop/src/renderer/views/library/ServerLibraryView.tsx`),
+  a sheet opened from the window bar's **Library** icon or the search palette. It reads every
+  connected computer and groups each one's rows by day.
+- Terminal: `Ctrl+K` → **Library of every bot: artifacts and files…**
+  (`host/src/tui/manage/server_library.rs`, `host/src/tui/sheets/server_library_view.rs`);
+  `Tab` filters, `Enter` opens an artifact or a file's text preview, `f` saves, `r` renames.
+
+Each client filters locally after one read (`images`/`files` are sent by the host too), so
+switching the filter never waits for the computer.
+

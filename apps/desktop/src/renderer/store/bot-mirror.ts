@@ -1,4 +1,5 @@
 import { checkVersions, isBelow, type VersionMismatch } from '@shared/compat'
+import { hasServerLibrary } from '@shared/artifacts'
 import { mixesAgents } from '@shared/fallbacks'
 import {
   isInternalEntry,
@@ -210,6 +211,11 @@ export class BotMirror extends Observable {
   /** The host keeps roster sections (an older one leaves them out): the menus offer them only then. */
   get hasRosterSections() {
     return this.hostVersion !== null && hostHasSections(this.hostVersion.version)
+  }
+
+  /** The host has the server's Library (`serverLibrary`); an older one leaves the page out. */
+  get hasServerLibrary() {
+    return this.hostVersion !== null && hasServerLibrary(this.hostVersion.version)
   }
 
   /** The user picks the lead (`setLead`) and may delete it: an older host refuses both. */

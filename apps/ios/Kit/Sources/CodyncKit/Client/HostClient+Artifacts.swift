@@ -15,6 +15,14 @@ public extension HostClient {
         return res.items.compactMap(\.item)
     }
 
+    /// The server's Library, every bot's newest first. Kinds this app doesn't know are left out.
+    func serverLibrary(filter: ServerLibraryFilter = .all) async throws -> [ServerLibraryItem] {
+        struct Res: Decodable { var items: [ServerLibraryItem.Wire] }
+        let body: [String: String] = filter == .all ? [:] : ["filter": filter.rawValue]
+        let res: Res = try await call("serverLibrary", body)
+        return res.items.compactMap(\.serverItem)
+    }
+
     /// At most `FileDownload.chunkSize` bytes of an artifact's HTML, from `offset`.
     func readArtifact(botId: String, artifactId: String, offset: Int64) async throws -> ArtifactChunk {
         struct Body: Encodable { let botId: String; let artifactId: String; let offset: Int64 }

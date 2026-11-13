@@ -88,6 +88,8 @@ import kotlinx.serialization.json.putJsonArray
     val allRoster = roster(state.bots)
     val online = state.actualConnection is LinkState.Ready
     var searchState by remember(state.contextId) { mutableStateOf(RosterSearchState(botMatches = allRoster)) }
+    /// The server's Library sheet (every bot's artifacts and files).
+    var showLibrary by rememberSaveable(state.contextId) { mutableStateOf(false) }
 
     LaunchedEffect(searchQuery, allRoster, state.entries, state.historyComplete, online) {
         val nextId = searchReqSeq + 1L
@@ -186,7 +188,7 @@ import kotlinx.serialization.json.putJsonArray
                 }
                 RosterQuickActions(
                     query = searchQuery, online = online, account = account, manage = manage,
-                    newBot = newBot, newGroup = newGroup,
+                    newBot = newBot, newGroup = newGroup, library = { showLibrary = true },
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                 )
                 state.mismatch?.let { UpdateNeededCard(state, it, store::requestHostUpdate, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
@@ -265,6 +267,7 @@ import kotlinx.serialization.json.putJsonArray
             },
         )
     }
+    CodyncSheet(showLibrary, { showLibrary = false }) { ServerLibrarySheet(state, store) }
 }
 
 @Composable private fun RosterListContent(

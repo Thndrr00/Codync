@@ -165,6 +165,8 @@ impl App {
             }
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::ServerLibrary => self.server_library_loaded(v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::ServerLibraryPreview => self.server_library_preview(&v),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);
@@ -505,6 +507,24 @@ impl App {
                 }
                 self.flash(&e);
             }
+            Reply::ServerLibrary => {
+                for o in &mut self.overlays {
+                    if let Overlay::ServerLibrary(s) = o {
+                        s.items.get_or_insert_with(Vec::new);
+                        s.error = Some(e.clone());
+                    }
+                }
+                self.flash(&e);
+            }
+            Reply::ServerLibraryPreview => {
+                for o in &mut self.overlays {
+                    if let Overlay::ServerLibrary(s) = o {
+                        s.preview = None;
+                        s.error = Some(e.clone());
+                    }
+                }
+                self.flash(&e);
+            }
             Reply::Thread { bot, root } => {
                 for o in &mut self.overlays {
                     if let Overlay::Thread(t) = o
@@ -627,6 +647,9 @@ impl App {
                 }
                 Overlay::Library(l) => {
                     calls.push(("library", json!({"botId": l.bot}), After::Sheet(Reply::Library(l.bot.clone()))));
+                }
+                Overlay::ServerLibrary(_) => {
+                    calls.push(("serverLibrary", json!({}), After::Sheet(Reply::ServerLibrary)));
                 }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));
