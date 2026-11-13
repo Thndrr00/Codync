@@ -2,7 +2,9 @@
 
 Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, modelos en `userData/comfy`, cola de un trabajo, puente `comfyui` y adjuntos del chat). No se rehizo nada de esa base: se amplió. El trabajo quedó en la rama `deska/PROMPT-V2---SOBRE-LO-QUE-YA-EST----PLANTILLAS--MODELOS-Y-RE--5db46a30` (commits `7cfcb863`, `2e0b8f66`, `3942fe5b` y el de este reporte), empujada a `origin`.
 
-> **Segunda pasada.** Sobre la entrega inicial se añadieron el reproductor de vídeo y audio en el chat, el catálogo de las quince familias del desafío Higgsfield con sus repositorios y licencias, la evaluación del MCP oficial con su arnés de prueba, el servidor falso de `/ws` y el evento `comfy_template_run`. Sigue sin compilarse ni ejecutarse nada.
+> **Segunda pasada.** Sobre la entrega inicial se añadieron el reproductor de vídeo y audio en el chat, el catálogo de las quince familias del desafío Higgsfield con sus repositorios y licencias, la evaluación del MCP oficial con su arnés de prueba, el servidor falso de `/ws` y el evento `comfy_template_run`.
+>
+> **Tercera pasada, solo pruebas de código.** Se separaron las funciones puras de los adjuntos (`media.ts`) y del importador para probarlas con `node --test`, sin recompilar la app. La compilación y las pruebas del host de la pasada anterior siguen siendo las que constan abajo.
 
 > **Compilado y probado en esta máquina (Windows, sin GPU).** Se ejecutaron `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, las pruebas unitarias del host (`comfy` y `analytics`), `npm run typecheck` y `npm test` del escritorio, y el arnés del MCP oficial. No se abrió Codync Dev ni se ejecutó un trabajo real: no hay ComfyUI instalado, ni GPU, ni SDK de Android, ni macOS para iOS.
 
@@ -88,6 +90,8 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 | Suite completa `cargo test` | No terminó: los binarios de integración (`*_e2e`) se quedan esperando servicios en esta máquina. Las pruebas unitarias del host sí pasan. |
 | `npm run typecheck` (escritorio) | Pasa, con el visor 3D. |
 | `npm test` (escritorio) | 805 pasan, 4 fallan por el idioma del sistema (esperan inglés y el Windows está en español); no tocan ComfyUI. |
+| `node --test apps/desktop/src/renderer/views/thread/media.test.ts` | 4 pasan: familias de archivo, MIME, símbolo y tamaños. |
+| `node --test tools/import-freefield-app.test.mjs` | 2 pasan: el importador enlaza todos los campos y no muta el grafo de origen. |
 | `tools/comfy-mcp-smoke.mjs` | 39 tools reales de `comfy-mcp 0.10.0`; 7/7 operaciones presentes; `server_info` y `search_templates` (761 plantillas) responden. Sin ComfyUI no se ejecutó ningún workflow. |
 | Codync Dev abierto / trabajo real | **No**: no hay ComfyUI, GPU ni modelos en esta máquina. |
 | Android / iOS | **No compilados**: no hay SDK de Android ni macOS aquí. |
