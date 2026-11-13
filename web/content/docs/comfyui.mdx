@@ -12,7 +12,7 @@ The card shows the state, the ComfyUI version that ships with your Codync, the s
 
 **Templates** is the gallery of named workflows. Each card says what it makes (image, video, audio or 3D), about how long it takes and how many models it needs. Pick one and its form appears: the fields come from the template's own manifest (text, numbers with their limits, choices, a picture, a seed), so you never touch a node. **Run** queues it and takes you to **Jobs**.
 
-Six templates ship with Codync: **Text to image** and **Redraw a picture** (Stable Diffusion 1.5), **Follow the outline** (ControlNet), **Upscale a picture** (Real-ESRGAN), **Angles** (imported from Freefield, Qwen-Image-Edit with 31 GB of models and a 24 GB graphics-memory estimate) and **Colour check**, which needs no model and proves the engine works. Each names the models it needs and their licence; a download only ever comes from the template's manifest.
+Seven templates ship with Codync: **Text to image** and **Redraw a picture** (Stable Diffusion 1.5), **Follow the outline** (ControlNet), **Upscale a picture** (Real-ESRGAN), **Angles** (imported from Freefield, Qwen-Image-Edit with 31 GB of models and a 24 GB graphics-memory estimate), **Paint a Plate** (imported from AInVFX: paint on a frame and the edit follows; its three FLUX 3 models are gated, so their page opens for a signed-in download) and **Colour check**, which needs no model and proves the engine works. Each names the models it needs and their licence; a download only ever comes from the template's manifest.
 
 Before a run is queued, Codync checks that ComfyUI is running, that the template's nodes are installed, that every model is on disk at the right size, that the graphics card has the memory the template asks for, and that the disk has room. A problem appears with the button that fixes it (**Download**, **Start**, **Open ComfyUI**); **Run** stays disabled until nothing is missing.
 
@@ -24,7 +24,7 @@ If port 8188 is taken, ComfyUI uses the next free one; the card and the log say 
 
 ## Models
 
-**Models** lists every folder (checkpoints, LoRAs, VAEs, upscalers…), each file's size, which templates need it and its licence, plus the space used and free. A file a template needs but you don't have offers **Download**: it resumes where it stopped after **Pause**, checks the size and hash its manifest declares, and only then takes its final name. **Delete** asks first when a template still needs the file.
+**Models** lists every folder (checkpoints, LoRAs, VAEs, upscalers…), each file's size, which templates need it and its licence, plus the space used and free. A file a template needs but you don't have offers **Download**: it resumes where it stopped after **Pause**, checks the size and hash its manifest declares, and only then takes its final name. A **gated** model (Paint a Plate's FLUX files) instead offers **Open model page**: you sign in on Hugging Face, accept its licence and put the file in the folder. **Delete** asks first when a template still needs the file.
 
 ## Jobs
 

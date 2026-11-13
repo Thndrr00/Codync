@@ -15,7 +15,8 @@
     "license": "Apache-2.0",
     "output": ["video"],
     "summary": "VFX plates: paint on the first frame and the edit carries through the shot.",
-    "author": "AInVFX"
+    "author": "AInVFX",
+    "imported": true
   },
   {
     "id": "h3-motion",
@@ -123,7 +124,8 @@
     "license": "MIT",
     "output": ["image", "video", "audio"],
     "summary": "120 image, video, VFX and audio apps, every model open weights.",
-    "author": "neuregex"
+    "author": "neuregex",
+    "imported": true
   },
   {
     "id": "henge",

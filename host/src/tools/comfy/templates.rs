@@ -15,12 +15,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// The manifests that ship with Codync, by id: their manifest is embedded in the binary.
-const BASE: [(&str, &str); 6] = [
+const BASE: [(&str, &str); 7] = [
     ("text-to-image", include_str!("../../../assets/comfy-templates/text-to-image.json")),
     ("image-to-image", include_str!("../../../assets/comfy-templates/image-to-image.json")),
     ("canny-to-image", include_str!("../../../assets/comfy-templates/canny-to-image.json")),
     ("image-upscale", include_str!("../../../assets/comfy-templates/image-upscale.json")),
     ("freefield-angles", include_str!("../../../assets/comfy-templates/freefield-angles.json")),
+    ("paint-a-plate", include_str!("../../../assets/comfy-templates/paint-a-plate.json")),
     ("smoke-test", include_str!("../../../assets/comfy-templates/smoke-test.json")),
 ];
 
@@ -39,6 +40,9 @@ pub struct Curated {
     pub output: Vec<String>,
     pub summary: String,
     pub author: String,
+    /// The gallery lists only the families whose graph is not installed yet.
+    #[serde(default)]
+    pub imported: bool,
 }
 
 /// The challenge catalogue; empty when the embedded list can't be read.
@@ -135,6 +139,10 @@ pub struct Model {
     pub sha256: Option<String>,
     #[serde(default)]
     pub url: Option<String>,
+    /// The repository requires signing in before a file can be downloaded (Hugging Face gated).
+    /// The model manager won't fetch it; the card opens its page instead.
+    #[serde(default)]
+    pub gated: bool,
     #[serde(default)]
     pub license: Option<String>,
 }
@@ -319,6 +327,12 @@ impl Template {
                     model.file
                 );
             }
+            ensure!(
+                !model.gated || model.url.is_some(),
+                "template `{}`: gated model `{}` has no page to open",
+                self.id,
+                model.file
+            );
         }
         Ok(())
     }

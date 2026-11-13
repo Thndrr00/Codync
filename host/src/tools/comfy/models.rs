@@ -93,6 +93,7 @@ impl Downloads {
                     row["declared"] = json!(true);
                     row["url"] = json!(model.url);
                     row["license"] = json!(model.license);
+                    row["gated"] = json!(model.gated);
                     if let Some(used_by) = row["usedBy"].as_array_mut() {
                         used_by.push(json!(template.id));
                     }
@@ -134,6 +135,11 @@ impl Downloads {
             bail!("`{file}` is not declared by any template, so it cannot be downloaded here");
         };
         ensure!(model.url.is_some(), "`{file}` has no download URL in `{}`", template);
+        ensure!(
+            !model.gated,
+            "`{file}` comes from a gated repository: open its page, sign in, and put the file in the {} folder",
+            model.folder
+        );
         let key = key(folder, file);
         if let Some(entry) = self.entries.locked().get(&key) {
             ensure!(entry.phase != "downloading", "`{file}` is already downloading");

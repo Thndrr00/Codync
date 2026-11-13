@@ -68,13 +68,15 @@ export interface TemplateModel {
   size: number
   sha256?: string | null
   url?: string | null
+  /** The repository requires signing in before the file can be downloaded. */
+  gated?: boolean
   license?: string | null
 }
 
 export interface TemplatePreflightProblem {
   code: string
   message: string
-  action: { kind: 'start' | 'download' | 'installNode' | 'lowerResolution' | 'freeSpace' | 'useCpu'; [key: string]: unknown }
+  action: { kind: 'start' | 'download' | 'openUrl' | 'installNode' | 'lowerResolution' | 'freeSpace' | 'useCpu'; [key: string]: unknown }
 }
 
 /** A gallery row (`comfyTemplates`). */
@@ -114,6 +116,7 @@ export interface ModelFile {
   declared: boolean
   usedBy: string[]
   url?: string | null
+  gated?: boolean
   license?: string | null
 }
 
@@ -151,6 +154,8 @@ export interface CuratedTemplate {
   output: string[]
   summary: string
   author: string
+  /** True once its graph is a manifest of its own; the gallery hides it. */
+  imported?: boolean
 }
 
 

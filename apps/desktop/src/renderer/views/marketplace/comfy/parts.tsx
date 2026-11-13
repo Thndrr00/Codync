@@ -17,7 +17,7 @@ export function megabytes(bytes: number): string {
 export function ProblemRow({ problem, onAction }: { problem: TemplatePreflightProblem; onAction: (kind: string, problem: TemplatePreflightProblem) => void }) {
   const tr = useTr()
   const action = problem.action?.kind
-  const label = action === 'download' ? 'Download' : action === 'start' ? 'Start' : action === 'installNode' ? 'Open ComfyUI' : null
+  const label = action === 'download' ? 'Download' : action === 'start' ? 'Start' : action === 'openUrl' ? 'Open model page' : action === 'installNode' ? 'Open ComfyUI' : null
   return (
     <HStack gap={8} align="start">
       <Text size="caption" tone={problem.action?.kind === 'useCpu' ? 'secondary' : 'attention'} grow>{tr(problem.message)}</Text>

@@ -24,12 +24,13 @@ function downloadOf(library: ModelLibrary | null, model: ModelFile, folder: stri
 }
 
 /** One file: what it is, who needs it, and the action its state allows. */
-function ModelRow({ model, download, busy, onDownload, onPause, onDelete }: {
+function ModelRow({ model, download, busy, onDownload, onPause, onOpen, onDelete }: {
   model: ModelFile
   download?: ModelDownload
   busy: boolean
   onDownload: () => void
   onPause: () => void
+  onOpen: () => void
   onDelete: () => void
 }) {
   const tr = useTr()
@@ -48,6 +49,7 @@ function ModelRow({ model, download, busy, onDownload, onPause, onDelete }: {
           <Text size="caption" tone="secondary">{tr('Added by hand')}</Text>
         ) : null}
         {model.license ? <Text size="caption" tone="secondary">{model.license}</Text> : null}
+        {model.gated ? <Text size="caption" tone="secondary">{tr('Gated: sign in on Hugging Face')}</Text> : null}
       </HStack>
       {active || download?.phase === 'paused' ? (
         <HStack gap={8}>
@@ -61,7 +63,11 @@ function ModelRow({ model, download, busy, onDownload, onPause, onDelete }: {
       {download?.phase === 'failed' ? <Text size="caption" tone="attention">{download.error}</Text> : null}
       <HStack gap={8}>
         {!model.present && !active ? (
-          <Button kind="secondary" disabled={busy || !model.url} onClick={onDownload}>{tr(download?.phase === 'paused' ? 'Resume' : 'Download')}</Button>
+          model.gated && model.url ? (
+            <Button kind="secondary" disabled={busy} onClick={onOpen}>{tr('Open model page')}</Button>
+          ) : (
+            <Button kind="secondary" disabled={busy || !model.url} onClick={onDownload}>{tr(download?.phase === 'paused' ? 'Resume' : 'Download')}</Button>
+          )
         ) : null}
         {model.present ? <Button kind="secondary" disabled={busy} onClick={onDelete}>{tr('Delete')}</Button> : null}
         {!model.url && !model.present ? <Text size="caption" tone="secondary">{tr('No download URL in its manifest.')}</Text> : null}
@@ -157,6 +163,7 @@ export function ComfyModels({ call }: { call: ToolCall }) {
               busy={busy}
               onDownload={() => void download(folder.folder, model.file)}
               onPause={() => void pause(folder.folder, model.file)}
+              onOpen={() => model.url && window.codync.app.openExternal(model.url)}
               onDelete={() => {
                 if (model.usedBy.length > 0) setRemoving({ folder: folder.folder, file: model.file, usedBy: model.usedBy })
                 else void remove(folder.folder, model.file, false)

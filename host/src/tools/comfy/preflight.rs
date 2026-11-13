@@ -99,10 +99,20 @@ fn model_issue(model: &Model) -> Option<Value> {
     let code = if present { "modelIncomplete" } else { "modelMissing" };
     let message = if present {
         format!("`{}` is on disk but is not the size this template expects. Download it again.", model.file)
+    } else if model.gated {
+        format!(
+            "`{}` comes from a gated Hugging Face repository: open its page, sign in and accept its licence, then put the file in the {} folder.",
+            model.file, model.folder
+        )
     } else {
         format!("`{}` is not downloaded. It goes in the {} folder.", model.file, model.folder)
     };
-    Some(problem(code, message, download_action(model)))
+    let action = if model.gated {
+        json!({"kind": "openUrl", "url": model.url, "license": model.license})
+    } else {
+        download_action(model)
+    };
+    Some(problem(code, message, action))
 }
 
 fn download_action(model: &Model) -> Value {
@@ -113,6 +123,7 @@ fn download_action(model: &Model) -> Value {
         "url": model.url,
         "size": model.size,
         "license": model.license,
+        "gated": model.gated,
     })
 }
 
@@ -159,6 +170,24 @@ mod tests {
             .expect("the model problem");
         assert_eq!(download["action"]["kind"], "download");
         assert_eq!(download["action"]["url"], "https://example.test/model.safetensors");
+    }
+
+    #[test]
+    fn a_gated_model_opens_its_page_instead_of_downloading() {
+        let mut manifest = manifest();
+        manifest.models[0].gated = true;
+        manifest.models[0].url = Some("https://huggingface.co/owner/repo".into());
+        manifest.models[0].sha256 = None;
+        let report = check(&manifest, false, None);
+        let problem = report["problems"]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .find(|p| p["code"] == "modelMissing")
+            .expect("the gated model");
+        assert_eq!(problem["action"]["kind"], "openUrl");
+        assert_eq!(problem["action"]["url"], "https://huggingface.co/owner/repo");
+        assert!(problem["message"].as_str().is_some_and(|m| m.contains("sign in")), "{problem}");
     }
 
     #[test]

@@ -168,6 +168,8 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
         setNote(tr('The download started: watch it in Models.'))
       } else if (kind === 'start') {
         await call('toolStart')
+      } else if (kind === 'openUrl' && typeof problem.action.url === 'string') {
+        window.codync.app.openExternal(problem.action.url)
       } else if (kind === 'installNode') {
         await window.codync.tools.open('comfy')
       }
@@ -230,7 +232,7 @@ export function ComfyTemplates({ call, onQueued }: { call: ToolCall; onQueued: (
             <Text size="caption" tone="secondary">
               {tr('Open Source Higgsfield: each entry is its author\'s repository. Import its graph, nodes and models from there; it is not installed here.')}
             </Text>
-            {curated.map((entry) => (
+            {curated.filter((entry) => !entry.imported).map((entry) => (
               <button key={entry.id} className="comfy-template curated" onClick={() => window.codync.app.openExternal(entry.repo)}>
                 <HStack gap={8}>
                   <Text weight="medium" tone="text" grow>{entry.name}</Text>

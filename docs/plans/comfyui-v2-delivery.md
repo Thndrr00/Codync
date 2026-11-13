@@ -5,6 +5,8 @@ Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, mo
 > **Segunda pasada.** Sobre la entrega inicial se añadieron el reproductor de vídeo y audio en el chat, el catálogo de las quince familias del desafío Higgsfield con sus repositorios y licencias, la evaluación del MCP oficial con su arnés de prueba, el servidor falso de `/ws` y el evento `comfy_template_run`.
 >
 > **Tercera pasada, solo pruebas de código.** Se separaron las funciones puras de los adjuntos (`media.ts`) y del importador para probarlas con `node --test`, sin recompilar la app. La compilación y las pruebas del host de la pasada anterior siguen siendo las que constan abajo.
+>
+> **Cuarta pasada, sin compilar.** Se importó **Paint a Plate** (Apache-2.0) desde su grafo `edit.json`, con sus tres modelos FLUX 3 **gated**: el preflight y la pestaña Modelos abren su página en vez de descargar sin credenciales. Se añadió `gated` al manifiesto y `openUrl` a las acciones, y `tools/check-comfy-manifests.mjs` valida los siete manifiestos sin compilar.
 
 > **Compilado y probado en esta máquina (Windows, sin GPU).** Se ejecutaron `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, las pruebas unitarias del host (`comfy` y `analytics`), `npm run typecheck` y `npm test` del escritorio, y el arnés del MCP oficial. No se abrió Codync Dev ni se ejecutó un trabajo real: no hay ComfyUI instalado, ni GPU, ni SDK de Android, ni macOS para iOS.
 
@@ -60,11 +62,13 @@ Añadidas junto a las existentes (los nombres viejos se conservan): `comfy_list_
 - `tools/comfy-mcp-smoke.mjs` se ejecutó contra una venv con `comfy-mcp 0.10.0` y `comfy-cli 1.26.0`: handshake, 39 tools, **7/7** operaciones presentes, `server_info` y `search_templates` (761 plantillas). No había ComfyUI, así que no se ejecutó ningún workflow.
 - Si se adopta, el orden de retirada del puente está escrito: primero `list_models`/`list_nodes`, luego `run_workflow`/`job_status`/`cancel_job`, después `upload_image`; los `comfy_*` de plantillas se quedan.
 
-### T7 · Higgsfield (una familia importada, el resto catalogado)
+### T7 · Higgsfield (dos familias importadas, el resto catalogado)
 
 - `host/assets/comfy-templates/curated.json` lista las quince familias con su repositorio real, licencia y tipo de salida, leídos de la página del concurso y de la API de GitHub: Panorama Stickers (MIT), Paint a Plate (Apache-2.0), H3 Motion (AGPL-3.0), OneShot MV (MIT), H3 AudioRetake (MIT), Genobi (MIT), Splat Edit Engine (AGPL-3.0), Sonder (GPL-3.0), Max Editor (Apache-2.0), Blocksfield (MIT), Creativefield (GPL-3.0), ComfyArt (MIT), Reshoot 4D (AGPL-3.0), Freefield (MIT) y Henge (MIT).
-- **Angles (Freefield)** está importada como `freefield-angles`: su `workflow.api.json` real, cuatro campos (foto, movimiento, detalle, semilla), cinco modelos con tamaño exacto y SHA-256 de Hugging Face, 31,2 GB y ~24 GB de VRAM. `tools/import-freefield-app.mjs` hace la conversión desde un `app.json` + `workflow.api.json` de Freefield y se puede repetir con sus otras apps.
-- La galería muestra el resto bajo las plantillas instaladas; elegir una abre el repositorio del autor. No se presentan como ejecutables porque el grafo, los nodos y los modelos son del autor.
+- **Angles (Freefield)** está importada como `freefield-angles`: su `workflow.api.json` real, cuatro campos, cinco modelos públicos con tamaño y SHA-256, 31,2 GB y ~24 GB de VRAM. `tools/import-freefield-app.mjs` convierte cualquier `app.json` + `workflow.api.json` de Freefield.
+- **Paint a Plate** está importada como `paint-a-plate`: su grafo `edit.json` (30 nodos) con cinco imágenes, pie de foto, sampler y controles de máscara/relight; tres modelos FLUX 3 **gated** (11,2 GB) con tamaño exacto y sin hash público. El preflight y la pestaña Modelos abren la página de Hugging Face en vez de intentar una descarga anónima que daría 401.
+- Quedan trece catalogadas. H3 Motion es AGPL-3.0; Genobi depende de un pack de character-swap GPL-3.0; OneShot MV solo publica grafos envoltorio (`FVRunResult`); Panorama Stickers no publica ningún workflow JSON. Importarlas es una decisión de licencia o de integración, no una conversión de JSON.
+- `tools/check-comfy-manifests.mjs` valida los siete manifiestos (marcadores, tipos, carpetas, gated, salida) sin compilar.
 
 ## Plantillas incluidas
 
@@ -75,6 +79,7 @@ Añadidas junto a las existentes (los nombres viejos se conservan): `comfy_list_
 | Follow the outline (`canny-to-image`) | SD 1.5 + ControlNet v1.1 canny, 1 445 234 681 B | OpenRAIL-M + Apache-2.0 | 16 s, 5 GB |
 | Upscale a picture (`image-upscale`) | Real-ESRGAN x4plus, 67 040 989 B | BSD-3-Clause | 6 s, 2 GB |
 | Angles (Freefield) (`freefield-angles`) | Qwen-Image-Edit 2509, su VAE y dos LoRA: 31,2 GB | Apache-2.0 | 60 s, 24 GB; 15 s en RTX 4090 |
+| Paint a Plate (`paint-a-plate`) | FLUX 3 Image Klein, su text encoder y VAE: 11,2 GB, gated | FLUX Kommunity License v1.0 | 45 s, 16 GB; 12 s en RTX 4090 |
 | Colour check (`smoke-test`) | Ninguno | Codync | 1 s, 0 GB |
 
 Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hugging Face y GitHub) con una petición de rango y la API de Hugging Face. Los tiempos y la VRAM son estimaciones del manifiesto, **no medidas**: la matriz real de T10 no se pudo correr.
@@ -92,6 +97,7 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 | `npm test` (escritorio) | 805 pasan, 4 fallan por el idioma del sistema (esperan inglés y el Windows está en español); no tocan ComfyUI. |
 | `node --test apps/desktop/src/renderer/views/thread/media.test.ts` | 4 pasan: familias de archivo, MIME, símbolo y tamaños. |
 | `node --test tools/import-freefield-app.test.mjs` | 2 pasan: el importador enlaza todos los campos y no muta el grafo de origen. |
+| `node tools/check-comfy-manifests.mjs` | Los siete manifiestos pasan: marcadores, tipos, carpetas, gated, salida. |
 | `tools/comfy-mcp-smoke.mjs` | 39 tools reales de `comfy-mcp 0.10.0`; 7/7 operaciones presentes; `server_info` y `search_templates` (761 plantillas) responden. Sin ComfyUI no se ejecutó ningún workflow. |
 | Codync Dev abierto / trabajo real | **No**: no hay ComfyUI, GPU ni modelos en esta máquina. |
 | Android / iOS | **No compilados**: no hay SDK de Android ni macOS aquí. |
@@ -99,7 +105,7 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 ## Lo que quedó fuera
 
 - **T6 · Adopción del MCP oficial**: evaluado y probado en superficie (39 tools, 7/7), no adoptado; no se generó nada con él porque no hay ComfyUI.
-- **T7 · Grafos ejecutables de Higgsfield**: una familia importada (Angles, de Freefield) y las otras catorce catalogadas con su repositorio y licencia. Importar cada una exige su grafo, marcadores, modelos y prueba; no se inventó ninguno. Panorama Stickers no publica un workflow JSON (es una app de nodos), así que no se puede importar como manifiesto sin integrarla.
+- **T7 · Grafos ejecutables de Higgsfield**: dos familias importadas (Angles, de Freefield, y Paint a Plate) y las otras trece catalogadas con su repositorio y licencia. H3 Motion es AGPL-3.0; Genobi depende de un pack GPL-3.0; OneShot MV solo publica envoltorios; Panorama Stickers no publica workflow. No se inventó ninguno.
 - **T10 · Matriz completa**: las pruebas unitarias del host y el `/ws` falso pasan; faltan las cinco pruebas reales con GPU y las mediciones, y la suite completa no terminó en esta máquina porque los binarios `*_e2e` esperan servicios. No hay ComfyUI ni GPU aquí.
 - **Móvil**: Android muestra el porcentaje del sampler y ya cancelaba; no tiene galería ni formulario. iOS no tiene sección de ComfyUI. No hay SDK de Android ni macOS en esta máquina para compilar ninguno de los dos.
 - **T9 · No bloquear**: `comfy_run_template` espera hasta 5 minutos (como `run_workflow`) para poder adjuntar dentro del turno; con `wait: false` encola y vuelve. El adjunto fuera de turno no existe en el host, así que el resultado se entrega cuando el bot vuelve a consultar.
