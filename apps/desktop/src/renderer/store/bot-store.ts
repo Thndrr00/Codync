@@ -357,6 +357,26 @@ export class BotStore extends BotSync {
     }
   }
 
+  /** The database this bot may only read, when the person picked one. */
+  async botDatabase(botId: string): Promise<string | null> {
+    try {
+      const { database } = await (await this.ready()).call<{ database: string | null }>('botDatabase', { botId })
+      return database ?? null
+    } catch {
+      return null
+    }
+  }
+
+  /** Picks (a path) or clears (null) the database a bot may only read; the host checks it's a file here. */
+  async setBotDatabase(botId: string, path: string | null): Promise<string | null> {
+    try {
+      await (await this.ready()).call('setBotDatabase', { botId, path })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
   /** The rules a bot proposes after the person denied the same action twice. */
   async approvalLessons(botId: string): Promise<ApprovalLesson[]> {
     try {

@@ -135,6 +135,8 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const [pickingFolder, setPickingFolder] = useState(false)
   const [lessons, setLessons] = useState<ApprovalLesson[]>([])
   const [history, setHistory] = useState<ApprovalRecord[]>([])
+  const [databasePath, setDatabasePath] = useState('')
+  const [databaseError, setDatabaseError] = useState<string | null>(null)
   const [viewingSkill, setViewingSkill] = useState<SkillRef | null>(null)
   const [proxy, setProxy] = useState<{ proxy: string | null; authenticated: boolean } | null>(null)
   const [proxyInput, setProxyInput] = useState('')
@@ -146,8 +148,13 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
     let live = true
     void store.approvalLessons(settingsBot).then((found) => { if (live) setLessons(found) })
     void store.approvalHistory(settingsBot).then((found) => { if (live) setHistory(found) })
+    void store.botDatabase(settingsBot).then((path) => { if (live) setDatabasePath(path ?? '') })
     return () => { live = false }
   }, [settingsBot, store])
+  const saveDatabase = async () => {
+    if (!settingsBot) return
+    setDatabaseError(await store.setBotDatabase(settingsBot, databasePath.trim() || null))
+  }
   const decideLesson = async (id: string, accept: boolean) => {
     await store.decideApprovalLesson(id, accept)
     if (settingsBot) setLessons(await store.approvalLessons(settingsBot))
@@ -457,6 +464,14 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             onDecideLesson={(id, accept) => void decideLesson(id, accept)}
             history={history}
           />
+          <Field label="Database" detail="A SQLite file this bot may only read: one SELECT or WITH per question, at most 500 rows and 5 seconds.">
+            <HStack gap={8}>
+              <AutoTextArea className="field-box" value={databasePath} placeholder="/path/to/database.db" minRows={1} maxRows={2}
+                onChange={setDatabasePath} />
+              <Button kind="secondary" disabled={!draft.id} onClick={() => void saveDatabase()}>Save</Button>
+            </HStack>
+            {databaseError ? <Text size="footnote" tone="danger">{databaseError}</Text> : null}
+          </Field>
         </CardSection>
 
         <CardSection title="Activity">
