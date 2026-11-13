@@ -44,20 +44,28 @@ The host registers a `comfyui` connector while ComfyUI runs (`lifecycle::offer_t
 | --- | --- |
 | `id`, `name`, `version`, `description`, `tags`, `license` | what the gallery and the bot show |
 | `workflow` | the graph in ComfyUI's API format, with `{{input}}` placeholders in its strings |
-| `inputs` | the form: `key`, `label`, `type` (`text`, `number`, `integer`, `select`, `image`, `seed`, `boolean`), `default`, `min`, `max`, `step`, `options`, `required`, `help` |
+| `inputs` | the form: `key`, `label`, `type` (`text`, `number`, `integer`, `select`, `image`, `video`, `audio`, `seed`, `boolean`), `default`, `min`, `max`, `step`, `options`, `required`, `help` |
 | `models` | `file`, `folder` (a key of `extra_model_paths.yaml`), `size`, `sha256`, `url`, `license` |
 | `output` | `image`, `video`, `audio` or `mesh`, and an optional MIME override |
 | `estimate` | seconds, VRAM and output GB, overall and per GPU family under `byGpu` (`rtx-4090`, `default`…) |
 
 Validation happens before anything is listed or run: ids, ranges, select options, model folders, sizes, hashes and URLs, and that the placeholder set equals the input set (a form field the graph never uses is refused, and a placeholder with no field is refused). The graph is data, never code: only placeholder substitution is applied, and every node class is checked against the running server's `/object_info` (`comfy_job::validate`). `{{key}}` as a whole string keeps its JSON type (a number stays a number); inside a longer string it is joined as text.
 
-The seven base manifests are embedded from `host/assets/comfy-templates/` and copied on startup. An untouched base manifest is updated in place; one the user edited is left alone and the new version is written beside it as `template.json.new`. Their model URLs were checked against the publishers and their sizes and SHA-256 come from the repositories: Stable Diffusion 1.5 fp16 (`2,132,696,762` bytes, CreativeML OpenRAIL-M), ControlNet v1.1 canny (`1,445,234,681` bytes, Apache-2.0), Real-ESRGAN x4plus (`67,040,989` bytes, BSD-3-Clause) and the five Qwen-Image-Edit files of Freefield's Angles (Apache-2.0, 31.2 GB in total, exact LFS sizes and hashes).
+The ten base manifests are embedded from `host/assets/comfy-templates/` and copied on startup. An untouched base manifest is updated in place; one the user edited is left alone and the new version is written beside it as `template.json.new`. Their model URLs were checked against the publishers and their sizes and SHA-256 come from the repositories: Stable Diffusion 1.5 fp16 (`2,132,696,762` bytes, CreativeML OpenRAIL-M), ControlNet v1.1 canny (`1,445,234,681` bytes, Apache-2.0), Real-ESRGAN x4plus (`67,040,989` bytes, BSD-3-Clause) and the five Qwen-Image-Edit files of Freefield's Angles (Apache-2.0, 31.2 GB in total, exact LFS sizes and hashes).
 
 `tools/import-freefield-app.mjs` turns a Freefield `app.json` and `workflow.api.json` into a manifest: it binds each declared input to its graph slot, merges template bindings (`{move} {details}` becomes `{{move}} {{details}}`), keeps the models the app declares, and fills their size and SHA-256 from the Hugging Face tree. `freefield-angles` is imported from it.
 
-**Paint a Plate** is imported from AInVFX's Apache-2.0 `web/workflows/edit.json` and `web/models.json`: its 30-node edit graph exposes five images, a caption, the sampler values and the relight mask controls. Its three FLUX 3 files are **gated** on Hugging Face, so the manifest marks them `gated`: the preflight and the Models tab open their page instead of pretending a download can work without a signed-in token. The other twelve families stay catalogued: H3 Motion is AGPL-3.0, Genobi's graph depends on a GPL-3.0 character-swap pack, OneShot MV ships only wrapper graphs, and Panorama Stickers has no workflow JSON at all. Importing those would be a licence or an integration decision, not a JSON conversion.
+**Paint a Plate** is imported from AInVFX's Apache-2.0 `web/workflows/edit.json` and `web/models.json`: its 30-node edit graph exposes five images, a caption, the sampler values and the relight mask controls. Its three FLUX 3 files are **gated** on Hugging Face, so the manifest marks them `gated`: the preflight and the Models tab open their page instead of pretending a download can work without a signed-in token.
 
 `tools/check-comfy-manifests.mjs` checks every embedded manifest (ids, placeholders, input types, model folders, gated pages, output kind) without compiling the host; the loader enforces the same rules.
+
+**Three families need an input clip or a song**, so a template input can be `video` or `audio` as well as `image`: the value is a local path the host uploads (up to 300 MB) or a name the server already has, and the extension must be one the loader reads. The three stay dependency-free of each other and each keeps its author's graph:
+
+- **H3 Motion: change what happens in a mask** (`h3-motion-mask`), from PxTicks' AGPL-3.0 `workflows/api/h3m_inpaint.api.json`: a clip, a white-on-black mask clip of the same length, the prompt for what appears inside the mask, length and size. It needs the author's ComfyUI-vlo pack and VideoHelperSuite; the preflight names each missing node.
+- **Swap the person in a clip** (`openjutsu-swap`), from Genobi's MIT copy of Comfy Openjutsu and Akatz Labs' MIT H3 Character Swap: a five-to-fifteen-second clip and one character picture. It needs Akatz Labs' `h3_character_swap` pack, GPL-3.0, with Genobi's GPL patch; that is a licence the user accepts by installing it, not one Codync ships.
+- **OneShot MV: a song into a music video** (`oneshot-mv`), from VisualFrisson's MIT `api/OneShotMV_director_api.json`: a song, one line about the world, length, shape, quality. `FVDirector` is one node that plans, casts, renders and edits inside its own pack, so the manifest is three nodes and the pack is required.
+
+The ten families left catalogued have no importable graph (Panorama Stickers publishes no workflow JSON) or an app-shaped one (Splat Edit Engine, Sonder, Reshoot 4D, H3 AudioRetake and the rest): their cards open the author's repository.
 
 ## Preflight
 
@@ -67,7 +75,7 @@ The seven base manifests are embedded from `host/assets/comfy-templates/` and co
 
 A job is `queued → running → done | cancelled | error`, with the node and step `/ws` reports (`{"progress": {"node", "class", "step", "total", "percent"}}`), its template id and when it started. Finished jobs stay in a twenty-entry history in the host, so the phone and the card read the same state after the desktop closes. Cancelling a running job interrupts it, a queued one is dequeued; a bot's stopped turn cancels the job it was waiting for.
 
-`outputs` is read from the whole `outputs` record (not only `images`): image, video, audio and mesh keep their own extension and MIME (`comfy/results.rs`), and a video gets a JPEG poster made with `ffmpeg` when it is on `PATH`. A missing `ffmpeg` costs the poster, not the output. The chat attachment path is unchanged: `send_file` copies any type, and the apps already show images and video.
+`outputs` is read from the whole `outputs` record (not only `images`): image, video, audio and mesh keep their own extension and MIME (`comfy/results.rs`), and a video gets a JPEG poster made with `ffmpeg` when it is on `PATH`. A missing `ffmpeg` costs the poster, not the output. A graph that is one wrapper node and reports no file of its own (`oneshot-mv`'s `FVDirector` writes the film itself) falls back to the ingestible outputs created since the job was queued, newest five at most. The chat attachment path is unchanged: `send_file` copies any type, and the apps already show images and video.
 
 ## Models
 
@@ -76,7 +84,7 @@ A job is `queued → running → done | cancelled | error`, with the node and st
 ## Not covered here yet
 
 - **The official ComfyUI MCP** was evaluated and its tool surface checked: [comfy-official-mcp.md](comfy-official-mcp.md) has the coverage table, the actual 39-tool smoke run and why Codync keeps its bridge (AGPL/commercial licence, a Python + `comfy-cli` runtime, beta). `tools/comfy-mcp-smoke.mjs` is the harness.
-- **The Higgsfield challenge pack** is catalogued and two families are imported: `host/assets/comfy-templates/curated.json` lists the fifteen entries with their authors' repositories, licences and output types; **Angles (Freefield)** ships with its API graph, five models and exact hashes, and **Paint a Plate** ships with its edit graph and three gated FLUX models. The other thirteen keep their repository as the import source.
+- **The Higgsfield challenge pack** is catalogued and five families are imported: `host/assets/comfy-templates/curated.json` lists the fifteen entries with their authors' repositories, licences and output types; **Angles (Freefield)** ships with its API graph, five models and exact hashes, **Paint a Plate** with its edit graph and three gated FLUX models, and **H3 Motion**, **Genobi** and **OneShot MV** with their own graphs and public models. The other ten keep their repository as the import source and their cards say which node pack they need.
 - **One job at a time**, no parallel queue, and the twenty-entry history lives in the host process (not SQLite).
 - **The gallery, form and model manager are on the desktop**; Android shows the job, its percentage and cancel, and iOS has no ComfyUI section yet. The host owns the state, so those screens can follow without host changes.
 - **Audio has a player in the chat; meshes and splats do not**: a `.glb` arrives with its type and a download, with no WebGL viewer yet.
