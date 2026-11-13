@@ -125,6 +125,21 @@ pub fn notify_with(
     if bot.notify == Some(false) || bot.hidden || hub.phone_connected() {
         return;
     }
+    // The person's rules decide before the relay is asked: a muted kind or a quiet hour never
+    // buzzes. An approval always goes out: a bot waiting for an answer is stuck until it is read.
+    let rules = hub.store.notification_rules().unwrap_or_else(|error| {
+        tracing::warn!(error = format!("{error:#}"), "couldn't read notification rules; sending the alert");
+        crate::store::NotificationRules::default()
+    });
+    let kind_rule = match kind {
+        AlertKind::Done => crate::store::NotificationKind::Done,
+        AlertKind::NeedsInput => crate::store::NotificationKind::NeedsInput,
+        AlertKind::Failed => crate::store::NotificationKind::Failed,
+        AlertKind::Paused => crate::store::NotificationKind::Paused,
+    };
+    if !rules.allows(kind_rule, crate::store::now_ms()) {
+        return;
+    }
     // A new approval replaces the alert for the same chat: throttling it would leave the older card's
     // buttons on screen while the agent waits for the new one.
     if approval.is_none() && throttled((bot.id.clone(), kind), Duration::from_secs(5)) {

@@ -4,12 +4,12 @@ import { artifactDraftKey, artifactQuote, type Artifact } from '@shared/artifact
 import { isGroup, isWorkingIn, quoteOf, type Bot, type Entry } from '@shared/models'
 import type { PickedFile } from '@shared/ipc'
 import { BotAvatar } from '../../components/Avatar'
-import { DropdownMenu } from '../../components/Controls'
+import { Button, DropdownMenu, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { IconButton } from '../../components/Controls'
 import { RecordingPill } from '../../components/RecordingPill'
-import { Sheet, usePresence } from '../../components/Overlay'
+import { ModalHeader, Sheet, usePresence } from '../../components/Overlay'
 import { VoiceChatSettingsView } from '../settings/VoiceChatSettingsView'
+import { Field } from '../marketplace/pieces'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
@@ -68,6 +68,9 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   const setDraft = (text: string) => drafts.set(draftKey, text)
   const [files, setFiles] = useState<OutgoingFile[]>([])
   const [voiceSettings, setVoiceSettings] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')
+  const [scheduling, setScheduling] = useState(false)
   const dictation = useDictation((change) => drafts.set(draftKey, change(drafts.get(draftKey))), () => setVoiceSettings(true))
   const field = useRef<HTMLTextAreaElement>(null)
   const measure = useRef<HTMLDivElement>(null)
@@ -173,8 +176,33 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   }
   const menu = useCommandMenu(draft, commands, run)
 
-  const append = (incoming: PickedFile[]) => {
-    if (!canAttach) return
+  // Scheduling is for the chat itself: a document's side conversation and a quote have no line of
+  // their own in the chat's history to land in later.
+  const canSchedule = !!bot && !terminal && !about && !thread && !reply
+  const openSchedule = () => {
+    const at = new Date(Date.now() + 30 * 60_000)
+    const pad = (value: number) => String(value).padStart(2, '0')
+    setScheduleAt(`${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`)
+    setScheduleOpen(true)
+  }
+  const schedule = async () => {
+    const sendAt = new Date(scheduleAt).getTime()
+    if (!Number.isFinite(sendAt) || sendAt < Date.now() - 60_000) {
+      store.setError('Pick a time from now on, as year-month-day and hour:minute.')
+      return
+    }
+    setScheduling(true)
+    try {
+      if (!(await store.scheduleMessage(botId, draft, sendAt))) return
+      setScheduleOpen(false)
+      setDraft('')
+      field.current?.focus()
+    } finally {
+      setScheduling(false)
+    }
+  }
+
+  const append = (incoming: PickedFile[]) => {    if (!canAttach) return
     const accepted: OutgoingFile[] = []
     for (const f of incoming) {
       if (f.data.length > MAX_FILE_SIZE) {
@@ -282,6 +310,8 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
                   { title: 'Add files', icon: 'folder', action: () => void window.codync.app.pickFiles().then(append) },
                   { title: 'Wrap in code', icon: 'terminal', action: () => applyEdit(wrapInCode(draft, fieldSelection().start, fieldSelection().end)) },
                   { title: 'Code block', icon: 'terminal', action: () => applyEdit(insertCodeBlock(draft, fieldSelection().start, fieldSelection().end)) },
+                  // Send it later instead of now: the text waits here until its time.
+                  ...(canSchedule && draft.trim() ? [{ title: 'Schedule message…', icon: 'clock', action: openSchedule }] : []),
                 ]}
               >
                 <Icon name="plus" size={13} weight="medium" color="var(--text)" />
@@ -370,6 +400,23 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
           </div>
         </div>
       </div>
+      <Sheet open={scheduleOpen} onClose={() => setScheduleOpen(false)} width={460}>
+        <VStack gap={12}>
+          <ModalHeader icon="clock" title="Schedule message" onClose={() => setScheduleOpen(false)} />
+          <Text size="caption" tone="secondary">
+            {bot ? `It goes out as your message in this chat at that time, and ${bot.name} answers it then.` : 'It goes out at that time.'}
+          </Text>
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">When (year-month-day and hour:minute)</Text>
+            <Field label="When" value={scheduleAt} onChange={setScheduleAt} placeholder="2026-01-01T09:00" />
+          </VStack>
+          <Text size="caption" tone="secondary" className="schedule-preview">{draft}</Text>
+          <HStack justify="end" gap={8}>
+            <Button kind="secondary" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+            <Button disabled={!canSchedule || !draft.trim() || !scheduleAt.trim() || scheduling} onClick={() => void schedule()}>{scheduling ? 'Scheduling…' : 'Schedule'}</Button>
+          </HStack>
+        </VStack>
+      </Sheet>
       <Sheet open={voiceSettings} onClose={() => setVoiceSettings(false)}>
         <VoiceChatSettingsView />
       </Sheet>

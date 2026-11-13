@@ -13,6 +13,7 @@ import { HealthSection } from './HealthSection'
 import { TeamRunSection } from './TeamRunSection'
 import { TokenBudgetSection } from './TokenBudgetSection'
 import { RetentionSection } from './RetentionSection'
+import { NotificationRulesSection } from './NotificationRulesSection'
 import { WorkspaceExportSection } from './WorkspaceExportSection'
 import { AuditLogSection } from './AuditLogSection'
 import { errorText } from './parts'
@@ -62,6 +63,11 @@ export function DiagnosticsView() {
   useEffect(() => {
     if (running) void runScan()
   }, [running])
+
+  // Alerts' rules and the messages waiting to go out come with the page.
+  useEffect(() => {
+    if (running) void maintenance.loadNotifications()
+  }, [running, maintenance])
 
   return (
     <CardForm>
@@ -140,6 +146,7 @@ export function DiagnosticsView() {
       <TeamRunSection bots={bots} online={running} send={(text, botId) => local?.send(text, botId)} />
       <TokenBudgetSection store={maintenance} bots={bots} online={running} />
       <RetentionSection store={maintenance} online={running} />
+      <NotificationRulesSection store={maintenance} online={running} nameOf={(id) => local?.bots.get(id)?.name ?? id} />
       <WorkspaceExportSection store={maintenance} online={running} />
       <BotBundleSection store={maintenance} bots={bots} online={running} />
       <AuditLogSection />

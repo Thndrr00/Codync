@@ -90,6 +90,22 @@ export class BotStore extends BotSync {
   /** How much of a file the computer has, by the file's own id (shown in the composer while it uploads). */
   readonly uploadPercents = new Map<string, number>()
 
+  /**
+   * Writes a message now and lets the computer send it at `sendAt` (Unix milliseconds), as if the
+   * person had typed it then. `false` means it wasn't scheduled and the error is already shown.
+   */
+  async scheduleMessage(botId: string, text: string, sendAt: number): Promise<boolean> {
+    const trimmed = text.trim()
+    if (!trimmed) return false
+    try {
+      await (await this.ready()).call('scheduleMessage', { botId, text: trimmed, sendAt })
+      return true
+    } catch (error) {
+      this.setError(error instanceof Error ? error.message : String(error))
+      return false
+    }
+  }
+
   send(text: string, botId: string, { files = [], nonce = crypto.randomUUID(), pasted = [], replyTo = null, thread = null, call = null }: SendOptions = {}) {
     const trimmed = text.trim()
     if ((!trimmed && !files.length) || this.retired) return

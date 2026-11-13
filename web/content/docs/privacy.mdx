@@ -41,6 +41,7 @@ On the iPhone, a bot can notify you when it needs you, when it's done, or when i
 - Your phone's push token is wrapped in a ticket that only the push service can open. Your computer never sees the raw token. The push service doesn't store notifications.
 - Live Activities on the Lock Screen and in the Dynamic Island get only the bot's status from the computer, never message text.
 - No notification is sent while the iPhone app is connected to the computer. Muted and hidden bots don't notify.
+- **Desktop › Settings › System diagnostics › Notifications** decides which of the four alerts are on, and quiet hours in this computer's time zone or another one you name. They are checked on the computer before anything is sent to the push service. A bot that needs your answer still notifies during quiet hours: it cannot go on until you reply. Muted and hidden bots never notify.
 
 To turn notifications off on an iPhone, tap the connection status at the top of the Bots tab (such as **1 connected**), choose **Manage computers**, and turn off **Push notifications** on that computer. Each bot's settings have their own notification options.
 

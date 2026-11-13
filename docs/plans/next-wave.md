@@ -23,6 +23,9 @@ is bigger than one release.
 | Desktop global shortcut done; agent dock next |
 | Global search across chats and documents | done |
 | Workspace export (bots + documents) | done |
+| Scheduled messages | done (desktop) |
+| Notification rules (kinds and quiet hours) | done (desktop; phone settings next) |
+| Tool rate limits and a read-only tool cache | done |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -130,6 +133,28 @@ Goal: a bot can run without an account.
 - `tools/eval-bots.mjs` runs cases from `evals/*.json` against a running host: final reply must contain
   the expected strings and the expected tools must have been called; exits 1 on failure.
 - Next: a seeded host in CI and a nightly job with a score per model and a diff between runs.
+
+## Scheduled messages and notification rules — done (desktop)
+
+- A message can be scheduled from the composer (`+` › Schedule message…). The host keeps the list in
+  `kv` (`scheduled-messages.v1`), and a half-minute loop posts each due message as the person's own
+  message in its chat and starts the bot's turn (`from: "scheduled"`). A message whose time passed while
+  the host was off goes out right after it starts; one that fails to post goes back in the list. The
+  list and its cancel buttons are in Diagnostics › Scheduled messages.
+- Notifications: `notification-rules.v1` stores which of the four alerts are on (`done`, `needsInput`,
+  `failed`, `paused`), quiet hours and the zone they use. `remote::push::notify_with` consults it before
+  asking the relay. An approval ignores quiet hours: a bot waiting for an answer is stuck until the
+  person reads it. Diagnostics › Notifications edits the rules.
+- Next: the same rules on the phone's own notification settings, and an "only mentions me" rule for groups.
+
+## Tool guards — done
+
+- `chat/tool_limits.rs` keeps a per-bot, per-tool sliding minute: 8 `research_sources`, 40 workspace
+  reads/searches, 60 chat messages, 30 artifacts, 180 for the rest. Over the limit the tool returns an
+  error telling the bot to wait, instead of spending another turn.
+- Identical read-only calls (`list_artifacts`, `instruction_history`, `search_workspace`,
+  `read_workspace_file`) are answered from memory for 20 seconds, capped at 64 KiB and 256 entries.
+  Nothing that writes is cached. Both live in memory and vanish with the host.
 
 ## Policies, retention, budgets — retention done; policies and the budget gate next
 

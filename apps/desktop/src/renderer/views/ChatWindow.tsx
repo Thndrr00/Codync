@@ -19,6 +19,7 @@ import { ExtensionsMovedTip } from './ExtensionsMovedTip'
 import { RailAccountNotice } from './SidebarFooter'
 import { AppRail } from './AppRail'
 import { InboxView } from './inbox/InboxView'
+import { ShortcutsSheet } from './ShortcutsSheet'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -262,6 +263,7 @@ function ChatSplitView() {
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
   // The Inbox takes the window beside the rail: everything that waits on a person.
   const [inboxPage, setInboxPage] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
@@ -404,6 +406,18 @@ function ChatSplitView() {
   const errorMessage = app.errorMessage
   const mismatchStores = stores.filter((s) => shown.has(s.computer.id) && s.mismatch)
   const selected = app.selection
+  // `?` opens the shortcuts sheet, except while typing in a field.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== '?') return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      event.preventDefault()
+      setShortcutsOpen((open) => !open)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   // A choice or form drawn by an agent sends its answer as a message to that bot.
   useEffect(() => {
     const onReply = (event: Event) => {
@@ -570,6 +584,7 @@ function ChatSplitView() {
         </div>
       ) : null}
 
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <SearchPalette open={searching} items={visibleRoster} onPick={(ref) => app.select(ref)} onClose={() => setSearching(false)} onSearch={async (query): Promise<SearchHit[]> => {
         const found = await Promise.all(
           onlineStores.map(async (store) => {
@@ -616,6 +631,7 @@ function ChatSplitView() {
         { id: 'voice', title: 'Voice', icon: 'waveform', run: () => { setSearching(false); setSettings('voice') } },
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
         { id: 'access', title: 'Computer access', icon: 'lock.shield', run: () => { setSearching(false); setSettings('access') } },
+        { id: 'shortcuts', title: 'Keyboard shortcuts', icon: 'keyboard.chevron.compact.down', run: () => { setSearching(false); setShortcutsOpen(true) } },
       ]} />
       <Sheet open={editing !== null} onClose={() => setEditing(null)} width={520} height={Math.min(680, sheetHeight)}>
         {editing ? (

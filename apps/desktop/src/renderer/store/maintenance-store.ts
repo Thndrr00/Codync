@@ -2,11 +2,39 @@ import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
 import type { BotBundle, DoctorReport, TokenBudget } from '@shared/models'
 
+/** Which alerts reach the phone, and the quiet hours around them. */
+export interface NotificationRules {
+  done: boolean
+  needsInput: boolean
+  failed: boolean
+  paused: boolean
+  /** Local hour the quiet window starts (0–23); equal to `quietEnd` means no quiet hours. */
+  quietStart: number
+  quietEnd: number
+  /** The zone the quiet hours are read in; null uses this computer's. */
+  timezone: string | null
+}
+
+export const DEFAULT_NOTIFICATION_RULES: NotificationRules = {
+  done: true, needsInput: true, failed: true, paused: true, quietStart: 0, quietEnd: 0, timezone: null,
+}
+
+/** A message written now that goes out later, as the person's own message in its chat. */
+export interface ScheduledMessage {
+  id: string
+  botId: string
+  text: string
+  sendAt: number
+  createdAt: number
+}
+
 /** The host's upkeep calls the diagnostics page makes: bot check, daily token limits, failed runs, bot bundles. */
 export class MaintenanceStore extends Observable {
   report: DoctorReport | null = null
   budgets: TokenBudget[] = []
   retention: { days: number; messages: number } | null = null
+  rules: NotificationRules | null = null
+  scheduled: ScheduledMessage[] = []
   busy = false
   error: string | null = null
   notice: string | null = null
@@ -53,6 +81,35 @@ export class MaintenanceStore extends Observable {
       const { deleted } = await c.call<{ deleted: number }>('pruneRetention', { days })
       this.retention = null
       this.notice = deleted ? `Deleted ${deleted} old ${deleted === 1 ? 'message' : 'messages'}.` : 'Nothing was older than that.'
+    })
+  }
+
+  /** The alerts' rules and the messages waiting to go out, for the Diagnostics page. */
+  async loadNotifications() {
+    await this.run(async (c) => {
+      const [rules, scheduled] = await Promise.all([
+        c.call<{ rules: NotificationRules }>('notificationRules', {}),
+        c.call<{ messages: ScheduledMessage[] }>('scheduledMessages', {}),
+      ])
+      this.rules = rules.rules
+      this.scheduled = scheduled.messages
+    })
+  }
+
+  /** Saves the alert rules; the host checks them and refuses impossible hours or an unknown zone. */
+  async saveRules(rules: NotificationRules) {
+    await this.run(async (c) => {
+      this.rules = (await c.call<{ rules: NotificationRules }>('setNotificationRules', { rules })).rules
+      this.notice = 'Notification rules saved.'
+    })
+  }
+
+  /** Takes a waiting message back before its time. */
+  async cancelScheduled(id: string) {
+    await this.run(async (c) => {
+      const { cancelled } = await c.call<{ cancelled: boolean }>('cancelScheduled', { id })
+      if (cancelled) this.scheduled = this.scheduled.filter((message) => message.id !== id)
+      this.notice = cancelled ? 'Scheduled message cancelled.' : 'That message was already sent.'
     })
   }
 

@@ -291,3 +291,14 @@
 }
 .channel-icon:hover { color: var(--text); }
 .channel-icon.chosen { background: var(--accent-fill); color: var(--on-accent); }
+
+/* One scheduled message: who, when, and what it says. */
+.scheduled-row {
+  width: 100%;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.scheduled-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

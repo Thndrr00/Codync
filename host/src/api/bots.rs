@@ -78,32 +78,40 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
-            if name == "research_sources" {
-                crate::research::sources(hub, bot, str_arg(&b["arguments"], "objective")?, b["arguments"].get("urls"))
-                    .await?
-            } else if crate::documents::TOOLS.contains(&name) {
-                crate::documents::call(hub, bot, name, &b["arguments"]).await?
-            } else if crate::chat::profile::TOOLS.contains(&name) {
-                crate::chat::profile::call(hub, bot, name, &b["arguments"]).await?
-            } else if crate::chat::scratchpad::TOOLS.contains(&name) {
-                crate::chat::scratchpad::call(hub, bot, name, &b["arguments"])?
-            } else if crate::chat::teach::TOOLS.contains(&name) {
-                crate::chat::teach::call(hub, bot, name, &b["arguments"])?
-            } else if crate::chat::apps::TOOLS.contains(&name) {
-                crate::chat::apps::call(hub, bot, name, &b["arguments"])?
-            } else if crate::chat::open_items::TOOLS.contains(&name) {
-                crate::chat::open_items::call(hub, bot, name, &b["arguments"])?
-            } else if crate::chat::workspace::TOOLS.contains(&name) {
-                crate::chat::workspace::call(hub, bot, name, &b["arguments"])?
-            } else if name == crate::chat::skills::TOOL {
-                crate::chat::skills::call(hub, bot, &b["arguments"]).await?
-            } else if crate::chat::fallbacks::TOOLS.contains(&name) {
-                crate::chat::fallbacks::call(hub, bot, name, &b["arguments"]).await?
-            } else if crate::chat::artifacts::TOOLS.contains(&name) {
-                crate::chat::artifacts::call(hub, bot, name, &b["arguments"]).await?
-            } else {
-                crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
+            let arguments = &b["arguments"];
+            // An identical read-only call moments ago is answered from memory, and a looping
+            // model gets an error instead of spending the person's tokens again.
+            if let Some(answer) = crate::chat::tool_limits::cached(bot, name, arguments) {
+                return Ok(ControlFlow::Break(answer));
             }
+            crate::chat::tool_limits::check(bot, name)?;
+            let answer = if name == "research_sources" {
+                crate::research::sources(hub, bot, str_arg(arguments, "objective")?, arguments.get("urls")).await?
+            } else if crate::documents::TOOLS.contains(&name) {
+                crate::documents::call(hub, bot, name, arguments).await?
+            } else if crate::chat::profile::TOOLS.contains(&name) {
+                crate::chat::profile::call(hub, bot, name, arguments).await?
+            } else if crate::chat::scratchpad::TOOLS.contains(&name) {
+                crate::chat::scratchpad::call(hub, bot, name, arguments)?
+            } else if crate::chat::teach::TOOLS.contains(&name) {
+                crate::chat::teach::call(hub, bot, name, arguments)?
+            } else if crate::chat::apps::TOOLS.contains(&name) {
+                crate::chat::apps::call(hub, bot, name, arguments)?
+            } else if crate::chat::open_items::TOOLS.contains(&name) {
+                crate::chat::open_items::call(hub, bot, name, arguments)?
+            } else if crate::chat::workspace::TOOLS.contains(&name) {
+                crate::chat::workspace::call(hub, bot, name, arguments)?
+            } else if name == crate::chat::skills::TOOL {
+                crate::chat::skills::call(hub, bot, arguments).await?
+            } else if crate::chat::fallbacks::TOOLS.contains(&name) {
+                crate::chat::fallbacks::call(hub, bot, name, arguments).await?
+            } else if crate::chat::artifacts::TOOLS.contains(&name) {
+                crate::chat::artifacts::call(hub, bot, name, arguments).await?
+            } else {
+                crate::chat::outbox::call(hub, bot, name, arguments).await?
+            };
+            crate::chat::tool_limits::remember(bot, name, arguments, &answer);
+            answer
         }
         // An agent on this computer that isn't a bot (`codync-host mcp network`).
         "agentCall" => {
@@ -266,7 +274,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"approvals": approvals, "runs": runs, "threads": threads})
         }
         "deleteBot" => {
-            hub.delete_bot(str_arg(&b, "botId")?)?;
+            let bot = str_arg(&b, "botId")?;
+            hub.delete_bot(bot)?;
+            hub.store.clear_scheduled_for_bot(bot)?;
             json!({})
         }
         // The user makes this bot the lead, in place of the one before.
@@ -305,6 +315,38 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     .await??;
             json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size})
         }
+        // Messages the person wrote now for later: listed with their times, cancelled by id.
+        "scheduledMessages" => {
+            let messages: Vec<Value> = hub
+                .store
+                .scheduled_messages()?
+                .into_iter()
+                .map(|m| {
+                    json!({
+                        "id": m.id,
+                        "botId": m.bot_id,
+                        "text": m.text,
+                        "sendAt": m.send_at,
+                        "createdAt": m.created_at,
+                    })
+                })
+                .collect();
+            json!({"messages": messages})
+        }
+        "scheduleMessage" => {
+            let bot = str_arg(&b, "botId")?;
+            let row = hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            if crate::external::is_external(&row.config) {
+                bail!("this bot runs in your terminal: schedule the message there");
+            }
+            let when = match b.get("sendAt").and_then(Value::as_i64) {
+                Some(ms) => crate::store::When::At(ms),
+                None => crate::store::When::InMinutes(b["inMinutes"].as_i64().unwrap_or_default()),
+            };
+            let message = hub.store.schedule_message(bot, str_arg(&b, "text")?, when, crate::store::now_ms())?;
+            json!({"message": message})
+        }
+        "cancelScheduled" => json!({"cancelled": hub.store.cancel_scheduled(str_arg(&b, "id")?)?}),
         "send" => {
             let bot = str_arg(&b, "botId")?;
             let text = b["text"].as_str().unwrap_or_default().trim();
@@ -418,6 +460,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({})
         }
         "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
+        // Which alerts reach the phone, and the quiet hours around them.
+        "notificationRules" => json!({"rules": hub.store.notification_rules()?}),
+        "setNotificationRules" => {
+            let rules: crate::store::NotificationRules =
+                serde_json::from_value(b["rules"].clone()).context("invalid notification rules")?;
+            hub.store.set_notification_rules(&rules)?;
+            json!({"rules": rules})
+        }
         "setTokenBudget" => {
             let limit = b["limit"].as_u64();
             hub.budget.set_limit(&hub.store, str_arg(&b, "botId")?, limit)?;

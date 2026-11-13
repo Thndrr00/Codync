@@ -262,3 +262,14 @@
 .command-detail.warning {
   color: var(--attention);
 }
+
+/* The text a scheduled message will send, shown under its time. */
+.schedule-preview {
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
