@@ -32,6 +32,8 @@ pub enum Problem {
     SkillLimit,
     /// Skills the bot saved that nobody used for 30 days.
     DormantSkills,
+    /// A connector the bot lists is no longer installed on this computer.
+    MissingConnector,
 }
 
 impl Problem {
@@ -40,9 +42,8 @@ impl Problem {
             Self::NoFolder | Self::MissingFolder | Self::NoAgent | Self::EmptyFallback | Self::MissingMember => {
                 Severity::Error
             }
-            Self::UnknownAgent | Self::SmallGroup | Self::DuplicateName | Self::SkillLimit | Self::DormantSkills => {
-                Severity::Warning
-            }
+            Self::UnknownAgent | Self::SmallGroup | Self::DuplicateName | Self::SkillLimit | Self::DormantSkills
+            | Self::MissingConnector => Severity::Warning,
         }
     }
 
@@ -58,6 +59,7 @@ impl Problem {
             Self::DuplicateName => "shares its name with another bot",
             Self::SkillLimit => "has saved as many skills as a bot may keep",
             Self::DormantSkills => "has skills it saved that nobody used for 30 days",
+            Self::MissingConnector => "lists a connector that is no longer installed",
         }
     }
 }
@@ -78,6 +80,8 @@ pub struct Probe<'a> {
     pub agent_known: &'a dyn Fn(&str) -> bool,
     /// How many skills a bot saved, and how many of those are dormant.
     pub written_skills: &'a dyn Fn(&str) -> (usize, usize),
+    /// Whether this computer still installs the connector with this id.
+    pub connector_known: &'a dyn Fn(&str) -> bool,
 }
 
 pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
@@ -130,6 +134,9 @@ pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
                 if dormant > 0 {
                     add(Problem::DormantSkills);
                 }
+                if bot.connectors.iter().any(|connector| !(probe.connector_known)(connector)) {
+                    add(Problem::MissingConnector);
+                }
             }
         }
     }
@@ -139,10 +146,12 @@ pub fn inspect(bots: &[BotConfig], probe: &Probe) -> Vec<Finding> {
 /// The `doctor` API answer: every finding, and how many are errors.
 pub fn report(hub: &Hub) -> anyhow::Result<Value> {
     let bots: Vec<BotConfig> = hub.store.bots()?.into_iter().filter(|r| !r.deleted).map(|r| r.config).collect();
+    let installed: std::collections::HashSet<String> = crate::market::connector_ids(&hub.store)?.into_iter().collect();
     let probe = Probe {
         folder_exists: &|path| Path::new(path).is_dir(),
         agent_known: &crate::agent::backends::is_known,
         written_skills: &|bot| crate::market::written_skills(&hub.store, bot, crate::store::now_ms()),
+        connector_known: &|id| installed.contains(id),
     };
     let findings = inspect(&bots, &probe);
     let errors = findings.iter().filter(|f| f.severity == Severity::Error).count();
@@ -169,8 +178,23 @@ mod tests {
             folder_exists: &move |_| folders,
             agent_known: &|id| id == "claude",
             written_skills: &move |_| skills,
+            connector_known: &|_| true,
         };
         inspect(bots, &probe).into_iter().map(|f| f.problem).collect()
+    }
+
+    #[test]
+    fn a_connector_the_computer_no_longer_installs_is_a_warning() {
+        let probe = Probe {
+            folder_exists: &|_| true,
+            agent_known: &|id| id == "claude",
+            written_skills: &|_| (0, 0),
+            connector_known: &|id| id == "github",
+        };
+        assert!(inspect(&[bot(json!({"connectors": ["github"]}))], &probe).is_empty());
+        let findings = inspect(&[bot(json!({"connectors": ["github", "slack"]}))], &probe);
+        assert_eq!(findings.len(), 1);
+        assert_eq!((findings[0].problem, findings[0].severity), (Problem::MissingConnector, Severity::Warning));
     }
 
     #[test]

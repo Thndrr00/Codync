@@ -36,6 +36,7 @@ is bigger than one release.
 | Policies by role (group editor) | done (desktop) |
 | Share a chat as a read-only HTML file | done (desktop) |
 | Task board (four columns, bot per card) | done (desktop) |
+| Connector health in the doctor | done |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -181,7 +182,13 @@ Goal: a bot can run without an account.
   `read_workspace_file`) are answered from memory for 20 seconds, capped at 64 KiB and 256 entries.
   Nothing that writes is cached. Both live in memory and vanish with the host.
 
-## Board — done (desktop)
+## Connector health — done
+
+- `doctor` now asks whether each connector a bot lists is still installed (`market::connector_ids`), and
+  reports `MissingConnector` as a warning. It shows in Diagnostics › Bot check, next to the folder and
+  agent checks, so a connector removed from the computer is visible before a turn fails on it.
+
+## Board - done (desktop)
 
 - `store/board.rs` keeps the computer's cards in `kv` (`board.v1`): title, detail, one of four
   statuses, the bot that owns it, and a due date. `boardTasks`, `saveBoardTask`, `moveBoardTask` and
