@@ -287,6 +287,42 @@ impl Routines {
         self.state.locked().runs.iter().filter(|r| r.status == Status::Pending && !r.waiting(now)).cloned().collect()
     }
 
+    /// A due run whose bot has used up its daily token budget: `Some(true)` when the routine holds
+    /// it for the reset, `Some(false)` when it skips this run, `None` when it may run. The routine's
+    /// `limitPolicy` decides, so a job that must not be missed waits and one that repeats all day
+    /// doesn't spend the next day's budget catching up.
+    fn held_at_limit(&self, hub: &Hub, run: &Run, now: i64) -> Option<bool> {
+        if !hub.budget.exceeded(&run.bot_id, now) {
+            return None;
+        }
+        let policy = self
+            .state
+            .locked()
+            .routines
+            .iter()
+            .find(|r| r.id == run.routine_id)
+            .map(|r| r.limit_policy.clone())
+            .unwrap_or_else(|| "wait".to_owned());
+        Some(policy != "skip")
+    }
+
+    /// Holds a run for the reset, or records that its routine skipped it. Both leave the reason in
+    /// the run's history, so a quiet day is explained instead of mysterious.
+    fn hold_at_limit(&self, store: &Store, run: &Run, now: i64, wait: bool) -> Result<()> {
+        self.change(store, |s| {
+            let Some(queued) = s.runs.iter_mut().find(|r| r.id == run.id) else { return Ok(()) };
+            if wait {
+                queued.not_before = Some(crate::budget::next_day(now));
+            } else {
+                queued.status = Status::Cancelled;
+                queued.finished_at = Some(now);
+                queued.detail = Some("Skipped: the bot's daily token budget is used up".into());
+                queued.event = Value::Null;
+            }
+            Ok(())
+        })
+    }
+
     /// Queues the runs whose time came; returns the `watch` checks that came due instead, which
     /// queue a run themselves only if what they watch changed.
     fn schedule_due(&self, store: &Store, now: i64) -> Result<Vec<Check>> {
@@ -412,6 +448,12 @@ fn tick(hub: &Arc<Hub>) -> Result<()> {
             hub.routines.disable_bot(&hub.store, &run.bot_id)?;
             continue;
         }
+        if let Some(wait) = hub.routines.held_at_limit(hub, &run, now) {
+            if let Err(error) = hub.routines.hold_at_limit(&hub.store, &run, now, wait) {
+                tracing::warn!(error = format!("{error:#}"), "couldn't hold a routine at the token limit");
+            }
+            continue;
+        }
         {
             let mut active = hub.routines.active.locked();
             let count = active.entry(run.bot_id.clone()).or_default();
@@ -522,5 +564,45 @@ mod tests {
         let state = routines.state.locked();
         assert_eq!(state.runs[0].status, Status::Cancelled);
         assert_eq!(state.runs[1].status, Status::Pending);
+    }
+
+    #[test]
+    fn a_run_held_at_the_limit_waits_for_the_reset() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let routines = Routines::default();
+        let routine = super::super::tests::routine();
+        let run = new_run(&routine, Value::Null, None);
+        routines
+            .change(&store, |s| {
+                s.routines.push(routine);
+                s.runs.push(run.clone());
+                Ok(())
+            })
+            .unwrap();
+        routines.hold_at_limit(&store, &run, 1_000, true).unwrap();
+        assert!(routines.due(1_000).is_empty(), "a held run doesn't start before the reset");
+        let state = routines.state.locked();
+        assert_eq!(state.runs[0].status, Status::Pending);
+        assert_eq!(state.runs[0].not_before, Some(crate::budget::next_day(1_000)));
+    }
+
+    #[test]
+    fn a_skipped_run_says_the_budget_was_used_up() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let routines = Routines::default();
+        let routine = super::super::tests::routine();
+        let run = new_run(&routine, Value::Null, None);
+        routines
+            .change(&store, |s| {
+                s.routines.push(routine);
+                s.runs.push(run.clone());
+                Ok(())
+            })
+            .unwrap();
+        routines.hold_at_limit(&store, &run, 1_000, false).unwrap();
+        let state = routines.state.locked();
+        assert_eq!(state.runs[0].status, Status::Cancelled);
+        assert!(state.runs[0].detail.as_deref().is_some_and(|d| d.contains("budget")));
+        assert!(routines.due(1_000).is_empty());
     }
 }

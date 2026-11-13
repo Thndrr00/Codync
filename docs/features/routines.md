@@ -130,6 +130,21 @@ in a new session (the retry rules below still apply). Session recovery cannot
 guarantee exactly-once external side effects; inspect the transcript before retrying
 an interrupted action.
 
+### The daily token limit (`limitPolicy`)
+
+A bot's daily token budget (`budget.rs`) tallies each finished turn: at 80% its chat gets a
+warning, at 100% its routines pause and the user is told. A run that comes due while the tally is
+used up never starts: the scheduler asks `Budgets::exceeded` for the bot (or the fleet) before it
+hands a run to the actor, and the routine's `limitPolicy` decides what happens.
+
+- `wait` (the default) holds the run until the tally resets at midnight UTC: it stays pending with
+  `notBefore` set to the reset, so it runs then instead of being lost.
+- `skip` records the run as cancelled with "Skipped: the bot's daily token budget is used up" in its
+  history, and the next occurrence runs normally.
+
+The user's own messages are never refused: the limit governs unattended work, not the person at
+the keyboard.
+
 ### Failed runs (`routines/retry.rs`)
 
 A failed or interrupted run is tried again only when that can't repeat work. The
