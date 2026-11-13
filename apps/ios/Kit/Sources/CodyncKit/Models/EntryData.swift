@@ -35,6 +35,8 @@ public struct EntryData: Codable, Hashable, Sendable {
     /// tool: whether it's the bot's own bookkeeping (composing its message, keeping its memory), left out of the
     /// working steps; `nil` from a host older than 2.25.0.
     public var bookkeeping: Bool?
+    /// tool: a credential in the call's arguments, by category and path; `nil` from a host older than 2.48.0.
+    public var caution: CredentialCaution?
     public var output: String?
     public var diffs: [FileDiff]?
     public var locations: [Location]?

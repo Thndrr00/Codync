@@ -81,6 +81,19 @@ public struct Location: Codable, Hashable, Sendable {
     public var line: Int?
 }
 
+/// A credential the host found in a tool call's arguments: its category and where it sits, never the value.
+public struct CredentialCaution: Codable, Hashable, Sendable {
+    /// `sensitive_content` | `inspection_limit`
+    public var reason: String
+    public var findings: [Finding]
+
+    public struct Finding: Codable, Hashable, Sendable {
+        /// `credential_field` | `private_key` | `provider_token` | `authorization_header`
+        public var category: String
+        public var path: String
+    }
+}
+
 public struct PermissionOption: Codable, Hashable, Sendable, Identifiable {
     public var optionId: String
     public var name: String
