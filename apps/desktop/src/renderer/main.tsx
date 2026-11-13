@@ -8,6 +8,7 @@ import { BrowserWindow } from './views/browser/BrowserWindow'
 import { ToolWindow } from './views/tools/ToolWindow'
 import { PairingWindow } from './views/PairingWindow'
 import { IslandWindow } from './views/island/IslandWindow'
+import { DockWindow } from './views/DockWindow'
 import { IslandModel } from './views/island/island-model'
 import { AppModel } from './store/app-model'
 import { AppContext } from './store/context'
@@ -86,6 +87,9 @@ if (page === 'screen') {
   const island = new IslandModel()
   island.start()
   root.render(<IslandWindow model={island} />)
+} else if (page === 'dock') {
+  // The dock draws the same summary as the island, in a normal always-on-top window.
+  root.render(<DockWindow />)
 } else {
   // The pairing window only needs this computer's host, not a mirror of its bots.
   const app = new AppModel(page !== 'pairing')

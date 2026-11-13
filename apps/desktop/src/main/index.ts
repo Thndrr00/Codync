@@ -53,6 +53,7 @@ const account = new AccountService()
 const updates = new Updates(host)
 let chat: BrowserWindow | null = null
 let pairing: BrowserWindow | null = null
+let agentDock: BrowserWindow | null = null
 const quitLifecycle = new QuitLifecycle(app, autoUpdater)
 /** A message box holds an unsent draft; quitting asks once before going. */
 let draftsDirty = false
@@ -101,6 +102,27 @@ function openChat() {
   return chat
 }
 
+function openAgentDock() {
+  if (agentDock) {
+    agentDock.show()
+    agentDock.focus()
+    return agentDock
+  }
+  agentDock = new BrowserWindow({
+    width: 360,
+    height: 560,
+    minWidth: 280,
+    minHeight: 320,
+    title: 'Codync dock',
+    alwaysOnTop: true,
+    backgroundColor: background(),
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true },
+  })
+  agentDock.on('closed', () => (agentDock = null))
+  void agentDock.loadURL(rendererURL('dock'))
+  return agentDock
+}
+
 function openPairing() {
   if (pairing) {
     pairing.webContents.send('app:command', { kind: 'reviewApprovals' } satisfies WindowCommand)
@@ -144,6 +166,7 @@ function menu() {
         { label: 'New Bot', accelerator: 'CmdOrCtrl+N', click: () => send({ kind: 'newBot' }) },
         { label: 'Search Bots', accelerator: 'CmdOrCtrl+F', click: () => send({ kind: 'search' }) },
         { label: 'Board', click: () => send({ kind: 'board' }) },
+        { label: 'Agent dock', accelerator: 'CmdOrCtrl+Shift+D', click: () => openAgentDock() },
         { label: 'Toggle Sidebar', accelerator: 'Ctrl+CmdOrCtrl+S', click: () => send({ kind: 'toggleSidebar' }, false) },
         { label: 'Conversation Details', accelerator: 'Alt+CmdOrCtrl+I', click: () => send({ kind: 'toggleDetails' }, false) },
         { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: () => send({ kind: 'refresh' }, false) },

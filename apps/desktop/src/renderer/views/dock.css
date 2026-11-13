@@ -1,0 +1,59 @@
+/* The agent dock: a small, always-on-top list of bots and approvals. */
+html[data-window='dock'] body {
+  margin: 0;
+  background: var(--background);
+}
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100vh;
+  padding: 12px;
+  overflow: auto;
+}
+.dock-header {
+  padding-bottom: 4px;
+}
+.dock-health {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
+.dock-approval {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+.dock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dock-row:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.dock-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tertiary);
+}
+.dock-dot.working { background: var(--accent); }
+.dock-dot.needsInput { background: var(--warning); }
+.dock-dot.error { background: var(--danger); }

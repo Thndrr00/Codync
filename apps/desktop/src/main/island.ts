@@ -115,7 +115,9 @@ export class Island {
     ipcMain.handle('island:state', () => ({ screen: this.screen, summary: this.summary }))
     ipcMain.on('island:summary', (_e, summary: IslandSummary) => {
       this.summary = summary
-      this.window?.webContents.send('island:summary', summary)
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send('island:summary', summary)
+      }
     })
     ipcMain.on('island:shape', (_e, rect: IslandRect) => {
       this.rect = rect
