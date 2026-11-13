@@ -111,10 +111,12 @@ import kotlinx.serialization.json.jsonPrimitive
 private fun outcome(d: JsonObject): String = when (d.text("status")) {
     "answered" -> {
         val chosen = (d["options"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.firstOrNull { it.text("optionId") == d.text("selected") }
-        when (chosen?.text("kind")) {
+        val what = when (chosen?.text("kind")) {
             "allow_once" -> "Allowed once"; "allow_always" -> "Always allowed"; "reject_once" -> "Denied"; "reject_always" -> "Never allowed"
             else -> chosen?.text("name") ?: "Answered"
         }
+        // Who answered, when the host recorded it: a decided card is not anonymous.
+        d.text("approvedBy")?.takeIf(String::isNotBlank)?.let { "$what · $it" } ?: what
     }
     "cancelled" -> "Cancelled"
     else -> "Expired — the agent moved on"

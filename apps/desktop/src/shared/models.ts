@@ -442,6 +442,9 @@ export interface EntryData {
   locations?: { path: string; line?: number }[]
   options?: PermissionOption[]
   selected?: string
+  /** permission: who answered the card (a device's name, "This computer" or "A voice call"), when the host
+   * recorded it; an older host leaves it out. */
+  approvedBy?: string
   command?: string
   detail?: string
   cwd?: string

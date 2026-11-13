@@ -161,6 +161,12 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
 
 function outcome(entry: Entry) {
   const d = entry.data
+  // Who answered, when the host recorded it: a decided card is not anonymous.
+  const what = decided(d)
+  return d.status === 'answered' && d.approvedBy ? `${what} · ${d.approvedBy}` : what
+}
+
+function decided(d: Entry['data']) {
   switch (d.status) {
     case 'answered': {
       const chosen = d.options?.find((o) => o.optionId === d.selected)

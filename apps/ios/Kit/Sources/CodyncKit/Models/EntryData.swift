@@ -34,6 +34,9 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var locations: [Location]?
     public var options: [PermissionOption]?
     public var selected: String?
+    /// permission: who answered the card (a device's name, "This computer" or "A voice call"), when the host
+    /// recorded it; `nil` from an older host.
+    public var approvedBy: String?
     public var command: String?
     public var detail: String?
     public var cwd: String?

@@ -121,13 +121,16 @@ struct PermissionCard: View {
         switch d.status {
         case "answered":
             let chosen = d.options?.first { $0.optionId == d.selected }
-            return switch chosen?.kind {
+            let what = switch chosen?.kind {
             case "allow_once": "Allowed once"
             case "allow_always": "Always allowed"
             case "reject_once": "Denied"
             case "reject_always": "Never allowed"
             default: chosen?.name ?? "Answered"
             }
+            // Who answered, when the host recorded it: a decided card is not anonymous.
+            if let by = d.approvedBy, !by.isEmpty { return "\(what) · \(by)" }
+            return what
         case "cancelled": return "Cancelled"
         default: return "Expired — the agent moved on"
         }
