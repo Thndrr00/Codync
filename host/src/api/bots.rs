@@ -163,7 +163,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             json!({"results": results})
         }
-        // An agent on this computer that isn't a bot (`codync-host mcp network`).        "agentCall" => {
+        // An agent on this computer that isn't a bot (`codync-host mcp network`).
+        "agentCall" => {
             crate::chat::team::assistant::local_call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"])
                 .await?
         }
