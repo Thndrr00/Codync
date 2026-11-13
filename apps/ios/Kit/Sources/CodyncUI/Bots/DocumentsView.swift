@@ -222,6 +222,26 @@ private struct DocumentEditor: View {
                             Button("Delete document") { withAnimation(Motion.layout) { delete = true } }
                                 .foregroundStyle(Palette.danger).disabled(library.saving || library.dirty)
                         }
+                        if !library.links.isEmpty || !library.backlinks.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                if !library.links.isEmpty {
+                                    Text("This page names").font(.caption).foregroundStyle(Palette.secondary)
+                                    ForEach(library.links) { link in
+                                        Text(link.documentId == nil
+                                             ? "[[\(link.target)]] · no page with that title yet"
+                                             : "[[\(link.target)]]")
+                                            .font(.caption)
+                                            .foregroundStyle(link.documentId == nil ? Palette.secondary : Palette.text)
+                                    }
+                                }
+                                if !library.backlinks.isEmpty {
+                                    Text("Linked from").font(.caption).foregroundStyle(Palette.secondary)
+                                    ForEach(library.backlinks) { page in
+                                        Text(page.title).font(.caption).foregroundStyle(Palette.text)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             }

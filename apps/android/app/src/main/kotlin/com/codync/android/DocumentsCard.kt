@@ -137,6 +137,22 @@ private enum class DocumentsTab { Library, Reviews, Activity }
                         }
                     }
                 }
+                if (model.links.isNotEmpty() || model.backlinks.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (model.links.isNotEmpty()) {
+                            Text("This page names", style = Type.caption, color = Palette.secondary)
+                            for (link in model.links) Text(
+                                if (link.documentId == null) "[[${link.target}]] · no page with that title yet" else "[[${link.target}]]",
+                                style = Type.caption,
+                                color = if (link.documentId == null) Palette.secondary else Palette.text,
+                            )
+                        }
+                        if (model.backlinks.isNotEmpty()) {
+                            Text("Linked from", style = Type.caption, color = Palette.secondary)
+                            for (page in model.backlinks) Text(page.title, style = Type.caption, color = Palette.text)
+                        }
+                    }
+                }
                 if (!preview) Text("Type / on a new final line to insert a block.", style = Type.caption, color = Palette.secondary)
                 Text(when {
                     model.saving -> "Saving…"

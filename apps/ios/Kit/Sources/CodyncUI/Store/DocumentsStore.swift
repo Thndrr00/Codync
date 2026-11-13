@@ -54,6 +54,9 @@ final class DocumentsStore {
     var query = ""
     var draft: DocumentDraft?
     var conflict: LibraryDocument?
+    /// The pages the open document names, and the pages that name it.
+    var links: [DocumentLink] = []
+    var backlinks: [LibraryDocument] = []
     var selectedReview: DocumentReview?
     var loading = false
     var saving = false
@@ -87,7 +90,17 @@ final class DocumentsStore {
     private struct Listing: Decodable { let items: [LibraryDocument]; let next: String? }
     private struct Reviews: Decodable { let items: [DocumentReview] }
     private struct Activities: Decodable { let items: [DocumentActivity] }
-    private struct DocumentResult: Decodable { let document: LibraryDocument }
+    private struct DocumentResult: Decodable {
+        let document: LibraryDocument
+        let links: [DocumentLink]?
+        let backlinks: [LibraryDocument]?
+    }
+    /// A `[[title]]` a page names, and the page it is when one has that title.
+    struct DocumentLink: Decodable, Identifiable {
+        let target: String
+        let documentId: String?
+        var id: String { target }
+    }
     private struct ReviewResult: Decodable { let review: DocumentReview }
     private struct WriteResult: Decodable { let status: String; let document: LibraryDocument? }
     private struct ID: Encodable { let id: String }
@@ -145,6 +158,8 @@ final class DocumentsStore {
         do {
             let response: DocumentResult = try await client().call("getDocument", ID(id: id))
             guard asked == editorRequest else { return }
+            links = response.links ?? []
+            backlinks = response.backlinks ?? []
             accept(response.document)
         } catch is CancellationError {} catch {
             if asked == editorRequest { editorError = error.localizedDescription }

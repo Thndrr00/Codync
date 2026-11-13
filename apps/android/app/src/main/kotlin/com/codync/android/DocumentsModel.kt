@@ -25,6 +25,7 @@ import java.util.UUID
     val id: String, val botId: String, val title: String, val body: String = "",
     val parentId: String? = null, val revision: Long, val updatedAt: Long = 0,
 )
+@Serializable internal data class DocumentLink(val target: String, val documentId: String? = null)
 @Serializable internal data class DocumentDraft(
     val title: String, val body: String, val ifRevision: Long,
     val id: String? = null, val parentId: String? = null,
@@ -56,6 +57,8 @@ internal class DocumentsModel(
     var error by mutableStateOf<String?>(null); private set
     var editor by mutableStateOf(false); private set
     var draft by mutableStateOf<DocumentDraft?>(null); private set
+    var links by mutableStateOf<List<DocumentLink>>(emptyList()); private set
+    var backlinks by mutableStateOf<List<BotDocument>>(emptyList()); private set
     var dirty by mutableStateOf(false); private set
     var conflict by mutableStateOf<BotDocument?>(null); private set
     var review by mutableStateOf<DocumentReview?>(null); private set
@@ -227,6 +230,8 @@ internal class DocumentsModel(
             val response = call("getDocument", buildJsonObject { put("id", id) })
             if (requested == opening) {
                 adopt(WireJson.decodeFromJsonElement(response.getValue("document")))
+                links = response["links"]?.let { WireJson.decodeFromJsonElement<List<DocumentLink>>(it) }.orEmpty()
+                backlinks = response["backlinks"]?.let { WireJson.decodeFromJsonElement<List<BotDocument>>(it) }.orEmpty()
             }
         }
     }

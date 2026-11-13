@@ -41,6 +41,8 @@ impl App {
             }
             DocumentReply::Open(..) => {
                 sheet.draft = Some(DocumentDraft::from_document(&value["document"]));
+                sheet.links = value["links"].as_array().cloned().unwrap_or_default();
+                sheet.backlinks = value["backlinks"].as_array().cloned().unwrap_or_default();
                 sheet.mode = DocumentMode::Edit;
                 sheet.conflict = None;
                 sheet.preview_latest = false;

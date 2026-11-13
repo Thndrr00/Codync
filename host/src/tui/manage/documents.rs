@@ -91,6 +91,9 @@ pub struct DocumentSheet {
     pub draft: Option<DocumentDraft>,
     pub review: Option<Value>,
     pub conflict: Option<Value>,
+    /// The pages this document names, and the pages that name it, from `getDocument`.
+    pub links: Vec<Value>,
+    pub backlinks: Vec<Value>,
     pub error: Option<String>,
     pub status: String,
     pub loading: bool,
@@ -153,6 +156,8 @@ impl App {
             draft: None,
             review: None,
             conflict: None,
+            links: Vec::new(),
+            backlinks: Vec::new(),
             error: None,
             status: String::new(),
             loading: false,

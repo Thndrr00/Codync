@@ -134,6 +134,10 @@ fn editor(buf: &mut Buffer, area: Rect, sheet: &DocumentSheet) {
         "Markdown · /doc /routine /skill /task + Tab insert content · autosave 800 ms"
     };
     put(buf, area.x, area.y + 1, area.width, hint, palette.secondary.patch(palette.panel));
+    let links = link_summary(sheet);
+    if !links.is_empty() {
+        put(buf, area.x, area.y + 2, area.width, &links, palette.secondary.patch(palette.panel));
+    }
     let body = Rect::new(area.x, area.y + 3, area.width, area.height.saturating_sub(3));
     if sheet.preview_latest {
         if let Some(latest) = &sheet.conflict {
@@ -205,4 +209,20 @@ fn review(buf: &mut Buffer, area: Rect, sheet: &DocumentSheet) {
         .wrap(Wrap { trim: false })
         .scroll((u16::try_from(sheet.scroll).unwrap_or(u16::MAX), 0))
         .render(area, buf);
+}
+
+/// The pages this one names and the pages that name it, in one line: a document is a page in a wiki,
+/// and where it sits there is worth seeing while editing it.
+fn link_summary(sheet: &DocumentSheet) -> String {
+    let names = |items: &[serde_json::Value], key: &str| {
+        items.iter().filter_map(|item| item[key].as_str()).collect::<Vec<_>>().join(", ")
+    };
+    let out = names(&sheet.links, "target");
+    let back = names(&sheet.backlinks, "title");
+    match (out.is_empty(), back.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => format!("Links: {out}"),
+        (true, false) => format!("Linked from: {back}"),
+        (false, false) => format!("Links: {out} · Linked from: {back}"),
+    }
 }
