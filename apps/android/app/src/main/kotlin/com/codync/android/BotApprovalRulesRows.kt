@@ -64,6 +64,27 @@ internal fun CardRows.approvalRulesRows(state: AppState, store: AppStore, draft:
     row { ApprovalLessons(store, draft) }
 }
 
+/** The SQLite file this bot may only read: the person picks it, the host checks it is a file here. */
+internal fun CardRows.databaseRow(store: AppStore, draft: BotDraft) {
+    val botId = draft.id ?: return
+    var path by remember(botId) { mutableStateOf("") }
+    var error by remember(botId) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(botId) { path = store.botDatabase(botId).orEmpty() }
+    row {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(tr("Database"), style = Type.body, color = Palette.text)
+            Text(tr("A SQLite file this bot may only read: one SELECT or WITH per question, at most 500 rows and 5 seconds."),
+                style = Type.caption, color = Palette.secondary)
+            FieldBox(path, { path = it; error = null }, "/path/to/database.db", 1, 2, capitalize = false)
+            SecondaryButton(tr("Save database")) {
+                scope.launch { error = store.setBotDatabase(botId, path.trim().ifEmpty { null }) }
+            }
+            error?.let { Text(it, style = Type.caption, color = Palette.danger) }
+        }
+    }
+}
+
 /**
  * What the bot learned from refusals (a rule it proposes, to keep or dismiss) and the newest decisions on its cards.
  * Both are the host's; nothing here decides anything.

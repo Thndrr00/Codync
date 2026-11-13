@@ -208,6 +208,7 @@ private fun CardRows.placeRows(state: AppState, store: AppStore, draft: BotDraft
         }
     }
     approvalRulesRows(state, store, draft, savedProfile, change)
+    databaseRow(store, draft)
 }
 
 private fun CardRows.notifyRow(draft: BotDraft, change: (BotDraft) -> Unit) =

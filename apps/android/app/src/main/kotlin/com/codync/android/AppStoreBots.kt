@@ -173,6 +173,20 @@ suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: Lis
     }
     ApprovalRules.decodeEvaluation(hostQuery("testApprovalRule", payload))
 }.getOrNull()
+/** The database this bot may only read, when the person picked one. */
+suspend fun AppStore.botDatabase(botId: String): String? = runCatching {
+    hostQuery("botDatabase", buildJsonObject { put("botId", botId) })["database"]?.jsonPrimitive?.contentOrNull
+}.getOrNull()
+
+/** Picks (a path) or clears (null) the database a bot may only read; null when it was saved. */
+suspend fun AppStore.setBotDatabase(botId: String, path: String?): String? = runCatching {
+    hostQuery("setBotDatabase", buildJsonObject {
+        put("botId", botId)
+        if (path == null) put("path", JsonNull) else put("path", path)
+    })
+    null
+}.getOrElse { it.message ?: "Couldn't save the database." }
+
 /** The rules a bot proposes after the same action was denied twice. */
 suspend fun AppStore.approvalLessons(botId: String): List<ApprovalLesson> = runCatching {
     ApprovalRules.decodeLessons(hostQuery("approvalLessons", buildJsonObject { put("botId", botId) }))
