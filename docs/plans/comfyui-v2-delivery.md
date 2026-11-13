@@ -1,6 +1,6 @@
 # ComfyUI: plantillas, modelos y resultados (entrega V2)
 
-Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, modelos en `userData/comfy`, cola de un trabajo, puente `comfyui` y adjuntos del chat). No se rehizo nada de esa base: se amplió. El trabajo quedó en la rama `deska/PROMPT-V2---SOBRE-LO-QUE-YA-EST----PLANTILLAS--MODELOS-Y-RE--5db46a30` (commits `7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`, `daa5b533`, `19351b2f` y `1a847cea`), empujada a `origin`.
+Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, modelos en `userData/comfy`, cola de un trabajo, puente `comfyui` y adjuntos del chat). No se rehizo nada de esa base: se amplió. El trabajo quedó en la rama `deska/PROMPT-V2---SOBRE-LO-QUE-YA-EST----PLANTILLAS--MODELOS-Y-RE--5db46a30` (commits `7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`, `daa5b533`, `19351b2f`, `1a847cea`, `ae8de2fd`, `c715de84`, `b20473bd`, `6837a035`, `7903f2de` y `74d6c240`), empujada a `origin`.
 
 > **Segunda pasada.** Sobre la entrega inicial se añadieron el reproductor de vídeo y audio en el chat, el catálogo de las quince familias del desafío Higgsfield con sus repositorios y licencias, la evaluación del MCP oficial con su arnés de prueba, el servidor falso de `/ws` y el evento `comfy_template_run`.
 >
@@ -10,7 +10,7 @@ Este encargo se montó sobre lo que ya existía (runner, ComfyUI empaquetado, mo
 >
 > **Quinta pasada, sin compilar.** Se importaron las tres familias que faltaban por su dificultad, no por su licencia: **H3 Motion** (AGPL-3.0), **Genobi/Openjutsu** (MIT sobre un pack GPL-3.0) y **OneShot MV** (MIT). Los manifiestos estrenan entradas `video` y `audio`, que el host sube como cualquier imagen; el preflight nombra cada nodo del pack que falte. Las licencias se anotan en el manifiesto y en la ficha, y no bloquean nada: el usuario instala el pack y acepta con ello su licencia.
 
-> **Sexta pasada: las quince familias, sin excepción.** Se importaron las diez que faltaban (Blocksfield, ComfyArt, Henge, Splat Edit Engine, Max Editor, Creativefield, Panorama Stickers, Sonder, Reshoot 4D y H3 Audio Retake) sobre lo que ya existía: mismo runner, mismo ComfyUI empaquetado, misma cola, mismo puente, mismos adjuntos. Tres de ellas solo publican grafo en formato de editor, así que se escribió el conversor `tools/comfy-ui-to-api.mjs` con sus pruebas. Se añadió el tipo de entrada `file` para escenas de splat, packs de cámara y mallas. No se pudo ejecutar nada de esto de verdad: esta máquina sigue sin ComfyUI, sin GPU y sin macOS ni SDK de Android.
+> **Sexta pasada: las quince familias, sin excepción.** Se importaron las diez que faltaban (Blocksfield, ComfyArt, Henge, Splat Edit Engine, Max Editor, Creativefield, Panorama Stickers, Sonder, Reshoot 4D y H3 Audio Retake) sobre lo que ya existía: mismo runner, mismo ComfyUI empaquetado, misma cola, mismo puente, mismos adjuntos. Tres de ellas solo publican grafo en formato de editor, así que se escribió el conversor `tools/comfy-ui-to-api.mjs` con sus pruebas. Se añadió el tipo de entrada `file` para escenas de splat, packs de cámara y mallas. Se compiló y se corrieron las pruebas unitarias del host y del escritorio; un trabajo real con ComfyUI y GPU sigue sin poder hacerse en esta máquina.
 
 > **Compilado y probado en esta máquina (Windows, sin GPU).** Se ejecutaron `cargo check --all-targets`, `cargo clippy --all-targets -- -D warnings`, las pruebas unitarias del host (`comfy` y `analytics`), `npm run typecheck` y `npm test` del escritorio, y el arnés del MCP oficial. No se abrió Codync Dev ni se ejecutó un trabajo real: no hay ComfyUI instalado, ni GPU, ni SDK de Android, ni macOS para iOS.
 
@@ -113,7 +113,8 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 | --- | --- |
 | `cargo check --all-targets` | Pasa, sin errores. |
 | `cargo clippy --all-targets -- -D warnings` | Pasa. |
-| `cargo test --bin codync-host comfy` | 43 pasan, 0 fallan, 2 ignoradas (las que piden el ComfyUI real). Incluye la plantilla inválida, el preflight, la descarga, el historial, el `/ws` falso, el manifiesto de Freefield, el clip que solo admite vídeo y la salida que el propio grafo guarda. |
+| `cargo test --bin codync-host comfy` | 44 pasan, 0 fallan, 2 ignoradas (las que piden el ComfyUI real). Incluye la plantilla inválida, el preflight, la descarga, el historial, el `/ws` falso, el clip que solo admite vídeo, el campo de escena que rechaza una imagen y la validación de los **veinte** manifiestos, uno por uno. |
+| `cargo fmt --check` | Pasa. |
 | `cargo test --bin codync-host analytics` | 32 pasan. |
 | Suite completa `cargo test` | No terminó: los binarios de integración (`*_e2e`) se quedan esperando servicios en esta máquina. Las pruebas unitarias del host sí pasan. |
 | `npm run typecheck` (escritorio) | Pasa, con el visor 3D. |
@@ -138,14 +139,14 @@ Los tamaños, las URLs y los SHA-256 se comprobaron contra los publicadores (Hug
 - **T9 · No bloquear**: `comfy_run_template` espera hasta 5 minutos (como `run_workflow`) para poder adjuntar dentro del turno; con `wait: false` encola y vuelve. El adjunto fuera de turno no existe en el host, así que el resultado se entrega cuando el bot vuelve a consultar.
 - **Cola**: sigue habiendo un trabajo a la vez; el historial no se persiste en SQLite (vive en el proceso del host).
 - **Versión**: no se pudo ejecutar `tools/bump-version.py`: el `project.pbxproj` del fork está en 2.39.0 y `project.yml` en 2.45.1, y regenerarlo necesita `xcodegen` (macOS), que no existe aquí. Editar el pbxproj a mano está prohibido por las reglas del repositorio.
-- **Commits por ficha**: van siete commits funcionales (`7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`, `daa5b533`, `19351b2f`) más el del reporte, no uno por ficha. Los archivos se cruzan entre fichas (`comfy_job.rs`, `api/host.rs`, `lifecycle.rs`, la tarjeta) y separarlos por hunks habría dejado commits que no se sostienen.
+- **Commits por ficha**: van once commits funcionales (`7cfcb863`, `2e0b8f66`, `3942fe5b`, `4d10e9ed`, `daa5b533`, `19351b2f`, `ae8de2fd`, `c715de84`, `b20473bd`, `6837a035`, `7903f2de`), más los de documentación y el del reporte, no uno por ficha. Los archivos se cruzan entre fichas (`comfy_job.rs`, `api/host.rs`, `lifecycle.rs`, la tarjeta) y separarlos por hunks habría dejado commits que no se sostienen.
 
 ## Cómo comprobarlo cuando se pueda compilar
 
 1. `cd host && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`
 2. `cd apps/desktop && npm run typecheck && npm test`
 3. `cd apps/android && ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug`
-4. Con una GPU y ComfyUI descargado: abrir Codync Dev, **Extensions → Apps → ComfyUI → Templates**, ejecutar **Colour check** (no necesita modelo), luego descargar SD 1.5 desde **Text to image**, ejecutarlo y ver el archivo en el chat. Repetir con un vídeo real (fuera de las plantillas base) para comprobar póster y MIME.
+4. Con una GPU y ComfyUI descargado: abrir Codync Dev, **Extensions → Apps → ComfyUI → Templates**, ejecutar **Colour check** (no necesita modelo), luego descargar SD 1.5 desde **Text to image**, ejecutarlo y ver el archivo en el chat. Repetir con una de vídeo (**H3 Motion**, si ya está su pack) para comprobar póster y MIME.
 5. Medir las veinte plantillas y sustituir las estimaciones del manifiesto por los números medidos; empezar por las que no piden GPU propia (Colour check) y seguir por una de cada familia.
 6. Ejecutar de verdad una de las familias reconvertidas (Panorama Stickers) con un grafo convertido, para confirmar que el conversor UI→API y el tipo de entrada `file` funcionan contra un servidor: primero SpEdE con una escena diminuta, luego Sonder con el dataset del autor.
 7. Con el MCP oficial instalado (`pip install comfy-mcp "comfy-cli>=1.14.0"`), `node tools/comfy-mcp-smoke.mjs --bin comfy-mcp --comfy-bin <ruta a comfy> --call` y comparar su tabla con `docs/reference/comfy-official-mcp.md`.
