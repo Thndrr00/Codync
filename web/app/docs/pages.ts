@@ -33,6 +33,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Chatting with a bot: messages and files, approval cards, stopping, replies, reactions, commands, fresh conversations and notifications.",
       },
       {
+        slug: "board",
+        title: "The board",
+        description:
+          "Keep the computer's tasks on one board: four columns, a card per task, and the bot that owns each one a click away.",
+      },
+      {
         slug: "channels",
         title: "Messaging channels",
         description:

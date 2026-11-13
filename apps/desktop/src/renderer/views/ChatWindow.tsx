@@ -19,6 +19,7 @@ import { ExtensionsMovedTip } from './ExtensionsMovedTip'
 import { RailAccountNotice } from './SidebarFooter'
 import { AppRail } from './AppRail'
 import { InboxView } from './inbox/InboxView'
+import { BoardView } from './board/BoardView'
 import { ShortcutsSheet } from './ShortcutsSheet'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
@@ -263,6 +264,8 @@ function ChatSplitView() {
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
   // The Inbox takes the window beside the rail: everything that waits on a person.
   const [inboxPage, setInboxPage] = useState(false)
+  // The board takes the same window: the computer's tasks.
+  const [boardPage, setBoardPage] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
@@ -469,18 +472,32 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = inboxPage ? 'inbox' : canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
-  const width = compact || inboxPage ? 76 : sidebarWidth
+  if (boardPage) {
+    detail = (
+      <BoardView
+        stores={stores}
+        onOpen={(computerId, botId) => {
+          setBoardPage(false)
+          app.select({ computerId, botId })
+        }}
+      />
+    )
+  }
+
+  const railActive = boardPage ? 'board' : inboxPage ? 'inbox' : canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const width = compact || inboxPage || boardPage ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
-      <aside className={`sidebar ${compact || inboxPage ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
+      <aside className={`sidebar ${compact || inboxPage || boardPage ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
         <div className="sidebar-rail">
           <AppRail
             active={railActive}
-            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false) }}
-            onInbox={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(true) }}
+            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false); setBoardPage(false) }}
+            onInbox={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(true); setBoardPage(false) }}
+            onBoard={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false); setBoardPage(true) }}
             onCanvas={() => {
               setInboxPage(false)
+              setBoardPage(false)
               if (selectedBot && selectedStore) {
                 setCanvasBot(selectedBot.id)
                 setCanvasStore(selectedStore)
@@ -492,11 +509,11 @@ function ChatSplitView() {
               setCanvasBot(first.bot.id)
               setCanvasStore(first.store)
             }}
-            onUsage={() => { setInboxPage(false); setSettings('usage') }}
+            onUsage={() => { setInboxPage(false); setBoardPage(false); setSettings('usage') }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
-            onExtensions={() => { setInboxPage(false); openMarketplace() }}
-            onSettings={() => { setInboxPage(false); setSettings('general') }}
+            onExtensions={() => { setInboxPage(false); setBoardPage(false); openMarketplace() }}
+            onSettings={() => { setInboxPage(false); setBoardPage(false); setSettings('general') }}
             onAccount={() => setShowAccount((s) => !s)}
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
@@ -512,7 +529,7 @@ function ChatSplitView() {
             </div>
           ) : null}
         </div>
-        <div className="sidebar-panel" style={inboxPage ? { display: 'none' } : undefined}>
+        <div className="sidebar-panel" style={inboxPage || boardPage ? { display: 'none' } : undefined}>
         <div className="sidebar-header drag" inert={compact}>
           <Spacer />
           <HStack gap={6} className="no-drag">

@@ -1,0 +1,93 @@
+/* The board: four columns of cards, the same on every window of this computer. */
+.board-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  padding: 26px 26px 18px;
+  overflow: auto;
+}
+.board-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.board-add {
+  flex-wrap: wrap;
+}
+.board-columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-height: 0;
+}
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.board-column.done {
+  opacity: 0.75;
+}
+.board-column-hint {
+  margin-top: -4px;
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--background);
+  box-shadow: var(--shadow-s);
+}
+.board-card-title {
+  overflow-wrap: anywhere;
+}
+.board-card-detail {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.board-card-menu {
+  flex: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--secondary);
+  cursor: pointer;
+}
+.board-card-menu:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.board-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px 2px 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.board-owner:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+@media (max-width: 980px) {
+  .board-columns {
+    grid-template-columns: repeat(2, minmax(190px, 1fr));
+  }
+}

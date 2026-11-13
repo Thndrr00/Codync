@@ -35,6 +35,7 @@ is bigger than one release.
 | Bot activity timeline | done (desktop) |
 | Policies by role (group editor) | done (desktop) |
 | Share a chat as a read-only HTML file | done (desktop) |
+| Task board (four columns, bot per card) | done (desktop) |
 | Share-to-bot on Android and iOS | next |
 | Real offline mode | next |
 | Marketplace reputation and updates | later |
@@ -179,6 +180,15 @@ Goal: a bot can run without an account.
 - Identical read-only calls (`list_artifacts`, `instruction_history`, `search_workspace`,
   `read_workspace_file`) are answered from memory for 20 seconds, capped at 64 KiB and 256 entries.
   Nothing that writes is cached. Both live in memory and vanish with the host.
+
+## Board — done (desktop)
+
+- `store/board.rs` keeps the computer's cards in `kv` (`board.v1`): title, detail, one of four
+  statuses, the bot that owns it, and a due date. `boardTasks`, `saveBoardTask`, `moveBoardTask` and
+  `deleteBoardTask` are the API; a card keeps its creation time when edited.
+- The desktop's rail gains **Board**, with four columns, an add row, a card menu to move or delete, and
+  a computer picker when the app is connected to several. A card's bot opens its chat.
+- Next: the board moving itself from routine runs and turn states, and drag between columns.
 
 ## Activity and role rules — done (desktop)
 

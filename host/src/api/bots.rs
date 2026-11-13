@@ -365,6 +365,29 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 .collect();
             json!({"items": items, "runs": runs})
         }
+        // The board: cards that name the bot that owns each task, and the column it is in.
+        "boardTasks" => json!({"tasks": hub.store.board_tasks()?}),
+        "saveBoardTask" => {
+            let now = crate::store::now_ms();
+            let task = hub.store.save_board_task(
+                b["id"].as_str().filter(|id| !id.is_empty()),
+                str_arg(&b, "title")?,
+                b["detail"].as_str().unwrap_or_default(),
+                b["status"].as_str().unwrap_or("todo"),
+                b["botId"].as_str().filter(|id| !id.is_empty()),
+                b["dueAt"].as_i64(),
+                now,
+            )?;
+            json!({"task": task})
+        }
+        "moveBoardTask" => json!({
+            "moved": hub.store.move_board_task(
+                str_arg(&b, "id")?,
+                b["status"].as_str().unwrap_or("todo"),
+                crate::store::now_ms(),
+            )?
+        }),
+        "deleteBoardTask" => json!({"deleted": hub.store.delete_board_task(str_arg(&b, "id")?)?}),
         "deleteBot" => {
             let bot = str_arg(&b, "botId")?;
             hub.delete_bot(bot)?;
