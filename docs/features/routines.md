@@ -142,8 +142,8 @@ hands a run to the actor, and the routine's `limitPolicy` decides what happens.
 - `skip` records the run as cancelled with "Skipped: the bot's daily token budget is used up" in its
   history, and the next occurrence runs normally.
 
-The user's own messages are never refused: the limit governs unattended work, not the person at
-the keyboard.
+The user's own messages are never refused, and neither is a test run (`run_routine`, an event whose
+`source` is `test`): the limit governs unattended work, not the person at the keyboard.
 
 ### Failed runs (`routines/retry.rs`)
 

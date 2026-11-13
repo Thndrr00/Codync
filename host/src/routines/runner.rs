@@ -292,6 +292,10 @@ impl Routines {
     /// `limitPolicy` decides, so a job that must not be missed waits and one that repeats all day
     /// doesn't spend the next day's budget catching up.
     fn held_at_limit(&self, hub: &Hub, run: &Run, now: i64) -> Option<bool> {
+        // A run the person asked for now is the person at the keyboard, not unattended work.
+        if run.event["source"] == "test" {
+            return None;
+        }
         if !hub.budget.exceeded(&run.bot_id, now) {
             return None;
         }
