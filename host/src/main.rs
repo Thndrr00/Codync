@@ -38,6 +38,7 @@ mod local_models;
 mod market;
 mod mcp;
 mod n8n;
+mod native_channels;
 mod network;
 mod network_cli;
 mod proactive;
@@ -240,6 +241,8 @@ enum Sub {
     },
     /// Send a message to a bot, optionally waiting for its reply.
     Send(cli::send::Args),
+    /// Call a built-in host tool from a script, without a model turn.
+    Tool(cli::tool::Args),
     /// Message your bots from this terminal.
     Tui {
         /// Host to connect to (default: this computer). The API only answers local
@@ -447,6 +450,7 @@ async fn main() -> Result<()> {
         Sub::Serve { port, bind } => serve(&bind, port).await,
         Sub::Pair { port, json } => pair(port, json).await,
         Sub::Info { port, json } => info(port, json).await,
+        Sub::Tool(args) => cli::tool::run(&args).await,
         Sub::Send(args) => {
             let code = cli::send::run(args).await;
             if code != 0 {

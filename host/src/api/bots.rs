@@ -15,6 +15,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         return Ok(ControlFlow::Break(answer));
     }
     Ok(ControlFlow::Break(match method {
+        "hermesRuntime" | "hermesRuntimeStatus" | "setHermesRuntime" | "hermesEnvironmentHealth" => {
+            crate::agent::hermes::api(hub, method, &b).await?
+        }
         "routineSchedule" => crate::routines::schedule_preview(&b, crate::store::now_ms())?,
         "browserProxy" => {
             let bot = str_arg(&b, "botId")?;
@@ -36,12 +39,20 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"proxy": null, "authenticated": false})
         }
         "routines" => hub.routines.list(str_arg(&b, "botId")?, |_| false),
+        "routineTemplates" => crate::routines::blueprints::list(),
+        "routineTemplateDraft" => crate::routines::blueprints::draft(&b)?,
         "routineCalendar" => hub.routines.calendar(
             str_arg(&b, "botId")?,
             b["from"].as_i64().context("from is required")?,
             b["to"].as_i64().context("to is required")?,
         )?,
         "saveRoutine" => hub.routines.save(hub, str_arg(&b, "botId")?, &b)?,
+        "saveRoutineWithOutputs" => {
+            if b.get("outputs").is_none() && b.get("outputText").is_none() {
+                bail!("outputs or outputText is required");
+            }
+            hub.routines.save(hub, str_arg(&b, "botId")?, &b)?
+        }
         "setRoutineEnabled" => hub.routines.set_enabled(
             &hub.store,
             str_arg(&b, "botId")?,
@@ -85,7 +96,6 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             // model gets an error instead of spending the person's tokens again.
             if let Some(answer) = crate::chat::tool_limits::cached(bot, name, arguments) {
                 return Ok(ControlFlow::Break(answer));
-            }
             crate::chat::tool_limits::check(bot, name)?;
             let answer = if name == "research_sources" {
                 crate::research::sources(hub, bot, str_arg(arguments, "objective")?, arguments.get("urls")).await?
@@ -105,8 +115,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::workspace::semantic_search(hub, bot, arguments).await?
             } else if crate::chat::workspace::TOOLS.contains(&name) {
                 crate::chat::workspace::call(hub, bot, name, arguments)?
-            } else if name == crate::chat::skills::TOOL {
-                crate::chat::skills::call(hub, bot, arguments).await?
+            } else if crate::chat::skills::TOOLS.contains(&name) {
+                crate::chat::skills::dispatch(hub, bot, name, arguments).await?
             } else if crate::chat::fallbacks::TOOLS.contains(&name) {
                 crate::chat::fallbacks::call(hub, bot, name, arguments).await?
             } else if crate::chat::artifacts::TOOLS.contains(&name) {
