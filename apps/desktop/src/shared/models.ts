@@ -256,6 +256,13 @@ export interface FileDiff {
   patch: string
 }
 
+/** A credential the host found in a tool call's arguments: its category and where it sits, never the value. */
+export interface CredentialCaution {
+  /** sensitive_content | inspection_limit */
+  reason: string
+  findings: { category: string; path: string }[]
+}
+
 export interface PermissionOption {
   optionId: string
   name: string
@@ -468,6 +475,8 @@ export interface EntryData {
   /** tool: whether it's the bot's own bookkeeping (composing its message, keeping its memory), left out of the
    * working steps; a host older than 2.25.0 leaves it out, and the steps then leave out the call too. */
   bookkeeping?: boolean
+  /** tool: a credential in the call's arguments, by category and path; a host older than 2.48.0 leaves it out. */
+  caution?: CredentialCaution
   output?: string
   diffs?: FileDiff[]
   locations?: { path: string; line?: number }[]
