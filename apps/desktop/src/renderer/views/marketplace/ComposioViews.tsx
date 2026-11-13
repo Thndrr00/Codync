@@ -42,10 +42,13 @@ export function ComposioSection({ query, onError }: { query: string; onError: (m
     setLoading(true)
     try {
       const s = await market.composioStatus(client)
-      const more = s.configured ? await market.composioApps(client, search, cursor) : { items: [], next: null }
+      const more = s.configured ? await market.composioApps(client, search, cursor) : { items: [], next: null as string | null }
       if (request.current !== id) return
       setStatus(s)
-      setPage((old) => (cursor ? appendPage(old, more.items, (a) => a.slug) : appendPage(emptyPage<ComposioApp>(), more.items, (a) => a.slug)))
+      setPage((old) => {
+        const merged = cursor ? appendPage(old, more.items, (a) => a.slug) : appendPage(emptyPage<ComposioApp>(), more.items, (a) => a.slug)
+        return { ...merged, next: more.next }
+      })
       setFailed(null)
     } catch (e) {
       if (request.current === id) {

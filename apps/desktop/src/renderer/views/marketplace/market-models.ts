@@ -373,6 +373,8 @@ export const market = {
 /** Keep fetched catalog metadata in memory. The Extensions tabs scroll through it. */
 export interface MarketplacePage<T> {
   items: T[]
+  /** A cursor for the next page, when the source pages its results. */
+  next?: string | null
 }
 
 export const emptyPage = <T>(): MarketplacePage<T> => ({ items: [] })
