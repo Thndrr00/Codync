@@ -23,6 +23,7 @@ import { BoardView } from './board/BoardView'
 import { ShortcutsSheet } from './ShortcutsSheet'
 import { NotificationCenter } from './notifications/NotificationCenter'
 import { SaveSkillSheet } from './SaveSkillSheet'
+import { RoutineWorkflowView } from './routines/workflow/RoutineWorkflowView'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -268,6 +269,8 @@ function ChatSplitView() {
   const [inboxPage, setInboxPage] = useState(false)
   // The board takes the same window: the computer's tasks.
   const [boardPage, setBoardPage] = useState(false)
+  // The Routines page takes the window beside the rail, as OpenBot's does.
+  const [routinesPage, setRoutinesPage] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [readAt, setReadAt] = usePref(prefs.notificationsReadAt)
@@ -511,6 +514,8 @@ function ChatSplitView() {
     )
   }
 
+  if (routinesPage) detail = <RoutineWorkflowView onClose={() => setRoutinesPage(false)} />
+
   if (inboxPage) {
     detail = (
       <InboxView
@@ -535,18 +540,20 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = boardPage ? 'board' : inboxPage ? 'inbox' : canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
-  const width = compact || inboxPage || boardPage ? 76 : sidebarWidth
+  const railActive = routinesPage ? 'routines' : boardPage ? 'board' : inboxPage ? 'inbox' : canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const width = compact || routinesPage || inboxPage || boardPage ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
-      <aside className={`sidebar ${compact || inboxPage || boardPage ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
+      <aside className={`sidebar ${compact || routinesPage || inboxPage || boardPage ? 'compact' : ''} ${resizing ? 'resizing' : ''}`} style={{ width }}>
         <div className="sidebar-rail">
           <AppRail
             active={railActive}
-            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false); setBoardPage(false) }}
-            onInbox={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(true); setBoardPage(false) }}
-            onBoard={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setInboxPage(false); setBoardPage(true) }}
+            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setRoutinesPage(false); setInboxPage(false); setBoardPage(false) }}
+            onInbox={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setRoutinesPage(false); setInboxPage(true); setBoardPage(false) }}
+            onBoard={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setRoutinesPage(false); setInboxPage(false); setBoardPage(true) }}
+            onRoutines={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setRoutinesPage(true); setInboxPage(false); setBoardPage(false) }}
             onCanvas={() => {
+              setRoutinesPage(false)
               setInboxPage(false)
               setBoardPage(false)
               if (selectedBot && selectedStore) {
@@ -560,11 +567,11 @@ function ChatSplitView() {
               setCanvasBot(first.bot.id)
               setCanvasStore(first.store)
             }}
-            onUsage={() => { setInboxPage(false); setBoardPage(false); setSettings('usage') }}
+            onUsage={() => { setRoutinesPage(false); setInboxPage(false); setBoardPage(false); setSettings('usage') }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
-            onExtensions={() => { setInboxPage(false); setBoardPage(false); openMarketplace() }}
-            onSettings={() => { setInboxPage(false); setBoardPage(false); setSettings('general') }}
+            onExtensions={() => { setRoutinesPage(false); setInboxPage(false); setBoardPage(false); openMarketplace() }}
+            onSettings={() => { setRoutinesPage(false); setInboxPage(false); setBoardPage(false); setSettings('general') }}
             onAccount={() => setShowAccount((s) => !s)}
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
@@ -585,7 +592,7 @@ function ChatSplitView() {
             </div>
           ) : null}
         </div>
-        <div className="sidebar-panel" style={inboxPage || boardPage ? { display: 'none' } : undefined}>
+        <div className="sidebar-panel" style={inboxPage || boardPage || routinesPage ? { display: 'none' } : undefined}>
         <div className="sidebar-header drag" inert={compact}>
           <Spacer />
           <HStack gap={6} className="no-drag">
