@@ -320,6 +320,11 @@ function ChatSplitView() {
     setUnreadNotices(0)
     setNotificationsOpen(true)
   }
+  // A message typed while its computer was offline goes out when the connection is back.
+  const connectionKey = stores.map((store) => `${store.computer.id}:${store.connection.kind}`).join('|')
+  useEffect(() => {
+    for (const store of stores) store.flushOutbox()
+  }, [connectionKey])
   const selectedStore = app.selectedStore
   const createStore = creating ? app.store(creating.computerId) : null
   const localOnline = !!app.local && onlineStores.includes(app.local)

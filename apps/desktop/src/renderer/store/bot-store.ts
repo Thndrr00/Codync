@@ -30,6 +30,7 @@ import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RulePropos
 import type { HostHealth } from '@shared/health'
 import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
+import { dropQueued, queueMessage, takeQueued } from './outbox'
 import { readSharedFile } from '../../shared/files.ts'
 import { FileDownloads } from './file-downloads'
 import { BotSections } from './bot-sections'
@@ -157,14 +158,44 @@ export class BotStore extends BotSync {
           return client.send(botId, trimmed, nonce, ids, pasted, replyTo?.id ?? null, thread, call)
         }, true)
         this.outgoingFiles.delete(nonce)
+        dropQueued(nonce)
         this.upsert(e)
         this.changed()
       } catch (error) {
         if (this.outgoingFiles.has(nonce)) this.lastError = `Couldn't send the files: ${error instanceof Error ? error.message : error}`
         for (const file of this.outgoingFiles.get(nonce) ?? []) this.uploadPercents.delete(file.id)
-        this.markLocal(nonce, botId, 'failed')
+        if (this.isOffline && !files.length) {
+          // Waiting on this device: it goes out by itself when the computer is back.
+          this.markLocal(nonce, botId, 'waiting')
+          queueMessage({
+            computerId: this.computer.id,
+            botId,
+            text: trimmed,
+            nonce,
+            pasted,
+            thread,
+            replyTo,
+            at: Date.now(),
+          })
+        } else {
+          dropQueued(nonce)
+          this.markLocal(nonce, botId, 'failed')
+        }
       }
     })()
+  }
+
+  /** Sends this computer's waiting messages now that it is online. Safe to repeat. */
+  flushOutbox() {
+    if (this.connection.kind !== 'online' || this.retired) return
+    for (const message of takeQueued(this.computer.id)) {
+      this.send(message.text, message.botId, {
+        nonce: message.nonce,
+        pasted: message.pasted,
+        replyTo: message.replyTo,
+        thread: message.thread,
+      })
+    }
   }
 
   /** Asks this computer to update itself while it's behind this app (`installHostUpdate`). */

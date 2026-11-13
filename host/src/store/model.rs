@@ -203,6 +203,9 @@ pub struct BotConfig {
     /// Skill ids the bot is told about; see `market`.
     #[serde(default)]
     pub skills: Vec<String>,
+    /// Tool names this bot may never call, as the agent sees them (`*` blocks every chat tool).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_tools: Vec<String>,
     /// The bot gets the built-in `computer` MCP server (see `screen`).
     #[serde(default)]
     pub computer: bool,

@@ -8,6 +8,7 @@ impl Actor {
     /// Counts a finished turn's `usage` and reacts to any budget it crossed.
     pub(super) fn count_spend(&self, usage: &serde_json::Value) {
         let tokens = crate::budget::spent(usage);
+        self.hub.budget.release(&self.cfg.id);
         for (key, crossed) in self.hub.budget.record(&self.hub.store, &self.cfg.id, crate::store::now_ms(), tokens) {
             self.budget_crossed(&key, crossed);
         }

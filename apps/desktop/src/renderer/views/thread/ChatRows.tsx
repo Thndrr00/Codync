@@ -370,6 +370,8 @@ function UserStatus({ entry, botWorking, hovering }: { entry: Entry; botWorking:
       return <Text size="caption2" tone="tertiary">{tr(`Sending…`)}</Text>
     case 'queued':
       return <Text size="caption2" tone="tertiary">{botWorking ? tr(`Queued until this response finishes`) : tr(`Queued`)}</Text>
+    case 'waiting':
+      return <Text size="caption2" tone="tertiary">{tr(`Waiting for the computer to come online`)}</Text>
     case 'failed':
       return (
         <HStack as="span" gap={2}>

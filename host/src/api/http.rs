@@ -506,18 +506,27 @@ async fn agui(
                 };
                 let message_id = format!("msg-{}", entry.id);
                 let text = entry.data["text"].as_str().unwrap_or_default().to_owned();
-                let events: Vec<Result<Event, Infallible>> = vec![
-                    Ok(Event::default()
-                        .event("TEXT_MESSAGE_START")
-                        .data(json!({"messageId": message_id, "role": "assistant"}).to_string())),
-                    Ok(Event::default()
+                let mut events: Vec<Result<Event, Infallible>> = vec![Ok(Event::default()
+                    .event("TEXT_MESSAGE_START")
+                    .data(json!({"messageId": message_id, "role": "assistant"}).to_string()))];
+                // The host holds the finished message, not the model's token stream: send it in
+                // small deltas so a client that renders as it reads still sees it arrive.
+                let chars: Vec<char> = text.chars().collect();
+                let mut deltas: Vec<String> = chars.chunks(160).map(|chunk| chunk.iter().collect::<String>()).collect();
+                if deltas.is_empty() {
+                    deltas.push(String::new());
+                }
+                for delta in deltas {
+                    events.push(Ok(Event::default()
                         .event("TEXT_MESSAGE_CONTENT")
-                        .data(json!({"messageId": message_id, "delta": text}).to_string())),
-                    Ok(Event::default().event("TEXT_MESSAGE_END").data(json!({"messageId": message_id}).to_string())),
-                    Ok(Event::default()
-                        .event("RUN_FINISHED")
-                        .data(json!({"threadId": thread_id, "runId": run_id}).to_string())),
-                ];
+                        .data(json!({"messageId": message_id, "delta": delta}).to_string())));
+                }
+                events.push(Ok(Event::default()
+                    .event("TEXT_MESSAGE_END")
+                    .data(json!({"messageId": message_id}).to_string())));
+                events.push(Ok(Event::default()
+                    .event("RUN_FINISHED")
+                    .data(json!({"threadId": thread_id, "runId": run_id}).to_string())));
                 return events;
             }
         })

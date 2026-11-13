@@ -9,6 +9,7 @@
 //!   usual retry after a garbled line — is answered from memory instead of walking the workspace
 //!   again. Nothing that writes is cached.
 
+use crate::hub::Hub;
 use anyhow::{Result, bail};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -47,6 +48,15 @@ fn per_minute(name: &str) -> u32 {
 /// Tools whose answer depends only on their arguments and the files at this instant.
 fn read_only(name: &str) -> bool {
     matches!(name, "list_artifacts" | "instruction_history" | "search_workspace" | "read_workspace_file")
+}
+
+/// Refuses a tool this bot's policy turns off. `*` blocks every chat tool.
+pub fn blocked(hub: &Hub, bot: &str, name: &str) -> Result<()> {
+    let Some(row) = hub.store.bot(bot)? else { return Ok(()) };
+    if row.config.blocked_tools.iter().any(|tool| tool == "*" || tool == name) {
+        bail!("{name} is turned off for this bot by its tool policy");
+    }
+    Ok(())
 }
 
 /// Refuses the call once this bot has used up its minute; the tool never runs.

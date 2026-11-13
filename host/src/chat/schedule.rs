@@ -38,6 +38,7 @@ fn send(hub: &Hub, message: &ScheduledMessage) -> bool {
     match dispatch_bot_turn(hub, &message.bot_id, &message.text, "scheduled") {
         Ok(()) => true,
         Err(error) => {
+            hub.budget.release(&message.bot_id);
             tracing::warn!(bot = %message.bot_id, error = format!("{error:#}"), "couldn't send a scheduled message");
             false
         }

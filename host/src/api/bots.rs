@@ -79,6 +79,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
             let arguments = &b["arguments"];
+            // A tool the bot's policy turns off never runs (and is not cached or counted).
+            crate::chat::tool_limits::blocked(hub, bot, name)?;
             // An identical read-only call moments ago is answered from memory, and a looping
             // model gets an error instead of spending the person's tokens again.
             if let Some(answer) = crate::chat::tool_limits::cached(bot, name, arguments) {

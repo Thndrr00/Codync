@@ -1,7 +1,8 @@
 //! A daily token budget for a bot, or for all of them. The host tallies the tokens each finished turn used; at 80%
 //! of the limit the bot's chat gets a notice, and at 100% its routines pause so a runaway job can't spend the rest
-//! of the day. The user's own messages are never refused. Local only: the tally comes from the agents' own usage
-//! reports, not from a provider.
+//! of the day. At 100% a new user turn or scheduled message waits for the reset (`chat::budget_gate`),
+//! and a turn in flight holds an estimate so two can't spend the last of the day. Local only: the
+//! tally comes from the agents' own usage reports, not from a provider.
 //!
 //! Idea from mercury-agent's `bot-manager.ts` (MIT); no code copied.
 
@@ -12,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 const STATE_KEY: &str = "budget.v1";
 /// The key the fleet-wide limit and tally are kept under.
@@ -19,6 +21,10 @@ pub const FLEET: &str = "*";
 const DAY_MS: i64 = 86_400_000;
 /// The share of the limit that earns a warning.
 const WARN_PERCENT: u64 = 80;
+/// Tokens held for one turn so two turns can't both spend the last of a day's budget.
+pub const TURN_RESERVE: u64 = 4_000;
+/// A reservation that was never released (a turn that failed without usage) stops counting here.
+const RESERVE_TTL: Duration = Duration::from_mins(10);
 
 /// How a day's use stands against a limit.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +110,10 @@ impl State {
 #[derive(Default)]
 pub struct Budgets(Mutex<State>);
 
+/// Tokens held by turns in flight, by bot, and when they took them. One host per process, so a
+/// module-wide map is enough and nothing is written to disk.
+static RESERVED: std::sync::LazyLock<Mutex<HashMap<String, (u64, Instant)>>> = std::sync::LazyLock::new(Mutex::default);
+
 impl Budgets {
     pub fn load(store: &Store) -> Self {
         let state = store.kv_read(STATE_KEY).ok().flatten().and_then(|s| serde_json::from_str(&s).ok());
@@ -126,6 +136,32 @@ impl Budgets {
             tally.announced = None;
         }
         Self::save(store, &state)
+    }
+
+    /// Whether there is room for a turn of `tokens` under the bot's limit and the fleet's, counting
+    /// turns already in flight. Reserves that room when there is.
+    pub fn reserve(&self, bot: &str, tokens: u64, now: i64) -> bool {
+        let day = day_of(now);
+        let state = self.0.locked();
+        let mut reserved = RESERVED.locked();
+        reserved.retain(|_, (_, at)| at.elapsed() < RESERVE_TTL);
+        let held = |key: &str| reserved.get(key).map_or(0, |(tokens, _)| *tokens);
+        for key in [bot, FLEET] {
+            let Some(limit) = state.limits.get(key) else { continue };
+            let used = state.tallies.get(key).filter(|tally| tally.day == day).map_or(0, |tally| tally.tokens);
+            if used.saturating_add(held(key)).saturating_add(tokens) > *limit {
+                return false;
+            }
+        }
+        if state.limits.contains_key(bot) || state.limits.contains_key(FLEET) {
+            reserved.insert(bot.to_owned(), (tokens, Instant::now()));
+        }
+        true
+    }
+
+    /// Frees the room a finished (or failed) turn held.
+    pub fn release(&self, bot: &str) {
+        RESERVED.locked().remove(bot);
     }
 
     /// Counts a finished turn's tokens against the bot and the fleet, and says which budgets just crossed a level.

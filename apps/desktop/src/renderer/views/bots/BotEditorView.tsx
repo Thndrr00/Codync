@@ -431,6 +431,13 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             quick={draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} }}
             onQuick={(next) => onChange((d) => ({ ...d, actionRulesOn: next.on, actionRules: next.policies }))}
           />
+          <Field
+            label="Blocked tools"
+            detail="Tools this bot may never call, separated by commas, as the agent names them in its trace. Use * to turn off every chat tool."
+            value={(draft.blockedTools ?? []).join(', ')}
+            onChange={(text) => set('blockedTools', text.split(',').map((tool) => tool.trim()).filter(Boolean))}
+            placeholder="for example: shell, browser"
+          />
         </CardSection>
 
         <CardSection title="Activity">

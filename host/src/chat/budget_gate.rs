@@ -12,7 +12,7 @@ use serde_json::json;
 /// person gets one notice that day and the turn is not started.
 pub fn blocks(hub: &Hub, bot: &str) -> bool {
     let now = crate::store::now_ms();
-    if !hub.budget.exceeded(bot, now) {
+    if hub.budget.reserve(bot, crate::budget::TURN_RESERVE, now) {
         return false;
     }
     let day = crate::budget::day_of(now);

@@ -80,6 +80,8 @@ export interface Bot {
   notify?: boolean | null
   connectors: string[]
   skills: string[]
+  /** Tool names this bot may never call (`*` for all of them). */
+  blockedTools: string[]
   /** The bot can see and operate the computer's desktop. */
   computer: boolean
   /** The bot can create bots (which can too) and change its own setup and the bots it created (the built-in `manage` tools); null from an older host. */
@@ -169,6 +171,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     notify: raw.notify ?? null,
     connectors: raw.connectors ?? [],
     skills: raw.skills ?? [],
+    blockedTools: raw.blockedTools ?? [],
     computer: raw.computer ?? false,
     manageTeam: raw.manageTeam ?? null,
     verifyCommand: raw.verifyCommand ?? null,
@@ -799,6 +802,7 @@ export interface BotDraft {
   notify?: boolean | null
   connectors?: string[]
   skills?: string[]
+  blockedTools?: string[]
   computer?: boolean
   manageTeam?: boolean
   verifyCommand?: string | null
@@ -849,6 +853,7 @@ export function draftOf(bot: Bot): BotDraft {
     notify: bot.notify ?? null,
     connectors: bot.connectors,
     skills: bot.skills,
+    blockedTools: bot.blockedTools,
     computer: bot.computer,
     manageTeam: bot.manageTeam ?? undefined,
     verifyCommand: bot.verifyCommand,
