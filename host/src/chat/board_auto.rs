@@ -48,6 +48,7 @@ fn step(hub: &Hub, now: i64) {
             && let (Some(due), Some(bot)) = (task.due_at, task.bot_id.as_deref())
             && due <= now + DAY_MS
             && due > now - 7 * DAY_MS
+            && hub.store.bot(bot).is_ok_and(|row| row.is_some_and(|row| !row.deleted))
         {
             let key = format!("board-due:{}:{}", task.id, date_of(now));
             if hub.store.kv_get(&key).is_some() {
