@@ -76,6 +76,10 @@ public final class BotStore {
     /// The lines of the threads read here, by root id; the chat keeps its own in `entries`.
     public internal(set) var threadEntries: [String: [Entry]] = [:]
     public internal(set) var usage: Usage
+    /// How often each skill's text entered a turn (`skillUsage`); nil until read, or from an older host.
+    public internal(set) var skillUsage: SkillUsage? = nil
+    /// The computer's memory, CPU and disk (`hostHealth`); nil until read, or from an older host.
+    public internal(set) var health: HostHealth? = nil
     /// The newest order still to send, and the task sending them (`setUsageOrder`).
     @ObservationIgnored var usageOrderWaiting: [String]?
     @ObservationIgnored var usageOrderSending: Task<Void, Never>?

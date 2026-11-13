@@ -18,6 +18,8 @@ enum Line<'a> {
     /// Why a provider has no numbers: its agent is too old, or this account can't be read.
     Status(&'a str),
     Window(&'a Value),
+    /// One skill in the Skill tab: its name, loads, tokens, share and agents.
+    Skill(&'a Value),
     Gap,
 }
 
@@ -33,6 +35,11 @@ fn lines(providers: &[Value]) -> Vec<Line<'_>> {
     lines
 }
 
+/// The Skill tab: each skill's name, then its numbers, one line each.
+fn skill_lines(skills: &[Value]) -> Vec<Line<'_>> {
+    skills.iter().map(Line::Skill).collect()
+}
+
 /// The sheet on a screen `area`, and how many list lines fit in it.
 fn sheet(area: Rect, rows: usize) -> (Rect, usize) {
     let r = centered(area, 78, u(rows + 5).max(8));
@@ -45,28 +52,38 @@ pub(in crate::tui) fn usage_services(app: &App) -> &[Value] {
     app.usage["services"].as_array().map_or(&[], Vec::as_slice)
 }
 
-/// How far the list scrolls on a screen `height` rows tall: more providers than fit scroll with ↑↓.
+/// How far the list scrolls on a screen `height` rows tall: more rows than fit scroll with ↑↓.
 pub(in crate::tui) fn usage_scroll_max(app: &App, height: u16) -> usize {
-    let providers = app.usage["providers"].as_array().cloned().unwrap_or_default();
-    let rows = lines(&providers).len();
+    let rows = if app.usage_skills {
+        let skills = app.skills["skills"].as_array().cloned().unwrap_or_default();
+        skill_lines(&skills).len()
+    } else {
+        let providers = app.usage["providers"].as_array().cloned().unwrap_or_default();
+        lines(&providers).len()
+    };
     let (_, fits) = sheet(Rect::new(0, 0, 80, height), rows);
-    rows.saturating_sub(fits.saturating_sub(usize::from(week_line(&app.week).is_some())))
+    let week = usize::from(!app.usage_skills && week_line(&app.week).is_some());
+    rows.saturating_sub(fits.saturating_sub(week))
 }
 
 pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App, scroll: usize) {
     let t = theme();
     let providers = app.usage["providers"].as_array().cloned().unwrap_or_default();
-    let lines = lines(&providers);
-    let (r, fits) = sheet(area, lines.len());
-    // The week's line takes the row above the footer.
-    let fits = fits.saturating_sub(usize::from(week_line(&app.week).is_some()));
-    let inner = frame_box(buf, r, t.text, t.panel, Some((tr("Usage").as_ref(), t.text)));
+    let skills = app.skills["skills"].as_array().cloned().unwrap_or_default();
+    let list = if app.usage_skills { skill_lines(&skills) } else { lines(&providers) };
+    let (r, fits) = sheet(area, list.len());
+    // The week's line takes the row above the footer, and only on the limits.
+    let fits = fits.saturating_sub(usize::from(!app.usage_skills && week_line(&app.week).is_some()));
+    let title =
+        if app.usage_skills { format!("{} · {}", tr("Usage"), tr("Skills")) } else { tr("Usage").into_owned() };
+    let inner = frame_box(buf, r, t.text, t.panel, Some((title.as_str(), t.text)));
     let top = inner.y + 1;
-    if providers.is_empty() {
-        put(buf, inner.x, top, inner.width, "No usage numbers yet.", t.secondary.patch(t.panel));
+    if list.is_empty() {
+        let empty = if app.usage_skills { "No skill has been loaded yet." } else { "No usage numbers yet." };
+        put(buf, inner.x, top, inner.width, &tr(empty), t.secondary.patch(t.panel));
     }
-    let scroll = scroll.min(lines.len().saturating_sub(fits));
-    for (y, line) in (top..).zip(lines.iter().skip(scroll).take(fits)) {
+    let scroll = scroll.min(list.len().saturating_sub(fits));
+    for (y, line) in (top..).zip(list.iter().skip(scroll).take(fits)) {
         match line {
             Line::Provider(name) => {
                 put(buf, inner.x, y, inner.width, name, t.bold.patch(t.panel));
@@ -80,13 +97,21 @@ pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App, scroll: usize) {
                 put(buf, inner.x + 2, y, inner.width.saturating_sub(2), &tr(message), t.secondary.patch(t.panel));
             }
             Line::Window(win) => window(buf, inner, y, win),
+            Line::Skill(skill) => skill_row(buf, inner, y, skill),
             Line::Gap => {}
         }
     }
-    let choose = if usage_services(app).is_empty() { "" } else { "s choose · " };
-    let scrolls = if lines.len() > fits { "↑↓ scroll · " } else { "" };
-    let footer = format!("Read from the agents on this computer. {choose}{scrolls}esc close");
-    if let Some(line) = week_line(&app.week) {
+    let choose = if usage_services(app).is_empty() || app.usage_skills { "" } else { "s choose · " };
+    let scrolls = if list.len() > fits { "↑↓ scroll · " } else { "" };
+    let tab = if app.usage_skills { "t limits" } else { "t skills" };
+    let footer = if app.usage_skills {
+        format!("Loaded when an agent read a skill's SKILL.md. {scrolls}{tab} · esc close")
+    } else {
+        format!("Read from the agents on this computer. {choose}{scrolls}{tab} · esc close")
+    };
+    if !app.usage_skills
+        && let Some(line) = week_line(&app.week)
+    {
         put(
             buf,
             inner.x,
@@ -97,6 +122,20 @@ pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App, scroll: usize) {
         );
     }
     put(buf, inner.x, inner.bottom() - 1, inner.width, &footer, t.dim.patch(t.panel));
+}
+
+/// One skill: its name, then loads, estimated tokens, share and agents.
+fn skill_row(buf: &mut Buffer, inner: Rect, y: u16, skill: &Value) {
+    let t = theme();
+    let name = truncate(skill["name"].as_str().unwrap_or_default(), 26);
+    let loads = skill["loads"].as_i64().unwrap_or(0);
+    let tokens = skill["tokens"].as_i64().unwrap_or(0);
+    let share = (skill["share"].as_f64().unwrap_or(0.0) * 100.0).round();
+    let agents = skill["agents"].as_i64().unwrap_or(0);
+    let x = put(buf, inner.x + 2, y, 26, &name, t.text.patch(t.panel));
+    let numbers =
+        format!("{loads} {} · {tokens} {} · {share:.0}% · {agents} {}", tr("loads"), tr("tokens"), tr("agents"));
+    put(buf, x + 2, y, inner.right().saturating_sub(x + 2), &truncate(&numbers, 40), t.secondary.patch(t.panel));
 }
 
 /// Which agents' limits show on this computer, and in what order.

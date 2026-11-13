@@ -55,7 +55,8 @@ pub use custom::add_custom_connector;
 pub use install::{import_connectors, install_connector, list_connectors, remove_connector};
 pub use registry::{browse_connectors, connector_info, refresh_first_page};
 pub use skill_usage::{
-    note_use as note_skill_use, offer_skill, retire_dormant as retire_dormant_skills, skill_touched, skills_root,
+    load_tokens as skill_load_tokens, note_load as note_skill_load, note_use as note_skill_use, offer_skill,
+    report as skill_usage_report, retire_dormant as retire_dormant_skills, skill_read, skill_touched, skills_root,
     written_skills,
 };
 pub use skills::{

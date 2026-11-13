@@ -190,6 +190,10 @@ export class FakeHost {
         return { enabled: false }
       case 'usage':
         return story.usage(Date.now())
+      case 'skillUsage':
+        return story.skillUsage()
+      case 'hostHealth':
+        return { ramTotal: 17_179_869_184, ramFree: 6_871_947_674, ramUsedPercent: 60, cpu: 14, diskTotal: 536_870_912_000, diskFree: 193_273_528_320, level: 'normal', refusing: false, thresholds: { warn: 70, critical: 85 }, agents: [], at: Date.now() }
       case 'history':
         return { entries: [] }
       case 'rosterPreview':

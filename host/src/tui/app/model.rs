@@ -67,6 +67,8 @@ pub enum After {
     RulesSaved,
     /// `weekSummary`: the last seven days, for the usage sheet; a host without it says nothing.
     Week,
+    /// `skillUsage`: how often each skill's text entered a turn, for the usage sheet's Skill tab.
+    SkillUsage,
     /// `track`: fire and forget; analytics never surfaces an error.
     Tracked,
     Analytics,

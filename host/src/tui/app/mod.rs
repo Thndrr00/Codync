@@ -88,6 +88,10 @@ pub struct App {
     pub usage: Value,
     /// The last seven days (`weekSummary`), read when the usage sheet opens; null until then.
     pub week: Value,
+    /// The Skill tab of the usage sheet (`skillUsage`); null until read or from an older host.
+    pub skills: Value,
+    /// The usage sheet shows its Skill tab instead of the limits.
+    pub usage_skills: bool,
     /// `hostHealth`, for the header; null from an older host.
     pub health: Value,
     health_asked: Option<Instant>,
@@ -204,6 +208,8 @@ impl App {
             entries: HashMap::new(),
             usage: Value::Null,
             week: Value::Null,
+            skills: Value::Null,
+            usage_skills: false,
             health: Value::Null,
             health_asked: None,
             comfy: Value::Null,

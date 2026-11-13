@@ -234,8 +234,13 @@ impl App {
             Err(e) => {
                 match after {
                     After::Hello => self.error = Some(e),
-                    After::Tracked | After::Week | After::RuleTest | After::Profiles | After::Health | After::Comfy => {
-                    }
+                    After::Tracked
+                    | After::Week
+                    | After::SkillUsage
+                    | After::RuleTest
+                    | After::Profiles
+                    | After::Health
+                    | After::Comfy => {}
                     After::Channels | After::ChannelsSlack => self.flash(&format!("Channels: {e}")),
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),
@@ -327,6 +332,7 @@ impl App {
                 }
             }
             After::Week => self.week = v,
+            After::SkillUsage => self.skills = v,
             After::RuleTest => self.rules_tested(&v),
             After::Health => self.health = v,
             After::Comfy => self.comfy = v,

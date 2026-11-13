@@ -21,6 +21,7 @@ pub mod reported;
 mod session;
 pub(crate) mod setup;
 mod turns;
+mod webhooks;
 
 pub use event::Event;
 pub use lifecycle::{
@@ -33,6 +34,7 @@ pub use turns::{
     Retired, Steer, TurnOutcome, TurnSource, agent_fell_back, agent_retired, context_compacted, message_steered,
     tool_caution, turn_finished, turn_queued,
 };
+pub use webhooks::webhook_received;
 
 const KV_ENABLED: &str = "analytics_enabled";
 /// Set to `dev` on test machines (`CODYNC_ANALYTICS_ENV=dev`): their events say `env: dev`, outside every chart.
@@ -82,6 +84,8 @@ pub struct Analytics {
     session: Mutex<session::Session>,
     /// The UTC day each phone last connected (`phone_connected`), in memory only.
     phones: Mutex<HashMap<String, chrono::NaiveDate>>,
+    /// The UTC minute and how many webhook deliveries were reported in it.
+    webhooks: Mutex<(i64, u32)>,
 }
 
 enum Msg {
@@ -119,6 +123,7 @@ impl Analytics {
             rx: Mutex::new(Some(rx)),
             session: Mutex::default(),
             phones: Mutex::default(),
+            webhooks: Mutex::default(),
         }
     }
 

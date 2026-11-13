@@ -5,6 +5,9 @@ use crate::hub::Hub;
 use serde::Serialize;
 use serde_json::json;
 
+/// A turn this long counts as slow in analytics. A fixed step, so the count stays comparable.
+const SLOW_TURN_MS: i64 = 10 * 60 * 1000;
+
 /// How an agent's turn ended (`turn_finished`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TurnOutcome {
@@ -29,8 +32,8 @@ pub enum TurnSource {
     Host,
 }
 
-/// `turn_finished`: the agent, how the turn ended, why it failed and how long it ran;
-/// never its text or the error's.
+/// `turn_finished`: the agent, how the turn ended, why it failed and how long it ran; never its text or the error's.
+/// `first_output_ms`: from the turn starting to its first streamed text, thought or tool call, when there was one.
 pub fn turn_finished(
     hub: &Hub,
     agent: &str,
@@ -39,6 +42,7 @@ pub fn turn_finished(
     failure: Option<&anyhow::Error>,
     source: TurnSource,
     ms: i64,
+    first_output_ms: Option<i64>,
 ) {
     let failure = failure.map(failure_kind);
     let outcome = outcome_name(outcome, failure.map(|(kind, _)| kind));
@@ -56,7 +60,18 @@ pub fn turn_finished(
         TurnSource::Bot => "bot",
         TurnSource::Host => "host",
     };
-    let mut p = json!({"agent": agent, "outcome": outcome, "stop_reason": stop_reason, "source": source, "seconds": ms.max(0) / 1000});
+    let ms = ms.max(0);
+    let mut p = json!({
+        "agent": agent,
+        "outcome": outcome,
+        "stop_reason": stop_reason,
+        "source": source,
+        "seconds": ms / 1000,
+        "slow": ms >= SLOW_TURN_MS,
+    });
+    if let Some(first) = first_output_ms {
+        p["first_output_s"] = (first.max(0) / 1000).into();
+    }
     if let Some((kind, rpc)) = failure {
         p["error"] = kind.into();
         if let Some(rpc) = rpc {
@@ -280,5 +295,22 @@ mod tests {
         assert_eq!(reason_of("fetch failed while loading the model list"), "network");
         assert_eq!(reason_of("No provider configured"), "provider");
         assert_eq!(reason_of("Internal error: /Users/me/project"), "unknown");
+    }
+
+    #[test]
+    fn a_slow_turn_reports_rounded_times_and_counts_only() {
+        let dir = std::env::temp_dir().join(format!("codync-turn-event-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).unwrap();
+        let identity = crate::remote::identity::Identity::load_or_create(&dir).unwrap();
+        let hub = Hub::new(store, "h".into(), identity, "t".into(), 0);
+        turn_finished(&hub, "claude", TurnOutcome::Done, "end_turn", None, TurnSource::User, 600_000, Some(2_500));
+        let sent = hub.store.pending_analytics().unwrap();
+        let properties = &sent[0]["properties"];
+        assert_eq!(properties["slow"], true);
+        assert_eq!(properties["seconds"], 600);
+        assert_eq!(properties["first_output_s"], 2);
+        assert!(properties.get("text").is_none() && properties.get("prompt").is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

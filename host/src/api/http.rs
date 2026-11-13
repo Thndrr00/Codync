@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub fn router(hub: Arc<Hub>) -> Router {
     let main = Router::new()
@@ -336,20 +336,25 @@ async fn routine_hook(
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
     use crate::routines::hooks::{MAX_BODY, Refused};
-    if body.len() > MAX_BODY {
+    let started = Instant::now();
+    let bytes = body.len();
+    if bytes > MAX_BODY {
+        crate::analytics::webhook_received(&hub, true, StatusCode::PAYLOAD_TOO_LARGE.as_u16(), bytes, 0);
         return Err(ApiError(StatusCode::PAYLOAD_TOO_LARGE, "event too large".into()));
     }
     let headers =
         headers.iter().filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned()))).collect();
-    hub.routines.receive(&hub, &id, &headers, &body, true).map(Json).map_err(|e| {
-        let status = match e {
-            Refused::Unauthorized => StatusCode::UNAUTHORIZED,
-            Refused::Paused | Refused::Busy => StatusCode::CONFLICT,
-            Refused::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
-            Refused::Invalid(_) => StatusCode::BAD_REQUEST,
-        };
-        ApiError(status, e.to_string())
-    })
+    let result = hub.routines.receive(&hub, &id, &headers, &body, true);
+    let status = match &result {
+        Ok(_) => StatusCode::OK,
+        Err(Refused::Unauthorized) => StatusCode::UNAUTHORIZED,
+        Err(Refused::Paused | Refused::Busy) => StatusCode::CONFLICT,
+        Err(Refused::RateLimited(_)) => StatusCode::TOO_MANY_REQUESTS,
+        Err(Refused::Invalid(_)) => StatusCode::BAD_REQUEST,
+    };
+    let ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+    crate::analytics::webhook_received(&hub, true, status.as_u16(), bytes, ms);
+    result.map(Json).map_err(|e| ApiError(status, e.to_string()))
 }
 
 #[cfg(test)]

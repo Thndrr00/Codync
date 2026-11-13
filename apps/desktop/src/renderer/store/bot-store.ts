@@ -898,6 +898,15 @@ export class BotStore extends BotSync {
     } catch {}
   }
 
+  /** Reads how often each skill's text entered a turn; an older host keeps what was there (nothing). */
+  async refreshSkillUsage() {
+    if (this.retired || !this.client) return
+    try {
+      this.skillUsage = await this.client.call<import('@shared/models').SkillUsage>('skillUsage', {})
+      this.changed()
+    } catch {}
+  }
+
   /** Changes the memory levels that warn and that stop new turns; throws the host's reason when they make no sense. */
   async setHealthThresholds(warn: number, critical: number) {
     if (this.retired || !this.client) return

@@ -2459,5 +2459,21 @@
   "Dictation only": "ディクテーションのみ",
   "Add key": "キーを追加",
   "No key": "キーなし",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "キーはこのコンピューターに保存されます。ホストがプロバイダーで確認してから保存します。"
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "キーはこのコンピューターに保存されます。ホストがプロバイダーで確認してから保存します。",
+  "Breakdown": "内訳",
+  "Limits": "上限",
+  "Skill": "スキル",
+  "Skill usage": "スキルの使用",
+  "Loads": "読み込み",
+  "loads": "回読み込み",
+  "Estimated tokens": "推定トークン",
+  "Estimated cost": "推定コスト",
+  "Share": "割合",
+  "Unavailable": "利用不可",
+  "Under $0.01": "0.01 ドル未満",
+  "No skill has been loaded yet.": "まだスキルは読み込まれていません。",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "エージェントがターン中にスキルの SKILL.md を読むと 1 回として数えます。",
+  "RAM": "RAM",
+  "CPU": "CPU",
+  "Disk": "ディスク"
 }

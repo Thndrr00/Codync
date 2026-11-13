@@ -408,5 +408,21 @@
   "Dictation only": "الإملاء فقط",
   "Add key": "إضافة مفتاح",
   "No key": "لا يوجد مفتاح",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "يبقى المفتاح على هذا الكمبيوتر. يتحقق منه المضيف لدى المزوّد قبل حفظه."
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "يبقى المفتاح على هذا الكمبيوتر. يتحقق منه المضيف لدى المزوّد قبل حفظه.",
+  "Breakdown": "تفصيل",
+  "Limits": "الحدود",
+  "Skill": "مهارة",
+  "Skill usage": "استخدام المهارات",
+  "Loads": "التحميلات",
+  "loads": "تحميلات",
+  "Estimated tokens": "الرموز المقدّرة",
+  "Estimated cost": "التكلفة المقدّرة",
+  "Share": "الحصة",
+  "Unavailable": "غير متاح",
+  "Under $0.01": "أقل من 0.01 $",
+  "No skill has been loaded yet.": "لم يتم تحميل أي مهارة بعد.",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "تُحتسب التحميلة عندما يقرأ وكيل ملف SKILL.md لمهارة أثناء دور.",
+  "RAM": "الذاكرة",
+  "CPU": "المعالج",
+  "Disk": "القرص"
 }

@@ -2459,5 +2459,21 @@
   "Dictation only": "Только диктовка",
   "Add key": "Добавить ключ",
   "No key": "Нет ключа",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "Ключ остаётся на этом компьютере. Хост проверяет его у поставщика, прежде чем сохранить."
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "Ключ остаётся на этом компьютере. Хост проверяет его у поставщика, прежде чем сохранить.",
+  "Breakdown": "Разбивка",
+  "Limits": "Лимиты",
+  "Skill": "Навык",
+  "Skill usage": "Использование навыков",
+  "Loads": "Загрузки",
+  "loads": "загрузок",
+  "Estimated tokens": "Оценка токенов",
+  "Estimated cost": "Оценка стоимости",
+  "Share": "Доля",
+  "Unavailable": "Недоступно",
+  "Under $0.01": "Меньше 0,01 $",
+  "No skill has been loaded yet.": "Навыки ещё не загружались.",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "Загрузка считается, когда агент читает SKILL.md навыка во время хода.",
+  "RAM": "ОЗУ",
+  "CPU": "ЦП",
+  "Disk": "Диск"
 }

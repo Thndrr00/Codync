@@ -303,12 +303,14 @@ function UsageLimitsList() {
   const app = useApp()
   const stores = app.computers.flatMap((c) => app.store(c.id) ?? [])
   const [refreshing, setRefreshing] = useState(false)
-  const withUsage = stores.filter((s) => s.usage.providers.length > 0 || s.usage.services?.length)
+  const withUsage = stores.filter((s) => s.usage.providers.length > 0 || s.usage.services?.length || s.skillUsage?.skills.length || s.health)
   const refresh = async () => {
     if (refreshing) return
     setRefreshing(true)
     try {
-      await Promise.all(stores.map((s) => s.refreshUsage()))
+      await Promise.all(stores.map(async (s) => {
+        await Promise.all([s.refreshUsage(), s.refreshHealth(), s.refreshSkillUsage()])
+      }))
     } finally {
       setRefreshing(false)
     }
@@ -339,6 +341,8 @@ function UsageLimitsList() {
               {store.hostName}
             </>}
             usage={store.usage}
+            skills={store.skillUsage}
+            health={store.health}
             onShown={(id, shown) => void store.setUsageShown(id, shown).catch((e: unknown) => app.setError(errorText(e)))}
             onOrder={(ids) => store.setUsageOrder(ids).catch((e: unknown) => app.setError(errorText(e)))}
           />

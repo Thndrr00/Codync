@@ -2459,5 +2459,21 @@
   "Dictation only": "仅听写",
   "Add key": "添加密钥",
   "No key": "无密钥",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "密钥保存在这台电脑上。主机先向提供方验证，通过后才保存。"
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "密钥保存在这台电脑上。主机先向提供方验证，通过后才保存。",
+  "Breakdown": "明细",
+  "Limits": "额度",
+  "Skill": "技能",
+  "Skill usage": "技能使用",
+  "Loads": "加载次数",
+  "loads": "次加载",
+  "Estimated tokens": "预估词元",
+  "Estimated cost": "预估费用",
+  "Share": "占比",
+  "Unavailable": "不可用",
+  "Under $0.01": "低于 $0.01",
+  "No skill has been loaded yet.": "尚未加载任何技能。",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "智能体在一轮中读取技能的 SKILL.md 时计为一次加载。",
+  "RAM": "内存",
+  "CPU": "处理器",
+  "Disk": "磁盘"
 }

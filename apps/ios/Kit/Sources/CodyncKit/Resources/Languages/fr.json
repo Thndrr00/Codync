@@ -2459,5 +2459,21 @@
   "Dictation only": "Dictée uniquement",
   "Add key": "Ajouter une clé",
   "No key": "Aucune clé",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "La clé reste sur cet ordinateur. L’hôte la vérifie auprès du fournisseur avant de la garder."
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "La clé reste sur cet ordinateur. L’hôte la vérifie auprès du fournisseur avant de la garder.",
+  "Breakdown": "Répartition",
+  "Limits": "Limites",
+  "Skill": "Compétence",
+  "Skill usage": "Utilisation des compétences",
+  "Loads": "Chargements",
+  "loads": "chargements",
+  "Estimated tokens": "Tokens estimés",
+  "Estimated cost": "Coût estimé",
+  "Share": "Part",
+  "Unavailable": "Indisponible",
+  "Under $0.01": "Moins de 0,01 $",
+  "No skill has been loaded yet.": "Aucune compétence n'a encore été chargée.",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "Un chargement compte lorsqu'un agent lit le SKILL.md d'une compétence pendant un tour.",
+  "RAM": "RAM",
+  "CPU": "CPU",
+  "Disk": "Disque"
 }

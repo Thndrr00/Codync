@@ -151,6 +151,8 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         announce: None,
         first_prompt: None,
         turn: None,
+        turn_skills: HashSet::new(),
+        turn_first_output: None,
         queue: VecDeque::new(),
         steers_in_flight: HashMap::new(),
         held_done: None,
@@ -348,6 +350,10 @@ struct Actor {
     /// The snapshot of a new session's first prompt, marked delivered once the agent answered it.
     first_prompt: Option<Snapshot>,
     turn: Option<i64>,
+    /// The skills whose text this turn already loaded: one load per skill per turn.
+    turn_skills: HashSet<String>,
+    /// When this turn first streamed text, a thought or a tool call, for `turn_finished`.
+    turn_first_output: Option<i64>,
     queue: VecDeque<Queued>,
     /// Queued messages handed to the agent to join the running turn, by entry id, until it answers (`steer`).
     steers_in_flight: HashMap<String, steer::InFlight>,

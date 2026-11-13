@@ -42,7 +42,7 @@ import kotlinx.serialization.json.JsonElement
 
     /** The numbers for the status tab, in the order memory, CPU, disk. */
     fun lines(): List<Pair<String, String>> = listOf(
-        "Memory" to "$ramUsedPercent % used · ${bytesText(ramFree)} free of ${bytesText(ramTotal)}",
+        "RAM" to "$ramUsedPercent % used · ${bytesText(ramFree)} free of ${bytesText(ramTotal)}",
         "CPU" to "${Math.round(cpu)} %",
         "Disk" to if (diskTotal > 0) "${bytesText(diskFree)} free of ${bytesText(diskTotal)}" else "Unknown",
     )

@@ -90,6 +90,8 @@ export class BotMirror extends Observable {
   usage: Usage = { providers: [] }
   /** Memory, CPU and disk of this computer (`hostHealth`); null until read, or from an older host. */
   health: HostHealth | null = null
+  /** How often each skill's text entered a turn (`skillUsage`); null until read, or from an older host. */
+  skillUsage: import('@shared/models').SkillUsage | null = null
   /** The hourly ceiling on local script requests (`scriptLimit`); null until read, or from an older host. */
   scriptLimit: { perHour: number; choices: number[] } | null = null
   /** When a plan card starts the work by itself (`planStart`); null until read, or from an older host. */

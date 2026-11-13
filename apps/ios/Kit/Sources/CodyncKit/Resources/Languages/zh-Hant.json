@@ -2459,5 +2459,21 @@
   "Dictation only": "僅聽寫",
   "Add key": "新增金鑰",
   "No key": "沒有金鑰",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "金鑰保存在這台電腦上。主機會先向提供者驗證，通過後才儲存。"
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "金鑰保存在這台電腦上。主機會先向提供者驗證，通過後才儲存。",
+  "Breakdown": "明細",
+  "Limits": "額度",
+  "Skill": "技能",
+  "Skill usage": "技能使用",
+  "Loads": "載入次數",
+  "loads": "次載入",
+  "Estimated tokens": "預估詞元",
+  "Estimated cost": "預估費用",
+  "Share": "占比",
+  "Unavailable": "無法使用",
+  "Under $0.01": "低於 $0.01",
+  "No skill has been loaded yet.": "尚未載入任何技能。",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "代理在一輪中讀取技能的 SKILL.md 時計為一次載入。",
+  "RAM": "記憶體",
+  "CPU": "處理器",
+  "Disk": "磁碟"
 }

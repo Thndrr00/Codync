@@ -675,7 +675,10 @@ mod tests {
         assert!(matches!(connected.hello(&hub, false).await, Out::Msg(v) if v["t"] == "welcome"));
         let hello = connected.call(1, "hello", json!({})).await;
         assert_eq!(hello["ok"]["computerId"], hub.identity.computer_id());
-        let refused = connected.call(2, "setScreenEnabled", json!({"enabled": true})).await;
+        // A paired phone reads the computer's health: it is not a setting, so it is not local-only.
+        let health = connected.call(2, "hostHealth", json!({})).await;
+        assert!(health["ok"].is_object(), "{health}");
+        let refused = connected.call(3, "setScreenEnabled", json!({"enabled": true})).await;
         assert_eq!(refused["err"]["status"], 403);
     }
 

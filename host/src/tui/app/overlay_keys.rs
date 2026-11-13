@@ -70,7 +70,9 @@ impl App {
             }
             Action::Usage => {
                 self.overlays.push(Overlay::Usage(0));
+                self.usage_skills = false;
                 self.call("weekSummary", json!({"days": 7}), After::Week);
+                self.call("skillUsage", json!({}), After::SkillUsage);
             }
             Action::CheckUpdate => self.call("checkHostUpdate", json!({}), After::Update),
             Action::Analytics => self.toggle_analytics(),

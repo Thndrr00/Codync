@@ -1,4 +1,4 @@
-import type { Bot, EntryData, Usage } from '@shared/models'
+import type { Bot, EntryData, SkillUsage, Usage } from '@shared/models'
 
 // The website demo's story, on two computers. The MacBook Pro: four bots on a small `pace` project (an
 // isoWeek / weeklyTotals bug), the "Ship room" group, replies quoting earlier messages and a pending
@@ -213,6 +213,16 @@ export function usage(now: number): Usage {
     services: [
       { id: 'claude', name: 'Claude', shown: true },
       { id: 'codex', name: 'Codex', shown: true },
+    ],
+  }
+}
+
+export function skillUsage(): SkillUsage {
+  return {
+    totalTokens: 4_800,
+    skills: [
+      { id: 'release-checklist', name: 'Release checklist', loads: 7, tokens: 3_200, costUsd: 0.0064, share: 0.67, agents: 2 },
+      { id: 'pdf', name: 'PDF', loads: 3, tokens: 1_600, costUsd: null, share: 0.33, agents: 1 },
     ],
   }
 }

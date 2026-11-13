@@ -2459,5 +2459,21 @@
   "Dictation only": "받아쓰기 전용",
   "Add key": "키 추가",
   "No key": "키 없음",
-  "The key stays on this computer. The host checks it with the provider before keeping it.": "키는 이 컴퓨터에 보관됩니다. 호스트가 공급자에게 확인한 뒤 저장합니다."
+  "The key stays on this computer. The host checks it with the provider before keeping it.": "키는 이 컴퓨터에 보관됩니다. 호스트가 공급자에게 확인한 뒤 저장합니다.",
+  "Breakdown": "분석",
+  "Limits": "한도",
+  "Skill": "스킬",
+  "Skill usage": "스킬 사용",
+  "Loads": "로드",
+  "loads": "회 로드",
+  "Estimated tokens": "예상 토큰",
+  "Estimated cost": "예상 비용",
+  "Share": "비중",
+  "Unavailable": "사용 불가",
+  "Under $0.01": "$0.01 미만",
+  "No skill has been loaded yet.": "아직 로드된 스킬이 없습니다.",
+  "A load is counted when an agent reads a skill's SKILL.md during a turn.": "에이전트가 턴 중에 스킬의 SKILL.md를 읽으면 1회로 집계됩니다.",
+  "RAM": "RAM",
+  "CPU": "CPU",
+  "Disk": "디스크"
 }

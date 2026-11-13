@@ -41,8 +41,7 @@ import java.util.Locale
 }
 
 @Serializable data class UsageWindow(val id: String, val label: String, val percent: Double? = null,
-    val resetsAt: Long? = null, val resetsText: String? = null, val text: String? = null) {
-    val reportedPercent: Double? get() = percent?.takeIf { it.isFinite() }
+    val resetsAt: Long? = null, val resetsText: String? = null, val text: String? = null) {    val reportedPercent: Double? get() = percent?.takeIf { it.isFinite() }
     val barFraction: Float? get() = reportedPercent?.coerceIn(0.0, 100.0)?.div(100)?.toFloat()
 
     /** When the window resets: `resetsAt`, or Claude Code's text read as a date. */
@@ -71,4 +70,12 @@ import java.util.Locale
             return at.toInstant().toEpochMilli()
         }
     }
+}
+
+/** One skill in the Usage Breakdown's Skill tab. */
+@Serializable data class SkillUsageRow(val id: String, val name: String = "", val loads: Long = 0,
+    val tokens: Long = 0, val costUsd: Double? = null, val share: Double = 0.0, val agents: Int = 0)
+
+@Serializable data class SkillUsage(val skills: List<SkillUsageRow> = emptyList(), val totalTokens: Long = 0) {
+    companion object { fun decode(value: JsonElement): SkillUsage = WireJson.decodeFromJsonElement(value) }
 }

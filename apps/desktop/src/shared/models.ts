@@ -642,6 +642,27 @@ export interface Usage {
   services?: UsageService[]
 }
 
+/** One skill in the Usage Breakdown's Skill tab. */
+export interface SkillUsageRow {
+  id: string
+  name: string
+  /** Turns whose agent read this skill's `SKILL.md`, one per turn at most. */
+  loads: number
+  /** Estimated tokens of the skill text, added up. */
+  tokens: number
+  /** Estimated list cost in USD; null when no load's model has a known rate. */
+  costUsd: number | null
+  /** This skill's share of the tokens of all skill loads, 0–1. */
+  share: number
+  /** How many bots loaded it. */
+  agents: number
+}
+
+export interface SkillUsage {
+  skills: SkillUsageRow[]
+  totalTokens: number
+}
+
 export interface Backend {
   id: string
   name: string

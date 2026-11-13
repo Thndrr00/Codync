@@ -31,12 +31,14 @@ mod kimi;
 mod kiro;
 mod omp;
 mod opencode;
+mod pricing;
 mod reading;
 mod services;
 mod vibe;
 
 pub use claude::{ingest_claude_rate_limit, ingest_statusline};
 pub(crate) use command::strip_ansi;
+pub(crate) use pricing::estimate as estimate_cost;
 pub use services::{bots_changed, set_order, set_shown};
 
 use crate::LockExt;

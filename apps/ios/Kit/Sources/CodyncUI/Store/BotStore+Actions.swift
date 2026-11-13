@@ -471,6 +471,18 @@ extension BotStore {
         return try? await client.weekSummary()
     }
 
+    /// How often each skill's text entered a turn; nil when the host can't say (an older one) or can't be reached.
+    public func refreshSkillUsage() async {
+        guard !retired, let client else { return }
+        if let usage = try? await client.skillUsage(), !Task.isCancelled { skillUsage = usage }
+    }
+
+    /// The computer's memory, CPU and disk; an older host leaves it nil.
+    public func refreshHealth() async {
+        guard !retired, let client else { return }
+        if let reading = try? await client.hostHealth(), !Task.isCancelled { health = reading }
+    }
+
     /// Reads the network again; the host asks the other computers when what it heard is stale, and
     /// the `network` event brings what they answer.
     public func refreshNetwork() async {

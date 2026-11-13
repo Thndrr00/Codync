@@ -96,6 +96,11 @@ impl Actor {
 
     pub(super) fn on_update(&mut self, u: &Value) {
         let turn = self.turn.unwrap_or(0);
+        if self.turn_first_output.is_none()
+            && matches!(u["sessionUpdate"].as_str(), Some("agent_message_chunk" | "agent_thought_chunk" | "tool_call"))
+        {
+            self.turn_first_output = Some(crate::store::now_ms());
+        }
         match u["sessionUpdate"].as_str().unwrap_or_default() {
             "agent_message_chunk" => {
                 let t = acp::content_text(&u["content"]);

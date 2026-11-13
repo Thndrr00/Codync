@@ -71,7 +71,7 @@ Your provider key stays on your computer, encrypted. It's never sent to the rela
 
 Codync records which features you use, to spot bugs sooner and see where people get stuck. Analytics are **on by default**. The Windows installer asks first; nothing else does. They go to PostHog (US).
 
-**What's recorded:** opening the app and its screens, setting up and pairing (and whether you allow notifications), creating or deleting a bot, sending a message (with the number of attachments, never the files), running a routine or a voice call, and installing a connector. Each event carries the app version, the platform, and the agent and model the bot uses.
+**What's recorded:** opening the app and its screens, setting up and pairing (and whether you allow notifications), creating or deleting a bot, sending a message (with the number of attachments, never the files), running a routine or a voice call, and installing a connector. Each event carries the app version, the platform, and the agent and model the bot uses. Timings are rounded seconds and counts: how long the host took to start, how long a message waited in the queue, how long until a turn's first output, and whether a turn took ten minutes or more. A webhook delivery records only the routine kind, the result, the HTTP status, the body size and the answer time: never its URL, secret, event type or body.
 
 **Crashes and errors:** the kind of error and where in Codync's own code it happened. Never the error's message; file paths are cut down to Codync's own files.
 

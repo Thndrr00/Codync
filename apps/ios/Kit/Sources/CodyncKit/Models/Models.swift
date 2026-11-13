@@ -113,6 +113,62 @@ public struct Usage: Codable, Hashable, Sendable {
     public init(providers: [UsageProvider] = []) { self.providers = providers }
 }
 
+/// One skill in the Usage Breakdown's Skill tab.
+public struct SkillUsageRow: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    /// Turns whose agent read this skill's `SKILL.md`, one per turn at most.
+    public var loads: Int
+    /// Estimated tokens of the skill text, added up.
+    public var tokens: Int
+    /// Estimated list cost in USD; nil when no load's model has a known rate.
+    public var costUsd: Double?
+    /// This skill's share of the tokens of all skill loads, 0–1.
+    public var share: Double
+    /// How many bots loaded it.
+    public var agents: Int
+}
+
+public struct SkillUsage: Codable, Hashable, Sendable {
+    public var skills: [SkillUsageRow]
+    public var totalTokens: Int
+    public init(skills: [SkillUsageRow] = [], totalTokens: Int = 0) {
+        self.skills = skills
+        self.totalTokens = totalTokens
+    }
+}
+
+/// The computer's health as the host reports it (`hostHealth`).
+public struct HostHealth: Codable, Hashable, Sendable {
+    public var ramTotal: Int64
+    public var ramFree: Int64
+    public var ramUsedPercent: Int
+    public var cpu: Double
+    public var diskTotal: Int64
+    public var diskFree: Int64
+    /// `normal`, `warning` or `critical`.
+    public var level: String
+    /// New turns are not starting.
+    public var refusing: Bool
+
+    /// The numbers for the Usage header, in the order RAM, CPU, disk.
+    public var lines: [(label: String, value: String)] {
+        [
+            ("RAM", "\(ramUsedPercent) % used · \(Self.bytes(ramFree)) free of \(Self.bytes(ramTotal))"),
+            ("CPU", "\(Int(cpu.rounded())) %"),
+            ("Disk", diskTotal > 0 ? "\(Self.bytes(diskFree)) free of \(Self.bytes(diskTotal))" : "Unknown"),
+        ]
+    }
+
+    private static func bytes(_ bytes: Int64) -> String {
+        let gb = 1024.0 * 1024 * 1024
+        let mb = 1024.0 * 1024
+        return bytes >= Int64(gb)
+            ? String(format: "%.1f GB", Double(bytes) / gb)
+            : "\(Int((Double(bytes) / mb).rounded())) MB"
+    }
+}
+
 public struct UsageProvider: Codable, Hashable, Sendable, Identifiable {
     public var id: String
     public var name: String

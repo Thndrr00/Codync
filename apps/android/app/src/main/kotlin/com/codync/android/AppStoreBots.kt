@@ -176,6 +176,10 @@ suspend fun AppStore.signOutAgent(backend: String) {
 suspend fun AppStore.weekSummary(): WeekSummary? = runCatching {
     WireJson.decodeFromJsonElement<WeekSummary>(hostQuery("weekSummary", buildJsonObject { put("days", 7) }))
 }.getOrNull()
+/** How often each skill's text entered a turn; null from an older host or when it can't be reached. */
+suspend fun AppStore.skillUsage(): SkillUsage? = runCatching {
+    SkillUsage.decode(hostQuery("skillUsage", buildJsonObject { }))
+}.getOrNull()
 /** The security profiles the host offers; null from an older host or when it can't be reached. */
 suspend fun AppStore.securityProfiles(): List<SecurityProfile>? = runCatching {
     SecurityProfile.decodeAll(hostQuery("securityProfiles", buildJsonObject { }))
