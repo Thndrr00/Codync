@@ -24,6 +24,8 @@ pub enum DocumentReply {
     Resolve(String, u64),
     Change(String, u64),
     Csv(String),
+    /// The links between the bot's pages (`documentGraph`).
+    Graph(String, u64),
 }
 
 impl DocumentReply {
@@ -36,6 +38,7 @@ impl DocumentReply {
             | Self::Review(scope, ..)
             | Self::Resolve(scope, ..)
             | Self::Change(scope, ..)
+            | Self::Graph(scope, ..)
             | Self::Csv(scope) => scope,
         }
     }
@@ -232,6 +235,16 @@ impl App {
     }
 
     pub fn documents_key(&mut self, mut sheet: Box<DocumentSheet>, key: KeyEvent) -> Option<Overlay> {
+        // The links between the bot's pages, as one line: who names whom.
+        if key.code == KeyCode::Char('G') && sheet.tab == 0 {
+            sheet.busy = true;
+            self.document_call(
+                "documentGraph",
+                json!({"botId": &sheet.bot}),
+                DocumentReply::Graph(sheet.scope.clone(), sheet.generation),
+            );
+            return Some(Overlay::Documents(sheet));
+        }
         if key.code == KeyCode::Char('g') && ctrl(key) && sheet.tab == 0 {
             if sheet.busy || sheet.dirty() || self.selected.as_deref() != Some(sheet.bot.as_str()) {
                 sheet.error = Some("Save or resolve your draft before discussing the document.".into());

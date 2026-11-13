@@ -39,6 +39,29 @@ impl App {
                     sheet.activity = items;
                 }
             }
+            DocumentReply::Graph(..) => {
+                let title = |id: &str| {
+                    sheet.items.iter().find(|doc| doc["id"] == id).and_then(|doc| doc["title"].as_str()).unwrap_or("?").to_owned()
+                };
+                let edges = value["edges"].as_array().cloned().unwrap_or_default();
+                let pairs: Vec<String> = edges
+                    .iter()
+                    .take(4)
+                    .map(|edge| {
+                        format!(
+                            "{} → {}",
+                            title(edge["from"].as_str().unwrap_or_default()),
+                            title(edge["to"].as_str().unwrap_or_default())
+                        )
+                    })
+                    .collect();
+                sheet.status = if pairs.is_empty() {
+                    "No links between pages yet".into()
+                } else {
+                    format!("{} links: {}", edges.len(), pairs.join(" · "))
+                };
+                sheet.busy = false;
+            }
             DocumentReply::Open(..) => {
                 sheet.draft = Some(DocumentDraft::from_document(&value["document"]));
                 sheet.links = value["links"].as_array().cloned().unwrap_or_default();
