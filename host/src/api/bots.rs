@@ -493,6 +493,24 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id, actor })?;
             json!({})
         }
+        // The person did the step a bot asked for (a CAPTCHA, a login): the card closes and the bot
+        // goes on with what they say they did.
+        "resolveTakeover" => {
+            let entry_id = str_arg(&b, "entryId")?;
+            let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
+            let note = b["note"].as_str().unwrap_or_default();
+            let done = crate::chat::takeover::resolved(&e.data, note, crate::store::now_ms())
+                .ok_or_else(|| anyhow!("this takeover request isn't waiting"))?;
+            let note = note.trim();
+            if !note.is_empty() {
+                // The agent goes on with the note, so the card closes only once it has it.
+                let row = hub.store.bot(&e.bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+                let text = format!("I did it: {note}");
+                crate::chat::messages::post_in_lane(hub, &row.config, Lane::main(&e.bot_id), json!({"text": text}))?;
+            }
+            hub.set_entry(entry_id, &done);
+            json!({"entry": hub.store.entry(entry_id)})
+        }
         "approvalLessons" => {
             let bot = str_arg(&b, "botId")?;
             json!({"lessons": hub.store.approval_lessons(bot, None)})

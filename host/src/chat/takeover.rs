@@ -49,6 +49,27 @@ pub fn lapsed(data: &Value, now: i64) -> Option<Value> {
     Some(next)
 }
 
+/// The card's data once the person says they did it, with what they did: the agent goes on from that
+/// note. `None` when the request isn't waiting (already done, or lapsed).
+pub fn resolved(data: &Value, note: &str, now: i64) -> Option<Value> {
+    let request = data.get("takeoverRequest")?;
+    if request["status"] != "waiting" {
+        return None;
+    }
+    let note = note.trim();
+    let mut next = data.clone();
+    next["takeoverRequest"]["status"] = "resolved".into();
+    next["takeoverRequest"]["note"] = note.into();
+    next["takeoverRequest"]["resolvedAt"] = now.into();
+    let reason = request["reason"].as_str().unwrap_or("a step for you");
+    next["text"] = if note.is_empty() {
+        format!("Takeover done: {reason}").into()
+    } else {
+        format!("Takeover done: {reason} — {note}").into()
+    };
+    Some(next)
+}
+
 /// Every waiting request's card id and data.
 fn waiting(store: &Store) -> Result<Vec<(String, Value)>> {
     store.with_connection(|c| {
@@ -106,6 +127,17 @@ mod tests {
         assert_eq!(next["takeoverRequest"]["status"], "expired");
         assert!(next["text"].as_str().is_some_and(|t| t.contains("log in")));
         assert!(lapsed(&next, 9_999_999_999).is_none(), "an expired request does not lapse again");
+    }
+
+    #[test]
+    fn a_done_request_carries_the_note_and_never_lapses() {
+        let data = card("b1", "log in", None, 1_000);
+        let done = resolved(&data, "  I logged in  ", 2_000).expect("done");
+        assert_eq!(done["takeoverRequest"]["status"], "resolved");
+        assert_eq!(done["takeoverRequest"]["note"], "I logged in");
+        assert!(done["text"].as_str().is_some_and(|t| t.contains("I logged in")));
+        assert!(lapsed(&done, i64::MAX).is_none(), "a done request never lapses");
+        assert!(resolved(&done, "again", 3_000).is_none(), "it is only done once");
     }
 
     #[test]

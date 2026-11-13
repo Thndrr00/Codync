@@ -134,6 +134,11 @@ out of the pending decisions; the terminal shows the rewritten line. iOS has no 
 request does not hold the bot's computer: the remote screen's own takeover (`screenTakeover`) is the person's
 choice and is not touched.
 
+When the person did the step, `resolveTakeover {entryId, note}` closes the card as `resolved`, keeps the note
+(`takeoverRequest.note`, `resolvedAt`) and posts "I did it: …" to the bot, so its agent goes on with what they
+did; an empty note only closes the card. A request is done once: a second call is refused, and a resolved card
+never lapses.
+
 ## Answering a card
 
 The card is the effect's key: the first decision is the one that happens.
