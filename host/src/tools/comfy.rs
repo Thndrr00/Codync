@@ -59,7 +59,7 @@ pub fn pin() -> &'static Pin {
 }
 
 /// Model folders ComfyUI is pointed at, relative to [`data_dir`] (keys of `extra_model_paths.yaml.example`).
-pub(crate) const MODEL_FOLDERS: [(&str, &str); 12] = [
+pub(crate) const MODEL_FOLDERS: [(&str, &str); 15] = [
     ("checkpoints", "models/checkpoints/"),
     ("configs", "models/configs/"),
     ("loras", "models/loras/"),
@@ -71,6 +71,9 @@ pub(crate) const MODEL_FOLDERS: [(&str, &str); 12] = [
     ("controlnet", "models/controlnet/"),
     ("upscale_models", "models/upscale_models/"),
     ("vae_approx", "models/vae_approx/"),
+    ("detection", "models/detection/"),
+    ("background_removal", "models/background_removal/"),
+    ("geometry_estimation", "models/geometry_estimation/"),
     ("custom_nodes", "custom_nodes/"),
 ];
 

@@ -118,12 +118,33 @@ fn cache_name(path: &Path) -> String {
     format!("{stem}-{:016x}", hasher.finish())
 }
 
-/// What `upload_image`-style tools accept: pictures a `LoadImage` reads, and the audio and video
-/// custom nodes read from the same input folder.
+/// What `upload_image`-style tools accept: pictures a `LoadImage` reads, the audio and video custom
+/// nodes read from the same input folder, and the scene files a splat, camera pack or mesh node
+/// reads by path (`SpEdE` scenes, `Reshoot` captures, SMPL-X bodies).
 pub fn ingestible(path: &Path) -> bool {
     matches!(
         extension(path).as_str(),
-        "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "wav" | "mp3" | "flac" | "ogg" | "mp4" | "webm" | "mov"
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "webp"
+            | "bmp"
+            | "gif"
+            | "wav"
+            | "mp3"
+            | "flac"
+            | "ogg"
+            | "mp4"
+            | "webm"
+            | "mov"
+            | "ply"
+            | "npz"
+            | "spz"
+            | "splat"
+            | "obj"
+            | "glb"
+            | "gltf"
+            | "zip"
     )
 }
 
@@ -148,6 +169,7 @@ mod tests {
     #[test]
     fn only_inputs_a_loader_reads_are_accepted() {
         assert!(ingestible(Path::new("cat.jpg")) && ingestible(Path::new("take.wav")));
+        assert!(ingestible(Path::new("scene.ply")) && ingestible(Path::new("cameras.npz")));
         assert!(!ingestible(Path::new("run.exe")) && !ingestible(Path::new("no-extension")));
     }
 

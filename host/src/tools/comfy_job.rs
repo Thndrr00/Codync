@@ -362,8 +362,8 @@ impl Jobs {
                 (Phase::Error, Some(failure(&record)), vec![])
             } else {
                 let mut files = output_files(&record);
-                // A graph made of one wrapper node (OneShot MV's director) saves its film in the
-                // output folder and returns no file of its own: take what the run touched.
+                // A graph that writes its own file and reports none (OneShot MV's director, Splat
+                // Edit Engine's scene): take what the run touched.
                 if files.is_empty() {
                     files = recent_outputs(&comfy::output_dir(), self.created_of(id));
                 }

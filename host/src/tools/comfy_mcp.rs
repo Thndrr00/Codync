@@ -248,7 +248,8 @@ pub async fn run_template(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Val
     Ok(status)
 }
 
-/// Replaces each picture, clip or sound input's local path with the name ComfyUI stored it under.
+/// Replaces each picture, clip, sound or scene input's local path with the name ComfyUI stored it
+/// under.
 async fn upload_inputs(
     api: &Api,
     template: &Template,
@@ -320,7 +321,7 @@ fn options(info: &Value, class: &str, input: &str) -> Value {
 
 async fn upload(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
     let path = PathBuf::from(args["path"].as_str().context("`path` is required")?);
-    anyhow::ensure!(results::ingestible(&path), "upload takes a picture, an audio file or a video");
+    anyhow::ensure!(results::ingestible(&path), "upload takes a picture, an audio file, a video or a scene file");
     let meta = tokio::fs::metadata(&path).await.with_context(|| format!("reading {}", path.display()))?;
     anyhow::ensure!(meta.is_file() && meta.len() <= MAX_UPLOAD, "the input must be a file of at most 300 MB");
     let name = match args["name"].as_str() {

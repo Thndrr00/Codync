@@ -52,7 +52,7 @@ export interface ToolProgress {
 export interface TemplateInput {
   key: string
   label: string
-  type: 'text' | 'number' | 'integer' | 'select' | 'image' | 'video' | 'audio' | 'seed' | 'boolean'
+  type: 'text' | 'number' | 'integer' | 'select' | 'image' | 'video' | 'audio' | 'file' | 'seed' | 'boolean'
   default?: unknown
   min?: number | null
   max?: number | null
@@ -154,7 +154,7 @@ export interface CuratedTemplate {
   output: string[]
   summary: string
   author: string
-  /** True once its graph is a manifest of its own; the gallery hides it. */
+  /** True once its graph is a manifest of its own; the gallery marks it as imported. */
   imported?: boolean
 }
 

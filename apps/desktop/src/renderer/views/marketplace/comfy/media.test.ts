@@ -11,6 +11,9 @@ test('a field takes the files its loader reads', () => {
   assert.equal(accepts('audio', 'song.wav'), true)
   assert.equal(accepts('audio', 'song.mp3'), true)
   assert.equal(accepts('audio', 'reference.png'), false)
+  assert.equal(accepts('file', 'scene.ply'), true)
+  assert.equal(accepts('file', 'cameras.npz'), true)
+  assert.equal(accepts('file', 'start.png'), false)
 })
 
 test('the picker names the kind it wants', () => {

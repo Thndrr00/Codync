@@ -132,6 +132,9 @@ pub enum InputKind {
     Video,
     /// A sound the host uploads the same way: a `LoadAudio` node reads it by name.
     Audio,
+    /// Any other file the host uploads the same way: a scene (`.ply`), a camera pack (`.npz`), a
+    /// mesh. ComfyUI's `/upload/image` stores it in the input folder and the node reads it by name.
+    File,
     Seed,
     Boolean,
 }
@@ -139,7 +142,7 @@ pub enum InputKind {
 impl InputKind {
     /// The kinds whose value is a file in ComfyUI's input folder, uploaded before a run.
     pub fn is_media(self) -> bool {
-        matches!(self, Self::Image | Self::Video | Self::Audio)
+        matches!(self, Self::Image | Self::Video | Self::Audio | Self::File)
     }
 
     /// The extensions a loader of this kind reads, and the name the form uses for a file.
@@ -147,6 +150,7 @@ impl InputKind {
         match self {
             Self::Video => &["mp4", "webm", "mov", "mkv", "gif"],
             Self::Audio => &["wav", "mp3", "flac", "ogg", "m4a"],
+            Self::File => &["ply", "npz", "spz", "splat", "obj", "glb", "gltf", "zip"],
             _ => &["png", "jpg", "jpeg", "webp", "bmp", "gif"],
         }
     }
@@ -156,6 +160,7 @@ impl InputKind {
         match self {
             Self::Video => "video",
             Self::Audio => "sound",
+            Self::File => "scene file",
             _ => "picture",
         }
     }
@@ -442,7 +447,7 @@ impl Template {
 impl Input {
     fn coerce(&self, value: &Value) -> Result<Value> {
         match self.kind {
-            InputKind::Text | InputKind::Image | InputKind::Video | InputKind::Audio => {
+            InputKind::Text | InputKind::Image | InputKind::Video | InputKind::Audio | InputKind::File => {
                 let text = value.as_str().with_context(|| format!("`{}` must be text", self.key))?.trim().to_owned();
                 if self.required {
                     ensure!(!text.is_empty(), "`{}` can't be empty", self.key);
@@ -508,7 +513,12 @@ impl Input {
     /// What an omitted, optional value becomes.
     fn empty(&self) -> Value {
         match self.kind {
-            InputKind::Text | InputKind::Select | InputKind::Image | InputKind::Video | InputKind::Audio => json!(""),
+            InputKind::Text
+            | InputKind::Select
+            | InputKind::Image
+            | InputKind::Video
+            | InputKind::Audio
+            | InputKind::File => json!(""),
             InputKind::Number => json!(self.default.as_ref().and_then(Value::as_f64).unwrap_or(0.0)),
             InputKind::Integer | InputKind::Seed => json!(0),
             InputKind::Boolean => json!(false),
@@ -809,6 +819,24 @@ mod tests {
         given.insert("clip".into(), json!("song.wav"));
         let error = t.values(&given).expect_err("a sound").to_string();
         assert!(error.contains("wants a video file"), "{error}");
+    }
+
+    #[test]
+    fn a_scene_input_takes_only_a_scene() {
+        let mut t = template();
+        t.inputs.push(
+            serde_json::from_value(json!({"key": "scene", "label": "Scene", "type": "file", "required": true}))
+                .expect("an input"),
+        );
+        t.workflow["2"]["inputs"]["filename_prefix"] = json!("{{scene}}");
+        let mut given = Map::new();
+        given.insert("width".into(), json!(64));
+        given.insert("scene".into(), json!("room.ply"));
+        assert_eq!(t.values(&given).expect("a scene")["scene"], json!("room.ply"));
+
+        given.insert("scene".into(), json!("cat.png"));
+        let error = t.values(&given).expect_err("a picture").to_string();
+        assert!(error.contains("wants a scene file"), "{error}");
     }
 
     #[test]
