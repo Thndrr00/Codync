@@ -1,5 +1,15 @@
 import Foundation
 
+/// One snapshot of a file a bot published (`fileVersions`): the same name, an older version.
+public struct SharedFileVersion: Decodable, Identifiable, Sendable {
+    /// When the message that carries it was sent.
+    public let at: Int64
+    /// The message that carries it, for `readFile`.
+    public let entryId: String
+    public let file: SharedFile
+    public var id: String { entryId }
+}
+
 /// An immutable host snapshot published by a bot. Separate from user uploads.
 public struct SharedFile: Codable, Hashable, Sendable, Identifiable {
     public let id: String
