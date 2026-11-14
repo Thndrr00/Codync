@@ -33,11 +33,11 @@ test('/image opens the picker, and using it writes the command the host reads', 
 
     // A Codex bot makes no clip; the switch says so instead of offering one.
     await sheet.getByRole('button', { name: 'Video', exact: true }).click()
-    await expect(sheet.getByText("This bot's agent makes no video.")).toBeVisible()
+    await expect(sheet.getByText(/makes no video/)).toBeVisible()
     await sheet.getByRole('button', { name: 'Image', exact: true }).click()
 
     // The preview is the message the host parses, and each choice shows in it.
-    await sheet.getByRole('button', { name: '16:9' }).click()
+    await sheet.getByRole('radio', { name: '16:9' }).click()
     await expect(sheet.locator('.media-preview')).toHaveText('/image --model gpt-image --aspect 16:9')
     await sheet.getByRole('switch', { name: 'Transparent background' }).click()
     await expect(sheet.locator('.media-preview')).toHaveText('/image --model gpt-image --aspect 16:9 --transparent')
