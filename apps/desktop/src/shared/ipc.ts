@@ -286,6 +286,15 @@ export interface CodyncBridge {
     onCommand(cb: (command: WindowCommand) => void): () => void
     resetAllData(): Promise<void>
     setLaunchAtLogin(on: boolean): Promise<boolean>
+    /**
+     * The encrypted on-disk cache (one computer's bots and recent messages, this account's): what
+     * the app opens with and reads offline. Keys are opaque; the main process never parses values.
+     */
+    cache: {
+      read(key: string): Promise<string | null>
+      write(key: string, text: string): Promise<void>
+      clear(): Promise<void>
+    }
     /** Whether any message box holds an unsent draft, for the quit prompt. */
     setDraftsDirty(dirty: boolean): void
     appearance(): Promise<Appearance>

@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.Manifest
 import android.os.Build
@@ -145,7 +145,7 @@ import com.codync.android.design.*
 }
 
 /** The host's alert rules: which kinds reach the phone. Quiet hours stay in the desktop's Diagnostics for now. */
-@Composable private fun AlertRulesSection(store: AppStore) {
+@Composable internal fun AlertRulesSection(store: AppStore) {
     var rules by remember { mutableStateOf<NotificationRules?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -165,15 +165,47 @@ import com.codync.android.design.*
     CardSection("Push alert rules", "Which of the computer's alerts reach this phone. An approval always arrives, even in quiet hours.") {
         val current = rules
         if (current == null) {
-            row { Text(error ?: "Loading…", style = Type.body, color = Palette.secondary) }
+            row { Text(error ?: "Loadingâ€¦", style = Type.body, color = Palette.secondary) }
         } else {
             row { SwitchRow("Task finished", isOn = current.done, onChange = { change(current.copy(done = it)) }) }
             row { SwitchRow("Needs you", "An approval or a question; always arrives.", isOn = current.needsInput, onChange = { change(current.copy(needsInput = it)) }) }
             row { SwitchRow("Task failed", isOn = current.failed, onChange = { change(current.copy(failed = it)) }) }
             row { SwitchRow("Task paused", isOn = current.paused, onChange = { change(current.copy(paused = it)) }) }
+            row {
+                SwitchRow("Quiet hours", "Finished, failed and paused tasks wait until it ends.",
+                    isOn = current.quietStart != current.quietEnd,
+                    onChange = { change(current.copy(quietStart = if (it) 22 else 0, quietEnd = if (it) 8 else 0)) })
+            }
+            if (current.quietStart != current.quietEnd) {
+                row { HourRow("From", current.quietStart) { change(current.copy(quietStart = it)) } }
+                row { HourRow("Until", current.quietEnd) { change(current.copy(quietEnd = it)) } }
+            }
         }
         if (error != null && current != null) row { Text(error ?: "", style = Type.footnote, color = Palette.danger) }
     }
+}
+
+/** One quiet-hour bound: a dropdown of the day's hours, in 12-hour labels like the phones show. */
+@Composable private fun HourRow(title: String, hour: Int, onChange: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = Type.body, color = Palette.text)
+        Box(Modifier.weight(1f))
+        DropdownMenu({ (0..23).map { value -> MenuItem(hourLabel(value), selected = value == hour) { onChange(value) } } }) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(hourLabel(hour), style = Type.body, color = Palette.text)
+                Symbol("chevron.up.chevron.down", size = 11.dp, tint = Palette.tertiary)
+            }
+        }
+    }
+}
+
+private fun hourLabel(hour: Int): String {
+    val shown = when {
+        hour == 0 -> 12
+        hour > 12 -> hour - 12
+        else -> hour
+    }
+    return "$shown ${if (hour < 12) "AM" else "PM"}"
 }
 
 /** Whether Android lets Codync show notifications at all; each computer's push switch is on its card. */
@@ -194,3 +226,4 @@ import com.codync.android.design.*
         }
     }
 }
+

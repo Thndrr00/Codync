@@ -7,6 +7,7 @@ import type { AccountState } from '../shared/ipc'
 import { authenticate, AuthenticationEnded } from './auth'
 import { dropDeviceKey, revokeThisDevice } from './cloud'
 import { buildConfig, identity } from './environment'
+import { clearMirrorCache } from './mirror-cache'
 
 /**
  * The Codync account through Clerk's Frontend API, the way ClerkKit drives it on the native
@@ -319,6 +320,7 @@ export class AccountService extends EventEmitter {
         if (cloud && token) await revokeThisDevice(cloud, token, session.user.id).catch(() => {})
         await dropDeviceKey(session.user.id)
       }
+      await clearMirrorCache()
       await this.refreshClient()
     } catch {
       this.set({ error: "Couldn't sign out. Check your connection and try again." })
@@ -344,6 +346,7 @@ export class AccountService extends EventEmitter {
     }
     this.cachedToken = null
     await dropDeviceKey(userId)
+    await clearMirrorCache()
     // The user is gone; a client that can't be read now drops it all the same.
     await this.refreshClient().catch(() => this.applyClient(null))
     if (this.activeSession?.user?.id === userId) this.applyClient(null)

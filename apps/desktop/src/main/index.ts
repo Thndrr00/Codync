@@ -30,6 +30,7 @@ import { registerSSHConfig } from './ssh-config'
 import { QuitLifecycle } from './quit-lifecycle'
 import { Island } from './island'
 import { registerErrorReports } from './error-reports'
+import { registerMirrorCache } from './mirror-cache'
 import { reportHostSetupFailure } from './analytics'
 import { launchAtLogin, openedAtLogin, setLaunchAtLogin, updateLoginItem } from './login-item'
 
@@ -189,6 +190,7 @@ function registerIPC(tray: Tray) {
   registerFileSaves()
   registerAgentImport()
   registerArtifacts()
+  registerMirrorCache()
   ipcMain.on('app:version', (e) => (e.returnValue = app.getVersion()))
   ipcMain.on('app:computerName', (e) => (e.returnValue = computerName()))
   ipcMain.on('app:openedAtLogin', (e) => (e.returnValue = openedAtLogin()))

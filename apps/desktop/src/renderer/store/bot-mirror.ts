@@ -23,6 +23,7 @@ import { hostHasSections } from '../lib/roster-sections'
 import { ComposerDrafts } from '@shared/composer-drafts'
 import { canLoadHistory } from '@shared/mirror-window'
 import { loadIconCache, saveIconCache } from '../lib/icon-cache'
+import { appMirrorCache } from '../lib/mirror-cache'
 
 /** The first host where the user picks the lead and may delete it. */
 const LEAD_CHOICE_HOST = '2.33.0'
@@ -129,7 +130,7 @@ export class BotMirror extends Observable {
     this.computer = computer
     this.composerDrafts = new ComposerDrafts(volatile ? new MemoryStorage() : localStorage, `codync-drafts-v1-${JSON.stringify([contextId, computer.id])}`,
       () => this.setError("Couldn't save the draft on this device. Your text is still here; keep this window open until you send or copy it."))
-    this.loadCache()
+    void this.loadCache()
   }
 
   // MARK: derived
@@ -315,14 +316,17 @@ export class BotMirror extends Observable {
     return `codync-mirror-${this.contextId}-${this.computer.id}`
   }
 
-  private loadCache() {
+  /** The encrypted cache on disk (or this window's storage in the demo). */
+  private readonly cache = appMirrorCache()
+
+  private async loadCache() {
     if (this.volatile) return
     void loadIconCache(this.cacheKey).then((icons) => {
       if (!this.retired && !this.iconsReceived) this.restoreIcons(icons)
     }).catch((error: unknown) => console.warn('Could not read cached icons', error))
     try {
-      const raw = localStorage.getItem(this.cacheKey)
-      if (!raw) return
+      const raw = await this.cache.read(this.cacheKey)
+      if (!raw || this.retired || this.hello || this.bots.size) return
       const cache = JSON.parse(raw) as { stamp?: string; hostId?: string; rev: number; bots: Bot[]; entries: Entry[] }
       this.cacheStamp = cache.stamp ?? ''
       this.hostId = cache.hostId ?? null
@@ -331,6 +335,7 @@ export class BotMirror extends Observable {
       const grouped = new Map<string, Entry[]>()
       for (const e of cache.entries) grouped.set(e.botId, [...(grouped.get(e.botId) ?? []), e])
       this.entries = grouped
+      this.changed()
     } catch {}
   }
 
@@ -350,9 +355,7 @@ export class BotMirror extends Observable {
     }
     const bots = [...this.bots.values()].map(({ customIcon: _image, ...bot }) => bot)
     const cache = { stamp: `${this.appVersion}/${this.hello?.version ?? ''}`, hostId: this.hostId, rev: this.rev, bots, entries: kept }
-    try {
-      localStorage.setItem(this.cacheKey, JSON.stringify(cache))
-    } catch {}
+    void this.cache.write(this.cacheKey, JSON.stringify(cache))
   }
 }
 

@@ -156,6 +156,8 @@ private struct ComputerRows: View {
     @State private var coloring = false
     @State private var voiceSettings = false
     @State private var networkSheet = false
+    @State private var alertRules = false
+    @State private var workspace = false
 
     var body: some View {
         summary
@@ -172,6 +174,10 @@ private struct ComputerRows: View {
                 Button { networkSheet = true } label: { RowLabel("Network", image: .codyncNetwork, chevron: true) }
                     .buttonStyle(.plain)
             }
+            Button { alertRules = true } label: { RowLabel("Alert rules", systemImage: "bell.badge", chevron: true) }
+                .buttonStyle(.plain)
+            Button { workspace = true } label: { RowLabel("Workspace", systemImage: "rectangle.3.group", chevron: true) }
+                .buttonStyle(.plain)
         }
         ComputerNotificationsRow(store: store)
         connection
@@ -219,6 +225,10 @@ private struct ComputerRows: View {
             if store.connection == .online, showsNetwork {
                 items.append(MenuItem("Network", image: .codyncNetwork) { networkSheet = true })
             }
+            if store.connection == .online {
+                items.append(MenuItem("Alert rules", icon: "bell.badge") { alertRules = true })
+                items.append(MenuItem("Workspace", icon: "rectangle.3.group") { workspace = true })
+            }
             if let revoke {
                 items.append(MenuItem("Revoke this iPhone's access", icon: "lock.slash", destructive: true, divider: true, action: revoke))
             }
@@ -229,6 +239,8 @@ private struct ComputerRows: View {
         }
         .codyncSheet(isPresented: $voiceSettings) { VoiceChatSettingsView().environment(store) }
         .codyncSheet(isPresented: $networkSheet) { NetworkSheet().environment(store) }
+        .codyncSheet(isPresented: $alertRules) { AlertRulesSheet().environment(store) }
+        .codyncSheet(isPresented: $workspace) { WorkspaceSheet().environment(store) }
         .codyncOverlay(isPresented: $coloring) { close in
             ZStack {
                 Color.black.opacity(0.35).ignoresSafeArea().onTapGesture(perform: close)

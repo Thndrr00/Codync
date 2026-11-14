@@ -57,6 +57,8 @@ import kotlinx.serialization.json.put
     var coloring by remember { mutableStateOf(false) }
     var voice by remember { mutableStateOf(false) }
     var network by remember { mutableStateOf(false) }
+    var workspace by remember { mutableStateOf(false) }
+    var alertRules by remember { mutableStateOf(false) }
     LaunchedEffect(state.contextId) { store.refreshCloud() }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         PageHeader("Computer management")
@@ -66,7 +68,8 @@ import kotlinx.serialization.json.put
                 val inAccount = state.cloudComputers.firstOrNull { it.computerId == paired.id }
                 CardSection {
                     computerRows(state, store, inAccount != null, ComputerActions(extensions, store::openScreen, voice = { voice = true },
-                        network = { network = true }, color = { coloring = true }, ask = inAccount?.let { c -> { ask(c) } },
+                        network = { network = true }, color = { coloring = true }, workspace = { workspace = true },
+                        alertRules = { alertRules = true }, ask = inAccount?.let { c -> { ask(c) } },
                         revoke = inAccount?.takeIf { it.isGranted }?.let { c -> { confirmRevoke = c } }) { confirmForget = true })
                 }
             }
@@ -95,6 +98,8 @@ import kotlinx.serialization.json.put
         } }
     }
     CodyncSheet(voice, { voice = false }) { VoiceChatSettings(state, store) }
+    CodyncSheet(workspace, { workspace = false }) { WorkspaceSheet(store) }
+    CodyncSheet(alertRules, { alertRules = false }) { AlertRulesSheet(store) }
     CodyncSheet(network, { network = false }) { state.network?.let { NetworkSheet(it, store::refreshNetwork) } }
     SwatchPanel(coloring, paired?.color, { coloring = false }, store::setColor)
     CodyncDialog(tr("Remove {name}?").replace("{name}", paired?.name ?: "computer"), confirmForget, { confirmForget = false },
@@ -109,6 +114,7 @@ import kotlinx.serialization.json.put
 
 /** What the paired computer's row and its menu open; `revoke` is set when this phone's account access can be revoked. */
 private class ComputerActions(val extensions: () -> Unit, val screen: () -> Unit, val voice: () -> Unit, val network: () -> Unit, val color: () -> Unit,
+    val workspace: () -> Unit, val alertRules: () -> Unit,
     val ask: (() -> Unit)?, val revoke: (() -> Unit)?, val remove: () -> Unit)
 
 /**
@@ -124,6 +130,8 @@ private fun CardRows.computerRows(state: AppState, store: AppStore, inAccount: B
         row { RowLabel("Voice chat", "waveform", chevron = true, modifier = Modifier.plainButton(action = actions.voice)) }
         if (state.screen != null) row { RowLabel("Screen", "display", chevron = true, modifier = Modifier.plainButton(action = actions.screen)) }
         if (state.network?.shown == true) row { RowLabel("Network", NETWORK_ICON, chevron = true, modifier = Modifier.plainButton(action = actions.network)) }
+        row { RowLabel("Workspace", "rectangle.3.group", chevron = true, modifier = Modifier.plainButton(action = actions.workspace)) }
+        row { RowLabel("Alert rules", "bell.badge", chevron = true, modifier = Modifier.plainButton(action = actions.alertRules)) }
     }
     if (BuildConfig.PUSH_CONFIGURED) row {
         CodyncSwitch(state.computers.first().notifications, store::notifications, Modifier.fillMaxWidth()) {
@@ -151,6 +159,8 @@ private fun CardRows.computerRows(state: AppState, store: AppStore, inAccount: B
             if (online) MenuItem("Voice chat", icon = "waveform", action = actions.voice) else null,
             if (online && state.screen != null) MenuItem("Screen", icon = "display", action = actions.screen) else null,
             if (online && state.network?.shown == true) MenuItem("Network", icon = NETWORK_ICON, action = actions.network) else null,
+            if (online) MenuItem("Workspace", icon = "rectangle.3.group", action = actions.workspace) else null,
+            if (online) MenuItem("Alert rules", icon = "bell.badge", action = actions.alertRules) else null,
             actions.revoke?.let { MenuItem("Revoke this phone's access", icon = "lock.slash", destructive = true, divider = true, action = it) },
             if (!inAccount) MenuItem("Remove", icon = "trash", destructive = true, divider = actions.revoke == null, action = actions.remove) else null,
         )

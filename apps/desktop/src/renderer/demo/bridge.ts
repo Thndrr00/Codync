@@ -127,6 +127,13 @@ const bridge: CodyncBridge = {
     screenAgentState: async () => ({ available: false, needsApproval: false, registered: false }),
     setScreenAgent: unavailable,
     syncScreenAgent: async () => ({ needsApproval: false }),
+    cache: {
+      read: async (key) => localStorage.getItem(key),
+      write: async (key, text) => localStorage.setItem(key, text),
+      clear: async () => {
+        for (const key of Object.keys(localStorage)) if (key.startsWith('codync-mirror-')) localStorage.removeItem(key)
+      },
+    },
   },
 }
 
