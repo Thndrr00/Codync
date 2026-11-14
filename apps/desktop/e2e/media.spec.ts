@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 import { api, attach } from './sandbox.ts'
 
 test('/image opens the picker, and using it writes the command the host reads', async () => {
+  // The first window of a run has the onboarding between it and the roster, which can outlast the default.
+  test.setTimeout(90_000)
   const { browser, page } = await attach()
   const name = `Media Bot ${Date.now().toString(36)}`
   let botId: string | undefined

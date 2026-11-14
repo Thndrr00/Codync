@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 import { api, attach } from './sandbox.ts'
 
 test('a message pins from its menu into the chat\'s pin list, and unpins from there', async () => {
+  // The first window of a run has the onboarding between it and the roster, which can outlast the default.
+  test.setTimeout(90_000)
   const { browser, page } = await attach()
   const run = Date.now().toString(36)
   const name = `Pin Bot ${run}`
