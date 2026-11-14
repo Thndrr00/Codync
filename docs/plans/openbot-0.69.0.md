@@ -58,16 +58,13 @@ message, not a section, so `withMoves` keeps returning its band.
 
 ## Checks
 
-`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` on the host:
-1 535 passed, 2 failed on this Windows machine only (a symlink privilege, `ERROR_PRIVILEGE_NOT_HELD`
-1314, and an unpacked-folder cleanup), both unrelated to this work. The pins, steer and WhatsApp
-settings tests ran on their own too, as did the team tests the steering default changed (29 of 29).
-Desktop `npm run typecheck` is clean; `npm test` has 812 of 840 passing, its 4 failures being tests
-that assert English copy on a Spanish-locale machine. Android `:core:test`, `:app:testDebugUnitTest`,
-`:app:assembleDebug` and `:app:lintDebug` are green. Web `npm run check:docs` and `npm run lint` are
-clean. iOS could not be built here (no Xcode on this machine), so the iPhone sources of pins were only
-compiled by review.
+The baseline checks and the end-to-end run are shared with the 0.70.0 work of this branch, since both
+ports landed together: [`docs/plans/openbot-0.70.0.md`](openbot-0.70.0.md#checks) records the host,
+desktop, Android and web checks and the test-side fixes the Windows run needed. This release's own
+coverage on top of that: `push`, `steer` and `whatsapp::settings` in the host, and the team tests the
+steering default changed, all 29 of them.
 
-The desktop end-to-end run against the worktree sandbox covers the pin list and the sending choice
-(`e2e/pins.spec.ts`, `e2e/queue.spec.ts`). A linked WhatsApp number is not part of it (the sandbox has
-no phone), so the switch in the WhatsApp sheet is host-test plus review only.
+`e2e/pins.spec.ts` and the three `e2e/queue.spec.ts` tests pass against the worktree sandbox, covering
+the pin list and the sending choice. A linked WhatsApp number is not part of the run (the sandbox has
+no phone), so the switch in the WhatsApp sheet is host-test plus review only. iOS could not be built
+here (no Xcode on this machine), so the iPhone sources of pins were compiled by review.

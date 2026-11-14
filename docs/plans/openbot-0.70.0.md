@@ -69,8 +69,20 @@ Desktop: `npm run typecheck` clean; `npm test` 812 of 840 passing, its 4 failure
 assert English copy on a Spanish-locale machine. Android: `:core:test`, `:app:testDebugUnitTest`,
 `:app:assembleDebug` and `:app:lintDebug` green. Web: `npm run check:docs` and `npm run lint` clean.
 
+Desktop end to end, against the worktree sandbox and the real app: `e2e/media.spec.ts` and
+`e2e/pins.spec.ts` pass (11 s, 17 s), and so do the three `e2e/queue.spec.ts` tests that cover the
+sending choice. The picker's copy, its model and aspect choices and the command it writes into the
+composer are covered; a real generation through `/image` needs an installed Codex or Grok and is not.
+
+Getting that run green on Windows took three fixes, all on the test side. The scripted agent fixtures
+were quoted with single quotes, which only quote in `sh`, so on Windows the path split at its first
+space and no agent ever started; `fixtureCommand` now quotes per platform. The queue spec asserted row
+buttons by their English names, which fail on a Spanish computer, so it pins the window to English like
+the pin and media specs do, and its 40-message test has a timeout of its own. The aspect choices are
+radios, not buttons. Sandbox memory sat above the host's 85 % refusal threshold, which the run raises
+for itself.
+
 iOS could not be built here (this machine has no Xcode), so the iPhone sources of media and pins were
-only compiled by review. The desktop end-to-end run against the worktree sandbox covers the picker's
-settings and command (`e2e/media.spec.ts`); one real generation through `/image` needs an installed
-Codex or Grok and is not part of it. The mute switch has no e2e of its own: its copy and state are in
-the bot menu, whose rows the menu specs already open.
+only compiled by review. The mute switch has no e2e of its own either: its copy and state live in the
+bot menu, whose rows the menu specs already open.
+
