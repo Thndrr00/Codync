@@ -1,7 +1,7 @@
 import { FileDownloadCard } from './FileDownloadCard'
 import { ArtifactCard } from '../library/ArtifactCard'
 import { memo, useRef, useState } from 'react'
-import { groupBotReactions, isGroup, isReplyable, type Bot, type BotApp, type Entry, type ReplyQuote } from '@shared/models'
+import { groupBotReactions, isGroup, isReplyable, type Bot, type BotApp, type Entry, type Person, type ReplyQuote } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { ComputerCard } from '../../components/ComputerCard'
 import { Button, IconButton } from '../../components/Controls'
@@ -77,6 +77,7 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
     case 'user':
       return (
         <VStack align="flex-end" gap={4} className={groupStart ? 'chat-row group-start' : 'chat-row'}>
+          {entry.data.person && groupStart ? <PersonLabel person={entry.data.person} /> : null}
           <UserBubble entry={entry} reply={reply} forward={forward} branch={branch} />
           {entry.data.routineThread && openThread ? (
             <button className="thread-link press" onClick={() => openThread(entry.id)}>
@@ -120,6 +121,11 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
       return <div className="chat-row notice"><NoticeRow entry={entry} addFallback={entry.data.addFallback && openAgent ? () => openAgent(entry.data.author ?? entry.botId) : undefined} undo={entry.data.memoryUndo && !entry.data.memoryUndo.undone ? () => void host.undoMemoryChange(entry) : undefined} /></div>
   }
 })
+
+/** Who wrote a user message from another of your devices: their name in their colour. */
+function PersonLabel({ person }: { person: Person }) {
+  return <span className="chat-person" style={{ color: avatarColor(person.color) }}>{person.name}</span>
+}
 
 function BeliefLearningNotice({ entry }: { entry: Entry }) {
   const store = useLiveStore()

@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,9 +122,13 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
         last = at
         when (slot) {
             is Entry -> {
-                val who = when (slot.kind) { "user" -> "user"; "agent" -> "agent:" + slot.data.text("author").orEmpty(); else -> slot.kind }
+                val who = when (slot.kind) {
+                    "user" -> "user:" + slot.person?.key.orEmpty()
+                    "agent" -> "agent:" + slot.data.text("author").orEmpty()
+                    else -> slot.kind
+                }
                 out += ChatItem.Message(id, slot, who != author)
-                author = if (who == "user" || slot.kind == "agent") who else null
+                author = if (slot.kind == "user" || slot.kind == "agent") who else null
             }
             is PendingSend -> { out += ChatItem.Pending(id, slot, author != "user"); author = "user" }
             is BotExchangeGroup -> { out += ChatItem.Exchanges(id, slot); author = null }
@@ -171,6 +176,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
     when (entry.kind) {
         "user" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (groupStart) entry.person?.takeIf { it.key != store.myKey }?.let { PersonLabel(it) }
             UserBubble(entry, state, store, reply, forward, thread, speeds, branch)
             ReactionsRow(entry, store)
             ThreadChip(entry, state) { store.openBot(entry.botId, entry.id) }
@@ -224,6 +230,19 @@ internal class ConnectionRequestActions(val openApp: (String, ComposioApp) -> Un
         if (bot != null) CharacterAvatar(bot.avatarShape, bot.avatarColor, 26.dp)
         Text(name ?: bot?.name ?: "A deleted bot", style = Type.chatSubheadline.medium,
             color = bot?.let { AvatarPalette.tint(it.avatarColor) } ?: Palette.secondary)
+    }
+}
+
+/** Who wrote a message from another of your devices: their initials and name in their colour. */
+@Composable private fun PersonLabel(person: com.codync.android.core.Person) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(
+            Modifier.size(16.dp).clip(CircleShape).background(AvatarPalette.tint(person.color)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(person.initials, style = Type.system(8f).bold, color = Palette.onAccent)
+        }
+        Text(person.name, style = Type.caption.medium, color = AvatarPalette.tint(person.color))
     }
 }
 

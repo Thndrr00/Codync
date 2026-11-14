@@ -19,6 +19,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::agent::hermes::api(hub, method, &b).await?
         }
         "routineSchedule" => crate::routines::schedule_preview(&b, crate::store::now_ms())?,
+        // Who else is in this chat now, and whether the caller is typing (`chat::people`).
+        "presence" => crate::chat::people::look(hub, caller, str_arg(&b, "botId")?, b["typing"].as_bool()),
         "browserProxy" => {
             let bot = str_arg(&b, "botId")?;
             crate::market::vault::unlock(hub.clone()).await?;
@@ -439,6 +441,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             if let Some(reply) = reply {
                 data["replyTo"] = reply;
+            }
+            // Who wrote it, when another person's device did (`chat::people`).
+            if let Some(person) = crate::chat::people::author(hub, caller) {
+                data["person"] = person;
             }
             // Said on a voice call (on-device or speech to text): the apps show it in the call's conversation.
             if let Some(call) = b["call"].as_str() {

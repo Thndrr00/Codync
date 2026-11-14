@@ -96,6 +96,8 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     LaunchedEffect(text, draftKey) {
         snapshotFlow { text.text.toString() }.collect {
             echoes.addLast(it); while (echoes.size > 32) echoes.removeFirst()
+            // The other devices see the typing while the keys come (`presence`).
+            store.noteTyping(bot.id)
             store.editDraft(bot.id, thread, it, draftKey)
         }
     }

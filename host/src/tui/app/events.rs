@@ -230,8 +230,13 @@ impl App {
             Err(e) => {
                 match after {
                     After::Hello => self.error = Some(e),
-                    After::Tracked | After::Week | After::RuleTest | After::Profiles | After::Health | After::Comfy => {
-                    }
+                    After::Tracked
+                    | After::Week
+                    | After::RuleTest
+                    | After::Profiles
+                    | After::Health
+                    | After::Comfy
+                    | After::Presence(_) => {}
                     After::Channels | After::ChannelsSlack => self.flash(&format!("Channels: {e}")),
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),
@@ -327,6 +332,10 @@ impl App {
             After::RuleTest => self.rules_tested(&v),
             After::Health => self.health = v,
             After::Comfy => self.comfy = v,
+            After::Presence(bot) => {
+                let people = v["people"].as_array().cloned().unwrap_or_default();
+                self.people.insert(bot, people);
+            }
             After::Profiles => self.profiles = v["profiles"].as_array().cloned().unwrap_or_default(),
             After::Channels => self.channels_loaded(&v),
             After::ChannelsSlack => self.channels_slack_loaded(v),

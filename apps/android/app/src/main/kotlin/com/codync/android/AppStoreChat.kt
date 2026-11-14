@@ -36,6 +36,44 @@ internal fun AppStore.loadDocumentConversation(botId: String, rootId: String) {
 }
 fun AppStore.showTrace(show: Boolean) { mutableState.update { it.copy(trace = show) } }
 
+/**
+ * Says this phone is in the chat, typing or not, and keeps who else is there (`presence`).
+ * Presence is decoration: a lost poll just means the next one.
+ */
+fun AppStore.presence(botId: String, typing: Boolean? = null) {
+    val active = channel ?: return
+    contextScope.launch {
+        try {
+            val answer = active.call("presence", buildJsonObject {
+                put("botId", botId)
+                typing?.let { put("typing", it) }
+            })
+            val people = answer.jsonObject["people"]?.jsonArray.orEmpty()
+                .mapNotNull { (it as? JsonObject)?.let { person -> runCatching { WireJson.decodeFromJsonElement<Person>(person) }.getOrNull() } }
+            mutableState.update { it.copy(present = it.present + (botId to people)) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { }
+    }
+}
+
+/** Whether this phone is typing in the chat (the others are told, at most once a second). */
+fun AppStore.isTyping(botId: String): Boolean = (typingUntil[botId] ?: 0) > System.currentTimeMillis()
+
+/** A key went into the chat's box: the others see the typing for the next three seconds. */
+fun AppStore.noteTyping(botId: String) {
+    val now = System.currentTimeMillis()
+    typingUntil[botId] = now + 3_000
+    if (now - (typingTold[botId] ?: 0) < 1_000) return
+    typingTold[botId] = now
+    presence(botId, typing = true)
+}
+
+/** The chat is left: nothing here counts as typing any more. */
+fun AppStore.stopTyping(botId: String) {
+    typingUntil[botId] = 0
+    typingTold[botId] = 0
+}
+
 /** A conversation on screen: a bot's main chat (`thread` null) or one of its threads. */
 internal data class ReadingScope(val botId: String, val thread: String?)
 
@@ -103,6 +141,7 @@ fun AppStore.loadHistory() {
 fun AppStore.send(text: String, files: List<OutgoingFile> = emptyList()) {
     val id = state.value.selectedBot ?: return
     if (text.isBlank() && files.isEmpty()) return
+    stopTyping(id)
     val send = PendingSend(UUID.randomUUID().toString(), id, text.trim(), System.currentTimeMillis(), files = files, threadId = state.value.thread)
     action("save:" + send.nonce) { savePending(send); deliver(send) }
 }

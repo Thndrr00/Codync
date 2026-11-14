@@ -339,6 +339,14 @@ public extension HostClient {
         return res.pins
     }
 
+    /// Who else is in the chat now, and whether this device is typing (`presence`).
+    func presence(botId: String, typing: Bool?) async throws -> [Person] {
+        struct Body: Encodable { var botId: String; var typing: Bool? }
+        struct Res: Decodable { var people: [Person] }
+        let res: Res = try await call("presence", Body(botId: botId, typing: typing))
+        return res.people
+    }
+
     /// `replyTo`: the chat message this one quotes.
     /// `pasted`: what the user pasted rather than typed, which memory never takes as their own words.
     /// `call`: the voice call it was said in (on-device or speech to text).

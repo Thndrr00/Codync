@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { Entry } from '@shared/models'
-import { groupExchanges, type BotExchange, type ChatSlot } from './bot-exchange'
+import { groupExchanges, type BotExchange, type ChatSlot } from './bot-exchange.ts'
 
 export type ChatItem =
   | { id: string; kind: 'separator'; date: number }
@@ -29,10 +29,11 @@ export function buildChat(entries: Entry[]): ChatItem[] {
       lastDate = e.createdAt
       continue
     }
-    // In a group each bot is its own author.
-    const author = e.kind === 'user' ? 'user' : e.kind === 'agent' ? `agent:${e.data.author ?? ''}` : e.kind
+    // In a group each bot is its own author; among the people, each device is.
+    const author =
+      e.kind === 'user' ? `user:${e.data.person?.key ?? ''}` : e.kind === 'agent' ? `agent:${e.data.author ?? ''}` : e.kind
     out.push({ id, kind: 'entry', entry: e, groupStart: author !== lastAuthor })
-    lastAuthor = author === 'user' || e.kind === 'agent' ? author : null
+    lastAuthor = e.kind === 'user' || e.kind === 'agent' ? author : null
     lastDate = e.createdAt
   }
   return out

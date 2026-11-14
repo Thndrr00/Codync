@@ -56,6 +56,8 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var author: String?
     /// user: the message it replies to, as the computer quoted it.
     public var replyTo: ReplyQuote?
+    /// user: the person whose device wrote it, when another of your devices did (`presence`).
+    public var person: Person?
     /// The user's emoji reactions, oldest first.
     public var reactions: [String]?
     /// Who pinned it, and when: it is in the chat's pin list.

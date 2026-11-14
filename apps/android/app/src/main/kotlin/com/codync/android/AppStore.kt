@@ -48,6 +48,11 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     internal var draftBook: DraftBook? = null
     internal var draftWriter: Job? = null
     internal var savedDrafts: Map<String, ComposerDraft> = emptyMap()
+    /** Until when this phone counts as typing in each chat, and when it last told the computer (`presence`). */
+    internal val typingUntil = mutableMapOf<String, Long>()
+    internal val typingTold = mutableMapOf<String, Long>()
+    /** This phone's own device key, so its own messages don't carry its name as somebody else's. */
+    internal var myKey: String? = null
     /** Limits orders dropped before the host answered: only the newest waits. */
     internal val usageOrders = Channel<List<String>>(Channel.CONFLATED)
     internal var connectionJob: Job? = null

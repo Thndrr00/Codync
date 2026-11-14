@@ -21,6 +21,7 @@ pub mod naming;
 pub mod oneshot;
 pub mod open_items;
 pub mod outbox;
+pub mod people;
 pub mod pins;
 pub mod profile;
 pub mod prompt;

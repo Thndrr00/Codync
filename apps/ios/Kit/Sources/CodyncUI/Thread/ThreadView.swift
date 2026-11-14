@@ -47,6 +47,7 @@ public struct ThreadView: View {
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 } else {
+                    PresenceRow(botId: botId)
                     Composer(botId: botId, replyingTo: $replyingTo,
                              queued: model.chat(botId).hidingCalls().queue(working: busy),
                              onCall: !calling && bot != nil ? { calling = true } : nil,
@@ -292,10 +293,10 @@ struct ChatItem: Identifiable {
                 out.append(ChatItem(id: id, kind: .exchanges(group)))
                 lastAuthor = nil
             case .entry(let e):
-                // In a group each bot is its own author.
-                let author = e.kind == "user" ? "user" : e.kind == "agent" ? "agent:\(e.data.author ?? "")" : e.kind
+                // In a group each bot is its own author; among the people, each device is.
+                let author = e.kind == "user" ? "user:\(e.data.person?.key ?? "")" : e.kind == "agent" ? "agent:\(e.data.author ?? "")" : e.kind
                 out.append(ChatItem(id: id, kind: .entry(e, groupStart: author != lastAuthor)))
-                lastAuthor = (author == "user" || e.kind == "agent") ? author : nil
+                lastAuthor = (e.kind == "user" || e.kind == "agent") ? author : nil
             }
         }
         return out

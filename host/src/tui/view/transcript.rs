@@ -171,10 +171,14 @@ pub(super) fn entry_lines(out: &mut Built, app: &App, b: &Bot, e: &Entry, info: 
         Kind::User => {
             gap(out);
             let from = out.lines.len();
-            let mut head = vec![
-                Span::styled(" you", t.secondary.add_modifier(Modifier::BOLD)),
-                Span::styled(format!(" {}", clock(e.created_at)), t.dim),
-            ];
+            let mine = e.data["person"]["name"]
+                .as_str()
+                .map(|n| (n.to_owned(), e.data["person"]["color"].as_str().unwrap_or("gray")));
+            let mut head = match mine {
+                Some((name, color)) => vec![Span::styled(format!(" {name}"), name_style(color))],
+                None => vec![Span::styled(" you", t.secondary.add_modifier(Modifier::BOLD))],
+            };
+            head.push(Span::styled(format!(" {}", clock(e.created_at)), t.dim));
             if e.is_pinned() {
                 head.push(Span::styled(format!(" · {}", tr("Pinned")), t.amber));
             }

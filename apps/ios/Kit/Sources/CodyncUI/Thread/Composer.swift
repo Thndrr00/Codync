@@ -290,6 +290,8 @@ struct Composer: View {
         .onChange(of: replyingTo?.id) { if replyingTo != nil { focused = true } }
         .onDisappear { dictation.stop() }
         .onChange(of: draft) { _, value in
+            // The other devices see the typing while the keys come (`presence`).
+            model.noteTyping(botId)
             model.setComposerDraft(value, for: draftKey)
             // Starting a command: list the computer's skills again.
             if value == "/" { Task { await model.refreshPlugins() } }
@@ -422,5 +424,6 @@ struct Composer: View {
             files = []
             replyingTo = nil
         }
+        model.stopTyping(botId)
     }
 }

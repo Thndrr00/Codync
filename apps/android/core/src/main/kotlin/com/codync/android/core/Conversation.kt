@@ -66,6 +66,8 @@ data class Entry(
     val isReplyable: Boolean get() = !isInternal && (kind == "user" || kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true)
     /** The message this one replies to, as the computer quoted it. */
     val replyTo: ReplyQuote? get() = (data["replyTo"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ReplyQuote>(it) }.getOrNull() }
+    /** The person whose device wrote it, when another of your devices did (`presence`). */
+    val person: Person? get() = (data["person"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<Person>(it) }.getOrNull() }
     /** What the composer shows of the message it replies to: its text, or the names of its files. */
     val quotePreview: String get() = text.ifEmpty {
         (files.map { it.name } + (data["attachments"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.text("name") }).joinToString(", ")

@@ -88,6 +88,25 @@ it has no pointer tooltip or link-opening action.
 - A pin or an unpin counts in analytics as `message_pinned` (`pinned`: which way it went), never which
   message or its text ([analytics events](../reference/analytics-events.md)).
 
+## Several people
+
+- The people of a chat are the devices paired with the computer (`host/src/chat/people.rs`): each by its
+  own name and a colour picked from its key, so two people on one computer are told apart. The computer
+  itself is the owner and has no author.
+- `presence {botId, typing?}` says the caller is looking at the chat and answers `{people, at}` with the
+  other devices there, each `{key, name, color, typing}`. It is in memory only: a device drops out 30 s
+  after it last looked, and counts as typing for 4 s after its last key (`typing: false` ends it sooner).
+- A user message sent by a device carries `data.person: {key, name, color}` (`api/bots.rs`'s `send`);
+  written at the computer it has none. It still counts as the owner's message everywhere: no new
+  permissions, notifications or push.
+- Every client polls `presence` every 3 s while a chat is open, sends its own `typing: true` at most once
+  a second while a key comes (3 s locally, cleared on send) and shows the others above the message box:
+  initials in their colour and "Ana is typing…" / "Ana is here". A run of a device's messages carries
+  its name once, and runs group by device, mobile included; the terminal names the person on the user
+  line instead of "you".
+- The first presence with somebody else in a chat sends `presence_shown` (`others`, `typing`), once per
+  chat per host run ([analytics events](../reference/analytics-events.md)).
+
 ## Bot reactions
 
 - The `chat` server's `react {emoji, to?}` (`host/src/chat/reactions.rs`) goes through the bot's actor,

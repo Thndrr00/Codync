@@ -71,6 +71,8 @@ data class AppState(
     val entries: List<Entry> = emptyList(),
     val pending: List<PendingSend> = emptyList(),
     val drafts: Map<String, ComposerDraft> = emptyMap(),
+    /** Who else is in each chat right now (`presence`), while its screen is up. */
+    val present: Map<String, List<Person>> = emptyMap(),
     val uploadProgress: Map<String, Int> = emptyMap(),
     /** Files bots shared that this phone is downloading, has downloaded or couldn't, by file ID. */
     val fileDownloads: Map<String, FileDownloadState> = emptyMap(),

@@ -93,6 +93,8 @@ pub struct Hub {
     pub team: crate::chat::team::Requests,
     /// People answering a bot's `ask_member` card (`chat::team::members`).
     pub members: crate::chat::team::members::Members,
+    /// The paired devices seen in each chat, and who is typing (`chat::people`).
+    pub people: crate::chat::people::People,
     pub groups: crate::chat::group::Rooms,
     /// The user's other computers (codync-network), once this one is in a network.
     pub network: crate::network::Network,
@@ -169,6 +171,7 @@ impl Hub {
             ),
             team: crate::chat::team::Requests::default(),
             members: crate::chat::team::members::Members::default(),
+            people: crate::chat::people::People::new(),
             groups: crate::chat::group::Rooms::default(),
             network: crate::network::Network::default(),
             waiting: crate::chat::team::remote::Waiting::default(),

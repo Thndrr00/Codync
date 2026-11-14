@@ -168,6 +168,7 @@ impl App {
                     self.client.spawn_send_files(body, files, after, self.tx.clone());
                 }
                 self.flash("Sending… Your draft stays here until delivered.");
+                self.stop_typing();
             }
             KeyCode::Backspace if draft.text.is_empty() => {
                 if let Some(files) = self.files.get_mut(&key) {
@@ -191,6 +192,10 @@ impl App {
             _ => {
                 draft.key(k);
             }
+        }
+        // The other devices see the typing while the keys come (`presence`).
+        if !matches!(k.code, KeyCode::Esc | KeyCode::Enter) {
+            self.note_typing();
         }
         self.slash_typed();
     }

@@ -163,6 +163,14 @@ public final class BotStore {
     /// The chats on screen, by the view showing each.
     @ObservationIgnored var readingViews: [UUID: String] = [:]
 
+    /// Who else is in each chat right now (`presence`), while its view is on screen.
+    public internal(set) var people: [String: [Person]] = [:]
+    /// Until when this device counts as typing in each chat, and when it last told the computer.
+    @ObservationIgnored var typingUntil: [String: Date] = [:]
+    @ObservationIgnored var typingTold: [String: Date] = [:]
+    /// This device's own key, so its messages don't carry its name as somebody else's.
+    @ObservationIgnored public internal(set) var myKey: String?
+
     var cacheStamp: String?
 
     /// Loads this context's `DeviceIdentity` itself.
@@ -170,6 +178,7 @@ public final class BotStore {
         self.init(computer: computer, storage: storage) { current in
             try await HostConnector.connect(current, identity: try DeviceIdentity.load(context: storage))
         }
+        myKey = try? DeviceIdentity.load(context: storage).publicKey
     }
 
     init(computer: Computer, storage: SharedStore.Context,

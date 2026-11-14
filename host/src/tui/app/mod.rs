@@ -59,6 +59,14 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::manage::{PinsSheet, Reply, Shell, ThreadSheet, ThreadsSheet};
 use super::net::Client;
 
+/// How often the chat says this terminal is in it, while it is on screen: the computer forgets a
+/// device thirty seconds after it last looked.
+const PRESENCE_REFRESH: Duration = Duration::from_secs(3);
+/// How long after a key this terminal counts as typing (the computer forgets it at four).
+const PRESENCE_TYPING: Duration = Duration::from_secs(3);
+/// The typing is said at most this often while keys come.
+const PRESENCE_TOLD: Duration = Duration::from_secs(1);
+
 #[derive(Clone)]
 struct PendingSend {
     text: String,
@@ -94,6 +102,12 @@ pub struct App {
     /// `toolStatus` of the computer's ComfyUI, for the header; null from an older host.
     pub comfy: Value,
     comfy_asked: Option<Instant>,
+    /// Who else is in each chat right now (`presence`), while it is on screen.
+    pub people: HashMap<String, Vec<Value>>,
+    presence_asked: Option<Instant>,
+    /// Until when this terminal counts as typing in the open chat, and when it last said so.
+    typing_until: Option<Instant>,
+    typing_told: Option<Instant>,
     /// The security profiles the host offers (`securityProfiles`), read when they are first needed.
     pub profiles: Vec<Value>,
     pub screen: Value,
@@ -210,6 +224,10 @@ impl App {
             health_asked: None,
             comfy: Value::Null,
             comfy_asked: None,
+            people: HashMap::new(),
+            presence_asked: None,
+            typing_until: None,
+            typing_told: None,
             profiles: Vec::new(),
             screen: Value::Null,
             network: Value::Null,
@@ -450,6 +468,31 @@ impl App {
         self.sheet("pinnedMessages", json!({"botId": bot}), Reply::Pins(bot.to_owned()));
     }
 
+    /// Says this terminal is in the open chat, typing or not, and keeps who else is there (`presence`).
+    fn look_around(&mut self, now: Instant) {
+        let Some(bot) = self.selected.clone() else { return };
+        self.presence_asked = Some(now);
+        let typing = self.typing_until.is_some_and(|until| until > now);
+        self.call("presence", json!({"botId": bot, "typing": typing}), After::Presence(bot));
+    }
+
+    /// A key went into the box: the others see the typing for the next three seconds.
+    pub(in crate::tui) fn note_typing(&mut self) {
+        let now = Instant::now();
+        self.typing_until = Some(now + PRESENCE_TYPING);
+        if self.typing_told.is_some_and(|at| now.duration_since(at) < PRESENCE_TOLD) {
+            return;
+        }
+        self.typing_told = Some(now);
+        self.look_around(now);
+    }
+
+    /// The message went or the box is left: nothing here counts as typing any more.
+    pub(in crate::tui) fn stop_typing(&mut self) {
+        self.typing_until = None;
+        self.typing_told = None;
+    }
+
     /// Pins a message or takes its pin back (`p` on a picked message).
     pub(super) fn pin_message(&mut self, bot: &str, entry: &str, pinned: bool) {
         self.call("pinMessage", json!({"botId": bot, "messageId": entry, "pinned": pinned}), After::Nothing);
@@ -595,6 +638,9 @@ impl App {
         if self.online && self.comfy_asked.is_none_or(|at| at.elapsed() >= comfy::REFRESH) {
             self.comfy_asked = Some(now);
             self.call("toolStatus", json!({"id": "comfy"}), After::Comfy);
+        }
+        if self.online && self.chat_visible() && self.presence_asked.is_none_or(|at| at.elapsed() >= PRESENCE_REFRESH) {
+            self.look_around(now);
         }
         self.toasts.retain(|t| t.until > now);
         if self.hint.as_ref().is_some_and(|(_, until)| *until <= now) {

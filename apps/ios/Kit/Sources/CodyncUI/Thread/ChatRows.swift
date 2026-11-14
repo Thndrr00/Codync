@@ -29,8 +29,8 @@ struct ChatRow: View {
         switch entry.kind {
         case "user":
             VStack(alignment: .trailing, spacing: 4) {
+                if let person = entry.data.person, person.key != model.myKey, groupStart { PersonLabel(person: person) }
                 UserBubble(entry: entry, botWorking: chat?.isWorking == true, reply: reply, branch: branch)
-                UserBubble(entry: entry, reply: reply)
                 ReactionsRow(entry: entry)
                 if let summary = entry.data.thread, let openThread {
                     ThreadChip(summary: summary, open: openThread)
@@ -88,6 +88,24 @@ struct TimeSeparator: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 18)
             .padding(.bottom, 6)
+    }
+}
+
+/// Who wrote a message from another of your devices: their initials and name in their colour.
+private struct PersonLabel: View {
+    let person: Person
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(person.initials)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(Palette.onAccent)
+                .frame(width: 16, height: 16)
+                .background(AvatarPalette.color(person.color), in: .circle)
+            Text(person.name)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AvatarPalette.color(person.color))
+        }
     }
 }
 

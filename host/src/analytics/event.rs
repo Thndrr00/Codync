@@ -93,6 +93,8 @@ pub enum Event {
     AgentSetupStarted,
     AgentSignedIn,
     SettingChanged,
+    /// Another person's device is in a chat you opened (once per chat and host run).
+    PresenceShown,
     /// The desktop app's ask before Reach from anywhere turns on for a computer in no account.
     ReachAccountAnswered,
     ContinuedWithoutAccount,
@@ -211,6 +213,7 @@ impl Event {
             Self::AgentSetupStarted => "agent_setup_started",
             Self::AgentSignedIn => "agent_signed_in",
             Self::SettingChanged => "setting_changed",
+            Self::PresenceShown => "presence_shown",
             Self::ReachAccountAnswered => "reach_account_answered",
             Self::ContinuedWithoutAccount => "continued_without_account",
             Self::JoinOfferAnswered => "join_offer_answered",

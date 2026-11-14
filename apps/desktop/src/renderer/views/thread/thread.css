@@ -243,6 +243,14 @@
   padding: 0 16px 8px;
 }
 
+/* Who wrote a user message from another of your devices (ChatRows' PersonLabel). */
+.chat-person {
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+
 /* Messages */
 /* Space above a row: more where a new speaker's run (or a card) starts. */
 .chat-row {

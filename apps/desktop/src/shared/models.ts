@@ -408,6 +408,17 @@ export interface AgentSwitch {
   carried: string | null
 }
 
+/** Another person in a chat: their device, named and coloured by the host (`presence`). */
+export interface Person {
+  /** The device key. */
+  key: string
+  name: string
+  /** One of the avatar colours. */
+  color: string
+  /** Whether they are typing now. */
+  typing: boolean
+}
+
 export interface EntryData {
   /** Internal scheduled input or provisional background output; never rendered. */
   internal?: boolean
@@ -489,6 +500,8 @@ export interface EntryData {
   author?: string
   /** user: the message this one replies to. */
   replyTo?: ReplyQuote
+  /** user: the person whose device wrote it; absent when written at this computer. */
+  person?: Person
   reactions?: string[]
   /** The bots' reactions, one per bot, oldest first. */
   botReactions?: BotReaction[]

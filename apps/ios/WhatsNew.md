@@ -14,6 +14,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - 從側邊欄的選單可以「靜音」一個 bot：它的通知停下來，需要你時仍會通知；選「取消靜音」回到電腦的設定。
 - bot 工作時傳的訊息預設會併入目前的回覆；在電腦的「傳送」設定關掉，訊息就會排隊。
 - WhatsApp 每個訊息都會收到 👀 反應，並可關掉「Trabajando en ello…」這行，只收回答。
+- 多人共用一個聊天：別人也在同一個聊天時，訊息框上方會顯示對方的頭像與名字，打字時顯示「某某正在輸入…」，對方傳的訊息也會標上名字。
 
 ### en-US
 - Pin a message: touch and hold it, then Pin. The pin button in the chat header lists the chat's pins and a pin opens its message; anyone can unpin. A chat keeps up to 50 pins, and bots pin important messages too.
@@ -21,6 +22,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - Mute a bot from its menu in the sidebar: its notifications stop, and it still reaches you when it needs you. Unmute gives it the computer's choice again.
 - A message you send while a bot works now joins its running turn; turn it off in the computer's Sending setting to keep messages queued.
 - WhatsApp reacts with a 👀 to each message, and a switch turns off the "Trabajando en ello…" line so only the answer comes.
+- Several people in one chat: while someone else is there, the line above the box shows their face and name, "Ana is typing…" while they type, and a message they send carries their name.
 
 ## 2.39.0
 

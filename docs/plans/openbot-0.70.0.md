@@ -22,6 +22,7 @@ either server-side (Codync has no joined servers) or already here.
 | Prepare a step from its panel (add a picture/clip step) | **Add a picture step** / **Add a clip step** in the routine panel | `FlowInspector.tsx`, `RoutineFlowDetail.kt` |
 | Mute an agent from its menu | The bot's notification switch: `notify: false` mutes it, `null` gives it the computer's choice again; a hidden bot still reaches the phone when it needs you. Analytics: `bot_updated` lists `notify` among its `fields` | `notify` store and API, the mute item in the desktop, iPhone and Android menus, the terminal's **Notify** field, `host/src/remote/push.rs` (`alert_allowed`) |
 | A message to a working agent steers the running turn by default | The computer's **Sending** setting (on unless turned off): a user message to a working agent calls `steer`; groups, routines and channel work keep their own turn | `host/src/chat/steer.rs`, `host/src/api/bots.rs`, the **Sending** setting of the desktop and the phones' computer settings, the terminal's palette action |
+| Multiplayer mode: who else is in a chat, and who wrote a message | The chat's people are the devices paired with this computer: `presence` answers who else is there and who is typing (present 30 s, typing 4 s), a device's message carries `data.person`, and every client shows the faces and "Ana is typing…" above the message box and the author above a run of messages. Analytics: `presence_shown` (`others`, `typing`) once per chat per host run | `host/src/chat/people.rs`, `host/src/api/bots.rs`, `PresenceRow` and the user row of each client, [chat messages](../features/chat-messages.md#several-people) |
 
 The picker is in every client's composer (desktop, iPhone, Android); the terminal fills `/image ` or
 `/video ` with a new `SlashAction::Media` and the host's refusal note tells the person to describe
@@ -48,10 +49,10 @@ Feature behavior is documented in [media](../features/media.md) and in the user 
 - **The video card of a step with its own play, position, mute and full screen**: a shipped clip plays in
   place in the chat (`AttachmentVideo.swift`, the desktop and Android players) with the system controls,
   not OpenBot's own card in the step.
-- **Multiplayer mode**: the release's own changelog names it only as a landing-page line ("people and
-  agents work in shared channels"), and Codync's groups and channels already carry several people and
-  bots in one conversation, so nothing was rebuilt; the OpenBot presence and cursor layer is not
-  brought over.
+- **Multiplayer mode's shared channels and name entry**: OpenBot's people join a team server and pick a name
+  there; Codync reuses the pairing that already makes a device a person, so a device's own name is the
+  author and there is no second sign-in. What is left out is its per-keystroke cursors (Codync sends a
+  whole message at a time) and its channel-wide member list (the row only covers the open chat).
 - **Server settings** (self-hosted restart, Vault per-agent access, joined-server agent defaults,
   thread limits, dock setting, web sign-in language): Codync has no joined server and Vault, and
   these were outside the release's user-facing media work.

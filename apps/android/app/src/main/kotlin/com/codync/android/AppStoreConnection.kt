@@ -174,6 +174,7 @@ fun AppStore.connect() {
             try {
                 showConnection(LinkState.Connecting)
                 val identity = withContext(Dispatchers.IO) { local.identity() }
+                myKey = identity.publicKey
                 val target = state.value.computers.firstOrNull { it.id == computer.id } ?: return@launch
                 val active = HostConnector.connect(target, identity)
                 connected = active

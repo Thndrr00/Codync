@@ -290,6 +290,8 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
                 onCompositionEnd={() => { composing.current = false }}
                 onChange={(e) => {
                   setDraft(e.target.value)
+                  // The other devices see the typing while the keys come (`presence`).
+                  store.noteTyping(botId)
                   // Starting a command: list the computer's skills again.
                   if (bot && e.target.value === '/') void plugins.refresh()
                 }}

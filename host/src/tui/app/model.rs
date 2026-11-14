@@ -49,6 +49,8 @@ pub enum After {
     Health,
     /// `toolStatus` of ComfyUI: the header's phrase; a host without it says nothing.
     Comfy,
+    /// `presence` in chat `.0`: who else is there now, typing or not.
+    Presence(String),
     /// `telegramStatus` and the Telegram calls that answer with it.
     Channels,
     /// `slackStatus`.

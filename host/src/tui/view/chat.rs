@@ -6,14 +6,14 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
 use super::super::app::{App, Click, Editor, Entry, Mark, SlashAction, Status};
-use super::super::l10n::tr;
+use super::super::l10n::{fill as fill_in, tr};
 use super::super::md::{truncate, width as w};
 use super::buffer::{fill, hline, put, put_line, rput, u};
 use super::queue::queue_band;
 use super::set_cursor;
 use super::style::{avatar, rgb, spin, theme};
 use super::time::elapsed;
-use super::transcript::build_chat;
+use super::transcript::{build_chat, name_style};
 
 pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     let t = theme();
@@ -89,7 +89,13 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     let qh = u16::from(quote.is_some());
     let files = app.draft_files();
     let fh = u16::from(!files.is_empty());
-    let box_top = r.bottom().saturating_sub(ch + qh + fh + 2);
+    let people = app.people.get(&b.id).cloned().unwrap_or_default();
+    let ph = u16::from(!people.is_empty());
+    let box_top = r.bottom().saturating_sub(ch + qh + fh + ph + 2);
+    if ph > 0 {
+        presence_line(buf, r, box_top, &people);
+    }
+    let box_top = box_top + ph;
     let typing = app.typing && app.overlays.is_empty();
     let rule = if typing { t.text } else { t.line };
     hline(buf, r.x, box_top, r.width, rule);
@@ -120,7 +126,7 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     }
     let comp_top = box_top + qh + fh;
     put(buf, r.x + 1, comp_top + 1, 1, "›", if typing { t.bold } else { t.dim });
-    let comp_rect = Rect::new(r.x, box_top, r.width, ch + qh + fh + 2);
+    let comp_rect = Rect::new(r.x, box_top.saturating_sub(ph), r.width, ch + qh + fh + ph + 2);
     app.hits.clicks.push((comp_rect, Click::Composer));
     let first = clines.len().saturating_sub(usize::from(ch)).min(cursor.1.saturating_sub(usize::from(ch) - 1));
     // Where the first composer line's text ends, so the chip on its right never covers it.
@@ -217,6 +223,39 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     if typing {
         command_menu(buf, body, app);
     }
+}
+
+/// Who else is in the chat now, over the message box: their initials in their colour, and who is
+/// typing. The apps' presence line, for a terminal.
+fn presence_line(buf: &mut Buffer, r: Rect, y: u16, people: &[serde_json::Value]) {
+    let t = theme();
+    let mut x = r.x + 1;
+    for p in people.iter().take(3) {
+        let initials: String = p["name"]
+            .as_str()
+            .unwrap_or("?")
+            .split_whitespace()
+            .take(2)
+            .filter_map(|word| word.chars().next())
+            .flat_map(char::to_uppercase)
+            .collect();
+        x = put(buf, x, y, 3, &initials, name_style(p["color"].as_str().unwrap_or("gray"))) + 1;
+    }
+    let names: Vec<&str> = people.iter().filter_map(|p| p["name"].as_str()).collect();
+    let typing: Vec<&str> = people.iter().filter(|p| p["typing"] == true).filter_map(|p| p["name"].as_str()).collect();
+    let line = match (typing.len(), names.len()) {
+        (1, _) => fill_in(&tr("{name} is typing…"), &[("name", typing[0])]),
+        (2, _) => fill_in(&tr("{a} and {b} are typing…"), &[("a", typing[0]), ("b", typing[1])]),
+        (n, _) if n > 2 => fill_in(&tr("{names} are typing…"), &[("names", &typing.join(", "))]),
+        (_, 1) => fill_in(&tr("{name} is here"), &[("name", names[0])]),
+        (_, 2) => fill_in(&tr("{a} and {b} are here"), &[("a", names[0]), ("b", names[1])]),
+        (_, n) => {
+            let count = (n - 2).to_string();
+            fill_in(&tr("{names} and {count} more are here"), &[("names", &names[..2].join(", ")), ("count", &count)])
+        }
+    };
+    let room = usize::from(r.width.saturating_sub(x - r.x + 1));
+    put(buf, x, y, u(room), &truncate(&line, room.saturating_sub(1)), t.secondary);
 }
 
 /// The `/` list over the bottom of the transcript: the commands matching what's typed, the

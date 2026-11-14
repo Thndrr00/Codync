@@ -15,6 +15,7 @@ import {
   type Hello,
   type MessageBookmark,
   type OpenItem,
+  type Person,
   type ReplyQuote,
   type ScreenState,
   type SentinelReport,
@@ -62,6 +63,9 @@ export interface SendOptions {
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅']
 
+/** How long after the last key this device still counts as typing (the host forgets it at four). */
+const TYPING_FOR = 3_000
+
 /**
  * One computer's mirror (bots, transcripts), kept by one events stream (catch-up since
  * `rev`, then live). Port of kit's `BotStore`.
@@ -94,6 +98,37 @@ export class BotStore extends BotSync {
   /** The message sent from here last: its row in the queue scrolls into view (`QueuedMessages`). */
   lastSentNonce: string | null = null
 
+  /** Who else is in each chat right now (`presence`), while its view is open. */
+  private readonly present = new Map<string, Person[]>()
+  /** Until when this device counts as typing in each chat, and when it last told the host. */
+  private readonly typing = new Map<string, { until: number; told: number }>()
+
+  people(botId: string): Person[] {
+    return this.present.get(botId) ?? []
+  }
+
+  /** Says this device is looking at the chat, typing or not, and keeps who else is there. */
+  async presence(botId: string, typing?: boolean) {
+    const res = await this.withLink((c) => c.call<{ people: Person[] }>('presence', { botId, typing }))
+    if (this.retired) return
+    this.present.set(botId, res.people)
+    this.changed()
+  }
+
+  /** Whether this device is typing in the chat (the others are told, at most once a second). */
+  isTyping(botId: string): boolean {
+    return (this.typing.get(botId)?.until ?? 0) > Date.now()
+  }
+
+  /** A key went into the chat's box: the others see the typing for the next three seconds. */
+  noteTyping(botId: string) {
+    const now = Date.now()
+    const said = this.typing.get(botId)
+    this.typing.set(botId, { until: now + TYPING_FOR, told: now })
+    if (said && now - said.told < 1_000) return
+    void this.presence(botId, true).catch(() => {})
+  }
+
   send(text: string, botId: string, { files = [], nonce = crypto.randomUUID(), pasted = [], replyTo = null, thread = null, call = null }: SendOptions = {}) {
     const trimmed = text.trim()
     if ((!trimmed && !files.length) || this.retired) return
@@ -110,6 +145,8 @@ export class BotStore extends BotSync {
       turn: 0, data, createdAt: Date.now(), updatedAt: 0, ...(thread ? { threadId: thread } : {}),
     })
     this.changed()
+    this.typing.delete(botId)
+    void this.presence(botId, false).catch(() => {})
     void (async () => {
       try {
         // Safe to repeat: the computer skips a nonce it already has.

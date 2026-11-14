@@ -1,0 +1,50 @@
+/* Who else is in the chat now, over the message box (PresenceRow.tsx). */
+.presence-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 0 18px 5px;
+  font-size: 11px;
+  color: var(--secondary);
+  animation: presence-in 0.18s var(--ease-out) both;
+}
+.presence-faces {
+  display: flex;
+}
+.presence-face {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  margin-left: -5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--background);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.presence-face:first-child {
+  margin-left: 0;
+}
+.presence-face.typing {
+  animation: presence-breathe 1.3s ease-in-out infinite;
+}
+.presence-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes presence-in {
+  from { opacity: 0; transform: translateY(2px); }
+}
+@keyframes presence-breathe {
+  50% { transform: scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .presence-row,
+  .presence-face.typing {
+    animation: none;
+  }
+}
