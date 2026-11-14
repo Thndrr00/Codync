@@ -27,3 +27,7 @@ suspend fun AppStore.whatsappSetAllowed(jid: String, allowed: Boolean): List<Str
     val answer = hostQuery("whatsappSetAllowed", buildJsonObject { put("jid", jid); put("allowed", allowed) })
     return WhatsApp.decode(answer).allowed
 }
+
+/** Whether a request gets the "Working on it…" line before its answer; false sends only the answer. */
+suspend fun AppStore.whatsappSetWorkingMessage(on: Boolean): Boolean =
+    WhatsApp.decode(hostQuery("whatsappSetWorkingMessage", buildJsonObject { put("enabled", on) })).workingMessage

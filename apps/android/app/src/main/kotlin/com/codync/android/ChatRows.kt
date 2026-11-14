@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +51,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -93,8 +95,6 @@ internal fun withUnreadLine(items: List<ChatItem>, unreadMark: Long?): List<Chat
     return buildList { for (item in items) { if (item === first) add(ChatItem.NewLine("new-${item.id}")); add(item) } }
 }
 
-/** Chat-visible entries plus time separators (gaps over an hour) and author grouping. */
-internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<ChatItem> {
 /** Chat-visible entries plus time separators (gaps over an hour) and author grouping. While the bot is [busy], queued
  *  messages wait above the composer instead ([queuedMessages]); the send each came from doesn't show again either. */
 internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: Boolean = false): List<ChatItem> {
@@ -151,10 +151,9 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
     }
 }
 
-/** One chat-visible entry, with what can be done to it. `reply` quotes it in the composer; `addFallback` opens a bot's fallbacks;
- *  `openArtifact` opens an artifact card's artifact. */
+/** One chat-visible entry, with what can be done to it. `reply` quotes it in the composer; `openArtifact` opens an artifact card's artifact. */
 @Composable internal fun ChatRow(entry: Entry, groupStart: Boolean, chat: Bot?, state: AppState, store: AppStore,
-    openTrace: () -> Unit, reply: (() -> Unit)?, connect: ConnectionRequestActions, thread: String? = null, addFallback: (Bot) -> Unit = {}, openArtifact: (OpenArtifact) -> Unit = {}) {
+    openTrace: () -> Unit, reply: (() -> Unit)?, connect: ConnectionRequestActions, thread: String? = null, openArtifact: (OpenArtifact) -> Unit = {}) {
     val group = chat?.kind == "group"
     val compact = LocalUiDensity.current == UiDensity.Compact
     val topGroupGap = if (compact) 8.dp else 12.dp
@@ -234,6 +233,9 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Message", entry.text))
     })
     if (quote != null) add(MenuItem("Quote", icon = "text.bubble", action = quote))
+    if (store != null) add(MenuItem(if (entry.pinned != null) "Unpin" else "Pin", icon = if (entry.pinned != null) "pin.slash" else "pin") {
+        store.setPinned(entry)
+    })
     if (store != null) add(MenuItem("Bookmark", icon = "bookmark") {
         store.command("saveBookmark", body("botId" to entry.botId, "entryId" to entry.id, "preview" to entry.text, "author" to entry.replyQuote.author), "bookmark:" + entry.id)
     })
@@ -246,10 +248,10 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
             add(MenuItem(if (reading) "Stop reading" else "Read aloud", icon = if (reading) "stop.fill" else "play.circle") {
                 store.readAloud(entry)
             })
-            if (speeds != null) add(MenuItem("Reading speed…", icon = "waveform", action = speeds))
+            if (speeds != null) add(MenuItem("Reading speedâ€¦", icon = "waveform", action = speeds))
         }
     }
-    if (forward != null) add(MenuItem("Send to a channel…", icon = "arrowshape.turn.up.right", action = forward))
+    if (forward != null) add(MenuItem("Send to a channelâ€¦", icon = "arrowshape.turn.up.right", action = forward))
     if (store != null) add(MenuItem("Delete", icon = "trash") { store.deleteEntry(entry) })
     if (trace != null) add(MenuItem("Show what it did", icon = "list.bullet", action = trace))
 }
@@ -273,7 +275,7 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
     }
 }
 
-internal val quickReactions = listOf("👍", "❤️", "😂", "🎉", "👀", "✅")
+internal val quickReactions = listOf("ðŸ‘", "â¤ï¸", "ðŸ˜‚", "ðŸŽ‰", "ðŸ‘€", "âœ…")
 
 private fun reactionPick(entry: Entry, store: AppStore) = ReactionPick(quickReactions, entry.reactions) { emoji ->
     store.command("react", body("entryId" to entry.id, "emoji" to emoji), "react:" + entry.id)
@@ -283,26 +285,18 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 
 @Composable private fun UserBubble(entry: Entry, state: AppState, store: AppStore, reply: (() -> Unit)?, forward: (() -> Unit)?, thread: String?, speeds: (() -> Unit)?, branch: (() -> Unit)?) {
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
     val attachments = entry.data["attachments"]?.jsonArray?.map { WireJson.decodeFromJsonElement<Attachment>(it) }.orEmpty()
     Column(Modifier.fillMaxWidth().padding(start = 56.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (attachments.isNotEmpty()) AttachmentList(attachments, entry.botId, state, store)
         ForwardedLabel(entry)
-        entry.replyTo?.let { quote ->
-            val author = if (quote.author == "user") "You" else state.bots.firstOrNull { it.id == quote.author }?.name ?: "Bot"
-            Text("↩ $author: ${quote.text}", style = Type.caption, color = Palette.tertiary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser).swipeToReply(reply)
-            .contextActions(reactions = reactionPick(entry, store), preview = { SelectionContainer { UserText(entry.text) } }) {
+        val quote = entry.replyTo
+        if (entry.text.isNotEmpty() || quote != null) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser).swipeToReply(reply)
+            .contextActions(reactions = reactionPick(entry, store), onClick = { focus.clearFocus() }, preview = { SelectionContainer { UserText(entry.text, quote) } }) {
                 messageMenu(context, entry, reply, null, store, quote = { store.quoteMessage(entry, thread) }, forward = forward, speeds = speeds,
                     branch = branch)
-            }) { UserText(entry.text) }
-        SendStatusLine(entry.status, state.bots.firstOrNull { it.id == entry.botId }?.status == "working")
-        val quote = entry.replyTo
-        if (entry.text.isNotEmpty() || quote != null) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser)
-            .contextActions(reactions = reactionPick(entry, store), onClick = { focus.clearFocus() }, preview = { SelectionContainer { UserText(entry.text, quote) } }) {
-                messageMenu(context, entry, reply, null)
             }) { UserText(entry.text, quote) }
-        SendStatusLine(entry.status)
+        SendStatusLine(entry.status, state.bots.firstOrNull { it.id == entry.botId }?.status == "working")
     }
 }
 
@@ -317,20 +311,27 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     }
 }
 
-@Composable private fun UserText(text: String) {
+@Composable private fun UserText(text: String, quote: ReplyQuote? = null) {
     val compact = LocalUiDensity.current == UiDensity.Compact
-    Text(
-        text,
-        Modifier.background(Palette.bubbleUser).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp),
-        style = Type.chatBody.copy(textDirection = TextDirection.Content),
-        color = Palette.text,
-    )
+    Column(Modifier.background(Palette.bubbleUser).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (quote != null) QuoteLine(quote.text)
+        if (text.isNotEmpty()) Text(text, style = Type.chatBody.copy(textDirection = TextDirection.Content), color = Palette.text)
+    }
 }
 
-@Composable private fun SendStatusLine(status: String?) {
+/** The message a reply quotes, as its first line without Markdown markers: in its bubble, and in the composer while replying. */
+@Composable internal fun QuoteLine(text: String, modifier: Modifier = Modifier) {
+    Row(modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Symbol("text.bubble", size = 14.dp, tint = Palette.secondary)
+        Text("\u201c${messagePreview(text)}\u201d", style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable private fun SendStatusLine(status: String?, working: Boolean = false) {
     val text = when (status) {
-        "sending" -> "Sending…"
-        "cancelled" -> "Not sent — stopped"
+        "sending" -> if (working) "Waiting for the bot to finish" else "Sending\u2026"
+        "cancelled" -> "Not sent \u2014 stopped"
         "delivering" -> "Delivered to the computer"
         else -> null
     }
@@ -342,11 +343,11 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     val compact = LocalUiDensity.current == UiDensity.Compact
     Column(Modifier.fillMaxWidth().padding(top = if (groupStart) (if (compact) 8.dp else 12.dp) else (if (compact) 2.dp else 4.dp)).padding(start = 56.dp),
         horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (file in send.files) Text(file.name + " · " + formatBytes(file.size), Modifier.clip(RoundedRectangle(14.dp))
+        for (file in send.files) Text(file.name + " Â· " + formatBytes(file.size), Modifier.clip(RoundedRectangle(14.dp))
             .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.chatFootnote, color = Palette.text)
-        if (send.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text) }
+        if (send.text.isNotEmpty() || send.replyTo != null) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text, send.replyTo) }
         when (send.status) {
-            SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files · $it%" } ?: "Sending…",
+            SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files Â· $it%" } ?: "Sendingâ€¦",
                 style = Type.caption2, color = Palette.tertiary)
             SendStatus.Delivering -> Text("Delivered to the computer", style = Type.caption2, color = Palette.tertiary)
             SendStatus.Waiting, SendStatus.Held -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -385,6 +386,8 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         },
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             SharedFilesList(entry, files, state, store)
+            // A file a media tool made keeps what was asked for under it.
+            if (entry.madeMedia != null && entry.text.isNotEmpty()) AgentText(entry.text, selectable = false)
         } else if (entry.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).swipeToReply(reply)
             .contextActions(reactions = reactionPick(entry, store), preview = { AgentText(entry.text, selectable = true) }) {
                 messageMenu(context, entry, reply, openTrace, store, quote = { store.quoteMessage(entry, thread) }, forward = forward, speeds = speeds, branch = branch)
@@ -477,7 +480,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         seconds != null -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Symbol("waveform", size = 15.dp, tint = Palette.secondary)
             Spacer(Modifier.width(6.dp))
-            Text("$text · %02d:%02d".format(seconds / 60, seconds % 60), style = Type.chatFootnote.monospacedDigit, color = Palette.secondary)
+            Text("$text Â· %02d:%02d".format(seconds / 60, seconds % 60), style = Type.chatFootnote.monospacedDigit, color = Palette.secondary)
         }
         entry.data.text("style") == "divider" -> Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -493,27 +496,25 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             Symbol("arrow.triangle.branch", size = 13.dp, tint = Palette.secondary)
             Text(text, style = Type.chatFootnote, color = Palette.secondary)
         }
-        else -> Text(text, Modifier.fillMaxWidth(), style = Type.chatFootnote, color = Palette.secondary, textAlign = TextAlign.Center)
-/** A line from the computer. `addFallback`, on a failure the bot's fallbacks could have carried, opens them. */
-@Composable private fun NoticeRow(entry: Entry, addFallback: (() -> Unit)?) {
-    val text = tr(entry.text)
-    val length = callLength(entry)
-    when {
-        length.isNotEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Symbol("waveform", size = 15.dp, tint = Palette.secondary)
-            Spacer(Modifier.width(6.dp))
-            Text(text + length, style = Type.footnote.monospacedDigit, color = Palette.secondary)
-        }
-        entry.data.text("style") == "error" -> Row(Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp))
-            .background(Palette.danger.copy(alpha = 0.12f)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Symbol("exclamationmark.triangle.fill", size = 16.dp, tint = Palette.danger)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SelectionContainer { Text(tr(text), style = Type.footnote, color = Palette.text) }
-                if (addFallback != null && entry.data["addFallback"]?.jsonPrimitive?.booleanOrNull == true) SecondaryButton("Add a fallback", action = addFallback)
-            }
-        }
         "agentSwitch" in entry.data -> AgentSwitchLine(text, (entry.data["agentSwitch"] as? JsonObject)?.text("carried"))
-        else -> Text(tr(text), Modifier.fillMaxWidth(), style = Type.footnote, color = Palette.secondary, textAlign = TextAlign.Center)
+        else -> Text(text, Modifier.fillMaxWidth(), style = Type.chatFootnote, color = Palette.secondary, textAlign = TextAlign.Center)
+    }
+}
+
+/** Another agent took over the chat (or its own is back): tapping the line unfolds what the new agent was told. */
+@Composable private fun AgentSwitchLine(text: String, carried: String?) {
+    val label: @Composable RowScope.() -> Unit = {
+        Symbol("arrow.turn.down.right", size = 13.dp, tint = Palette.secondary)
+        Spacer(Modifier.width(6.dp))
+        Text(text, Modifier.weight(1f, fill = false), style = Type.footnote, color = Palette.secondary)
+    }
+    var expanded by remember { mutableStateOf(false) }
+    if (carried.isNullOrEmpty()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, content = label)
+    else Disclosure(expanded, { expanded = !expanded }, Modifier.fillMaxWidth(), label) {
+        SelectionContainer {
+            Text(carried, Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp)).background(Palette.bubbleAgent).padding(12.dp),
+                style = Type.footnote, color = Palette.secondary)
+        }
     }
 }
 
@@ -535,10 +536,10 @@ internal fun currentThinking(entries: List<Entry>, botId: String, thread: String
         BotAvatar(bot, state.bots, 72.dp)
         Text(bot.name, style = Type.title2.semibold, color = Palette.text)
         val lines = if (bot.kind == "group") listOfNotNull(
-            members.joinToString(" · ") { it.name }.takeIf { bot.name != members.joinToString(", ") { it.name } },
+            members.joinToString(" Â· ") { it.name }.takeIf { bot.name != members.joinToString(", ") { it.name } },
             bot.description.ifEmpty { null }) else listOfNotNull(
-            if (bot.managedWorkspace) "${backendName(state, bot.backend)} · Personal workspace" else "${backendName(state, bot.backend)} in ${bot.cwd}",
-            if (bot.managedWorkspace) "${backendName(state, bot.backend)} · ${tr("Personal workspace")}"
+            if (bot.managedWorkspace) "${backendName(state, bot.backend)} Â· Personal workspace" else "${backendName(state, bot.backend)} in ${bot.cwd}",
+            if (bot.managedWorkspace) "${backendName(state, bot.backend)} Â· ${tr("Personal workspace")}"
             else fill(tr("{agent} in {path}"), "agent" to backendName(state, bot.backend), "path" to bot.cwd),
             bot.description.ifEmpty { null })
         for (line in lines) Text(line, style = Type.chatSubheadline, color = Palette.secondary, textAlign = TextAlign.Center)
@@ -547,8 +548,6 @@ internal fun currentThinking(entries: List<Entry>, botId: String, thread: String
             Modifier.padding(top = 4.dp), style = Type.chatSubheadline, color = Palette.secondary, textAlign = TextAlign.Center)
     }
 }
-
-internal fun JsonObject.text(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
 /** A routine's thread root: opens it, with a dot while it has unread replies. */
 @Composable private fun RoutineThreadChip(entry: Entry, store: AppStore) {
@@ -565,3 +564,5 @@ internal fun JsonObject.text(key: String): String? = this[key]?.jsonPrimitive?.c
         Symbol("chevron.right", size = 12.dp, tint = Palette.tertiary)
     }
 }
+
+

@@ -71,6 +71,23 @@ fun AppStore.updateFlowLink(botId: String, linkId: String, instruction: String, 
 fun AppStore.disconnectFlow(botId: String, linkId: String) =
     flowChange(botId, "disconnectRoutineFlow", buildJsonObject { put("linkId", linkId) })
 
+/** Adds a picture or clip step to a routine, at its model's first settings. */
+fun AppStore.addFlowMedia(botId: String, routineId: String, kind: String, added: (FlowMedia) -> Unit = {}) =
+    flowChange(botId, "addRoutineFlowMedia", buildJsonObject { put("routineId", routineId); put("kind", kind) }) { answer ->
+        added(WireJson.decodeFromJsonElement(answer.getValue("media")))
+    }
+
+/** Saves a step's description, model and settings. */
+fun AppStore.updateFlowMedia(botId: String, mediaId: String, settings: MediaChoice, prompt: String) =
+    flowChange(botId, "updateRoutineFlowMedia", buildJsonObject {
+        put("mediaId", mediaId); put("prompt", prompt); put("model", settings.model); put("aspect", settings.aspect)
+        put("duration", settings.duration); put("resolution", settings.resolution); put("transparent", settings.transparent)
+        put("voice", settings.voice)
+    })
+
+fun AppStore.removeFlowMedia(botId: String, mediaId: String) =
+    flowChange(botId, "removeRoutineFlowMedia", buildJsonObject { put("mediaId", mediaId) })
+
 /** Starts the flow with a sample reply, without running the routine. */
 fun AppStore.testFlow(botId: String, routineId: String) =
     flowChange(botId, "testRoutineFlow", buildJsonObject { put("botId", botId); put("routineId", routineId) })

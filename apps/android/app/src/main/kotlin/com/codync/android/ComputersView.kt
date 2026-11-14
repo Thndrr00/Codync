@@ -77,10 +77,11 @@ import kotlinx.serialization.json.put
                 row {
                     if (state.isOlderCopy(computer)) OlderCopyRow(computer)
                     else AccountComputerRow(computer, state.access?.takeIf { it.computerId == computer.computerId }?.code,
-                        askingAnother = state.askingAccess.let { it != null && it != computer.computerId },
+                        asking = state.askingAccess.let { it != null && it != computer.computerId },
                         ask = { ask(computer) }, revoke = { confirmRevoke = computer })
                 }
             }
+            if (signedIn) CloudSettings(state, store)
             val hidden = state.bots.filter { it.hidden && !it.deleted }
             if (hidden.isNotEmpty()) CardSection("Hidden bots") {
                 for (bot in hidden) row { HiddenBotRow(state, store, bot) }
@@ -132,6 +133,11 @@ private fun CardRows.computerRows(state: AppState, store: AppStore, inAccount: B
         row { RowLabel("WhatsApp", "bubble.left.and.bubble.right", chevron = true, modifier = Modifier.plainButton(action = actions.whatsapp)) }
         if (state.screen != null) row { RowLabel("Screen", "display", chevron = true, modifier = Modifier.plainButton(action = actions.screen)) }
         if (state.network?.shown == true) row { RowLabel("Network", NETWORK_ICON, chevron = true, modifier = Modifier.plainButton(action = actions.network)) }
+        row {
+            CodyncSwitch(store.steerWhileWorking, store::setSteerWhileWorking, Modifier.fillMaxWidth()) {
+                RowLabel("Steer while working", "arrow.turn.down.right", modifier = Modifier.weight(1f))
+            }
+        }
     }
     if (BuildConfig.PUSH_CONFIGURED) row {
         CodyncSwitch(state.computers.first().notifications, store::notifications, Modifier.fillMaxWidth()) {
@@ -214,9 +220,6 @@ private const val NETWORK_ICON = "point.3.connected.trianglepath.dotted"
     }
 }
 
-/** A computer in the account that this phone can't use yet; `askingAnother` while this phone asks a different one. */
-@Composable private fun AccountComputerRow(computer: CloudComputer, code: String?, askingAnother: Boolean, ask: () -> Unit,
-    revoke: () -> Unit) {
 /**
  * A computer in the account that this phone can't use yet; [asking] while this phone's request is on its way to it.
  * [revoke] takes back an earlier install's approval first; without it, asking offers to replace that approval.
@@ -238,8 +241,6 @@ private const val NETWORK_ICON = "point.3.connected.trianglepath.dotted"
         }
         when {
             code != null -> SecondaryButton("Code", action = ask)
-            computer.isGranted -> SecondaryButton("Revoke", action = revoke)
-            else -> SecondaryButton("Ask for access", enabled = !askingAnother, action = ask)
             computer.isGranted && revoke != null -> SecondaryButton("Revoke", action = revoke)
             else -> SecondaryButton("Ask for access", enabled = !asking, action = ask)
         }

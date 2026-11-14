@@ -62,7 +62,7 @@ import kotlinx.coroutines.withContext
 
 /** Files a bot shared: pictures and clips as a stack with a full-size viewer (save included), other files as cards. */
 @Composable internal fun SharedFilesList(entry: Entry, files: List<SharedFile>, state: AppState, store: AppStore) {
-    val media = files.filter { (it.isImage || it.isVideo) && it.size <= 20L * 1024 * 1024 }
+    val media = files.filter { (it.isImage || it.isVideo) && (it.size <= 20L * 1024 * 1024 || entry.madeMedia != null) }
     val rest = files.filterNot { it in media }
     var viewing by remember { mutableStateOf<Int?>(null) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {

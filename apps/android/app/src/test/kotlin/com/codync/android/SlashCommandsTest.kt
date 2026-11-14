@@ -9,7 +9,10 @@ import org.junit.Test
 
 class SlashCommandsTest {
     /** The tool commands every bot lists after its skills. */
-    private val tools = listOf("n8n", "comfy")
+    private val tools = listOf("image", "video", "n8n", "comfy")
+
+    /** A group has no agent of its own, so it lists the note-only tools. */
+    private val groupTools = listOf("n8n", "comfy")
 
     @Test fun `only a leading slash word lists commands and the bot's skills`() {
         assertEquals("ne", SlashCommands.query("/ne"))
@@ -23,7 +26,17 @@ class SlashCommandsTest {
         val mine = listOf(InstalledSkill("n8n", "n8n", "mine", "src", "/n"))
         assertEquals(listOf("mine"), SlashCommands.list(Bot("b", "Bot", skills = listOf("n8n")), "n8n", mine).map { it.detail })
         assertNull("a new session is in the bot's menu", SlashCommands.builtIn(bot, " /new "))
-        assertEquals(tools, SlashCommands.list(Bot("g", "Team", kind = "group"), "", skills).map { it.name })
+        assertEquals(groupTools, SlashCommands.list(Bot("g", "Team", kind = "group"), "", skills).map { it.name })
+    }
+
+    @Test fun `a bare image command opens the picker unless a skill has its name`() {
+        val bot = Bot("b", "Bot")
+        assertEquals("image", SlashCommands.builtIn(bot, " /image ")?.media)
+        assertEquals("video", SlashCommands.builtIn(bot, "/video")?.media)
+        assertEquals(listOf("image", "video", "comfy"), SlashCommands.list(bot, "i", emptyList()).map { it.name })
+        assertEquals(listOf("Video"), SlashCommands.list(bot, "vid", emptyList()).map { it.title })
+        assertNull("the host expands a skill named image", SlashCommands.builtIn(Bot("b", "Bot", skills = listOf("image")), "/image"))
+        assertNull("a group has no agent", SlashCommands.builtIn(Bot("g", "Team", kind = "group"), "/image"))
     }
 
     @Test fun `a group lists its members' Fast mode and the union of their skills`() {
@@ -35,7 +48,7 @@ class SlashCommandsTest {
         val plain = Bot("c", "Plain", fastModeSupport = "unsupported")
         fun fast(vararg members: Bot) = SlashCommands.list(group, "fast", skills, members.toList()).single()
 
-        assertEquals(listOf("fast", "review", "notes") + tools, SlashCommands.list(group, "", skills, listOf(scout, writer, plain)).map { it.name })
+        assertEquals(listOf("fast", "review", "notes") + groupTools, SlashCommands.list(group, "", skills, listOf(scout, writer, plain)).map { it.name })
         assertEquals("Turn on for every bot here: faster replies and more usage", fast(scout.copy(fastMode = true), writer).detail)
         // Members without Fast mode don't count toward "on".
         assertEquals("Turn off for every bot here and return to standard speed", fast(scout.copy(fastMode = true), writer.copy(fastMode = true), plain).detail)
@@ -43,7 +56,7 @@ class SlashCommandsTest {
         assertEquals("Writer: The agent turned it off: busy. Switch it off and on to try again.", refused.detail)
         assertTrue(refused.warning)
         assertEquals("fast", SlashCommands.builtIn(group, " /fast ", listOf(scout))?.name)
-        assertEquals(listOf("review") + tools, SlashCommands.list(group, "", skills, listOf(plain, Bot("d", "Old", fastModeSupport = "unsupported",
+        assertEquals(listOf("review") + groupTools, SlashCommands.list(group, "", skills, listOf(plain, Bot("d", "Old", fastModeSupport = "unsupported",
             skills = listOf("review")))).map { it.name })
         assertNull(SlashCommands.builtIn(group, "/fast", listOf(plain)))
     }

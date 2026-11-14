@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -86,10 +86,6 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     draftKey: String = ComposerDraft.lane(bot.id, thread), replyQuote: ReplyQuote? = replyingTo?.replyQuote) {
     val lane = draftKey
     val draft = state.drafts[lane]
-@Composable fun MessageComposer(bot: Bot, state: AppState, store: AppStore, onCall: (() -> Unit)?,
-    onInterrupt: (() -> Unit)? = null, replyTo: ReplyQuote? = null, cancelReply: () -> Unit = {}, about: String? = null,
-    draftKey: String = bot.id, queued: List<Entry> = emptyList()) {
-    val draft = state.drafts[draftKey]
     val text = rememberTextFieldState(initialText = draft?.text.orEmpty())
     val files = draft?.files.orEmpty()
     val queuing = "draft-send:" + lane in state.busy
@@ -140,8 +136,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     } }
     val online = state.actualConnection is LinkState.Ready
     val empty = text.text.isBlank() && files.isEmpty()
-    // Offline computers still take text when the relay can hold it; files need the computer.
-    val canSend = !terminal && !empty && !importing && !queuing && (online || state.actualConnection is LinkState.ComputerOffline && files.isEmpty())
+    // Offline computers still take text: the relay holds it for them, or with no relay this phone does. Files need the computer.
+    val canHold = state.actualConnection is LinkState.ComputerOffline || holdsOnPhone(state.computer?.cloud, state.actualConnection)
+    val canSend = !terminal && !empty && !importing && !queuing && (online || canHold && files.isEmpty())
     val working = bot.isWorking(bot.id)
     val bare = text.text.isEmpty() && files.isEmpty()
     val trailing = when {
@@ -152,11 +149,11 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         else -> Trailing.Send
     }
     val placeholder = when {
-        terminal -> "This bot runs in your terminal — reply there; approvals still work here"
-        about != null -> tr("Message about “{title}”").replace("{title}", about)
-        replyQuote != null -> tr("Reply…")
-        thread != null -> "Reply…"
-        bot.kind == "group" -> "Message everyone · @ to ask one bot"
+        terminal -> "This bot runs in your terminal â€” reply there; approvals still work here"
+        about != null -> tr("Message about â€œ{title}â€").replace("{title}", about)
+        replyQuote != null -> tr("Replyâ€¦")
+        thread != null -> "Replyâ€¦"
+        bot.kind == "group" -> "Message everyone Â· @ to ask one bot"
         working -> "Queue a message for ${bot.name}"
         else -> "Ask ${bot.name}"
     }
@@ -165,9 +162,11 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     // Starting a command: list the computer's skills again, once each time the draft becomes "/".
     val startingCommand = typed == "/" && bot.kind != "group"
     LaunchedEffect(startingCommand) { if (startingCommand && online) store.refreshPlugins() }
-    val mentions = if (bot.kind != "group") emptyList() else mentionQuery(typed)?.let { query ->
+    val mentionMembers = if (bot.kind != "group") emptyList() else mentionQuery(typed, bot.members.mapNotNull { id -> state.bots.firstOrNull { it.id == id } })?.let { query ->
         bot.members.mapNotNull { id -> state.bots.firstOrNull { it.id == id } }.filter { query.isEmpty() || it.name.contains(query, true) }
     }.orEmpty()
+    // The image and video picker: which command opened it.
+    var media by remember { mutableStateOf<String?>(null) }
     fun clear() = text.edit { replace(0, length, "") }
     // A shortcut edits one range and moves the selection; it never replaces the draft or sends.
     fun applyEdit(edit: ComposerEdits.Edit?) {
@@ -175,11 +174,15 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     }
     fun run(command: SlashCommand) {
         val skill = command.skill
+        val kind = command.media
         when {
+            kind != null -> media = kind
             skill != null -> text.setTextAndPlaceCursorAtEnd("/$skill ")
             else -> { store.command("updateBot", buildJsonObject { put("id", bot.id); put("fastMode", !bot.fastMode) }, "roster:" + bot.id); clear() }
         }
     }
+    // The messages waiting behind the running turn, with what can be done with the next one.
+    val queued = state.queuedMessages(bot.id, thread)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     // Over the box, past the + button.
     QueuedMessages(queued, state, store, Modifier.padding(start = 16.dp + FIELD_HEIGHT + 8.dp, end = 16.dp))
@@ -195,14 +198,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         Text(replyQuote.text, Modifier.weight(1f), style = Type.caption, color = Palette.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
         IconButton("Cancel reply", "xmark", action = cancelReply)
     }
-    AnimatedVisibility(mentions.isNotEmpty(), enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
-        MentionChips(mentions, state.bots) { member -> text.setTextAndPlaceCursorAtEnd(typed.substring(0, typed.lastIndexOf('@')) + "@${member.name} ") }
+    AnimatedVisibility(mentionMembers.isNotEmpty(), enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
+        MentionChips(mentionMembers, state.bots) { member -> text.setTextAndPlaceCursorAtEnd(typed.substring(0, typed.lastIndexOf('@')) + "@${member.name} ") }
     }
-    // The messages waiting behind the running turn, with what can be done with the next one.
-    val queued = state.queuedMessages(bot.id, thread)
-    var queueSheet by remember { mutableStateOf(false) }
-    QueuedStrip(queued, working && online, store) { queueSheet = true }
-    QueueSheetHost(queueSheet, queued, working && online, store) { queueSheet = false }
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp), verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         DropdownMenu({ buildList {
@@ -261,6 +259,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             store.importFiles(listOf(exported)) { store.addDraftFiles(bot.id, thread, it, draftKey) }
             annotating = null
         }
+    }
+    CodyncSheet(media, { media = null }) { kind ->
+        MediaSheet(store, bot.id, kind, typed, { media = null }) { text.setTextAndPlaceCursorAtEnd(it) }
     }
     }
 }

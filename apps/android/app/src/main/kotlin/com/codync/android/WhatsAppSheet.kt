@@ -103,11 +103,24 @@ import kotlinx.coroutines.launch
                         }
                         row { SecondaryButton(tr("Copy code"), enabled = !busy) { copyCode(code) } }
                     }
-                    current?.state == "connected" -> row {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(current.name ?: current.me.orEmpty(), style = Type.body, color = Palette.text)
-                            Text(tr("Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention."),
-                                style = Type.footnote, color = Palette.secondary)
+                    current?.state == "connected" -> {
+                        row {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(current.name ?: current.me.orEmpty(), style = Type.body, color = Palette.text)
+                                Text(tr("Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention."),
+                                    style = Type.footnote, color = Palette.secondary)
+                            }
+                        }
+                        row {
+                            CodyncSwitch(current.workingMessage, { on ->
+                                act { store.whatsappSetWorkingMessage(on); link = store.whatsapp() }
+                            }, Modifier.fillMaxWidth()) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    RowLabel("“Working on it…” message", "ellipsis.bubble")
+                                    Text(tr("A request gets it while the bot works, then the answer. Off sends only the answer."),
+                                        style = Type.caption, color = Palette.secondary)
+                                }
+                            }
                         }
                     }
                     current?.state != "starting" -> {

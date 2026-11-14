@@ -8,9 +8,13 @@ class RoutineFlowTest {
     private fun link(from: String, to: String) = FlowLink("$from-$to", "r", from, to, "", createdAt = 1)
     private fun step(bot: String, status: String, at: Long = 1) = FlowStep("s-$bot", "run", bot, status = status, updatedAt = at)
 
-    private fun canvas(links: List<FlowLink>, steps: List<FlowStep> = emptyList(), positions: List<FlowPosition> = emptyList(), placed: List<String> = emptyList()): FlowCanvas {
+    private fun media(id: String, kind: String = "image", prompt: String = "", routine: String = "r") =
+        FlowMedia(id = id, kind = kind, model = "gpt-image", prompt = prompt, routineId = routine)
+
+    private fun canvas(links: List<FlowLink>, steps: List<FlowStep> = emptyList(), positions: List<FlowPosition> = emptyList(),
+        placed: List<String> = emptyList(), media: List<FlowMedia> = emptyList()): FlowCanvas {
         val routine = Routine("r", "a", "Digest", "", emptyList(), true)
-        return FlowCanvas("a", 1, listOf(FlowRoutineCard(routine, steps = steps)), links, positions, placed)
+        return FlowCanvas("a", 1, listOf(FlowRoutineCard(routine, steps = steps)), links, positions, placed, media)
     }
 
     @Test fun `depth is the longest path from the routine bot and a bot not reached is absent`() {
@@ -88,13 +92,35 @@ class RoutineFlowTest {
         assertNull(RoutineFlow.nodeAt(nodes, -999.0, -999.0))
     }
 
+    @Test fun `a media step takes part in links, the canvas and the list`() {
+        val node = media("m", prompt = "A red kite")
+        val c = canvas(listOf(link("a", "media:m")), media = listOf(node))
+        assertNull(RoutineFlow.connectProblem(canvas(emptyList(), media = listOf(node)), "r", "a", "media:m"))
+        assertEquals(node, RoutineFlow.mediaOf(c, "media:m"))
+        assertEquals("A red kite", RoutineFlow.mediaTitle(node))
+        assertEquals("Video", RoutineFlow.mediaTitle(media("v", kind = "video")))
+        assertTrue(RoutineFlow.layout(c).any { it.key == "media:m" && it.kind == RoutineFlow.NodeKind.MEDIA })
+        assertEquals(listOf(Triple("bot:a", "media:m", "a-media:m")), RoutineFlow.edges(c).drop(1).map { Triple(it.from, it.to, it.linkId) })
+        assertEquals(listOf("a" to "bot", "media:m" to "media"), RoutineFlow.rows(c).map { it.nodeId to it.kind })
+    }
+
+    @Test fun `a media step follows the same connect rules as a bot`() {
+        val c = canvas(listOf(link("a", "media:m"), link("a", "b")), media = listOf(media("m"), media("n", routine = "other")))
+        assertTrue(RoutineFlow.connectProblem(c, "r", "media:m", "media:m")!!.contains("itself"))
+        assertTrue(RoutineFlow.connectProblem(c, "r", "a", "media:m")!!.contains("already connected"))
+        assertTrue(RoutineFlow.connectProblem(c, "r", "media:m", "media:n")!!.contains("not part of this routine"))
+        assertNull("a media step hands the file on to a bot", RoutineFlow.connectProblem(c, "r", "media:m", "b"))
+    }
+
     @Test fun `the canvas decodes the hosts answer and the event decodes`() {
         val json = """{"botId":"a","rev":3,"routines":[{"routine":{"id":"r","botId":"a","name":"D","instruction":"i","triggers":[],"enabled":true},
             "recentRuns":[],"upcomingRuns":[1],"steps":[{"id":"s","runId":"x","botId":"a","deliveryId":null,"input":"","output":null,"status":"running","error":null,"createdAt":1,"updatedAt":2}]}],
-            "links":[{"id":"l","routineId":"r","fromBotId":"a","toBotId":"b","instruction":"go","createdAt":1}],"positions":[{"nodeKey":"bot:a","x":1.5,"y":2}],"placedBotIds":["b"],"extra":1}"""
+            "links":[{"id":"l","routineId":"r","fromBotId":"a","toBotId":"b","instruction":"go","createdAt":1}],"positions":[{"nodeKey":"bot:a","x":1.5,"y":2}],"placedBotIds":["b"],
+            "mediaNodes":[{"id":"m","kind":"image","model":"gpt-image","prompt":"A kite","aspect":"1:1","duration":0,"resolution":"","transparent":false,"voice":null,"createdAt":1,"routineId":"r"}],"extra":1}"""
         val decoded = WireJson.decodeFromString<FlowCanvas>(json)
         assertEquals(listOf("running"), decoded.routines.single().steps.map { it.status })
         assertEquals("Running", decoded.routines.single().steps.single().label)
+        assertEquals("A kite", decoded.mediaNodes.single().prompt)
         val event = MirrorEvent.decode(WireJson.parseToJsonElement("""{"type":"routineFlow","rev":9,"botIds":["a","b"]}""").jsonObject)
         assertEquals(MirrorEvent.RoutineFlow(9, listOf("a", "b")), event)
         assertEquals(MirrorEvent.Ignored, MirrorEvent.decode(WireJson.parseToJsonElement("""{"type":"routineFlow"}""").jsonObject))

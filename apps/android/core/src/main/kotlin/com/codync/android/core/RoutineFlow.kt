@@ -9,7 +9,9 @@ import kotlin.math.roundToLong
 // Routine flows (host/src/routines/flow/, docs/features/routine-flows.md). The host owns the rules: it validates every change
 // and runs the flow. This file shapes what the screens show — node positions (saved, else automatic columns), edges, the list
 // that mirrors the canvas — and pre-checks the connect rules so a drop the host would refuse never leaves the phone.
-// The desktop app has the same model in `lib/routine-flow.ts`.
+// The desktop app has the same model in `lib/routine-flow.ts`. Media nodes follow OpenBot 0.70.0
+// `packages/ui/src/features/workflows/WorkflowImageNode.tsx` (a step that makes a file is a node
+// like any other, linked to the steps around it).
 
 /** [model] and [modelOptions] are what this step runs on instead of the target bot's own model; null is the bot's own. */
 @Serializable data class FlowLink(
@@ -32,6 +34,14 @@ fun flowStatusLabel(status: String?): String = when (status) {
     "cancelled" -> "Cancelled"; else -> "Not run yet"
 }
 
+/** A picture or clip step of a routine's flow (`host/src/store/flow_media.rs`); its node key is `media:<id>`. */
+@Serializable data class FlowMedia(
+    val id: String, val kind: String, val model: String, val prompt: String = "", val aspect: String = "1:1",
+    /** Seconds; only a video uses it. */
+    val duration: Int = 0, /** Only a video uses it. */ val resolution: String = "",
+    val transparent: Boolean = false, val voice: String? = null, val createdAt: Long = 0, val routineId: String,
+)
+
 @Serializable data class FlowPosition(val nodeKey: String, val x: Double, val y: Double)
 
 @Serializable data class FlowRoutineCard(
@@ -45,6 +55,8 @@ fun flowStatusLabel(status: String?): String = when (status) {
     val botId: String, val rev: Long = 0, val routines: List<FlowRoutineCard> = emptyList(),
     val links: List<FlowLink> = emptyList(), val positions: List<FlowPosition> = emptyList(),
     val placedBotIds: List<String> = emptyList(),
+    /** The picture and clip steps of these routines (`host/src/store/flow_media.rs`). */
+    val mediaNodes: List<FlowMedia> = emptyList(),
 )
 
 object RoutineFlow {
@@ -61,6 +73,23 @@ object RoutineFlow {
 
     fun routineKey(id: String) = "routine:$id"
     fun botKey(id: String) = "bot:$id"
+    fun mediaKey(id: String) = "media:$id"
+
+    /** The canvas key of a link's end, which names a bot or a `media:` step. */
+    fun flowKey(id: String) = if (id.startsWith("media:")) mediaKey(id.removePrefix("media:")) else botKey(id)
+
+    /** The media step a link end names, if it is one. */
+    fun mediaEnd(id: String): String? = if (id.startsWith("media:")) id.removePrefix("media:") else null
+
+    /** The media step of this canvas a node id stands for. */
+    fun mediaOf(canvas: FlowCanvas, id: String): FlowMedia? =
+        mediaEnd(id)?.let { own -> canvas.mediaNodes.firstOrNull { it.id == own } }
+
+    /** What a media node is called: its own description, else its kind. */
+    fun mediaTitle(media: FlowMedia?): String {
+        val prompt = media?.prompt?.trim().orEmpty()
+        return prompt.ifEmpty { if (media?.kind == "video") "Video" else "Picture" }
+    }
 
     fun clampCoordinate(value: Double): Double = value.coerceIn(-MAX_COORDINATE, MAX_COORDINATE).roundToLong().toDouble()
 
@@ -106,6 +135,8 @@ object RoutineFlow {
         val links = canvas.links.filter { it.routineId == routineId }
         if (from == to) return "A bot can't hand work to itself."
         if (to == owner) return "The routine's own bot starts the flow, so nothing can hand work back to it."
+        val media = mediaOf(canvas, to)
+        if (media != null && media.routineId != routineId) return "That step is not part of this routine."
         val here = depths(owner, links)[from] ?: return "The flow doesn't reach that bot yet: connect it from the routine's bot first."
         if (links.any { it.fromBotId == from && it.toBotId == to }) return "These two bots are already connected in this routine."
         if (reaches(links, to, from)) return "That link would make the flow loop."
@@ -113,19 +144,28 @@ object RoutineFlow {
         return null
     }
 
-    /** The bots a canvas shows: its own, every routine's bot, every link's ends and the bots placed by hand. */
-    fun botIds(canvas: FlowCanvas): List<String> = buildList {
+    /** The bots a canvas shows: its own, every routine's bot, every link's bot ends and the bots placed by hand. */
+    fun canvasBotIds(canvas: FlowCanvas): List<String> = buildList {
         add(canvas.botId)
-        canvas.routines.forEach { add(it.routine.botId) }
-        canvas.links.forEach { add(it.fromBotId); add(it.toBotId) }
+        fun addBot(id: String) { if (!id.startsWith("media:")) add(id) }
+        canvas.routines.forEach { addBot(it.routine.botId) }
+        canvas.links.forEach { addBot(it.fromBotId); addBot(it.toBotId) }
         addAll(canvas.placedBotIds)
     }.distinct()
 
-    data class Node(val key: String, val isRoutine: Boolean, val id: String, val x: Double, val y: Double, val saved: Boolean)
+    /** The bots a canvas shows, without the media steps (`canvasBotIds`). */
+    fun botIds(canvas: FlowCanvas): List<String> = canvasBotIds(canvas)
+
+    enum class NodeKind { ROUTINE, BOT, MEDIA }
+
+    data class Node(val key: String, val kind: NodeKind, val id: String, val x: Double, val y: Double, val saved: Boolean) {
+        val isRoutine: Boolean get() = kind == NodeKind.ROUTINE
+    }
 
     /**
-     * Every node with its place: the saved one, else an automatic column. Routines stand in the first column; a bot goes one
-     * column right of the deepest routine flow that reaches it, bots no flow reaches in the last column.
+     * Every node with its place: the saved one, else an automatic column. Routines stand in the first column; a bot or a
+     * media step goes one column right of the deepest routine flow that reaches it, nodes no flow reaches in the last
+     * column.
      */
     fun layout(canvas: FlowCanvas): List<Node> {
         val saved = canvas.positions.associateBy { it.nodeKey }
@@ -137,15 +177,19 @@ object RoutineFlow {
         }
         val lastColumn = max(1, column.values.maxOrNull() ?: 1) + 1
         val rows = mutableMapOf<Int, Int>()
-        fun place(key: String, isRoutine: Boolean, id: String, col: Int): Node {
+        fun place(key: String, kind: NodeKind, id: String, col: Int): Node {
             val position = saved[key]
             val row = rows[col] ?: 0
             rows[col] = row + 1
-            return Node(key, isRoutine, id, position?.x ?: (col * (NODE_WIDTH + COLUMN_GAP)),
+            return Node(key, kind, id, position?.x ?: (col * (NODE_WIDTH + COLUMN_GAP)),
                 position?.y ?: (row * (NODE_HEIGHT + ROW_GAP)), position != null)
         }
-        val nodes = canvas.routines.map { place(routineKey(it.routine.id), true, it.routine.id, 0) }.toMutableList()
-        for (id in botIds(canvas)) nodes += place(botKey(id), false, id, column[id] ?: lastColumn)
+        val nodes = canvas.routines.map { place(routineKey(it.routine.id), NodeKind.ROUTINE, it.routine.id, 0) }.toMutableList()
+        for (id in canvasBotIds(canvas)) nodes += place(botKey(id), NodeKind.BOT, id, column[id] ?: lastColumn)
+        for (media in canvas.mediaNodes) {
+            val key = mediaKey(media.id)
+            nodes += place(key, NodeKind.MEDIA, key, column[key] ?: lastColumn)
+        }
         return nodes
     }
 
@@ -154,7 +198,7 @@ object RoutineFlow {
 
     fun edges(canvas: FlowCanvas): List<Edge> =
         canvas.routines.map { Edge("start:${it.routine.id}", routineKey(it.routine.id), botKey(it.routine.botId), null) } +
-            canvas.links.map { Edge(it.id, botKey(it.fromBotId), botKey(it.toBotId), it.id) }
+            canvas.links.map { Edge(it.id, flowKey(it.fromBotId), flowKey(it.toBotId), it.id) }
 
     /** The latest step the canvas holds for a bot, across its routines. */
     fun latestStep(canvas: FlowCanvas, botId: String): FlowStep? =
@@ -162,18 +206,27 @@ object RoutineFlow {
 
     fun isUnconnected(canvas: FlowCanvas, routineId: String): Boolean = canvas.links.none { it.routineId == routineId }
 
-    /** One line of the list that mirrors the canvas: a routine's bot, or a bot under the bot that hands to it. */
-    data class Row(val key: String, val routineId: String, val botId: String, val depth: Int, val link: FlowLink?, val step: FlowStep?)
+    /** One line of the list that mirrors the canvas: a routine's bot, or a bot or media step under the step that hands to it. */
+    data class Row(
+        val key: String, val routineId: String,
+        /** The bot id, or the `media:` step id. */
+        val nodeId: String, /** `bot` or `media`. */ val kind: String, val media: FlowMedia?,
+        val depth: Int, val link: FlowLink?, val step: FlowStep?,
+    ) {
+        val botId: String get() = nodeId
+    }
 
     /** The canvas as a list, routine by routine and depth first: what TalkBack and small screens walk. */
     fun rows(canvas: FlowCanvas): List<Row> {
         val rows = mutableListOf<Row>()
         for (card in canvas.routines) {
             val links = canvas.links.filter { it.routineId == card.routine.id }
-            fun walk(bot: String, depth: Int, link: FlowLink?, path: Set<String>) {
-                if (rows.size >= MAX_ROWS || bot in path) return
-                rows += Row("${card.routine.id}/${link?.id ?: "start"}", card.routine.id, bot, depth, link, card.step(bot))
-                links.filter { it.fromBotId == bot }.forEach { walk(it.toBotId, depth + 1, it, path + bot) }
+            fun walk(nodeId: String, depth: Int, link: FlowLink?, path: Set<String>) {
+                if (rows.size >= MAX_ROWS || nodeId in path) return
+                val media = mediaOf(canvas, nodeId)
+                rows += Row("${card.routine.id}/${link?.id ?: "start"}", card.routine.id, nodeId,
+                    if (media != null) "media" else "bot", media, depth, link, card.step(nodeId))
+                links.filter { it.fromBotId == nodeId }.forEach { walk(it.toBotId, depth + 1, it, path + nodeId) }
             }
             walk(card.routine.botId, 0, null, emptySet())
         }

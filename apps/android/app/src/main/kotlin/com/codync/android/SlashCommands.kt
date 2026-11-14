@@ -27,19 +27,25 @@ import com.codync.android.core.GroupFastMode
 import com.codync.android.core.InstalledSkill
 import com.codync.android.core.fastModeDetail
 import com.codync.android.core.fastModeState
+import com.codync.android.core.mediaOffered
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 
-/** A command in the composer's `/` list (iOS `SlashCommand`): Fast mode, one of the bot's skills, or a tool command. */
+/**
+ * A command in the composer's `/` list (iOS `SlashCommand`): Fast mode, one of the bot's skills, a tool command that fills the
+ * `/<id> ` in, or the image and video pickers (`media`). Name, icon, title, what it does.
+ */
 internal data class SlashCommand(val name: String, val icon: String, val title: String, val detail: String, val warning: Boolean,
-    val skill: String? = null)
+    val skill: String? = null, val media: String? = null)
 
 /**
- * The tools every bot can be asked to work with, `/n8n …` and `/comfy …`: the host adds a note and the bot uses the tool's own
- * tools (host/src/chat/tool_commands.rs). Name, icon, title, what it does.
+ * The tools every bot can be asked to work with: `/image …` and `/video …` open the picker and the host writes the request note
+ * (host/src/media); `/n8n …` and `/comfy …` only add a note (host/src/chat/tool_commands.rs).
  */
 private val TOOL_COMMANDS = listOf(
+    SlashCommand("image", "sparkles", "Image", "Make an image with your agent's subscription", false, media = "image"),
+    SlashCommand("video", "film", "Video", "Make a short video with your agent's subscription", false, media = "video"),
     SlashCommand("n8n", "point.3.connected.trianglepath.dotted", "n8n", "Do it with the computer's n8n workflows", false, "n8n"),
     SlashCommand("comfy", "photo", "ComfyUI", "Make an image with ComfyUI", false, "comfy"),
 )
@@ -58,13 +64,21 @@ internal object SlashCommands {
         val owners = if (bot.kind == "group") members else listOf(bot)
         val own = skills.filter { skill -> owners.any { skill.id in it.skills } }.map { SlashCommand(it.id, "book.pages", it.name, it.description, false, it.id) }
         // A skill with the same id keeps the name: the host expands the skill first.
-        val tools = TOOL_COMMANDS.filter { tool -> own.none { it.name == tool.name } }
+        val tools = TOOL_COMMANDS.filter { tool -> own.none { it.name == tool.name } && (tool.media == null || bot.mediaOffered()) }
         return (builtIn(bot, members) + own + tools).filter { query.isEmpty() || it.name.contains(query, true) || it.title.contains(query, true) }
     }
 
-    /** A draft that is just a built-in command (`/fast`): sending it runs the command. */
-    fun builtIn(bot: Bot, draft: String, members: List<Bot> = emptyList()): SlashCommand? =
-        query(draft.trim())?.let { name -> builtIn(bot, members).firstOrNull { it.name == name } }
+    /**
+     * A draft that is just a built-in command (`/fast`): sending it runs the command. A bare `/image` or `/video` opens the
+     * picker, unless a skill of that name is on (the host expands the skill first).
+     */
+    fun builtIn(bot: Bot, draft: String, members: List<Bot> = emptyList()): SlashCommand? {
+        val name = query(draft.trim()) ?: return null
+        builtIn(bot, members).firstOrNull { it.name == name }?.let { return it }
+        val owners = if (bot.kind == "group") members else listOf(bot)
+        if (owners.any { name in it.skills } || !bot.mediaOffered()) return null
+        return TOOL_COMMANDS.firstOrNull { it.media == name }
+    }
 
     /** Fast mode, while the bot (or a member of the group) shows it. */
     private fun builtIn(bot: Bot, members: List<Bot>): List<SlashCommand> {
@@ -80,21 +94,6 @@ internal object SlashCommands {
     }
 }
 
-/** The `/` list above the box: each command's icon, name and what it does; tapping one runs it (iOS `CommandList`). */
-@Composable internal fun CommandList(commands: List<SlashCommand>, pick: (SlashCommand) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().heightIn(max = 280.dp).glass(RoundedRectangle(20.dp)).verticalScroll(rememberScrollState())
-        .padding(vertical = 6.dp)) {
-        for (command in commands) Row(Modifier.fillMaxWidth().plainButton { pick(command) }
-            .semantics(mergeDescendants = true) { contentDescription = command.title }.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.width(20.dp), contentAlignment = Alignment.Center) { Symbol(command.icon, size = 17.dp, tint = Palette.secondary) }
-            Text(tr(command.title), style = Type.subheadline, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(tr(command.detail), Modifier.weight(1f), style = Type.subheadline, color = if (command.warning) Palette.warning else Palette.secondary,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
 /** The bots to @mention above a group's box: chips with their faces (iOS `SuggestionChip`). */
 @Composable internal fun MentionChips(members: List<Bot>, bots: List<Bot>, mention: (Bot) -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -106,10 +105,13 @@ internal object SlashCommands {
     }
 }
 
-/** The `@partial` being typed at the end of a group's draft, if any. */
-internal fun mentionQuery(draft: String): String? {
+/** The `@partial` being typed at the end of a group's draft, if any. A member's full name and its space end it, so the
+ * list doesn't stay up for a longer name that holds this one. */
+internal fun mentionQuery(draft: String, members: List<Bot>): String? {
     val at = draft.lastIndexOf('@')
-    if (at < 0 || at > 0 && !draft[at - 1].isWhitespace()) return null
+    if (at < 0) return null
+    if (at > 0 && !draft[at - 1].isWhitespace()) return null
     val query = draft.substring(at + 1)
-    return if (query.contains('\n') || query.length > 24) null else query
+    if (query.firstOrNull()?.isWhitespace() == true || query.contains('\n') || query.length > 24) return null
+    return if (members.any { query.lowercase() == it.name.lowercase() + " " }) null else query
 }

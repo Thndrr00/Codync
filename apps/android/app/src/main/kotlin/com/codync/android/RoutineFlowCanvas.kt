@@ -184,30 +184,41 @@ import kotlin.math.roundToInt
     }
 }
 
-/** One node: a routine with its week and last runs, or a bot with its avatar and latest step. */
+/** One node: a routine with its week and last runs, a bot with its avatar and latest step, or a step that makes a picture or a clip. */
 @Composable private fun FlowNodeCard(node: Node, x: Double, y: Double, canvas: FlowCanvas, bots: Map<String, Bot>, editable: Boolean,
     select: (FlowSelection) -> Unit, drag: (Double, Double) -> Unit, drop: () -> Unit, run: (String) -> Unit) {
     val density = LocalDensity.current.density
     val card = if (node.isRoutine) canvas.routines.firstOrNull { it.routine.id == node.id } else null
-    val bot = if (node.isRoutine) null else bots[node.id]
-    val title = card?.routine?.name ?: bot?.name ?: tr("Unknown bot")
-    val step = if (node.isRoutine) null else RoutineFlow.latestStep(canvas, node.id)
+    val media = RoutineFlow.mediaOf(canvas, node.key)
+    val bot = if (node.isRoutine || media != null) null else bots[node.id]
+    val title = card?.routine?.name ?: media?.let { RoutineFlow.mediaTitle(it) } ?: bot?.name ?: tr("Unknown bot")
+    val kindName = when {
+        card != null -> tr("Routine"); media != null -> tr(if (media.kind == "video") "Clip step" else "Picture step")
+        else -> tr("Bot")
+    }
+    val step = if (card != null) null else RoutineFlow.latestStep(canvas, node.id)
     Column(Modifier.offset { IntOffset((x * density).roundToInt(), (y * density).roundToInt()) }
         .size(RoutineFlow.NODE_WIDTH.dp, RoutineFlow.NODE_HEIGHT.dp).clip(RoundedRectangle(12.dp))
-        .background(if (node.isRoutine) Palette.bubbleAgent else Palette.background)
+        .background(if (card != null) Palette.bubbleAgent else Palette.background)
         .pointerInput(node.key, editable) {
             if (editable) detectDragGestures(onDragEnd = drop, onDragCancel = drop) { change, amount ->
                 change.consume(); drag(amount.x.toDouble() / density, amount.y.toDouble() / density)
             }
         }
         .clickable { select(FlowSelection.OfNode(node.key)) }
-        .semantics(mergeDescendants = true) { contentDescription = "${if (node.isRoutine) "Routine" else "Bot"}: $title" }
+        .semantics(mergeDescendants = true) { contentDescription = "$kindName: $title" }
         .padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (bot != null) BotAvatar(bot, bots.values.toList(), 30.dp) else Symbol("clock.arrow.circlepath", size = 26.dp, tint = Palette.secondary)
+            when {
+                card != null -> Symbol("clock.arrow.circlepath", size = 26.dp, tint = Palette.secondary)
+                media != null -> Symbol(if (media.kind == "video") "film" else "sparkles", size = 24.dp, tint = Palette.secondary)
+                bot != null -> BotAvatar(bot, bots.values.toList(), 30.dp)
+                else -> Symbol("questionmark.circle", size = 26.dp, tint = Palette.secondary)
+            }
             Column(Modifier.weight(1f)) {
                 Text(title, style = Type.system(13f), color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(card?.routine?.triggerDescriptions?.joinToString(" · ") ?: bot?.model ?: bot?.backend.orEmpty(),
+                Text(card?.routine?.triggerDescriptions?.joinToString(" · ") ?: media?.let { tr(if (it.kind == "video") "Clip" else "Picture") }
+                    ?: bot?.model ?: bot?.backend.orEmpty(),
                     style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (card != null) {

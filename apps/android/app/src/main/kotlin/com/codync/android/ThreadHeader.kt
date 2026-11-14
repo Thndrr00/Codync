@@ -114,6 +114,12 @@ import com.kyant.shapes.RoundedRectangle
                 add(MenuItem("Reconnect", icon = "arrow.clockwise") { store.reconnect() })
                 add(MenuItem("Details", icon = "info.circle", divider = true) { edit(bot) })
                 add(MenuItem("Full conversation", icon = "list.bullet.rectangle", action = trace))
+                add(
+                    MenuItem(
+                        if (bot.notify == false) "Unmute agent" else "Mute agent",
+                        icon = if (bot.notify == false) "bell" else "bell.slash",
+                    ) { store.setBotMuted(bot, bot.notify != false) },
+                )
                 val pin = MenuItem(if (bot.pinned) "Unpin" else "Pin", icon = "pin") {
                     store.command("updateBot", kotlinx.serialization.json.buildJsonObject {
                         put("id", kotlinx.serialization.json.JsonPrimitive(bot.id)); put("pinned", kotlinx.serialization.json.JsonPrimitive(!bot.pinned))

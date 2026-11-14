@@ -25,6 +25,11 @@ internal fun AppStore.hideBotFromRoster(bot: Bot) {
     command("updateBot", buildJsonObject { put("id", bot.id); put("hidden", true) }, "roster:" + bot.id)
 }
 
+/** Mutes the bot's notifications on every device, or gives them back. */
+internal fun AppStore.setBotMuted(bot: Bot, muted: Boolean) {
+    command("updateBot", buildJsonObject { put("id", bot.id); put("notify", muted) }, "roster:" + bot.id)
+}
+
 /**
  * Stops an active bot execution without faking local idle state; keeps `"stop:${bot.id}"` in `busy`
  * until the host confirms the command.
@@ -99,6 +104,12 @@ internal fun botRosterActions(bot: Bot, store: AppStore, edit: () -> Unit, delet
             MenuItem("Mark as read", icon = "checkmark.message") {
                 store.markBotRead(bot)
             },
+        )
+        add(
+            MenuItem(
+                title = if (bot.notify == false) "Unmute agent" else "Mute agent",
+                icon = if (bot.notify == false) "bell" else "bell.slash",
+            ) { store.setBotMuted(bot, bot.notify != false) },
         )
         if (bot.kind != "group") add(MenuItem("Duplicate", icon = "square.on.square") { store.duplicateBot(bot) })
         if (bot.kind != "group") add(MenuItem("New session", icon = "arrow.counterclockwise", action = newSession))

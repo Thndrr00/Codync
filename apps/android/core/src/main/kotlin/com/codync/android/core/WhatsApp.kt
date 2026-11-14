@@ -18,6 +18,8 @@ import kotlinx.serialization.json.jsonObject
     val bot: String? = null,
     /** Chats and people allowed to write; empty means anyone. */
     val allowed: List<String> = emptyList(),
+    /** Answer each request with a "Working on it…" line (missing: on). Off sends only the answer. */
+    val workingMessage: Boolean = true,
 )
 
 /** What the WhatsApp screen shows, and the words it uses; the host owns the meaning. */

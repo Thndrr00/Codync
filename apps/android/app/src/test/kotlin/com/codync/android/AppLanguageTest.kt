@@ -9,8 +9,7 @@ import org.junit.Test
 
 class AppLanguageTest {
     @Test fun additionalLanguagesResolveRegionsAndKeepExplicitChoices() {
-        for (language in listOf(AppLanguage.Ja, AppLanguage.Ko, AppLanguage.Fr, AppLanguage.De, AppLanguage.Es, AppLanguage.Ar)) {
-        for (language in listOf(AppLanguage.Ja, AppLanguage.Ko, AppLanguage.Fr, AppLanguage.De, AppLanguage.Es, AppLanguage.Ru, AppLanguage.It)) {
+        for (language in listOf(AppLanguage.Ja, AppLanguage.Ko, AppLanguage.Fr, AppLanguage.De, AppLanguage.Es, AppLanguage.Ru, AppLanguage.It, AppLanguage.Ar)) {
             assertEquals(language, AppLanguage.System.resolved(language.stored + "-XX"))
             assertEquals(language, language.resolved("zh-TW"))
             assertEquals(language, AppLanguage.fromStored(language.stored))
@@ -18,7 +17,7 @@ class AppLanguageTest {
             assertEquals("Unknown", translate("Unknown", language, true, phrases))
             assertFalse(language.usesChinese(true))
         }
-        assertEquals(AppLanguage.En, AppLanguage.System.resolved("pt-BR"))
+        assertEquals(AppLanguage.PtBr, AppLanguage.System.resolved("pt-BR"))
     }
 
     @Test fun brazilianPortuguesePersistsAndAppearsAfterSpanish() {

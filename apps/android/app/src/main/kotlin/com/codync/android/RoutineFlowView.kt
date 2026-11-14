@@ -51,6 +51,25 @@ private fun Context.screenReaderOn(): Boolean =
     LaunchedEffect(bot.id, online, rev) { if (online) store.loadFlow(bot.id) }
     val byId = state.bots.associateBy { it.id }
     val takers = state.bots.filter { it.kind != "group" && !it.hidden && it.backend != "external" }
+    // The bots and steps `from` may hand work to, in some routine of this canvas.
+    fun targets(from: String): List<FlowTarget> {
+        val drawn = canvas ?: return emptyList()
+        return buildList {
+            for (target in takers) {
+                if (target.id == from) continue
+                if (drawn.routines.any { RoutineFlow.connectProblem(drawn, it.routine.id, from, target.id) == null }) {
+                    add(FlowTarget(target.id, target.name))
+                }
+            }
+            for (media in drawn.mediaNodes) {
+                val key = RoutineFlow.mediaKey(media.id)
+                if (key == from) continue
+                if (drawn.routines.any { RoutineFlow.connectProblem(drawn, it.routine.id, from, key) == null }) {
+                    add(FlowTarget(key, RoutineFlow.mediaTitle(media)))
+                }
+            }
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (canvas == null) {
@@ -83,7 +102,7 @@ private fun Context.screenReaderOn(): Boolean =
 
     val shown = selection
     CodyncSheet(shown != null, { selection = null }, setOf(SheetDetent.Medium, SheetDetent.Expanded)) {
-        if (canvas != null && shown != null) FlowDetail(state, bot, canvas, byId, takers, shown, online, busy, store,
+        if (canvas != null && shown != null) FlowDetail(state, bot, canvas, byId, { targets(it) }, shown, online, busy, store,
             { text -> note = text }, { selection = it }, { selection = null })
     }
 }
@@ -108,18 +127,19 @@ private fun placeBot(store: AppStore, canvasBot: String, canvas: FlowCanvas, bot
                     if (RoutineFlow.isUnconnected(canvas, routine.id)) Text(tr("Not connected"), style = Type.caption, color = Palette.secondary)
                 }
                 for (row in rows.filter { it.routineId == routine.id }) {
-                    val name = bots[row.botId]?.name ?: tr("Unknown bot")
+                    val media = row.media
+                    val name = media?.let { RoutineFlow.mediaTitle(it) } ?: bots[row.nodeId]?.name ?: tr("Unknown bot")
                     val status = tr(flowStatusLabel(row.step?.status))
                     Row(Modifier.fillMaxWidth()
-                        .clickable { select(row.link?.let { FlowSelection.OfLink(it.id) } ?: FlowSelection.OfNode(RoutineFlow.botKey(row.botId))) }
+                        .clickable { select(row.link?.let { FlowSelection.OfLink(it.id) } ?: FlowSelection.OfNode(RoutineFlow.flowKey(row.nodeId))) }
                         .semantics(mergeDescendants = true) { contentDescription = "$name, $status" }
                         .padding(start = (row.depth * 14).dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text((if (row.depth > 0) "→ " else "") + name, style = Type.footnote, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            row.link?.instruction?.takeIf { it.isNotBlank() }?.let {
-                                Text(it, style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
+                            val detail = row.link?.instruction?.takeIf { it.isNotBlank() }
+                                ?: media?.let { tr(if (it.kind == "video") "Clip step" else "Picture step") }
+                            detail?.let { Text(it, style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
                         StatusChip(row.step?.status)
                     }

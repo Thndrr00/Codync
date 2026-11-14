@@ -105,6 +105,8 @@ import com.kyant.shapes.RoundedRectangle
     var replyingTo by remember(bot.id) { mutableStateOf<Entry?>(null) }
     // The chat's threads, open ones or the archive.
     var threadsOpen by remember(bot.id) { mutableStateOf(false) }
+    // The chat's pinned messages.
+    var pinsOpen by remember(bot.id) { mutableStateOf(false) }
     val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var composerHeight by remember { mutableIntStateOf(0) }
     val scroll = rememberConversationScroll()
@@ -118,8 +120,8 @@ import com.kyant.shapes.RoundedRectangle
         ScrollEdge(Edge.Bottom, with(density) { composerHeight.toDp() } + 4.dp, Modifier.align(Alignment.BottomCenter))
         // 10 above the composer, as on iOS: the list already keeps 8 under its last row.
         JumpToLatest(scroll, Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { composerHeight.toDp() } + 10.dp))
-        ThreadHeader(bot, state, store, { shown -> if (shown.kind == "group") edit(shown) else details = DetailsRequest() }, { store.showTrace(true) }, { openRoutine(null) }, { confirmNewSession = true }, { confirmDelete = true }, { searching = true },
-            threads = { threadsOpen = true }, newThread = { store.startThread(bot.id) })
+        ThreadHeader(bot, state, store, { if (bot.kind == "group") edit(bot) else details = DetailsRequest() },
+            { pinsOpen = true })
         // The call floats over the chat under the header, as on iOS; the chat stays readable and usable.
         AnimatedVisibility(state.voice != null, Modifier.padding(top = top + 54.dp),
             enter = fadeIn(Motion.fade()) + slideInVertically(Motion.layoutOffset) { -it }, exit = fadeOut(Motion.fade()) + slideOutVertically(Motion.layoutOffset) { -it }) {
@@ -151,11 +153,6 @@ import com.kyant.shapes.RoundedRectangle
             else if (viewing == null) MessageComposer(bot, null, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
                 replyingTo = replyingTo, cancelReply = { replyingTo = null },
                 onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null)
-            // An artifact's viewer has its own box for the same draft; two would overwrite each other.
-            else if (viewing == null) MessageComposer(bot, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
-                onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null,
-                replyTo = replyTo, cancelReply = { replyId = null },
-                queued = queuedMessages(state.chatEntries(bot), bot.isWorking))
         }
     }) {
         Transcript(bot, chatState, store, connect, scroll, PaddingValues(start = 16.dp, end = 16.dp, top = top + 60.dp,
@@ -180,6 +177,7 @@ import com.kyant.shapes.RoundedRectangle
     CodyncSheet(state.trace, { store.showTrace(false) }) { TraceView(bot, state.thread, state) }
     CodyncSheet(searching, { searching = false }) { ConversationSearch(bot, store) { searching = false } }
     CodyncSheet(threadsOpen, { threadsOpen = false }) { ThreadsSheet(bot, state, store) { threadsOpen = false } }
+    CodyncSheet(pinsOpen, { pinsOpen = false }) { PinsSheet(bot, state, store) { pinsOpen = false } }
     CodyncSheet(routines, { routines = false }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded), initialDetent = SheetDetent.Expanded) {
         RoutinesScreen(bot, state, store, routineId)
     }
@@ -196,18 +194,8 @@ import com.kyant.shapes.RoundedRectangle
     CodyncSheet(connector, { connector = null; setupEntry = null }) { InstallConnectorSheet(it, state, store, setupEntry) }
 }
 
-/** The messages: all this phone has, earlier ones from the computer near the top, following the newest. */
-@Composable private fun Transcript(bot: Bot, state: AppState, store: AppStore, connect: ConnectionRequestActions, scroll: ConversationScroll, padding: PaddingValues,
-    indicatorTop: Dp, openRoutine: (String) -> Unit, reply: (Entry) -> Unit, openArtifact: (OpenArtifact) -> Unit, openCall: (String) -> Unit, openPeer: (String) -> Unit) {
-    val entries = state.entries.filter { it.botId == bot.id && it.threadId == null && it.isChat }.hidingCalls()
-    val pending = state.pending.filter { it.botId == bot.id && it.threadId == null && (it.call == null || it.status == SendStatus.Failed) }
-    val items = chatItems(entries, pending)
-    // The first unread message when the chat opened; opening marks it read, so keep the mark for this visit.
-    val unreadMark = remember(bot.id) { bot.readRev.takeIf { bot.unread > 0 } }
-    val rows = remember(items, unreadMark) { withUnreadLine(items, unreadMark) }
-    val newLineColor = bot.chatColor?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
 /** The glass back button, the title (tapping it opens the bot's details) and the connection under it. */
-@Composable private fun ThreadHeader(bot: Bot, state: AppState, store: AppStore, openDetails: () -> Unit) {
+@Composable private fun ThreadHeader(bot: Bot, state: AppState, store: AppStore, openDetails: () -> Unit, pins: () -> Unit) {
     Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 16.dp).height(44.dp)) {
         val (source, pressed) = rememberPress()
         Box(Modifier.align(Alignment.CenterStart).size(44.dp).glass(Capsule(), pressed = pressed)
@@ -224,16 +212,24 @@ import com.kyant.shapes.RoundedRectangle
                 ConnectionSubtitle(state)
             }
         }
-        // The corner is the computer: it pulses while this bot is operating it (watch, then take over).
+        // The corner is the pin list, then the computer: it pulses while this bot is operating it (watch, then take over).
         val screen = state.screen
-        if (screen != null) {
-            val operating = screen.agentBot == bot.id
-            ComputerButton(operating, Modifier.align(Alignment.CenterEnd)) { store.openScreen(bot.id.takeIf { operating }) }
+        val pinsLabel = tr("Pinned messages")
+        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val (pinSource, pinPressed) = rememberPress()
+            Box(Modifier.size(44.dp).glass(Capsule(), pressed = pinPressed)
+                .then(Modifier.plainButton { pins() }).semantics { contentDescription = pinsLabel }, contentAlignment = Alignment.Center) {
+                Symbol("pin", size = 20.dp, tint = Palette.text)
+            }
+            if (screen != null) {
+                val operating = screen.agentBot == bot.id
+                ComputerButton(operating) { store.openScreen(bot.id.takeIf { operating }) }
+            }
         }
     }
 }
 
-@Composable private fun ComputerButton(operating: Boolean, modifier: Modifier, action: () -> Unit) {
+@Composable private fun ComputerButton(operating: Boolean, modifier: Modifier = Modifier, action: () -> Unit) {
     val (source, pressed) = rememberPress()
     val pulse by rememberInfiniteTransition(label = "Operating").animateFloat(1f, 0.35f,
         infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "Pulse")
@@ -262,24 +258,35 @@ import com.kyant.shapes.RoundedRectangle
 private fun AppState.chatEntries(bot: Bot) = entries.filter { it.botId == bot.id && it.isChat }.hidingCalls()
 
 /** The messages: all this phone has, earlier ones from the computer near the top, following the newest. */
-@Composable private fun Transcript(bot: Bot, state: AppState, store: AppStore, connect: ConnectionRequestActions, padding: PaddingValues,
-    indicatorTop: Dp, openRoutine: (String) -> Unit, reply: (Entry) -> Unit, addFallback: (Bot) -> Unit, openArtifact: (OpenArtifact) -> Unit,
+@Composable private fun Transcript(bot: Bot, state: AppState, store: AppStore, connect: ConnectionRequestActions, scroll: ConversationScroll,
+    padding: PaddingValues, indicatorTop: Dp, openRoutine: (String) -> Unit, reply: (Entry) -> Unit, openArtifact: (OpenArtifact) -> Unit,
     openCall: (String) -> Unit, openPeer: (String) -> Unit) {
     val entries = state.chatEntries(bot)
     // A call's message that failed to send stays here, to be sent again.
     val pending = state.pending.filter { it.botId == bot.id && (it.call == null || it.status == SendStatus.Failed) }
     // Messages waiting behind the bot's work show above the composer instead.
     val items = chatItems(entries, pending, busy = bot.isWorking)
+    // The first unread message when the chat opened; opening marks it read, so keep the mark for this visit.
+    val unreadMark = remember(bot.id) { bot.readRev.takeIf { bot.unread > 0 } }
+    val rows = remember(items, unreadMark) { withUnreadLine(items, unreadMark) }
+    val newLineColor = bot.chatColor?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
     val working = bot.isWorking(bot.id) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
+    // The earlier pages' own memory, for this visit to the chat.
+    val paging = remember(bot.id) { EarlierPaging() }
     val details by ThinkingDetails.enabled.collectAsStateWithLifecycle()
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
     ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
         if (more) item("earlier") {
             Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
-                contentAlignment = Alignment.Center) { Spinner(14.dp) }
+                contentAlignment = Alignment.Center) { if ("history" !in state.busy) Spinner(14.dp) }
             // A chat shorter than the screen never scrolls, so showing the row is the trigger.
-            LaunchedEffect(Unit) { if ("history" !in state.busy) store.loadHistory() }
+            LaunchedEffect(rows.size, "history" in state.busy, state.failedAction) {
+                if (state.failedAction == "history") paging.failed()
+                if (paging.ask(settled = true, visible = true, loading = "history" in state.busy, shown = entries.size,
+                        floor = entries.firstOrNull()?.seq ?: 0)) store.loadHistory()
+            }
+            DisposableEffect(paging) { onDispose { paging.left() } }
         }
         if (items.isEmpty() && !more) item("intro") { IntroCard(bot, state) }
         items(rows, key = { it.id }) { item ->

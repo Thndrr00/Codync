@@ -39,6 +39,8 @@ data class Entry(
     val status: String? get() = data.text("status")
     /** Files the bot shared in this message. */
     val files: List<SharedFile> get() = data["files"]?.let { WireJson.decodeFromJsonElement<List<SharedFile>>(it) }.orEmpty()
+    /** The kind of file a media tool made (`image` or `video`), so the chat shows the picture or plays the clip. */
+    val madeMedia: String? get() = (data["media"] as? JsonObject)?.text("kind")
     /** The artifact a bot published in this message (an artifact card), read leniently: its text stands in for it. */
     val artifact: ArtifactCard? get() = (data["artifact"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ArtifactCard>(it) }.getOrNull() }
     /** A message of the user's waiting behind the bot's work: the computer hasn't given it to the agent yet. */
@@ -138,7 +140,7 @@ private fun isVideoName(name: String) = name.substringAfterLast('.', "").lowerca
 private val CONTROLS = setOf(Character.CONTROL, Character.FORMAT)
 
 @Serializable
-enum class SendStatus { Sending, Waiting, Delivering, Failed }
+enum class SendStatus { Sending, Waiting, Delivering, Failed, Held }
 
 @Serializable
 data class PendingSend(
@@ -239,4 +241,6 @@ data class MirrorSnapshot(
     val rev: Long = 0,
     val usage: JsonObject = JsonObject(emptyMap()),
     val screen: JsonObject? = null,
+    /** The bots' own images, by `bot:<id>`, already set on each bot. */
+    val icons: Map<String, CustomIcon> = emptyMap(),
 )
