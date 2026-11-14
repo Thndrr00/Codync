@@ -1,5 +1,7 @@
 import type { CallError } from '@shared/ipc'
 import { isChat, isReplyable, normalizeBot, quoteOf, type N8nState, type Bot, type BotDraft, type Entry, type GroupDraft } from '@shared/models'
+import type { PinnedMessage, Pinner } from '@shared/pins'
+import type { MediaAnswer, MediaModel } from '@shared/media'
 import * as story from './story'
 
 // An in-memory codync-host for the website demo: the methods the renderer calls, with the
@@ -7,6 +9,19 @@ import * as story from './story'
 // order, then live). Every mutation stamps a global rev, like the real host.
 
 const TYPING_MS = 1500
+
+/** The host's `mediaModels` answer for a Codex bot: the one image tool its subscription pays for. */
+const DEMO_IMAGE_MODEL: MediaModel = {
+  id: 'gpt-image',
+  name: 'GPT Image',
+  maker: 'OpenAI',
+  subscription: 'ChatGPT',
+  kinds: ['image'],
+  aspects: ['1:1', '4:3', '16:9', '9:16'],
+  transparent: true,
+  voices: false,
+  capabilities: { aspects: ['1:1', '4:3', '16:9', '9:16'], durations: [], resolutions: [], transparent: true, voices: null },
+}
 
 export const DEMO_UNAVAILABLE = 'Not available in the web demo. Install Codync to use this.'
 
@@ -87,8 +102,23 @@ export class FakeHost {
     this.emit({ type: 'entry', rev: e.rev, entry: e })
   }
 
-  /** The host's `bot_json`: a group is busy while one of its members works in it. */
-  private botJSON(b: Bot): Bot {
+  /** A pin as the host's `pinnedMessages` lists it. */
+  private pinView(e: Entry): PinnedMessage {
+    const pin = e.data.pinned as { by: Pinner; at: number }
+    return {
+      messageId: e.id,
+      threadId: e.threadId ?? null,
+      threadTitle: null,
+      pinnedAt: pin.at,
+      pinnedBy: pin.by,
+      author: e.kind === 'user' ? 'user' : 'agent',
+      authorBotId: e.data.author ?? null,
+      createdAt: e.createdAt,
+      text: (e.data.text || e.data.files?.map((f) => f.name).join(', ') || '').slice(0, 1000),
+    }
+  }
+
+  /** The host's `bot_json`: a group is busy while one of its members works in it. */  private botJSON(b: Bot): Bot {
     if (b.kind !== 'group') return b
     const busy = b.members.map((m) => this.bots.get(m)).find((m) => m && m.status !== 'idle' && m.workingChat === b.id)
     return busy
@@ -239,6 +269,30 @@ export class FakeHost {
         e.data = { ...e.data, reactions: [...reactions] }
         this.emitEntry(e)
         return { entry: e }
+      }
+      case 'pinMessage': {
+        const e = this.entries.find((x) => x.id === str('messageId') && x.botId === str('botId'))
+        if (!e) throw fail('That message is gone.')
+        const data = { ...e.data }
+        if (b.pinned === false) delete data.pinned
+        else data.pinned = { by: { kind: 'person', device: null }, at: Date.now() }
+        e.data = data
+        this.emitEntry(e)
+        return { entry: e, pin: e.data.pinned ? this.pinView(e) : null }
+      }
+      case 'pinnedMessages':
+        return {
+          pins: this.entries
+            .filter((e) => e.botId === str('botId') && e.data.pinned)
+            .sort((a, c) => (c.data.pinned?.at ?? 0) - (a.data.pinned?.at ?? 0))
+            .map((e) => this.pinView(e)),
+        }
+      case 'mediaModels': {
+        const bot = this.bots.get(str('botId'))
+        if (!bot) throw fail('That bot was deleted.')
+        const answer: MediaAnswer = { agent: bot.backend === 'codex' ? 'codex' : null, installed: true, models: [] }
+        if (answer.agent) answer.models = [DEMO_IMAGE_MODEL]
+        return answer
       }
       case 'stop': {
         const id = str('botId')
