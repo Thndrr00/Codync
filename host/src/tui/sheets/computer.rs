@@ -65,7 +65,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
             sheet.state["scriptLimit"]["perHour"].as_u64().unwrap_or_default()
         );
         let text = format!(
-            "{text}\nLocal apps: {}/{} registered; a safeguard on this computer, not a plan. < and > change it; past it a new app is refused, and an app a bot already has still updates.",
+            "{text}\nLocal apps: {}/{} registered; a local safeguard on this computer, not a plan. < and > change it; past it a new app is refused, and an app a bot already has still updates.",
             sheet.state["localApps"]["count"].as_u64().unwrap_or_default(),
             sheet.state["localApps"]["limit"].as_u64().unwrap_or_default()
         );

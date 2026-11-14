@@ -41,8 +41,7 @@ accident. The bots on a computer share one ceiling, `localApps.limit`, saved in 
   works at the limit; a bot can keep improving what it made.
 - At the limit, `save_app` for a new app refuses with the limit, the count, and how to make room:
   "This computer has 100 registered apps and a limit of 100. Delete an app you no longer use, or
-  raise the limit in Settings > General > Local apps to make room. It is a local safeguard, not a
-  plan."
+  raise the limit in Settings > Local apps."
 - Deleting an app makes room at once. Raising the limit adds room without touching an app. Lowering
   it never deletes anything; it only stops new apps until the count is below the new ceiling.
 - `list_apps` answers with `count`, `limit`, `choices` and `botsWithApps` beside the apps so an

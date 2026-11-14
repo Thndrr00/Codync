@@ -63,7 +63,7 @@ pub fn check_new(store: &Store, bot_id: &str, slug: &str) -> Result<()> {
 /// What `save_app` answers when the computer is full, naming both numbers and either way out.
 fn refusal(count: i64, limit: u32) -> String {
     format!(
-        "This computer has {count} registered apps and a limit of {limit}. Delete an app you no longer use, or raise the limit in Settings > General > Local apps to make room. It is a local safeguard, not a plan."
+        "This computer has {count} registered apps and a limit of {limit}. Delete an app you no longer use, or raise the limit in Settings > Local apps."
     )
 }
 
@@ -108,14 +108,14 @@ mod tests {
         }
         assert_eq!(
             check_new(&store, "bot", "extra").unwrap_err().to_string(),
-            "This computer has 25 registered apps and a limit of 25. Delete an app you no longer use, or raise the limit in Settings > General > Local apps to make room. It is a local safeguard, not a plan."
+            "This computer has 25 registered apps and a limit of 25. Delete an app you no longer use, or raise the limit in Settings > Local apps."
         );
         // One app past the ceiling (a save that predates this setting, say) still names both numbers.
         store.save_bot_app("bot", "over", "Over", None, None).unwrap();
         let refusal = check_new(&store, "bot", "extra").unwrap_err().to_string();
         assert_eq!(
             refusal,
-            "This computer has 26 registered apps and a limit of 25. Delete an app you no longer use, or raise the limit in Settings > General > Local apps to make room. It is a local safeguard, not a plan."
+            "This computer has 26 registered apps and a limit of 25. Delete an app you no longer use, or raise the limit in Settings > Local apps."
         );
 
         // An app the bot already registered is an update, and never takes a new slot.

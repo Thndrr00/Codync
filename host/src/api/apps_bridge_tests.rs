@@ -79,9 +79,10 @@ async fn save_app_refuses_a_new_app_at_the_local_limit_but_an_update_deleting_an
     let refused = crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"extra", "title":"Extra"}))
         .unwrap_err()
         .to_string();
-    assert!(refused.contains("limit of 25"), "{refused}");
-    assert!(refused.contains("registered apps"), "{refused}");
-    assert!(refused.contains("local safeguard, not a plan"), "{refused}");
+    assert_eq!(
+        refused,
+        "This computer has 25 registered apps and a limit of 25. Delete an app you no longer use, or raise the limit in Settings > Local apps."
+    );
 
     // Updating an app the bot already has never counts.
     crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"app-0", "title":"App again"})).unwrap();
