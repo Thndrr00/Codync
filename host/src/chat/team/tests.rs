@@ -364,6 +364,8 @@ async fn stopping_the_sender_drops_the_replies_queued_for_it() {
 #[tokio::test]
 async fn requests_from_several_senders_keep_fifo_and_user_batch_boundaries() {
     let f = Fixture::new();
+    // The queue's own order is the subject here, so a message doesn't join the running turn.
+    crate::chat::steer::set(&f.hub.store, false).unwrap();
     f.sending("c");
     f.send_user("BLOCK current turn").await;
     f.until(|| f.prompts().len() == 1).await;
@@ -392,6 +394,28 @@ async fn requests_from_several_senders_keep_fifo_and_user_batch_boundaries() {
     // Each reply goes to the bot that asked; a's may come in one turn or two.
     assert!(!f.finals("a").join(" | ").contains("message from c"));
     assert_eq!(f.finals("c"), ["Relayed: reply: message from c"]);
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_message_to_a_working_agent_joins_its_turn_unless_its_owner_queues_it() {
+    let f = Fixture::new();
+    f.send_user("BLOCK current turn").await;
+    f.until(|| f.prompts().len() == 1).await;
+    // The default: the message doesn't wait behind the blocked turn, it takes the turn over.
+    f.send_user("takes over").await;
+    f.until(|| f.took("b", 2)).await;
+    assert_eq!(f.prompts()[1], "takes over");
+    // With Queue chosen, the next one waits for a turn of its own instead.
+    crate::chat::steer::set(&f.hub.store, false).unwrap();
+    f.send_user("BLOCK again").await;
+    f.until(|| f.prompts().len() == 3).await;
+    f.send_user("waits its turn").await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(f.prompts().len(), 3, "a queued message waits");
+    std::fs::write(f.dir.join("b/release"), "").unwrap();
+    f.until(|| f.took("b", 4)).await;
+    assert_eq!(f.prompts()[3], "waits its turn");
     f.shutdown().await;
 }
 
