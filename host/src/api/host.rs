@@ -68,6 +68,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 view["bot"] = Value::String(bot);
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
+            view["workingMessage"] = json!(crate::whatsapp::working_message(&hub.store));
             view
         }
         "whatsappConnect" => {
@@ -82,7 +83,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 view["bot"] = Value::String(bot);
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
+            view["workingMessage"] = json!(crate::whatsapp::working_message(&hub.store));
             view
+        }
+        "whatsappSetWorkingMessage" => {
+            let on = crate::whatsapp::set_working_message(hub, b["enabled"].as_bool().context("enabled must be a boolean")?)?;
+            json!({"workingMessage": on})
         }
         "whatsappLogout" => {
             hub.whatsapp.logout(hub).await?;
@@ -205,6 +211,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 "screen": hub.screen.state(),
                 "n8n": hub.n8n.state(),
                 "analytics": hub.analytics.state(),
+                // Whether a message to a working agent joins its turn (Settings > Agents); off: it queues.
+                "steerWhileWorking": crate::chat::steer::enabled(&hub.store),
                 // Before 2.41.0, apps called `joinAccount` when this was true. It takes a certificate now, which they
                 // don't send, so they aren't told to.
                 "joinAccount": false,
@@ -372,6 +380,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.analytics.set_enabled(&hub.store, b["enabled"].as_bool().unwrap_or(false))?;
             crate::remote::managed::share_analytics(hub);
             json!({"enabled": hub.analytics.state()})
+        }
+        // A message the user sends to a working agent joins its turn (`true`) or waits in the queue (`false`).
+        "setSteerWhileWorking" => {
+            let on = crate::chat::steer::set(&hub.store, b["enabled"].as_bool().context("enabled must be a boolean")?)?;
+            json!({"steerWhileWorking": on})
         }
         "track" => {
             crate::analytics::track(hub, &b)?;

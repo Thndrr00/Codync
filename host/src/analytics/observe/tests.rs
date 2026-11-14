@@ -70,6 +70,10 @@ fn settings_routines_screen_and_devices() {
     );
     assert_eq!(setting("setScreenEnabled", json!({"enabled": true})).map(|s| s.1), Some(json!("remote_screen")));
     assert_eq!(
+        setting("setSteerWhileWorking", json!({"enabled": false})),
+        Some((Event::SettingChanged, json!("steer_while_working"), json!(false)))
+    );
+    assert_eq!(
         setting("setAssistants", json!({"enabled": true})),
         Some((Event::SettingChanged, json!("cloud_assistants"), json!(true)))
     );

@@ -298,9 +298,11 @@ impl App {
                 v["home"].as_str().unwrap_or_default().clone_into(&mut self.home);
                 self.backends = v["backends"].as_array().cloned().unwrap_or_default();
                 self.analytics_hello(&v);
+                self.steer_hello(&v);
                 self.screen = v["screen"].clone();
             }
             After::Analytics => self.analytics_set(&v),
+            After::Steer => self.steer_set(&v),
             After::Backends => {
                 self.backends = v["backends"].as_array().cloned().unwrap_or_default();
                 self.flash("Agents refreshed");

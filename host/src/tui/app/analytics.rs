@@ -79,6 +79,30 @@ impl App {
         }
     }
 
+    /// Every `hello`: whether a message to a working bot joins its turn (missing: on).
+    pub(super) fn steer_hello(&mut self, v: &Value) {
+        self.steer = Some(v["steerWhileWorking"].as_bool().unwrap_or(true));
+    }
+
+    /// Whether messages join a running turn; on unless turned off.
+    fn steers(&self) -> bool {
+        self.steer.unwrap_or(true)
+    }
+
+    /// The palette → Steer the bot while it works: flips it.
+    pub(super) fn toggle_steer(&mut self) {
+        self.call("setSteerWhileWorking", json!({"enabled": !self.steers()}), After::Steer);
+    }
+
+    pub(super) fn steer_set(&mut self, v: &Value) {
+        self.steer = v["steerWhileWorking"].as_bool();
+        self.flash(if self.steers() {
+            "Messages steer while the bot works"
+        } else {
+            "Messages wait for the next turn"
+        });
+    }
+
     pub(super) fn analytics_set(&mut self, v: &Value) {
         self.analytics = v["enabled"].as_bool();
         self.flash(if self.analytics == Some(true) {

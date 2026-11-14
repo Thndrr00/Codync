@@ -154,6 +154,40 @@ impl WhatsApp {
             if let Err(error) = hub.send_cmd(&bot, crate::agent::bot::Cmd::Send { lane, entry_id: entry.id, text }) {
                 tracing::warn!(%error, "Could not deliver a WhatsApp message to a bot");
             }
+            self.acknowledge(
+                hub,
+                chat,
+                sender,
+                group,
+                event["fromMe"].as_bool().unwrap_or(false),
+                event["id"].as_str().unwrap_or_default(),
+            )
+            .await;
+        }
+    }
+
+    /// Tells the sender that the request arrived: a 👀 reaction on their message, then, unless the
+    /// number's owner turned it off, a "Working on it…" line. The answer itself follows.
+    async fn acknowledge(&self, hub: &Hub, chat: &str, sender: &str, group: bool, from_me: bool, message_id: &str) {
+        if message_id.is_empty() {
+            return;
+        }
+        let Ok(snapshot) = hub.store.snapshot_whatsapp_output(&json!({})) else { return };
+        let binding = snapshot["whatsappBinding"].clone();
+        let account = binding[0].as_str().unwrap_or_default();
+        // A group reaction names its author; in a direct chat the chat itself is the author.
+        let participant = if group { sender } else { "" };
+        if let Err(error) =
+            self.send_bound_react(&hub.store, account, &binding, chat, message_id, participant, from_me, "👀").await
+        {
+            tracing::debug!(%error, "WhatsApp could not acknowledge a message");
+            return;
+        }
+        if !crate::whatsapp::working_message(&hub.store) {
+            return;
+        }
+        if let Err(error) = self.send_bound_text(&hub.store, account, &binding, chat, "Trabajando en ello…").await {
+            tracing::debug!(%error, "WhatsApp could not post the working line");
         }
     }
 }

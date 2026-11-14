@@ -105,6 +105,12 @@ fn faces(hub: &Hub, bot: &BotConfig, from: Option<&str>) -> Vec<Value> {
         .collect()
 }
 
+/// Whether an alert of `kind` on `bot` should reach the phone at all. A hidden bot keeps working
+/// out of sight, so only the alert that waits for the user gets through.
+fn alert_allowed(bot: &BotConfig, kind: AlertKind) -> bool {
+    bot.notify != Some(false) && (!bot.hidden || kind == AlertKind::NeedsInput)
+}
+
 /// `bot` is the chat the alert opens; `from` is the member bot speaking when that chat is a group.
 pub fn notify(hub: &Hub, bot: &BotConfig, from: Option<&str>, title: &str, body: &str, kind: AlertKind) {
     notify_with(hub, bot, from, title, body, kind, None);
@@ -122,7 +128,7 @@ pub fn notify_with(
     approval: Option<Value>,
 ) {
     purge_dead_tickets(hub);
-    if bot.notify == Some(false) || bot.hidden || hub.phone_connected() {
+    if hub.phone_connected() || !alert_allowed(bot, kind) {
         return;
     }
     // A new approval replaces the alert for the same chat: throttling it would leave the older card's
@@ -230,5 +236,22 @@ mod tests {
         assert_eq!(payload["event"], "update");
         assert_eq!(payload["contentState"]["startedAt"], 1.0);
         assert_eq!(payload["staleDate"].as_i64().unwrap() - payload["timestamp"].as_i64().unwrap(), 900);
+    }
+
+    fn bot(hidden: bool, notify: Option<bool>) -> BotConfig {
+        serde_json::from_value(json!({"id": "b", "name": "Ada", "hidden": hidden, "notify": notify}))
+            .expect("a bot")
+    }
+
+    #[test]
+    fn a_hidden_bot_reaches_the_phone_only_when_it_needs_you() {
+        let hidden = bot(true, None);
+        assert!(alert_allowed(&hidden, AlertKind::NeedsInput));
+        assert!(!alert_allowed(&hidden, AlertKind::Done));
+        assert!(!alert_allowed(&hidden, AlertKind::Failed));
+        // Unhidden, every alert shows, and mute beats both.
+        let shown = bot(false, None);
+        assert!(alert_allowed(&shown, AlertKind::Done));
+        assert!(!alert_allowed(&bot(false, Some(false)), AlertKind::NeedsInput));
     }
 }

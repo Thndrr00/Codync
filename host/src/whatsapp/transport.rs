@@ -118,6 +118,24 @@ impl WhatsApp {
         self.send_payload(json!({"type":"send","to":to,"text":text}), Some((store, account, binding))).await
     }
 
+    /// Reacts to a message of `to` (in a group, from `participant`), so its sender sees the request landed.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn send_bound_react(
+        &self,
+        store: &crate::store::Store,
+        account: &str,
+        binding: &Value,
+        to: &str,
+        message_id: &str,
+        participant: &str,
+        from_me: bool,
+        emoji: &str,
+    ) -> Result<()> {
+        let body = json!({"type":"react","to":to,"messageId":message_id,"participant":participant,
+            "fromMe":from_me,"text":emoji});
+        self.send_payload(body, Some((store, account, binding))).await
+    }
+
     pub(super) async fn send_bound_file(
         &self,
         store: &crate::store::Store,
@@ -181,7 +199,9 @@ impl WhatsApp {
         if next.state != "connected" {
             self.receipts.disconnect();
         }
-        let view = next.view();
+        let mut view = next.view();
+        // The number's own switch, so a state event never shows it as on again behind its owner's back.
+        view["workingMessage"] = json!(super::working_message(&hub.store));
         *self.state.lock().await = next;
         let _ = hub.events.send(json!({"type":"whatsapp","whatsapp":view}));
     }

@@ -64,3 +64,39 @@ pub(crate) fn set_allowed(hub: &Hub, jid: &str, allowed: bool) -> Result<Vec<Str
     }
     Ok(list)
 }
+
+/// The "Working on it…" acknowledgement is on unless its owner turned it off for this number.
+pub(crate) fn working_message(store: &crate::store::Store) -> bool {
+    store.kv_get("whatsapp.workingMessage").is_none_or(|value| value != "0")
+}
+
+/// Turns that acknowledgement on or off; a request that already runs keeps its post.
+pub(crate) fn set_working_message(hub: &Hub, on: bool) -> Result<bool> {
+    let _guard = crate::LockExt::locked(&hub.store.connector_lock);
+    publish(hub, "whatsapp.workingMessage", if on { "1" } else { "0" }, "whatsapp.workingMessage.generation")?;
+    Ok(on)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::remote::identity::Identity;
+
+    fn hub() -> (Hub, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("codync-whatsapp-settings-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("store");
+        (Hub::new(store, "whatsapp-test".into(), Identity::load_or_create(&dir).expect("identity"), "t".into(), 0), dir)
+    }
+
+    #[test]
+    fn the_working_message_is_on_until_its_owner_turns_it_off() {
+        let (hub, dir) = hub();
+        assert!(working_message(&hub.store));
+        assert!(!set_working_message(&hub, false).unwrap());
+        assert!(!working_message(&hub.store));
+        assert!(set_working_message(&hub, true).unwrap());
+        assert!(working_message(&hub.store));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

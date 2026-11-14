@@ -198,6 +198,19 @@ async function send(command) {
     }
 }
 
+/** Reacts to a message, so its sender sees that the request arrived before the answer. */
+async function react(command) {
+    if (!socket) return out({ type: 'error', id: command.id, error: 'WhatsApp is not connected' })
+    try {
+        const key = { remoteJid: command.to, fromMe: command.fromMe ?? false, id: command.messageId }
+        if (command.participant) key.participant = command.participant
+        await socket.sendMessage(command.to, { react: { text: command.text, key } })
+        out({ type: 'sent', id: command.id, messageId: null })
+    } catch (error) {
+        out({ type: 'error', id: command.id, error: String(error?.message ?? error) })
+    }
+}
+
 for await (const line of createInterface({ input: process.stdin })) {
     if (!line.trim()) continue
     let command
@@ -211,6 +224,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     else if (command.type === 'stop') await stop()
     else if (command.type === 'logout') await logout()
     else if (command.type === 'send') await send(command)
+    else if (command.type === 'react') await react(command)
     else if (command.type === 'chats') {
         out({ type: 'chats', id: command.id, chats: Object.values(socket?.store?.chats?.all?.() ?? {}).map((c) => ({ id: c.id, name: c.name })) })
     } else if (command.type === 'ping') out({ type: 'pong' })
