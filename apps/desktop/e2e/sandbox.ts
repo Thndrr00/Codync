@@ -11,6 +11,14 @@ const root = resolve(__dirname, '../../..')
 // A scripted agent whose turn waits until a steered message joins it (host/tests/fixtures/steer_agent.py).
 const steerAgent = join(root, 'host/tests/fixtures/steer_agent.py')
 
+/**
+ * A Python fixture started through the shell. The host hands the command line to `sh -c` or `cmd /d /c`, so the path
+ * needs that shell's quoting: single quotes are POSIX-only and `cmd` would split the path at its first space.
+ */
+export function fixtureCommand(script: string, args: string) {
+  return `python3 -X utf8 -u ${process.platform === 'win32' ? `"${script}"` : `'${script}'`} ${args}`
+}
+
 /** This worktree's sandbox: its name, data folder, host port and DevTools port (`npm run dev -- --cdp` opens port + 10000). */
 export function sandbox() {
   const name = sandboxName(basename(root))
@@ -61,7 +69,7 @@ export async function setPref(page: Page, key: string, value: unknown) {
 /** A bot on the scripted agent, which waits up to `seconds` for a steered message. */
 export async function steerBot(page: Page, name: string, seconds: number) {
   const { bot } = await api<{ bot: { id: string } }>(page, 'createBot', {
-    name, backend: 'custom', command: `python3 -X utf8 -u '${steerAgent}' steer ${seconds}`, connectors: [], skills: [], notify: false,
+    name, backend: 'custom', command: fixtureCommand(steerAgent, `steer ${seconds}`), connectors: [], skills: [], notify: false,
   })
   return bot
 }

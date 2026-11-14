@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { join, resolve } from 'node:path'
-import { api, attach, typeMessage } from './sandbox.ts'
+import { api, attach, fixtureCommand, typeMessage } from './sandbox.ts'
 
 // A scripted agent that answers `initialize` the way Claude's adapter does and reports the context use a message names
 // (host/tests/fixtures/instructions_agent.py). Playwright loads specs as CommonJS here, so `__dirname` is defined.
@@ -59,7 +59,7 @@ test('once the agent tells its window, Set a size lists sizes by 100K and takes 
   const name = `Summarize sizes e2e ${Date.now()}`
   let botId: string | undefined
   try {
-    const command = `python3 -X utf8 -u '${agent}' claude`
+    const command = fixtureCommand(agent, 'claude')
     botId = (await api<{ bot: Bot }>(page, 'createBot', { name, backend: 'custom', command, connectors: [], skills: [], notify: false })).bot.id
     const row = await summarizeRow(page, name)
     await expect(row, 'a custom command shows it once it runs Claude').toHaveCount(0)
