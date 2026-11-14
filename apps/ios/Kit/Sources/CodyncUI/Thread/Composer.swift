@@ -34,6 +34,7 @@ struct Composer: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @FocusState private var focused: Bool
     @State private var dictation = Dictation()
+    @State private var showingPrompts = false
     /// One line of the field's text, following Dynamic Type: the send button centers on the last line.
     @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 22
 
@@ -251,6 +252,12 @@ struct Composer: View {
         }
         .animation(Motion.reduced(Motion.morph, reduceMotion), value: dictation.listening || dictation.transcribing)
         .codyncSheet(isPresented: $dictation.needsKey) { VoiceChatSettingsView() }
+        .codyncSheet(isPresented: $showingPrompts) {
+            PromptLibraryView(draft: draft) { text in
+                draft = text
+                focused = true
+            }
+        }
         .codyncDialog("Couldn't dictate", isPresented: Binding(get: { dictation.failure != nil }, set: { if !$0 { dictation.failure = nil } }),
                       message: dictation.failure, cancel: "OK") { [] }
     }
@@ -305,7 +312,8 @@ struct Composer: View {
     @ViewBuilder private var addButton: some View {
             DropdownMenu {
                 var items = [MenuItem("Photos", icon: "photo.on.rectangle") { pickingPhotos = true },
-                             MenuItem("Files", icon: "folder") { pickingFiles = true }]
+                             MenuItem("Files", icon: "folder") { pickingFiles = true },
+                             MenuItem("Prompt library", icon: "book.closed") { showingPrompts = true }]
                 if UIPasteboard.general.hasImages || UIPasteboard.general.hasURLs {
                     items.append(MenuItem("Paste", icon: "doc.on.clipboard") { pasteFiles() })
                 }

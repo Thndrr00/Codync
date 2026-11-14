@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +52,7 @@ import com.kyant.shapes.RoundedRectangle
     routines: () -> Unit, newSession: () -> Unit, delete: () -> Unit, search: () -> Unit) {
     val density = LocalDensity.current
     val host = state.computer?.name.orEmpty()
+    var meeting by remember { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 6.dp).padding(horizontal = 12.dp).height(48.dp)) {
         val showInlineRoutines = bot.kind != "group" && maxWidth >= 380.dp && density.fontScale <= 1.15f
         Row(
@@ -110,7 +113,7 @@ import com.kyant.shapes.RoundedRectangle
                 Symbol("magnifyingglass", size = 20.dp, tint = Palette.text)
             }
             DropdownMenu({ buildList {
-                add(MenuItem("$host · ${connectionLabel(state)}", enabled = false))
+                add(MenuItem("$host Â· ${connectionLabel(state)}", enabled = false))
                 add(MenuItem("Reconnect", icon = "arrow.clockwise") { store.reconnect() })
                 add(MenuItem("Details", icon = "info.circle", divider = true) { edit(bot) })
                 add(MenuItem("Full conversation", icon = "list.bullet.rectangle", action = trace))
@@ -121,6 +124,7 @@ import com.kyant.shapes.RoundedRectangle
                 }
                 if (bot.kind == "group") {
                     add(MenuItem("Edit group", icon = "person.2") { edit(bot) }); add(pin)
+                    add(MenuItem("Team meeting", icon = "person.3.sequence") { meeting = true })
                     add(MenuItem("Delete group", icon = "trash", destructive = true, divider = true, action = delete))
                 } else {
                     add(MenuItem("Edit profile", icon = "pencil") { edit(bot) }); if (!bot.lead) add(pin)
@@ -133,6 +137,7 @@ import com.kyant.shapes.RoundedRectangle
             }
         }
     }
+    if (bot.kind == "group") CodyncSheet(meeting, { meeting = false }) { TeamMeetingSheet(bot, store) }
 }
 
 @Composable private fun ComputerButton(operating: Boolean, modifier: Modifier, action: () -> Unit) {
@@ -149,7 +154,7 @@ import com.kyant.shapes.RoundedRectangle
 /** The link to the computer: route icon (or a spinner), computer name when known, and connection state. */
 @Composable private fun ConnectionSubtitle(state: AppState) {
     val host = state.computer?.name.orEmpty()
-    val statusText = if (host.isNotEmpty()) "$host · ${connectionLabel(state)}" else connectionLabel(state)
+    val statusText = if (host.isNotEmpty()) "$host Â· ${connectionLabel(state)}" else connectionLabel(state)
     Row(
         Modifier.clearAndSetSemantics { contentDescription = "${state.hostName}, ${connectionDescription(state)}" },
         verticalAlignment = Alignment.CenterVertically,
@@ -165,3 +170,5 @@ import com.kyant.shapes.RoundedRectangle
         Text(statusText, style = Type.system(11f).medium, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+

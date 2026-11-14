@@ -24,6 +24,7 @@ public struct ThreadView: View {
     /// The chat stays on the newest message until the reader scrolls away.
     @State var following = true
     @State var loadingEarlier = false
+    @State var meeting = false
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var bot: Bot? { model.bots[botId] }
@@ -91,6 +92,9 @@ public struct ThreadView: View {
             }
             .codyncSheet(isPresented: $editingGroup) {
                 if let bot { GroupEditorView(group: bot) }
+            }
+            .codyncSheet(isPresented: $meeting) {
+                MeetingView(groupId: botId).environment(model)
             }
     }
 
@@ -393,6 +397,11 @@ extension ThreadView {
                 }
                 if model.screen != nil {
                     ToolbarItem(placement: .topBarTrailing) { computerButton }
+                }
+                if bot?.isGroup == true {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(L10n.tr("Team meeting"), systemImage: "person.3.sequence") { meeting = true }
+                    }
                 }
             }
     }

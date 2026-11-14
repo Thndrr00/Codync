@@ -119,6 +119,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
     var cameraFile by remember { mutableStateOf<File?>(null) }
     var annotating by remember { mutableStateOf<Pair<Uri, File>?>(null) }
+    var promptsOpen by remember { mutableStateOf(false) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
         val uri = cameraUri
         val file = cameraFile
@@ -205,6 +206,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
                 cameraUri?.let(camera::launch)
             })
             add(MenuItem("Files", icon = "folder") { documents.launch(arrayOf("*/*")) })
+            add(MenuItem("Prompt library", icon = "book.closed") { promptsOpen = true })
             add(MenuItem("Wrap in code", icon = "terminal") { applyEdit(ComposerEdits.wrapInCode(text.text.toString(), text.selection.start, text.selection.end)) })
             add(MenuItem("Code block", icon = "terminal") { applyEdit(ComposerEdits.insertCodeBlock(text.text.toString(), text.selection.start, text.selection.end)) })
             // Only the clip's description: reading the clip itself would show Android's paste notice.
@@ -250,6 +252,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             store.importFiles(listOf(exported)) { store.addDraftFiles(bot.id, thread, it, draftKey) }
             annotating = null
         }
+    }
+    CodyncSheet(promptsOpen, { promptsOpen = false }) {
+        PromptLibrarySheet(text.text.toString()) { picked -> text.setTextAndPlaceCursorAtEnd(picked) }
     }
     }
 }
