@@ -1,6 +1,7 @@
 import { VoiceReceipt } from './VoiceReceipt'
 import { RepliesView } from './RepliesView'
 import { ForwardSheet } from './ForwardSheet'
+import { SearchSheet } from './SearchSheet'
 import { FileView, type OpenFile } from './FileView'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { draftOf, folderName, isGroup, isWorkingIn, sharedWorkspacePeers, type Bot, type BotApp, type BotDraft, type Entry, type SharedFile } from '@shared/models'
@@ -69,6 +70,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   const [editingGroup, setEditingGroup] = useState(false)
   const [templateDraft, setTemplateDraft] = useState<BotDraft | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [searching, setSearching] = useState(false)
   const [detailsTab, setDetailsTab] = useState<DetailsTab>('details')
   const [compactDetails, setCompactDetails] = useState(false)
   const [calling, setCalling] = useState(false)
@@ -202,6 +204,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
           <TopFade />
           <div className="top-chrome-row">
             <Spacer />
+            <MacChatButton className="ringed" title={tr('Search this chat')} icon="magnifyingglass" onClick={() => setSearching(true)} />
             {(!showSettings || !wide) && !compactDetails ? (
               <MacChatButton className="ringed" title="Conversation details" icon="chevron.left.2" direction={[-1, 0]} onClick={toggleDetails} />
             ) : null}
@@ -298,6 +301,9 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       </Sheet>
       <Sheet open={botChat !== null} onClose={() => setBotChat(null)} width={620} height={560}>
         {botChat ? <BotConversationView botId={botId} peerId={botChat} /> : null}
+      </Sheet>
+      <Sheet open={searching} onClose={() => setSearching(false)} width={560} height={580}>
+        <SearchSheet botId={botId} close={() => setSearching(false)} />
       </Sheet>
       <Sheet open={forwardEntry !== null} onClose={() => setForwardEntry(null)} width={420} height={520}>
         {forwardEntry ? <ForwardSheet entry={forwardEntry} close={() => setForwardEntry(null)} /> : null}

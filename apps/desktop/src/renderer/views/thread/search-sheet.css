@@ -1,0 +1,19 @@
+/* Search over this chat: one field, whose words were said, and whether tool traces count. */
+.search-sheet-controls { padding: 12px 16px; flex: none; }
+.search-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: calc(24px * var(--scale));
+  padding: 0 calc(10px * var(--scale));
+  border-radius: var(--radius-pill);
+  font-size: var(--text-body);
+  color: var(--secondary);
+  transition: background-color var(--hover), color var(--hover);
+}
+.search-toggle:hover { color: var(--text); }
+.search-toggle.on { background: var(--chat-button); color: var(--text); }
+.search-hit-head { justify-content: flex-start; }
+.search-snippet { margin-top: 6px; font-size: var(--text-body); color: var(--secondary); }
+/* The matched words come back bold: the snippet marks them with brackets. */
+.search-mark { background: none; color: var(--text); font-weight: 600; }
