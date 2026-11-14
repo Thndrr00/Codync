@@ -117,4 +117,4 @@ codync-host devices revoke <key>     # removes one; it disconnects at once
 
 ## Updates
 
-A host installed with the script and run as the background service updates itself: it checks once a day, while no bot is working. Homebrew installs update with `brew upgrade leepokai/codync/codync-host`, followed by `codync-host install`. Commands and details: [Updates](/docs/updates).
+A host installed with the script and run as the background service updates itself: it checks once a day, while no bot is working. Homebrew installs update with `brew upgrade leepokai/codync/codync-host`, followed by `codync-host install`. Commands and details: [Updates](/docs/updates). A server in an LXC container, for example on Proxmox, updates the same way, even when the container can't load the AppArmor profile that lets the bot sandbox make user namespaces.

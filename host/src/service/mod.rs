@@ -22,11 +22,15 @@ pub use addresses::{addresses, interface_addresses, public_addresses};
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
-pub use unix::{install, installed, require_executable, start, started_by_service, stop, uninstall};
+pub use unix::{install, installed, reload_profile, require_executable, start, started_by_service, stop, uninstall};
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
 pub use windows::{install, installed, require_executable, start, started_by_service, stop, uninstall};
+
+/// `AppArmor` is Linux's; every other platform has no profile step to skip.
+#[cfg(not(unix))]
+pub fn reload_profile() {}
 
 static BINARY_IDENTITY: OnceLock<(String, String)> = OnceLock::new();
 

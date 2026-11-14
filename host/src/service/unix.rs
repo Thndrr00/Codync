@@ -67,6 +67,84 @@ pub fn require_executable(expected: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Where the host runs, as far as the `AppArmor` step is concerned.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sandbox {
+    /// A machine: an installed profile is reloaded as before.
+    Machine,
+    /// A container that loads profiles.
+    Container,
+    /// A container without `AppArmor`: loading a profile there fails, so the step is skipped.
+    ContainerWithoutAppArmor,
+}
+
+/// What Linux leaves behind about a container: systemd writes its kind to
+/// `/run/systemd/container`, `/proc/1/cgroup` names Docker, LXC and friends on older kernels,
+/// and Docker and podman leave a marker at the root. Pure, so the reading is tested without a
+/// container.
+pub fn container_from(systemd: Option<&str>, cgroup: &str, marker: bool) -> Option<String> {
+    const KINDS: [&str; 6] = ["lxc", "kubepods", "docker", "podman", "containerd", "garden"];
+    if let Some(kind) = systemd.map(str::trim).filter(|kind| !kind.is_empty()) {
+        return Some(kind.to_owned());
+    }
+    if let Some(kind) = KINDS.into_iter().find(|kind| cgroup.contains(*kind)) {
+        return Some(kind.to_owned());
+    }
+    marker.then_some("container".to_owned())
+}
+
+/// The container this host runs in, if it does. A Proxmox LXC container is "lxc".
+pub fn container() -> Option<String> {
+    let systemd = std::fs::read_to_string("/run/systemd/container").ok();
+    let cgroup = std::fs::read_to_string("/proc/1/cgroup").unwrap_or_default();
+    let marker = Path::new("/.dockerenv").exists() || Path::new("/run/.containerenv").exists();
+    container_from(systemd.as_deref(), &cgroup, marker)
+}
+
+/// `AppArmor` exposes its security filesystem only where the kernel runs it. A container can
+/// mount it and still refuse every profile, which is why [`Sandbox`] keeps both facts.
+fn apparmor_enabled() -> bool {
+    Path::new("/sys/kernel/security/apparmor").exists()
+}
+
+/// A machine keeps the profile step it had; a container without `AppArmor` skips only that step.
+pub fn sandbox(container: Option<&str>, apparmor: bool) -> Sandbox {
+    match (container, apparmor) {
+        (None, _) => Sandbox::Machine,
+        (Some(_), true) => Sandbox::Container,
+        (Some(_), false) => Sandbox::ContainerWithoutAppArmor,
+    }
+}
+
+/// The profile an administrator installs so the bot sandbox can create unprivileged user
+/// namespaces (Ubuntu 23.10+, Debian 13). Codync does not ship one.
+fn profile() -> PathBuf {
+    PathBuf::from("/etc/apparmor.d/codync-host")
+}
+
+/// Reloads the host's `AppArmor` profile when its binary is replaced: a profile attaches to the
+/// binary's path. A container can show `AppArmor` and still refuse the profile (Proxmox LXC), so
+/// the step is skipped there, and a profile that does not load is a warning: an update never
+/// stops because of it.
+pub fn reload_profile() {
+    let profile = profile();
+    if !profile.is_file() {
+        return;
+    }
+    let kind = container();
+    if sandbox(kind.as_deref(), apparmor_enabled()) == Sandbox::ContainerWithoutAppArmor {
+        tracing::warn!(
+            container = kind.as_deref().unwrap_or_default(),
+            "skipping the AppArmor profile: this container cannot load profiles"
+        );
+        return;
+    }
+    let loaded = Command::new("apparmor_parser").arg("--replace").arg(&profile).status();
+    if !matches!(loaded, Ok(status) if status.success()) {
+        tracing::warn!(profile = %profile.display(), "the AppArmor profile was not reloaded");
+    }
+}
+
 fn launchd_plist() -> PathBuf {
     home().join(format!("Library/LaunchAgents/{LABEL}.plist"))
 }
@@ -138,6 +216,7 @@ pub fn install(port: u16) -> Result<()> {
         create_parent(&file)?;
         std::fs::write(&file, unit).with_context(|| format!("writing {}", file.display()))?;
         run("systemctl", &["--user", "daemon-reload"])?;
+        reload_profile();
         run("systemctl", &["--user", "stop", UNIT])?;
         wait_for_host_exit()?;
         run("systemctl", &["--user", "enable", "--now", UNIT])?;
@@ -176,7 +255,7 @@ fn current_uid() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::systemd_quote;
+    use super::{Sandbox, container_from, sandbox, systemd_quote};
 
     #[test]
     fn unit_values_stay_one_word() {
@@ -189,5 +268,25 @@ mod tests {
         assert_eq!(exe, r#""/home/me/My $$bin/codync-host""#);
         let parsed = shlex::split(&format!("{exe} serve")).unwrap();
         assert_eq!(parsed[0].replace("%%", "%").replace("$$", "$"), "/home/me/My $bin/codync-host");
+    }
+
+    #[test]
+    fn a_container_is_named_from_the_evidence_linux_leaves() {
+        assert_eq!(container_from(Some("lxc"), "", false).as_deref(), Some("lxc"));
+        assert_eq!(container_from(Some(" docker\n"), "", false).as_deref(), Some("docker"));
+        assert_eq!(container_from(None, "12:pids:/docker/abc\n", false).as_deref(), Some("docker"));
+        assert_eq!(container_from(None, "11:memory:/lxc/100\n", false).as_deref(), Some("lxc"));
+        assert_eq!(container_from(None, "0::/", true).as_deref(), Some("container"));
+        assert_eq!(container_from(None, "0::/init.scope\n", false), None, "a machine is not a container");
+        assert_eq!(container_from(Some("  "), "", false), None, "an empty file says nothing");
+    }
+
+    #[test]
+    fn a_container_without_apparmor_skips_only_the_profile_step() {
+        assert_eq!(sandbox(None, true), Sandbox::Machine);
+        assert_eq!(sandbox(None, false), Sandbox::Machine, "a machine without AppArmor keeps its behaviour");
+        assert_eq!(sandbox(Some("lxc"), true), Sandbox::Container);
+        assert_eq!(sandbox(Some("lxc"), false), Sandbox::ContainerWithoutAppArmor);
+        assert_eq!(sandbox(Some("docker"), false), Sandbox::ContainerWithoutAppArmor);
     }
 }

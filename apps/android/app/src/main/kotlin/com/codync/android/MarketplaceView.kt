@@ -240,7 +240,7 @@ import kotlinx.coroutines.launch
         when (section) {
             ExtensionSection.Apps -> when {
                 shownApps.isEmpty() -> item {
-                    Text(if (query.isEmpty()) tr("No apps yet.") else tr("No apps match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                    MarketEmpty(tr(if (query.isEmpty()) "No apps yet." else "No apps match “{query}”.").replace("{query}", query))
                 }
                 else -> MarketCategories.group(shownApps, { it.category }, { it.featured }).forEach { (title, group) ->
                     item(key = "app:$title") { MarketSection(title) {} }
@@ -261,7 +261,7 @@ import kotlinx.coroutines.launch
             }
             ExtensionSection.Agents -> when {
                 shownMarketAgents.isEmpty() -> item {
-                    Text(if (query.isEmpty()) tr("No agents yet.") else tr("No agents match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                    MarketEmpty(tr(if (query.isEmpty()) "No agents yet." else "No agents match “{query}”.").replace("{query}", query))
                 }
                 else -> MarketCategories.group(shownMarketAgents, { it.category }, { it.featured }).forEach { (title, group) ->
                     item(key = "agent:$title") { MarketSection(title) {} }
@@ -273,7 +273,7 @@ import kotlinx.coroutines.launch
             }
             ExtensionSection.Clis -> when {
                 agents.isEmpty() -> item {
-                    Text(if (query.isEmpty()) tr("No agent CLIs yet.") else tr("No agent CLIs match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                    MarketEmpty(tr(if (query.isEmpty()) "No agent CLIs yet." else "No agent CLIs match “{query}”.").replace("{query}", query))
                 }
                 else -> items(agents, key = { "cli:${it.id}" }) { backend ->
                     MarketRow(backend.name, backend.description ?: "", added = false, open = { agent = backend },
@@ -282,7 +282,7 @@ import kotlinx.coroutines.launch
             }
             ExtensionSection.Skills -> if (loadingSkills) item { SkeletonRows() }
             else if (shownSkills.isEmpty() && query.isNotEmpty()) item {
-                Text(tr("No skills match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                MarketEmpty(tr("No skills match “{query}”.").replace("{query}", query))
             } else MarketCategories.group(shownSkills.filter { it.category != null }, { it.category ?: "other" }, { it.featured == true }).forEach { (title, group) ->
                 item(key = "skill:$title") { MarketSection(title) {} }
                 items(group, key = { it.source }) { s -> SkillEntry(s, installedSkills, busySkill) { busySkill = it } }
@@ -303,7 +303,7 @@ import kotlinx.coroutines.launch
                 if (!inModal && state.computers.isEmpty()) {
                     Column(Modifier.weight(1f).then(inset), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MarketEmpty("desktopcomputer", "No computer paired", "Pair a computer to browse and install agents, connectors and skills.")
+                        MarketEmpty(tr("No computer paired"), tr("Pair a computer to browse and install agents, connectors and skills."))
                         if (openComputers != null) SecondaryButton("Open computers", action = openComputers)
                     }
                 } else {

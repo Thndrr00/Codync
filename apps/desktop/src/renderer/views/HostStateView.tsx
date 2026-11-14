@@ -52,12 +52,23 @@ function HostBot({ compact, mood }: { compact: boolean; mood: Mood }) {
   )
 }
 
-/** A quiet placeholder for an empty screen: icon (an SF Symbol name or artwork), title, an optional line of help and an optional action. */
-export function EmptyState({ icon, title, message, action, compact = false }: { icon: string | ReactElement; title: string; message?: string; action?: [string, () => void]; compact?: boolean }) {
+/** A quiet placeholder for an empty screen: a plush or an icon (an SF Symbol name or artwork), a title, an optional line of help and an optional action. */
+export function EmptyState({ icon, plush, title, message, action, compact = false, inline = false }: {
+  /** The SF Symbol name, or artwork such as the host bot. Ignored when `plush` is given. */
+  icon?: string | ReactElement
+  /** The felt character above the text, for an empty list or search. */
+  plush?: ReactElement
+  title: string
+  message?: string
+  action?: [string, () => void]
+  compact?: boolean
+  /** In a scrolling page rather than the whole window: no full height. */
+  inline?: boolean
+}) {
   const tr = useTr()
   return (
-    <div className={`empty-state ${compact ? 'local-recovery' : ''}`}>
-      {typeof icon === 'string' ? <Icon name={icon} size={compact ? 22 : 36} weight="light" color="var(--tertiary)" /> : icon}
+    <div className={`empty-state ${compact ? 'local-recovery' : ''} ${inline ? 'is-inline' : ''}`}>
+      {plush ?? (typeof icon === 'string' ? <Icon name={icon} size={compact ? 22 : 36} weight="light" color="var(--tertiary)" /> : icon)}
       <Text as="div" size={compact ? 'callout' : 'title3'} weight="semibold" tone="text">{tr(title)}</Text>
       {message ? <Text as="div" size="callout" tone="secondary" className="empty-state-message">{tr(message)}</Text> : null}
       {action ? (

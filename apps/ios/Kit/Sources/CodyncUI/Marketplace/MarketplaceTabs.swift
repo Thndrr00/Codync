@@ -79,8 +79,7 @@ extension MarketplaceView {
                 }
             }
         } else if !query.isEmpty {
-            Text(L10n.tr("No apps match “{query}”.").replacingOccurrences(of: "{query}", with: query))
-                .foregroundStyle(Palette.secondary)
+            MarketEmpty(title: L10n.fill(L10n.tr("No apps match “{query}”."), ["query": query]))
         }
         MarketSection(title: "MCP Registry") {
             if connectors.loading {
@@ -109,8 +108,7 @@ extension MarketplaceView {
 
     @ViewBuilder private var agentsTab: some View {
         if shownMarketAgents.isEmpty {
-            Text(query.isEmpty ? L10n.tr("No agents yet.") : L10n.tr("No agents match “{query}”.").replacingOccurrences(of: "{query}", with: query))
-                .foregroundStyle(Palette.secondary)
+            MarketEmpty(title: L10n.fill(L10n.tr(query.isEmpty ? "No agents yet." : "No agents match “{query}”."), ["query": query]))
         } else {
             ForEach(groups(shownMarketAgents, category: \.category, featured: \.featured), id: \.0) { title, group in
                 MarketSection(title: title) {
@@ -151,8 +149,7 @@ extension MarketplaceView {
             SkeletonGrid()
         } else if shownSkills.isEmpty {
             if !query.isEmpty {
-                Text(L10n.tr("No skills match “{query}”.").replacingOccurrences(of: "{query}", with: query))
-                    .foregroundStyle(Palette.secondary)
+                MarketEmpty(title: L10n.fill(L10n.tr("No skills match “{query}”."), ["query": query]))
             }
         } else {
             ItemGrid {

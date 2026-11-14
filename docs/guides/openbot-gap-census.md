@@ -165,12 +165,12 @@ Nothing missing in this bullet.
 
 | Sub-part | Verdict | Evidence and behaviour |
 | --- | --- | --- |
-| The browser site limit | MISSING | Codync hosts no static sites, so it has no site limit or slots. Its agent-built apps are local and served by the host (`host/src/chat/apps.rs:1-3`, `host/src/api/apps_runtime.rs`) with no plan limit. F11.16. |
+| The browser site limit | DEFERRED | Codync hosts no static sites, so it has no site limit or slots. Its agent-built apps are local and served by the host (`host/src/chat/apps.rs:1-3`, `host/src/api/apps_runtime.rs`) with no plan limit. F11.16 explains why this stays deferred. |
 | A disk warning | EXISTS | `host/src/health.rs:339-343` marks the disk low at 10% free (clears at 12%), and `:484-495` posts one error notice per episode in the working bots' chats ("This computer's disk is almost full (N GB free). Free space, or saving and agent work may fail."), with an info notice when room comes back. It is a chat notice, not a sidebar card. |
-| Updating inside an LXC container | MISSING | Updates replace the binary and restart the service (`host/src/update/install.rs:113-190`) with no container or AppArmor handling. F11.17. |
+| Updating inside an LXC container | EXISTS | An update names the container from `/run/systemd/container`, `/proc/1/cgroup` or a root marker, and skips only the AppArmor profile step when the container has no `/sys/kernel/security/apparmor` (`host/src/service/unix.rs`). The unit still restarts, and a host that does not report the new version and binary hash within 30 seconds rolls back (`host/src/update/install.rs`). F11.17. |
 | Programs in `~/.local/bin` in Docker | EXISTS | `host/src/agent/backends/search_path.rs:42-60` adds `~/.local/bin` to the path it exports, and `:71-73` makes every spawned agent resolve the same way. Codync ships no Docker image, so the image-specific gap does not exist here. |
 
-Upstream for the missing rows:
+Upstream for these rows:
 
 - `CHANGELOG.md:2794` (0.62.0) - "One server can have a custom limit of active hosted sites...
   from 1 to 1000 sites"; `:3626` - "Server settings > Sites shows See plans when a server on
@@ -186,7 +186,7 @@ Upstream for the missing rows:
 
 | Sub-part | Verdict | Evidence and behaviour |
 | --- | --- | --- |
-| A plush in empty states | PARTIAL | The host screens' empty states already pass the plush character: `apps/desktop/src/renderer/views/HostStateView.tsx:19-47` builds `HostBot` from `CharacterAvatar`, and the plush style is the default (`apps/ios/Kit/Sources/CodyncKit/Design/Appearance.swift:16-19`). The shared `EmptyState` takes an icon name or an element (`HostStateView.tsx:56-64`), and every caller but the host rows passes an SF Symbol: `views/marketplace/InstalledView.tsx:53,112-117` ("Nothing installed" with `shippingbox`), and the same in iOS (`InstalledView.swift:37,108-109`). F11.18. |
+| A plush in empty states | EXISTS | Empty lists and empty searches, on desktop, iOS and Android, show the felt plush above the text: `EmptyState`'s `plush` with `components/Plush.tsx`, `MarketEmpty` in `apps/ios/Kit/Sources/CodyncUI/Marketplace/` and in `apps/android/app/src/main/kotlin/com/codync/android/MarketRows.kt`. The working mood moves and Reduce Motion leaves it still. F11.18. |
 
 Upstream:
 
@@ -411,7 +411,7 @@ These are the next work. They are not part of `feat/openbot-connector-experience
   header shows the live step and time and clicking it returns to the card; when the subagent
   ends the header goes away.
 
-### F11.16 Browser site limit
+### F11.16 Browser site limit — deferred
 
 - **What.** Hosted sites with a plan limit and the slots in use, a Sites page that says "See
   plans" at the limit, and a publish that fails with the limit and how to get more. An agent
@@ -423,29 +423,56 @@ These are the next work. They are not part of `feat/openbot-connector-experience
   and the limit read-only.
 - **Test.** Publish up to the limit, the next publish says the limit and how to raise it, and
   `list_sites` reports the same numbers. A failed publish leaves no slot taken.
+- **Decision: deferred, not built.** Codync hosts no static sites and sells no plans, so a
+  site limit would gate nothing: the apps an agent builds are local, served by the host
+  (`host/src/chat/apps.rs`, `host/src/api/apps_runtime.rs`) with no plan, and adding a slot
+  count there would invent a limit on a feature nobody buys. Build this only if Codync ever
+  publishes hosted sites with plans; until then the card stays here as the record of that
+  reasoning.
 
 ### F11.17 Updating inside an LXC container
 
 - **What.** An update on a server in an LXC container (Proxmox, for example) must not stop
   when the container cannot load the AppArmor profile: skip the profile step, restart the
   unit, and keep the previous binary if the new one does not answer.
-- **Where.** `host/src/update/install.rs:113-190` and `host/src/service/unix.rs` (detect a
-  container without AppArmor, and the rollback path).
+- **Where.** `host/src/update/install.rs` (`should_roll_back`, the restart-and-verify step)
+  and `host/src/service/unix.rs` (`container`, `sandbox`, `reload_profile`); the container
+  rule is `container_from` + `sandbox`, both pure.
+- **How.** A container is named from `/run/systemd/container`, `/proc/1/cgroup` or a root
+  marker (`/.dockerenv`, `/run/.containerenv`); AppArmor is present when
+  `/sys/kernel/security/apparmor` exists. On a machine, a present
+  `/etc/apparmor.d/codync-host` profile is reloaded exactly as before (Codync ships none, so
+  this is normally a no-op). In a container without AppArmor the reload is skipped with a
+  warning and nothing else changes: the service restarts and `hello`/health must report the
+  new version and binary hash within 30 seconds, or the previous binary comes back.
 - **Clients.** None; host only. The app's update state already shows the result.
-- **Test.** A Linux container without AppArmor runs the update: the service restarts, `hello`
-  reports the new version, and a deliberately broken binary rolls back to the old one.
+- **Test.** Unit tests cover the container reading and the rollback rule
+  (`host/src/service/unix.rs`, `host/src/update/tests.rs`). Manual Linux check: in a Proxmox
+  LXC container without AppArmor, install a profile at `/etc/apparmor.d/codync-host`, run
+  `codync-host update`: the log says the profile step was skipped, the service restarts,
+  `codync-host status` and `hello` report the new version, and a deliberately broken
+  executable rolls back to the old one.
 
 ### F11.18 Plush in list and search empty states
 
 - **What.** The plush sits above the text in empty lists and empty searches ("No results",
   "Nothing installed", an empty tab), and stays a still image with reduced motion.
-- **Where.** `apps/desktop/src/renderer/views/HostStateView.tsx:56-64` (let `EmptyState`
-  take a plush instead of an icon) and its callers, `views/marketplace/InstalledView.tsx:53,112`,
-  the search views; `apps/ios/Kit/Sources/CodyncUI/Marketplace/InstalledView.swift:37,108`;
-  the Android empty states.
-- **Clients.** Desktop, iOS and Android. The terminal UI has no pictures.
-- **Test.** A search with no results shows the plush above "No results"; with Reduce Motion
-  the same screen shows it still; an empty Marketplace tab does the same.
+- **Where.** Desktop: `EmptyState` in `apps/desktop/src/renderer/views/HostStateView.tsx`
+  takes a `plush` element (and `inline` for a scrolling page); `components/Plush.tsx` is the
+  felt character, and `views/marketplace/InstalledView.tsx`, `MarketplacePanel.tsx` pass it.
+  iOS: `MarketEmpty` (`apps/ios/Kit/Sources/CodyncUI/Marketplace/MarketEmpty.swift`) draws
+  the `CharacterAvatar` plush above the text, used by `InstalledView.swift` and
+  `MarketplaceTabs.swift`. Android: `MarketEmpty` in `MarketRows.kt` draws the same plush
+  (`CharacterAvatar("blob", "violet", 64.dp, "working")`), used by `InstalledView.kt` and
+  `MarketplaceView.kt`.
+- **Motion.** The plush is the user's felt avatar in its working mood: it blinks and glances,
+  and each client's Reduce Motion handling stops it (desktop `useReduceMotion`, iOS
+  `accessibilityReduceMotion`, Android animations off), so it is a still image there.
+- **Clients.** Desktop, iOS and Android. The terminal UI has no pictures, so it is unchanged.
+- **Test.** Manual check: a Marketplace search with no results shows the plush above "No
+  apps/agents/skills match …", **Connectors & skills** with nothing installed shows it above
+  "Nothing installed", and with Reduce Motion the same screens show it still. The repo has no
+  harness for client rendering, and the decision is pure presentation, so no unit test fits.
 
 ## How to use this
 
@@ -455,7 +482,7 @@ rule (a UI change lands in iOS, Android, desktop and the terminal UI together), 
 "Test" line is the check that proves it. Pick a card, open its own worktree and branch, and
 follow the after-change workflow before merging.
 
-Bullets 1, 3, 4 and 7 are the bulk of the residue; bullet 5 is already done. Bullet 2 is
+Bullets 1, 3 and 4 are the bulk of the residue; bullets 5 and 7 are done. Bullet 2 is
 half done: approvals, allowed groups and files work, but strangers, photos, SVG and durable
-people do not. Bullet 6 is missing only its server-side hosting and container update work;
-the disk warning and the agent path already exist.
+people do not. Bullet 6 is missing only its server-side site hosting, which stays deferred
+(F11.16); the disk warning, the agent path and container updates exist.

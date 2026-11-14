@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Button, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, SheetPage } from '../../components/Overlay'
-import { VStack } from '../../components/Stack'
+import { Plush } from '../../components/Plush'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { useTr } from '../../lib/use-language'
+import { EmptyState } from '../HostStateView'
 import { errorText, needsSignIn } from './market-models'
 import { AppLogo, FormSheet, ItemGrid, ItemRow, MarketSection, ScreenHeader, ServiceLogo, SkillGlyph } from './pieces'
 import { SkillSheet, type SkillRef } from './SkillSheet'
@@ -50,7 +51,7 @@ export function InstalledView({ back, connectorId }: { back: () => void; connect
         <div className="market-scroll">
           <div className="market-page-content">
             {connectorId && !targeted && plugins.installedConnectors.length > 0 ? <Text tone="secondary">{tr('The requested connector is no longer installed.')}</Text> : null}
-            {empty ? <EmptyState icon="shippingbox" title="Nothing installed" detail="Connectors and skills you add show up here." /> : null}
+            {empty ? <EmptyState inline plush={<Plush />} title="Nothing installed" message="Connectors and skills you add show up here." /> : null}
             {plugins.installedConnectors.length ? (
               <MarketSection title="Connectors">
                 <ItemGrid>
@@ -105,18 +106,6 @@ export function InstalledView({ back, connectorId }: { back: () => void; connect
         {tools && <McpToolsSheet key={`${store.contextId}:${store.computer.id}:${tools.id}`} connector={tools} />}
       </FormSheet>
     </SheetPage>
-  )
-}
-
-/** A quiet "nothing here" message (replaces `ContentUnavailableView`). */
-function EmptyState({ icon, title, detail }: { icon: string; title: string; detail: string }) {
-  const tr = useTr()
-  return (
-    <VStack align="center" gap={8} className="market-empty">
-      <Icon name={icon} size={28} color="var(--tertiary)" />
-      <Text size="compactBody" weight="semibold" tone="text">{tr(title)}</Text>
-      <Text size="compactSecondary" tone="secondary">{tr(detail)}</Text>
-    </VStack>
   )
 }
 

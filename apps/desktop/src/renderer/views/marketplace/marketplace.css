@@ -24,10 +24,6 @@
   flex: 1;
   min-height: 0;
 }
-.market-empty {
-  padding: 40px 0;
-  text-align: center;
-}
 
 /* Installed ⇄ page: slides like `.move(edge:)` + opacity. The base page sizes the stack (so a
    card that fits its content fits it) and the page on top takes the same box. */

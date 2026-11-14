@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -200,12 +201,14 @@ internal fun serviceDomain(website: String?, name: String, registryName: String?
         color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
-/** A quiet "nothing here" message. */
-@Composable internal fun MarketEmpty(icon: String, title: String, detail: String) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
+/** A quiet "nothing here" message, with the felt plush above the text. The plush blinks and
+ * glances; with Reduce Motion (animations off) it is a still image. The caller translates both
+ * strings, so a search query can be filled in first. */
+@Composable internal fun MarketEmpty(title: String, detail: String? = null) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Symbol(icon, size = 30.dp, tint = Palette.tertiary)
-        Text(tr(title), style = Type.body.semibold, color = Palette.text)
-        Text(tr(detail), style = Type.subheadline, color = Palette.secondary)
+        CharacterAvatar("blob", "violet", 64.dp, "working")
+        Text(title, style = Type.body.semibold, color = Palette.text, textAlign = TextAlign.Center)
+        detail?.let { Text(it, style = Type.subheadline, color = Palette.secondary, textAlign = TextAlign.Center) }
     }
 }
