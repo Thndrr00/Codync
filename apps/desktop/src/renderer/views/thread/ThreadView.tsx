@@ -6,7 +6,7 @@ import { IslandBudget } from '../island/IslandBudget'
 import { IslandTerminal } from '../island/IslandTerminal'
 import { useIslandThreadNavigation } from './use-island-thread-navigation'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { draftOf, folderName, isGroup, isWorking, isWorkingIn, sharedWorkspacePeers, type Bot, type BotApp, type BotDraft, type Entry, type SharedFile } from '@shared/models'
+import { draftOf, folderName, isGroup, isWorking, isWorkingIn, sharedWorkspacePeers, threadName, type Bot, type BotApp, type BotDraft, type Entry, type SharedFile } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { BotAppPanel } from '../../components/BotAppPanel'
 import { Spinner } from '../../components/Controls'
@@ -75,6 +75,14 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   /** The voice call whose conversation is open (its line's entry id). */
   const [callLine, setCallLine] = useState<string | null>(null)
   const [threadRoot, setThreadRoot] = useState<string | null>(null)
+  /** What the open thread is called, for the call bar's "Joining …" row (card K13). */
+  const threadTitle = (() => {
+    if (!threadRoot) return null
+    const known = store.threads.get(botId)?.find((thread) => thread.id === threadRoot)
+    if (known) return threadName(known)
+    const root = store.allEntries(botId).find((entry) => entry.id === threadRoot)
+    return root?.data.text ? root.data.text.slice(0, 60).replaceAll('\n', ' ') : null
+  })()
   /** The message the forward picker is sending on. */
   const [forwardEntry, setForwardEntry] = useState<Entry | null>(null)
   /** Shared files open over the chat, each its own tab, and the one shown. */
@@ -303,7 +311,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         </div>
         {calling ? (
           <div className="call-overlay">
-            <CallView botId={botId} threadId={threadRoot} onSpeaking={setCallSpeaking} interrupt={interruptCall} onEnd={() => setCalling(false)} />
+            <CallView botId={botId} threadId={threadRoot} threadName={threadTitle} onSpeaking={setCallSpeaking} interrupt={interruptCall} onEnd={() => setCalling(false)} />
           </div>
         ) : null}
         {activeArtifact ? (

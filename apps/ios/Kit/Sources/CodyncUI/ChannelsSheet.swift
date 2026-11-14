@@ -104,6 +104,9 @@ public struct ChannelsSheet: View {
                                     .font(.footnote)
                                     .foregroundStyle(Palette.text)
                             }
+                            if !bot.botId.isEmpty {
+                                ConversationLinksView(provider: "telegram", channel: bot.name, botId: bot.botId)
+                            }
                             Button("Pair someone") {
                                 act {
                                     let answer = try await store.pairTelegram(name: bot.name)
@@ -166,6 +169,9 @@ public struct ChannelsSheet: View {
                         Text("\(binding.channelId) · \(binding.allowedUsers.count) \(L10n.tr("people allowed"))")
                             .font(.caption)
                             .foregroundStyle(Palette.tertiary)
+                        if !binding.botId.isEmpty {
+                            ConversationLinksView(provider: "discord", channel: binding.channelId, botId: binding.botId)
+                        }
                     }
                     Button("Change Discord settings") { startDiscord() }
                         .buttonStyle(.secondary)
@@ -295,6 +301,14 @@ public struct ChannelsSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let slack {
                     Text(slackLine(slack)).foregroundStyle(Palette.secondary)
+                    ForEach(slack.bindings) { binding in
+                        Text(binding.channelId)
+                            .font(.caption)
+                            .foregroundStyle(Palette.tertiary)
+                        if !binding.botId.isEmpty {
+                            ConversationLinksView(provider: "slack", channel: binding.channelId, botId: binding.botId)
+                        }
+                    }
                     if slack.configured {
                         Button("Disconnect Slack") {
                             act { slack = try await store.disconnectSlack() }

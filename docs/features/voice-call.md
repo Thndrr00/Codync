@@ -574,10 +574,15 @@ replies carry the same `thread_id`, so Slack, Discord or the app's thread shows 
 
 Messaging conversations can be linked to any Codync thread with `linkConversation {botId, source, channel, thread?,
 threadId}` (`host/src/store/links.rs`, the `conversation_links` table) and unlinked with `unlinkConversation`;
-`conversationLinks {botId}` lists them. Slack ingress, Discord ingress and Telegram ingress check the link before
-falling back to their own durable root, and the Slack/Discord reply queries read the linked root, so a channel message
-and the bot's reply stay in the same conversation. Linking after messages moved later messages only; earlier entries
-keep their old thread.
+`conversationLinks {botId}` lists them. The channel settings on the desktop, iPhone and Android list those links for a
+bot, take one away and link the conversation on the page to a thread picked from the chat's own threads; the terminal
+UI has no control and uses the host methods only. Slack ingress, Discord ingress and Telegram ingress check the link
+before falling back to their own durable root, and the Slack/Discord reply queries read the linked root, so a channel
+message and the bot's reply stay in the same conversation. Linking after messages moved later messages only; earlier
+entries keep their old thread.
+
+The desktop call bar adds a row naming the thread a call joins when one is open (**Joining …**); the phones' calls still
+write into the bot's main chat.
 
 ### Missing dictation keys
 

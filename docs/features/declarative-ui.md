@@ -104,10 +104,13 @@ card and the tool reports `{"answered": false, "cancelled": true}`.
 - **iPhone** (`apps/ios/Kit/Sources/CodyncUI/Thread/DeclarativeCard.swift`): a `CardSection` of rows,
   `Field` + `TextField(...).fieldBox()`, `ChoicePicker`, `Toggle(.codync)`, a `Grid` table and a
   `Canvas`/bar chart, all native.
-- **Android: phase 2.** No renderer ships. The card falls back to its title and action buttons, so a
-  form is answered on the computer or iPhone. A half renderer (fields that can't report values) was
-  deliberately left out; when it lands it follows the same schema and the same `values` answer. The
-  terminal UI shows the buttons the same way, without fields.
+- **Android** (`apps/android/core/src/main/kotlin/com/codync/android/core/DeclarativeBlock.kt` for the
+  model, `apps/android/app/src/main/kotlin/com/codync/android/DeclarativeCard.kt` for the card):
+  `PermissionCard` hands a block card to `DeclarativeCard`, which draws Codync's `Text`, `Hairline`,
+  `ChoicePicker`, `CodyncSwitch`, `Field` + `FieldBox` and its own table and `Canvas` chart. Fields keep
+  what the person typed and the buttons stay off until every required one is filled; the answer goes
+  through `respondPermission` with `values`, the same path as the desktop and iPhone. A card answered
+  elsewhere still reads **Answers sent**.
 
 ## K4: shared view state and named actions
 
@@ -194,8 +197,8 @@ unknown view, kind or action is refused with what the view declares.
   a lane) and follows `create_routine`/`select_routine`/`focus_lane` by reloading the canvas and
   selecting the node or lane.
 - **iPhone**: `ThreadView` reports `chat:<botId>` and opens the thread an `open_thread` action names.
-- **Android: phase 2**, like block rendering. It neither reports view state nor handles actions yet;
-  the host treats a view with no recent delta as empty.
+- **Android: phase 2.** It neither reports view state nor handles actions yet; the host treats a view with
+  no recent delta as empty. Its K3 renderer and form answers ship (above).
 
 ## Tests
 
@@ -210,6 +213,9 @@ unknown view, kind or action is refused with what the view declares.
   unknown views/actions refused, and `create_routine` landing in the routine API.
 - `apps/desktop/src/shared/declarative.test.ts`: the form model the card renders (initial values,
   answers sent, completeness) and the chart geometry.
+- `apps/android/core/src/test/kotlin/com/codync/android/core/DeclarativeBlockTest.kt`: the same form
+  model on the phone (the agent's starting values, blanks left out, a toggle's no) and a block this
+  build can't read drawing nothing.
 
 ## Limits and follow-ups
 
@@ -218,5 +224,5 @@ unknown view, kind or action is refused with what the view declares.
 - Only the bot's chat and its routine canvas are views today; a named view is one more `Kind` in
   `host/src/views/state.rs` plus the actions it declares, and each client that shows it.
 - The form waits 10 minutes; after that the tool reports a timeout and the card closes.
-- Android gets K3 and K4 in phase 2 (renderer and view wiring), documented above rather than shipped
-  half done.
+- Android draws K3's blocks; its K4 view reporting and named actions are still phase 2, documented above
+  rather than shipped half done. The terminal UI shows a block's buttons, without fields.

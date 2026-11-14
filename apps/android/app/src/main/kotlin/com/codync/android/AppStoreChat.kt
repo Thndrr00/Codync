@@ -216,11 +216,16 @@ fun AppStore.setReadingSpeed(rate: Float) {
     voiceSettings(VoicePreferences.load(getApplication()).copy(rate = rate))
     messageSpeech?.setRate(rate)
 }
-fun AppStore.respond(entry: Entry, option: String?) = action("permission:" + entry.id) {
+fun AppStore.respond(entry: Entry, option: String?, values: Map<String, JsonElement>? = null) = action("permission:" + entry.id) {
     // A command or a file change on the computer takes a thumb first; a deny never does.
     if (!Approvals.confirmCurrent(entry, option)) return@action
     val active = ready()
-    active.call("respondPermission", body("entryId" to entry.id, "optionId" to option))
+    active.call("respondPermission", buildJsonObject {
+        put("entryId", entry.id)
+        option?.let { put("optionId", it) }
+        // A declarative block's form: the host checks these against the block before the answer goes on.
+        if (values != null) put("values", JsonObject(values))
+    })
     delay(2_000)
 }
 

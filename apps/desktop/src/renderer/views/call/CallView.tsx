@@ -56,10 +56,12 @@ export const OpenVoiceSettings = createContext<(() => void) | null>(null)
  * the call's messages, its final replies are read aloud, and the call ends as one titled line
  * ("Release plan · 00:16") that opens its conversation.
  */
-export function CallView({ botId, threadId, onSpeaking, interrupt, onEnd }: {
+export function CallView({ botId, threadId, threadName, onSpeaking, interrupt, onEnd }: {
   botId: string
   /** The thread the chat is showing (a Slack or Discord conversation): the call joins it. */
   threadId?: string | null
+  /** What that thread is called, as the call bar says where the call goes. */
+  threadName?: string | null
   onSpeaking: (speaking: boolean) => void
   interrupt: { current: (() => void) | null }
   onEnd: () => void
@@ -300,6 +302,12 @@ export function CallView({ botId, threadId, onSpeaking, interrupt, onEnd }: {
           <Icon name="xmark" size={16} weight="semibold" scaled={false} />
         </button>
       </div>
+      {/* Card K13: where a call started in a side conversation writes. */}
+      {threadId ? (
+        <Text as="div" size="caption" tone="secondary" className="call-line">
+          {fill(tr('Joining {thread}'), { thread: threadName ?? tr('This thread') })}
+        </Text>
+      ) : null}
       {failure ? (
         <Text as="div" key="failure" tone="danger" className="call-line">
           {tr(failure)}

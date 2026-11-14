@@ -1,6 +1,8 @@
 package com.codync.android
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +23,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.Bot
 import com.codync.android.core.FlowCanvas
+import com.codync.android.core.FlowLane
 import com.codync.android.core.FlowLink
 import com.codync.android.core.FlowRoutineCard
 import com.codync.android.core.RoutineFlow
@@ -34,10 +38,12 @@ import com.codync.android.core.flowStatusLabel
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 
-/** What the detail sheet is about: a routine or a bot (by node key), or a link (by id). */
+/** What the detail sheet is about: a routine or a bot (by node key), a link (by id), or one agent's lane. */
 internal sealed interface FlowSelection {
     data class OfNode(val key: String) : FlowSelection
     data class OfLink(val id: String) : FlowSelection
+    /** One agent's lane of a shared routine card (card K14). */
+    data class OfLane(val routineId: String, val botId: String) : FlowSelection
 }
 
 /** A step's status as a small chip: words and a symbol, never color alone. */
@@ -54,6 +60,24 @@ internal sealed interface FlowSelection {
     }
 }
 
+/** One agent's lane: whose it is and how its step went, tap to open that lane (card K14). */
+@Composable internal fun LaneChip(lane: FlowLane, open: () -> Unit) {
+    val symbol = when (lane.status) {
+        "running" -> "arrow.triangle.2.circlepath"; "succeeded" -> "checkmark.circle"; "failed" -> "xmark.circle"
+        "skipped" -> "minus.circle"; "cancelled" -> "stop.circle"; else -> "circle.dashed"
+    }
+    val tint = when (lane.status) { "succeeded" -> Palette.added; "failed" -> Palette.danger; "running" -> Palette.accent; else -> Palette.secondary }
+    val status = tr(flowStatusLabel(lane.status))
+    Row(Modifier.clip(RoundedRectangle(50.dp)).background(Palette.text.copy(alpha = 0.07f))
+        .clickable(role = Role.Button, onClick = open)
+        .semantics(mergeDescendants = true) { contentDescription = "${lane.name}, $status" }
+        .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Symbol(symbol, size = 11.dp, tint = tint)
+        Text(lane.name, style = Type.caption, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
 /** The sheet over the canvas or the list: what the selected routine, bot or link says, and the actions on it. */
 @Composable internal fun FlowDetail(state: AppState, owner: Bot, canvas: FlowCanvas, bots: Map<String, Bot>, takers: List<Bot>,
     selection: FlowSelection, online: Boolean, busy: Boolean, store: AppStore, note: (String?) -> Unit,
@@ -63,6 +87,7 @@ internal sealed interface FlowSelection {
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         ModalHeader(when (selection) {
             is FlowSelection.OfLink -> tr("Link")
+            is FlowSelection.OfLane -> tr("Bot")
             is FlowSelection.OfNode -> if (selection.key.startsWith("routine:")) tr("Routine") else tr("Bot")
         })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -70,10 +95,15 @@ internal sealed interface FlowSelection {
                 is FlowSelection.OfLink -> canvas.links.firstOrNull { it.id == selection.id }?.let { link ->
                     LinkPanel(state, owner, link, bots[link.toBotId], name, online, busy, store, close)
                 } ?: Text(tr("This link is gone."), style = Type.footnote, color = Palette.secondary)
+                is FlowSelection.OfLane -> canvas.routines.firstOrNull { it.routine.id == selection.routineId }
+                    ?.let { card -> card.lane(selection.botId)?.let { lane -> LanePanel(card, lane, bots) } }
+                    ?: Text(tr("Unknown bot"), style = Type.footnote, color = Palette.secondary)
                 is FlowSelection.OfNode -> {
                     val id = selection.key.substringAfter(':')
                     if (selection.key.startsWith("routine:")) canvas.routines.firstOrNull { it.routine.id == id }?.let { card ->
-                        RoutinePanel(owner, canvas, card, name, online, busy, store)
+                        RoutinePanel(owner, canvas, card, name, online, busy, store) { botId ->
+                            reselect(FlowSelection.OfLane(card.routine.id, botId))
+                        }
                     } else BotPanel(owner, canvas, bots[id], id, takers, name, online, busy, store, note, reselect, close)
                 }
             }
@@ -106,11 +136,19 @@ internal sealed interface FlowSelection {
     SecondaryButton(tr("Disconnect"), Modifier.fillMaxWidth(), enabled = online && !busy) { store.disconnectFlow(owner.id, link.id); close() }
 }
 
-@Composable private fun RoutinePanel(owner: Bot, canvas: FlowCanvas, card: FlowRoutineCard, name: (String) -> String, online: Boolean, busy: Boolean, store: AppStore) {
+@Composable private fun RoutinePanel(owner: Bot, canvas: FlowCanvas, card: FlowRoutineCard, name: (String) -> String, online: Boolean, busy: Boolean, store: AppStore, openLane: (String) -> Unit) {
     val routine = card.routine
     val linked = !RoutineFlow.isUnconnected(canvas, routine.id)
     Text(routine.name, style = Type.headline, color = Palette.text)
     Text(routine.triggerDescriptions.joinToString(" · "), style = Type.footnote, color = Palette.secondary)
+    // Card K14: the agents that work this card, each lane opened by tapping it.
+    if (card.lanes.size > 1) {
+        Text("${tr("Shared card: {count} bots work it, each in its own lane.").replace("{count}", card.lanes.size.toString())}",
+            style = Type.caption, color = Palette.secondary)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (lane in card.lanes) LaneChip(lane) { openLane(lane.botId) }
+        }
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(tr(if (routine.enabled) "Active" else "Paused"), Modifier.weight(1f), style = Type.footnote, color = Palette.text)
         CodyncSwitch(routine.enabled, { store.setFlowRoutineEnabled(owner.id, routine.id, it) },
@@ -139,6 +177,18 @@ internal sealed interface FlowSelection {
             Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(run.createdAt)), style = Type.caption, color = Palette.secondary)
         }
     }
+}
+
+/** One agent's lane of a shared card: whose step it is, how it went and what it said. */
+@Composable private fun LanePanel(card: FlowRoutineCard, lane: FlowLane, bots: Map<String, Bot>) {
+    val step = card.step(lane.botId)
+    Text(bots[lane.botId]?.name ?: lane.name, style = Type.headline, color = Palette.text)
+    Text(tr("Step {depth} in the flow of {name}").replace("{depth}", (lane.depth + 1).toString()).replace("{name}", card.routine.name),
+        style = Type.caption, color = Palette.secondary)
+    StatusChip(lane.status)
+    Text(tr("The other bots keep their own lanes on this card."), style = Type.caption, color = Palette.secondary)
+    step?.error?.let { Text(it, style = Type.caption, color = Palette.danger, maxLines = 6, overflow = TextOverflow.Ellipsis) }
+    step?.output?.let { Text(it, style = Type.caption, color = Palette.secondary, maxLines = 8, overflow = TextOverflow.Ellipsis) }
 }
 
 @Composable private fun BotPanel(owner: Bot, canvas: FlowCanvas, bot: Bot?, id: String, takers: List<Bot>, name: (String) -> String,

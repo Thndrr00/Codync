@@ -43,8 +43,18 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /** Approval card in Grok Bot's choice-card style: what the agent wants, where it runs, and the answers as rows. */
-@Composable internal fun PermissionCard(entry: Entry, hostName: String, answering: Boolean, respond: (String?) -> Unit) {
+@Composable internal fun PermissionCard(
+    entry: Entry,
+    hostName: String,
+    answering: Boolean,
+    respond: (String?, Map<String, JsonElement>?) -> Unit,
+) {
     val d = entry.data
+    // A declarative block (card K3) draws itself; the entry is the same approval either way.
+    if (d["block"] is JsonObject) {
+        DeclarativeCard(entry, answering, respond)
+        return
+    }
     val pending = d.text("status") == "pending"
     var expanded by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
@@ -105,7 +115,7 @@ import kotlinx.serialization.json.jsonPrimitive
                     d = d,
                     pick = pick,
                     answering = answering,
-                    onSend = { chosen = it; respond(it) },
+                    onSend = { chosen = it; respond(it, null) },
                     onBack = { summary = null },
                 )
             } else {
@@ -124,9 +134,9 @@ import kotlinx.serialization.json.jsonPrimitive
                         Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
                             .clickable(enabled = !answering, role = Role.Button) {
                                 when {
-                                    id == "__back" -> { chosen = id; respond(id) }
+                                    id == "__back" -> { chosen = id; respond(id, null) }
                                     lastQuestion -> summary = option
-                                    else -> { chosen = id; respond(id) }
+                                    else -> { chosen = id; respond(id, null) }
                                 }
                             }
                             .graphicsLayer { alpha = if (!waiting || chosen == id) 1f else 0.4f }

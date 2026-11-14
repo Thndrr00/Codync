@@ -125,14 +125,68 @@ public struct SlackStatus: Decodable, Equatable, Sendable {
     public var configured: Bool
     public var socketMode: Bool
     public var workspaceId: String?
+    public var bindings: [SlackBinding]
 
-    private enum CodingKeys: String, CodingKey { case configured, socketMode, workspaceId }
+    private enum CodingKeys: String, CodingKey { case configured, socketMode, workspaceId, bindings }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
         socketMode = try c.decodeIfPresent(Bool.self, forKey: .socketMode) ?? false
         workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId)
+        bindings = try c.decodeIfPresent([SlackBinding].self, forKey: .bindings) ?? []
+    }
+}
+
+/// One bound Slack channel: the host bot that answers it and the people allowed in it.
+public struct SlackBinding: Decodable, Identifiable, Equatable, Sendable {
+    public var channelId: String
+    public var botId: String
+    public var allowedUsers: [String]
+    public var memory: String
+    public var icon: String
+
+    public var id: String { channelId }
+
+    private enum CodingKeys: String, CodingKey { case channelId, botId, allowedUsers, memory, icon }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        channelId = try c.decode(String.self, forKey: .channelId)
+        botId = try c.decodeIfPresent(String.self, forKey: .botId) ?? ""
+        allowedUsers = try c.decodeIfPresent([String].self, forKey: .allowedUsers) ?? []
+        memory = try c.decodeIfPresent(String.self, forKey: .memory) ?? ""
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+    }
+}
+
+/// One messaging conversation linked to a Codync thread (card K13): what `conversationLinks` lists and
+/// `linkConversation` and `unlinkConversation` change, so the app, a call and the channel share one conversation.
+public struct ConversationLink: Decodable, Identifiable, Equatable, Sendable {
+    public var botId: String
+    /// `telegram`, `slack`, `discord` or `matrix`.
+    public var source: String
+    public var channel: String
+    /// The provider's thread inside the channel: a Slack thread's timestamp, empty for a Telegram chat or Discord channel.
+    public var thread: String
+    /// The Codync thread the conversation writes into.
+    public var rootId: String
+    public var createdAt: Int64
+    public var updatedAt: Int64
+
+    public var id: String { "\(channel)/\(thread)" }
+
+    private enum CodingKeys: String, CodingKey { case botId, source, channel, thread, rootId, createdAt, updatedAt }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        botId = try c.decode(String.self, forKey: .botId)
+        source = try c.decode(String.self, forKey: .source)
+        channel = try c.decode(String.self, forKey: .channel)
+        thread = try c.decodeIfPresent(String.self, forKey: .thread) ?? ""
+        rootId = try c.decode(String.self, forKey: .rootId)
+        createdAt = try c.decodeIfPresent(Int64.self, forKey: .createdAt) ?? 0
+        updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? 0
     }
 }
 

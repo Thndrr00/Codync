@@ -23,6 +23,23 @@ export interface SlackStatus {
   bindings: { channelId: string; botId: string; allowedUsers: string[]; memory?: string; icon?: string }[] | null
 }
 
+/**
+ * One messaging conversation linked to a Codync thread (card K13): the host's `conversationLinks` entry, which
+ * `linkConversation` and `unlinkConversation` change.
+ */
+export interface ConversationLink {
+  botId: string
+  /** `telegram`, `slack`, `discord` or `matrix`. */
+  source: string
+  channel: string
+  /** The provider's thread inside the channel: a Slack thread's timestamp, empty for a Telegram chat or Discord channel. */
+  thread: string
+  /** The Codync thread the conversation writes into. */
+  rootId: string
+  createdAt: number
+  updatedAt: number
+}
+
 /** The Matrix connection, as `matrixStatus` reports it. Room ids look like `!opaque:server`. */
 export interface MatrixBinding {
   roomId: string

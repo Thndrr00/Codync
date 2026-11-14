@@ -188,9 +188,9 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
         }
         "permission" -> Column(Modifier.padding(top = topGroupGap), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (group) AuthorLabel(entry.data.text("author"), state)
-            PermissionCard(entry, state.computer?.name.orEmpty(), answering = "permission:" + entry.id in state.busy) {
+            PermissionCard(entry, state.computer?.name.orEmpty(), answering = "permission:" + entry.id in state.busy) { option, values ->
                 haptics.perform(CodyncHaptic.PermissionAction)
-                store.respond(entry, it)
+                store.respond(entry, option, values)
             }
         }
         "subagents" -> Column(Modifier.padding(top = if (groupStart) topGroupGap else topSameGap), verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -29,8 +29,10 @@ Both agents keep their lanes: a lane report is just a scoped `set` on the same v
 conflict (two windows or an agent wrote first) re-applies the delta to the current version rather than
 dropping it. The generated cards stay consistent because both lanes render through the same routine card,
 step list and status vocabulary — no agent-specific UI; a block either agent declares goes through the
-same validated K3 schema and the same card renderer. The iPhone app has no flow canvas yet, so its
-routine screen lists the same steps without lanes; Android and the terminal list them under the routine.
+same validated K3 schema and the same card renderer. Android's flow list draws a chip per lane under the
+routine (name and step status) and opens that lane's panel; the terminal draws the same lane strip over
+the chain, and a digit picks one. The iPhone app has no flow canvas yet, so its routine screen lists the
+steps without lanes.
 
 **OpenIntelligentUI verdict (contrast only, no dependency).** Its generative-UI model lets a model compose
 arbitrary layout at run time, which is stronger for one-off, exploratory boards: it can invent a shape
@@ -171,8 +173,8 @@ ignore the new method names and `routineFlow` events (the TUI and apps skip unkn
 In each client, a bot's routines screen has a **List | Flow** selector. Flow shows the canvas of that bot: routine and bot nodes, a fixed dashed edge from each routine to its own bot, link edges, saved positions (nodes never moved sit in automatic columns by depth), and each bot's latest step status (icon and words, never colour alone). A shared routine card also carries a lane chip per participating agent; picking one focuses that agent's step in the inspector. A **list** of the same flow is the keyboard and screen-reader equivalent (and the phone's default with TalkBack on or on narrow screens). Both open the same inspector: a routine (pause/resume, test, latest steps, run history), a lane (that agent's step and output), a bot (hand its reply on to…, remove if placed by hand) or a link (instruction, model and its options, disconnect). States: loading, no routines, not connected, no runs yet, error with retry, offline (read-only) and a host without the methods (the canvas says to update Codync there). The desktop rail's **Bot canvas** button opens the selected bot's flow in the same large sheet.
 
 - **Desktop** (`apps/desktop/src/renderer/views/routines/flow/`, model `lib/routine-flow.ts`, state `store/routine-flow-store.ts`): hand-written pan/zoom/drag; connect by dragging from a bot's dot onto another bot, or from the inspector. Choosing **Flow** opens the canvas in a large sheet (the details column is too narrow for a graph); the same canvas can be reopened from its expand button. A routine card shows the next seven days as seven tick columns and its newest runs as status dots, with a play button that tests the flow (disabled until a bot is linked).
-- **Android** (`RoutineFlow*.kt`, model `core/RoutineFlow.kt`): pan, pinch and node dragging; connect from the bot's detail sheet; the same week strip, run dots and play button on a routine card.
-- **Terminal** (`f` on a routine): the chain as rows; same words (Running, Succeeded, Failed, Skipped, Cancelled).
+- **Android** (`RoutineFlow*.kt`, model `core/RoutineFlow.kt`): pan, pinch and node dragging; connect from the bot's detail sheet; the same week strip, run dots and play button on a routine card. A shared card's flow list shows a chip per lane (agent name and that step's status) under the routine, and the routine's detail panel repeats them; tapping one opens the lane's panel with its step, error and output.
+- **Terminal** (`f` on a routine): the chain as rows, with a lane strip over it when a card has more than one lane (agent name and status); `1`–`9` picks a lane and the sheet shows that lane's step and output. Same words (Running, Succeeded, Failed, Skipped, Cancelled).
 - **iPhone**: not built yet.
 
 The clients pre-check the connect rules (`connectProblem`, same wording as the host) and the host stays the authority.

@@ -116,6 +116,7 @@ import kotlinx.coroutines.launch
                                 act { store.setChannelIcon("telegram", bot.name, icon); bots = store.telegramBots() ?: bots }
                             }
                             ChannelNotesRow("telegram", bot.name, store)
+                            if (bot.botId.isNotEmpty()) ChannelLinksRow("telegram", bot.name, bot.botId, store)
                             ChannelRoutinesRow("telegram", bot.name, bot.botId, store)
                             ChannelMemoryField(bot.name, bot.memory) { memory ->
                                 act { store.setChannelMemory("telegram", bot.name, memory); bots = store.telegramBots() ?: bots }
@@ -167,6 +168,7 @@ import kotlinx.coroutines.launch
                                     act { store.setChannelIcon("discord", binding.channelId, icon); discord = store.discordStatus() }
                                 }
                                 ChannelNotesRow("discord", binding.channelId, store)
+                                if (binding.botId.isNotEmpty()) ChannelLinksRow("discord", binding.channelId, binding.botId, store)
                                 ChannelRoutinesRow("discord", binding.channelId, binding.botId, store)
                                 ChannelMemoryField(binding.channelId, binding.memory) { memory ->
                                     act { store.setChannelMemory("discord", binding.channelId, memory); discord = store.discordStatus() }
@@ -306,6 +308,7 @@ import kotlinx.coroutines.launch
                                 act { store.setChannelIcon("slack", binding.channelId, icon); slack = store.slackStatus() }
                             }
                             ChannelNotesRow("slack", binding.channelId, store)
+                            if (binding.botId.isNotEmpty()) ChannelLinksRow("slack", binding.channelId, binding.botId, store)
                             ChannelRoutinesRow("slack", binding.channelId, binding.botId, store)
                             ChannelMemoryField(binding.channelId, binding.memory) { memory ->
                                 act { store.setChannelMemory("slack", binding.channelId, memory); slack = store.slackStatus() }

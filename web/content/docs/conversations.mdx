@@ -111,9 +111,7 @@ When the agent asks you a question with a few answers, the card asks one questio
 
 A bot can show a form in the chat instead of asking in prose: a few fields to fill in, a table, a small chart, and one or more buttons such as **Approve** or **Deny**. It arrives as an approval card, so you answer it like any other, and **Submit** stays off until every field marked with `*` is filled.
 
-On the desktop and iPhone the form uses the app's own fields: text boxes, a date, a time, a picker for a list of choices and a switch for yes or no. The bot gets the fields back with the button you chose.
-
-**Android** doesn't draw forms yet: the card shows its title and its buttons. Answer forms on the computer or iPhone. The terminal UI shows the buttons too, without the fields.
+On the desktop, iPhone and Android the form uses the app's own fields: text boxes, a date, a time, a picker for a list of choices and a switch for yes or no. The bot gets the fields back with the button you chose. The terminal UI shows the form's buttons, without the fields.
 
 Some agents keep working after their reply, for example a background helper that finishes a long job. With **Approve automatically**, what that work asks is allowed too, unless you stopped the bot's latest reply; under any other setting it's declined, since no card can wait for you. Once the bot is idle there's no **Stop**: to stop approving that work, switch the bot to **Ask me**. When that work is done, the bot can still send you its result as a message in its chat, unless you stopped its latest reply.
 
@@ -185,7 +183,7 @@ If you delete a bot's history while it's working, its running turn stops first.
 
 A voice call you start while a side conversation is open (for example a Slack or Discord thread) joins it: what you say on the call, the bot's replies and the transcript stay in that conversation instead of starting a new one in the main chat. The desktop app passes the open thread to the call; the host keeps the link for the whole call.
 
-A channel conversation can also be linked to a Codync thread on the computer (`linkConversation`). From then on its messages and the bot's replies use that thread, so text you type in the app, a call and the channel share one context. `conversationLinks` lists the links and `unlinkConversation` removes one; messages from before the link stay where they were. See [Channels](/docs/channels#linked-conversations).
+A channel conversation can also be linked to a Codync thread on the computer (`linkConversation`). From then on its messages and the bot's replies use that thread, so text you type in the app, a call and the channel share one context. `conversationLinks` lists the links and `unlinkConversation` removes one; messages from before the link stay where they were. The channel's settings on the desktop and the phones show what is linked, take a link away and link a thread; a Slack channel asks for the thread's timestamp and a Telegram bot for the chat's id, since those are the names the computer keeps. See [Channels](/docs/channels#linked-conversations).
 
 ## Proactive check-ins
 

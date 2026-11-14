@@ -125,3 +125,28 @@ suspend fun AppStore.setChannelIcon(provider: String, channel: String, icon: Str
         put("channel", channel)
         put("icon", icon)
     })
+
+/** The conversations of [botId] linked to a Codync thread (card K13). */
+suspend fun AppStore.conversationLinks(botId: String): List<ConversationLink> =
+    ConversationLink.decodeList(hostQuery("conversationLinks", body("botId" to botId)))
+
+/** Links a channel conversation to [threadId]; every link of the bot comes back. */
+suspend fun AppStore.linkConversation(botId: String, provider: String, channel: String, thread: String,
+    threadId: String): List<ConversationLink> =
+    ConversationLink.decodeList(hostQuery("linkConversation", buildJsonObject {
+        put("botId", botId)
+        put("provider", provider)
+        put("channel", channel)
+        put("thread", thread)
+        put("threadId", threadId)
+    }))
+
+/** Takes a channel conversation's link away; its next message starts a conversation of its own. */
+suspend fun AppStore.unlinkConversation(botId: String, provider: String, channel: String,
+    thread: String): List<ConversationLink> =
+    ConversationLink.decodeList(hostQuery("unlinkConversation", buildJsonObject {
+        put("botId", botId)
+        put("provider", provider)
+        put("channel", channel)
+        put("thread", thread)
+    }))

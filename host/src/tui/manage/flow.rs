@@ -21,6 +21,8 @@ pub struct FlowSheet {
     /// The owner's canvas, as `routineFlowCanvas` answered; `None` while it loads.
     pub canvas: Option<Value>,
     pub cursor: usize,
+    /// The agent's lane the person picked, if any (card K14).
+    pub lane: Option<String>,
     pub stage: FlowStage,
 }
 
@@ -83,14 +85,54 @@ impl FlowSheet {
     pub fn rows(&self) -> Vec<FlowRow> {
         self.canvas.as_ref().map_or_else(Vec::new, |c| rows(c, &self.routine, &self.bot))
     }
+
+    /// The agents that work this card, the routine's own bot first (card K14).
+    pub fn lanes(&self) -> Vec<Value> {
+        let card = self
+            .canvas
+            .as_ref()
+            .and_then(|c| c["routines"].as_array())
+            .and_then(|routines| routines.iter().find(|card| card["routine"]["id"] == self.routine.as_str()))?;
+        card["lanes"].as_array().cloned()
+    }
+
+    /// The lane the person picked, while it is still on the card.
+    pub fn selected_lane(&self) -> Option<Value> {
+        let lane = self.lane.as_deref()?;
+        self.lanes().into_iter().find(|l| l["botId"] == lane)
+    }
+
+    /// The step of the selected lane in the latest run, if it ran.
+    pub fn lane_step(&self) -> Option<Value> {
+        let lane = self.selected_lane()?;
+        let bot = lane["botId"].as_str()?;
+        self.canvas
+            .as_ref()?
+            .get("routines")?
+            .as_array()?
+            .iter()
+            .find(|card| card["routine"]["id"] == self.routine.as_str())?
+            .get("steps")?
+            .as_array()?
+            .iter()
+            .find(|step| step["botId"] == bot)
+            .cloned()
+    }
 }
 
 impl App {
     pub(in crate::tui) fn open_flow(&mut self, list: RoutineList, routine: &Value) {
         let (bot, id) = (list.bot.clone(), s(routine, "id"));
         self.sheet("routineFlowCanvas", json!({"botId": bot}), Reply::Flow(bot.clone()));
-        let sheet =
-            FlowSheet { bot, routine: id, name: s(routine, "name"), canvas: None, cursor: 0, stage: FlowStage::Browse };
+        let sheet = FlowSheet {
+            bot,
+            routine: id,
+            name: s(routine, "name"),
+            canvas: None,
+            cursor: 0,
+            lane: None,
+            stage: FlowStage::Browse,
+        };
         self.overlays.push(Overlay::Routines(list));
         self.overlays.push(Overlay::Flow(Box::new(sheet)));
     }
@@ -125,6 +167,15 @@ impl App {
         f.stage = match std::mem::replace(&mut f.stage, FlowStage::Browse) {
             FlowStage::Browse => match k.code {
                 KeyCode::Esc | KeyCode::Char('q') => return None,
+                KeyCode::Char(digit @ '1'..='9') => {
+                    // Card K14: a digit picks one agent's lane of the shared card.
+                    let index = usize::from(digit as u8 - b'1');
+                    match f.lanes().get(index) {
+                        Some(lane) => f.lane = lane["botId"].as_str().map(str::to_owned),
+                        None => self.flash("That lane isn't on this card"),
+                    }
+                    FlowStage::Browse
+                }
                 KeyCode::Down | KeyCode::Char('j') => {
                     f.cursor = (f.cursor + 1).min(rows.len().saturating_sub(1));
                     FlowStage::Browse
@@ -242,6 +293,11 @@ impl App {
             {
                 f.cursor = f.cursor.min(rows(v, &f.routine, &f.bot).len().saturating_sub(1));
                 f.canvas = Some(v.clone());
+                // The lane picked stays only while the card still has that agent.
+                let kept = f.lane.as_deref().is_some_and(|lane| f.lanes().iter().any(|l| l["botId"] == lane));
+                if !kept {
+                    f.lane = None;
+                }
             }
         }
     }
@@ -274,5 +330,31 @@ mod tests {
             {"id": "2", "routineId": "r", "fromBotId": "b", "toBotId": "a"},
         ]});
         assert!(rows(&canvas, "r", "a").len() <= MAX_ROWS);
+    }
+
+    #[test]
+    fn lanes_come_from_the_card_and_keep_that_agents_step() {
+        let canvas = json!({"routines": [{
+            "routine": {"id": "r"},
+            "steps": [{"botId": "b", "status": "succeeded", "output": "done"}],
+            "lanes": [
+                {"botId": "a", "name": "Owner", "depth": 0},
+                {"botId": "b", "name": "Reviewer", "depth": 1, "status": "succeeded"},
+            ],
+        }]});
+        let sheet = FlowSheet {
+            bot: "a".into(),
+            routine: "r".into(),
+            name: "Review".into(),
+            canvas: Some(canvas),
+            cursor: 0,
+            lane: Some("b".into()),
+            stage: FlowStage::Browse,
+        };
+        assert_eq!(sheet.lanes().len(), 2);
+        assert_eq!(sheet.selected_lane().unwrap()["name"], "Reviewer");
+        assert_eq!(sheet.lane_step().unwrap()["output"], "done");
+        let gone = FlowSheet { lane: Some("zzz".into()), ..sheet };
+        assert!(gone.selected_lane().is_none());
     }
 }

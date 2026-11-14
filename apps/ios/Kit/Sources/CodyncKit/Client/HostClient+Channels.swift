@@ -178,4 +178,38 @@ public extension HostClient {
         let answer: Answer = try await call("whatsappAnswerRequest", Body(code: code, approve: approve))
         return answer.requests
     }
+
+    // MARK: conversation links (card K13)
+
+    struct ConversationLinkBody: Encodable {
+        var botId: String
+        var provider: String
+        var channel: String
+        var thread: String?
+        var threadId: String?
+    }
+
+    /// The conversations of a bot linked to a Codync thread.
+    func conversationLinks(botId: String) async throws -> [ConversationLink] {
+        struct Body: Encodable { var botId: String }
+        struct Answer: Decodable { var links: [ConversationLink] }
+        let answer: Answer = try await call("conversationLinks", Body(botId: botId))
+        return answer.links
+    }
+
+    /// Links a channel conversation to `threadId`; every link of the bot comes back.
+    func linkConversation(botId: String, provider: String, channel: String, thread: String, threadId: String) async throws -> [ConversationLink] {
+        struct Answer: Decodable { var links: [ConversationLink] }
+        let body = ConversationLinkBody(botId: botId, provider: provider, channel: channel, thread: thread, threadId: threadId)
+        let answer: Answer = try await call("linkConversation", body)
+        return answer.links
+    }
+
+    /// Takes a channel conversation's link away; its next message starts a conversation of its own.
+    func unlinkConversation(botId: String, provider: String, channel: String, thread: String) async throws -> [ConversationLink] {
+        struct Answer: Decodable { var links: [ConversationLink] }
+        let body = ConversationLinkBody(botId: botId, provider: provider, channel: channel, thread: thread)
+        let answer: Answer = try await call("unlinkConversation", body)
+        return answer.links
+    }
 }

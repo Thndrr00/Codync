@@ -63,7 +63,9 @@ attachments and Slack OAuth onboarding remain pending.
 
 A thread can also be linked to a Codync thread (`linkConversation`, see [voice calls](voice-call.md#one-conversation-across-text-a-call-and-a-channel)):
 messages and replies then use the linked root, so a call started from that conversation and the Slack thread share
-one transcript.
+one transcript. The channel's settings list a Slack channel's links, remove one, and link a thread by its timestamp
+(the one Slack shows in the thread's permalink) to a Codync thread picked from the chat; the same control exists on the
+iPhone and Android channel sheets, and the terminal UI uses the host methods only.
 
 Approvals asked in a mapped thread are posted as a Block Kit card with one button
 per option and settled once anyone answers, here or in another Codync client.

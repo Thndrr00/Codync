@@ -94,4 +94,27 @@ extension BotStore {
     public func whatsappAnswerRequest(_ code: String, approve: Bool) async throws -> [WhatsAppRequest] {
         try await ready().whatsappAnswerRequest(code: code, approve: approve)
     }
+
+    /// The conversations of `botId` linked to a Codync thread (card K13).
+    public func conversationLinks(_ botId: String) async throws -> [ConversationLink] {
+        try await ready().conversationLinks(botId: botId)
+    }
+
+    /// The chat's threads, for choosing the one a channel conversation shares.
+    public func channelThreads(_ botId: String) async throws -> [ThreadInfo] {
+        try await ready().threads(botId: botId)
+    }
+
+    /// Links a channel conversation to a thread; every link of the bot comes back.
+    public func linkConversation(botId: String, provider: String, channel: String, thread: String,
+                                 threadId: String) async throws -> [ConversationLink] {
+        try await ready().linkConversation(botId: botId, provider: provider, channel: channel, thread: thread,
+                                           threadId: threadId)
+    }
+
+    /// Takes a channel conversation's link away.
+    public func unlinkConversation(botId: String, provider: String, channel: String,
+                                   thread: String) async throws -> [ConversationLink] {
+        try await ready().unlinkConversation(botId: botId, provider: provider, channel: channel, thread: thread)
+    }
 }

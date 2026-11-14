@@ -52,7 +52,7 @@ Keep it short and stable. Anything that changes per message belongs in the messa
 
 ## Linked conversations
 
-A channel conversation can share a Codync thread, so the app, a voice call and Slack (or Telegram or Discord) keep one context. A Slack thread or Discord channel gets a durable root of its own from its first message; linking moves later messages and replies to the thread you choose. Linking does not claim to move earlier messages: they stay in the old conversation. The computer exposes this as `conversationLinks`, `linkConversation` and `unlinkConversation`; a call started from a thread carries that thread with `startCall`'s `threadId`.
+A channel conversation can share a Codync thread, so the app, a voice call and Slack (or Telegram or Discord) keep one context. A Slack thread or Discord channel gets a durable root of its own from its first message; linking moves later messages and replies to the thread you choose. Linking does not claim to move earlier messages: they stay in the old conversation. The computer exposes this as `conversationLinks`, `linkConversation` and `unlinkConversation`; a call started from a thread carries that thread with `startCall`'s `threadId`. A channel's settings on the desktop and the phones list the links it has, remove one, and link the channel to a thread you pick; for Slack and Telegram you enter the conversation's own id (a thread timestamp or a chat id), because that is how the computer names it.
 
 See [one conversation across text, calls and channels](/docs/conversations#one-conversation-across-text-calls-and-channels).
 

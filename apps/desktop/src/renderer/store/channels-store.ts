@@ -1,6 +1,6 @@
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
-import type { DiscordStatus, MatrixStatus, SlackStatus, TelegramBotStatus } from '../../shared/channels'
+import type { ConversationLink, DiscordStatus, MatrixStatus, SlackStatus, TelegramBotStatus } from '../../shared/channels'
 
 interface TelegramReply { bots: TelegramBotStatus[]; result?: { code?: string; expiresAt?: number } }
 
@@ -106,6 +106,33 @@ export class ChannelsStore extends Observable {
   async removeNote(provider: 'slack' | 'discord' | 'telegram' | 'matrix', channel: string, index: number): Promise<string[]> {
     const answer = await (await this.client()).call<{ notes: string[] }>('removeChannelNote', { provider, channel, index })
     return answer.notes ?? []
+  }
+
+  /** The conversations of this bot linked to a Codync thread (card K13). */
+  async conversationLinks(botId: string): Promise<ConversationLink[]> {
+    const answer = await (await this.client()).call<{ links: ConversationLink[] }>('conversationLinks', { botId })
+    return answer.links ?? []
+  }
+
+  /** The chat's threads, for choosing the one a channel conversation shares. */
+  async threads(botId: string): Promise<{ id: string; name: string }[]> {
+    const answer = await (await this.client()).call<{ threads: { id: string; title: string; branchText: string | null }[] }>('threads', { botId })
+    return (answer.threads ?? []).map((thread) => ({
+      id: thread.id,
+      name: thread.title.trim() || thread.branchText?.slice(0, 60).replaceAll('\n', ' ') || 'Thread',
+    }))
+  }
+
+  /** Links a channel conversation to a thread; every link of the bot comes back. */
+  async linkConversation(body: { botId: string; provider: string; channel: string; thread: string; threadId: string }): Promise<ConversationLink[]> {
+    const answer = await (await this.client()).call<{ links: ConversationLink[] }>('linkConversation', body)
+    return answer.links ?? []
+  }
+
+  /** Takes a channel conversation's link away; its next message starts over. */
+  async unlinkConversation(body: { botId: string; provider: string; channel: string; thread: string }): Promise<ConversationLink[]> {
+    const answer = await (await this.client()).call<{ links: ConversationLink[] }>('unlinkConversation', body)
+    return answer.links ?? []
   }
 
   async disconnectSlack() {

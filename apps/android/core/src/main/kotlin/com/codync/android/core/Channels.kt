@@ -58,6 +58,31 @@ import kotlinx.serialization.json.jsonObject
     val state: String = "starting",
 )
 
+/**
+ * One messaging conversation linked to a Codync thread (card K13): what `conversationLinks` lists and
+ * `linkConversation` and `unlinkConversation` change, so the app, a call and the channel share one conversation.
+ */
+@Serializable data class ConversationLink(
+    val botId: String,
+    /** `telegram`, `slack`, `discord` or `matrix`. */
+    val source: String,
+    val channel: String,
+    /** The provider's thread inside the channel: a Slack thread's timestamp, empty for a Telegram chat or Discord channel. */
+    val thread: String = "",
+    /** The Codync thread the conversation writes into. */
+    val rootId: String,
+    val createdAt: Long = 0,
+    val updatedAt: Long = 0,
+) {
+    val key: String get() = "$channel/$thread"
+
+    companion object {
+        fun decodeList(response: JsonElement): List<ConversationLink> =
+            (response.jsonObject["links"] as? kotlinx.serialization.json.JsonArray).orEmpty()
+                .mapNotNull { runCatching { WireJson.decodeFromJsonElement<ConversationLink>(it) }.getOrNull() }
+    }
+}
+
 /** What the Channels screen shows, and the words it uses; the host owns the meaning. */
 object Channels {
     /** A short name the host accepts for a Telegram bot. */
