@@ -154,7 +154,7 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         replyQuote != null -> tr("Reply…")
         thread != null -> "Reply…"
         bot.kind == "group" -> "Message everyone · @ to ask one bot"
-        working -> "Queue a message for ${bot.name}"
+        working -> tr("Message {name}").replace("{name}", bot.name)
         else -> "Ask ${bot.name}"
     }
     val typed = text.text.toString()

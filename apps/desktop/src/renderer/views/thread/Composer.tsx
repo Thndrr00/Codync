@@ -94,7 +94,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
       : bot && isGroup(bot)
         ? tr('Ask everyone · @ to ask one bot')
         : working
-          ? tr('Queue a message for {name}').replace('{name}', name)
+          ? tr('Message {name}').replace('{name}', name)
           : tr('Ask {name}').replace('{name}', name)
 
   // A routine's "Try it" fills the chat's box (an artifact's leaves it for the chat).

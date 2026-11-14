@@ -63,7 +63,7 @@ struct Composer: View {
         if let artifact { return L10n.tr("Message about “{title}”").replacingOccurrences(of: "{title}", with: artifact.title) }
         if replyingTo != nil { return L10n.tr("Reply…") }
         if bot?.isGroup == true { return L10n.tr("Ask everyone · @ to ask one bot") }
-        let key = working ? "Queue a message for {name}" : "Ask {name}"
+        let key = working ? "Message {name}" : "Ask {name}"
         return L10n.tr(key).replacingOccurrences(of: "{name}", with: name)
     }
 
