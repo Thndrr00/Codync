@@ -41,6 +41,18 @@ public struct ComposioStatus: Decodable, Sendable {
     public var keyUrl: String
 }
 
+/// How to connect an app: what to do at the vendor, and the vendor's own page to do it on.
+///
+/// The steps are the vendor's own or a reviewed copy of them; the link is only ever the vendor's
+/// page, never the broker's, so somebody who expected a sign-in is never left at a bare form.
+public struct ConnectionGuide: Codable, Hashable, Sendable {
+    /// `signIn`, `key`, `nothing` or `install`.
+    public var kind: String
+    public var steps: [String]
+    public var url: String?
+    public var signingIn: Bool { kind == "signIn" }
+}
+
 public struct ComposioApp: Decodable, Hashable, Sendable, Identifiable {
     public struct Connection: Decodable, Hashable, Sendable {
         public var id: String
@@ -52,6 +64,11 @@ public struct ComposioApp: Decodable, Hashable, Sendable, Identifiable {
     public var name: String
     public var description: String?
     public var logo: String?
+    /// Whether connecting means typing a key from the app; nil when Composio doesn't publish it.
+    public var needsKey: Bool?
+    /// The row's line when it does ("Needs a key from …").
+    public var keyNote: String?
+    public var guide: ConnectionGuide?
     public var connection: Connection?
     public var id: String { slug }
     public var connected: Bool { connection?.status == "active" }
@@ -76,6 +93,7 @@ public struct ComposioConnect: Decodable, Sendable {
     public var connection: String?
     public var mode: String?
     public var fields: [Field]?
+    public var guide: ConnectionGuide?
 }
 
 public struct ComposioConnectionState: Decodable, Sendable {
@@ -245,6 +263,8 @@ public struct MarketApp: Codable, Hashable, Sendable, Identifiable {
     public var steps: [String]
     public var docsUrl: String?
     public var docsLabel: String?
+    /// How to connect: what to do at the app, and its own page to do it on.
+    public var guide: ConnectionGuide?
     public var prompts: [Prompt]
     public var installed: Bool
 
@@ -363,9 +383,16 @@ public extension HostClient {
     }
 
     @discardableResult
-    func finishConnectorSignIn(state: String, code: String?, error: String?) async throws -> InstalledConnector {
-        struct Body: Encodable { var state: String; var code: String?; var error: String? }
-        let res: Installed = try await call("connectorSignInFinish", Body(state: state, code: code, error: error), timeout: 60)
+    func installMarketApp(_ id: String, values: [String: String]) async throws -> InstalledConnector {
+        struct Body: Encodable { var id: String; var values: [String: String] }
+        let res: Installed = try await call("installMarketApp", Body(id: id, values: values), timeout: 45)
+        return res.connector
+    }
+
+    @discardableResult
+    func finishConnectorSignIn(state: String, code: String?, error: String?, iss: String?) async throws -> InstalledConnector {
+        struct Body: Encodable { var state: String; var code: String?; var error: String?; var iss: String? }
+        let res: Installed = try await call("connectorSignInFinish", Body(state: state, code: code, error: error, iss: iss), timeout: 60)
         return res.connector
     }
 
@@ -380,6 +407,7 @@ public extension HostClient {
         try await call("setComposioKey", ["key": key], timeout: 60)
     }
 
+    /// A page of Composio's apps, for `search` and the cursor of the page before; nil at the end.
     func composioApps(search: String, cursor: String? = nil) async throws -> (items: [ComposioApp], next: String?) {
         struct Page: Decodable { var items: [ComposioApp]; var nextCursor: String? }
         let res: Page = try await call("composioToolkits", ["search": search, "cursor": cursor ?? ""], timeout: 60)

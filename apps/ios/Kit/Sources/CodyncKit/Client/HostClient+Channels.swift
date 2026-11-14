@@ -9,6 +9,17 @@ private extension String {
 // only carry them.
 
 public extension HostClient {
+    /// A channel sub-task: stop it, let it go on, give it another member, or cancel its branch.
+    func groupTask(_ botId: String, taskId: String, action: String, ownerId: String? = nil) async throws {
+        struct Body: Encodable {
+            var botId: String
+            var taskId: String
+            var action: String
+            var ownerId: String?
+        }
+        let _: Empty = try await call("groupTask", Body(botId: botId, taskId: taskId, action: action, ownerId: ownerId))
+    }
+
     struct TelegramBody: Encodable {
         var name: String
         var userId: Int64?
@@ -88,6 +99,12 @@ public extension HostClient {
         return try await call("setGitHubToken", Body(token: token.trimmed))
     }
 
+    /// Creates a repository on that account; the answer carries `created` plus the fresh status.
+    func githubCreateRepo(name: String, isPrivate: Bool, description: String) async throws -> GitHubStatus {
+        struct Body: Encodable { var name: String; var `private`: Bool; var description: String }
+        return try await call("githubCreateRepo", Body(name: name.trimmed, private: isPrivate, description: description.trimmed))
+    }
+
     func whatsappState() async throws -> WhatsAppLink { try await call("whatsappState", Empty()) }
 
     /// Starts the link; the host reports the QR code through `whatsappState`.
@@ -126,5 +143,13 @@ public extension HostClient {
         struct Answer: Decodable { var allowed: [String] }
         let answer: Answer = try await call("whatsappSetAllowed", Body(jid: jid, allowed: allowed))
         return answer.allowed
+    }
+
+    /// Approves or denies a person who asked to write; approved, they join the allowed chats.
+    func whatsappAnswerRequest(code: String, approve: Bool) async throws -> [WhatsAppRequest] {
+        struct Body: Encodable { var code: String; var approve: Bool }
+        struct Answer: Decodable { var requests: [WhatsAppRequest] }
+        let answer: Answer = try await call("whatsappAnswerRequest", Body(code: code, approve: approve))
+        return answer.requests
     }
 }

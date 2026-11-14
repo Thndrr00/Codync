@@ -153,22 +153,15 @@ internal suspend fun AppStore.deliver(send: PendingSend) {
             }
         }
         val connection = ready()
-        val ids = mutableListOf<String>()
-        var completed = 0L
-        val total = send.files.sumOf { it.size }
-        for (file in send.files) {
-            val id = UUID.randomUUID().toString()
-            HostFiles(connection).upload(send.botId, id, file) { offset ->
-                val percent = if (total == 0L) 100 else ((completed + offset) * 100 / total).toInt()
-                mutableState.update { it.copy(uploadProgress = it.uploadProgress + (send.nonce to percent)) }
-            }
-            completed += file.size
-            ids.add(id)
+        // Every file uploads as it is attached; sending waits for the ones still on their way.
+        val ids = uploadIds(send.botId, send.files)
+        for ((file, id) in send.files.zip(ids)) {
             withContext(Dispatchers.IO) { attachments.cache(id, file) }
         }
         val result = connection.call("send", send.body(ids))
         val entry = Entry.decode(result.jsonObject.getValue("entry").jsonObject)
         withContext(Dispatchers.IO) { requireNotNull(database).receive(listOf(entry)) }
+        releaseUploads(send.files)
         refresh()
         val bot = state.value.bots.firstOrNull { it.id == send.botId }
         if (bot != null && PushPreferences.tasks(getApplication()) && getApplication<Application>().getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled()) {
@@ -183,7 +176,6 @@ internal suspend fun AppStore.deliver(send: PendingSend) {
         savePending(send.copy(status = SendStatus.Failed, error = error.message ?: "Couldn't send."))
     } finally {
         sends.remove(send.nonce)
-        mutableState.update { it.copy(uploadProgress = it.uploadProgress - send.nonce) }
     }
 }
 
@@ -195,6 +187,12 @@ internal suspend fun AppStore.savePending(send: PendingSend) {
 fun AppStore.continueTurn(entry: Entry) = action("continue:" + entry.id) {
     ready().call("continueTurn", body("entryId" to entry.id))
 }
+
+/** A channel sub-task's controls: `stop`, `continue`, `reassign` (with [ownerId]) or `cancel`. */
+fun AppStore.groupTask(botId: String, taskId: String, action: String, ownerId: String? = null) =
+    this.action("groupTask:" + taskId) {
+        ready().call("groupTask", body("botId" to botId, "taskId" to taskId, "action" to action, "ownerId" to ownerId))
+    }
 
 /** Sends a message on to another chat; the host copies its files and marks it forwarded. */
 internal fun AppStore.forwardEntry(entry: Entry, toBotId: String, done: () -> Unit = {}) = action("forward:" + entry.id) {

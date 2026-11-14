@@ -44,7 +44,9 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
         Overlay::LeadAgent(scroll) => super::lead_agent::lead_agent(buf, area, *scroll),
         Overlay::Confirm(c) => {
             let t = theme();
-            let r = centered(area, 62, 8);
+            // Wide enough for what these dialogs say in one line (what a deletion keeps, and what
+            // its bots then show).
+            let r = centered(area, 70, 8);
             let inner = frame_box(buf, r, t.red, t.panel, None);
             // The title already includes a bot or device name. Translating it
             // here would also translate a name that is itself a phrase.
@@ -149,12 +151,15 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
         Overlay::Routine(f) => super::super::sheets::routine(buf, area, f),
         Overlay::Flow(f) => super::super::sheets::flow(buf, area, app, f),
         Overlay::Library(l) => super::super::sheets::library(buf, area, app, l),
+        Overlay::ServerLibrary(s) => super::super::sheets::server_library(buf, area, app, s),
         Overlay::Market(m) => super::super::sheets::market(buf, area, app, m),
         Overlay::Agent(a) => super::super::sheets::agent(buf, area, app, a),
         Overlay::Fields(f) => super::super::sheets::fields(buf, area, f),
         Overlay::Skill(s) => super::skill::skill(buf, area, app, s),
         Overlay::Analytics(s) => super::analytics::analytics(buf, area, s),
         Overlay::Network(n) => super::network::network(buf, area, n),
+        Overlay::Voice(s) => super::voice::voice(buf, area, s),
+        Overlay::People(s) => super::super::sheets::people(buf, area, s),
         Overlay::Rules(s) => super::rules::rules(buf, area, s),
         Overlay::Channels(s) => super::channels::channels(buf, area, s),
         Overlay::Beliefs(s) => super::beliefs::beliefs(buf, area, s),

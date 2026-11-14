@@ -50,6 +50,13 @@ island's pagination is desktop-only because the other clients do not have its
 small fixed window. The user clarified that "web" means the Electron desktop,
 so the public website is unaffected.
 
+Kimi's reader parses the **Monthly** plan row as its own window (alongside the
+5-hour and weekly rows) when the CLI's `/usage` screen has one. OpenCode Go's
+uncapped dollar reading is a note, not a bar: a charge of $0 (what the Go
+subscription reports for each turn) shows **Unavailable**, never `$0.00`,
+because that is the subscription's accounting, not a price. A non-zero spend
+keeps its `$N.NN spent` note.
+
 Source tests cover version gating, invalid/missing quota, conversion and model
 groups, distinct account identities, Codex app-server parsing, Grok's proto3
 billing periods, the saved reading and Android decoding of unavailable

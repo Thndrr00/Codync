@@ -3,6 +3,7 @@
 #![allow(dead_code, reason = "some host code is reached from clients and each other")]
 
 mod agent;
+mod agui;
 mod analytics;
 mod analytics_cli;
 mod api;
@@ -35,6 +36,7 @@ mod import;
 mod import_cli;
 mod keeper;
 mod local_api;
+mod local_apps;
 mod market;
 mod mcp;
 mod n8n;
@@ -43,6 +45,7 @@ mod n8n_remote;
 mod native_channels;
 mod network;
 mod network_cli;
+mod people;
 mod proactive;
 mod prompt;
 mod remote;
@@ -51,6 +54,7 @@ mod routines;
 mod screen;
 mod send_cli;
 mod sentinel;
+mod server_settings;
 mod service;
 mod shell;
 mod slack;
@@ -74,7 +78,10 @@ use std::fmt::Write as _;
 use std::future::IntoFuture;
 use std::io::Read;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// When this process started, for `host_started.start_ms`.
+pub static STARTED: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 /// Poison-tolerant locking. Every critical section in the host is a short,
 /// self-contained update, so a panic elsewhere never leaves the data half
@@ -278,6 +285,9 @@ enum Sub {
         #[command(subcommand)]
         server: McpServer,
     },
+    /// Presents a remote AG-UI endpoint to a bot as an ACP agent (started by the host, not by hand).
+    #[command(hide = true)]
+    AguiAcp,
 }
 
 #[derive(Subcommand)]
@@ -443,6 +453,8 @@ fn write_token_file(token: &str) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Forced here, at the start, so `host_started` can report how long the host took to be ready.
+    LazyLock::force(&STARTED);
     // Every TLS connection (the relay, HTTPS) uses aws-lc-rs, also in builds that have ring too.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let cli = Cli::parse();
@@ -578,6 +590,7 @@ async fn main() -> Result<()> {
         }
         Sub::Node => agent::node::add().await,
         Sub::Keeper => keeper::run().await,
+        Sub::AguiAcp => agui::shim::run().await,
         Sub::Npm { args } => std::process::exit(agent::node::npm(&args).await?),
         Sub::Statusline { port, wrapped } => {
             statusline(port, wrapped.join(" ")).await;
@@ -679,7 +692,8 @@ async fn serve(bind: &str, port: u16) -> Result<()> {
     let hub = hub::Hub::new(store, host_id, identity, token, port);
     hub.start()?;
     network::start(&hub).await;
-    analytics::host_started(&hub, service::started_by_service());
+    let start_ms = i64::try_from(STARTED.elapsed().as_millis()).unwrap_or(i64::MAX);
+    analytics::host_started(&hub, service::started_by_service(), start_ms);
     let agent_checks = background::start(&hub);
     tracing::info!(version = env!("CARGO_PKG_VERSION"), bind, port, "codync-host listening");
     // Peer addresses: some settings may only be changed from this computer.

@@ -102,6 +102,7 @@ import kotlinx.coroutines.launch
     val connectors = remember(store) {
         ConnectorCatalog<MarketConnector>({ it.name }) { search, cursor -> store.marketConnectors(search, cursor).let { it.items to it.nextCursor } }
     }
+    val composio = remember(store) { ComposioState(store) }
     var skills by remember { mutableStateOf(emptyList<MarketSkill>()) }
     var apps by remember { mutableStateOf(emptyList<MarketApp>()) }
     var marketAgents by remember { mutableStateOf(emptyList<MarketAgent>()) }
@@ -139,6 +140,10 @@ import kotlinx.coroutines.launch
     LaunchedEffect(canLoad, state.contextId) {
         if (!canLoad) return@LaunchedEffect
         connectors.load(query)
+    }
+    LaunchedEffect(canLoad, state.contextId, searchToken) {
+        if (!canLoad) return@LaunchedEffect
+        composio.load(query)
     }
     LaunchedEffect(canLoad, state.contextId) {
         if (!canLoad) return@LaunchedEffect
@@ -187,9 +192,7 @@ import kotlinx.coroutines.launch
     }
     /** Composio apps sit under the Apps catalog: connecting one adds it like any other connector. */
     fun LazyListScope.apps() {
-        if (section == ExtensionSection.Apps && canLoad) item {
-            Box(Modifier.padding(top = 12.dp)) { ComposioSection(query, searchToken, state, store) }
-        }
+        if (section == ExtensionSection.Apps && canLoad) composio(state, composio, query)
     }
     /** The MCP Registry after the app catalog: every other server can be found or searched there. */
     fun LazyListScope.registry() {
@@ -237,12 +240,13 @@ import kotlinx.coroutines.launch
         when (section) {
             ExtensionSection.Apps -> when {
                 shownApps.isEmpty() -> item {
-                    Text(if (query.isEmpty()) tr("No apps yet.") else tr("No apps match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                    MarketEmpty(tr(if (query.isEmpty()) "No apps yet." else "No apps match “{query}”.").replace("{query}", query))
                 }
                 else -> MarketCategories.group(shownApps, { it.category }, { it.featured }).forEach { (title, group) ->
                     item(key = "app:$title") { MarketSection(title) {} }
                     items(group, key = { it.id }) { app ->
                         MarketRow(app.name, app.tagline, app.installed || app.id in appsAdded,
+                            note = if (app.guide?.kind == "key") tr("Needs a key from {name}").replace("{name}", app.name) else null,
                             icon = { ServiceLogo(app.website, app.name, null) }, open = { viewingApp = app }) { viewingApp = app }
                     }
                 }
@@ -257,7 +261,7 @@ import kotlinx.coroutines.launch
             }
             ExtensionSection.Agents -> when {
                 shownMarketAgents.isEmpty() -> item {
-                    Text(if (query.isEmpty()) tr("No agents yet.") else tr("No agents match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                    MarketEmpty(tr(if (query.isEmpty()) "No agents yet." else "No agents match “{query}”.").replace("{query}", query))
                 }
                 else -> MarketCategories.group(shownMarketAgents, { it.category }, { it.featured }).forEach { (title, group) ->
                     item(key = "agent:$title") { MarketSection(title) {} }
@@ -269,7 +273,7 @@ import kotlinx.coroutines.launch
             }
             ExtensionSection.Clis -> when {
                 agents.isEmpty() -> item {
-                    Text(if (query.isEmpty()) tr("No agent CLIs yet.") else tr("No agent CLIs match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                    MarketEmpty(tr(if (query.isEmpty()) "No agent CLIs yet." else "No agent CLIs match “{query}”.").replace("{query}", query))
                 }
                 else -> items(agents, key = { "cli:${it.id}" }) { backend ->
                     MarketRow(backend.name, backend.description ?: "", added = false, open = { agent = backend },
@@ -278,7 +282,7 @@ import kotlinx.coroutines.launch
             }
             ExtensionSection.Skills -> if (loadingSkills) item { SkeletonRows() }
             else if (shownSkills.isEmpty() && query.isNotEmpty()) item {
-                Text(tr("No skills match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
+                MarketEmpty(tr("No skills match “{query}”.").replace("{query}", query))
             } else MarketCategories.group(shownSkills.filter { it.category != null }, { it.category ?: "other" }, { it.featured == true }).forEach { (title, group) ->
                 item(key = "skill:$title") { MarketSection(title) {} }
                 items(group, key = { it.source }) { s -> SkillEntry(s, installedSkills, busySkill) { busySkill = it } }
@@ -299,7 +303,7 @@ import kotlinx.coroutines.launch
                 if (!inModal && state.computers.isEmpty()) {
                     Column(Modifier.weight(1f).then(inset), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MarketEmpty("desktopcomputer", "No computer paired", "Pair a computer to browse and install agents, connectors and skills.")
+                        MarketEmpty(tr("No computer paired"), tr("Pair a computer to browse and install agents, connectors and skills."))
                         if (openComputers != null) SecondaryButton("Open computers", action = openComputers)
                     }
                 } else {
@@ -347,6 +351,7 @@ import kotlinx.coroutines.launch
     CodyncSheet(showWhatsApp, { showWhatsApp = false }) { WhatsAppSheet(state, store) }
     CodyncSheet(showChannels, { showChannels = false }) { ChannelsSheet(state, store) }
     CodyncSheet(viewingSkill, { viewingSkill = null }) { SkillSheet(it, state, store) }
+    ComposioSheets(state, store, composio) { submit() }
     CodyncSheet(writingSkill, { writingSkill = false }) { NewSkillSheet(store) }
     CodyncSheet(agent, { agent = null }) { AgentSheet(it, state, store) }
     CodyncSheet(viewingApp, { viewingApp = null }) { app ->

@@ -60,6 +60,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             b["enabled"].as_bool().context("enabled is required")?,
         )?,
         "deleteEntry" => json!({"deleted": hub.delete_entry(str_arg(&b, "entryId")?)?}),
+        "deleteHistory" => hub.delete_history(str_arg(&b, "botId")?)?,
+        "compactContext" => hub.compact_context(str_arg(&b, "botId")?)?,
         "deleteRoutine" => hub.routines.remove(hub, str_arg(&b, "botId")?, str_arg(&b, "id")?)?,
         "runRoutine" => hub.routines.enqueue(
             &hub.store,
@@ -75,6 +77,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             str_arg(&b, "botId")?,
             str_arg(&b, "id")?,
             b["rotate"].as_bool().unwrap_or(false),
+            b["key"].as_str(),
         )?,
         "routineCall" => crate::routines::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"])?,
         "memoryCall" => {
@@ -112,6 +115,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::artifacts::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::dev_servers::TOOLS.contains(&name) {
                 crate::dev_servers::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::group::drop::TOOLS.contains(&name) {
+                crate::chat::group::drop::call(hub, bot, name, &b["arguments"]).await?
+            } else if name == crate::chat::group::send::TOOL {
+                crate::chat::group::send::call(hub, bot, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }
@@ -139,7 +146,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"id":entry.id,"botId":entry.bot_id,"threadId":entry.thread_id,"status":entry.data["status"],"result":entry.data["turnResult"]})
         }
         "manageCall" => {
-            crate::chat::manage::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?
+            let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
+            if crate::chat::group::tools::TOOLS.contains(&name) {
+                crate::chat::group::tools::call(hub, bot, name, &b["arguments"]).await?
+            } else {
+                crate::chat::manage::call(hub, bot, name, &b["arguments"]).await?
+            }
         }
         "history" => {
             let bot = str_arg(&b, "botId")?;
@@ -208,6 +220,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let mut b = b;
             // Only a bot's `create_bot` records who made one.
             b["createdBy"] = Value::Null;
+            let asked = b["person"].as_str().map(str::to_owned);
+            let person = new_bot_person(hub, caller, asked.as_deref())?;
+            if let Some(member) = person.as_deref() {
+                crate::people::check_group_members(hub, &b, member)?;
+            }
+            b["person"] = json!(person);
             let cfg = crate::agent::new_bot::with_defaults(hub, b).await?;
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??})
@@ -221,6 +239,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let mut b = b;
             if let Some(patch) = b.as_object_mut() {
                 patch.remove(crate::chat::instruction_history::AUTHOR);
+            }
+            // A bot keeps its person: a member's device can't move a bot to the owner (or to anyone else),
+            // and the owner's choice has to name a person that exists.
+            if let Some(person) = crate::people::caller_person(hub, caller) {
+                crate::people::check_group_members(hub, &b, &person)?;
+                b["person"] = json!(person);
+            } else if let Some(person) = b["person"].as_str()
+                && hub.store.person(person).is_none()
+            {
+                bail!("unknown person");
             }
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&b)).await??})
@@ -375,6 +403,15 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     .await??;
             json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size})
         }
+        // Drops a file the user stopped uploading: its partial chunks leave the computer, and the
+        // upload's id can never reach a `send`.
+        "cancelUpload" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted);
+            let root = crate::chat::uploads::root(&row.ok_or_else(|| anyhow!("unknown bot"))?.config);
+            let id = str_arg(&b, "uploadId")?.to_owned();
+            let removed = tokio::task::spawn_blocking(move || crate::chat::uploads::cancel(&root, &id)).await??;
+            json!({"removed": removed})
+        }
         "send" => {
             let bot = str_arg(&b, "botId")?;
             let text = b["text"].as_str().unwrap_or_default().trim();
@@ -499,6 +536,26 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
         }
+        // A channel request's sub-tasks: stop, continue, reassign or cancel one row of its tree.
+        "groupTask" => {
+            let action = str_arg(&b, "action")?;
+            crate::chat::group::tasks::act(
+                hub,
+                str_arg(&b, "botId")?,
+                str_arg(&b, "taskId")?,
+                action,
+                b["ownerId"].as_str(),
+            )?
+        }
+        // A person asked the lead to drop the channel's running request: its whole run ends.
+        "dropRequest" => {
+            let group = hub.store.bot(str_arg(&b, "botId")?)?.filter(|row| !row.deleted).context("Unknown bot.")?;
+            if !group.config.is_group() {
+                bail!("only a channel has requests to drop");
+            }
+            let by = b["by"].as_str().map(str::trim).filter(|by| !by.is_empty()).unwrap_or("The user");
+            json!({"dropped": crate::chat::group::tasks::drop_run(hub, &group.config, by)?})
+        }
         "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
         "setTokenBudget" => {
             let limit = b["limit"].as_u64();
@@ -542,9 +599,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "newSession" => {
             let bot = str_arg(&b, "botId")?;
-            if !hub.store.bot(bot)?.is_some_and(|r| crate::external::is_external(&r.config)) {
-                hub.send_cmd(bot, Cmd::NewSession)?;
-            }
+            hub.new_conversation(bot)?;
             json!({})
         }
         "memory" | "memoryFile" => crate::chat::memory::call(hub, method, &b).await?,
@@ -554,6 +609,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::chat::memory::import_agent_memory(hub, str_arg(&b, "botId")?, &b["facts"]).await?
         }
         "library" => crate::chat::library::list(hub, str_arg(&b, "botId")?)?,
+        "serverLibrary" => crate::chat::library::server(hub, b["filter"].as_str())?,
         "readArtifact" | "renameArtifact" => crate::chat::artifacts::api(hub, method, &b).await?,
         "editHandoff" | "keepConversation" => crate::chat::handoff::call(hub, method, &b)?,
         "react" => {
@@ -695,4 +751,17 @@ fn save_always_rule(hub: &Hub, card: &crate::store::Entry, option_id: Option<&st
     let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
     hub.update_bot(&json!({"id": card.bot_id, "approvalRules": rules}))?;
     Ok(())
+}
+
+/// The person a new bot belongs to: a member's device always makes its own (the body can't name another),
+/// and the owner may name one, or leave it empty for their own.
+fn new_bot_person(hub: &Hub, caller: &Caller, asked: Option<&str>) -> Result<Option<String>> {
+    if let Some(person) = crate::people::caller_person(hub, caller) {
+        return Ok(Some(person));
+    }
+    let Some(person) = asked.filter(|p| !p.is_empty()) else { return Ok(None) };
+    if hub.store.person(person).is_none() {
+        bail!("unknown person");
+    }
+    Ok(Some(person.to_owned()))
 }

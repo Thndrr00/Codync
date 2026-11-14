@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -46,6 +48,21 @@ import kotlinx.serialization.json.jsonPrimitive
     val pending = d.text("status") == "pending"
     var expanded by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
+    // A question card's last pick, shown with the earlier answers before anything is sent.
+    var summary by remember(entry.id) { mutableStateOf<JsonObject?>(null) }
+    val questionIndex = d["questionIndex"]?.jsonPrimitive?.intOrNull
+    val questionCount = d["questionCount"]?.jsonPrimitive?.intOrNull ?: 1
+    val lastQuestion = questionIndex != null && questionIndex >= questionCount - 1
+    // A plan card with a start time counts down on its allow button once a minute or more is left.
+    val startsAt = d["autoApproveAt"]?.jsonPrimitive?.longOrNull
+    var now by remember(entry.id) { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(entry.id, pending, startsAt) {
+        if (!pending || startsAt == null) return@LaunchedEffect
+        while (true) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1_000)
+        }
+    }
     val headline = when (d.text("toolKind")) {
         "execute" -> "Wants to run a command"
         "edit", "delete", "move" -> "Wants to change files"
@@ -63,6 +80,9 @@ import kotlinx.serialization.json.jsonPrimitive
             Text(headline, style = Type.headline, color = Palette.text)
             if (pending) Box(Modifier.size(7.dp).clip(Capsule()).background(Palette.warning))
         }
+        if (questionIndex != null) {
+            Text("Question ${questionIndex + 1} of $questionCount", style = Type.caption, color = Palette.secondary)
+        }
         Text(d.text("title").orEmpty(), style = Type.subheadline.monospaced, color = Palette.secondary, maxLines = if (expanded) Int.MAX_VALUE else 3)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Symbol("desktopcomputer", size = 14.dp, tint = Palette.tertiary)
@@ -79,33 +99,94 @@ import kotlinx.serialization.json.jsonPrimitive
             }
         }
         if (pending) {
-            val rank = mapOf("allow_once" to 0, "allow_always" to 1, "reject_once" to 2, "reject_always" to 3)
-            val offered = (d["options"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-            // "Always allow" is a standing permission: a thumb on a phone doesn't grant one. The computer's apps do, with
-            // the rule it would keep in front of the person; the phone keeps "Allow once" (unless that is all there is).
-            val options = offered.filter { it.text("kind") != "allow_always" || offered.none { o -> o.text("kind") == "allow_once" } }
-                .sortedBy { rank[it.text("kind")] ?: 9 }
-            Column(Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedRectangle(14.dp)).background(Palette.background)) {
-                for ((index, option) in options.withIndex()) {
-                    val id = option.text("optionId") ?: continue
-                    val kind = option.text("kind").orEmpty()
-                    if (index > 0) Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
-                    val waiting = answering && chosen != null
-                    Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
-                        .clickable(enabled = !answering, role = Role.Button) { chosen = id; respond(id) }
-                        .graphicsLayer { alpha = if (!waiting || chosen == id) 1f else 0.4f }
-                        .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(when (kind) {
-                            "allow_once" -> "Allow once"; "allow_always" -> "Always allow"; "reject_once" -> "Deny"; "reject_always" -> "Never"
-                            else -> option.text("name").orEmpty()
-                        }, Modifier.weight(1f), style = if (kind == "allow_once") Type.body.semibold else Type.body,
-                            color = if (kind.startsWith("allow")) Palette.text else Palette.danger)
-                        if (answering && chosen == id) Spinner(14.dp)
+            val pick = summary
+            if (pick != null) {
+                SummaryStep(
+                    d = d,
+                    pick = pick,
+                    answering = answering,
+                    onSend = { chosen = it; respond(it) },
+                    onBack = { summary = null },
+                )
+            } else {
+                val rank = mapOf("allow_once" to 0, "allow_always" to 1, "reject_once" to 2, "reject_always" to 3)
+                val offered = (d["options"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+                // "Always allow" is a standing permission: a thumb on a phone doesn't grant one. The computer's apps do, with
+                // the rule it would keep in front of the person; the phone keeps "Allow once" (unless that is all there is).
+                val options = offered.filter { it.text("kind") != "allow_always" || offered.none { o -> o.text("kind") == "allow_once" } }
+                    .sortedBy { rank[it.text("kind")] ?: 9 }
+                Column(Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedRectangle(14.dp)).background(Palette.background)) {
+                    for ((index, option) in options.withIndex()) {
+                        val id = option.text("optionId") ?: continue
+                        val kind = option.text("kind").orEmpty()
+                        if (index > 0) Box(Modifier.fillMaxWidth().height(0.5.dp).background(Palette.border))
+                        val waiting = answering && chosen != null
+                        Row(Modifier.fillMaxWidth().heightIn(min = 46.dp)
+                            .clickable(enabled = !answering, role = Role.Button) {
+                                when {
+                                    id == "__back" -> { chosen = id; respond(id) }
+                                    lastQuestion -> summary = option
+                                    else -> { chosen = id; respond(id) }
+                                }
+                            }
+                            .graphicsLayer { alpha = if (!waiting || chosen == id) 1f else 0.4f }
+                            .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                (if (id == "__back") "Back" else label(kind, option.text("name").orEmpty())) + (if (kind == "allow_once") countdownSuffix(startsAt, now) else ""),
+                                Modifier.weight(1f), style = if (kind == "allow_once") Type.body.semibold else Type.body,
+                                color = if (id == "__back") Palette.secondary else if (kind.startsWith("allow")) Palette.text else Palette.danger,
+                            )
+                            if (answering && chosen == id) Spinner(14.dp)
+                        }
                     }
                 }
             }
         } else Text(outcome(d), style = Type.caption.medium, color = Palette.secondary)
     }
+}
+
+/** "Allow once", "Always allow", "Deny", "Never", or the agent's own name for the option. */
+private fun label(kind: String, name: String): String = when (kind) {
+    "allow_once" -> "Allow once"
+    "allow_always" -> "Always allow"
+    "reject_once" -> "Deny"
+    "reject_always" -> "Never"
+    else -> name
+}
+
+/** The last question's pick and the answers before it, before anything goes to the agent. */
+@Composable private fun SummaryStep(
+    d: JsonObject,
+    pick: JsonObject,
+    answering: Boolean,
+    onSend: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    val answers = (d["answers"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Summary", style = Type.subheadline.medium, color = Palette.text)
+        for (answer in answers) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(answer.text("text").orEmpty(), Modifier.weight(1f), style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(answer.text("label").orEmpty(), style = Type.body, color = Palette.text)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(d.text("title").orEmpty(), Modifier.weight(1f), style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(pick.text("name").orEmpty(), style = Type.body.semibold, color = Palette.text)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val id = pick.text("optionId")
+            PrimaryButton("Send answers", enabled = !answering) { if (id != null) onSend(id) }
+            SecondaryButton("Back", action = onBack)
+        }
+    }
+}
+/** " · 4:59" when the plan starts by itself in a minute or more. */
+internal fun countdownSuffix(startsAt: Long?, now: Long): String {
+    val remaining = (startsAt ?: return "") - now
+    val total = ((remaining + 999) / 1_000).coerceAtLeast(0)
+    return if (total < 60) "" else " · %d:%02d".format(total / 60, total % 60)
 }
 
 private fun outcome(d: JsonObject): String = when (d.text("status")) {

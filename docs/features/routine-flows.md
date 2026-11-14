@@ -25,7 +25,8 @@ those routines, where the nodes sit, and the bots **placed** on it before any li
 ## Running a flow
 
 1. The routine's run ends (`Routines::complete`). A reply other than `(pass)` becomes the root step
-   (`output` = the reply, `botId` = the routine's bot). A failed, interrupted or cancelled run records
+   (`output` = the reply, `botId` = the routine's bot). A run that reported nothing (`(pass)`, `[SILENT]`,
+   `[[no-update]]`, or no text at all) starts no flow, and a failed, interrupted or cancelled run records
    the root step that way and **skips** every bot the flow reaches.
 2. Level by level (depth 1, 2, …) each bot of the flow gets a request through the **same road as
    `ask_bot`** (`chat/team/flow.rs`): the bot's actor queue, an exchange notice in its chat ("Routine flow ·
@@ -33,7 +34,7 @@ those routines, where the nodes sit, and the bots **placed** on it before any li
    it and the links' instructions. A flow needs no turn of the sending bot (the host sends it).
 3. A bot with several inputs (a join) waits for all of them and gets them in one request. If some inputs
    failed, it runs with the ones that replied; if none replied, its step is `skipped`. A bot that replies
-   `(pass)` succeeds with no output, so what hangs below it is skipped.
+   `(pass)`, or with no text at all, succeeds with no output, so what hangs below it is skipped.
 4. Each step has the **routine's run timeout**. A step that fails leaves its bot's step `failed` with the
    error, and everything that only depended on it is `skipped`.
 

@@ -24,7 +24,10 @@ impl App {
             self.focus = Focus::Chat;
             // A file dragged onto the terminal pastes its path: attach it.
             if let Some(paths) = dropped_files(&s) {
-                self.files.entry(key).or_default().extend(paths);
+                for path in paths {
+                    self.files.entry(key.clone()).or_default().push(path.clone());
+                    self.start_upload(&key, path);
+                }
             } else {
                 self.drafts.entry(key.clone()).or_default().insert(&s);
                 self.pasted.entry(key).or_default().push(s);
@@ -46,7 +49,12 @@ impl App {
             Overlay::Group(g) => match g.field {
                 GroupField::Name => Some(&mut g.name),
                 GroupField::About => Some(&mut g.about),
-                GroupField::Bots => None,
+                GroupField::Title => Some(&mut g.title),
+                GroupField::Picture
+                | GroupField::Archived
+                | GroupField::KeepMemories
+                | GroupField::Lead
+                | GroupField::Bots => None,
             },
             Overlay::Form(f) => {
                 let field = f.current();
@@ -56,12 +64,13 @@ impl App {
             Overlay::Rules(s) => (s.mode != super::rules::Mode::List).then_some(&mut s.editor),
             Overlay::Always(s) => s.refusal.is_none().then_some(&mut s.editor),
             Overlay::Fields(f) => f.current().map(|i| &mut i.ed),
-            Overlay::Routine(f) => Some(match f.field {
-                super::super::manage::RoutineField::Name => &mut f.name,
-                super::super::manage::RoutineField::Instruction => &mut f.instruction,
-                super::super::manage::RoutineField::When => &mut f.when,
-                super::super::manage::RoutineField::Outputs => &mut f.outputs,
-            }),
+            Overlay::Routine(f) => match f.field {
+                super::super::manage::RoutineField::Name => Some(&mut f.name),
+                super::super::manage::RoutineField::Instruction => Some(&mut f.instruction),
+                super::super::manage::RoutineField::When => Some(&mut f.when),
+                super::super::manage::RoutineField::Outputs => Some(&mut f.outputs),
+                super::super::manage::RoutineField::Thread => None,
+            },
             _ => None,
         }
     }
@@ -120,6 +129,18 @@ impl App {
                 if files.is_empty() && self.built_in_command(&text) {
                     return;
                 }
+                // Every file must have reached the computer: one on its way (or retried after a
+                // failure) holds the send, as the ring in its row says.
+                for file in &files {
+                    if !self.uploads_for(&key).iter().any(|upload| upload.path == *file) {
+                        self.start_upload(&key, file.clone());
+                    }
+                }
+                let ids = if files.is_empty() { None } else { self.uploaded_ids(&key) };
+                if !files.is_empty() && ids.is_none() {
+                    self.flash("Waiting for the upload: ctrl+x cancels a file, ctrl+r retries one.");
+                    return;
+                }
                 // A waiting message the box took over (`/edit`): this send saves it, it doesn't post another.
                 if files.is_empty()
                     && let Some((bot, entry)) = self.pending_edit.clone()
@@ -161,19 +182,30 @@ impl App {
                 if let Some(pasted) = self.pasted.get(&key).filter(|p| !p.is_empty()) {
                     body["pasted"] = json!(pasted);
                 }
-                let after = After::Sent(key);
-                if files.is_empty() {
-                    self.call("send", body, after);
-                } else {
-                    self.client.spawn_send_files(body, files, after, self.tx.clone());
+                if let Some(ids) = ids {
+                    body["attachments"] = json!(ids);
                 }
+                self.call("send", body, After::Sent(key));
                 self.flash("Sending… Your draft stays here until delivered.");
             }
             KeyCode::Backspace if draft.text.is_empty() => {
-                if let Some(files) = self.files.get_mut(&key) {
-                    files.pop();
+                self.drop_last_file(&key);
+            }
+            KeyCode::Char('x') if ctrl => {
+                let uploading = self
+                    .uploads_for(&key)
+                    .iter()
+                    .find(|upload| upload.state == super::uploads::UploadState::Uploading)
+                    .map(|upload| upload.path.clone());
+                match uploading {
+                    Some(path) => {
+                        self.cancel_upload(&key, &path);
+                        self.flash("Upload cancelled: ctrl+r retries it, ⌫ removes the file.");
+                    }
+                    None => self.flash("No file is uploading."),
                 }
             }
+            KeyCode::Char('r') if ctrl => self.retry_upload(&key),
             KeyCode::Char('c') if ctrl => {
                 if draft.text.is_empty() {
                     self.flash("esc then s stops the bot");
@@ -209,6 +241,9 @@ impl App {
         let narrow = self.width == Width::Narrow;
         let roster_page = narrow && !self.chat_page;
         if self.pick.is_some() && self.pick_key(k) {
+            return;
+        }
+        if self.tasks_key(k) {
             return;
         }
         match k.code {
@@ -360,9 +395,7 @@ impl App {
                 self.steer_next();
             }
             KeyCode::Char('S') => {
-                if self.bot().is_some_and(|b| b.group) {
-                    self.flash("A group has no session of its own");
-                } else if let Some(b) = self.bot() {
+                if let Some(b) = self.bot() {
                     let c = Confirm {
                         title: format!("Start a new session for {}?", b.name),
                         detail: "The agent forgets this conversation's context.".into(),
@@ -371,6 +404,25 @@ impl App {
                         act: ConfirmAct::NewSession(b.id.clone()),
                     };
                     self.overlays.push(Overlay::Confirm(c));
+                }
+            }
+            KeyCode::Char('X') => {
+                if let Some(b) = self.bot() {
+                    let c = Confirm {
+                        title: format!("Delete {}'s history?", b.name),
+                        detail: "Its messages and turns go.".into(),
+                        note: "Its setup, memories, routines, artifacts and files stay.".into(),
+                        button: "Delete history",
+                        act: ConfirmAct::DeleteHistory(b.id.clone()),
+                    };
+                    self.overlays.push(Overlay::Confirm(c));
+                }
+            }
+            KeyCode::Char('Z') => {
+                if let Some(b) = self.bot() {
+                    let id = b.id.clone();
+                    self.call("compactContext", json!({"botId": id}), After::Nothing);
+                    self.flash("Compacting the conversation…");
                 }
             }
             KeyCode::Char('x') => {
@@ -454,6 +506,7 @@ impl App {
                             self.open_thread(&bot, &root);
                         }
                     }
+                    Some(Click::Subagents(id)) => self.scroll_to = Some(id),
                     Some(Click::DevServers) => self.open_dev_servers(),
                     None => {
                         if self.overlays.is_empty() {

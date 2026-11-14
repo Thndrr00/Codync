@@ -75,9 +75,11 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   const pasted = useRef<string[]>([])
   const working = !!bot && isWorkingIn(bot, botId)
   const empty = !draft.trim() && !files.length
+  /** Every attached file reached the computer: Send waits for a file on its way, or retried after a failure. */
+  const filesReady = files.every((f) => store.uploads.state(f.id)?.status === 'uploaded')
   /** A session the person runs in their own terminal: it is read here, answered in that terminal. */
   const terminal = !!bot && bot.backend === 'external'
-  const canSend = !terminal && !empty && (store.connection.kind === 'online' || (store.canQueue && !files.length))
+  const canSend = !terminal && !empty && filesReady && (store.connection.kind === 'online' || (store.canQueue && !files.length))
   const canAttach = !!bot && !terminal
 
   const members = bot && isGroup(bot) ? store.members(bot) : []
@@ -171,6 +173,8 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
       }
       accepted.push({ id: crypto.randomUUID(), name: f.name, data: f.data })
     }
+    // Each uploads now, so its ring shows before Send names it.
+    for (const file of accepted) store.uploads.begin(botId, file)
     setFiles((list) => [...list, ...accepted])
   }
 
@@ -249,7 +253,15 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
           <ComposerReveal open={files.length > 0}>
             <div className="file-chips">
               {files.map((f) => (
-                <ComposerAttachment key={f.id} file={f} remove={() => setFiles((list) => list.filter((x) => x.id !== f.id))} />
+                <ComposerAttachment
+                  key={f.id}
+                  file={f}
+                  botId={botId}
+                  remove={() => {
+                    store.uploads.forget(f.id)
+                    setFiles((list) => list.filter((x) => x.id !== f.id))
+                  }}
+                />
               ))}
             </div>
           </ComposerReveal>

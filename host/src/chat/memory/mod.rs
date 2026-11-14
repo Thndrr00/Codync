@@ -8,6 +8,7 @@ mod api;
 mod beliefs;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod budget;
+pub mod channel;
 mod dates;
 mod dream;
 mod file_api;
@@ -32,6 +33,19 @@ use crate::store::{BotConfig, Store};
 /// working in a project folder doesn't.
 pub fn shared(cfg: &BotConfig) -> bool {
     cfg.shared_memory.unwrap_or_else(|| crate::agent::workspace::is_managed(cfg))
+}
+
+/// The chats a bot may read: its own chat (its side threads share the id), and the groups it answers in that
+/// belong to its person. A member's bot never reads the owner's chats, even in a group both answer in.
+pub fn chats(hub: &Hub, cfg: &BotConfig) -> Vec<String> {
+    let groups = hub.store.groups_with(&cfg.id).unwrap_or_default().into_iter().filter(|group| {
+        hub.store
+            .bot(group)
+            .ok()
+            .flatten()
+            .is_some_and(|row| !row.deleted && row.config.person.as_deref() == cfg.person.as_deref())
+    });
+    std::iter::once(cfg.id.clone()).chain(groups).collect()
 }
 
 /// The memory section of a bot's instructions: each `MEMORY.md` it sees, then the index of its notes.

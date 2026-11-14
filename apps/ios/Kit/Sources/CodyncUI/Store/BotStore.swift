@@ -76,6 +76,10 @@ public final class BotStore {
     /// The lines of the threads read here, by root id; the chat keeps its own in `entries`.
     public internal(set) var threadEntries: [String: [Entry]] = [:]
     public internal(set) var usage: Usage
+    /// How often each skill's text entered a turn (`skillUsage`); nil until read, or from an older host.
+    public internal(set) var skillUsage: SkillUsage? = nil
+    /// The computer's memory, CPU and disk (`hostHealth`); nil until read, or from an older host.
+    public internal(set) var health: HostHealth? = nil
     /// The newest order still to send, and the task sending them (`setUsageOrder`).
     @ObservationIgnored var usageOrderWaiting: [String]?
     @ObservationIgnored var usageOrderSending: Task<Void, Never>?
@@ -124,6 +128,11 @@ public final class BotStore {
     var retired = false
     /// Files of messages not delivered yet (by client nonce), kept for a retry.
     @ObservationIgnored var outgoingFiles: [String: [OutgoingFile]] = [:]
+    /// Files in a message box on their way to the computer, by the attached file's id (`BotStore+Uploads`).
+    var fileUploads: [UUID: FileUpload] = [:]
+    @ObservationIgnored var uploadTasks: [UUID: Task<Void, Never>] = [:]
+    /// The sends waiting for a file to reach the computer (`BotStore+Uploads`).
+    @ObservationIgnored var uploadWaiters: [UUID: [CheckedContinuation<String, Error>]] = [:]
     /// The message sent from here last: its row in the queue scrolls into view (`QueuedMessages`).
     @ObservationIgnored var lastSentNonce: String?
     /// Section moves shown but not answered yet, oldest first.
@@ -243,7 +252,7 @@ public final class BotStore {
 
         /// Roster order: the lead, pinned bots, then where the user dragged them, then most recent activity.
     public var roster: [Bot] {
-        bots.values.filter { !$0.hidden }.sorted {
+        bots.values.filter { !$0.hidden && !($0.isGroup && $0.archived) }.sorted {
             if $0.band != $1.band { return $0.band < $1.band }
             if $0.position != $1.position { return $0.position < $1.position }
             return $0.lastAt > $1.lastAt
@@ -295,6 +304,11 @@ public final class BotStore {
     }
 
     public var hiddenBots: [Bot] { bots.values.filter(\.hidden).sorted { $0.name < $1.name } }
+
+    /// Groups taken out of the open roster, by name: what Computer management offers to restore.
+    public var archivedGroups: [Bot] {
+        bots.values.filter { $0.isGroup && $0.archived && !$0.hidden }.sorted { $0.name < $1.name }
+    }
 
     /// Everything in a bot's or group's chat this device has, oldest first (trace included).
     public func chat(_ botId: String) -> [Entry] { (entries[botId] ?? []).visibleEntries() }

@@ -308,6 +308,7 @@ import kotlinx.coroutines.launch
     var rotating by remember(id) { mutableStateOf(false) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var copied by remember(id) { mutableStateOf<String?>(null) }
+    var secret by remember(id) { mutableStateOf("") }
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val unlock = rememberUnlock(contextId, scope) { error = it }
@@ -318,11 +319,12 @@ import kotlinx.coroutines.launch
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    suspend fun load(rotate: Boolean) {
+    suspend fun load(rotate: Boolean, key: String? = null) {
         rotating = rotate
         try {
-            webhook = store.routineWebhook(botId, id, rotate); error = null
+            webhook = store.routineWebhook(botId, id, rotate, key?.trim()?.ifEmpty { null }); error = null
             if (rotate) { copied = null; showKey = true }
+            if (!key.isNullOrBlank()) secret = ""
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) { error = failure.message ?: "Connect to this computer to see the webhook." }
         finally { rotating = false }
@@ -356,6 +358,17 @@ import kotlinx.coroutines.launch
                     else if (value.url == null) "The Codync cloud is off, so only this computer can send to it."
                     else "POST with Authorization: Bearer <key>. For GitHub, use content type application/json and the key as the secret. " +
                         "Deliveries wait up to 72 hours while this computer is off. They pass through the Codync cloud, which can read them.")
+                Field("Sender's signing secret") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f)) {
+                            PlainInput(secret, { secret = it }, "whsec_…", secret = true, enabled = !rotating && online)
+                        }
+                        SecondaryButton("Use it", enabled = secret.trim().length >= 16 && !rotating && online) {
+                            scope.launch { load(false, secret) }
+                        }
+                    }
+                }
+                Note("A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.")
                 error?.let { Text(it, Modifier.padding(start = 4.dp), style = Type.caption, color = Palette.danger) }
             }
             error != null -> Text(error.orEmpty(), Modifier.padding(start = 4.dp), style = Type.caption, color = Palette.danger)

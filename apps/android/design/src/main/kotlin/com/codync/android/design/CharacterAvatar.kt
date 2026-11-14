@@ -1,14 +1,21 @@
 package com.codync.android.design
 
 import android.animation.ValueAnimator
+import android.graphics.BitmapFactory
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Region
+import android.util.Base64
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -32,7 +39,8 @@ object AvatarPalette {
     fun tint(id: String): Color = Color(colors[id] ?: colors.getValue("blue"))
 }
 
-data class AvatarFace(val shape: String, val color: String, val status: String = "idle")
+data class AvatarFace(val shape: String, val color: String, val status: String = "idle",
+    val customImage: String? = null, val customTinted: Boolean = false)
 
 /**
  * Static system-widget drawing uses the same mask, palette and eyes as the app; [cells] is its grid
@@ -117,7 +125,7 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
     }
 }
 
-@Composable fun GroupAvatar(faces: List<AvatarFace>, size: Dp = 40.dp) {
+@Composable fun GroupAvatar(faces: List<AvatarFace>, size: Dp = 40.dp, photo: String? = null) {
     val owner = LocalLifecycleOwner.current
     var active by remember(owner) { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     DisposableEffect(owner) {
@@ -131,26 +139,41 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
         transition.animateFloat(0f, 3600f, infiniteRepeatable(tween(3_600_000, easing = LinearEasing)), label = "Group float clock")
     } else null
     Box(Modifier.size(size).clearAndSetSemantics { }) {
-        fun side(fraction: Float) = size * fraction
-        @Composable fun place(index: Int, fraction: Float, align: Alignment) {
-            val face = faces[index]
-            val drift = float?.let { (sin(it.value / 2.4 + index * 1.9) * size.value * .02).dp } ?: 0.dp
-            Box(Modifier.align(align).offset(y = drift)) { CharacterAvatar(face.shape, face.color, side(fraction), face.status) }
-        }
-        when (faces.size) {
-            0 -> Symbol("person.2", Modifier.align(Alignment.Center), size = size * 0.4f, tint = Palette.secondary)
-            1 -> place(0, 1f, Alignment.Center)
-            2 -> { place(1, .66f, Alignment.TopEnd); place(0, .66f, Alignment.BottomStart) }
-            3 -> { place(0, .55f, Alignment.TopCenter); place(1, .55f, Alignment.BottomStart); place(2, .55f, Alignment.BottomEnd) }
-            else -> {
-                place(0, .5f, Alignment.TopStart); place(1, .5f, Alignment.TopEnd); place(2, .5f, Alignment.BottomStart)
-                if (faces.size == 4) place(3, .5f, Alignment.BottomEnd)
-                else Box(Modifier.size(size * .5f).align(Alignment.BottomEnd), contentAlignment = Alignment.Center) {
-                    Text("+${faces.size - 3}", style = Type.system(size.value * 0.24f, FontWeight.Bold), color = Palette.secondary)
+        val picture = dataUrlBitmap(photo)
+        if (picture != null) {
+            Image(picture, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+        } else {
+            fun side(fraction: Float) = size * fraction
+            @Composable fun place(index: Int, fraction: Float, align: Alignment) {
+                val face = faces[index]
+                val drift = float?.let { (sin(it.value / 2.4 + index * 1.9) * size.value * .02).dp } ?: 0.dp
+                Box(Modifier.align(align).offset(y = drift)) {
+                    CharacterAvatar(face.shape, face.color, side(fraction), face.status,
+                        customImage = face.customImage, customTinted = face.customTinted)
+                }
+            }
+            when (faces.size) {
+                0 -> Symbol("person.2", Modifier.align(Alignment.Center), size = size * 0.4f, tint = Palette.secondary)
+                1 -> place(0, 1f, Alignment.Center)
+                2 -> { place(1, .66f, Alignment.TopEnd); place(0, .66f, Alignment.BottomStart) }
+                3 -> { place(0, .55f, Alignment.TopCenter); place(1, .55f, Alignment.BottomStart); place(2, .55f, Alignment.BottomEnd) }
+                else -> {
+                    place(0, .5f, Alignment.TopStart); place(1, .5f, Alignment.TopEnd); place(2, .5f, Alignment.BottomStart)
+                    if (faces.size == 4) place(3, .5f, Alignment.BottomEnd)
+                    else Box(Modifier.size(size * .5f).align(Alignment.BottomEnd), contentAlignment = Alignment.Center) {
+                        Text("+${faces.size - 3}", style = Type.system(size.value * 0.24f, FontWeight.Bold), color = Palette.secondary)
+                    }
                 }
             }
         }
     }
+}
+
+/** A data-URL picture (the channel picture) as a bitmap, decoded once per URL. */
+@Composable private fun dataUrlBitmap(dataUrl: String?): ImageBitmap? = remember(dataUrl) {
+    val encoded = dataUrl?.substringAfter(',', "")?.takeIf { it.isNotEmpty() } ?: return@remember null
+    val bytes = runCatching { Base64.decode(encoded, Base64.DEFAULT) }.getOrNull() ?: return@remember null
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
 }
 
 private fun eyeColumns(cells: Int) = when (cells) { 7 -> listOf(2, 4); 9 -> listOf(3, 6); else -> listOf(4, 8) }

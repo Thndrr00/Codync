@@ -281,4 +281,32 @@ The terminal's `Ctrl+K` actions offer the same three choices, saved in the local
 uses `COLORFGBG` for accent contrast. `CODYNC_THEME` supplies the initial choice
 when none is saved; `NO_COLOR` continues to disable color output.
 
+### Chat colour and chat background
+
+Settings → General (desktop: General → Chat; phones: Settings → Chat) offers the
+same 11 chat colours and 11 calm backgrounds as OpenBot 0.65, with one choice
+for the light theme and one for the dark. The row edits the theme the window
+shows; the other keeps its own choice. A colour saved before the split applies to
+both themes. The colour tints the person's own bubbles; the background sits
+behind the chat area only, not the whole window. The terminal offers both as
+`Ctrl+K` actions, saved in `tui-chat-colour` and `tui-chat-background`; a
+terminal without colour ignores them. The lists live in
+`host/src/tui/appearance.rs`, `apps/ios/Kit/Sources/CodyncKit/Design/ChatAppearance.swift`,
+`apps/android/design/.../Appearance.kt` and
+`apps/desktop/src/renderer/lib/chat-appearance.ts`.
+
+## Icons and badges
+
+Icons are one colour. At rest they are grey (`Palette.secondary` on the phones,
+`--secondary` on desktop, the terminal's dim/secondary style); a chosen or active
+row uses the single accent, never a second hue. Agent and provider logos are
+one-colour masks for this reason: they no longer wear brand colours or gradients,
+and a caller that shows a selected logo passes the accent. Status and unread
+badges wear the felt look (OpenBot 0.61–0.63): a soft gradient, a light along the
+top and a ring in the background colour. A bot that needs you shows the amber
+felt ball with its cream yarn mark (`FeltBadge.swift`, `Felt.kt`, `avatar.css`);
+an unread count sits in a felt capsule. The terminal uses `✻` for a bot that
+needs you and `●` for unread, with its own bold/dim styles.
+
+
 Roster section headings and the Bots label move whole groups within a computer: drag on desktop, touch and hold then drag on phones. Section order is per computer and per device. Pinned bots remain above all groups. Terminal Alt+Up/Down moves the selected bot's group for that run.

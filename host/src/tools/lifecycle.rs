@@ -147,6 +147,7 @@ fn offer_to_bots(store: &Store) -> Result<()> {
         url: None,
         headers: BTreeMap::new(),
         oauth: None,
+        person: None,
     };
     crate::market::update_connectors(store, |all| {
         match all.iter_mut().find(|c| c.id == CONNECTOR_ID) {

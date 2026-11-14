@@ -190,6 +190,10 @@ export class FakeHost {
         return { enabled: false }
       case 'usage':
         return story.usage(Date.now())
+      case 'skillUsage':
+        return story.skillUsage()
+      case 'hostHealth':
+        return { ramTotal: 17_179_869_184, ramFree: 6_871_947_674, ramUsedPercent: 60, cpu: 14, diskTotal: 536_870_912_000, diskFree: 193_273_528_320, level: 'normal', refusing: false, thresholds: { warn: 70, critical: 85 }, agents: [], at: Date.now() }
       case 'history':
         return { entries: [] }
       case 'rosterPreview':
@@ -308,6 +312,16 @@ export class FakeHost {
         return { devices: [] }
       case 'voiceStatus':
         return { providers: [] }
+      case 'voiceServer':
+        return {
+          baseUrl: '', transcribeModel: '', speechModel: '', keySaved: false,
+          effective: 'https://api.openai.com', custom: false, environment: null,
+          suggestions: ['parakeet-tdt-0.6b-v3', 'parakeet-unified-en-0.6b', 'whisper-turbo', 'cohere-transcribe-03-2026'],
+        }
+      case 'testVoiceServer':
+        return { ok: false, message: 'No local voice server is set. Add the URL of the server on this computer.' }
+      case 'setVoiceServer':
+        return this.call('voiceServer', {})
       case 'composioStatus':
         return { configured: false, keyUrl: '' }
       case 'credentialStatus':

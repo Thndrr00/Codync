@@ -4,11 +4,11 @@ import { Icon } from '../../components/Icon'
 import { HStack, Spacer, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import type { AgentModelsState } from './agent-models'
-import { useTr } from '../../lib/use-language'
+import { useResetLine, useTr } from '../../lib/use-language'
 import { useStore } from '../../store/context'
 import './agent-picker.css'
 import { isReasoningOption, ReasoningSlider } from './ReasoningSlider'
-import { spentNote } from '../usage/usage-model'
+import { resetDescription, spentNote, spentWindow } from '../../lib/usage-presentation'
 
 type Stage = 'closed' | 'settings' | 'agents' | 'models'
 type Choice = { id: string; label: string; leading?: ReactNode; status?: ReactNode }
@@ -30,6 +30,7 @@ export function AgentModelPicker({ backend, models, selection, onChange, options
   children?: ReactNode
 }) {
   const tr = useTr()
+  const resetLine = useResetLine()
   const store = useStore()
   const [stage, setStage] = useState<Stage>('closed')
   const [query, setQuery] = useState('')
@@ -58,8 +59,12 @@ export function AgentModelPicker({ backend, models, selection, onChange, options
   const summary = modelOptions.map((o) => o.values.find((v) => v.id === (chosen[o.id] ?? o.default))?.name).filter(Boolean).join(' · ')
   const browse = stage === 'agents' || stage === 'models'
   const choices = (stage === 'agents' ? agents : options).filter((o) => o.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-  // A spent plan window stops this agent's models: say so, and when it comes back (Usage screen).
+  // A spent plan window stops this agent's models: a chip beside the provider says when it comes
+  // back, and each stopped model says so (Usage screen). Read from the usage already fetched.
+  const limit = spentWindow(store.usage, backend)
   const note = spentNote(store.usage, backend, tr)
+  const reset = limit ? resetDescription(limit) : null
+  const limitChip = reset ? resetLine(reset) : note
   // A fresh list of agents asks the host about their sign-ins.
   const open = (next: Stage) => { setQuery(''); if (next === 'agents') void store.refreshBackends(); setStage(next) }
   const pick = (id: string) => {
@@ -85,12 +90,12 @@ export function AgentModelPicker({ backend, models, selection, onChange, options
     <VStack gap={8} className="agent-picker">
       <button className="agent-picker-summary" title={[agent?.label ?? backend, modelName, summary, fast ? tr("Fast") : ""].filter(Boolean).join(" · ")} aria-expanded={stage !== 'closed'} onClick={() => open(stage === 'closed' ? 'models' : 'closed')}>
         <span className="agent-picker-identity">{agent?.leading}<Text key={backend} className="agent-picker-text-change">{agent?.label ?? backend}</Text></span>
+        {limit && limitChip ? <span className="agent-picker-limit" title={note ?? limitChip}>{limitChip}</span> : null}
         <span className="agent-picker-model" title={modelName}><span key={modelName} className="agent-picker-text-change">{modelName}</span></span>
         {summary && <span className="agent-picker-effort" title={summary}><span key={summary} className="agent-picker-text-change">{summary}</span></span>}
         {fast && <Icon name="bolt" size={12} title={tr('Fast mode')} />}
         <Icon name={stage === 'closed' ? 'chevron.down' : 'chevron.up'} size={10} />
       </button>
-      {note && <Text size="caption" tone="secondary" className="agent-picker-note">{note}</Text>}
       {stage !== 'closed' && <VStack gap={10} className="agent-picker-panel fade-in">
         <div className="agent-picker-selectors">
           {onAgentChange && <button className="agent-picker-choice" title={agent?.label ?? backend} aria-expanded={stage === 'agents'} onClick={() => open(stage === 'agents' ? 'settings' : 'agents')}>{agent?.leading}<Text truncate>{agent?.label ?? backend}</Text><Icon name={stage === 'agents' ? 'chevron.up' : 'chevron.down'} size={10} /></button>}
@@ -105,8 +110,11 @@ export function AgentModelPicker({ backend, models, selection, onChange, options
             {stage === 'models' && hidden.size > 0 ? <IconButton title={showHidden ? 'Hide hidden models' : 'Show hidden models'} icon={showHidden ? 'eye.slash' : 'eye'} onClick={() => setShowHidden((s) => !s)} /> : null}
           </HStack>
           <div className="agent-picker-list">
-            {choices.map((o) => <button key={o.id} className={hidden.has(o.id) ? 'agent-picker-item hidden-model' : 'agent-picker-item'} aria-pressed={o.id === (stage === 'agents' ? backend : value)} onClick={() => pick(o.id)}>
+            {choices.map((o) => <button key={o.id} className={hidden.has(o.id) ? 'agent-picker-item hidden-model' : 'agent-picker-item'} aria-pressed={o.id === (stage === 'agents' ? backend : value)}
+              aria-label={stage === 'models' && o.id && limit ? `${tr(o.label)}. ${tr('Usage limit reached')}` : undefined}
+              onClick={() => pick(o.id)}>
               {o.leading}<Text className="agent-picker-result-name">{tr(o.label)}</Text><Spacer />{o.status}
+              {stage === 'models' && o.id && limit ? <span className="agent-picker-limit-model">{tr('Usage limit reached')}</span> : null}
               {stage === 'models' && o.id ? (
                 <span role="button" tabIndex={0} className="agent-picker-eye" title={tr(hidden.has(o.id) ? 'Show this model' : 'Hide this model')}
                   onClick={(e) => { e.stopPropagation(); void toggleHidden(o.id) }}

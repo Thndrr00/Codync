@@ -19,6 +19,8 @@ public struct ThreadView: View {
     @State var botChat: BotChatTarget?
     @State var openArtifact: ArtifactTarget?
     @State var openCall: Entry?
+    /// The message the "Send to a channel" sheet is sending on.
+    @State var forwardEntry: Entry?
     @State var editingGroup = false
     @State var details: DetailsRequest?
     @State var calling = false
@@ -27,7 +29,14 @@ public struct ThreadView: View {
     /// The chat stays on the newest message until the reader scrolls away.
     @State var following = true
     @State var loadingEarlier = false
+    /// The rows on screen now: a subagent card's header follows the reader while the card is away.
+    @State var visibleRows: Set<String> = []
+    /// The row the docked subagent header brings back into view.
+    @State var scrollToRow: String?
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.colorScheme) var colorScheme
+    /// The chat background of this theme; reading it here redraws the chat when Settings changes it.
+    @AppStorage(ChatAppearance.backgroundKey) var storedChatBackground = ""
 
     var bot: Bot? { model.bots[botId] }
 
@@ -35,7 +44,7 @@ public struct ThreadView: View {
     /// composer, without the platform's top chrome.
     private var chat: some View {
         transcript
-        .background(Palette.background)
+        .background(ChatAppearance.background(dark: colorScheme == .dark))
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 6) {
                 if let mismatch = model.mismatch {
@@ -45,6 +54,10 @@ public struct ThreadView: View {
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 } else {
+                    if let bot, bot.isGroup {
+                        GroupTasksCard(group: bot)
+                            .padding(.bottom, 6)
+                    }
                     Composer(botId: botId, replyingTo: $replyingTo,
                              queued: model.chat(botId).hidingCalls().queue(working: busy),
                              onCall: !calling && bot != nil ? { calling = true } : nil,
@@ -61,9 +74,17 @@ public struct ThreadView: View {
                 }
                     .padding(.top, 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            } else if let card = dockCard, showsDock {
+                // The card's header, held under the chat header while its subagents work out of view.
+                SubagentDock(entry: card) {
+                    following = false
+                    scrollToRow = card.id
+                }
+                .transition(.opacity)
             }
         }
         .animation(Motion.reduced(Motion.layout, reduceMotion), value: calling)
+        .animation(Motion.reduced(Motion.fade, reduceMotion), value: showsDock)
     }
 
     var conversation: some View {
@@ -88,6 +109,7 @@ public struct ThreadView: View {
             .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
             .codyncSheet(item: $openArtifact) { ArtifactView(target: $0) }
             .codyncSheet(item: $openCall) { CallConversationView(line: $0) }
+            .codyncSheet(item: $forwardEntry) { ForwardSheet(entry: $0) }
             .codyncSheet(item: $details) { request in
                 BotDetailsView(botId: request.botId ?? botId, request: request) { artifact in
                     details = nil
@@ -129,6 +151,7 @@ public struct ThreadView: View {
                         reply: e.isReplyable && model.mismatch == nil ? { reply(to: e) } : nil,
                         // A reply can be followed apart from the chat, as a thread of its own.
                         branch: e.isReplyable ? { startThread(from: e) } : nil,
+                        forward: { forwardEntry = e },
                         // Its thread, opened from the chip under the message.
                         openThread: e.data.thread == nil ? nil : { openThread = ThreadTarget(botId: botId, root: e.id) },
                         // In a group, the bot whose agent failed.
@@ -236,7 +259,7 @@ public struct ThreadView: View {
         HStack(spacing: 7) {
             if let bot {
                 let size: CGFloat = 22
-                if bot.isGroup { GroupAvatar(members: model.members(of: bot), size: size) } else { CharacterAvatar(bot: bot, size: size) }
+                if bot.isGroup { GroupAvatar(members: model.members(of: bot), size: size, photo: bot.avatarPhoto) } else { CharacterAvatar(bot: bot, size: size) }
             }
             Text(bot?.name ?? "")
                 .font(.system(size: 13, weight: .semibold))
@@ -309,7 +332,7 @@ struct GroupIntroCard: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            GroupAvatar(members: model.members(of: group), size: 72)
+            GroupAvatar(members: model.members(of: group), size: 72, photo: group.avatarPhoto)
             Text(group.name).font(.title2.weight(.semibold)).foregroundStyle(Palette.text)
             let names = model.members(of: group).map(\.name)
             if group.name != names.joined(separator: ", ") {
@@ -413,7 +436,17 @@ extension ThreadView {
         return ConversationList(rows: rows, following: $following, nearTop: { showEarlier() }, refresh: {
             model.restartStream()
             _ = try? await model.ready()
-        })
+        }, onVisible: { visibleRows = Set($0) }, scrollTo: $scrollToRow)
+    }
+
+    /// The newest turn whose subagents still work: its header hangs under the chat header while out of view.
+    private var dockCard: Entry? {
+        model.chat(botId).last { $0.kind == "subagents" && ($0.data.subagents ?? []).contains(where: \.isRunning) }
+    }
+
+    private var showsDock: Bool {
+        guard let card = dockCard else { return false }
+        return !visibleRows.contains(card.id)
     }
 
     private var moreOnComputer: Bool {

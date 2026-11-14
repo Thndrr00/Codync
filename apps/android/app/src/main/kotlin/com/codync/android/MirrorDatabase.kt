@@ -112,6 +112,12 @@ class MirrorDatabase(context: Context, directory: File, computerId: String) :
             is MirrorEvent.BotChanged -> { writeBot(db, event.bot); bump(db, event.bot.rev) }
             is MirrorEvent.EntryChanged -> { writeEntry(db, event.entry); bump(db, event.entry.rev) }
             is MirrorEvent.EntryDeleted -> { db.delete("entries", "id=?", arrayOf(event.id)); bump(db, event.rev) }
+            // The host removed the chat's own lines; side-thread lines go too locally and come back when opened.
+            is MirrorEvent.HistoryCleared -> {
+                db.delete("entries", "bot_id=?", arrayOf(event.botId))
+                db.delete("history", "lane=?", arrayOf(event.botId))
+                bump(db, event.rev)
+            }
             is MirrorEvent.ThreadUnread -> readEntry(db, event.threadId)?.let { entry ->
                 // The root line's chip reads its summary from its own data; a deleted thread clears it.
                 val data = event.summary?.let { JsonObject(entry.data + ("thread" to it)) }

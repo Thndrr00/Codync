@@ -9,6 +9,7 @@ import SwiftUI
 public struct VoiceChatSettingsView: View {
     @AppStorage(VoiceSettings.engineKey) private var engine = "device"
     @AppStorage(VoiceSettings.dictationEngineKey) private var dictationEngine = "device"
+    @AppStorage(VoiceSettings.speechOutputKey) private var speechOutput = "provider"
     @AppStorage(VoiceSettings.wakePhraseKey) private var wakePhrase = false
     @AppStorage(OnDeviceEngine.rateKey) private var rate = Double(AVSpeechUtteranceDefaultSpeechRate)
     @AppStorage(OnDeviceEngine.languageKey) private var language = ""
@@ -29,9 +30,9 @@ public struct VoiceChatSettingsView: View {
                 CardSection("Voice", footer: engineFooter) {
                     ValueRow("Engine") {
                         ChoicePicker(selection: $engine.animation(Motion.reduced(Motion.layout, reduceMotion)),
-                                     options: [("device", "On device")] + VoiceProvider.allCases.map { ($0.rawValue, $0.name) })
+                                     options: [("device", "On device")] + VoiceProvider.callProviders.map { ($0.rawValue, $0.name) })
                     }
-                    if let provider = VoiceProvider(rawValue: engine) {
+                    if let provider = provider {
                         ModeRows(provider: provider).id(provider)
                     } else {
                         ValueRow("Wake phrase", detail: "Say Hey Hermes before an on-device turn. Audio stays on this phone. Available only while the call is open and the app is visible.") {
@@ -48,25 +49,36 @@ public struct VoiceChatSettingsView: View {
                         PauseRow()
                     }
                 }
-                if let provider = VoiceProvider(rawValue: engine) {
+                if let provider = provider {
                     ProviderVoiceSettings(provider: provider).id(provider)
+                }
+                if speechOutput == "xai", self.provider != nil {
+                    ProviderVoiceSettings(provider: .xai, speechOnly: true).id("speech-xai")
                 }
                 if let provider = dictationProvider {
                     ProviderVoiceSettings(provider: provider, dictationOnly: true).id("dictation-\(provider.rawValue)")
                 }
+                LocalVoiceServerSection()
             }
         }
         .background(Palette.background)
         .tracked(.screenViewed(.voiceSettings))
     }
 
+    /// The call engine: a provider that hears and reads aloud.
+    private var provider: VoiceProvider? {
+        guard let stored = VoiceProvider(rawValue: engine), stored.carriesCalls else { return nil }
+        return stored
+    }
+
     /// Dictation on another provider than calls still needs that provider's key and speech-to-text model.
     private var dictationProvider: VoiceProvider? {
-        dictationEngine == engine ? nil : VoiceProvider(rawValue: dictationEngine)
+        guard let stored = VoiceProvider(rawValue: dictationEngine), stored.transcribes, stored != provider else { return nil }
+        return stored
     }
 
     private var engineFooter: String {
-        guard let provider = VoiceProvider(rawValue: engine) else {
+        guard let provider else {
             return "Apple speech, on this device. During a call, applies when you close settings."
         }
         return "Your own \(provider.name) key, billed by \(provider.name). During a call, applies when you close settings."
@@ -93,8 +105,12 @@ private struct ModeRows: View {
             }
         }
         if !provider.live || mode == "speech" {
-            ValueRow("Speech output", detail: "NeuTTS runs on your computer with its prepared Hermes model. Recognition still uses your selected speech provider.") {
-                ChoicePicker(selection: $speechOutput, options: [("provider", "Provider voice"), ("neutts", "NeuTTS local · Jo")])
+            ValueRow("Speech output", detail: speechOutput == "xai"
+                ? L10n.tr("Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.")
+                : "NeuTTS runs on your computer with its prepared Hermes model. Recognition still uses your selected speech provider.") {
+                ChoicePicker(selection: $speechOutput, options: [
+                    ("provider", "Provider voice"), ("xai", L10n.tr("xAI voice")), ("neutts", "NeuTTS local · Jo"),
+                ])
             }
             PauseRow()
         }
@@ -113,10 +129,12 @@ private struct PauseRow: View {
 }
 
 /// One provider: mode, the key the computer keeps, models, voice and this month's minutes.
-/// `dictationOnly` keeps the key and speech-to-text model.
+/// `dictationOnly` keeps the key and speech-to-text model; `speechOnly` keeps them and the
+/// spoken-replies model (xAI).
 private struct ProviderVoiceSettings: View {
     let provider: VoiceProvider
     let dictationOnly: Bool
+    let speechOnly: Bool
     @Environment(BotStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(VoiceSettings.dictationEngineKey) private var dictationEngine = "device"
@@ -137,15 +155,16 @@ private struct ProviderVoiceSettings: View {
     @State private var speechModel = ""
     @State private var models = VoiceModels(models: [], transcribe: [], speech: [])
 
-    init(provider: VoiceProvider, dictationOnly: Bool = false) {
+    init(provider: VoiceProvider, dictationOnly: Bool = false, speechOnly: Bool = false) {
         self.provider = provider
         self.dictationOnly = dictationOnly
+        self.speechOnly = speechOnly
         _mode = AppStorage(wrappedValue: "realtime", VoiceSettings.modeKey(provider))
     }
 
     private var speechMode: Bool { !provider.live || mode == "speech" }
     /// Speech mode and dictation with this provider both use its speech-to-text model.
-    private var transcribes: Bool { dictationOnly || speechMode || dictationEngine == provider.rawValue }
+    private var transcribes: Bool { !speechOnly && (dictationOnly || speechMode || dictationEngine == provider.rawValue) }
     private var hasKey: Bool { saved == true }
 
     var body: some View {
@@ -199,7 +218,8 @@ private struct ProviderVoiceSettings: View {
 
     private var footer: String? {
         guard hasKey else { return "Add a key to choose from \(provider.name)'s models." }
-        return dictationOnly ? "For dictation in the message box." : nil
+        if dictationOnly { return L10n.tr("For dictation in the message box.") }
+        return speechOnly ? L10n.tr("Read replies aloud with your own xAI key.") : nil
     }
 
     /// The key is on the computer: say so, and offer test / replace / remove.

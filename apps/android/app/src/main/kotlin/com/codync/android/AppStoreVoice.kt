@@ -98,12 +98,15 @@ private fun AppStore.begin(call: VoiceBinding, provider: VoiceProvider?) {
             choices.speechMode(provider) -> {
                 startCallOnHost(call, "speech", provider)
                 val transcribe = choices.model(provider, VoiceChoices.Model.Transcribe)
-                val speech = choices.model(provider, VoiceChoices.Model.Speech)
+                // Recognition stays with the call's provider; xAI can read the replies instead of it.
+                val speak = choices.speechProvider(provider)
+                val speech = choices.model(speak, VoiceChoices.Model.Speech)
+                val speechVoice = choices.voice(speak)
                 CloudSpeechEngine(contextScope, provider, settings, mic(), AndroidClipPlayer, CloudSpeechEngine.Speech(
                     transcribe = { inReadersScript(voiceTranscribe(provider, transcribe, it)) },
-                    synthesize = { voiceSpeak(provider, speech, voice, it, choices.localSpeech, call.botId) },
+                    synthesize = { voiceSpeak(speak, speech, speechVoice, it, choices.localSpeech, call.botId) },
                     send = { sendFromCall(call, it) },
-                    stream = if (choices.localSpeech) ({ text -> voiceSpeechStream(text,call.botId) }) else null), clipCharacters = if (choices.localSpeech) 120 else provider.speechChunk)
+                    stream = if (choices.localSpeech) ({ text -> voiceSpeechStream(text,call.botId) }) else null), clipCharacters = if (choices.localSpeech) 120 else speak.speechChunk)
             }
             // WebRTC records the microphone itself.
             provider == VoiceProvider.OpenAI -> OpenAIRealtimeEngine(contextScope, settings, model, voice,
@@ -279,6 +282,14 @@ internal suspend fun AppStore.voiceModels(provider: VoiceProvider): VoiceModels 
 /** The provider's own voices (ElevenLabs): premade, cloned and saved. */
 internal suspend fun AppStore.voiceVoices(provider: VoiceProvider): VoiceVoices =
     WireJson.decodeFromJsonElement(hostCall("voiceVoices", body("provider" to provider.id), 30_000))
+
+/** The local voice server's saved URL, models and key state. A phone may read it; only the computer changes it. */
+internal suspend fun AppStore.voiceServer(): VoiceServer =
+    WireJson.decodeFromJsonElement(hostCall("voiceServer", JsonObject(emptyMap()), 30_000))
+
+/** Tries the saved local voice server and says why when it doesn't answer. */
+internal suspend fun AppStore.testVoiceServer(): VoiceServerTest =
+    WireJson.decodeFromJsonElement(hostCall("testVoiceServer", JsonObject(emptyMap()), 30_000))
 
 /** A short-lived credential, which checks a key in the call settings. */
 internal suspend fun AppStore.voiceSession(provider: VoiceProvider, model: String, voice: String): String =

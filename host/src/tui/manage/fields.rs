@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::super::app::{App, Editor, Entry, Overlay};
 use super::market::connector_inputs;
-use super::{Fields, Input, Reply, Submit, ctrl, newline};
+use super::{Fields, Input, Reply, Submit, ctrl, newline, person_body};
 
 impl App {
     pub(in crate::tui) fn fields_key(&mut self, mut f: Box<Fields>, k: KeyEvent) -> Option<Overlay> {
@@ -35,6 +35,9 @@ impl App {
                 if let Some(i) = f.current() {
                     i.ed.insert("\n");
                 }
+            }
+            KeyCode::Enter if matches!(&f.submit, Submit::Composio(c) if c.step == super::composio::Step::Done) => {
+                return None;
             }
             KeyCode::Enter => self.save_fields(&mut f),
             KeyCode::Char('s') if ctrl(k) => self.save_fields(&mut f),
@@ -96,6 +99,14 @@ impl App {
                 );
             }
             Submit::Import => self.sheet("importConnectors", json!({"config": values["config"]}), Reply::FieldsSaved),
+            Submit::App(item) => {
+                self.sheet("installMarketApp", json!({"id": item["id"], "values": values}), Reply::FieldsSaved);
+            }
+            Submit::ComposioKey => self.submit_composio_key(&values),
+            Submit::Composio(_) => self.submit_composio(f, &values),
+            Submit::RoutineKey { bot, id } => {
+                self.sheet("routineWebhook", json!({"botId": bot, "id": id, "key": values["key"]}), Reply::Webhook);
+            }
             Submit::Handoff(entry) => {
                 self.sheet("editHandoff", json!({"entryId": entry, "text": values["text"]}), Reply::FieldsSaved);
             }
@@ -106,6 +117,32 @@ impl App {
                     Reply::FieldsSaved,
                 );
             }
+            Submit::VoiceKey { provider } => {
+                self.sheet(
+                    "setVoiceKey",
+                    json!({"provider": provider, "key": values.get("key").cloned().unwrap_or_default()}),
+                    Reply::VoiceKeySaved,
+                );
+            }
+            Submit::VoiceServer => {
+                // Empty fields count here: emptying one turns that part of the setting off.
+                let typed = |name: &str| {
+                    f.inputs.iter().find(|i| i.name == name).map(|i| i.ed.text.trim().to_owned()).unwrap_or_default()
+                };
+                let mut body = json!({
+                    "baseUrl": typed("baseUrl"),
+                    "transcribeModel": typed("transcribeModel"),
+                    "speechModel": typed("speechModel"),
+                });
+                // An empty key field keeps the saved key, unless the form says to remove it.
+                let key = typed("key");
+                if !key.is_empty() {
+                    body["key"] = Value::String(key);
+                } else if !f.choices.is_empty() && f.choice == 1 {
+                    body["key"] = Value::String(String::new());
+                }
+                self.sheet("setVoiceServer", body, Reply::VoiceServerSaved);
+            }
             Submit::ProtectedFill { id, code } => {
                 let mut body = json!({"id":id});
                 body[if *code { "code" } else { "loginId" }] = values["value"].clone();
@@ -114,6 +151,20 @@ impl App {
             Submit::RenameArtifact { bot, artifact } => {
                 let body = json!({"botId": bot, "artifactId": artifact, "title": values["title"]});
                 self.sheet("renameArtifact", body, Reply::FieldsSaved);
+            }
+            Submit::Person { id } => {
+                let body = person_body(id.as_deref(), &values);
+                self.sheet(if id.is_some() { "updatePerson" } else { "addPerson" }, body, Reply::PeopleSaved);
+            }
+            Submit::Section(bot) => {
+                let name = values.get("name").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+                let section = if name.is_empty() { Value::Null } else { Value::String(name) };
+                self.sheet("updateBot", json!({"id": bot, "section": section}), Reply::FieldsSaved);
+            }
+            Submit::RenameSection(from) => {
+                let name = values.get("name").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+                let to = if name.is_empty() { Value::Null } else { Value::String(name) };
+                self.sheet("renameSection", json!({"from": from, "to": to}), Reply::FieldsSaved);
             }
         }
     }
@@ -128,6 +179,31 @@ pub fn protected_fill_fields(id: &str, code: bool) -> Fields {
         cursor:0,error:None,saving:false,submit:Submit::ProtectedFill{id:id.into(),code},
     }
 }
+/// The sender's own signing secret of a webhook routine (`s` in its list): a Standard Webhooks
+/// sender such as Composio or Svix signs with it, so the routine's key becomes it.
+pub fn routine_key_fields(bot: &str, id: &str, name: &str) -> Fields {
+    Fields {
+        title: format!("Webhook secret of {name}"),
+        note: "Paste the signing secret the sender shows (it starts whsec_). Senders using the old key stop working."
+            .into(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![Input {
+            name: "key".into(),
+            label: "Signing secret".into(),
+            secret: true,
+            required: true,
+            multiline: false,
+            placeholder: "whsec_…".into(),
+            ed: Editor::default(),
+        }],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::RoutineKey { bot: bot.into(), id: id.into() },
+    }
+}
+
 pub fn voice_decision_fields(bot: &str, receipt: &str) -> Fields {
     Fields {
         title: "Confirm call decisions".into(),
@@ -135,6 +211,102 @@ pub fn voice_decision_fields(bot: &str, receipt: &str) -> Fields {
         choices: vec![], choice: 0,
         inputs: vec![Input { name:"summary".into(),label:"Decisions".into(),secret:false,required:true,multiline:true,placeholder:String::new(),ed:Editor::default() }],
         cursor:0,error:None,saving:false,submit:Submit::VoiceDecisions{bot:bot.into(),receipt:receipt.into()},
+    }
+}
+
+/// A voice provider's key: pasted here, checked by the host with the provider, then kept on this computer.
+pub fn voice_key_fields(provider: &str, name: &str) -> Fields {
+    let placeholder = match provider {
+        "openai" => "sk-…",
+        "gemini" => "AIza…",
+        "elevenlabs" => "sk_…",
+        "xai" => "xai-…",
+        "groq" => "gsk_…",
+        _ => "",
+    };
+    Fields {
+        title: format!("{name} key"),
+        note: super::super::l10n::tr(
+            "The key stays on this computer. The host checks it with the provider before keeping it.",
+        )
+        .into_owned(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![Input {
+            name: "key".into(),
+            label: "API key".into(),
+            secret: true,
+            required: true,
+            multiline: false,
+            placeholder: placeholder.into(),
+            ed: Editor::default(),
+        }],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::VoiceKey { provider: provider.into() },
+    }
+}
+
+/// The local voice server: its URL, the models it serves, and an optional key. Edited on this
+/// computer only (the host takes `setVoiceServer` from loopback), because the server runs here.
+pub fn voice_server_fields(state: Option<&Value>) -> Fields {
+    let value = |key: &str| state.and_then(|v| v[key].as_str()).unwrap_or_default();
+    let saved = state.and_then(|v| v["keySaved"].as_bool()).unwrap_or(false);
+    let note = super::super::l10n::tr(
+        "Codync ships no models. Run an OpenAI-compatible server on this computer, such as a sherpa-onnx or whisper server, and enter its URL here.",
+    )
+    .into_owned();
+    // An empty key field keeps the saved one.
+    let placeholder = if saved { "Saved. Type a new one to replace it." } else { "No key needed" };
+    Fields {
+        title: super::super::l10n::tr("Local voice server").into_owned(),
+        note,
+        // Only a saved key needs the choice: the empty field keeps it otherwise.
+        choices: if saved { vec!["Keep the saved key".into(), "Remove the saved key".into()] } else { Vec::new() },
+        choice: 0,
+        inputs: vec![
+            Input {
+                name: "baseUrl".into(),
+                label: "Server URL".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "http://127.0.0.1:8890".into(),
+                ed: Editor::with(value("baseUrl")),
+            },
+            Input {
+                name: "transcribeModel".into(),
+                label: "Dictation model".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "parakeet-tdt-0.6b-v3".into(),
+                ed: Editor::with(value("transcribeModel")),
+            },
+            Input {
+                name: "speechModel".into(),
+                label: "Speech model".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "whisper-turbo".into(),
+                ed: Editor::with(value("speechModel")),
+            },
+            Input {
+                name: "key".into(),
+                label: "Optional key".into(),
+                secret: true,
+                required: false,
+                multiline: false,
+                placeholder: placeholder.into(),
+                ed: Editor::default(),
+            },
+        ],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::VoiceServer,
     }
 }
 

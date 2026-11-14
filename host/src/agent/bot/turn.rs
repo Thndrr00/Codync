@@ -132,6 +132,8 @@ impl Actor {
         }
         self.lane = lane.clone();
         self.turn = Some(turn);
+        self.turn_skills.clear();
+        self.turn_first_output = None;
         // Only the user's own words feed memory: not another bot's, a room's or a routine's.
         let from_user = !hidden && self.source() == TurnSource::User;
         self.turn_text = from_user.then(|| text.to_owned());
@@ -161,6 +163,7 @@ impl Actor {
         self.watchdog.reset();
         self.loop_guard = super::stall::LoopGuard::default();
         self.plan_entry = None;
+        self.subagents = crate::chat::subagents::Card::default();
         self.last_text = None;
         self.sent.clear();
         self.reacted = Reacted::No;
@@ -454,6 +457,8 @@ impl Actor {
         if !grouped && !delegated && !self.proactive_turn && !stopped && !failed && stop_reason == "end_turn" {
             self.offer_skill();
         }
+        // The turn's subagents end with it: this runtime reports nothing after.
+        self.stop_subagents(self.turn.unwrap_or(0));
         self.turn = None;
         self.reply_hops = None;
         // A call's opening is heard on the call: no alert.
@@ -544,7 +549,17 @@ impl Actor {
         };
         let started = self.hub.runtime(&self.id()).started_at.unwrap_or_else(now_ms);
         let ms = now_ms() - started;
-        analytics::turn_finished(&self.hub, &self.cfg.backend, outcome, stop_reason, failure, self.source(), ms);
+        let first_output = self.turn_first_output.map(|at| (at - started).max(0));
+        analytics::turn_finished(
+            &self.hub,
+            &self.cfg.backend,
+            outcome,
+            stop_reason,
+            failure,
+            self.source(),
+            ms,
+            first_output,
+        );
     }
 
     /// What started the turn that is starting or running.

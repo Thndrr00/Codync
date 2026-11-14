@@ -6,6 +6,70 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.48.0
+### zh-Hant
+- 應用程式分頁換成 CopilotKit 審核過的連接器目錄：Google Drive、Notion、Linear、Sentry、Exa、Firecrawl 等服務，各自保留原廠的授權方式。
+- 需要登入的應用程式在瀏覽器完成授權，金鑰型的應用程式則填入自己的金鑰；兩者都只留在你的電腦上。
+- 登入回來時會核對發出的服務，移除連接器時也會一併撤銷授權。
+- 應用程式分頁也加入 Composio：在電腦上填一次 Platform 金鑰，就能瀏覽並連接 Gmail、Slack、GitHub、Notion 等 1,000 多個應用程式，金鑰只留在這台電腦上。
+- 應用程式現在會說明金鑰要到哪裡取得：逐步指引、前往該應用程式自己頁面的按鈕，表單欄位也改用白話說明。
+- 需要登入的應用程式排在前面，需要金鑰的列會先標明，再讓你打開。
+- 呼叫連接器時如果夾帶金鑰或密碼，這次呼叫底下會標示「帶有憑證」，展開後列出金鑰在哪個參數，不必把值抄出來。
+- 語音設定新增 xAI 與 Groq：xAI 用你自己的金鑰在「語音輸出」朗讀回覆，Groq 則在麥克風旁提供 Whisper 聽寫；兩者的金鑰都只留在電腦上。
+- 語音請求出錯時，電腦會在 logs/voice.log 記下原因、提供者、模型與回合，並移除任何金鑰。
+- 終端代理的計畫可以依你選的時間自行開始，「開始」按鈕會倒數。
+- 呼叫這台電腦例行程序的本機腳本共用你設定的每小時上限，迴圈不會花光你的額度。
+- Codync 支援希伯來文，版面會鏡像、程式碼維持由左至右；阿拉伯文同樣由右至左。
+- 聊天顏色與聊天背景各為淺色和深色主題選一次。
+- 代理的問題一次顯示一題，附「返回」，送出前有摘要。
+- 「用量」新增「技能」分頁：每個技能的載入次數、權杖、費用與使用它的代理。
+- 可從設定刪除聊天或頻道的歷史記錄，同時保留設定、記憶與例行程序。
+- 伺服器設定可選「自然」或「經典」更新、代理是否使用你的 Claude Code 設定，以及誰能控制這台電腦的螢幕（30 秒倒數與「全部停止」）。
+- 可從頻道設定開始新對話或壓縮上下文。
+- 頻道會顯示「等待子任務」清單：每一列是某個成員的子任務，可以先停止；停止後能繼續、改派給其他成員，或取消整段（訊息會保留）。
+- 可以請頻道的負責人放棄先前的請求：整輪連同執行中與排隊中的子任務一併取消，頻道會註明是誰要求的。
+- 頻道會列出每個等待中的子任務，附停止、繼續、改派與取消；負責人可以丟棄已被取代的執行。
+- 代理在擁有「管理團隊」時可以建立與修改頻道，頻道也會保存成員共用的記憶。
+- 代理可以從自己的聊天把工作送進頻道。
+- iPhone 也能「傳送到頻道」。
+- WhatsApp 上，陌生人會收到一組由你核准的短代碼；照片以照片送達，個人的資料會跨新聊天保留。
+- 代理頁面可以刪除 Codync 下載的版本，帳號與 Bot 都保留；模型選單最新版本在前，並顯示已用完方案的重新設定時間。
+- 附加檔案時就開始上傳，附可取消的圓環與失敗後的重試；子代理有卡片，離開畫面時標題會跟著聊天顯示。
+- 「資料庫」可從視窗列開啟，列出這台電腦上所有圖片與檔案。
+- 空的清單與搜尋會顯示氈毛玩偶。
+- LXC 容器中的伺服器更新時，不會再因 AppArmor 設定而中斷。
+- 語音設定可以把聽寫與朗讀回覆送到你在電腦上執行的 OpenAI 相容語音伺服器，使用它提供的模型；不會傳到 OpenAI。
+### en-US
+- The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
+- Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
+- A sign-in that comes back is checked against the service that issued it, and removing a connector revokes its grant.
+- The Apps tab also browses more than 1,000 apps through Composio: paste a Platform API key once, on your computer, and each app connects with its own sign-in.
+- Apps now say where to get the key they need: steps, a button to the app’s own page, and the form’s boxes in plain words.
+- Apps you sign in to are listed first, and a row that needs a key says so before you open it.
+- A connector call that carries a key or password says it carries a credential, and unfolding it lists which argument holds it, without copying the value.
+- Voice settings add xAI and Groq: xAI reads replies aloud with your own key under Speech output, and Groq adds Whisper dictation beside the microphone; both keys stay on the computer.
+- When a voice request fails, the computer writes the reason, provider, model and turn to logs/voice.log, with any keys removed.
+- A plan from a terminal agent can start by itself after a time you choose, and its Start button counts down.
+- Local scripts that call routines on this computer share an hourly ceiling you set, so a loop can't spend your quota.
+- Codync speaks Hebrew, with the layout mirrored and code left to right; Arabic is right to left too.
+- Pick a chat colour and a chat background once for light and once for dark.
+- An agent's questions show one at a time, with Back and a summary before you send.
+- Usage has a Skill tab: how often each skill loaded, its tokens, cost and the agents that used it.
+- Delete a chat's or channel's history from its settings, keeping its settings, memories and routines.
+- Server settings choose Natural or Classic updates, whether agents use your Claude Code setup, and who may control this computer's screen, with a 30-second warning and Stop all.
+- Start a new conversation or compact the context from a channel's settings.
+- Channels show a "Waiting for sub-tasks" list: stop a member's sub-task, then continue it, give it to another member, or cancel it and keep the messages.
+- Ask a channel's lead to drop earlier work: it cancels that whole run, with its running and queued sub-tasks, and the channel notes who asked.
+- Channels show each waiting sub-task with Stop, Continue, Reassign and Cancel, and the lead can drop a run a newer request replaced.
+- An agent with Manage the team can create and change channels, and channels keep memories their members share.
+- An agent can send work into a channel from its own chat, and the iPhone can send a message to a channel too.
+- On WhatsApp, an unknown person gets a short code you approve or deny, photos arrive as photos, and a person’s facts survive a new chat or a restart.
+- An agent’s page deletes the build Codync downloaded while its accounts, sign-ins and bots stay; the model picker leads with the newest model and shows a spent plan’s reset time.
+- Each file uploads as you attach it, with a ring you can cancel and a Retry when one fails; subagents get a card, and a header follows the chat while their card is out of view.
+- The Library opens from the window bar with every image and file on your computer.
+- Empty lists and searches show the felt plush.
+- A server in an LXC container updates without the AppArmor profile stopping it.
+- Voice settings can send dictation and spoken replies to an OpenAI-compatible voice server you run on your computer, with the models it serves; nothing goes to OpenAI.
 ## 2.39.0
 
 ### zh-Hant

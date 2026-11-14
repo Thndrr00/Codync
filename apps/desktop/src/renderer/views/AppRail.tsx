@@ -7,7 +7,7 @@ import appIcon from '../../../resources/icon.png'
 import './app-rail.css'
 
 /** Where the rail's icons point. The panel shows the list of the one that is current. */
-export type AppRailPage = 'bots' | 'canvas' | 'usage' | 'marketplace' | 'settings'
+export type AppRailPage = 'bots' | 'canvas' | 'usage' | 'library' | 'marketplace' | 'settings'
 
 /** One icon in the rail: a square button with a tooltip and a selected state. */
 function RailButton({ label, icon, current, onClick, children, status }: {
@@ -47,11 +47,12 @@ function n8nStatus(n8n: N8nState | ToolState | null | undefined): string {
  * pages in the middle, and the account and settings at the bottom. The list
  * panel beside it changes with the page.
  */
-export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onComfy, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n, comfy }: {
+export function AppRail({ active, onBots, onCanvas, onUsage, onLibrary, onN8n, onComfy, onBrowser, onExtensions, onSettings, onAccount, accountOpen, update, account, n8n, comfy }: {
   active: AppRailPage
   onBots: () => void
   onCanvas: () => void
   onUsage: () => void
+  onLibrary: () => void
   onN8n: () => void
   onBrowser: () => void
   onComfy: () => void
@@ -75,6 +76,7 @@ export function AppRail({ active, onBots, onCanvas, onUsage, onN8n, onComfy, onB
         <RailButton label={tr('Bots')} icon="bubble.left.and.bubble.right" current={active === 'bots'} onClick={onBots} />
         <RailButton label={tr('Bot canvas')} icon="arrow.triangle.branch" current={active === 'canvas'} onClick={onCanvas} />
         <RailButton label={tr('Usage')} icon="gauge.with.dots.needle.33percent" current={active === 'usage'} onClick={onUsage} />
+        <RailButton label={tr('Server Library')} icon="books.vertical" current={active === 'library'} onClick={onLibrary} />
         <RailButton
           label={tr('n8n: the workflow editor, run by this computer')}
           icon="point.3.connected.trianglepath.dotted"

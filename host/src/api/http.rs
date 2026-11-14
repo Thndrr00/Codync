@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub fn router(hub: Arc<Hub>) -> Router {
     let main = Router::new()
@@ -34,6 +34,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
                 .layer(axum::extract::DefaultBodyLimit::max(20 * 1024 * 1024)),
         )
         .route("/events", get(events))
+        .route("/agui/{bot}", post(agui_run).layer(axum::extract::DefaultBodyLimit::max(crate::agui::MAX_BODY)))
         .route("/scim/v2/Users", get(scim_users).post(scim_create))
         .route("/scim/v2/Users/{id}", axum::routing::delete(scim_delete))
         .route("/api/{method}", post(command))
@@ -189,6 +190,23 @@ async fn statusline(
     StatusCode::NO_CONTENT
 }
 
+/// `POST /agui/{bot}`: one bot turn as an AG-UI run over Server-Sent Events (see `agui`).
+async fn agui_run(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::agui::serve(hub, &bot, body).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
+}
+
 /// `POST /ingest/hook`: one event of an agent running in a terminal, from `codync-host hook`. A permission request
 /// answers only once a person has decided (or the wait runs out), so the connection may stay open for minutes.
 async fn hook(
@@ -231,6 +249,8 @@ async fn command(
 struct OAuthCallback {
     state: Option<String>,
     code: Option<String>,
+    /// The issuer the consent came back from (RFC 9207).
+    iss: Option<String>,
     error: Option<String>,
     error_description: Option<String>,
 }
@@ -246,9 +266,14 @@ async fn oauth_callback(
         return StatusCode::FORBIDDEN.into_response();
     }
     let error = q.error_description.or(q.error);
-    let result =
-        market::oauth::finish(&hub.store, q.state.as_deref().unwrap_or_default(), q.code.as_deref(), error.as_deref())
-            .await;
+    let result = market::oauth::finish(
+        &hub.store,
+        q.state.as_deref().unwrap_or_default(),
+        q.code.as_deref(),
+        error.as_deref(),
+        q.iss.as_deref(),
+    )
+    .await;
     let (title, detail) = match &result {
         Ok(c) => (format!("{} is connected", c.name), "You can close this tab and go back to Codync.".to_owned()),
         Err(e) => ("Sign-in didn't finish".to_owned(), format!("{e:#}")),
@@ -329,19 +354,25 @@ async fn routine_hook(
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
     use crate::routines::hooks::{MAX_BODY, Refused};
-    if body.len() > MAX_BODY {
+    let started = Instant::now();
+    let bytes = body.len();
+    if bytes > MAX_BODY {
+        crate::analytics::webhook_received(&hub, true, StatusCode::PAYLOAD_TOO_LARGE.as_u16(), bytes, 0);
         return Err(ApiError(StatusCode::PAYLOAD_TOO_LARGE, "event too large".into()));
     }
     let headers =
         headers.iter().filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned()))).collect();
-    hub.routines.receive(&hub, &id, &headers, &body).map(Json).map_err(|e| {
-        let status = match e {
-            Refused::Unauthorized => StatusCode::UNAUTHORIZED,
-            Refused::Paused | Refused::Busy => StatusCode::CONFLICT,
-            Refused::Invalid(_) => StatusCode::BAD_REQUEST,
-        };
-        ApiError(status, e.to_string())
-    })
+    let result = hub.routines.receive(&hub, &id, &headers, &body, true);
+    let status = match &result {
+        Ok(_) => StatusCode::OK,
+        Err(Refused::Unauthorized) => StatusCode::UNAUTHORIZED,
+        Err(Refused::Paused | Refused::Busy) => StatusCode::CONFLICT,
+        Err(Refused::RateLimited(_)) => StatusCode::TOO_MANY_REQUESTS,
+        Err(Refused::Invalid(_)) => StatusCode::BAD_REQUEST,
+    };
+    let ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+    crate::analytics::webhook_received(&hub, true, status.as_u16(), bytes, ms);
+    result.map(Json).map_err(|e| ApiError(status, e.to_string()))
 }
 
 #[cfg(test)]

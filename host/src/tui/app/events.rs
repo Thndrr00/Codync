@@ -33,6 +33,7 @@ impl App {
                 self.entries.clear();
                 self.history_done.clear();
                 self.floors.clear();
+                self.uploads.clear();
             }
             Msg::Connected { since } => {
                 self.stream_since = since;
@@ -49,6 +50,34 @@ impl App {
                 }
             }
             Msg::Term(id, v) => self.on_term(&id, &v),
+            Msg::Upload { key, path, id, sent, total } => {
+                self.on_upload(&key, &path, |upload| {
+                    if upload.id == id && upload.state == super::uploads::UploadState::Uploading {
+                        upload.sent = sent;
+                        upload.total = total;
+                    }
+                });
+            }
+            Msg::Uploaded { key, path, id } => {
+                self.on_upload(&key, &path, |upload| {
+                    if upload.id == id {
+                        upload.sent = upload.total;
+                        upload.state = super::uploads::UploadState::Done;
+                    }
+                });
+            }
+            Msg::UploadFailed { key, path, id, error } => {
+                let reason = error.clone();
+                let marked = self.on_upload(&key, &path, |upload| {
+                    // A cancel the person made keeps its own state.
+                    if upload.id == id && upload.state == super::uploads::UploadState::Uploading {
+                        upload.state = super::uploads::UploadState::Failed(error);
+                    }
+                });
+                if marked && !reason.is_empty() {
+                    self.flash(&format!("Upload failed: {reason} · ctrl+r retries, ⌫ removes it"));
+                }
+            }
         }
     }
 
@@ -93,6 +122,13 @@ impl App {
                     }
                     self.kofi_reply(&bot, &e);
                     self.entries.entry(bot).or_default().insert(e.seq, e);
+                }
+            }
+            Some("historyCleared") => {
+                if let Some(bot) = v["botId"].as_str() {
+                    self.entries.remove(bot);
+                    self.floors.remove(bot);
+                    self.history_done.remove(bot);
                 }
             }
             _ => {}
@@ -186,6 +222,10 @@ impl App {
             self.connection_reply(&id, step, r);
             return;
         }
+        if let After::Composio(step) = after {
+            self.composio_reply(step, r);
+            return;
+        }
         if let After::Sent(key) = after {
             self.sent(&key, r);
             return;
@@ -230,8 +270,13 @@ impl App {
             Err(e) => {
                 match after {
                     After::Hello => self.error = Some(e),
-                    After::Tracked | After::Week | After::RuleTest | After::Profiles | After::Health | After::Comfy => {
-                    }
+                    After::Tracked
+                    | After::Week
+                    | After::SkillUsage
+                    | After::RuleTest
+                    | After::Profiles
+                    | After::Health
+                    | After::Comfy => {}
                     After::Channels | After::ChannelsSlack => self.flash(&format!("Channels: {e}")),
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),
@@ -277,6 +322,7 @@ impl App {
             | After::ThreadOpened(_, _)
             | After::QueuedEdited(_, _, _)
             | After::Connection(_, _)
+            | After::Composio(_)
             | After::Roster(_, _)
             | After::RosterStopped(_)
             | After::Pairing
@@ -305,6 +351,10 @@ impl App {
                 self.backends = v["backends"].as_array().cloned().unwrap_or_default();
                 self.flash("Agents refreshed");
             }
+            After::AgentBuildDeleted => {
+                self.backends = v["backends"].as_array().cloned().unwrap_or_default();
+                self.flash("Deleted.");
+            }
             After::Update => match v["state"]["availableVersion"].as_str() {
                 Some(version) => self.flash(&format!("Version {version} is available: run codync-host update")),
                 None => self.flash("The host is up to date."),
@@ -322,6 +372,7 @@ impl App {
                 }
             }
             After::Week => self.week = v,
+            After::SkillUsage => self.skills = v,
             After::RuleTest => self.rules_tested(&v),
             After::Health => self.health = v,
             After::Comfy => self.comfy = v,
@@ -424,6 +475,7 @@ impl App {
                 {
                     self.drafts.remove(key);
                     self.files.remove(key);
+                    self.uploads.remove(key);
                     self.pasted.remove(key);
                 }
                 self.sends.remove(key);

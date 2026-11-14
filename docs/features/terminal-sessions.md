@@ -109,7 +109,7 @@ Because a session is a bot, every client already renders it: no client has its o
 ## Questions and plans from a terminal session
 
 `codync-host hooks install` adds a second `PreToolUse` hook (`codync-host hook --ask`, matcher
-`AskUserQuestion|ExitPlanMode`, 120 s). When Claude Code asks a question or presents a plan, the host shows a card on
+`AskUserQuestion|ExitPlanMode`, 900 s). When Claude Code asks a question or presents a plan, the host shows a card on
 every client (a Permission entry with `toolKind` `question` or `plan`):
 
 - **Question:** one card per question (up to 4), its options are the question's own (2 to 4). The picked labels go back
@@ -117,6 +117,12 @@ every client (a Permission entry with `toolKind` `question` or `plan`):
   than 2 to 4 options, or more than 4 questions stays in the terminal.
 - **Plan:** an Approve / Reject card showing the plan. Reject denies the tool with a reason; Approve allows it with the
   input unchanged.
+- **Start the work** (`planStart` / `setPlanStart`, ported from OpenBot's Settings > Agents): a plan card starts the
+  plan by itself after 10 s (the default), 30 s, 1 min, 5 min, a typed time (5 s to 14 min), or only when the person
+  presses Start. The choice belongs to the computer and covers every agent. The card carries `autoApproveAt` (epoch
+  ms); past a minute, its primary button counts down ("Allow once · 4:59") on every client, and the TUI's card says
+  when it starts. With no time, the card waits for the person and raises a notification. An answer always wins over
+  the timer.
 - An answer must be one of the options the card showed; anything else is ignored and the card keeps waiting. With no
   answer in time, a cancel, or an older install without the `--ask` hook, the terminal asks as before.
 - Rerun `codync-host hooks install` after updating to add the new hook.

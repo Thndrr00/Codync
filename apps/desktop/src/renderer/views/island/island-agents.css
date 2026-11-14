@@ -1,0 +1,106 @@
+/* The agent dock's roster: one compact row per bot, in the app's roster order. */
+.island-agent-dock {
+  gap: 6px;
+}
+.island-agent-dock-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.island-agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.island-agent-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 6px;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  transition: background-color var(--hover);
+}
+.island-agent-entry:hover,
+.island-agent-entry:focus-visible {
+  background: var(--island-fill);
+}
+.island-agent-entry-name {
+  flex: none;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.island-agent-entry-activity {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--secondary);
+  font-size: calc(12px * var(--island-text-scale, 1));
+}
+.island-agent-unread {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--island-shape);
+  font-size: calc(10px * var(--island-text-scale, 1));
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+/* The state is a dot and its word: amber needs you, white working, red stopped, quiet idle. */
+.island-agent-state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--secondary);
+  font-size: calc(11px * var(--island-text-scale, 1));
+}
+.island-agent-state::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--island-quiet);
+}
+.island-agent-state[data-state='working']::before {
+  background: var(--text);
+}
+.island-agent-state[data-state='needsInput'] {
+  color: var(--warning);
+}
+.island-agent-state[data-state='needsInput']::before {
+  background: var(--warning);
+}
+.island-agent-state[data-state='error'] {
+  color: var(--danger);
+}
+.island-agent-state[data-state='error']::before {
+  background: var(--danger);
+}
+/* Narrow panels keep the name and its state; the activity line is the first to go. */
+.island[data-narrow='true'] .island-agent-entry-activity {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .island-agent-entry {
+    transition: none;
+  }
+}

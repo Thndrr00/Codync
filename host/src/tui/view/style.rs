@@ -114,6 +114,20 @@ fn build_theme(light: bool, color: bool, explicit: bool) -> Theme {
     }
 }
 
+/// The band behind a user's message: the theme's own, or the chat colour the person chose.
+pub fn chat_band(base: Style) -> Style {
+    if !theme().color {
+        return base;
+    }
+    match super::super::appearance::chat_colour_now() {
+        Some(colour) => {
+            let hex = if super::super::appearance::dark_now() { colour.dark } else { colour.light };
+            base.bg(rgb(hex))
+        }
+        None => base,
+    }
+}
+
 pub fn bot_color(name: &str) -> Color {
     let hex = match name {
         "black" => 0x8A8A8A,
@@ -140,7 +154,8 @@ pub(super) fn spin(app: &App) -> &'static str {
 pub fn glyph(app: &App, m: Mark) -> (&'static str, Style) {
     let t = theme();
     match m {
-        Mark::Need => ("◆", t.amber),
+        // Felt has no gradients in a terminal: a knot for a bot that needs you, a dot for unread.
+        Mark::Need => ("✻", t.amber),
         Mark::Work => (spin(app), t.secondary),
         Mark::Unread => ("●", t.bold),
         Mark::Idle => ("○", t.dim),

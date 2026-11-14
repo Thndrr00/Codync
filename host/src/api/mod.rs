@@ -75,6 +75,11 @@ fn str_arg<'a>(b: &'a Value, k: &str) -> Result<&'a str> {
 /// Runs one API method for `caller` (permissions per spec §6.6).
 pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
     devices::permit(caller, method)?;
+    devices::permit_owner(hub, caller, method)?;
+    // A member's device acts as that person: it can't name another person's bot, whatever the method.
+    if let Some(person) = crate::people::caller_person(hub, caller) {
+        crate::people::check_bot(hub, &b, &person)?;
+    }
     let observed = crate::analytics::observe_call(hub, caller, method, &b);
     let audited = b.clone();
     let result = route(hub, caller, method, b).await;
@@ -192,7 +197,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         // Only signing in reads the vault; other computer tools work without a keyring.
         || (method == "computerCall" && b["name"] == "type_login")
         || method.starts_with("voice")
-        || method == "setVoiceKey"
+        || matches!(method, "setVoiceKey" | "setVoiceServer" | "testVoiceServer")
         || matches!(method, "agentAuth" | "agentAuthenticate" | "setAgentEnv" | "accountAuthenticate" | "agentSignOut" | "agentModels")
     {
         market::vault::unlock(hub.clone()).await?;
@@ -215,7 +220,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };
-    let b = match catalog::call(hub, method, b).await? {
+    let b = match catalog::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };

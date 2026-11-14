@@ -59,18 +59,37 @@ pub fn events_stream(
     caller: &Caller,
 ) -> Result<impl Stream<Item = Value> + Send + use<>> {
     let live = BroadcastStream::new(hub.events.subscribe());
+    // A member's phone sees only that person's bots, their chats and what hangs off them. The owner sees all.
+    let person = crate::people::caller_person(hub, caller);
+    let visible: Option<std::collections::HashSet<String>> = person.as_deref().map(|person| {
+        hub.store
+            .bots()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|row| row.config.person.as_deref() == Some(person))
+            .map(|row| row.config.id)
+            .collect()
+    });
     let mut catch_up: Vec<Value> = vec![];
     for bot in hub.bots_json(since)? {
-        catch_up.push(json!({"type": "bot", "rev": bot["rev"], "bot": bot}));
+        if shown(&json!({"bot": bot}), &visible) {
+            catch_up.push(json!({"type": "bot", "rev": bot["rev"], "bot": bot}));
+        }
     }
     for e in hub.store.entries_since(since, CATCH_UP_PER_BOT)? {
+        if !shown(&json!({"entry": {"botId": e.bot_id}}), &visible) {
+            continue;
+        }
         let mut entry = serde_json::to_value(&e)?;
         // A root line carries its thread's unread count and chip summary.
         hub.store.decorate_thread(&mut entry)?;
         catch_up.push(json!({"type": "entry", "rev": e.rev, "entry": entry}));
     }
-    catch_up.extend(crate::chat::artifacts::since(&hub.store, since));
-    catch_up.extend(crate::routines::flow::catch_up(&hub.store, since));
+    catch_up.extend(crate::chat::artifacts::since(&hub.store, since).into_iter().filter(|v| shown(v, &visible)));
+    catch_up.extend(crate::routines::flow::catch_up(&hub.store, since).into_iter().filter(|v| match &visible {
+        None => true,
+        Some(bots) => v["bots"].as_array().into_iter().flatten().all(|b| b.as_str().is_some_and(|b| bots.contains(b))),
+    }));
     catch_up.sort_by_key(|v| v["rev"].as_i64().unwrap_or(0));
     // `rev` counts every mutation, but the catch-up replays only bots and entries: the
     // last rev it sends is where a client's initial load ends.
@@ -99,10 +118,16 @@ pub fn events_stream(
     let local = matches!(caller, Caller::Local);
     let key = caller.device_key().to_owned();
     let guard = Arc::new(matches!(client, Some("ios" | "android")).then(|| PhoneClientGuard::new(hub.clone())));
+    let mut visible = visible;
     let tail = live.filter_map(move |msg| {
         let _keep = guard.clone();
         let key = key.clone();
+        let person = person.clone();
+        let visible = &mut visible;
         async move {
+            // A member's phone never hears of another person's bot, chat or artifact: a bot event also
+            // keeps the set up to date, so a bot made or deleted mid-stream shows or goes at once.
+            let mut visible = visible;
             match msg {
                 Ok(v) if !local && v["type"].as_str().is_some_and(|t| LOCAL_EVENTS.contains(&t)) => None,
                 // The editor's session cookie rides in n8n's state: this computer's own app only.
@@ -112,6 +137,22 @@ pub fn events_stream(
                 }
                 // What a call's voice should say goes to the device holding that call only.
                 Ok(v) if v["type"] == "call" && v["owner"] != key.as_str() => None,
+                // A bot made, changed or deleted mid-stream: a member hears only their person's.
+                Ok(v) if v["type"] == "bot" => {
+                    if let (Some(bots), Some(id)) = (visible.as_mut(), v["bot"]["id"].as_str()) {
+                        // A deletion carries no person, so the bot that was in sight is the one that goes.
+                        let theirs = v["bot"]["person"].as_str().is_some_and(|p| Some(p) == person.as_deref())
+                            || (v["bot"]["deleted"] == true && bots.contains(id));
+                        if theirs {
+                            bots.insert(id.to_owned());
+                        } else {
+                            bots.remove(id);
+                            return None;
+                        }
+                    }
+                    Some(v)
+                }
+                Ok(v) if !shown(&v, visible) => None,
                 Ok(v) => Some(v),
                 // Lagged: tell the client to resync from its last rev.
                 Err(_) => Some(json!({"type": "resync"})),
@@ -119,4 +160,22 @@ pub fn events_stream(
         }
     });
     Ok(stream::iter(catch_up).chain(tail))
+}
+
+/// Whether `person`'s device may receive this event about a bot, its chat, an artifact or a routine flow.
+/// Checks the bot a `bot`, `entry` or `artifact` event names, or the `botId` a method event carries.
+fn shown(v: &Value, visible: &Option<std::collections::HashSet<String>>) -> bool {
+    match visible {
+        None => true,
+        Some(bots) => {
+            if v["type"] == "bot" {
+                return v["bot"]["id"].as_str().is_some_and(|id| bots.contains(id));
+            }
+            v["entry"]["botId"]
+                .as_str()
+                .or_else(|| v["artifact"]["botId"].as_str())
+                .or_else(|| v["botId"].as_str())
+                .is_some_and(|id| bots.contains(id))
+        }
+    }
 }

@@ -34,7 +34,7 @@ struct InstalledView: View {
     private var list: some View {
         CardForm {
             if model.installedConnectors.isEmpty && model.installedSkills.isEmpty {
-                EmptyState(icon: "shippingbox", title: "Nothing installed", detail: "Connectors and skills you add show up here.")
+                MarketEmpty(title: L10n.tr("Nothing installed"), detail: L10n.tr("Connectors and skills you add show up here."))
             }
             if !model.installedConnectors.isEmpty {
                 CardSection("Connectors") {
@@ -102,23 +102,6 @@ struct InstalledView: View {
             }
             signingIn = nil
         }
-    }
-}
-
-/// A quiet "nothing here" message (replaces `ContentUnavailableView`).
-private struct EmptyState: View {
-    let icon: String
-    let title: String
-    let detail: String
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 28)).foregroundStyle(Palette.tertiary).accessibilityHidden(true)
-            Text(L10n.tr(title)).font(.body.weight(.semibold)).foregroundStyle(Palette.text)
-            Text(L10n.tr(detail)).font(.subheadline).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
     }
 }
 

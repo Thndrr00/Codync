@@ -6,7 +6,8 @@ use std::time::Instant;
 
 use super::super::manage::{
     AgentSetup, AnalyticsSheet, BotChatSheet, DevServersSheet, DocumentSheet, Fields, FlowSheet, Library, Market,
-    MemorySheet, NetworkSheet, RoutineForm, RoutineList, SkillSheet, ThreadSheet, ThreadsSheet,
+    MemorySheet, NetworkSheet, PeopleSheet, RoutineForm, RoutineList, ServerLibrary, SkillSheet, ThreadSheet,
+    ThreadsSheet,
 };
 use super::{Editor, Mark, WhatsNew};
 
@@ -56,8 +57,10 @@ pub enum Action {
     Computer,
     N8n,
     Library,
+    ServerLibrary,
     RefreshAgents,
     Pair,
+    People,
     Network,
     Rules,
     Channels,
@@ -71,10 +74,13 @@ pub enum Action {
     Language,
     ThinkingDetails,
     Keys,
+    Voice,
     Appearance(super::super::appearance::Appearance),
+    ChatColour,
+    ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 27] = [
+pub const ACTIONS: [(&str, &str, Action); 32] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -84,8 +90,10 @@ pub const ACTIONS: [(&str, &str, Action); 27] = [
     ("Computer: permissions, files, terminal and activity…", "", Action::Computer),
     ("n8n: workflows and runs…", "", Action::N8n),
     ("Library of this bot: artifacts and files…", "L", Action::Library),
+    ("Library of every bot: artifacts and files…", "", Action::ServerLibrary),
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
+    ("People on this computer…", "", Action::People),
     ("Network: your other computers…", "N", Action::Network),
     ("Approval rules of this bot…", "", Action::Rules),
     ("Channels: Telegram and Slack…", "", Action::Channels),
@@ -99,8 +107,11 @@ pub const ACTIONS: [(&str, &str, Action); 27] = [
     ("Appearance: System", "", Action::Appearance(super::super::appearance::Appearance::System)),
     ("Appearance: Light", "", Action::Appearance(super::super::appearance::Appearance::Light)),
     ("Appearance: Dark", "", Action::Appearance(super::super::appearance::Appearance::Dark)),
+    ("Chat colour…", "", Action::ChatColour),
+    ("Chat background…", "", Action::ChatBackground),
     ("App language…", "", Action::Language),
     ("Show thinking details", "", Action::ThinkingDetails),
+    ("Voice providers…", "", Action::Voice),
     ("Keys", "?", Action::Keys),
 ];
 
@@ -120,6 +131,8 @@ pub struct Goto {
 pub enum ConfirmAct {
     Delete(String),
     NewSession(String),
+    /// Removes a chat's or group's messages and turns, keeping its setup, memories, routines and files.
+    DeleteHistory(String),
     /// Keeps a bot's harness's own memory on beside Codync's.
     KeepHarnessMemory(String),
     DeleteRoutine(String, String),
@@ -128,6 +141,14 @@ pub enum ConfirmAct {
     RemoveSkill(String),
     /// A thread, by bot and root entry.
     DeleteThread(String, String),
+    /// A voice provider's key, removed from this computer.
+    RemoveVoiceKey {
+        provider: String,
+    },
+    /// The build Codync downloaded for an agent, deleted; its accounts, sign-ins and bots stay.
+    DeleteAgentDownload(String),
+    /// A person on this computer: their devices, bots, chats and connectors become the owner's.
+    RemovePerson(String),
 }
 
 pub struct Confirm {
@@ -344,24 +365,43 @@ impl Form {
 pub enum GroupField {
     Name,
     About,
+    Title,
+    Lead,
+    Picture,
+    Archived,
+    KeepMemories,
     Bots,
 }
 
 impl GroupField {
-    /// The field after this one; a new group has no About (it is written afterwards, in the editor).
-    pub(super) fn next(self, about: bool) -> Self {
+    /// The field after this one; a new group has no About, Lead, Picture, Archived or Channel memory (they are set
+    /// afterwards, in the editor).
+    pub(super) fn next(self, existing: bool) -> Self {
         match self {
-            Self::Name if about => Self::About,
-            Self::Name | Self::About => Self::Bots,
+            Self::Name if existing => Self::About,
+            Self::Name | Self::About => Self::Title,
+            Self::Title if existing => Self::Lead,
+            Self::Title => Self::Bots,
+            Self::Lead => Self::Picture,
+            Self::Picture => Self::Archived,
+            Self::Archived => Self::KeepMemories,
+            Self::KeepMemories => Self::Bots,
             Self::Bots => Self::Name,
         }
     }
 
-    pub(super) fn prev(self, about: bool) -> Self {
+    pub(super) fn prev(self, existing: bool) -> Self {
         match self {
             Self::Name => Self::Bots,
-            Self::Bots if about => Self::About,
-            Self::About | Self::Bots => Self::Name,
+            Self::Bots if existing => Self::KeepMemories,
+            Self::Bots => Self::Title,
+            Self::KeepMemories => Self::Archived,
+            Self::Archived => Self::Picture,
+            Self::Picture => Self::Lead,
+            Self::Lead => Self::Title,
+            Self::Title if existing => Self::About,
+            Self::Title => Self::Name,
+            Self::About => Self::Name,
         }
     }
 }
@@ -374,6 +414,18 @@ pub struct GroupForm {
     /// What the group is for; sent as `description`, shown to its members. Edited only:
     /// a new group starts without one.
     pub about: Editor,
+    /// The short line under the name in the roster; empty for none.
+    pub title: Editor,
+    /// Whether the group shows under ARCHIVED.
+    pub archived: bool,
+    /// Keeps what its members learn in the channel; their own chats don't get it.
+    pub keep_memories: bool,
+    /// Whether the group has a picture (the apps add it; the terminal can remove it).
+    pub has_photo: bool,
+    /// The picture is removed on save.
+    pub remove_picture: bool,
+    /// The member that leads the channel; `None` for none.
+    pub lead: Option<String>,
     /// Picked bot ids, in the order they were picked.
     pub members: Vec<String>,
     pub field: GroupField,
@@ -433,12 +485,17 @@ pub enum Overlay {
     Flow(Box<FlowSheet>),
     Routine(Box<RoutineForm>),
     Library(Library),
+    ServerLibrary(ServerLibrary),
     Market(Box<Market>),
     Agent(AgentSetup),
     Fields(Box<Fields>),
     Skill(SkillSheet),
     Analytics(AnalyticsSheet),
     Network(Box<NetworkSheet>),
+    /// The voice providers' keys (`voiceStatus`).
+    Voice(Box<super::super::manage::VoiceSheet>),
+    /// Who uses this computer besides its owner (`people`, `devices`).
+    People(Box<PeopleSheet>),
     /// A bot's approval rules.
     Rules(Box<super::rules::RulesSheet>),
     /// "Always allow" on a card: the rule to keep, to edit.
@@ -468,6 +525,8 @@ pub enum Click {
     BotChat(String),
     /// A line's thread chip (root entry id): opens that thread.
     Thread(String),
+    /// The docked subagent header (its card's entry id): scrolls the chat back to the card.
+    Subagents(String),
     /// The port in the chat's header: opens the bot's dev servers.
     DevServers,
 }

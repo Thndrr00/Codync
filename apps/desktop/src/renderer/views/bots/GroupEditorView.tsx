@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { isGroup, type Bot } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
-import { ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
+import { Button, ChoicePicker, IconButton, Spinner, Switch, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, SheetPage, useDismiss } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
+import { useModel } from '../../lib/observable'
+import { MemoryStore } from '../../store/memory-store'
+import { EntryRow } from './MemoryView'
 import { errorText } from './drafts'
+import { HistoryActions } from './HistoryActions'
 import { AutoTextArea } from './parts'
 import './bots.css'
 import { useTr } from '../../lib/use-language'
@@ -22,9 +26,15 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const store = useStore()
   const dismiss = useDismiss()
   const [name, setName] = useState(group.name)
+  const [title, setTitle] = useState(group.title ?? '')
   const [about, setAbout] = useState(group.description)
   const [members, setMembers] = useState<string[]>(group.members)
   const [chiefBotId, setChiefBotId] = useState<string | null>(group.chiefBotId ?? null)
+  const [archived, setArchived] = useState(group.archived)
+  const [keepMemories, setKeepMemories] = useState(group.keepMemories)
+  const [photo, setPhoto] = useState<string | null>(group.avatarPhoto ?? null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -39,6 +49,10 @@ export function GroupEditorView({ group }: { group: Bot }) {
   // "Alice, Bob" when no name is typed.
   const defaultName = picked.length ? picked.map((b) => b.name).join(', ') : 'Name'
   const current = store.bots.get(group.id)
+  const memory = useModel(useMemo(() => new MemoryStore(group.id, () => store.ready()), [group.id, store]))
+  // A memory changes anywhere moves the bot's `memoryRev`: read the channel's again.
+  useEffect(() => { void memory.load() }, [memory, current?.memoryRev])
+  const channel = memory.view?.channel
 
   const toggle = (id: string) => {
     setMembers((list) => (list.includes(id) ? list.filter((m) => m !== id) : [...list, id]))
@@ -49,10 +63,27 @@ export function GroupEditorView({ group }: { group: Bot }) {
     setSaving(true)
     setError(null)
     store
-      .updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId })
+      .updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId,
+        title: title.trim() || null, archived, keepMemories, avatarPhoto: photo })
       .then(dismiss)
       .catch((e: unknown) => setError(errorText(e)))
       .finally(() => setSaving(false))
+  }
+
+  /** The picture is a small data URL, as a bot's photo is: the same 300 KB. */
+  const choosePhoto = (file: File | undefined) => {
+    if (!file) return
+    if (file.size > 300 * 1024) {
+      setPhotoError(tr('The picture must be 300 KB or smaller.'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPhotoError(null)
+      setPhoto(typeof reader.result === 'string' ? reader.result : null)
+    }
+    reader.onerror = () => setPhotoError(tr('The picture could not be read.'))
+    reader.readAsDataURL(file)
   }
 
   return (
@@ -61,11 +92,30 @@ export function GroupEditorView({ group }: { group: Bot }) {
       <div className="group-scroll">
         <div className="group-form">
           <div className="group-identity">
-            <GroupAvatar members={picked} size={84} />
+            <GroupAvatar members={picked} size={84} photo={photo} />
             <input className="group-name" value={name} placeholder={defaultName} aria-label="Name" onChange={(e) => setName(e.target.value)} />
+            <input className="group-about" value={title} placeholder={tr('A short line under the name')} aria-label="Title" onChange={(e) => setTitle(e.target.value)} />
             <AutoTextArea className="group-about" value={about} placeholder="What this group works on" minRows={1} maxRows={4} onChange={setAbout} />
           </div>
           <VStack>
+            <ValueRow label={tr('Picture')} detail={tr("Shown in the roster instead of the members' faces.")}>
+              <Button kind="secondary" onClick={() => photoInput.current?.click()}>{tr('Choose Picture')}</Button>
+              {photo ? <Button kind="secondary" onClick={() => setPhoto(null)}>{tr('Remove Picture')}</Button> : null}
+              <input ref={photoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden
+                onChange={(e) => { choosePhoto(e.target.files?.[0]); e.target.value = '' }} />
+              {photoError ? <Text size="caption" tone="danger">{photoError}</Text> : null}
+            </ValueRow>
+            <ValueRow label={tr('Archived')} detail={tr('Archived groups leave the open roster; their conversation stays.')}>
+              <Switch on={archived} onChange={setArchived} label={tr('Archived')} />
+            </ValueRow>
+            <ValueRow label={tr('Keep memories in this channel')} detail={tr("What its members learn here stays in this channel; their other chats don't get it.")}>
+              <Switch on={keepMemories} onChange={setKeepMemories} label={tr('Keep memories in this channel')} />
+            </ValueRow>
+            <div className="group-section-title">{tr('Memory')}</div>
+            <Text size="caption" tone="tertiary">{tr('Every member reads these here. To change one, ask a member to remember or forget it.')}</Text>
+            {channel?.entries.length
+              ? channel.entries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
+              : <Text size="caption" tone="tertiary">{tr('Nothing yet. What the channel learns shows up here.')}</Text>}
             <div className="group-section-title">Members</div>
             {picked.map((bot) => (
               <div key={bot.id} className="member-row fade-in">
@@ -121,6 +171,9 @@ export function GroupEditorView({ group }: { group: Bot }) {
             ) : null}
           </VStack>
           {error ? <Text size="footnote" tone="danger" className="fade-in">{error}</Text> : null}
+          {current ? (
+            <HistoryActions bot={current} />
+          ) : null}
           {current ? (
             <button className="press group-delete" onClick={() => setConfirmDelete(current)}>
               Delete group chat

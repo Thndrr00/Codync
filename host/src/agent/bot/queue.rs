@@ -122,6 +122,12 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::SwitchBack => self.switch_back().await,
+            Cmd::CompactNow => {
+                self.queue.push_back(Queued::Compact { idle: false });
+                if self.turn.is_none() {
+                    self.next_in_queue(done_tx).await;
+                }
+            }
             Cmd::CallEnded { call } => {
                 if self.turn_call.as_ref() == Some(&call) {
                     self.turn_call = None;
@@ -129,6 +135,13 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::Reconfigure(base) => self.reconfigure(*base).await,
+            Cmd::RestartAgent => {
+                if self.turn.is_some() {
+                    self.restart_after_turn = true;
+                } else {
+                    self.restart_agent().await;
+                }
+            }
             Cmd::Shutdown => return false,
         }
         true

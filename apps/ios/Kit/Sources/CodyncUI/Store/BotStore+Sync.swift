@@ -126,6 +126,11 @@ extension BotStore {
                   current.rev == e.rev, !current.isInternal else { break }
             if let card = e.data.artifact { artifacts.announce(card) }
             acknowledgeVisibleConversations(e.botId, entry: e)
+        case let .historyCleared(botId, r):
+            entries[botId] = nil
+            windowFloors[botId] = nil
+            historyComplete.remove(botId)
+            bump(r)
         case let .call(cue):
             // The computer decides what the voice hears; this device hands each cue over once.
             guard let id = UUID(uuidString: cue.call), let call = voiceCalls[id], cue.seq > heardCues[id, default: 0] else { break }

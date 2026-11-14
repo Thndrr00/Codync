@@ -17,6 +17,8 @@ struct BotListView: View {
     @State private var query = ""
     @State private var filter = RosterFilter.all
     @State private var showHistory = false
+    /// The server's Library of the computers shown (every bot's artifacts and files).
+    @State private var showLibrary = false
     @AppStorage("rosterByProject") private var byProject = false
     @AppStorage("collapsedRosterProjects") private var collapsedProjects = "[]"
     /// A bot whose agent starts over with a fresh context, once confirmed.
@@ -141,7 +143,7 @@ struct BotListView: View {
                 // A newer app release (dismissible; everything still works). Computers update
                 // themselves, so a newer host gets no reminder here.
                 AppUpdateReminder()
-                RosterFilterControls(query: $query, filter: $filter, byProject: $byProject, showHistory: $showHistory)
+                RosterFilterControls(query: $query, filter: $filter, byProject: $byProject, showHistory: $showHistory, showLibrary: $showLibrary)
                 if !roster.isEmpty && !roster.contains(where: { filter.matches($0.bot, query: query) }) {
                     VStack {
                         Text("No bots match these filters").foregroundStyle(Palette.secondary)
@@ -223,6 +225,10 @@ struct BotListView: View {
                 accounts.selection = BotReference(accountId: accounts.accountId, computerId: store.computer.id, botId: hit.botId)
             }.id(accounts.accountId)
         }
+        .codyncSheet(isPresented: $showLibrary) {
+            ServerLibraryView(stores: shownStores.filter(\.hasServerLibrary))
+                .id(accounts.accountId)
+        }
         .codyncSheet(item: $creating) { target in
             if let store = accounts.store(for: target.computerId) {
                 Group {
@@ -270,6 +276,14 @@ struct BotListView: View {
             }]
         }
         .sectionNameDialog($naming)
+        .codyncDialog("Start a new session?",
+                      isPresented: Binding(get: { confirmNewSession != nil }, set: { if !$0 { confirmNewSession = nil } }),
+                      message: "The bot starts fresh. Earlier messages stay in the chat, and its setup, memories and routines do not change.") {
+            let item = confirmNewSession
+            return [DialogAction("New session") {
+                if let item { accounts.store(for: item.ref.computerId)?.newSession(item.bot.id) }
+            }]
+        }
     }
 
     /// A row the system's reordering dropped. A heading moves its computer and its bots (an order

@@ -12,6 +12,7 @@ mod l10n;
 mod manage;
 mod md;
 pub mod net;
+mod rtl;
 mod sheets;
 mod view;
 

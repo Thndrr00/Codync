@@ -186,6 +186,46 @@
   flex: 1;
   min-width: 0;
 }
+/* The computer's RAM, CPU and disk above its usage: three short lines. */
+.settings-usage-health {
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-usage-health-row {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Skill tab: a small table with the skill's name and five numbers. */
+.settings-skills {
+  padding: 4px 16px 12px;
+}
+
+.settings-skill-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px 92px 92px 52px 48px;
+  gap: 10px;
+  align-items: center;
+  min-height: 30px;
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.06);
+}
+
+.settings-skill-head {
+  min-height: 28px;
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.12);
+}
+
+.settings-skill-row > :not(:first-child) {
+  text-align: right;
+}
+
+.settings-skill-note {
+  display: block;
+  padding-top: 8px;
+}
+
 .settings-usage-grip {
   display: grid;
   place-items: center;
@@ -258,6 +298,12 @@
 }
 .settings-key-result.failed {
   color: var(--danger);
+}
+
+/* The local voice server's model suggestions: the ids common servers serve, fillable by click. */
+.voice-model-suggestions .styled-button {
+  font-family: var(--mono);
+  font-size: var(--text-caption);
 }
 
 /* A row that appears fades in. */

@@ -12,7 +12,7 @@ Pick the bots to add, type a name if you like, and choose **Create**. Without a 
 
 - A group needs at least one bot.
 - A group can't contain another group.
-- If a group with exactly the same bots already exists, you get that group instead of a second one.
+- If an open group with exactly the same bots already exists, you get that group instead of a second one.
 
 ## Edit, remove members, delete
 
@@ -22,9 +22,56 @@ Open the group's settings to change it:
 - **Desktop:** click the group's name at the top of the chat. The details panel lists the members, with **Add Member** and an X to remove each one.
 - **Terminal UI:** select the group and press `e`.
 
-In the editor you can rename the group, add or remove members, and fill in **What this group works on**. Every member reads that line, so use it to say what the room is for.
+In the editor you can rename the group, add or remove members, fill in **What this group works on**, give it a short **title** under its name, choose a **picture**, pick its **Chief of Staff** (the member that leads it), **archive** it, and turn on **Keep memories in this channel**. Every member reads the "What this group works on" line, so use it to say what the room is for.
+
+**Keep memories in this channel** keeps what its members learn while answering here in the channel itself: their own chats don't get those memories. Each member still has its own memory, and everything [shared by all your bots](/docs/memory) still reaches every chat. The editor also lists the channel's memories, read-only; to change one, ask a member to remember or forget it.
+
+A channel's memory is one shared layer beside each member's own: every member reads it when it answers in the room, and its own chats never do. A member adds to it with `channel_remember` ("Remember that our releases ship on Fridays") and removes one with `channel_forget_memory`. A memory holds up to 500 characters, the channel keeps its full list within the usual memory limit, and saving the same text again keeps one memory instead of two.
+
+The picture is a small image shown in place of the members' faces everywhere the group appears. On iPhone and Android choose one from your photos; on the desktop choose a PNG, JPEG or WebP file of 300 KB or less. The terminal shows a `▣` next to a group with a picture and can remove it.
+
+**Archived** takes the group out of the open list and stops what it is working on. Its conversation, members and files stay, and you can bring it back from **Archived groups** (desktop: Settings; iPhone and Android: Computer management) or, in the terminal UI, by selecting it under `ARCHIVED` and pressing `e`.
 
 **Delete group chat** removes the group and its conversation. Its bots stay. If you delete a bot, it leaves every group it was in.
+
+The same editor has three history actions, which never touch the members, their own chats, the group's memories or routines:
+
+- **Delete history** removes the group's messages and turns after you type the group's name. In the terminal press `X` while the group is selected.
+- **New conversation** keeps the messages and marks where the room starts fresh: members see only what is said after it in their next turns. In the terminal press `S`.
+- **Compact context** asks every member to summarize what it keeps. A member shares one conversation across its chats, so its own chat is compacted too.
+
+## Let a bot create and change channels
+
+A bot whose settings turn on **Manage the team** can create and change channels for you. Ask it in
+its own chat, for example: "Make a channel called Ship room for Alice and Ben, with Ben as the
+lead, and say it ships 2.0." It gets a `create_channel` tool (name, title, what the channel is for,
+members, lead, picture, archived) and an `update_channel` one (the same, plus adding and removing
+members). A picture is a PNG, JPEG or WebP file of 300 KB or less.
+
+- Under **Asks before acting**, each change waits for your Allow on an approval card in that bot's
+  chat, which lists the members, lead, title, archive state and whether a picture changes.
+- Under **Approves automatically**, the change applies at once. Either way the bot's chat gets a
+  line saying what changed.
+- A bot can only change a channel it can see: one it is in, made, or leads. Otherwise it is told
+  to ask you to add it or to change the channel.
+- A created channel appears on every device like one you made yourself, with its title, members,
+  lead and picture. If an open channel with exactly those bots already exists, the bot is told so
+  and asked to change that one instead.
+
+## Send work to a channel from a bot's chat
+
+A bot you talk to one-on-one can hand work to one of your channels: "Send this to Ship room for
+Ben". It has a `send_to_channel` tool that posts the request into the channel as its own message
+and starts an exchange there, exactly like a message you send in the group. The members it names
+answer; with none, the channel's lead routes it. The bot's own chat gets a line saying where the
+request went, and the tool returns the channel's id.
+
+- Under **Asks before acting**, the bot waits for your Allow on a card showing the channel, the
+  members asked and the request.
+- It only reaches a channel the bot can see (one it is in, made, or leads); another channel is
+  refused with a line saying to ask you to add it.
+- It is for work you give a channel. A request from a teammate still goes through the bots'
+  own messaging, or an @-mention when the bot is answering in the channel.
 
 ## Who answers
 
@@ -66,9 +113,26 @@ If a member fails while answering, the room counts it as a pass and shows the er
 
 ## Stop
 
-Press **Stop** in the group (the send button turns into Stop while members work; `s` in the terminal UI). It ends the current exchange and stops members working in the group.
+Press **Stop** in the group (the send button turns into Stop while members work; `s` in the terminal UI). It ends the current exchange, stops members working in the group, and keeps the exchange's sub-tasks stopped until you continue them (below).
 
 Sending a new message also ends the running exchange before the next member is asked, and starts a new one with your message.
+
+## Sub-tasks: stop, continue, reassign, cancel
+
+Every exchange you start is a small task tree: your request, an assignment for each member it asks, and the members those assignments bring in. While it has rows, every app shows **Waiting for sub-tasks** above the message box, one line per assignment with its member and its state: waiting, working, done, failed, stopped or cancelled.
+
+- **Stop** on a row pauses that row and everything below it, and stops the member working on it. On the request's own row it pauses the whole exchange, so no other member speaks.
+- A **stopped** row then offers **Continue**, **Reassign** and **Cancel**:
+  - **Continue** lets it go on, and the members that waited below it speak again.
+  - **Reassign** gives that row to another member, who carries on with what waited.
+  - **Cancel** ends the exchange from its request down, including every member's assignment, and keeps the messages. A member that was working stops.
+- The terminal UI lists the same rows over the composer: `,` and `.` pick one, `W` stops, `O` continues, `A` reassigns (then Enter), and `B` cancels.
+
+A newer message of yours replaces the earlier request: what was still waiting for it is cancelled, and its messages stay.
+
+## Drop earlier work
+
+When a newer request replaces one the group is still working on, ask its **Chief of Staff** to drop the old one: "drop that request, this one replaces it". The lead has a `drop_request` tool, and it ends that whole run — the running and queued sub-tasks included — while the channel keeps its messages. A line in the channel says who asked ("The user asked to drop this request: …"), and the lead's own chat records that it was dropped. Under **Asks before acting** the lead waits for your Allow first; under **Approves automatically** it applies at once.
 
 ## What each member remembers
 
@@ -76,6 +140,7 @@ Sending a new message also ends the running exchange before the next member is a
 - **What it's shown.** On each turn, a member reads the room's messages since it last spoke there, the most recent ones if there are many, plus who's in the room and what the group is for.
 - **Private chats.** Members are told not to reveal what you discussed with them one-on-one. That's only an instruction to the agent: the same session holds both conversations.
 - **Long-term memory.** In a group, a bot can add to its [memory](/docs/memory) but can't change or remove what's there. Group chats don't feed dreaming, and a bot's history search covers only its own chat.
+- **The channel's memory.** What the channel keeps with `channel_remember` is listed in every member's turn there, and in none of their own chats. With **Keep memories in this channel** on, a member's ordinary memory writes in the room go to the channel too.
 
 ## Notifications
 

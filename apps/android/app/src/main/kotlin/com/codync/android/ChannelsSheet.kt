@@ -57,6 +57,9 @@ import kotlinx.coroutines.launch
     var discordToken by remember { mutableStateOf("") }
     var rows by remember { mutableStateOf(listOf<BindingDraft>()) }
     var githubToken by remember { mutableStateOf("") }
+    var repoName by remember { mutableStateOf("") }
+    var repoDescription by remember { mutableStateOf("") }
+    var repoPrivate by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -224,7 +227,7 @@ import kotlinx.coroutines.launch
                     }
                 }
             }
-            CardSection(tr("GitHub"), footer = tr("A fine-grained token with the repository permissions your workflows need. It stays on the computer; Codync never sends it anywhere else.")) {
+            CardSection(tr("GitHub"), footer = tr("A fine-grained token with the repository permissions your workflows need, plus Administration to create repositories. It stays on the computer; Codync never sends it anywhere else.")) {
                 val connected = github
                 row {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -239,6 +242,26 @@ import kotlinx.coroutines.launch
                         if (connected?.configured == true) {
                             if (connected.scopes.isNotEmpty()) {
                                 Text("${tr("Scopes")}: ${connected.scopes.joinToString(", ")}", style = Type.caption, color = Palette.tertiary)
+                            }
+                            if (connected.canCreateRepos) {
+                                PlainInput(repoName, { repoName = it }, tr("New repository name"))
+                                PlainInput(repoDescription, { repoDescription = it }, tr("Description (optional)"))
+                                CodyncSwitch(repoPrivate, onChange = { repoPrivate = it }) { Text(tr("Private"), style = Type.body) }
+                                SecondaryButton(if (busy) tr("Creating…") else tr("Create repository"),
+                                    enabled = !busy && GitHub.repoNameOk(repoName)) {
+                                    act {
+                                        github = store.githubCreateRepo(repoName, repoPrivate, repoDescription)
+                                        repoName = ""
+                                        repoDescription = ""
+                                    }
+                                }
+                            }
+                            connected.created?.let { created ->
+                                Text("${tr("Created")} ${created.fullName}", style = Type.caption, color = Palette.secondary)
+                                Text(created.cloneUrl, style = Type.caption, color = Palette.tertiary)
+                                if (created.originSet) {
+                                    Text(tr("The workspace origin now points here."), style = Type.caption, color = Palette.tertiary)
+                                }
                             }
                             SecondaryButton(tr("Disconnect GitHub"), enabled = !busy) {
                                 act { github = store.disconnectGitHub() }

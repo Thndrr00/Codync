@@ -22,6 +22,7 @@ import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
+import { SubagentCard } from './Subagents'
 import { VoiceReceipt } from './VoiceReceipt'
 
 export function reactionPick(store: BotStore, entry: Entry): ReactionPick {
@@ -104,6 +105,13 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
         <VStack gap={4} className="chat-row group-start">
           {chat && isGroup(chat) ? <AuthorLabel botId={entry.data.author} /> : null}
           <LivePermission entry={entry} />
+        </VStack>
+      )
+    case 'subagents':
+      return (
+        <VStack gap={4} className="chat-row group-start">
+          {chat && isGroup(chat) ? <AuthorLabel botId={entry.data.author} /> : null}
+          <SubagentCard entry={entry} />
         </VStack>
       )
     default:

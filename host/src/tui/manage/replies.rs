@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 
 use super::super::app::{After, AgentModel, App, Entry, Overlay, Toggle};
-use super::{Market, MemoryMode, Reply, Shell, open_browser, s};
+use super::{Market, MemoryMode, Reply, Shell, Submit, open_browser, s};
 
 impl App {
     pub(in crate::tui) fn on_sheet_reply(&mut self, r: Reply, res: Result<Value, String>) {
@@ -35,6 +35,39 @@ impl App {
                 }
             }
             Reply::Computer(reply) => self.computer_reply(&reply, Ok(v)),
+            Reply::VoiceStatus | Reply::VoiceServer | Reply::VoiceServerSaved | Reply::VoiceServerTested => {
+                self.voice_reply(r.clone(), v);
+            }
+            Reply::VoiceKeySaved => {
+                // The key form goes away; the sheet behind it shows the new state.
+                if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, super::Submit::VoiceKey { .. }))
+                {
+                    self.overlays.pop();
+                }
+                self.sheet("voiceStatus", json!({}), Reply::VoiceStatus);
+            }
+            Reply::People => {
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.fill_people(&v);
+                    }
+                }
+            }
+            Reply::PeopleDevices => {
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.fill_devices(&v);
+                    }
+                }
+            }
+            Reply::PeopleSaved => {
+                // The person's form goes away; the list behind it shows the new state.
+                if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::Person { .. }))
+                {
+                    self.overlays.pop();
+                }
+                self.load_people();
+            }
             Reply::McpTools(reply) => self.mcp_tools_reply(&reply, Ok(v)),
             Reply::N8n(reply) => self.n8n_reply(&reply, Ok(v)),
             Reply::Documents(reply) => self.on_document_reply(&reply, &v),
@@ -150,6 +183,8 @@ impl App {
             }
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::ServerLibrary => self.server_library_loaded(v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::ServerLibraryPreview => self.server_library_preview(&v),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);
@@ -157,6 +192,11 @@ impl App {
                 self.refresh_sheets();
             }
             Reply::Webhook => {
+                // A pasted secret comes from the fields sheet: it has done its job.
+                if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Fields(_))) {
+                    self.overlays.truncate(i);
+                    self.refresh_sheets();
+                }
                 let url = v["url"].as_str().or_else(|| v["localUrl"].as_str()).unwrap_or_default();
                 let text = format!(
                     "curl -X POST '{url}' -H 'Authorization: Bearer {}' -H 'Content-Type: application/json' -d '{{}}'",
@@ -187,6 +227,55 @@ impl App {
                 {
                     m.skills = Some(v["items"].as_array().cloned().unwrap_or_default());
                 }
+            }
+            Reply::Apps => self.with_market(|_, m| {
+                m.apps = Some(v["items"].as_array().cloned().unwrap_or_default());
+            }),
+            Reply::ComposioStatus => self.with_market(|app, m| {
+                let configured = v["configured"] == true;
+                m.composio = Some(v);
+                m.composio_error = None;
+                m.composio_apps.clear();
+                m.composio_next = None;
+                if !configured {
+                    m.composio_loading = false;
+                    return;
+                }
+                let search = m.composio_searched.clone().unwrap_or_default();
+                m.composio_searched = Some(search.clone());
+                m.composio_loading = true;
+                m.composio_request += 1;
+                let reply = Reply::ComposioApps { request: m.composio_request, append: false };
+                app.sheet("composioToolkits", json!({"search": search}), reply);
+            }),
+            Reply::ComposioApps { request, append } => self.with_market(|app, m| {
+                if m.composio_request != request {
+                    return;
+                }
+                let page = v["items"].as_array().cloned().unwrap_or_default();
+                if append {
+                    let known: Vec<String> =
+                        m.composio_apps.iter().filter_map(|a| a["slug"].as_str().map(str::to_owned)).collect();
+                    m.composio_apps.extend(page.into_iter().filter(|a| !known.contains(&s(a, "slug"))));
+                } else {
+                    m.composio_apps = page;
+                }
+                m.composio_next = v["nextCursor"].as_str().filter(|c| !c.is_empty()).map(str::to_owned);
+                m.composio_loading = false;
+                m.composio_error = None;
+                app.load_near_end(m);
+            }),
+            Reply::ComposioKey => {
+                if let Some(i) = self
+                    .overlays
+                    .iter()
+                    .rposition(|o| matches!(o, Overlay::Fields(f) if matches!(&f.submit, Submit::ComposioKey)))
+                {
+                    self.overlays.truncate(i);
+                }
+                self.flash(&super::super::l10n::tr(if v["configured"] == true { "Saved" } else { "Key removed" }));
+                self.call("connectors", json!({}), After::Connectors);
+                self.reload_composio();
             }
             Reply::Catalog => {
                 if let Some(Overlay::Market(m)) =
@@ -237,6 +326,13 @@ impl App {
                 }
                 self.flash("Saved");
                 self.refresh_sheets();
+                // A connector that wants sign-in starts it right away, as the other clients do.
+                let connector = &v["connector"];
+                if connector["auth"] == "signedOut"
+                    && let Some(id) = connector["id"].as_str()
+                {
+                    self.sheet("connectorSignIn", json!({"id": id}), Reply::SignIn);
+                }
             }
             Reply::SignIn => {
                 let url = s(&v, "url");
@@ -365,6 +461,27 @@ impl App {
                 m.skills.get_or_insert_with(Vec::new);
                 m.error = Some(e);
             }),
+            Reply::Apps => self.with_market(|_, m| {
+                m.apps.get_or_insert_with(Vec::new);
+                m.error = Some(e);
+            }),
+            Reply::ComposioStatus => self.with_market(|_, m| {
+                m.composio_loading = false;
+                m.composio_error = Some(e);
+            }),
+            Reply::ComposioApps { request, .. } => self.with_market(|_, m| {
+                if m.composio_request == request {
+                    m.composio_loading = false;
+                    m.composio_error = Some(e);
+                }
+            }),
+            Reply::ComposioKey => match self.overlays.last_mut() {
+                Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::ComposioKey) => {
+                    f.saving = false;
+                    f.error = Some(e);
+                }
+                _ => self.flash(&e),
+            },
             Reply::CallEntries(call) => {
                 // The call's line folds again with nothing kept, so the next `o` asks again.
                 let lines: Vec<String> = self
@@ -408,6 +525,24 @@ impl App {
                 }
                 self.flash(&e);
             }
+            Reply::ServerLibrary => {
+                for o in &mut self.overlays {
+                    if let Overlay::ServerLibrary(s) = o {
+                        s.items.get_or_insert_with(Vec::new);
+                        s.error = Some(e.clone());
+                    }
+                }
+                self.flash(&e);
+            }
+            Reply::ServerLibraryPreview => {
+                for o in &mut self.overlays {
+                    if let Overlay::ServerLibrary(s) = o {
+                        s.preview = None;
+                        s.error = Some(e.clone());
+                    }
+                }
+                self.flash(&e);
+            }
             Reply::Thread { bot, root } => {
                 for o in &mut self.overlays {
                     if let Overlay::Thread(t) = o
@@ -444,6 +579,39 @@ impl App {
                     }
                 }
                 self.flash(&e);
+            }
+            Reply::VoiceStatus | Reply::VoiceServer | Reply::VoiceServerSaved | Reply::VoiceServerTested => {
+                self.voice_error(r, &e);
+            }
+            Reply::VoiceKeySaved => match self.overlays.last_mut() {
+                Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::VoiceKey { .. }) => {
+                    f.saving = false;
+                    f.error = Some(e);
+                }
+                _ => self.flash(&e),
+            },
+            Reply::People | Reply::PeopleDevices => {
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.busy = false;
+                        p.error = Some(e.clone());
+                    }
+                }
+            }
+            Reply::PeopleSaved => {
+                if let Some(Overlay::Fields(f)) = self.overlays.last_mut()
+                    && matches!(&f.submit, Submit::Person { .. })
+                {
+                    f.saving = false;
+                    f.error = Some(e);
+                } else {
+                    for o in &mut self.overlays {
+                        if let Overlay::People(p) = o {
+                            p.busy = false;
+                            p.error = Some(e.clone());
+                        }
+                    }
+                }
             }
             _ => self.flash(&e),
         }
@@ -517,9 +685,17 @@ impl App {
                 Overlay::Library(l) => {
                     calls.push(("library", json!({"botId": l.bot}), After::Sheet(Reply::Library(l.bot.clone()))));
                 }
+                Overlay::ServerLibrary(_) => {
+                    calls.push(("serverLibrary", json!({}), After::Sheet(Reply::ServerLibrary)));
+                }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));
                     calls.push(("skills", json!({}), After::Skills));
+                    calls.push(("composioStatus", json!({}), After::Sheet(Reply::ComposioStatus)));
+                }
+                Overlay::People(_) => {
+                    calls.push(("people", json!({}), After::Sheet(Reply::People)));
+                    calls.push(("devices", json!({}), After::Sheet(Reply::PeopleDevices)));
                 }
                 _ => {}
             }

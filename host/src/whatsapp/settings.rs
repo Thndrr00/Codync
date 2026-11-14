@@ -14,7 +14,9 @@ fn publish(hub: &Hub, key: &str, value: &str, epoch: &str) -> Result<()> {
             )?;
         }
         if key == "whatsapp.link.account" {
-            tx.execute_batch("DELETE FROM whatsapp_threads; DELETE FROM whatsapp_cards;")?;
+            tx.execute_batch(
+                "DELETE FROM whatsapp_threads; DELETE FROM whatsapp_cards; DELETE FROM kv WHERE k='whatsapp.requests';",
+            )?;
         }
         tx.commit()?;
         Ok(())
@@ -63,4 +65,21 @@ pub(crate) fn set_allowed(hub: &Hub, jid: &str, allowed: bool) -> Result<Vec<Str
         publish(hub, "whatsapp.allowed", &serde_json::to_string(&list)?, "whatsapp.allowed.generation")?;
     }
     Ok(list)
+}
+
+/// Answers the person who asked with `code`: approved, they join the allowed chats and the caller tells
+/// them once; denied, they hear nothing. Returns the person approved, when one was.
+pub(crate) fn answer_request(hub: &Hub, code: &str, approve: bool) -> Result<Option<String>> {
+    let request = {
+        let _guard = crate::LockExt::locked(&hub.store.connector_lock);
+        super::senders::take(&hub.store, code)?
+    };
+    let Some(request) = request else {
+        anyhow::bail!("That request already ended: the list shows the people still waiting.");
+    };
+    if !approve {
+        return Ok(None);
+    }
+    set_allowed(hub, &request.sender, true)?;
+    Ok(Some(request.sender))
 }

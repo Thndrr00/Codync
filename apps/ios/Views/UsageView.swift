@@ -1,40 +1,129 @@
 import CodyncKit
 import CodyncUI
+import Foundation
 import SwiftUI
 
-/// Usage limits (opened from the State tab): one card per provider, the tightest limit as a big bar, every limit listed below.
+/// Usage limits (opened from the State tab): the computer's health, then a Breakdown with its limits or its skills.
 struct UsageView: View {
     @Environment(BotStore.self) private var model
     @State private var collapsed: Set<String> = []
     @State private var week: WeekSummary?
+    @State private var tab: Tab = .limits
+
+    private enum Tab: Hashable { case limits, skills }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                ForEach(model.usage.providers) { provider in
-                    ProviderCard(provider: provider, collapsed: Binding(
-                        get: { collapsed.contains(provider.id) },
-                        set: { if $0 { collapsed.insert(provider.id) } else { collapsed.remove(provider.id) } }
-                    ))
+                if let health = model.health { HealthCard(health: health) }
+                VStack(spacing: 8) {
+                    Text(L10n.tr("Breakdown")).font(.caption).foregroundStyle(Palette.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    TabChoice(selection: $tab, options: [(.limits, "Limits"), (.skills, "Skills")])
                 }
-                if let week, week.activeBots > 0 { WeekCard(week: week) }
-                if model.usage.providers.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "chart.bar").font(.system(size: 40)).foregroundStyle(Palette.tertiary)
-                        Text(L10n.tr("No usage yet")).font(.title3.weight(.semibold)).foregroundStyle(Palette.text)
-                        Text(L10n.tr("Your computer reads plan limits from the agents installed on it."))
-                            .font(.subheadline).foregroundStyle(Palette.secondary)
+                if tab == .limits {
+                    ForEach(model.usage.providers) { provider in
+                        ProviderCard(provider: provider, collapsed: Binding(
+                            get: { collapsed.contains(provider.id) },
+                            set: { if $0 { collapsed.insert(provider.id) } else { collapsed.remove(provider.id) } }
+                        ))
                     }
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 60)
+                    if let week, week.activeBots > 0 { WeekCard(week: week) }
+                    if model.usage.providers.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "chart.bar").font(.system(size: 40)).foregroundStyle(Palette.tertiary)
+                            Text(L10n.tr("No usage yet")).font(.title3.weight(.semibold)).foregroundStyle(Palette.text)
+                            Text(L10n.tr("Your computer reads plan limits from the agents installed on it."))
+                                .font(.subheadline).foregroundStyle(Palette.secondary)
+                        }
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                    }
+                } else {
+                    SkillCard(usage: model.skillUsage)
                 }
             }
             .padding(16)
         }
         .background(Palette.background)
-        .refreshable { await model.refreshUsage() }
-        .task { week = await model.weekSummary() }
+        .refreshable {
+            await model.refreshUsage()
+            await model.refreshSkillUsage()
+            await model.refreshHealth()
+        }
+        .task {
+            week = await model.weekSummary()
+            await model.refreshSkillUsage()
+            await model.refreshHealth()
+        }
+    }
+}
+
+/// The computer's RAM, CPU and disk, read from `hostHealth`.
+private struct HealthCard: View {
+    let health: HostHealth
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(health.lines.indices, id: \.self) { index in
+                let line = health.lines[index]
+                HStack {
+                    Text(L10n.tr(line.label)).font(.footnote).foregroundStyle(Palette.secondary)
+                    Spacer()
+                    Text(line.value).font(.footnote.monospacedDigit()).foregroundStyle(Palette.text)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// How often each skill's text entered a turn, with its estimated tokens, cost and share.
+private struct SkillCard: View {
+    let usage: SkillUsage?
+
+    var body: some View {
+        let rows = usage?.skills ?? []
+        VStack(alignment: .leading, spacing: 12) {
+            if rows.isEmpty {
+                Text(L10n.tr("No skill has been loaded yet.")).font(.subheadline).foregroundStyle(Palette.secondary)
+            } else {
+                ForEach(rows) { row in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(row.name).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text).lineLimit(1)
+                            Spacer()
+                            Text(costText(row.costUsd)).font(.footnote.monospacedDigit())
+                                .foregroundStyle(row.costUsd == nil ? Palette.secondary : Palette.text)
+                        }
+                        Text(detail(row)).font(.caption).foregroundStyle(Palette.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            Text(L10n.tr("A load is counted when an agent reads a skill's SKILL.md during a turn."))
+                .font(.caption2).foregroundStyle(Palette.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func detail(_ row: SkillUsageRow) -> String {
+        let loads = "\(row.loads) \(L10n.tr("loads"))"
+        let tokens = "\(row.tokens.formatted()) \(L10n.tr("tokens"))"
+        let share = "\(Int((row.share * 100).rounded()))%"
+        let agents = "\(row.agents) \(L10n.tr("agents"))"
+        return [loads, tokens, share, agents].joined(separator: " · ")
+    }
+
+    private func costText(_ cost: Double?) -> String {
+        guard let cost else { return L10n.tr("Unavailable") }
+        if cost == 0 { return "$0.00" }
+        return cost < 0.01 ? L10n.tr("Under $0.01") : String(format: "$%.2f", cost)
     }
 }
 

@@ -8,6 +8,9 @@ extension BotStore {
     /// Whether the computer's host has the Library; an older one has no `library` method, so the app leaves it out.
     var hasLibrary: Bool { hostVersion.map { !AppVersion.isBelow($0.version, Artifact.firstHost) } ?? false }
 
+    /// Whether the computer's host has the server's Library; an older one leaves the page out.
+    public var hasServerLibrary: Bool { hostVersion.map { !AppVersion.isBelow($0.version, Artifact.serverLibraryHost) } ?? false }
+
     /// The chat's Library as the computer lists it now: its artifacts go to `artifacts` (where their events land too),
     /// the files shared in the chat come back.
     func loadLibrary(_ botId: String) async throws -> [ChatLibraryItem] {
@@ -17,6 +20,15 @@ extension BotStore {
             artifacts.upsert(artifact)
             return false
         }
+    }
+
+    /// The server's Library as the computer lists it now: every bot's artifacts join `artifacts`, everything comes back.
+    func loadServerLibrary(_ filter: ServerLibraryFilter = .all) async throws -> [ServerLibraryItem] {
+        let items = try await withLink(replay: true) { try await $0.serverLibrary(filter: filter) }
+        for item in items {
+            if case .artifact(let artifact) = item.item.kind { artifacts.upsert(artifact) }
+        }
+        return items
     }
 
     /// A card on screen: the version it names is known now (history and the cache don't come as events), and the

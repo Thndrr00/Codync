@@ -182,7 +182,13 @@ pub(crate) fn options(server: &Value) -> Vec<Value> {
     vec![json!({"id":"native:0","kind":"local","label":"Native channel · existing session","inputs":inputs})]
 }
 
-pub(crate) async fn install(store: &Store, name: &str, option: &str, inputs: &Value) -> Result<Value> {
+pub(crate) async fn install(
+    store: &Store,
+    name: &str,
+    option: &str,
+    inputs: &Value,
+    person: Option<&str>,
+) -> Result<Value> {
     anyhow::ensure!(option == "native:0", "Unknown native channel install option");
     let server = server(name)?.ok_or_else(|| anyhow::anyhow!("Unknown native channel"))?;
     let app = &server["codyncNativeApp"];
@@ -193,9 +199,10 @@ pub(crate) async fn install(store: &Store, name: &str, option: &str, inputs: &Va
         anyhow::ensure!(!value.is_empty() || field["required"] != true, "{key} is required");
         env.insert(key.into(), value.into());
     }
-    crate::market::add_custom_connector(
+    crate::market::add_custom_connector_as(
         store,
         &json!({"name":app["name"],"catalog":app["id"],"command":super::config::COMMAND,"args":[],"env":env}),
+        person,
     )
     .await
 }

@@ -63,6 +63,8 @@ export interface MemoryView {
   shared: boolean
   yours: MemoryLayer
   bot: MemoryLayer
+  /** A group's own layer, which every member reads in the room; null for a bot. */
+  channel?: MemoryLayer | null
   dreams: DreamRun[]
   /** Claude Code's own notes for the bot's project folder, read-only. */
   projectMemory: { path: string; text: string } | null

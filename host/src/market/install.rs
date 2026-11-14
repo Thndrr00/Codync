@@ -109,7 +109,7 @@ fn fill_url(url: &str, variables: &Value, input: &dyn Fn(&str) -> Option<String>
 }
 
 /// Fills `{placeholder}` in a header template with the user's value, or uses it as-is.
-fn fill(template: Option<&str>, value: &str) -> String {
+pub(super) fn fill(template: Option<&str>, value: &str) -> String {
     match template {
         Some(t) if t.contains('{') && t.contains('}') => {
             let (head, rest) = t.split_once('{').unwrap_or((t, ""));
@@ -160,15 +160,22 @@ fn package_command(p: &Value) -> Option<&'static str> {
     }
 }
 
-/// Installs a registry server with the user's inputs (`{NAME: value}`).
-pub async fn install_connector(store: &crate::store::Store, name: &str, option: &str, inputs: &Value) -> Result<Value> {
+/// Installs a registry server with the user's inputs (`{NAME: value}`). `person` is whose library it goes in
+/// (`None` = the owner's, shared with every bot).
+pub async fn install_connector(
+    store: &crate::store::Store,
+    name: &str,
+    option: &str,
+    inputs: &Value,
+    person: Option<&str>,
+) -> Result<Value> {
     if name.starts_with("codync-native/") {
-        return crate::native_channels::apps::install(store, name, option, inputs).await;
+        return crate::native_channels::apps::install(store, name, option, inputs, person).await;
     }
     if name.starts_with("hermes/") {
-        return super::hermes_apps::registry::install(store, name, option, inputs).await;
+        return super::hermes_apps::registry::install(store, name, option, inputs, person).await;
     }
-    install_server(store, &registry_server(name).await?, name, option, inputs).await
+    install_server(store, &registry_server(name).await?, name, option, inputs, person).await
 }
 
 /// A server that's installed already stays as it is when the call brings no values and runs it the
@@ -179,6 +186,7 @@ async fn install_server(
     name: &str,
     option: &str,
     inputs: &Value,
+    person: Option<&str>,
 ) -> Result<Value> {
     let input = |k: &str| inputs[k].as_str().filter(|v| !v.is_empty()).map(str::to_owned);
     let (kind, index) = option.split_once(':').ok_or_else(|| anyhow!("unknown install option"))?;
@@ -186,7 +194,7 @@ async fn install_server(
     let all = connectors(store)?;
     let typed = inputs.as_object().is_some_and(|m| m.values().any(|v| v.as_str().is_some_and(|s| !s.is_empty())));
     let command = if kind == "package" { package_command(&server["packages"][index]) } else { None };
-    if let Some(c) = all.iter().find(|c| c.registry_name.as_deref() == Some(name))
+    if let Some(c) = all.iter().find(|c| c.registry_name.as_deref() == Some(name) && c.person.as_deref() == person)
         && !typed
         && c.command.as_deref() == command
     {
@@ -207,6 +215,7 @@ async fn install_server(
         url: None,
         headers: BTreeMap::new(),
         oauth: None,
+        person: person.map(str::to_owned),
     };
     match kind {
         "package" => {
@@ -277,7 +286,7 @@ async fn install_server(
 
 /// Adds every server in a pasted MCP config: the `mcpServers` / `servers` JSON that
 /// Claude, Cursor, VS Code and most READMEs use, or one server's own entry.
-pub async fn import_connectors(store: &crate::store::Store, config: &str) -> Result<Value> {
+pub async fn import_connectors(store: &crate::store::Store, config: &str, person: Option<&str>) -> Result<Value> {
     let v: Value = serde_json::from_str(config.trim()).context("that isn't JSON")?;
     let servers = config_servers(&v);
     if servers.is_empty() {
@@ -286,7 +295,7 @@ pub async fn import_connectors(store: &crate::store::Store, config: &str) -> Res
     let all = connectors(store)?;
     let mut pending = vec![];
     for (name, entry) in servers {
-        pending.push(custom(&name, &entry, &all).await.with_context(|| name.clone())?);
+        pending.push(custom(&name, &entry, &all, person).await.with_context(|| name.clone())?);
     }
     update_connectors(store, |all| {
         let mut added = vec![];
@@ -319,14 +328,21 @@ fn config_servers(v: &Value) -> Vec<(String, Value)> {
 
 /// Installed MCP servers, then the apps connected through Composio.
 pub fn list_connectors(store: &crate::store::Store) -> Result<Value> {
+    list_connectors_for(store, None)
+}
+
+/// What `person` may see (the owner's view is everything, the caller's shared plus their own), then the apps
+/// connected through Composio, which belong to the computer as a whole.
+pub fn list_connectors_for(store: &crate::store::Store, person: Option<&str>) -> Result<Value> {
     let mut items: Vec<Value> = connectors(store)?
-        .iter()
+        .into_iter()
+        .filter(|c| super::visible_to(c, person))
         .map(|c| {
             let mut pub_val = c.public();
             if let Some(failure) = super::verify::last_failure(store, &c.id) {
                 pub_val["lastFailure"] = failure;
             }
-            crate::native_channels::apps::decorate(store, c, &mut pub_val)?;
+            crate::native_channels::apps::decorate(store, &c, &mut pub_val)?;
             Ok(pub_val)
         })
         .collect::<Result<_>>()?;
@@ -342,6 +358,7 @@ pub fn list_connectors(store: &crate::store::Store) -> Result<Value> {
             "url": null,
             "keys": [],
             "logo": c.logo,
+            "person": null,
         });
         if let Some(failure) = super::verify::last_failure(store, &id) {
             val["lastFailure"] = failure;
@@ -351,8 +368,12 @@ pub fn list_connectors(store: &crate::store::Store) -> Result<Value> {
     Ok(json!({"items": items}))
 }
 
-pub fn remove_connector(store: &crate::store::Store, id: &str) -> Result<()> {
+/// Removes a connector, first asking its vendor to end the grant when it signed in with one.
+pub async fn remove_connector(store: &crate::store::Store, id: &str) -> Result<()> {
     super::verify::clear_failure(store, id);
+    if let Some(c) = connectors(store)?.into_iter().find(|c| c.id == id) {
+        oauth::revoke(&c).await;
+    }
     update_connectors(store, |all| {
         all.retain(|c| c.id != id);
         Ok(())
@@ -375,15 +396,15 @@ mod tests {
         let server = json!({"name": name, "packages": [package("npm"), package("pypi")]});
         let only = || connectors(&store).expect("read").pop().expect("one connector");
         let first =
-            install_server(&store, &server, name, "package:0", &json!({"API_KEY": "wrong"})).await.expect("add");
-        install_server(&store, &server, name, "package:0", &json!({"API_KEY": "right"})).await.expect("new key");
+            install_server(&store, &server, name, "package:0", &json!({"API_KEY": "wrong"}), None).await.expect("add");
+        install_server(&store, &server, name, "package:0", &json!({"API_KEY": "right"}), None).await.expect("new key");
         // Add again with nothing typed keeps it (and its sign-in) as it is.
-        install_server(&store, &server, name, "package:0", &json!({"API_KEY": ""})).await.expect("retry");
+        install_server(&store, &server, name, "package:0", &json!({"API_KEY": ""}), None).await.expect("retry");
         assert_eq!(
             (only().id, only().env["API_KEY"].clone()),
             (first["id"].as_str().expect("id").to_owned(), "right".into())
         );
-        install_server(&store, &server, name, "package:1", &json!({})).await.expect("another runtime");
+        install_server(&store, &server, name, "package:1", &json!({}), None).await.expect("another runtime");
         assert_eq!(only().command.as_deref(), Some("uvx"));
         assert_eq!(connectors(&store).expect("read").len(), 1);
     }

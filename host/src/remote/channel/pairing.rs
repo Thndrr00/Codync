@@ -173,6 +173,7 @@ impl Channel {
             created_at: now_ms(),
             last_seen_at: None,
             account: request.account.map_or(DeviceAccount::SignedOut, |a| DeviceAccount::Of(a.user_id.clone())),
+            person_id: None,
         };
         if let Err(e) = self.hub.store.put_device(&device) {
             tracing::error!(error = format!("{e:#}"), "couldn't save a paired device");

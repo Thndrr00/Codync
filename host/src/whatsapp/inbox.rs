@@ -129,9 +129,15 @@ pub(super) async fn receive(app: &WhatsApp, hub: &Arc<Hub>, event: &Value) -> Re
     }
     let allowed: Vec<String> =
         hub.store.kv_read("whatsapp.allowed")?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default();
-    let own = !me.is_empty() && (me == chat || me == sender);
-    if !own && !allowed.is_empty() && !allowed.iter().any(|id| id == if group { chat } else { sender }) {
-        return Ok(());
+    match super::senders::gate(&allowed, me, chat, sender, group) {
+        super::senders::Gate::Allow => {}
+        super::senders::Gate::Ignore => return Ok(()),
+        super::senders::Gate::Pair => {
+            // An unknown direct sender on a restricted number gets one code for the owner, answered in the app.
+            let name = event["name"].as_str().unwrap_or_default();
+            super::senders::greet_person(app, hub, me, chat, sender, name).await;
+            return Ok(());
+        }
     }
     // Approval responses bypass only the slow input queue, with the usual sender/card checks.
     if event["media"].is_null()

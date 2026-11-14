@@ -220,7 +220,7 @@ pub async fn toolkits(store: &Store, search: &str, cursor: &str) -> Result<Value
     let (v, connected) = tokio::join!(get(&api, "/toolkits", &query), refresh(store));
     let v = v?;
     let connected = connected.unwrap_or(c.connections);
-    let items: Vec<Value> = v["items"]
+    let mut items: Vec<Value> = v["items"]
         .as_array()
         .into_iter()
         .flatten()
@@ -231,15 +231,34 @@ pub async fn toolkits(store: &Store, search: &str, cursor: &str) -> Result<Value
                 return None;
             }
             let conn = connected.iter().find(|c| c.toolkit == slug);
+            let name = super::guide::display_name(&slug, &text(&t["name"]).unwrap_or_else(|| slug.clone()));
+            let needs_key = super::guide::needs_key(t);
+            let hint = text(&t["auth_hint_url"]);
+            let docs = text(&t["auth_guide_url"]);
             Some(json!({
                 "slug": slug,
-                "name": text(&t["name"]).unwrap_or_else(|| slug.clone()),
+                "name": name,
                 "description": text(&t["meta"]["description"]).or_else(|| text(&t["description"])),
                 "logo": text(&t["meta"]["logo"]).or_else(|| text(&t["logo"])),
+                "needsKey": needs_key,
+                // An app Composio says nothing about is treated as a key app, so its row says so too.
+                "keyNote": (needs_key != Some(false)).then(|| super::guide::needs_key_line(&name)),
+                "guide": super::guide::toolkit(&slug, &name, hint.as_deref(), docs.as_deref(), needs_key),
                 "connection": conn.map(|c| json!({"id": c.id, "status": c.status})),
             }))
         })
         .collect();
+    // Apps somebody signs in to first: listing what anybody can connect puts them at the top of a
+    // search, and each key app's row says it needs one.
+    items.sort_by(|a, b| {
+        (a["needsKey"] == true).cmp(&(b["needsKey"] == true)).then_with(|| {
+            a["name"]
+                .as_str()
+                .unwrap_or_default()
+                .to_lowercase()
+                .cmp(&b["name"].as_str().unwrap_or_default().to_lowercase())
+        })
+    });
     Ok(json!({"items": items, "nextCursor": text(&v["next_cursor"])}))
 }
 
@@ -251,15 +270,25 @@ pub async fn connect(store: &Store, toolkit: &str) -> Result<Value> {
     let api = Api::of(store, &c)?;
     let slug = checked_slug(toolkit)?.to_lowercase();
     let detail = get(&api, &format!("/toolkits/{slug}"), &[]).await?;
+    let name = super::guide::display_name(&slug, &text(&detail["name"]).unwrap_or_else(|| title_case(&slug)));
+    let needs_key = super::guide::needs_key(&detail);
+    let guide = super::guide::toolkit(
+        &slug,
+        &name,
+        text(&detail["auth_hint_url"]).as_deref(),
+        text(&detail["auth_guide_url"]).as_deref(),
+        needs_key,
+    );
     let managed = detail["composio_managed_auth_schemes"].as_array().is_some_and(|a| !a.is_empty());
     if !managed && let Some((mode, fields)) = key_fields(&detail) {
-        return Ok(json!({"status": "needsFields", "mode": mode, "fields": fields}));
+        let fields = super::guide::plain_fields(&slug, &fields);
+        return Ok(json!({"status": "needsFields", "mode": mode, "fields": fields, "guide": guide}));
     }
     let auth_config = managed_auth_config(&api, &slug).await?;
     let v =
         post(&api, "/connected_accounts/link", &json!({"auth_config_id": auth_config, "user_id": c.user_id})).await?;
     let url = text(&v["redirect_url"]).ok_or_else(|| anyhow!("Composio didn't return a sign-in link"))?;
-    Ok(json!({"status": "redirect", "url": url, "connection": text(&v["connected_account_id"])}))
+    Ok(json!({"status": "redirect", "url": url, "connection": text(&v["connected_account_id"]), "guide": guide}))
 }
 
 /// The first non-OAuth scheme a toolkit declares, with its input fields.

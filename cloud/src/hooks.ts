@@ -1,16 +1,22 @@
 // Public routine webhooks (spec §7.8): the checks a delivery passes before it is queued for the host.
 //
 // The host registers each webhook routine's id and key over its relay socket. A sender proves it holds
-// the key with `Authorization: Bearer <key>` or, for GitHub and compatible senders, an
-// `X-Hub-Signature-256` HMAC of the body. The host checks the same proof again before running anything.
+// the key with `Authorization: Bearer <key>`, for GitHub and compatible senders an
+// `X-Hub-Signature-256` HMAC of the body, or a Standard Webhooks signature such as Composio and Svix
+// send (ported from `openbot-nightly/src/main/webhook-security.ts`). The host checks the same proof
+// again before running anything.
 
 import { utf8 } from "./auth";
 
 export const HOOK_ID = /^[A-Za-z0-9_-]{1,64}$/;
 export const HOOK_MAX_BODY = 64 * 1024;
-const KEY_MIN = 32;
-const KEY_MAX = 256;
+const KEY_MIN = 16;
+const KEY_MAX = 1024;
 const DELIVERY_MAX = 200;
+/** A signature outside this window is a replay, even when the secret is right. */
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const STANDARD_SECRET = "whsec_";
+const SHA256_BYTES = 32;
 
 /** Headers the host gets with a delivery; everything else stays at the edge. */
 export const FORWARDED_HEADERS = [
@@ -23,6 +29,9 @@ export const FORWARDED_HEADERS = [
   "x-github-delivery",
   "x-github-hook-id",
   "x-hub-signature-256",
+  "webhook-id",
+  "webhook-timestamp",
+  "webhook-signature",
 ] as const;
 
 export interface Hook {
@@ -58,14 +67,71 @@ function fromHex(s: string): Uint8Array | null {
   return Uint8Array.from(s.match(/../g)!.map((b) => parseInt(b, 16)));
 }
 
-/** Bearer key or `X-Hub-Signature-256: sha256=<hex HMAC-SHA256(key, body)>`. */
-export async function authorized(key: string, headers: Headers, body: Uint8Array): Promise<boolean> {
+/** Bearer key, `X-Hub-Signature-256: sha256=<hex HMAC-SHA256(key, body)>`, or Standard Webhooks. */
+export async function authorized(key: string, headers: Headers, body: Uint8Array, now = Date.now()): Promise<boolean> {
   const bearer = /^Bearer (.+)$/.exec(headers.get("authorization") ?? "")?.[1];
   if (bearer !== undefined && equal(utf8(bearer), utf8(key))) return true;
+  if (await standard(key, headers, body, now)) return true;
   const sig = /^sha256=([0-9a-fA-F]{64})$/.exec(headers.get("x-hub-signature-256") ?? "")?.[1];
   if (sig === undefined) return false;
   const mac = await crypto.subtle.importKey("raw", utf8(key), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
   return crypto.subtle.verify("HMAC", mac, fromHex(sig)!, body);
+}
+
+/** The base64 bytes a `webhook-signature` entry names, or `null`. */
+function fromBase64(value: string): Uint8Array | null {
+  for (const decoder of [
+    () => atob(value.replace(/-/g, "+").replace(/_/g, "/")),
+    () => atob(`${value.replace(/-/g, "+").replace(/_/g, "/")}${"=".repeat((4 - (value.length % 4)) % 4)}`),
+  ]) {
+    try {
+      return Uint8Array.from(decoder(), (c) => c.charCodeAt(0));
+    } catch {
+      // the next reading
+    }
+  }
+  return null;
+}
+
+/** The HMAC keys a Standard Webhooks secret stands for: the secret's bytes and, for `whsec_…`, the
+ *  bytes it encodes (base64 or base64url), which is what the specification defines. */
+function standardKeys(key: string): Uint8Array[] {
+  const keys = [utf8(key)];
+  if (!key.startsWith(STANDARD_SECRET)) return keys;
+  for (const decoder of [fromBase64, (v: string) => fromBase64(v.replace(/-/g, "+").replace(/_/g, "/"))]) {
+    const bytes = decoder(key.slice(STANDARD_SECRET.length));
+    if (bytes !== null && bytes.length >= KEY_MIN && !keys.some((k) => equal(k, bytes))) keys.push(bytes);
+  }
+  return keys;
+}
+
+function fresh(timestamp: string, now: number): boolean {
+  if (!/^\d{1,12}$/.test(timestamp)) return false;
+  return Math.abs(Number(timestamp) * 1000 - now) <= MAX_CLOCK_SKEW_MS;
+}
+
+/** A Standard Webhooks delivery: `v1,<base64 HMAC-SHA256>` of `<id>.<timestamp>.<body>`, in time. */
+async function standard(key: string, headers: Headers, body: Uint8Array, now: number): Promise<boolean> {
+  const id = headers.get("webhook-id");
+  const timestamp = headers.get("webhook-timestamp");
+  const signature = headers.get("webhook-signature");
+  if (id === null || timestamp === null || signature === null) return false;
+  if (!id || !fresh(timestamp, now)) return false;
+  const supplied = signature
+    .split(" ")
+    .filter((entry) => entry.startsWith("v1,"))
+    .map((entry) => fromBase64(entry.slice(3)))
+    .filter((bytes): bytes is Uint8Array => bytes !== null && bytes.length === SHA256_BYTES);
+  if (supplied.length === 0) return false;
+  const signed = utf8(`${id}.${timestamp}.`);
+  const message = new Uint8Array(signed.length + body.length);
+  message.set(signed);
+  message.set(body, signed.length);
+  for (const candidate of standardKeys(key)) {
+    const mac = await crypto.subtle.importKey("raw", candidate, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    for (const given of supplied) if (await crypto.subtle.verify("HMAC", mac, given, message)) return true;
+  }
+  return false;
 }
 
 /**
@@ -73,7 +139,11 @@ export async function authorized(key: string, headers: Headers, body: Uint8Array
  * fresh one. `null` when the sender's id is unusable.
  */
 export function deliveryId(headers: Headers): string | null {
-  const given = headers.get("x-delivery-id") ?? headers.get("x-github-delivery") ?? headers.get("idempotency-key");
+  const given =
+    headers.get("x-delivery-id") ??
+    headers.get("x-github-delivery") ??
+    headers.get("webhook-id") ??
+    headers.get("idempotency-key");
   if (given === null) return crypto.randomUUID();
   return given.length > 0 && given.length <= DELIVERY_MAX && /^[\x21-\x7e]+$/.test(given) ? given : null;
 }

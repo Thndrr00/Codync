@@ -163,27 +163,42 @@ const toolOrb = (kind?: string): OrbState => ({ search: 'searching', fetch: 'con
 export function ToolRow({ data }: { data: EntryData }) {
   const tr = useTr()
   const [expanded, setExpanded] = useState(false)
-  const hasBody = !!data.output || !!data.diffs?.length
+  const caution = data.caution
+  const hasBody = !!data.output || !!data.diffs?.length || !!caution?.findings.length
   const title = data.title ?? 'Tool'
   const label = (
-    <HStack as="span" gap={8} grow>
-      <IconSlot width={18} tone="secondary">
-        <Icon name={toolIcon(data.toolKind)} size={10} />
-      </IconSlot>
-      <Text size="subheadline" tone="text" lines={2} grow>{title === 'Tool' ? tr('Tool') : title}</Text>
-      {data.status === 'completed' ? (
-        <Icon name="checkmark" size={10} color="var(--accent)" />
-      ) : data.status === 'failed' ? (
-        <Icon name="xmark" size={10} color="var(--danger)" />
-      ) : (
-        <ThinkingOrb state={toolOrb(data.toolKind)} size={16} color="var(--secondary)" />
-      )}
-    </HStack>
+    <VStack gap={3}>
+      <HStack as="span" gap={8} grow>
+        <IconSlot width={18} tone="secondary">
+          <Icon name={toolIcon(data.toolKind)} size={10} />
+        </IconSlot>
+        <Text size="subheadline" tone="text" lines={2} grow>{title === 'Tool' ? tr('Tool') : title}</Text>
+        {data.status === 'completed' ? (
+          <Icon name="checkmark" size={10} color="var(--accent)" />
+        ) : data.status === 'failed' ? (
+          <Icon name="xmark" size={10} color="var(--danger)" />
+        ) : (
+          <ThinkingOrb state={toolOrb(data.toolKind)} size={16} color="var(--secondary)" />
+        )}
+      </HStack>
+      {caution ? (
+        <Label icon={<Icon name="key.fill" size={9} color="var(--warning)" />} tone="secondary">
+          {caution.reason === 'inspection_limit'
+            ? tr('Could not check the arguments for a credential')
+            : tr('Carries a credential')}
+        </Label>
+      ) : null}
+    </VStack>
   )
   if (!hasBody) return label
   return (
     <Disclosure expanded={expanded} onToggle={() => setExpanded((x) => !x)} label={label}>
       <VStack gap={8}>
+        {caution?.findings.length ? (
+          <ul className="trace-caution-paths" style={{ listStyle: 'none' }}>
+            {caution.findings.map((f, i) => <li key={i}>{f.path}</li>)}
+          </ul>
+        ) : null}
         {(data.diffs ?? []).map((diff, i) => <DiffView key={i} diff={diff} />)}
         {data.output ? <CodeBox text={data.output} /> : null}
       </VStack>

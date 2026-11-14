@@ -18,6 +18,13 @@ const MAX_OPTIONS: usize = 4;
 
 const APPROVE: &str = "allow";
 const REJECT: &str = "deny";
+/// The answer that goes back to the question before this one. It is a card option, so every client
+/// answers it like any other.
+const BACK: &str = "__back";
+/// Whether an option id is the way back to the question before this one.
+pub(super) fn is_back(id: &str) -> bool {
+    id == BACK
+}
 
 /// The verdict to print for the hook, or `None` when nobody answered and the terminal should ask.
 pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
@@ -27,7 +34,12 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
     let (bot, config) = target(hub, ev)?;
     if ev.tool == "ExitPlanMode" {
         let data = plan_card(ev, &bot, &config.cwd);
-        return match wait_card(hub, ev, &bot, &config, &data, "Approve the plan").await? {
+        // The plan starts the work by itself after the computer's time, or waits for the person.
+        let after = super::plan::saved(&hub.store);
+        let starts_at = after.map(|ms| crate::store::now_ms() + ms);
+        return match wait_card(hub, ev, &bot, &config, &data, "Approve the plan", starts_at, super::plan::wait(after))
+            .await?
+        {
             Decision::Allow => Some(json!({"permissionDecision": "allow", "updatedInput": ev.input})),
             Decision::Deny => {
                 Some(json!({"permissionDecision": "deny", "reason": "The plan was rejected from Codync."}))
@@ -36,16 +48,36 @@ pub(super) async fn ask(hub: &Arc<Hub>, ev: &Event) -> Option<Value> {
         };
     }
     let questions = questions(&ev.input)?;
-    let mut answers = Map::new();
-    for question in &questions {
-        let data = question_card(question, &bot, &config.cwd);
-        let Decision::Pick(index) = wait_card(hub, ev, &bot, &config, &data, &question.text).await? else {
+    // One card per question, in order. Back re-asks the one before, keeping the answers already given
+    // in the card's data, so the person sees where they are and the summary before the last answer.
+    let mut answers: Vec<Option<String>> = vec![None; questions.len()];
+    let mut step = 0;
+    loop {
+        let data = question_card(&questions, step, &answers, &bot, &config.cwd);
+        let Decision::Pick(index) =
+            wait_card(hub, ev, &bot, &config, &data, &questions[step].text, None, super::DECISION_WAIT).await?
+        else {
             return None;
         };
-        answers.insert(question.text.clone(), question.options.get(index)?.label.clone().into());
+        // The Back row sits after the question's own options.
+        if index == questions[step].options.len() {
+            step = step.saturating_sub(1);
+            continue;
+        }
+        let option = questions[step].options.get(index)?;
+        answers[step] = Some(option.label.clone());
+        if step + 1 < questions.len() {
+            step += 1;
+            continue;
+        }
+        break;
+    }
+    let mut answers_out = Map::new();
+    for (question, answer) in questions.iter().zip(answers) {
+        answers_out.insert(question.text.clone(), answer?.into());
     }
     let mut input = ev.input.clone();
-    input["answers"] = Value::Object(answers);
+    input["answers"] = Value::Object(answers_out);
     Some(json!({"permissionDecision": "allow", "updatedInput": input}))
 }
 
@@ -92,18 +124,30 @@ fn questions(input: &Value) -> Option<Vec<Question>> {
 }
 
 /// A question as an approval card: the options keep their labels, their ids are their positions.
-fn question_card(question: &Question, bot: &str, cwd: &str) -> Value {
+/// The card carries the whole set, which question it asks, the answers already given and, after the
+/// first, a Back option, so every client can show one question at a time with a summary.
+fn question_card(questions: &[Question], step: usize, answers: &[Option<String>], bot: &str, cwd: &str) -> Value {
+    let question = &questions[step];
     let detail: Vec<String> = question
         .options
         .iter()
         .filter(|o| !o.description.is_empty())
         .map(|o| format!("{}: {}", o.label, o.description))
         .collect();
-    let options: Vec<Value> = question
+    let mut options: Vec<Value> = question
         .options
         .iter()
         .enumerate()
         .map(|(i, o)| json!({"optionId": i.to_string(), "name": o.label, "kind": "allow_once"}))
+        .collect();
+    if step > 0 {
+        options.push(json!({"optionId": BACK, "name": "Back", "kind": "other"}));
+    }
+    let answered: Vec<Value> = questions
+        .iter()
+        .zip(answers)
+        .take(step)
+        .filter_map(|(question, answer)| answer.as_ref().map(|label| json!({"text": question.text, "label": label})))
         .collect();
     json!({
         "title": question.text,
@@ -115,6 +159,17 @@ fn question_card(question: &Question, bot: &str, cwd: &str) -> Value {
         "diffs": [],
         "cwd": cwd,
         "options": options,
+        "questions": questions
+            .iter()
+            .map(|question| json!({
+                "text": question.text,
+                "header": question.header,
+                "options": question.options.iter().map(|o| json!({"label": o.label, "description": o.description})).collect::<Vec<_>>(),
+            }))
+            .collect::<Vec<_>>(),
+        "questionIndex": step,
+        "questionCount": questions.len(),
+        "answers": answered,
         "status": "pending",
         "selected": Value::Null,
         "author": bot,
@@ -156,10 +211,27 @@ mod tests {
     #[test]
     fn a_single_choice_question_becomes_a_card_with_its_own_options() {
         let list = questions(&input(&pick())).expect("answerable");
-        let card = question_card(&list[0], "bot", "/work");
+        let card = question_card(&list, 0, &[None], "bot", "/work");
         assert_eq!(card["title"], "Which database?");
         assert_eq!(card["options"][1], json!({"optionId": "1", "name": "Postgres", "kind": "allow_once"}));
         assert_eq!(card["detail"], "SQLite: one file\nPostgres: a server");
+        assert_eq!(card["questionIndex"], 0);
+        assert_eq!(card["questionCount"], 1);
+        assert_eq!(card["questions"][0]["options"][0]["label"], "SQLite");
+        assert_eq!(card["answers"], json!([]));
+        // The first question has nowhere to go back to.
+        assert!(card["options"].as_array().unwrap().iter().all(|option| option["optionId"] != "__back"));
+    }
+
+    #[test]
+    fn a_later_question_carries_the_answers_and_a_way_back() {
+        let list = questions(&json!({"questions": [pick(), pick()]})).expect("answerable");
+        let card = question_card(&list, 1, &[Some("SQLite".to_owned()), None], "bot", "/work");
+        assert_eq!(card["questionIndex"], 1);
+        assert_eq!(card["questionCount"], 2);
+        assert_eq!(card["answers"][0], json!({"text": "Which database?", "label": "SQLite"}));
+        assert_eq!(card["options"][2]["optionId"], "__back");
+        assert_eq!(card["options"][2]["name"], "Back");
     }
 
     #[test]

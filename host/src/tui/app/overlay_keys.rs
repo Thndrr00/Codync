@@ -54,8 +54,10 @@ impl App {
             Action::Computer => self.open_computer_panel(),
             Action::N8n => self.open_n8n(),
             Action::Library => self.open_library(),
+            Action::ServerLibrary => self.open_server_library(),
             Action::RefreshAgents => self.call("refreshBackends", json!({}), After::Backends),
             Action::Pair => self.open_pair(),
+            Action::People => self.open_people(),
             Action::Network => self.open_network(),
             Action::Rules => self.open_rules(),
             Action::Channels => self.open_channels(),
@@ -70,7 +72,9 @@ impl App {
             }
             Action::Usage => {
                 self.overlays.push(Overlay::Usage(0));
+                self.usage_skills = false;
                 self.call("weekSummary", json!({"days": 7}), After::Week);
+                self.call("skillUsage", json!({}), After::SkillUsage);
             }
             Action::CheckUpdate => self.call("checkHostUpdate", json!({}), After::Update),
             Action::Analytics => self.toggle_analytics(),
@@ -78,6 +82,14 @@ impl App {
             Action::Appearance(mode) => match super::super::appearance::select(mode) {
                 Ok(()) => self.flash(&format!("Appearance: {}", mode.name())),
                 Err(error) => self.flash(&format!("Couldn't save appearance: {error}")),
+            },
+            Action::ChatColour => match super::super::appearance::cycle_chat_colour() {
+                Ok(id) => self.flash(&format!("Chat colour: {id}")),
+                Err(error) => self.flash(&format!("Couldn't save the chat colour: {error}")),
+            },
+            Action::ChatBackground => match super::super::appearance::cycle_chat_background() {
+                Ok(id) => self.flash(&format!("Chat background: {id}")),
+                Err(error) => self.flash(&format!("Couldn't save the chat background: {error}")),
             },
             Action::Language => {
                 let title = super::super::l10n::cycle_language();
@@ -89,6 +101,7 @@ impl App {
                 "Thinking details off"
             }),
             Action::Keys => self.overlays.push(Overlay::Help(Editor::default())),
+            Action::Voice => self.open_voice(),
         }
     }
 
@@ -117,6 +130,9 @@ impl App {
                     match &c.act {
                         ConfirmAct::Delete(id) => self.call("deleteBot", json!({"botId": id}), After::Nothing),
                         ConfirmAct::NewSession(id) => self.call("newSession", json!({"botId": id}), After::Nothing),
+                        ConfirmAct::DeleteHistory(id) => {
+                            self.call("deleteHistory", json!({"botId": id}), After::Nothing)
+                        }
                         ConfirmAct::KeepHarnessMemory(id) => {
                             self.call("updateBot", json!({"id": id, "harnessMemory": true}), changed);
                         }
@@ -135,6 +151,17 @@ impl App {
                             json!({"botId": bot, "threadId": root}),
                             After::Sheet(Reply::ThreadDeleted(root.clone())),
                         ),
+                        ConfirmAct::RemoveVoiceKey { provider, .. } => self.call(
+                            "setVoiceKey",
+                            json!({"provider": provider, "key": ""}),
+                            After::Sheet(Reply::VoiceKeySaved),
+                        ),
+                        ConfirmAct::DeleteAgentDownload(id) => {
+                            self.call("deleteAgentDownload", json!({"backend": id}), After::AgentBuildDeleted)
+                        }
+                        ConfirmAct::RemovePerson(id) => {
+                            self.call("removePerson", json!({"id": id}), After::Sheet(Reply::PeopleSaved))
+                        }
                     }
                     None
                 }
@@ -155,12 +182,15 @@ impl App {
             Overlay::Routine(f) => self.routine_key(f, k),
             Overlay::Flow(f) => self.flow_key(f, k),
             Overlay::Library(l) => self.library_key(l, k),
+            Overlay::ServerLibrary(l) => self.server_library_key(l, k),
             Overlay::Market(m) => self.market_key(m, k),
             Overlay::Agent(a) => self.agent_key(a, k),
             Overlay::Fields(f) => self.fields_key(f, k),
             Overlay::Skill(s) => self.skill_key(s, k),
             Overlay::Analytics(s) => s.key(k),
             Overlay::Network(n) => self.network_key(n, k),
+            Overlay::Voice(s) => self.voice_key(s, k),
+            Overlay::People(s) => self.people_key(s, k),
             Overlay::Rules(s) => self.approval_rules_key(s, k),
             Overlay::Channels(s) => self.channels_key(s, k),
             Overlay::Beliefs(s) => self.beliefs_key(s, k),

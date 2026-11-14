@@ -55,6 +55,14 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
     (`health/allergies.md`), starting with frontmatter whose `description:` says when to read it; at most 2,000
     tokens a note and 20 notes a layer, marked when passed, never cut. Links (a topic folder too: the host never
     reads or writes through one), hidden files and folders, and folders deeper than three are ignored.
+- **A channel's layer.** A group keeps a layer of its own in `<data>/bots/<group id>/bot-memory/`, beside its members'
+  own and "yours". Every member reads its `MEMORY.md` in the room only (`chat::memory::channel::block`, once per
+  session and again when `memory.revision.<group>` changes); a member's own chats never see it. `channel_remember` and
+  `channel_forget_memory` (in the `memory` MCP server) save one line of at most 500 characters, correcting rather than
+  duplicating the same text, within the layer's usual 1,200-token cap. With `keepMemories` on, a member's ordinary
+  `edit_memory` of its own layer in a room turn goes to the channel instead, so its other chats don't get it; the
+  shared layer is unaffected. Channel writes still pass `check_change`, but skip the "only in the user's own chat"
+  rule (`Writer.channel`).
 - **The opening** holds each `MEMORY.md` the bot sees in full (over its cap: marked, never cut), then the index of
   its notes (path, description, tokens). It doesn't change for a memory change, so the prompt cache holds: every
   change (the bot's, another bot's in "yours", dreaming's, an edit on the computer) reaches each session of the
@@ -227,10 +235,13 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   line: what the user said counts as their own words (spoken, not typed), the voice's lines and what it relayed to
   the bot (`from: voice`) are context only ([voice call](voice-call.md#the-call-on-the-host)). Group rooms don't
   feed dreaming.
-- `search_history` covers the bot's own chat, not group chats it took part in. It finds messages by words, or
-  reads back from a message id (`from`, then each page's `next`); `search_memory` gives each `MEMORY.md` line's
-  source message, so a bot can check where a memory came from.
+- `search_history` covers the bot's own chat, its side threads and the group chats it answers in; a result from
+  another chat names it. It finds messages by words, or reads back from a message id (`from`, then each page's
+  `next`); `search_memory` gives each `MEMORY.md` line's source message, so a bot can check where a memory came
+  from. Another bot's chats stay private.
 - A bot told by something it read in the user's own turn (a web page, a file) can still change or take out
   memory; routines, rooms and other bots can't.
 
 A reply stays in its chat's session, and its quote stays out of what memory takes as the user's words; see [groups and replies](groups-and-replies.md). Group and delegated requests don't feed dreaming.
+
+A chat's settings can also delete its history, start a new conversation or compact it now without touching memory, routines, artifacts or files: [chat history actions](chat-history.md). The update style between steps is a server setting: [server settings](server-settings.md).

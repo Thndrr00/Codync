@@ -84,11 +84,20 @@ struct AgentModelPicker: View {
 
     private var agentName: String { agents.first { $0.0 == backend }?.1 ?? backend }
     private var modelName: String { value.wrappedValue.isEmpty ? L10n.tr("Default") : modelChoices.first { $0.0 == value.wrappedValue }?.1 ?? value.wrappedValue }
-    private var summary: String {
+    /// The chosen model's settings and Fast mode, after the model's own name.
+    private var details: String {
         let settings = modelOptions.compactMap { option in
             option.values.first { $0.id == (options[option.id] ?? option.default) }?.name
         }
-        return ([agentName, modelName] + settings + (fastMode?.wrappedValue == true ? ["Fast"] : [])).joined(separator: " · ")
+        return ([modelName] + settings + (fastMode?.wrappedValue == true ? ["Fast"] : [])).joined(separator: " · ")
+    }
+    private var summary: String { [agentName, details].filter { !$0.isEmpty }.joined(separator: " · ") }
+    /// A spent plan window stops this agent's models: the chip beside its name says when it comes
+    /// back, and each model it stops says so (the Usage screen's readings, nothing asked anew).
+    private var limit: UsageWindow? { store.usage.spentWindow(for: backend) }
+    private var limitChip: String? {
+        guard let window = limit else { return nil }
+        return window.resetDescription.map(L10n.resetLine) ?? store.usage.spentNote(for: backend)
     }
 
     private func open(_ next: Stage) {
@@ -99,9 +108,19 @@ struct AgentModelPicker: View {
         VStack(alignment: .leading, spacing: 10) {
             Button { open(stage == .closed ? .models : .closed) } label: {
                 HStack(spacing: 6) {
-                    Text(summary).font(.subheadline).lineLimit(2)
-                        .contentTransition(.opacity)
-                        .animation(Motion.reduced(Motion.fade, reduceMotion), value: summary)
+                    Text(agentName).font(.subheadline.weight(.medium)).lineLimit(1)
+                    if let limitChip {
+                        Text(limitChip).font(.caption2).foregroundStyle(Palette.secondary).lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(Palette.surface, in: Capsule())
+                            .accessibilityHidden(true)
+                    }
+                    if !details.isEmpty {
+                        Text(details).font(.subheadline).foregroundStyle(Palette.secondary).lineLimit(1)
+                            .contentTransition(.opacity)
+                            .animation(Motion.reduced(Motion.fade, reduceMotion), value: summary)
+                    }
                     Spacer(minLength: 0)
                     Image(systemName: stage == .closed ? "chevron.down" : "chevron.up").font(.caption)
                 }
@@ -110,9 +129,7 @@ struct AgentModelPicker: View {
             }
             .buttonStyle(.plain)
             .accessibilityValue(stage == .closed ? "Collapsed" : "Expanded")
-            if let note = store.usage.spentNote(for: backend) {
-                Text(note).font(.caption).foregroundStyle(Palette.secondary)
-            }
+            .accessibilityLabel(limit == nil ? summary : "\(summary) · \(L10n.tr("Usage limit reached"))")
             if stage != .closed {
                 HStack {
                     if onAgentChange != nil {
@@ -199,6 +216,13 @@ struct AgentModelPicker: View {
                             HStack {
                                 Text(L10n.tr(choice.1)).lineLimit(2)
                                 Spacer(minLength: 0)
+                                // A spent window stops every one of this agent's models.
+                                if stage == .models, !choice.0.isEmpty, limit != nil {
+                                    Text(L10n.tr("Usage limit reached")).font(.caption2).foregroundStyle(Palette.secondary)
+                                        .lineLimit(1)
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Palette.surface, in: Capsule())
+                                }
                                 if choice.0 == (stage == .agents ? backend : value.wrappedValue) {
                                     Image(systemName: "checkmark").font(.caption)
                                 }

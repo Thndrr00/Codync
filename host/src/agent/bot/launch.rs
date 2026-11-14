@@ -18,19 +18,23 @@ pub(crate) fn system_prompt(system: &str) -> Value {
 /// Claude's `_meta`: the bot's instructions appended to Claude Code's own system prompt, and its options. The
 /// per-session parts of Claude Code's prompt (working directory, git status) move to the first message, so a
 /// bot's chat, groups and routines share one cached system prompt.
-pub(super) fn claude_meta(cfg: &BotConfig, system: &str) -> Value {
-    json!({"systemPrompt": {"append": system, "excludeDynamicSections": true}, "claudeCode": claude_options(cfg)})
+pub(super) fn claude_meta(cfg: &BotConfig, system: &str, user_setup: bool) -> Value {
+    json!({"systemPrompt": {"append": system, "excludeDynamicSections": true}, "claudeCode": claude_options(cfg, user_setup)})
 }
 
 /// Claude Code's own memory and its auto-dream stay off, so Codync's is the bot's one memory, unless the user kept
 /// them on; then Claude Code sets both itself ([design](../../../../docs/design/bot-memory.md#claude-codes-own-memory)).
 /// Claude's thinking shows as summaries, which the working steps a chat unfolds show: an SDK session otherwise
 /// leaves its text out. Whether Claude thinks stays the user's Claude Code setting.
-fn claude_options(cfg: &BotConfig) -> Value {
+fn claude_options(cfg: &BotConfig, user_setup: bool) -> Value {
     // The bot's replies, memory and team management are Codync's own tools, which follow the bot's permission inside
     // Codync: the user's Claude Code auto-mode classifier mustn't refuse them (it blocked a reply naming the user's
     // daughter), and a team change asks on Codync's own card.
     let mut settings = json!({"permissions": {"allow": ["mcp__chat", "mcp__memory", "mcp__manage"]}});
+    // "Use my Claude Code setup" is off by default: the person's ~/.claude (CLAUDE.md, skills, agents, hooks
+    // and plugins) stays out of the agents' prompt, so each turn sends a shorter one. Their sign-in settings in
+    // ~/.claude/settings.json still reach the agent through its environment.
+    settings["settingSources"] = if user_setup { json!(["user", "project", "local"]) } else { json!([]) };
     if !crate::agent::own_memory::kept(cfg) {
         settings["autoMemoryEnabled"] = false.into();
         settings["autoDreamEnabled"] = false.into();
@@ -358,7 +362,7 @@ mod tests {
             )
             .unwrap()
         };
-        let settings = |cfg: &BotConfig| claude_options(cfg)["options"]["settings"].clone();
+        let settings = |cfg: &BotConfig| claude_options(cfg, false)["options"]["settings"].clone();
         // `null`: a client sending back a bot that had no switch.
         for off in [json!(false), Value::Null] {
             let off = settings(&bot(off));
@@ -376,8 +380,24 @@ mod tests {
     fn claude_streams_thinking_summaries() {
         let cfg: BotConfig =
             serde_json::from_value(json!({"id": "a", "name": "B", "backend": "claude", "cwd": "/work/app"})).unwrap();
-        let options = &claude_options(&cfg)["options"];
+        let options = &claude_options(&cfg, false)["options"];
         assert_eq!(options["extraArgs"]["thinking-display"], "summarized");
         assert!(options.get("thinking").is_none(), "whether Claude thinks stays Claude Code's");
+    }
+
+    #[test]
+    fn the_claude_code_setup_loads_only_when_the_person_turned_it_on() {
+        let cfg: BotConfig =
+            serde_json::from_value(json!({"id": "a", "name": "B", "backend": "claude", "cwd": "/work/app"})).unwrap();
+        assert_eq!(
+            claude_options(&cfg, false)["options"]["settings"]["settingSources"],
+            json!([]),
+            "off by default: no CLAUDE.md, skills, agents, hooks or plugins from ~/.claude"
+        );
+        assert_eq!(
+            claude_options(&cfg, true)["options"]["settings"]["settingSources"],
+            json!(["user", "project", "local"]),
+            "on: the person's own Claude Code setup"
+        );
     }
 }

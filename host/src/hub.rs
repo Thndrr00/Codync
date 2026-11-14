@@ -24,6 +24,7 @@ mod bots;
 mod documents;
 pub mod flows;
 mod groups;
+mod history;
 mod lead;
 mod order;
 mod patch;

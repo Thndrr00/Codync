@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ApprovalRule, RuleProposal } from '@shared/approval-rules'
 import type { Entry, FileDiff, PermissionOption } from '@shared/models'
 import { Button, Disclosure, Spinner } from '../../components/Controls'
@@ -37,6 +37,12 @@ export const permissionHeadline = (toolKind?: string) => {
 
 const rank: Record<string, number> = { allow_once: 0, allow_always: 1, reject_once: 2, reject_always: 3 }
 
+/** " · 4:59" on a plan card's Start button when the plan starts by itself in a minute or more. */
+export const countdownLabel = (ms: number) => {
+  const total = Math.ceil(ms / 1_000)
+  return total < 60 ? '' : ` · ${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
 /** Allow before deny, once before always. */
 export const sortedOptions = (options: PermissionOption[]) => [...options].sort((a, b) => (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9))
 
@@ -55,6 +61,9 @@ export function optionLabel(o: PermissionOption) {
   }
 }
 
+/** The Back row of a question card: it re-asks the question before this one. */
+const isBack = (o: PermissionOption) => o.optionId === '__back'
+
 /** Approval card in Grok Bot's choice-card style: what the agent wants, where it runs, the answers. */
 export function PermissionCard({ entry, hostName, answering, respond, propose }: {
   entry: Entry
@@ -68,13 +77,29 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
   const [expanded, setExpanded] = useState(false)
   const [rejectedShake, setRejectedShake] = useState(false)
   const [always, setAlways] = useState<{ option: PermissionOption; proposal: RuleProposal; pattern: string } | null>(null)
+  /** A question card's last pick, shown with the earlier answers before anything is sent. */
+  const [summary, setSummary] = useState<PermissionOption | null>(null)
   const d = entry.data
   const pending = d.status === 'pending'
+  // A plan card with a start time counts down on its allow button once a minute or more is left.
+  const startsAt = typeof d.autoApproveAt === 'number' ? d.autoApproveAt : null
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!pending || startsAt === null) return
+    const timer = setInterval(() => setNow(Date.now()), 1_000)
+    return () => clearInterval(timer)
+  }, [pending, startsAt])
+  const countdown = startsAt === null ? null : Math.max(0, startsAt - now)
   const hasDetail = !!d.command || !!d.detail || !!d.diffs?.length
   const options = sortedOptions(d.options ?? [])
   const once = options.find((o) => o.kind === 'allow_once')
+  // A question card asks one question at a time; the last one shows the summary before answering.
+  const question = d.toolKind === 'question' && typeof d.questionIndex === 'number'
+  const lastQuestion = (d.questionIndex ?? 0) >= (d.questionCount ?? 1) - 1
   // "Always" shows the rule it would keep, which the person may edit, before anything is answered.
   const choose = async (o: PermissionOption) => {
+    if (isBack(o)) return respond(o.optionId)
+    if (question && lastQuestion) return setSummary(o)
     if (o.kind.startsWith('reject')) {
       setRejectedShake(true)
       setTimeout(() => setRejectedShake(false), 450)
@@ -93,6 +118,11 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
           <Text size="headline" tone="text">{permissionHeadline(d.toolKind)}</Text>
           {pending ? <span className="permission-card-dot" /> : null}
         </HStack>
+        {question ? (
+          <Text size="caption" tone="secondary">
+            {fill(tr('Question {current} of {total}'), { current: String((d.questionIndex ?? 0) + 1), total: String(d.questionCount ?? 1) })}
+          </Text>
+        ) : null}
         <Text as="div" size="subheadline" mono tone="secondary" lines={expanded ? undefined : 3} className="selectable permission-card-title">
           {d.title ?? ''}
         </Text>
@@ -110,21 +140,41 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
           </Disclosure>
         ) : null}
         {pending ? (
-          <div className="permission-card-options">
-            {options.map((o, i) => (
-              <div key={o.optionId}>
-                {i > 0 ? <div className="thread-hairline" /> : null}
-                <button
-                  className={answering === null || answering === o.optionId ? 'permission-option' : 'permission-option dimmed'}
-                  disabled={answering !== null}
-                  onClick={() => void choose(o)}
-                >
-                  <Text size="body" weight={o.kind === 'allow_once' ? 'semibold' : 'regular'} tone={o.kind.startsWith('allow') ? 'text' : 'danger'} className="permission-option-label">{optionLabel(o)}</Text>
-                  {answering === o.optionId ? <Spinner size={14} /> : null}
-                </button>
-              </div>
-            ))}
-          </div>
+          summary ? (
+            <VStack gap={8} className="permission-summary">
+              <Text size="subheadline" weight="medium" tone="text">{tr('Summary')}</Text>
+              {(d.answers ?? []).map((answer) => (
+                <HStack key={answer.text} gap={6}>
+                  <Text size="caption" tone="secondary" truncate>{answer.text}</Text>
+                  <Text size="body" tone="text">{answer.label}</Text>
+                </HStack>
+              ))}
+              <HStack gap={6}>
+                <Text size="caption" tone="secondary" truncate>{d.title}</Text>
+                <Text size="body" weight="semibold" tone="text">{optionLabel(summary)}</Text>
+              </HStack>
+              <HStack gap={8}>
+                <Button kind="primary" disabled={answering !== null} onClick={() => respond(summary.optionId)}>{tr('Send answers')}</Button>
+                <Button kind="secondary" onClick={() => setSummary(null)}>{tr('Back')}</Button>
+              </HStack>
+            </VStack>
+          ) : (
+            <div className="permission-card-options">
+              {options.map((o, i) => (
+                <div key={o.optionId}>
+                  {i > 0 ? <div className="thread-hairline" /> : null}
+                  <button
+                    className={answering === null || answering === o.optionId ? 'permission-option' : 'permission-option dimmed'}
+                    disabled={answering !== null}
+                    onClick={() => void choose(o)}
+                  >
+                    <Text size="body" weight={o.kind === 'allow_once' ? 'semibold' : 'regular'} tone={isBack(o) ? 'secondary' : o.kind.startsWith('allow') ? 'text' : 'danger'} className="permission-option-label">{isBack(o) ? tr('Back') : optionLabel(o)}{o.kind === 'allow_once' && countdown !== null ? countdownLabel(countdown) : ''}</Text>
+                    {answering === o.optionId ? <Spinner size={14} /> : null}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <Text as="div" size="caption" weight="medium" tone="secondary">{outcome(entry)}</Text>
         )}

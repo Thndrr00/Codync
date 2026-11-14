@@ -133,15 +133,46 @@ public struct GitHubStatus: Decodable, Equatable, Sendable {
     public var configured: Bool
     public var login: String?
     public var scopes: [String]
+    /// The token may create repositories (Administration, or a classic token's `repo` scope).
+    public var canCreateRepos: Bool
+    /// The repository the last `githubCreateRepo` made; only that answer carries it.
+    public var created: CreatedRepo?
 
-    private enum CodingKeys: String, CodingKey { case configured, login, scopes }
+    private enum CodingKeys: String, CodingKey { case configured, login, scopes, canCreateRepos, created }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
         login = try c.decodeIfPresent(String.self, forKey: .login)
         scopes = try c.decodeIfPresent([String].self, forKey: .scopes) ?? []
+        canCreateRepos = try c.decodeIfPresent(Bool.self, forKey: .canCreateRepos) ?? false
+        created = try c.decodeIfPresent(CreatedRepo.self, forKey: .created)
     }
+}
+
+/// A repository `githubCreateRepo` just created.
+public struct CreatedRepo: Decodable, Equatable, Sendable {
+    public var fullName: String
+    public var htmlUrl: String
+    public var cloneUrl: String
+    /// The host pointed the workspace at it, because the workspace had no origin.
+    public var originSet: Bool
+}
+
+/// Someone waiting for the owner to let them write to a linked number.
+public struct WhatsAppRequest: Decodable, Equatable, Sendable {
+    public var code: String
+    public var sender: String
+    public var name: String?
+    /// When the request arrived, in Unix milliseconds.
+    public var at: Int64
+}
+
+/// A person a linked number knows: their name and the facts they gave.
+public struct WhatsAppPerson: Decodable, Equatable, Sendable {
+    public var sender: String
+    public var name: String?
+    public var facts: [String]
 }
 
 /// The computer's linked WhatsApp number, as `whatsappState` reports it.
@@ -158,8 +189,12 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
     public var bot: String?
     /// Chats and people allowed to write; empty means anyone.
     public var allowed: [String]
+    /// People waiting for the owner's answer on a restricted number.
+    public var requests: [WhatsAppRequest]
+    /// People this number knows, with the facts they gave.
+    public var people: [WhatsAppPerson]
 
-    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed }
+    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed, requests, people }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -171,6 +206,8 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
         error = try c.decodeIfPresent(String.self, forKey: .error)
         bot = try c.decodeIfPresent(String.self, forKey: .bot)
         allowed = try c.decodeIfPresent([String].self, forKey: .allowed) ?? []
+        requests = try c.decodeIfPresent([WhatsAppRequest].self, forKey: .requests) ?? []
+        people = try c.decodeIfPresent([WhatsAppPerson].self, forKey: .people) ?? []
     }
 }
 
@@ -198,6 +235,13 @@ public enum Channels {
     public static func githubTokenOk(_ token: String) -> Bool {
         let value = token.trimmingCharacters(in: .whitespacesAndNewlines)
         return (20...255).contains(value.count) && value.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
+    }
+
+    /// GitHub's own repository-name rule, checked before the host is asked.
+    public static func repoNameOk(_ name: String) -> Bool {
+        let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = value.first, first.isASCII, first.isLetter || first.isNumber || first == "_" || first == "-" else { return false }
+        return value.count <= 100 && value.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" || $0 == ".") }
     }
 
     public static func stateText(_ state: String) -> String {

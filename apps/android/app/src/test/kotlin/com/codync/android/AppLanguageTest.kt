@@ -9,8 +9,7 @@ import org.junit.Test
 
 class AppLanguageTest {
     @Test fun additionalLanguagesResolveRegionsAndKeepExplicitChoices() {
-        for (language in listOf(AppLanguage.Ja, AppLanguage.Ko, AppLanguage.Fr, AppLanguage.De, AppLanguage.Es, AppLanguage.Ar)) {
-        for (language in listOf(AppLanguage.Ja, AppLanguage.Ko, AppLanguage.Fr, AppLanguage.De, AppLanguage.Es, AppLanguage.Ru, AppLanguage.It)) {
+        for (language in listOf(AppLanguage.Ja, AppLanguage.Ko, AppLanguage.Fr, AppLanguage.De, AppLanguage.Es, AppLanguage.Ru, AppLanguage.Ar, AppLanguage.He, AppLanguage.It)) {
             assertEquals(language, AppLanguage.System.resolved(language.stored + "-XX"))
             assertEquals(language, language.resolved("zh-TW"))
             assertEquals(language, AppLanguage.fromStored(language.stored))
@@ -83,6 +82,17 @@ class AppLanguageTest {
         assertEquals("الإعدادات", translate("Settings", AppLanguage.System, systemIsChinese = false, arabic))
         assertEquals("Settings", translate("Settings", AppLanguage.En, systemIsChinese = true, arabic))
         assertEquals("Not a phrase", translate("Not a phrase", AppLanguage.Ar, systemIsChinese = false, arabic))
+    }
+
+    @Test fun hebrewResolvesMirrorsAndUsesItsOwnTable() {
+        val hebrew = mapOf("Settings" to "הגדרות")
+        assertEquals(AppLanguage.He, AppLanguage.System.resolved("he-IL"))
+        assertEquals(AppLanguage.He, AppLanguage.fromStored("he"))
+        assertTrue(AppLanguage.System.resolved("he-IL").readsRightToLeft("he-IL"))
+        assertFalse(AppLanguage.Ar.readsRightToLeft("he-IL"))
+        assertEquals("הגדרות", translate("Settings", AppLanguage.He, systemIsChinese = false, hebrew))
+        assertEquals("הגדרות", translate("Settings", AppLanguage.System, systemIsChinese = false, hebrew))
+        assertEquals("Not a phrase", translate("Not a phrase", AppLanguage.He, systemIsChinese = false, hebrew))
     }
 
     @Test fun chineseFollowsTheChoiceNotTheOtherLanguage() {

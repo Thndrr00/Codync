@@ -82,7 +82,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
     @MainActor private static func render(_ bot: Bot, members: [Bot]) -> Data? {
         let face = Group {
-            if bot.isGroup { GroupAvatar(members: members, size: 88, animated: false) }
+            if bot.isGroup { GroupAvatar(members: members, size: 88, animated: false, photo: bot.avatarPhoto) }
             else { CharacterAvatar(bot: bot, size: 88, animated: false) }
         }
         .padding(20)

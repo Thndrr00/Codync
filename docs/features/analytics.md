@@ -60,6 +60,10 @@ can be traced from the events around it:
   on the iPhone and Android, both alike).
 - **Outcome**: how it ended, as `turn_finished` does: `outcome` (`done`, `failed`, …) and, for a
   failure, its category in `error`. Never the error's message.
+- **Timings and webhooks**: rounded seconds and counts only. `host_started.start_ms`, `turn_queued.wait_ms`,
+  `turn_finished.first_output_s` and `turn_finished.slow` (ten minutes or more). A webhook delivery
+  records its routine kind, result, HTTP status, body size and answer time (`webhook_received`),
+  at most 60 a minute, and never the URL, secret, event type or body.
 - **Errors**: failures that should never happen go to *Error tracking* below (`reportError` on
   the host, desktop and terminal UI); crashes are already caught.
 - **Display preferences send nothing.** A device's own look (Settings › Appearance: theme, text

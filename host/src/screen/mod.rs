@@ -36,6 +36,7 @@ mod activity;
 #[cfg(windows)]
 pub mod browser_panel;
 mod computer;
+mod consent;
 mod cua;
 mod helper;
 #[cfg(target_os = "linux")]
@@ -51,10 +52,11 @@ mod viewer;
 
 pub use activity::computer;
 pub use computer::computer_tools;
+pub use consent::ASK_WINDOW;
 pub use helper::serve_helpers;
 #[cfg(target_os = "linux")]
 pub use helper::supervise_linux_helper;
-pub use viewer::{IceConfig, watch_viewer};
+pub use viewer::{IceConfig, Stopped, watch_viewer};
 
 use crate::LockExt;
 use anyhow::{Result, anyhow, bail};
@@ -133,6 +135,8 @@ pub struct Screen {
     status: Mutex<HelperStatus>,
     control: Mutex<Control>,
     protected: Mutex<Option<protected_entry::ProtectedEntry>>,
+    /// "Ask on this computer": the question waiting for the person here.
+    consent: consent::Consent,
     #[cfg(windows)]
     protected_browser: tokio::sync::Mutex<Option<protected_browser::Browser>>,
     #[cfg(windows)]
@@ -158,6 +162,7 @@ impl Screen {
             status: Mutex::default(),
             control: Mutex::default(),
             protected: Mutex::default(),
+            consent: consent::Consent::default(),
             #[cfg(windows)]
             protected_browser: tokio::sync::Mutex::default(),
             #[cfg(windows)]
@@ -206,7 +211,43 @@ impl Screen {
             "agentBot": c.active_agent(),
             "computerUse": self.computer_use(),
             "viewers": viewers,
+            "consent": self.consent.pending(),
         })
+    }
+
+    /// Answers the question on this computer; only its own apps call this.
+    pub fn answer_consent(&self, id: &str, allow: bool) -> Result<bool> {
+        let answered = self.consent.answer(id, allow)?;
+        self.emit();
+        Ok(answered)
+    }
+
+    /// True when the person at this computer allowed `device` just now; one answer starts one session.
+    pub fn take_approval(&self, device: &str) -> bool {
+        self.consent.take_approval(device)
+    }
+
+    /// "Ask on this computer": asks, then waits up to 30 seconds for the answer. The device's
+    /// `screenPrepare` waits in the same request, so no client needs a retry loop.
+    pub async fn await_consent(&self, device: &str) -> Result<()> {
+        let request = self.consent.request(device);
+        self.emit();
+        let id = request["id"].as_str().unwrap_or_default().to_owned();
+        let deadline = crate::store::now_ms() + ASK_WINDOW;
+        loop {
+            if self.consent.take_approval(device) {
+                return Ok(());
+            }
+            if self.consent.pending().is_none() {
+                bail!("Remote control was not allowed at the computer.");
+            }
+            if crate::store::now_ms() >= deadline {
+                self.consent.cancel(&id);
+                self.emit();
+                bail!("Nobody allowed remote control at the computer within 30 seconds.");
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
     }
 
     fn emit(&self) {

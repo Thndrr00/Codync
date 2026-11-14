@@ -16,10 +16,20 @@ struct LibraryView: View {
     @State private var renaming: Artifact?
     @State private var sharing: ArtifactFile?
     @State private var viewing: Attachment?
+    /// The server's Library, every bot's artifacts and files, from this chat's Library page.
+    @State private var serverLibrary = false
 
     var body: some View {
         let items = files + model.artifacts.artifacts(of: botId).map(ChatLibraryItem.init)
         VStack(alignment: .leading, spacing: 28) {
+            if model.hasServerLibrary {
+                Button { serverLibrary = true } label: {
+                    LibraryRow(title: L10n.tr("Server Library"), detail: L10n.tr("Every artifact and file from this computer's bots, newest first.")) {
+                        symbol("books.vertical")
+                    }
+                }
+                .buttonStyle(.plain)
+            }
             if let error {
                 Text(L10n.tr(error)).font(.caption).foregroundStyle(Palette.danger).textSelection(.enabled)
             }
@@ -48,6 +58,7 @@ struct LibraryView: View {
         .codyncSheet(item: $renaming) { ArtifactRenameSheet(artifact: $0) }
         .artifactShareSheet($sharing)
         .codyncSheet(item: $viewing) { AttachmentViewer(file: $0, botId: botId) }
+        .codyncSheet(isPresented: $serverLibrary) { ServerLibraryView(stores: [model]) }
         .fileExportSheet(model, botId: botId)
     }
 

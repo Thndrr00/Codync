@@ -131,3 +131,56 @@ fn a_delivery_while_a_retry_waits_is_queued() {
     assert_eq!(third.unwrap_err().downcast::<Refused>().unwrap(), Refused::Busy, "the queued delivery is");
     assert_eq!(routines.state.locked().runs.len(), 2);
 }
+
+/// A hub on an in-memory store, with its identity in a temp folder the test removes.
+fn temp_hub() -> (std::sync::Arc<Hub>, std::path::PathBuf) {
+    let dir = std::env::temp_dir().join(format!("codync-routine-limit-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = Hub::new(
+        Store::open(std::path::Path::new(":memory:")).unwrap(),
+        "test".into(),
+        crate::remote::identity::Identity::load_or_create(&dir).unwrap(),
+        "test".into(),
+        19223,
+    );
+    (hub, dir)
+}
+
+fn webhook_routine() -> Routine {
+    Routine { triggers: vec![Trigger::Webhook], ..routine() }
+}
+
+fn delivery(id: &str) -> crate::routines::hooks::Headers {
+    [("authorization".to_owned(), "Bearer secret".to_owned()), ("idempotency-key".to_owned(), id.to_owned())].into()
+}
+
+#[test]
+fn local_deliveries_spend_the_hourly_limit_and_public_ones_and_retries_do_not() {
+    let (hub, dir) = temp_hub();
+    hub.routines
+        .change(&hub.store, |s| {
+            s.routines.push(webhook_routine());
+            Ok(())
+        })
+        .unwrap();
+    limits::set(&hub.store, limits::CHOICES[0]).unwrap();
+    let body = b"{\"text\":\"hi\"}";
+    for _ in 0..limits::DEFAULT {
+        hub.routines.receive(&hub, "routine", &delivery("d0"), body, true).unwrap();
+    }
+    let refused = hub.routines.receive(&hub, "routine", &delivery("new"), body, true).unwrap_err();
+    assert_eq!(refused, Refused::RateLimited(limits::DEFAULT));
+    assert_eq!(
+        hub.routines.receive(&hub, "routine", &delivery("d0"), body, true).unwrap()["run"]["deliveryId"],
+        "d0",
+        "a retry of a queued delivery returns its run instead of spending a slot"
+    );
+    assert_eq!(
+        hub.routines.receive(&hub, "routine", &delivery("public"), body, false).unwrap_err(),
+        Refused::Busy,
+        "a public delivery reaches the busy check, not a spent script ceiling"
+    );
+    limits::set(&hub.store, limits::CHOICES[4]).unwrap();
+    hub.routines.receive(&hub, "routine", &delivery("more"), body, true).unwrap();
+    std::fs::remove_dir_all(dir).ok();
+}

@@ -42,6 +42,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import com.codync.android.core.*
@@ -112,7 +114,8 @@ import com.kyant.shapes.RoundedRectangle
     // The main chat ignores an open thread: it stays put underneath.
     val chatState = state.copy(thread = null, trace = false)
     DisposableEffect(Unit) { onDispose { store.stopReading() } }
-    GlassStage(Modifier.fillMaxSize().background(bot.chatColor?.let { Color(android.graphics.Color.parseColor(it)).copy(alpha = 0.1f).compositeOver(Palette.background) } ?: Palette.background), chrome = {
+    val chatGround = Palette.chatBackground ?: Palette.background
+    GlassStage(Modifier.fillMaxSize().background(bot.chatColor?.let { Color(android.graphics.Color.parseColor(it)).copy(alpha = 0.1f).compositeOver(chatGround) } ?: chatGround), chrome = {
         // Down to just above the header's bottom; the bottom one stops under Jump to latest.
         ScrollEdge(Edge.Top, top + 84.dp)
         ScrollEdge(Edge.Bottom, with(density) { composerHeight.toDp() } + 4.dp, Modifier.align(Alignment.BottomCenter))
@@ -147,15 +150,16 @@ import com.kyant.shapes.RoundedRectangle
             }
             // Nothing sent now could be read on the other side.
             val mismatch = state.mismatch
-            if (mismatch != null) UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
-            else if (viewing == null) MessageComposer(bot, null, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
-                replyingTo = replyingTo, cancelReply = { replyingTo = null },
-                onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null)
-            // An artifact's viewer has its own box for the same draft; two would overwrite each other.
-            else if (viewing == null) MessageComposer(bot, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
-                onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null,
-                replyTo = replyTo, cancelReply = { replyId = null },
-                queued = queuedMessages(state.chatEntries(bot), bot.isWorking))
+            when {
+                mismatch != null -> UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+                viewing != null -> {} // An artifact's viewer has its own box for the same draft; two would overwrite each other.
+                else -> {
+                    if (bot.kind == "group") GroupTasksCard(bot, state, store)
+                    MessageComposer(bot, null, chatState, store, onCall = if (state.voice == null && state.actualConnection is LinkState.Ready) startCall else null,
+                        replyingTo = replyingTo, cancelReply = { replyingTo = null },
+                        onInterrupt = if (state.voice?.botId == bot.id && state.voice.state.phase == VoicePhase.Speaking) store::interruptVoice else null)
+                }
+            }
         }
     }) {
         Transcript(bot, chatState, store, connect, scroll, PaddingValues(start = 16.dp, end = 16.dp, top = top + 60.dp,
@@ -273,7 +277,10 @@ private fun AppState.chatEntries(bot: Bot) = entries.filter { it.botId == bot.id
     val working = bot.isWorking(bot.id) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
     val details by ThinkingDetails.enabled.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val itemIds = rows.map { it.id }
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
+    Box(Modifier.fillMaxSize()) {
     ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
         if (more) item("earlier") {
             Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
@@ -306,5 +313,14 @@ private fun AppState.chatEntries(bot: Bot) = entries.filter { it.botId == bot.id
             }
         }
         if (working) item("working") { WorkingIndicator(bot, workingSteps(state.entries.filter { it.botId == bot.id && it.threadId == null }), details) }
+    }
+    // The subagent card's header, held under the chat header while its subagents work out of view.
+    Box(Modifier.padding(top = padding.calculateTopPadding())) {
+        SubagentDockHost(entries, isVisible = { id -> scroll.list.layoutInfo.visibleItemsInfo.any { it.key == id } }) { id ->
+            val offset = (if (more) 1 else 0) + (if (items.isEmpty() && !more) 1 else 0)
+            val at = itemIds.indexOf(id).takeIf { it >= 0 }?.plus(offset)
+            if (at != null) scope.launch { scroll.list.animateScrollToItem(at) }
+        }
+    }
     }
 }

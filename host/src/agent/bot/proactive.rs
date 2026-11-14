@@ -17,7 +17,7 @@ pub(super) fn silent_update(scheduled: bool, text: Option<&str>) -> bool {
 }
 
 pub(super) fn internal_step(kind: EntryKind) -> bool {
-    matches!(kind, EntryKind::Agent | EntryKind::Thought | EntryKind::Tool | EntryKind::Plan)
+    matches!(kind, EntryKind::Agent | EntryKind::Thought | EntryKind::Tool | EntryKind::Plan | EntryKind::Subagents)
 }
 
 fn useful_output(data: &Value) -> bool {
@@ -98,6 +98,7 @@ mod tests {
         assert!(internal_step(EntryKind::Thought));
         assert!(internal_step(EntryKind::Tool));
         assert!(internal_step(EntryKind::Plan));
+        assert!(internal_step(EntryKind::Subagents));
         assert!(!internal_step(EntryKind::Permission));
         assert!(!internal_step(EntryKind::Notice));
         assert!(!useful_output(&json!({"text":"NO_UPDATE"})));

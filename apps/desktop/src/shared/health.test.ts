@@ -25,7 +25,7 @@ test('the small alert says nothing when all is well and says why turns stop when
 
 test('the numbers come in the order memory, CPU, disk', () => {
   assert.deepEqual(healthLines(health()), [
-    { label: 'Memory', value: '75 % used · 2.0 GB free of 8.0 GB' },
+    { label: 'RAM', value: '75 % used · 2.0 GB free of 8.0 GB' },
     { label: 'CPU', value: '12 %' },
     { label: 'Disk', value: '120.0 GB free of 500.0 GB' },
   ])

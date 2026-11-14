@@ -10,11 +10,13 @@ mod agent;
 mod analytics;
 mod bot_chat;
 mod catalog;
+pub(in crate::tui) mod composio;
 pub(in crate::tui) mod computer;
 mod dev_servers;
 pub(in crate::tui) mod documents;
 mod fields;
 mod flow;
+mod guide;
 mod hermes_routes;
 pub(super) mod hermes_runtime;
 mod library;
@@ -26,17 +28,20 @@ mod network;
 mod network_rules;
 mod network_setup;
 mod pages;
+mod people;
 mod replies;
 mod routines;
 mod scroll;
+mod server_library;
 mod skill;
 mod threads;
+mod voice;
 mod when;
 
 pub use analytics::AnalyticsSheet;
 pub use dev_servers::{DevServer, DevServerSummary, DevServersSheet, LogsView, summary as dev_server_summary};
 pub use documents::{DocumentReply, DocumentSheet};
-pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields};
+pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields, voice_key_fields, voice_server_fields};
 pub use flow::{FlowSheet, FlowStage, Target};
 pub use library::{ArtifactTitles, LibraryItem};
 pub use memory::{MemoryMode, MemorySheet, Section};
@@ -44,8 +49,11 @@ pub use network::{NetReply, NetworkSheet, Recovery, Step};
 pub use network_rules::{RuleField, RuleForm};
 pub use network_setup::{CONNECTORS, Setup, SetupField};
 pub use pages::Page;
+pub use people::{PeopleSection, PeopleSheet, PeopleStep, PersonAssign, person_body, person_fields};
 pub use scroll::Scroll;
+pub use server_library::{Preview, ServerFilter, ServerLibrary, ServerLibraryItem};
 pub use skill::SkillSheet;
+pub use voice::VoiceSheet;
 pub use when::complete_zone;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -77,6 +85,10 @@ pub enum Reply {
     RoutineSaved,
     /// A bot's Library (`library {botId}`).
     Library(String),
+    /// The server's Library (`serverLibrary`): every bot's artifacts and files.
+    ServerLibrary,
+    /// A file's first chunk for the server Library's preview (`readFile` or `readUpload`).
+    ServerLibraryPreview,
     /// A routine's webhook URL and key: copied as a ready-to-run curl.
     Webhook,
     /// A bot conversation's fetched history.
@@ -105,8 +117,34 @@ pub enum Reply {
         search: String,
         cursor: Option<String>,
     },
+    /// The voice providers and whether this computer holds each key.
+    VoiceStatus,
+    /// The local voice server's saved URL, models and key state (`voiceServer`).
+    VoiceServer,
+    /// The local voice server was saved: the sheet shows the answer.
+    VoiceServerSaved,
+    /// What `testVoiceServer` answered about the saved server.
+    VoiceServerTested,
+    /// A voice key was saved or removed: the sheet loads again.
+    VoiceKeySaved,
+    /// The people on this computer (`people`).
+    People,
+    /// The paired devices and the person each acts as (`devices`).
+    PeopleDevices,
+    /// A person was added, renamed or removed, a device was assigned, or a device's person changed.
+    PeopleSaved,
     Skills,
+    Apps,
     Catalog,
+    /// Composio's key state, and the apps it unlocks.
+    ComposioStatus,
+    /// A page of Composio's apps: the request it answers, and whether it follows the loaded ones.
+    ComposioApps {
+        request: u64,
+        append: bool,
+    },
+    /// The Composio key was saved or removed.
+    ComposioKey,
     /// A catalog bot or team (its id) was created.
     CatalogAdded(String),
     /// A skill's instructions, for the details sheet with that id.
@@ -228,6 +266,7 @@ pub enum RoutineField {
     Instruction,
     When,
     Outputs,
+    Thread,
 }
 
 pub struct RoutineForm {
@@ -237,6 +276,8 @@ pub struct RoutineForm {
     pub instruction: Editor,
     pub when: Editor,
     pub outputs: Editor,
+    /// Runs post in a thread of the bot's chat instead of its main one.
+    pub thread: bool,
     /// None preserves outputs that the host cannot express in the text editor.
     pub original_outputs: Option<String>,
     pub original_output_values: Value,
@@ -254,14 +295,16 @@ pub enum Tab {
     Teams,
     Agents,
     Connectors,
+    Apps,
     Skills,
 }
 
-pub const TABS: [(Tab, &str); 5] = [
+pub const TABS: [(Tab, &str); 6] = [
     (Tab::Bots, "Bots"),
     (Tab::Teams, "Teams"),
     (Tab::Agents, "Agents"),
     (Tab::Connectors, "Connectors"),
+    (Tab::Apps, "Apps"),
     (Tab::Skills, "Skills"),
 ];
 
@@ -273,6 +316,18 @@ pub struct Market {
     pub registry: Vec<Value>,
     pub next: Option<String>,
     pub skills: Option<Vec<Value>>,
+    /// The app catalogue; `None` while it loads.
+    pub apps: Option<Vec<Value>>,
+    /// Composio's key state (`composioStatus`); `None` until it answers.
+    pub composio: Option<Value>,
+    /// Composio's apps loaded so far, for the query in `composio_searched`.
+    pub composio_apps: Vec<Value>,
+    pub composio_next: Option<String>,
+    pub composio_searched: Option<String>,
+    /// The newest apps request; answers to older ones are dropped.
+    pub composio_request: u64,
+    pub composio_loading: bool,
+    pub composio_error: Option<String>,
     /// The host's ready-made bots and teams (`botCatalog`); empty on an older host.
     pub catalog: Value,
     /// Catalog bots and teams added while this sheet is open.
@@ -289,6 +344,12 @@ pub enum Row<'a> {
     Installed(&'a Value),
     Custom,
     Registry(&'a Value),
+    /// A catalogue app; it is a connector the host builds, and it is offered until installed.
+    App(&'a Value),
+    /// The Composio key: setting it up, or replacing and removing it.
+    ComposioKey,
+    /// An app through Composio, connected with its key.
+    ComposioApp(&'a Value),
     OwnSkill(&'a Value),
     Skill(&'a Value),
     /// A ready-made bot from the catalog.
@@ -312,6 +373,8 @@ pub enum SetupRow {
     Login,
     Method(Value),
     Check,
+    /// Removes the build Codync downloaded for this agent; its accounts, sign-ins and bots stay.
+    Delete,
 }
 
 pub struct Input {
@@ -333,7 +396,19 @@ pub enum Submit {
     AgentEnv(String),
     Connection(Box<super::connections::Connection>),
     Connector(Value),
+    /// A catalogue app and the sheet's values, as `installMarketApp` takes them.
+    App(Value),
+    /// The Composio key sheet.
+    ComposioKey,
+    /// One app through Composio, as its sheet steps through the host's answers.
+    Composio(Box<composio::Composio>),
     Import,
+    /// The sender's own signing secret (a Standard Webhooks sender's `whsec_…`), which becomes the
+    /// routine's webhook key.
+    RoutineKey {
+        bot: String,
+        id: String,
+    },
     /// A handoff card's text (the card's entry id).
     Handoff(String),
     VoiceDecisions {
@@ -344,10 +419,24 @@ pub enum Submit {
         id: String,
         code: bool,
     },
+    /// A voice provider's key (`setVoiceKey`), kept by the computer after it checks it.
+    VoiceKey {
+        provider: String,
+    },
+    /// The local voice server (`setVoiceServer`): its URL, the models it serves and an optional key.
+    VoiceServer,
+    /// A person's name and email: `addPerson`, or `updatePerson` when `id` names one.
+    Person {
+        id: Option<String>,
+    },
     RenameArtifact {
         bot: String,
         artifact: String,
     },
+    /// A bot moved to a roster section (empty removes it).
+    Section(String),
+    /// A roster section renamed; empty merges it into no section.
+    RenameSection(String),
 }
 
 /// A few labeled text fields: an agent's keys, a connector's setup, a pasted MCP config.
@@ -388,6 +477,29 @@ pub struct Shell {
 
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or_default().to_owned()
+}
+
+/// One text field for a roster section: the name a bot moves to, or the new name of a section.
+pub fn section_fields(title: &str, note: &str, value: Option<&str>, submit: Submit) -> Fields {
+    Fields {
+        title: title.to_owned(),
+        note: note.to_owned(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![Input {
+            name: "name".into(),
+            label: "Name".into(),
+            secret: false,
+            required: false,
+            multiline: false,
+            placeholder: String::new(),
+            ed: Editor::with(value.unwrap_or_default()),
+        }],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit,
+    }
 }
 
 fn ctrl(k: KeyEvent) -> bool {

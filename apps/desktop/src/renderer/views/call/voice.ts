@@ -9,10 +9,14 @@ import {
   chosenVoice,
   dictationEngine,
   callEngineChoice,
+  canDictate,
+  isCallProvider,
   isSpeechMode,
   isVoiceProvider,
   language,
+  localSpeech as localSpeechOutput,
   speechOutput,
+  speechProvider,
   pause,
   rate,
   voiceInfo,
@@ -25,8 +29,8 @@ export type { VoiceProvider, VoiceStatus } from '../settings/voice-settings'
 
 export const providerName = (p: VoiceProvider) => voiceInfo[p].name
 
-/** Longest stretch of a reply turned into audio at once: each clip has to fit one channel message. Gemini returns PCM, OpenAI AAC, ElevenLabs MP3. */
-export const SPEECH_CHUNK: Record<VoiceProvider, number> = { openai: 600, gemini: 150, elevenlabs: 600 }
+/** Longest stretch of a reply turned into audio at once: each clip has to fit one channel message. Gemini and xAI return PCM, OpenAI AAC, ElevenLabs MP3. */
+export const SPEECH_CHUNK: Record<VoiceProvider, number> = { openai: 600, gemini: 150, elevenlabs: 600, xai: 150, groq: 600 }
 
 /** The blob type for a provider's clip format. */
 export const audioType = (format: string) =>
@@ -45,19 +49,21 @@ export const VoiceSettings = {
   /** The provider picked in the call settings; null for on-device. */
   provider: (): VoiceProvider | null => {
     const value = callEngineChoice()
-    return isVoiceProvider(value) ? value : null
+    return isVoiceProvider(value) && isCallProvider(value) ? value : null
   },
   /** The provider picked for dictation; null for on-device. */
   dictationProvider: (): VoiceProvider | null => {
     const value = dictationEngine.get()
-    return isVoiceProvider(value) ? value : null
+    return isVoiceProvider(value) && canDictate(value) ? value : null
   },
   model: (p: VoiceProvider) => chosenModel(p, 'realtime'),
   transcribeModel: (p: VoiceProvider) => chosenModel(p, 'transcribe'),
   speechModel: (p: VoiceProvider) => chosenModel(p, 'speech'),
+  /** The provider that reads replies aloud: the call engine's, or xAI's own route. */
+  speechProvider,
   voice: chosenVoice,
   isSpeechMode,
-  localSpeech: () => speechOutput.get() === 'neutts',
+  localSpeech: localSpeechOutput,
   /** A pause this long (seconds) ends what you're saying and sends it. */
   pause: () => (pause.get() > 0 ? pause.get() : 1.5),
   /** AVSpeechUtterance's rate (0…1, 0.5 normal), as the Mac stores it. */
@@ -65,12 +71,12 @@ export const VoiceSettings = {
   /** The on-device recognizer's language; '' is the computer's. */
   language: () => language.get(),
   /** What a call's engine is built from (`CallView`'s `begin`): a different one picked mid-call takes over the call. */
-  engineChoice: (p: VoiceProvider | null): string =>
-    !p
-      ? `device ${VoiceSettings.language()}`
-      : VoiceSettings.isSpeechMode(p)
-        ? `${p} speech ${VoiceSettings.transcribeModel(p)} ${VoiceSettings.speechModel(p)} ${VoiceSettings.voice(p)} ${speechOutput.get()}`
-        : `${p} ${VoiceSettings.model(p)} ${VoiceSettings.voice(p)}`,
+  engineChoice: (p: VoiceProvider | null): string => {
+    if (!p) return `device ${VoiceSettings.language()}`
+    if (!VoiceSettings.isSpeechMode(p)) return `${p} ${VoiceSettings.model(p)} ${VoiceSettings.voice(p)}`
+    const speech = VoiceSettings.speechProvider(p)
+    return `${p} speech ${VoiceSettings.transcribeModel(p)} ${speech} ${VoiceSettings.speechModel(speech)} ${VoiceSettings.voice(speech)} ${speechOutput.get()}`
+  },
 }
 
 /** Rings when voice chat settings close, so a running call takes up a different engine picked there. */

@@ -14,6 +14,8 @@ struct ChatRow: View {
     var reply: (() -> Void)?
     /// Starts a thread branched from this message; nil in a thread.
     var branch: (() -> Void)?
+    /// Sends this message on to another chat; nil where it can't be.
+    var forward: (() -> Void)?
     /// Opens this message's thread, from its chip; nil where there's nothing to open.
     var openThread: (() -> Void)?
     /// A failure notice's "Add a fallback": the bot's details.
@@ -29,8 +31,7 @@ struct ChatRow: View {
         switch entry.kind {
         case "user":
             VStack(alignment: .trailing, spacing: 4) {
-                UserBubble(entry: entry, botWorking: chat?.isWorking == true, reply: reply, branch: branch)
-                UserBubble(entry: entry, reply: reply)
+                UserBubble(entry: entry, reply: reply, branch: branch, forward: forward)
                 ReactionsRow(entry: entry)
                 if let summary = entry.data.thread, let openThread {
                     ThreadChip(summary: summary, open: openThread)
@@ -42,7 +43,7 @@ struct ChatRow: View {
         case "agent":
             VStack(alignment: .leading, spacing: 4) {
                 if chat?.isGroup == true, groupStart { AuthorLabel(botId: entry.data.author) }
-                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, openArtifact: openArtifact, branch: branch)
+                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, openArtifact: openArtifact, branch: branch, forward: forward)
                 ReactionsRow(entry: entry)
                     .padding(.leading, chat?.isGroup == true ? 34 : 0)
                 if let summary = entry.data.thread, let openThread {
@@ -61,6 +62,12 @@ struct ChatRow: View {
                 }
             }
             .padding(.top, 12)
+        case "subagents":
+            VStack(alignment: .leading, spacing: 4) {
+                if chat?.isGroup == true { AuthorLabel(botId: entry.data.author) }
+                SubagentCard(entry: entry)
+            }
+            .padding(.top, groupStart ? 12 : 4)
         default:
             if let request = entry.data.connectionRequest {
                 ConnectionRequestCard(entry: entry, request: request).padding(.top, 12)
@@ -131,7 +138,12 @@ struct UserBubble: View {
     var reply: (() -> Void)?
     /// Starts a thread branched from this message; nil in a thread.
     var branch: (() -> Void)?
+    /// Sends this message on to another chat; nil where it can't be.
+    var forward: (() -> Void)?
     @Environment(BotStore.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+    /// The chat colour of this theme; reading it here redraws the bubble when Settings changes it.
+    @AppStorage(ChatAppearance.colourKey) private var storedChatColour = ""
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -158,11 +170,12 @@ struct UserBubble: View {
             }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(ChatAppearance.userBubble(dark: colorScheme == .dark), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .contextActions(reactions: model.reactionPick(entry)) {
                     var items = [MenuItem("Copy", icon: "square.on.square") { Pasteboard.copy(entry.data.text) }]
                     if let reply { items.append(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply)) }
                     if let branch { items.append(MenuItem("Branch from here", icon: "arrow.triangle.branch", action: branch)) }
+                    if let forward { items.append(MenuItem("Send to a channel", icon: "arrowshape.turn.up.right", action: forward)) }
                     return items
                 }
     }
@@ -206,6 +219,8 @@ struct AgentBubble: View {
     var openArtifact: ((ArtifactRef) -> Void)?
     /// Starts a thread branched from this message; nil in a thread.
     var branch: (() -> Void)?
+    /// Sends this message on to another chat; nil where it can't be.
+    var forward: (() -> Void)?
     @Environment(BotStore.self) private var model
 
     var body: some View {
@@ -229,6 +244,7 @@ struct AgentBubble: View {
                     ]
                     if let reply { items.insert(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply), at: 1) }
                     if let branch { items.insert(MenuItem("Branch from here", icon: "arrow.triangle.branch", action: branch), at: items.count) }
+                    if let forward { items.append(MenuItem("Send to a channel", icon: "arrowshape.turn.up.right", action: forward)) }
                     return items
                 }
         }

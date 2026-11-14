@@ -53,15 +53,18 @@ struct AgentSheet: View {
     @State private var checking = false
     @State private var authenticating: String?
     @State private var error: String?
+    @State private var confirmingDelete = false
+    @State private var deleting = false
 
     /// Live: an install or sign-in updates the host's list.
     private var backend: Backend { model.hello?.backends.first { $0.id == initial.id } ?? initial }
     private var installed: Bool { backend.installed == true }
     private var curated: Bool { backend.curated == true }
     private var signedIn: Bool? { auth?.signedIn ?? backend.signedIn }
-    /// It has run on this computer: its CLI is there, or an earlier check started it. Until then, a check
-    /// can download it, so only Set up starts one.
-    private var setUp: Bool { installed || backend.signedIn != nil || auth != nil }
+    /// It has run on this computer: its CLI is there, or an earlier check started it. Until then, a
+    /// check can download it, so only Set up starts one. A build the user deleted is off, signed in
+    /// or not, so the sheet offers Set up again instead of a check that would download it.
+    private var setUp: Bool { backend.turnedOff != true && (installed || backend.signedIn != nil || auth != nil) }
 
     var body: some View {
         ZStack {
@@ -143,10 +146,34 @@ struct AgentSheet: View {
             }
             signInSection
             AgentBrings(backendId: backend.id)
+            if backend.downloaded == true {
+                CardSection {
+                    Button(L10n.tr("Delete"), role: .destructive) { confirmingDelete = true }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(deleting ? Palette.tertiary : Palette.danger)
+                        .disabled(deleting)
+                }
+            }
             if let error {
                 CardSection { Text(L10n.tr(error)).foregroundStyle(Palette.danger).textSelection(.enabled) }
             }
         }
+        // Delete: only the runtime Codync downloaded goes. Accounts, sign-ins and bots stay, and a
+        // bot on this agent shows it as not installed until it is installed again.
+        .codyncDialog(
+            L10n.fill(L10n.tr("Delete {name}?"), ["name": backend.name]),
+            isPresented: $confirmingDelete,
+            message: deleteMessage
+        ) {
+            [DialogAction("Delete", destructive: true) { removeRuntime() }]
+        }
+    }
+
+    private var deleteMessage: String {
+        let removed = L10n.fill(L10n.tr("Codync removes the copy it downloaded for {name} on {host} and turns the agent off."),
+                                ["name": backend.name, "host": model.hostName])
+        return [removed, L10n.tr("Its accounts, sign-ins and bots stay."),
+                L10n.tr("Bots using it show as not installed until it is installed again.")].joined(separator: " ")
     }
 
     private var signInSection: some View {
@@ -275,6 +302,22 @@ struct AgentSheet: View {
             self.error = error.localizedDescription
         }
         await model.refreshBackends()
+    }
+
+    /// Deletes only the build Codync downloaded; the agent's accounts, sign-ins and bots stay.
+    private func removeRuntime() {
+        guard !deleting else { return }
+        deleting = true
+        error = nil
+        Task {
+            do {
+                try await model.deleteAgentDownload(backend: backend.id)
+                auth = nil
+            } catch {
+                self.error = error.localizedDescription
+            }
+            deleting = false
+        }
     }
 }
 

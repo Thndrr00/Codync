@@ -67,6 +67,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "pairing" => pairing(hub, b["shortCode"] == true).await?,
         "devices" => {
             let connected = hub.connected.locked().clone();
+            let people = hub.store.people()?;
             let devices: Vec<Value> = hub
                 .store
                 .devices()?
@@ -74,6 +75,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 .map(|d| {
                     let mut v = serde_json::to_value(&d).expect("Device is plain data and always serializes");
                     v["connected"] = connected.contains_key(&d.key).into();
+                    // The person the owner assigned it to, by name; null is the owner's own device.
+                    v["person"] = d
+                        .person_id
+                        .as_deref()
+                        .and_then(|id| people.iter().find(|p| p.id == id))
+                        .map(|p| Value::String(p.name.clone()))
+                        .unwrap_or(Value::Null);
                     v
                 })
                 .collect();
@@ -208,6 +216,7 @@ mod tests {
             created_at: 1,
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         };
         hub.store.put_device(&phone).unwrap();
         hub.store.put_device(&Device { key: "other".into(), ..phone.clone() }).unwrap();

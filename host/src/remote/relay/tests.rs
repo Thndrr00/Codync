@@ -198,6 +198,7 @@ async fn connects_publishes_acl_past_a_stale_version_and_delivers_mail() {
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         })
         .unwrap();
     let injected = b64(grant_key.verifying_key().as_bytes());
@@ -312,10 +313,18 @@ async fn registers_webhooks_and_runs_public_deliveries_once() {
     // Pausing changes what the relay should refuse: the set goes out again.
     hub.routines.set_enabled(&hub.store, &bot_id, &id, false).unwrap();
     wait_for(&fake, |m| m.iter().any(|v| v["t"] == "hooks" && v["hooks"][0]["enabled"] == false)).await;
-    let creds = hub.routines.credentials(&hub, &bot_id, &id, true).unwrap();
+    let creds = hub.routines.credentials(&hub, &bot_id, &id, true, None).unwrap();
     assert_ne!(creds["key"], key, "rotate replaces the key");
     assert_eq!(creds["url"], format!("{base}/v1/hooks/{}/{id}", hub.identity.computer_id()));
     wait_for(&fake, |m| m.iter().any(|v| v["t"] == "hooks" && v["hooks"][0]["key"] == creds["key"])).await;
+
+    // A sender's own signing secret replaces the generated key, and the relay learns it too.
+    let secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+    let pasted = hub.routines.credentials(&hub, &bot_id, &id, false, Some(secret)).unwrap();
+    assert_eq!(pasted["key"], secret);
+    wait_for(&fake, |m| m.iter().any(|v| v["t"] == "hooks" && v["hooks"][0]["key"] == secret)).await;
+    assert!(hub.routines.credentials(&hub, &bot_id, &id, false, Some("short")).is_err(), "too short to sign");
+    assert!(hub.routines.credentials(&hub, &bot_id, &id, false, Some("has a space in it")).is_err());
 }
 
 #[tokio::test]
@@ -336,6 +345,7 @@ async fn account_mail_waits_for_a_state_pull_instead_of_failing() {
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         })
         .unwrap();
     *fake.state.lock().unwrap() =
@@ -384,6 +394,7 @@ async fn a_private_relay_gets_its_token_only_to_enroll_and_never_changes_account
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         })
         .unwrap();
     *fake.state.lock().unwrap() = json!({"owner": null, "grants": [], "requests": []});
@@ -424,6 +435,6 @@ async fn a_private_relay_gets_its_token_only_to_enroll_and_never_changes_account
     assert!(hub.store.device(&dk).is_some(), "its empty grant list doesn't remove the account device");
     assert!(!hub.cloud_synced.load(Ordering::Acquire), "account devices stay out, as with the cloud off");
     assert_eq!(hub.cloud.status().relay, cloud::RelayKind::Private);
-    let creds = hub.routines.credentials(&hub, &bot_id, &routine_id, false).unwrap();
+    let creds = hub.routines.credentials(&hub, &bot_id, &routine_id, false, None).unwrap();
     assert_eq!(creds["url"], Value::Null, "a private relay delivers no public webhook");
 }

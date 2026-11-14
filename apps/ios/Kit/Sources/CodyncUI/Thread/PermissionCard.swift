@@ -10,9 +10,14 @@ struct PermissionCard: View {
     var answering: String?
     let respond: (String?) -> Void
     @State private var expanded = false
+    /// A question card's last pick, shown with the earlier answers before anything is sent.
+    @State private var summary: PermissionOption?
 
     private var d: EntryData { entry.data }
     private var pending: Bool { d.status == "pending" }
+    /// A question card asks one question at a time; the last one shows the summary before answering.
+    private var question: Bool { d.toolKind == "question" && d.questionIndex != nil }
+    private var lastQuestion: Bool { (d.questionIndex ?? 0) >= (d.questionCount ?? 1) - 1 }
 
     private var headline: String {
         switch d.toolKind {
@@ -32,10 +37,19 @@ struct PermissionCard: View {
                     Circle().fill(Palette.warning).frame(width: 7, height: 7)
                 }
             }
+            if question {
+                Text(L10n.fill(L10n.tr("Question {current} of {total}"), [
+                    "current": String((d.questionIndex ?? 0) + 1),
+                    "total": String(d.questionCount ?? 1),
+                ]))
+                    .font(.caption)
+                    .foregroundStyle(Palette.secondary)
+            }
             Text(d.title ?? "")
                 .font(.subheadline.monospaced())
                 .foregroundStyle(Palette.secondary)
                 .lineLimit(expanded ? nil : 3)
+                .codeDirection()
             Label("Runs on \(hostName)\(d.cwd.map { " · \(($0 as NSString).lastPathComponent)" } ?? "")", systemImage: "desktopcomputer")
                 .font(.caption)
                 .foregroundStyle(Palette.tertiary)
@@ -58,7 +72,11 @@ struct PermissionCard: View {
             }
 
             if pending {
-                buttons
+                if let summary {
+                    summaryStep(summary)
+                } else {
+                    buttons
+                }
             } else {
                 Text(outcome)
                     .font(.caption.weight(.medium))
@@ -82,6 +100,7 @@ struct PermissionCard: View {
     }
 
     private func label(_ o: PermissionOption) -> String {
+        if o.optionId == "__back" { return L10n.tr("Back") }
         switch o.kind {
         case "allow_once": "Allow once"
         case "allow_always": "Always allow"
@@ -91,16 +110,66 @@ struct PermissionCard: View {
         }
     }
 
+    private func optionText(_ o: PermissionOption, suffix: String) -> some View {
+        Text(label(o) + suffix)
+            .font(.body.weight(o.kind == "allow_once" ? .semibold : .regular))
+            .foregroundStyle(o.optionId == "__back" ? Palette.secondary : o.kind.hasPrefix("allow") ? Palette.text : Palette.danger)
+    }
+
+    /// The last question's pick and the answers before it, before anything goes to the agent.
+    private func summaryStep(_ pick: PermissionOption) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.tr("Summary")).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text)
+            ForEach(d.answers ?? [], id: \.text) { answer in
+                HStack(spacing: 6) {
+                    Text(answer.text).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                    Text(answer.label).font(.body).foregroundStyle(Palette.text)
+                }
+            }
+            HStack(spacing: 6) {
+                Text(d.title ?? "").font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                Text(label(pick)).font(.body.weight(.semibold)).foregroundStyle(Palette.text)
+            }
+            HStack(spacing: 8) {
+                Button { respond(pick.optionId) } label: {
+                    Text(L10n.tr("Send answers")).font(.body.weight(.semibold)).foregroundStyle(Palette.onAccent)
+                        .padding(.horizontal, 14).frame(minHeight: 40)
+                        .background(Palette.accentFill, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(answering != nil)
+                Button { summary = nil } label: {
+                    Text(L10n.tr("Back")).font(.body).foregroundStyle(Palette.text)
+                        .padding(.horizontal, 14).frame(minHeight: 40)
+                        .background(Palette.bubbleUser, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Answers an option; on a question card's last question, shows the summary first.
+    private func choose(_ o: PermissionOption) {
+        if o.optionId == "__back" { respond(o.optionId); return }
+        if question && lastQuestion { summary = o; return }
+        respond(o.optionId)
+    }
+
     private var buttons: some View {
-        let options = ordered
-        return VStack(spacing: 0) {
+        let options = ordered        return VStack(spacing: 0) {
             ForEach(Array(options.enumerated()), id: \.element.id) { i, o in
                 if i > 0 { Rectangle().fill(Palette.border).frame(height: 0.5) }
-                Button { respond(o.optionId) } label: {
+                Button { choose(o) } label: {
                     HStack(spacing: 8) {
-                        Text(label(o))
-                            .font(.body.weight(o.kind == "allow_once" ? .semibold : .regular))
-                            .foregroundStyle(o.kind.hasPrefix("allow") ? Palette.text : Palette.danger)
+                        if o.kind == "allow_once", let at = d.autoApproveAt {
+                            TimelineView(.periodic(from: .now, by: 1)) { context in
+                                optionText(o, suffix: planCountdown(at, now: context.date))
+                            }
+                        } else {
+                            optionText(o, suffix: "")
+                        }
                         Spacer(minLength: 0)
                         if answering == o.optionId { Spinner(size: 14) }
                     }
@@ -147,6 +216,7 @@ struct CodeBox: View {
         }
         .frame(maxHeight: 240)
         .background(Palette.codeBackground, in: RoundedRectangle(cornerRadius: 8))
+        .codeDirection()
     }
 }
 
@@ -164,6 +234,7 @@ struct DiffView: View {
             }
             .font(.caption.monospaced())
             .foregroundStyle(Palette.secondary)
+            .codeDirection()
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(diff.patch.split(separator: "\n", omittingEmptySubsequences: false).prefix(80).enumerated()), id: \.offset) { _, line in
@@ -176,6 +247,7 @@ struct DiffView: View {
             }
             .frame(maxHeight: 260)
             .background(Palette.codeBackground, in: RoundedRectangle(cornerRadius: 8))
+            .codeDirection()
         }
     }
 }

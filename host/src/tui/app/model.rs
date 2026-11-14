@@ -22,6 +22,27 @@ pub enum Msg {
     Rewind,
     /// A setup terminal's output or exit.
     Term(String, Value),
+    /// A draft file's upload: bytes the computer has so far.
+    Upload {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+        sent: u64,
+        total: u64,
+    },
+    /// The computer has the whole file; `id` names it in `send`.
+    Uploaded {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+    },
+    /// The upload stopped: the reason states it (the user cancelled it, or the link failed).
+    UploadFailed {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+        error: String,
+    },
 }
 
 /// What to do with a command's reply.
@@ -40,6 +61,8 @@ pub enum After {
     /// `editQueued` for bot `.0`, entry `.1`, of text `.2`: a waiting message the box rewrote.
     QueuedEdited(String, String, String),
     Connection(String, super::super::connections::Step),
+    /// Composio's connect flow, as the app's sheet steps through the host's answers.
+    Composio(super::super::manage::composio::Step),
     Hello,
     /// `testApprovalRule`: what the host says about a command tried in the rules sheet.
     RuleTest,
@@ -65,6 +88,8 @@ pub enum After {
     RulesSaved,
     /// `weekSummary`: the last seven days, for the usage sheet; a host without it says nothing.
     Week,
+    /// `skillUsage`: how often each skill's text entered a turn, for the usage sheet's Skill tab.
+    SkillUsage,
     /// `track`: fire and forget; analytics never surfaces an error.
     Tracked,
     Analytics,
@@ -77,6 +102,8 @@ pub enum After {
     /// The pair sheet's answer to a waiting phone.
     PairingDecided,
     Backends,
+    /// `deleteAgentDownload`: the agent is off until a build is installed again.
+    AgentBuildDeleted,
     Update,
     Saved,
     Connectors,
@@ -129,6 +156,8 @@ pub enum Kind {
     Plan,
     Permission,
     Notice,
+    /// The subagents an agent started in one turn (`chat::subagents`).
+    Subagents,
     Other,
 }
 
@@ -155,6 +184,7 @@ impl Entry {
             "plan" => Kind::Plan,
             "permission" => Kind::Permission,
             "notice" => Kind::Notice,
+            "subagents" => Kind::Subagents,
             _ => Kind::Other,
         };
         // The side conversation a line belongs to, and how many of a root's replies are unread, sit on

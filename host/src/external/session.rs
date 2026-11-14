@@ -4,6 +4,7 @@ use super::event::Event;
 use super::{BACKEND, STALE_AFTER, tool};
 use crate::LockExt;
 use crate::agent::acp::truncate;
+use crate::chat::subagents;
 use crate::hub::{BotStatus, Hub};
 use crate::remote::push::{self, AlertKind};
 use crate::store::{BotConfig, EntryKind, Lane, now_ms};
@@ -19,6 +20,8 @@ pub struct Session {
     turn: i64,
     /// The agent's tool call id → the transcript entry showing it.
     tools: HashMap<String, String>,
+    /// The subagents this turn started, in their own chat card.
+    subagents: subagents::Card,
     seen: Instant,
 }
 
@@ -91,7 +94,13 @@ pub(super) fn bot_for(hub: &Hub, ev: &Event) -> Option<String> {
             let turn = hub.store.max_turn(&bot);
             state.sessions.insert(
                 ev.session.clone(),
-                Session { bot: bot.clone(), turn, tools: HashMap::new(), seen: Instant::now() },
+                Session {
+                    bot: bot.clone(),
+                    turn,
+                    tools: HashMap::new(),
+                    subagents: subagents::Card::default(),
+                    seen: Instant::now(),
+                },
             );
             Some(bot)
         }
@@ -150,8 +159,60 @@ pub(super) fn record(hub: &Hub, ev: &Event) {
         "UserPromptSubmit" => prompt(hub, ev, &bot),
         "PreToolUse" => tool_started(hub, ev, &bot),
         "PostToolUse" | "PostToolUseFailure" => tool_finished(hub, ev, &bot),
+        "SubagentStart" => subagent_started(hub, ev, &bot),
+        "SubagentStop" => subagent_stopped(hub, ev, &bot),
         "Stop" | "StopFailure" | "Interrupt" => stopped(hub, ev, &bot),
         _ => {}
+    }
+}
+
+/// Writes the session's subagent card: a new entry the first time, its data in place after.
+fn save_subagents(hub: &Hub, bot: &str, session: &str) {
+    let (turn, mut data, entry) = {
+        let state = hub.external.state.locked();
+        let Some(s) = state.sessions.get(session) else { return };
+        (s.turn, s.subagents.data(), s.subagents.entry().map(str::to_owned))
+    };
+    data["author"] = json!(bot);
+    match entry {
+        Some(id) if hub.store.entry(&id).is_some() => hub.set_entry(&id, &data),
+        _ => {
+            if let Some(e) = hub.add_entry(&Lane::main(bot), EntryKind::Subagents, turn, &data)
+                && let Some(s) = hub.external.state.locked().sessions.get_mut(session)
+            {
+                s.subagents.set_entry(e.id);
+            }
+        }
+    }
+}
+
+/// The agent's own subagent started: its type is the task, unless its `Task` call already named it.
+fn subagent_started(hub: &Hub, ev: &Event, bot: &str) {
+    if ev.agent_id.is_empty() {
+        return;
+    }
+    let task = if ev.agent_type.is_empty() { "Subagent".to_owned() } else { ev.agent_type.clone() };
+    let started = hub.external.state.locked().sessions.get_mut(&ev.session).is_some_and(|s| {
+        !s.subagents.has(&ev.agent_id) && !s.subagents.running() && s.subagents.start(&ev.agent_id, &task, now_ms())
+    });
+    if started {
+        save_subagents(hub, bot, &ev.session);
+    }
+}
+
+/// A subagent's final report ends it; how it ended first stands.
+fn subagent_stopped(hub: &Hub, ev: &Event, bot: &str) {
+    if ev.agent_id.is_empty() {
+        return;
+    }
+    let changed = hub.external.state.locked().sessions.get_mut(&ev.session).is_some_and(|s| {
+        let step = truncate(&ev.message, 120);
+        let stepped = s.subagents.step(&ev.agent_id, &step);
+        let ended = s.subagents.finish(&ev.agent_id, subagents::State::Done, now_ms());
+        stepped || ended
+    });
+    if changed {
+        save_subagents(hub, bot, &ev.session);
     }
 }
 
@@ -160,6 +221,8 @@ fn prompt(hub: &Hub, ev: &Event, bot: &str) {
         let mut state = hub.external.state.locked();
         let Some(session) = state.sessions.get_mut(&ev.session) else { return };
         session.turn += 1;
+        // A new turn: its subagents get a card of their own.
+        session.subagents = subagents::Card::default();
         session.turn
     };
     if !ev.prompt.is_empty() {
@@ -186,6 +249,16 @@ fn tool_started(hub: &Hub, ev: &Event, bot: &str) {
         }
     }
     working(hub, bot, tool_activity(&data), false);
+    let started = hub
+        .external
+        .state
+        .locked()
+        .sessions
+        .get_mut(&ev.session)
+        .is_some_and(|s| s.subagents.start_with_tool(&id, &ev.tool, &ev.input, now_ms()));
+    if started {
+        save_subagents(hub, bot, &ev.session);
+    }
 }
 
 fn tool_activity(data: &Value) -> &str {
@@ -194,6 +267,17 @@ fn tool_activity(data: &Value) -> &str {
 
 fn tool_finished(hub: &Hub, ev: &Event, bot: &str) {
     let status = if ev.name == "PostToolUseFailure" { "failed" } else { "completed" };
+    let state = if ev.name == "PostToolUseFailure" { subagents::State::Failed } else { subagents::State::Done };
+    let finished = hub
+        .external
+        .state
+        .locked()
+        .sessions
+        .get_mut(&ev.session)
+        .is_some_and(|s| s.subagents.finish(&ev.tool_use_id, state, now_ms()));
+    if finished {
+        save_subagents(hub, bot, &ev.session);
+    }
     let known = hub.external.state.locked().sessions.get_mut(&ev.session).and_then(|s| s.tools.remove(&ev.tool_use_id));
     let diffs = ev.diffs();
     let started = known.and_then(|id| hub.store.entry(&id));
@@ -215,6 +299,12 @@ fn tool_finished(hub: &Hub, ev: &Event, bot: &str) {
 
 fn stopped(hub: &Hub, ev: &Event, bot: &str) {
     idle(hub, bot);
+    // A turn that ended ends the subagents it started.
+    let stopped_subagents =
+        hub.external.state.locked().sessions.get_mut(&ev.session).is_some_and(|s| s.subagents.stop_running(now_ms()));
+    if stopped_subagents {
+        save_subagents(hub, bot, &ev.session);
+    }
     let failed = ev.name == "StopFailure";
     if !ev.message.is_empty() {
         let data = json!({"text": ev.message, "final": true, "author": bot});

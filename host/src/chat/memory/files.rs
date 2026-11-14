@@ -81,6 +81,15 @@ pub fn scan(hub: &Hub, cfg: &BotConfig) -> bool {
     deferred
 }
 
+/// Records what changed in a channel's memory folder (a group's own layer, which its members read in the room).
+pub fn scan_channel(hub: &Hub, group: &str) {
+    let _one = SCANNING.locked();
+    prune(&hub.store);
+    if let Err(error) = scan_layer(hub, Some(group)) {
+        tracing::warn!(group, error = format!("{error:#}"), "couldn't scan the channel's memory files");
+    }
+}
+
 /// Once a day: versions older than [`KEEP_MS`] go.
 fn prune(store: &Store) {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -304,6 +313,9 @@ pub struct Writer<'a> {
     /// A bot's write: the user's message that started the turn, when it was one the user started in the bot's own
     /// chat. Only then may it change or take out what memory says.
     pub message: Option<&'a str>,
+    /// A write to a channel's own layer by one of its members (`channel_remember`): it may change or take out a
+    /// line without the user's own-chat turn, and it is recorded as the member's, not as one of its chats'.
+    pub channel: bool,
 }
 
 /// Writes a file the way every host writer does: only over the content whose hash is `expected` (`None`: no file
@@ -326,7 +338,7 @@ pub fn write(
         scan_layer(hub, layer)?;
         bail!("{name} changed meanwhile. Read it again and redo the change on top of it.");
     }
-    let asked = writer.message.is_some();
+    let asked = writer.message.is_some() || writer.channel;
     if writer.author == Author::Bot {
         admit(hub, layer, name, now.as_deref(), content, asked)?;
     }
@@ -354,7 +366,7 @@ pub fn write(
         size,
     };
     match writer.bot {
-        Some(cfg) if writer.author == Author::Bot => {
+        Some(cfg) if writer.author == Author::Bot && !writer.channel => {
             let session = hub.runtime(&cfg.id).session;
             record_bot_change(hub, cfg, session.as_deref(), now.as_deref(), &change, asked)
         }

@@ -13,6 +13,7 @@ pub mod reply;
 
 mod event;
 mod permission;
+pub mod plan;
 mod question;
 mod session;
 mod tool;

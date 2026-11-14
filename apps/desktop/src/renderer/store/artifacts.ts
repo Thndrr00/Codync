@@ -1,4 +1,4 @@
-import { readArtifactHTML, type Artifact, type LibraryItem } from '@shared/artifacts'
+import { readArtifactHTML, type Artifact, type LibraryItem, type ServerLibraryFilter, type ServerLibraryItem } from '@shared/artifacts'
 import { FILE_CHUNK_SIZE } from '../../shared/files.ts'
 import type { HostClient } from '../client/host-client'
 import { trNow } from '../lib/l10n.ts'
@@ -29,6 +29,14 @@ export class Artifacts {
   async library(client: HostClient | null, botId: string): Promise<LibraryItem[]> {
     if (!client) throw new Error(trNow('Connect to this computer to see its library'))
     const { items } = await client.library(botId)
+    for (const item of items) if (item.kind === 'artifact') this.upsert(item.artifact)
+    return items
+  }
+
+  /** The server's Library (`serverLibrary`), every bot's newest first; its artifacts join the ones known here. */
+  async serverLibrary(client: HostClient | null, filter: ServerLibraryFilter = 'all'): Promise<ServerLibraryItem[]> {
+    if (!client) throw new Error(trNow('Connect to this computer to see its library'))
+    const { items } = await client.serverLibrary(filter)
     for (const item of items) if (item.kind === 'artifact') this.upsert(item.artifact)
     return items
   }

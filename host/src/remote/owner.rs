@@ -212,6 +212,7 @@ mod tests {
                 created_at: 1,
                 last_seen_at: None,
                 account,
+                person_id: None,
             })
             .unwrap();
     }

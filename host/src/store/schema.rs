@@ -11,7 +11,8 @@ use std::sync::Mutex;
 /// 8: a flow link's own model and effort (`routine_flow_links.model`, `.model_options`).
 /// 9: a thread's title, branch origin and archive flag (`threads`).
 /// 10: a phone that paired with no account is told apart from a device paired before 2.36.0 (`devices.no_account`).
-const SCHEMA: i64 = 10;
+/// 11: people on this computer (`people`) and the person a device belongs to (`devices.person_id`).
+const SCHEMA: i64 = 11;
 
 /// 3: authorized devices (keys, not push tickets) with their push and Live Activity
 /// tickets. The old ticket-only `devices` table is dropped; phones re-register on connect.
@@ -25,6 +26,7 @@ const SCHEMA: i64 = 10;
 /// 8: a flow link's own model and effort (`routine_flow_links.model`, `.model_options`).
 /// 9: a thread's title, branch origin and archive flag (`threads`).
 /// 10: a phone that paired with no account is told apart from a device paired before 2.36.0 (`devices.no_account`).
+/// 11: people on this computer (`people`) and the person a device belongs to (`devices.person_id`).
 fn migrate(c: &Connection) -> Result<()> {
     let version: i64 =
         c.query_row("SELECT CAST(v AS INTEGER) FROM kv WHERE k = 'schema'", [], |r| r.get(0)).optional()?.unwrap_or(0);
@@ -44,7 +46,8 @@ fn migrate(c: &Connection) -> Result<()> {
     migrate_7(c)?;
     migrate_8(c)?;
     migrate_9(c)?;
-    migrate_10(c)
+    migrate_10(c)?;
+    migrate_11(c)
 }
 
 fn migrate_3(c: &Connection) -> Result<()> {
@@ -196,6 +199,25 @@ fn migrate_10(c: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// People on this computer: the owner stays implicit (no row), and a device may name a person.
+fn migrate_11(c: &Connection) -> Result<()> {
+    c.execute_batch(
+        "BEGIN;
+         CREATE TABLE IF NOT EXISTS people(
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, created_at INTEGER NOT NULL);
+         COMMIT;",
+    )?;
+    let has: bool =
+        c.query_row("SELECT count(*) > 0 FROM pragma_table_info('devices') WHERE name = 'person_id'", [], |r| {
+            r.get(0)
+        })?;
+    if !has {
+        c.execute_batch("ALTER TABLE devices ADD COLUMN person_id TEXT;")?;
+    }
+    c.execute_batch("INSERT INTO kv(k, v) VALUES('schema', '11') ON CONFLICT(k) DO UPDATE SET v = '11';")?;
+    Ok(())
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         let c = Connection::open(path)?;
@@ -248,6 +270,7 @@ impl Store {
         super::apps::open(&c)?;
         super::open_items::open(&c)?;
         super::threads::open(&c)?;
+        super::group_tasks::open(&c)?;
         super::flows::open(&c)?;
         codync_mem::schema::migrate(&c)?;
         let secret_key = if path == Path::new(":memory:") {
@@ -291,7 +314,7 @@ mod tests {
         }
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty());
-        assert_eq!(s.kv_get("schema").as_deref(), Some("10"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("11"));
         drop(s);
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty(), "reopening keeps the new table");
@@ -314,7 +337,7 @@ mod tests {
         let s = Store::open(&db).unwrap();
         let chat: Vec<String> = s.history("b", i64::MAX, 10).unwrap().into_iter().map(|e| e.id).collect();
         assert_eq!(chat, ["info"]);
-        assert_eq!(s.kv_get("schema").as_deref(), Some("10"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("11"));
     }
 
     #[test]

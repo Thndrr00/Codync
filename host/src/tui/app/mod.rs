@@ -26,13 +26,15 @@ pub mod roster_tools;
 mod rules;
 mod slash;
 mod steps;
+pub mod tasks;
 mod ui;
+pub mod uploads;
 mod usage_chooser;
 mod whats_new;
 
 pub use always::AlwaysSheet;
 pub use beliefs::BeliefsSheet;
-pub use bot::{AgentModel, Bot, ModelOption, OwnMemory};
+pub use bot::{AgentModel, Bot, ModelOption, OwnMemory, Task};
 pub use channels::ChannelsSheet;
 pub use editor::Editor;
 pub use exchange::{ConversationRow, Exchange, Item, Outcome, conversation, group, rows};
@@ -70,6 +72,8 @@ struct PendingSend {
 #[allow(clippy::struct_excessive_bools, reason = "independent UI flags, not a state machine")]
 pub struct App {
     pub roster_tools: roster_tools::RosterTools,
+    /// The channel's "Waiting for sub-tasks" band: its pick, and a reassign in progress.
+    pub tasks_band: tasks::TasksBand,
     pub client: Client,
     pub(super) tx: UnboundedSender<Msg>,
     pub url: String,
@@ -88,6 +92,10 @@ pub struct App {
     pub usage: Value,
     /// The last seven days (`weekSummary`), read when the usage sheet opens; null until then.
     pub week: Value,
+    /// The Skill tab of the usage sheet (`skillUsage`); null until read or from an older host.
+    pub skills: Value,
+    /// The usage sheet shows its Skill tab instead of the limits.
+    pub usage_skills: bool,
     /// `hostHealth`, for the header; null from an older host.
     pub health: Value,
     health_asked: Option<Instant>,
@@ -115,6 +123,8 @@ pub struct App {
     pub slash_pick: (String, usize),
     /// Files dropped on the composer (pasted paths), per draft like the text.
     pub files: HashMap<String, Vec<std::path::PathBuf>>,
+    /// Each draft's files on their way to the computer, in the draft's order (`net::spawn_upload`).
+    pub uploads: HashMap<String, Vec<uploads::FileUpload>>,
     /// What was pasted into each draft, sent along so memory never takes it as the user's own words.
     pub pasted: HashMap<String, Vec<String>>,
     pub download: Option<super::net::files::Download>,
@@ -123,6 +133,8 @@ pub struct App {
     sends: HashMap<String, PendingSend>,
     /// Lines scrolled up from the bottom of the chat (0 = follow new messages).
     pub chat_scroll: usize,
+    /// The subagent card to bring into view (the dock was clicked), then cleared.
+    pub scroll_to: Option<String>,
     pub trace_scroll: usize,
     pub trace: TraceMode,
     /// Turn shown in the trace; `None` follows the latest.
@@ -186,6 +198,7 @@ impl App {
     pub fn new(client: Client, tx: UnboundedSender<Msg>, url: String) -> Self {
         Self {
             roster_tools: roster_tools::RosterTools::default(),
+            tasks_band: tasks::TasksBand::default(),
             download: None,
             artifact_titles: super::manage::ArtifactTitles::default(),
             client,
@@ -204,6 +217,8 @@ impl App {
             entries: HashMap::new(),
             usage: Value::Null,
             week: Value::Null,
+            skills: Value::Null,
+            usage_skills: false,
             health: Value::Null,
             health_asked: None,
             comfy: Value::Null,
@@ -221,9 +236,11 @@ impl App {
             drafts: HashMap::new(),
             slash_pick: (String::new(), 0),
             files: HashMap::new(),
+            uploads: HashMap::new(),
             pasted: HashMap::new(),
             sends: HashMap::new(),
             chat_scroll: 0,
+            scroll_to: None,
             trace_scroll: 0,
             trace: TraceMode::Off,
             trace_turn: None,

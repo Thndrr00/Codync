@@ -23,6 +23,12 @@ pub enum SlashAction {
     /// Rewrites the next waiting message in the box (`editQueued`).
     Edit,
     DevServers,
+    /// The server's update style: a short note between steps, or the agent's own text.
+    Natural,
+    Classic,
+    /// Claude agents load the person's own `~/.claude`; `ClaudeSetupOff` leaves it out (the default).
+    ClaudeSetupOn,
+    ClaudeSetupOff,
     Skill,
 }
 
@@ -47,6 +53,10 @@ impl SlashCommand {
             | SlashAction::Steer
             | SlashAction::Unqueue
             | SlashAction::Edit
+            | SlashAction::Natural
+            | SlashAction::Classic
+            | SlashAction::ClaudeSetupOn
+            | SlashAction::ClaudeSetupOff
             | SlashAction::DevServers => format!("{} · {}", self.title, self.detail),
         }
     }
@@ -154,6 +164,38 @@ impl App {
         commands
     }
 
+    /// Server settings that a `/command` sets: the update style and the Claude Code setup switch. They
+    /// are offered once the person types something after `/`, so the first list stays short.
+    fn personality_commands() -> Vec<SlashCommand> {
+        vec![
+            SlashCommand {
+                name: "natural".into(),
+                title: "Personality: Natural".into(),
+                detail: "Updates between steps: a short note when a finding changes the plan or before a long step."
+                    .into(),
+                action: SlashAction::Natural,
+            },
+            SlashCommand {
+                name: "classic".into(),
+                title: "Personality: Classic".into(),
+                detail: "Updates between steps: the agent's own text as it comes.".into(),
+                action: SlashAction::Classic,
+            },
+            SlashCommand {
+                name: "claude-setup".into(),
+                title: "Use my Claude Code setup".into(),
+                detail: "Claude agents load your CLAUDE.md, skills, agents, hooks and plugins from ~/.claude.".into(),
+                action: SlashAction::ClaudeSetupOn,
+            },
+            SlashCommand {
+                name: "claude-setup-off".into(),
+                title: "Don't use my Claude Code setup".into(),
+                detail: "Claude agents send a shorter prompt without your ~/.claude setup (the default).".into(),
+                action: SlashAction::ClaudeSetupOff,
+            },
+        ]
+    }
+
     /// Built-in commands, then the skills the bot (or any member of a group) has on, whose name
     /// or title holds the `/partial` being typed.
     pub fn slash_commands(&self) -> Vec<SlashCommand> {
@@ -177,7 +219,12 @@ impl App {
             detail: tr(detail).into_owned(),
             action: SlashAction::Skill,
         });
-        let mut commands: Vec<SlashCommand> = self.built_in().into_iter().chain(skills).collect();
+        let mut commands: Vec<SlashCommand> = self.built_in();
+        // The server settings appear once something is typed after `/`, so the first list stays short.
+        if !query.is_empty() {
+            commands.extend(Self::personality_commands());
+        }
+        commands.extend(skills);
         let taken: Vec<String> = commands.iter().map(|c| c.name.clone()).collect();
         commands.extend(tools.filter(|t| !taken.contains(&t.name)));
         commands.retain(|c| c.name.contains(&query) || c.title.to_lowercase().contains(&query));
@@ -219,7 +266,10 @@ impl App {
     /// Returns whether it did.
     pub(super) fn built_in_command(&mut self, text: &str) -> bool {
         let Some(name) = text.strip_prefix('/') else { return false };
-        let Some(command) = self.built_in().into_iter().find(|c| c.name == name) else { return false };
+        let Some(command) = self.built_in().into_iter().chain(Self::personality_commands()).find(|c| c.name == name)
+        else {
+            return false;
+        };
         self.run_slash(&command);
         true
     }
@@ -276,6 +326,22 @@ impl App {
             }
             SlashAction::DevServers => {
                 self.open_dev_servers();
+                String::new()
+            }
+            SlashAction::Natural | SlashAction::Classic => {
+                let style = if command.action == SlashAction::Natural { "natural" } else { "classic" };
+                self.call("setServerSettings", json!({"responseStyle": style}), After::Nothing);
+                self.flash(if style == "natural" { "Personality: Natural" } else { "Personality: Classic" });
+                String::new()
+            }
+            SlashAction::ClaudeSetupOn | SlashAction::ClaudeSetupOff => {
+                let on = command.action == SlashAction::ClaudeSetupOn;
+                self.call("setServerSettings", json!({"claudeUserSetup": on}), After::Nothing);
+                self.flash(if on {
+                    "Claude agents use your Claude Code setup"
+                } else {
+                    "Claude agents leave your Claude Code setup out"
+                });
                 String::new()
             }
             SlashAction::Skill => format!("/{} ", command.name),

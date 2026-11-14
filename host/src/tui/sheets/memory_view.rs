@@ -28,9 +28,13 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, memory: &MemorySheet) {
                 notes(buf, body, memory);
                 "←→ section · ↑↓ move · ↵ open · Esc close · the bot writes notes"
             }
-            Section::Yours | Section::Bot => {
+            Section::Yours | Section::Bot | Section::Channel => {
                 entries(buf, body, app, memory);
-                "←→ section · ↑↓ move · s shared · Esc close · tell the bot to change it"
+                if memory.section == Section::Channel {
+                    "←→ section · ↑↓ move · Esc close · read-only, the channel's members change it"
+                } else {
+                    "←→ section · ↑↓ move · s shared · Esc close · tell the bot to change it"
+                }
             }
             Section::Dreams => {
                 dreams(buf, body, memory);
@@ -53,6 +57,7 @@ fn tabs(buf: &mut Buffer, inner: Rect, memory: &MemorySheet) {
         let layer = match section {
             Section::Yours => Some("yours"),
             Section::Bot => Some("bot"),
+            Section::Channel => Some("channel"),
             _ => None,
         };
         if let (Some(layer), Some(view)) = (layer, &memory.view) {
@@ -76,6 +81,9 @@ fn entries(buf: &mut Buffer, body: Rect, app: &App, memory: &MemorySheet) {
     let bot = app.bots.get(&memory.bot);
     let harness = app.harness_name(&memory.bot);
     let note = match (memory.section, view["shared"] == true, bot.and_then(|b| b.harness_memory)) {
+        (Section::Channel, _, _) => {
+            tr("What every member of this channel keeps · your other chats don't get it").into_owned()
+        }
         (Section::Yours, true, _) => tr("Shared by your bots · s stops this bot using it").into_owned(),
         (Section::Yours, false, _) => tr("This bot doesn't use what your bots share · s turns it on").into_owned(),
         (_, _, Some(OwnMemory::Switch(true))) => {
@@ -97,6 +105,8 @@ fn entries(buf: &mut Buffer, body: Rect, app: &App, memory: &MemorySheet) {
     if rows.is_empty() {
         let empty = tr(if memory.section == Section::Yours {
             "Nothing shared yet. Facts every bot should know (your name, time zone, people) go here."
+        } else if memory.section == Section::Channel {
+            "Nothing yet. What the channel learns shows up here."
         } else {
             "Nothing yet. What this bot learns about you shows up here."
         });

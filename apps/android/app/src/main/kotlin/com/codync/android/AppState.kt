@@ -34,7 +34,8 @@ data class AppState(
     val entries: List<Entry> = emptyList(),
     val pending: List<PendingSend> = emptyList(),
     val drafts: Map<String, ComposerDraft> = emptyMap(),
-    val uploadProgress: Map<String, Int> = emptyMap(),
+    /** The files in a message box on their way to the computer, by the draft file's path (`FileUpload`). */
+    val fileUploads: Map<String, FileUpload> = emptyMap(),
     /** Files bots shared that this phone is downloading, has downloaded or couldn't, by file ID. */
     val fileDownloads: Map<String, FileDownloadState> = emptyMap(),
     /** A downloaded file whose share sheet waits for its conversation to be on screen again. */
@@ -69,6 +70,8 @@ data class AppState(
     val artifacts: ArtifactCache = ArtifactCache(),
     /** Each chat's Library as last fetched, by chat ID (its artifacts as `artifacts` has them). */
     val library: Map<String, List<LibraryItem>> = emptyMap(),
+    /** The server's Library as last fetched (`serverLibrary`): every bot's artifacts and files; null until read. */
+    val serverLibrary: List<ServerLibraryItem>? = null,
     val plugins: PluginListing? = null,
     val voice: VoiceCallViewState? = null,
     /** The computer's remote screen (`null`: the host predates it). */

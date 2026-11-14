@@ -44,6 +44,7 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
         guard !isInternal else { return false }
         return switch kind {
         case "user", "permission": true
+        case "subagents": true
         case "notice": data.memory == nil && data.memoryFile == nil && data.compaction == nil && data.handoff?.status != "kept"
         case "agent": data.final == true
         default: false
@@ -81,6 +82,19 @@ public struct Location: Codable, Hashable, Sendable {
     public var line: Int?
 }
 
+/// A credential the host found in a tool call's arguments: its category and where it sits, never the value.
+public struct CredentialCaution: Codable, Hashable, Sendable {
+    /// `sensitive_content` | `inspection_limit`
+    public var reason: String
+    public var findings: [Finding]
+
+    public struct Finding: Codable, Hashable, Sendable {
+        /// `credential_field` | `private_key` | `provider_token` | `authorization_header`
+        public var category: String
+        public var path: String
+    }
+}
+
 public struct PermissionOption: Codable, Hashable, Sendable, Identifiable {
     public var optionId: String
     public var name: String
@@ -98,6 +112,62 @@ public struct PlanItem: Codable, Hashable, Sendable {
 public struct Usage: Codable, Hashable, Sendable {
     public var providers: [UsageProvider]
     public init(providers: [UsageProvider] = []) { self.providers = providers }
+}
+
+/// One skill in the Usage Breakdown's Skill tab.
+public struct SkillUsageRow: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    /// Turns whose agent read this skill's `SKILL.md`, one per turn at most.
+    public var loads: Int
+    /// Estimated tokens of the skill text, added up.
+    public var tokens: Int
+    /// Estimated list cost in USD; nil when no load's model has a known rate.
+    public var costUsd: Double?
+    /// This skill's share of the tokens of all skill loads, 0–1.
+    public var share: Double
+    /// How many bots loaded it.
+    public var agents: Int
+}
+
+public struct SkillUsage: Codable, Hashable, Sendable {
+    public var skills: [SkillUsageRow]
+    public var totalTokens: Int
+    public init(skills: [SkillUsageRow] = [], totalTokens: Int = 0) {
+        self.skills = skills
+        self.totalTokens = totalTokens
+    }
+}
+
+/// The computer's health as the host reports it (`hostHealth`).
+public struct HostHealth: Codable, Hashable, Sendable {
+    public var ramTotal: Int64
+    public var ramFree: Int64
+    public var ramUsedPercent: Int
+    public var cpu: Double
+    public var diskTotal: Int64
+    public var diskFree: Int64
+    /// `normal`, `warning` or `critical`.
+    public var level: String
+    /// New turns are not starting.
+    public var refusing: Bool
+
+    /// The numbers for the Usage header, in the order RAM, CPU, disk.
+    public var lines: [(label: String, value: String)] {
+        [
+            ("RAM", "\(ramUsedPercent) % used · \(Self.bytes(ramFree)) free of \(Self.bytes(ramTotal))"),
+            ("CPU", "\(Int(cpu.rounded())) %"),
+            ("Disk", diskTotal > 0 ? "\(Self.bytes(diskFree)) free of \(Self.bytes(diskTotal))" : "Unknown"),
+        ]
+    }
+
+    private static func bytes(_ bytes: Int64) -> String {
+        let gb = 1024.0 * 1024 * 1024
+        let mb = 1024.0 * 1024
+        return bytes >= Int64(gb)
+            ? String(format: "%.1f GB", Double(bytes) / gb)
+            : "\(Int((Double(bytes) / mb).rounded())) MB"
+    }
 }
 
 public struct UsageProvider: Codable, Hashable, Sendable, Identifiable {
@@ -178,6 +248,10 @@ public struct Backend: Codable, Hashable, Sendable, Identifiable {
     public var accounts: Bool?
     /// Whether the computer's own sign-in can be removed (a logout command or its credential files).
     public var signOut: Bool?
+    /// Codync's own build is unpacked under `~/.codync/agents`, so it can be deleted from here.
+    public var downloaded: Bool?
+    /// That build was deleted and nothing else runs this agent: its bots show it as not installed.
+    public var turnedOff: Bool?
 
     /// It can't run until Node.js is added to the computer.
     public var needsNode: Bool { node == "missing" }
@@ -279,7 +353,8 @@ public struct DirItem: Codable, Hashable, Sendable, Identifiable {
     public var id: String { path }
 }
 
-/// Create / update payload for a group chat.
+/// Create / update payload for a group chat. Optional setup is encoded as null when it is nil, so
+/// emptying the title, the picture or the lead in the editor clears it on the host.
 public struct GroupDraft: Codable, Hashable, Sendable {
     public var id: String?
     public var kind = "group"
@@ -288,6 +363,16 @@ public struct GroupDraft: Codable, Hashable, Sendable {
     public var description = ""
     public var members: [String]
     public var pinned: Bool?
+    /// A short line under the name; nil for none.
+    public var title: String?
+    /// Out of the open roster.
+    public var archived = false
+    /// Keeps what its members learn in the channel; their own chats don't get it.
+    public var keepMemories = false
+    /// The channel picture as a data URL; nil for none.
+    public var avatarPhoto: String?
+    /// The member that leads the channel; nil for none.
+    public var chiefBotId: String?
 
     public init(name: String, description: String = "", members: [String]) {
         self.name = name
@@ -301,6 +386,30 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         description = group.description
         members = group.members
         pinned = group.pinned
+        title = group.title
+        archived = group.archived
+        keepMemories = group.keepMemories
+        avatarPhoto = group.avatarPhoto
+        chiefBotId = group.chiefBotId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, name, description, members, pinned, title, archived, keepMemories, avatarPhoto, chiefBotId
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(name, forKey: .name)
+        try c.encode(description, forKey: .description)
+        try c.encode(members, forKey: .members)
+        try c.encodeIfPresent(pinned, forKey: .pinned)
+        try c.encode(title, forKey: .title)
+        try c.encode(archived, forKey: .archived)
+        try c.encode(keepMemories, forKey: .keepMemories)
+        try c.encode(avatarPhoto, forKey: .avatarPhoto)
+        try c.encode(chiefBotId, forKey: .chiefBotId)
     }
 }
 
@@ -328,6 +437,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var hidden: Bool?
     public var notify: Bool?
     public var connectors: [String]?
+    /// The person whose bot this is (`people`); nil is the owner's.
+    public var person: String?
     public var skills: [String]?
     public var computer: Bool?
     public var manageTeam: Bool?
@@ -378,6 +489,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         hidden = bot.hidden
         notify = bot.notify
         connectors = bot.connectors
+        person = bot.person
         skills = bot.skills
         computer = bot.computer
         manageTeam = bot.manageTeam

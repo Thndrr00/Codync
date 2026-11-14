@@ -39,6 +39,8 @@ pub fn wrap(
     first: &[Span<'static>],
     rest: &[Span<'static>],
 ) -> Vec<Line<'static>> {
+    let paragraph: String = spans.iter().map(|s| s.content.as_ref()).collect();
+    let alignment = super::rtl::alignment(&paragraph);
     let cells: Vec<(char, Style)> =
         spans.iter().flat_map(|s| s.content.chars().map(move |c| (c, s.style))).filter(|(c, _)| *c != '\r').collect();
     let mut out = vec![];
@@ -81,7 +83,7 @@ pub fn wrap(
             shown -= 1; // no trailing spaces at a soft break
         }
         push_cells(&mut line, &cells[i..shown]);
-        out.push(Line::from(line));
+        out.push(Line::from(line).alignment(alignment));
         is_first = false;
         if next >= cells.len() {
             break;
@@ -269,6 +271,14 @@ mod tests {
         assert_eq!(text(&l), ["hello brave", "new world"]);
         let l = wrap(&[Span::raw("你好世界再見")], 5, &[], &[]);
         assert_eq!(text(&l), ["你好", "世界", "再見"]);
+    }
+
+    #[test]
+    fn a_hebrew_paragraph_wraps_to_the_right() {
+        let l = wrap(&[Span::raw("שלום עולם")], 20, &[], &[]);
+        assert_eq!(l[0].alignment, Some(ratatui::layout::Alignment::Right));
+        let l = wrap(&[Span::raw("hello")], 20, &[], &[]);
+        assert_eq!(l[0].alignment, Some(ratatui::layout::Alignment::Left));
     }
 
     #[test]

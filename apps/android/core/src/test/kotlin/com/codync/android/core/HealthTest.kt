@@ -27,7 +27,7 @@ class HealthTest {
     }
 
     @Test fun `the lines come in the order memory cpu disk`() {
-        assertEquals(listOf("Memory" to "75 % used · 2.0 GB free of 8.0 GB", "CPU" to "12 %", "Disk" to "120.0 GB free of 500.0 GB"), health().lines())
+        assertEquals(listOf("RAM" to "75 % used · 2.0 GB free of 8.0 GB", "CPU" to "12 %", "Disk" to "120.0 GB free of 500.0 GB"), health().lines())
         assertEquals("Unknown", health().copy(diskTotal = 0).lines()[2].second)
     }
 

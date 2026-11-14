@@ -15,12 +15,15 @@ mod documents;
 mod entries;
 pub mod flow_steps;
 pub mod flows;
+mod group_tasks;
+mod history;
 mod inflight;
 pub(crate) mod mcp_policies;
 mod memory;
 mod model;
 pub(crate) mod native_channels;
 pub mod open_items;
+pub mod people;
 mod research;
 mod roster;
 pub(crate) mod routine_delivery;
@@ -39,13 +42,14 @@ pub(crate) mod discord;
 pub(crate) mod slack;
 pub(crate) mod whatsapp;
 
-pub use apps::{AppLink, AppLinkMode, BotApp};
+pub use apps::{AppLink, AppLinkMode, AppTotals, BotApp};
 pub use channel_activity::ChannelActivity;
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceAccount, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
+pub use group_tasks::{GroupTask, TaskKind, TaskState, branch as task_branch, new_task};
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,

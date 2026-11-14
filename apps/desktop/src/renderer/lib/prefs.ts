@@ -1,8 +1,9 @@
 import type { AppLanguage } from './l10n.ts'
-import { resolvedLanguage } from './l10n.ts'
+import { readsRightToLeft } from './l10n.ts'
 import { useSyncExternalStore } from 'react'
 import type { StarAsk } from './star-ask'
 import type { KofiInvite } from './kofi-invite'
+import { mixHex, savedChatBackground, savedChatColour } from './chat-appearance'
 
 /** A stored value, or the fallback when it's missing, unreadable or of another kind (a `null` where a string
  * belongs crashed the chat window). A `null` fallback takes any value. */
@@ -103,6 +104,10 @@ export const prefs = {
   extensionsMovedTipSeen: pref('extensionsMovedTipSeen', false),
   /** The version this device last opened on, for What's new; `null` before it ever recorded one. */
   whatsNewSeen: pref<string | null>('whatsNewSeen', null),
+  /** The person's own bubble colour: "light/dark" preset ids, `-` for the theme's own. */
+  chatColour: pref<string>('chatColour', ''),
+  /** The colour behind the chat: "light/dark" preset ids, `-` for the theme's own. */
+  chatBackground: pref<string>('chatBackground', ''),
 }
 
 /** The Mac preference supplies one scale for conversation text and app chrome. */
@@ -117,10 +122,37 @@ export function applyTextSize(size: number) {
 
 prefs.textSize.subscribe(() => applyTextSize(prefs.textSize.get()))
 
-/** The window mirrors for Arabic; paragraphs still follow their own text. */
+/**
+ * The chat colour and background of the scheme the window shows, as CSS variables. The other
+ * scheme keeps its own choice and appears when the system switches.
+ */
+export function applyChatAppearance() {
+  if (typeof document === 'undefined' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  const root = document.documentElement.style
+  const colour = savedChatColour(prefs.chatColour.get(), dark)
+  if (colour) {
+    const base = dark ? '#3A3A3A' : '#E2E2E2'
+    root.setProperty('--chat-bubble-user', mixHex(base, dark ? colour.dark : colour.light, dark ? 0.22 : 0.14))
+  } else {
+    root.removeProperty('--chat-bubble-user')
+  }
+  const background = savedChatBackground(prefs.chatBackground.get(), dark)
+  if (background) root.setProperty('--chat-background', dark ? background.dark : background.light)
+  else root.removeProperty('--chat-background')
+}
+
+prefs.chatColour.subscribe(applyChatAppearance)
+prefs.chatBackground.subscribe(applyChatAppearance)
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyChatAppearance)
+}
+applyChatAppearance()
+
+/** Arabic and Hebrew read right to left; paragraphs still follow their own text. */
 export function applyDirection(language: AppLanguage) {
   if (typeof document === 'undefined') return
-  document.documentElement.dir = resolvedLanguage(language, typeof navigator === 'undefined' ? 'en' : navigator.language) === 'ar' ? 'rtl' : 'ltr'
+  document.documentElement.dir = readsRightToLeft(language) ? 'rtl' : 'ltr'
 }
 
 prefs.appLanguage.subscribe(() => applyDirection(prefs.appLanguage.get()))

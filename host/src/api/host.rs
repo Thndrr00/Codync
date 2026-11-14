@@ -13,10 +13,16 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<ControlFlow<Value, Value>> {
+    // Who is on this computer: only the owner manages it.
+    if crate::people::METHODS.contains(&method) {
+        return Ok(ControlFlow::Break(crate::people::call(hub, method, &b)?));
+    }
     Ok(ControlFlow::Break(match method {
         "openaiKeys" | "openaiCreateKey" | "openaiRevokeKey" => super::openai_keys::call(hub, method, &b).await?,
         "hostUpdateStatus" => crate::update::status()?,
         "hostHealth" => crate::health::value(hub),
+        // How often each skill's text entered a turn, with its estimated tokens and cost.
+        "skillUsage" => crate::market::skill_usage_report(&hub.store),
         "channelActivity" => {
             let limit = b["limit"].as_u64().and_then(|n| usize::try_from(n).ok()).unwrap_or(30);
             let activity = if b["mentionsOnly"].as_bool().unwrap_or(true) {
@@ -48,6 +54,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::theme::select(&hub.store, b["name"].as_str())?;
             crate::theme::active(&hub.store)
         }
+        "serverSettings" => crate::server_settings::Settings::load(&hub.store).to_json(),
+        "setServerSettings" => {
+            let mut settings = crate::server_settings::Settings::load(&hub.store);
+            settings.apply(&b)?;
+            settings.save(&hub.store)?;
+            let _ = hub.events.send(json!({"type": "serverSettings", "settings": settings.to_json()}));
+            json!({"settings": settings.to_json()})
+        }
         "setHealthThresholds" => {
             let thresholds = crate::health::Thresholds {
                 warn: u8::try_from(b["warn"].as_u64().unwrap_or(0)).unwrap_or(0),
@@ -55,6 +69,33 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             };
             hub.health.set_thresholds(&hub.store, thresholds)?;
             crate::health::value(hub)
+        }
+        "scriptLimit" => json!({
+            "perHour": crate::routines::limits::saved(&hub.store),
+            "choices": crate::routines::limits::CHOICES,
+        }),
+        "setScriptLimit" => {
+            let per_hour = u32::try_from(b["perHour"].as_u64().context("perHour is required")?).unwrap_or(u32::MAX);
+            json!({"perHour": crate::routines::limits::set(&hub.store, per_hour)?})
+        }
+        // The computer's local app safeguard: how many mini-apps it holds and the ceiling.
+        "localApps" => crate::local_apps::status(&hub.store)?,
+        "setLocalAppsLimit" => {
+            let limit = u32::try_from(b["limit"].as_u64().context("limit is required")?).unwrap_or(u32::MAX);
+            json!({"limit": crate::local_apps::set(&hub.store, limit)?})
+        }
+        "planStart" => json!({
+            "afterMs": crate::external::plan::saved(&hub.store),
+            "presets": crate::external::plan::PRESETS,
+            "min": crate::external::plan::MIN,
+            "max": crate::external::plan::MAX,
+        }),
+        "setPlanStart" => {
+            let after = match b.get("afterMs") {
+                None | Some(Value::Null) => None,
+                Some(value) => Some(value.as_i64().context("afterMs must be a number of milliseconds or null")?),
+            };
+            json!({"afterMs": crate::external::plan::set(&hub.store, after)?})
         }
         "weekSummary" => {
             let days = b["days"].as_i64().unwrap_or(7).clamp(1, 31);
@@ -68,6 +109,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 view["bot"] = Value::String(bot);
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
+            view["requests"] = serde_json::to_value(crate::whatsapp::pending_requests(hub))?;
+            view["people"] = serde_json::to_value(crate::whatsapp::people(hub))?;
             view
         }
         "whatsappConnect" => {
@@ -99,6 +142,18 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let list = crate::whatsapp::set_allowed(hub, jid, b["allowed"].as_bool().unwrap_or(true))?;
             json!({"allowed": list})
         }
+        "whatsappAnswerRequest" => {
+            let code = str_arg(&b, "code")?;
+            let approve = b["approve"].as_bool().unwrap_or(false);
+            if let Some(jid) = crate::whatsapp::answer_request(hub, code, approve)? {
+                // One line to the person who asked, so they know they may write now.
+                let line = "Tu solicitud fue aprobada. Ya puedes escribir a este asistente.";
+                if let Err(error) = hub.whatsapp.send_message(&jid, line, None, None, None).await {
+                    tracing::warn!(%error, "WhatsApp could not tell an approved person");
+                }
+            }
+            json!({"requests": crate::whatsapp::pending_requests(hub)})
+        }
         "whatsappSend" => {
             let body: crate::whatsapp::SendBody = serde_json::from_value(b)?;
             hub.whatsapp
@@ -127,6 +182,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"scheduled": true})
         }
         "voiceStatus" => crate::voice::status(&hub.store)?,
+        "voiceServer" => crate::voice::server_state(&hub.store)?,
+        "setVoiceServer" => crate::voice::set_server(&hub.store, &b)?,
+        "testVoiceServer" => crate::voice::test_server(&hub.store).await?,
         "setVoiceKey" => {
             let provider = crate::voice::Provider::parse(str_arg(&b, "provider")?)?;
             crate::voice::set_key(&hub.store, provider, b["key"].as_str().unwrap_or_default()).await?
@@ -291,7 +349,24 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 }
                 _ => {
                     let vars = b["vars"].as_object().ok_or_else(|| anyhow!("`vars` is required"))?;
-                    crate::agent::auth::set_env(&hub.store, backend, b["botId"].as_str(), vars).await?
+                    let status = crate::agent::auth::set_env(&hub.store, backend, b["botId"].as_str(), vars).await?;
+                    // The AG-UI adapter reads its endpoint from this environment, so its process starts again.
+                    if backend == crate::agui::BACKEND {
+                        let targets: Vec<String> = match b["botId"].as_str() {
+                            Some(id) => vec![id.to_owned()],
+                            None => hub
+                                .store
+                                .bots()?
+                                .into_iter()
+                                .filter(|row| !row.deleted && !row.config.is_group() && row.config.backend == backend)
+                                .map(|row| row.config.id)
+                                .collect(),
+                        };
+                        for id in targets {
+                            let _ = hub.send_cmd(&id, crate::agent::bot::Cmd::RestartAgent);
+                        }
+                    }
+                    status
                 }
             };
             // Chats that asked the user to sign in get their messages answered now.
@@ -319,6 +394,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::agent::account::delete(&hub.store, account_id).await?;
             json!({})
         }
+        "deleteAgentDownload" => {
+            let backend = str_arg(&b, "backend")?.to_owned();
+            // A build can be gigabytes: removing it must not hold an async worker.
+            let removed =
+                tokio::task::spawn_blocking(move || crate::agent::backends::remove_download(&backend)).await??;
+            let listed = tokio::task::spawn_blocking(backends::list).await?;
+            json!({"removed": removed, "backends": listed})
+        }
         "termInput" => {
             hub.terms.write(str_arg(&b, "term")?, str_arg(&b, "data")?)?;
             json!({})
@@ -334,9 +417,44 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "screenStatus" => hub.screen.state(),
         "requestScreenPermission" => hub.screen.request_permission(&b).await?,
+        "answerScreenRequest" => {
+            if !matches!(caller, Caller::Local) {
+                return Err(anyhow::anyhow!("Only this computer answers a remote control request."));
+            }
+            let id = str_arg(&b, "id")?;
+            let allow = b["allow"].as_bool().unwrap_or(false);
+            json!({"answered": hub.screen.answer_consent(id, allow)?, "screen": hub.screen.state()})
+        }
+        "screenStopAll" => {
+            // A device needs the Screen scope (api/devices.rs), and the same policy that lets a
+            // phone control this computer: "Only this computer" keeps stopping to the computer.
+            if !matches!(caller, Caller::Local) {
+                let policy = crate::server_settings::Settings::load(&hub.store).remote_control;
+                if !crate::server_settings::allows_remote(policy.access, crate::server_settings::RemoteRole::Device) {
+                    bail!("This computer only allows remote control from itself.");
+                }
+            }
+            let stopped = hub.screen.stop_all().await?;
+            json!({"closed": stopped.viewers, "takeover": stopped.takeover, "screen": hub.screen.state()})
+        }
         "screenPrepare" => {
             if !hub.screen.enabled() {
                 bail!("Remote screen is turned off on this computer.");
+            }
+            // Who may control this computer, and whether the person here allows each session.
+            let policy = crate::server_settings::Settings::load(&hub.store).remote_control;
+            let role = match caller {
+                Caller::Local => crate::server_settings::RemoteRole::Owner,
+                _ => crate::server_settings::RemoteRole::Device,
+            };
+            if !crate::server_settings::allows_remote(policy.access, role) {
+                bail!("This computer only allows remote control from itself.");
+            }
+            if policy.ask_on_host
+                && role == crate::server_settings::RemoteRole::Device
+                && !hub.screen.take_approval(caller.device_key())
+            {
+                hub.screen.await_consent(caller.device_key()).await?;
             }
             let ice = if b["relay"].as_bool().unwrap_or(false) {
                 crate::remote::cloud::screen_ice(hub, caller.device_key()).await?

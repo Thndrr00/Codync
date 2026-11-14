@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { IslandBot, IslandDiff, IslandPermission } from '@shared/island'
 import { isActive } from '@shared/island'
+import { agentDockText } from '@shared/island-agents'
 import { CharacterAvatar } from '../../components/Avatar'
 import { Button, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -20,6 +21,7 @@ const veil = (color: string, alpha: number) => `radial-gradient(120% 90% at 50% 
  * right. With no notch to hide, the middle says what's going on.
  */
 export function Wings({ model, peek }: { model: IslandModel; peek: boolean }) {
+  const tr = useTr()
   const focus = model.focus
   const others = model.others(4)
   const swap = useSwap(focus?.ref)
@@ -27,7 +29,8 @@ export function Wings({ model, peek }: { model: IslandModel; peek: boolean }) {
   const cluster = useRef<HTMLSpanElement>(null)
   useFlip(cluster)
   if (!focus) return null
-  const label = focus.status === 'needsInput' ? 'Needs you' : `${model.activeCount} working`
+  // With the agent dock on, the collapsed island counts the agents instead of only the bot in focus.
+  const label = model.agentDock ? agentDockText(model.agentLine, tr) : focus.status === 'needsInput' ? 'Needs you' : `${model.activeCount} working`
   return (
     <div className={`island-wings ${peek ? 'peeking' : ''}`}>
       {model.screen.notch || peek ? null : <span className="island-wings-label">{label}</span>}

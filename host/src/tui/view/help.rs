@@ -10,7 +10,7 @@ use super::buffer::{centered, frame_box, put, u};
 use super::overlay::field_line;
 use super::style::theme;
 
-const HELP: [(&str, &str, &str); 73] = [
+const HELP: [(&str, &str, &str); 81] = [
     ("MOVE", "j k  ↑ ↓", "next / previous bot"),
     ("MOVE", "[ ]", "previous / next bot"),
     ("MOVE", "1…9", "jump to bot 1–9"),
@@ -29,6 +29,11 @@ const HELP: [(&str, &str, &str); 73] = [
     ("CHAT", "s", "stop the bot"),
     ("CHAT", "S", "send the next queued message now (none waiting: new session)"),
     ("CHAT", "D", "take back the last queued message"),
+    ("CHAT", ", .", "a channel: pick a sub-task"),
+    ("CHAT", "W", "a channel: stop the picked sub-task"),
+    ("CHAT", "O", "a channel: let a stopped sub-task go on"),
+    ("CHAT", "A", "a channel: give a stopped sub-task to another member"),
+    ("CHAT", "B", "a channel: cancel the picked sub-task and its branch"),
     ("CHAT", ">", "show / hide the working turn's steps (thinking details on)"),
     ("CHAT", "o", "last turn's steps"),
     ("CHAT", "c", "copy the last reply"),
@@ -48,6 +53,7 @@ const HELP: [(&str, &str, &str); 73] = [
     ("CHAT", "esc", "cancel the reply"),
     ("TYPE", "↵", "send"),
     ("TYPE", "⇧↵ alt↵ ^j", "new line"),
+    ("TYPE", "^x ^r", "cancel / retry an attached file's upload"),
     ("TYPE", "esc", "back to NAV"),
     ("TYPE", "^c", "clear the message"),
     ("TYPE", "^a ^e", "line start / end"),
@@ -62,6 +68,8 @@ const HELP: [(&str, &str, &str); 73] = [
     ("BOTS", "p", "pin / unpin"),
     ("BOTS", "J K", "move bot down / up"),
     ("BOTS", "S", "new session"),
+    ("BOTS", "X", "delete this chat's history (its setup, memories and routines stay)"),
+    ("BOTS", "Z", "compact the conversation now"),
     ("BOTS", "M", "memory"),
     ("BOTS", "R", "details: routines, computer"),
     ("BOTS", "B", "details: switch back to the bot's own agent"),
@@ -77,6 +85,7 @@ const HELP: [(&str, &str, &str); 73] = [
     ("VIEW", "U", "usage"),
     ("VIEW", "P", "pair a phone"),
     ("VIEW", "N", "network: your other computers"),
+    ("VIEW", "Voice providers…", "the voice keys this computer holds (Go to)"),
     ("VIEW", "^k share", "share usage analytics on / off"),
     ("VIEW", "^k about", "what usage analytics include"),
     ("VIEW", "language", "app language: follow system or choose one of eight languages"),

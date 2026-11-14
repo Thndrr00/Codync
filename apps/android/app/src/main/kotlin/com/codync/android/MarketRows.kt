@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -60,7 +61,7 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** One catalog item: its icon, name and line, then Add (or a check once added). */
-@Composable internal fun MarketRow(title: String, subtitle: String, added: Boolean, busy: Boolean = false, addLabel: String = "Add",
+@Composable internal fun MarketRow(title: String, subtitle: String, added: Boolean, note: String? = null, busy: Boolean = false, addLabel: String = "Add",
     open: (() -> Unit)? = null, icon: @Composable () -> Unit, add: () -> Unit) {
     // The whole row opens the item's details; without it the row does what its button does.
     val rowAction = open ?: if (added || busy) null else add
@@ -70,6 +71,7 @@ import com.kyant.shapes.RoundedRectangle
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(tr(title), style = Type.body.medium, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(tr(subtitle), style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            note?.let { KeyNote(it) }
         }
         when {
             busy -> Box(Modifier.width(60.dp), contentAlignment = Alignment.Center) { ThinkingOrb(size = 18.dp, color = Palette.secondary) }
@@ -104,23 +106,16 @@ import com.kyant.shapes.RoundedRectangle
     }
 }
 
-/** A coding agent's logo by ACP registry id, in its brand color when it has one; a terminal glyph otherwise. */
-@Composable internal fun AgentIcon(registry: String?, size: Dp) {
-    val tint = AGENT_TINTS[registry]?.let { Color(it) } ?: Palette.text
+/** A coding agent's logo by ACP registry id, in one colour: grey at rest, an accent while it is chosen. */
+@Composable internal fun AgentIcon(registry: String?, size: Dp, tint: Color = Palette.secondary) {
     val res = agentIconRes(registry)
     if (res != null) Image(painterResource(res), null, Modifier.size(size).clearAndSetSemantics {}, colorFilter = ColorFilter.tint(tint))
     else Symbol("terminal", Modifier.padding(size * 0.1f), size = size * 0.8f, tint = tint)
 }
 
-// Registry logos are one color; these carry their brand's (a gradient's middle for Gemini and omp).
-private val AGENT_TINTS = mapOf("claude-acp" to 0xFFD97857, "gemini" to 0xFF9178C7, "antigravity-acp" to 0xFF4285F5,
-    "mistral-vibe" to 0xFFFA520F, "qwen-code" to 0xFF615CED, "amp-acp" to 0xFFF24F40, "kiro" to 0xFF8F45FF,
-    "cortex-code" to 0xFF29B5E8, "omp" to 0xFF9C4DFF)
-
-/** A cloud provider's logo by the cloud's id for it (`boat`), Boat in its brand blue (in dark mode too, like the agents'
- * tints); the cloud symbol for a provider this app doesn't know. */
+/** A cloud provider's logo by the cloud's id for it, in the same resting grey as the agents' logos. */
 @Composable internal fun ProviderIcon(provider: String, size: Dp) {
-    val tint = if (provider == "boat") Color(0xFF263FA9) else Palette.text
+    val tint = Palette.secondary
     val res = providerIconRes(provider)
     if (res != null) Image(painterResource(res), null, Modifier.size(size).clearAndSetSemantics {}, colorFilter = ColorFilter.tint(tint))
     else Symbol("cloud", size = size, tint = tint)
@@ -206,12 +201,14 @@ internal fun serviceDomain(website: String?, name: String, registryName: String?
         color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
-/** A quiet "nothing here" message. */
-@Composable internal fun MarketEmpty(icon: String, title: String, detail: String) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
+/** A quiet "nothing here" message, with the felt plush above the text. The plush blinks and
+ * glances; with Reduce Motion (animations off) it is a still image. The caller translates both
+ * strings, so a search query can be filled in first. */
+@Composable internal fun MarketEmpty(title: String, detail: String? = null) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Symbol(icon, size = 30.dp, tint = Palette.tertiary)
-        Text(tr(title), style = Type.body.semibold, color = Palette.text)
-        Text(tr(detail), style = Type.subheadline, color = Palette.secondary)
+        CharacterAvatar("blob", "violet", 64.dp, "working")
+        Text(title, style = Type.body.semibold, color = Palette.text, textAlign = TextAlign.Center)
+        detail?.let { Text(it, style = Type.subheadline, color = Palette.secondary, textAlign = TextAlign.Center) }
     }
 }

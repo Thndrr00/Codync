@@ -77,10 +77,10 @@ final class CloudSpeechEngine: VoiceEngine {
         return seconds > 0 ? seconds : 1.5
     }
 
-    init(provider: VoiceProvider, speech: Speech, localOutput: Bool = false) {
+    init(provider: VoiceProvider, speech: Speech, localOutput: Bool = false, chunk: Int? = nil) {
         self.provider = provider
         self.speech = speech
-        chunk = localOutput ? 120 : provider.speechChunk
+        self.chunk = localOutput ? 120 : (chunk ?? provider.speechChunk)
     }
 
     func start() async {

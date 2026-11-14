@@ -16,7 +16,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--background);
+  background: var(--chat-background, var(--background));
 }
 
 /* Grok's desktop chat: no title bar. The chat blurs and fades as it scrolls up, with the bot in
@@ -322,7 +322,7 @@
   min-width: 0;
 }
 .bubble.user {
-  background: var(--chat-user);
+  background: var(--chat-bubble-user, var(--chat-user));
   color: var(--text);
   font-size: var(--conversation);
   line-height: 1.5;
@@ -514,4 +514,88 @@
   .row-in {
     animation: fade-in 0.12s both;
   }
+}
+
+/* A turn's subagents: the card in the chat and the header that hangs under the chat header
+   while the card is out of view. The dock takes no height, so the chat never moves. */
+.subagent-card {
+  max-width: 420px;
+}
+.subagent-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border-radius: var(--radius-s);
+  color: inherit;
+}
+.subagent-progress {
+  flex: none;
+}
+.subagent-ring {
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+}
+.subagent-ring-track {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2.5;
+}
+.subagent-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 300ms var(--ease-out);
+}
+.subagent-list {
+  padding-left: 4px;
+  animation: fade-in 0.12s var(--ease-out) both;
+}
+.subagent-row {
+  min-width: 0;
+  padding: 2px 0;
+}
+.subagent-row-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  padding-top: 2px;
+  flex: none;
+}
+.subagent-row-copy {
+  min-width: 0;
+  flex: 1;
+}
+.subagent-dock {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  width: min(100% - 32px, 420px);
+  pointer-events: none;
+}
+.subagent-dock-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-s);
+  pointer-events: auto;
+  animation: fade-in 0.16s var(--ease-out) both;
+}
+.subagent-dock-live {
+  min-width: 0;
+  flex: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .subagent-ring-fill { transition: none; }
+  .subagent-dock-bar { animation: none; }
 }

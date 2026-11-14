@@ -8,12 +8,18 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
     case gemini
     /// Speech only: ElevenLabs holds no live conversation here.
     case elevenLabs = "elevenlabs"
+    /// Speech only: xAI reads replies aloud and hears nothing (OpenBot 0.60).
+    case xai
+    /// Dictation only: Groq's Whisper hears speech and reads nothing (OpenBot 0.60).
+    case groq
 
     public var name: String {
         switch self {
         case .openAI: "OpenAI"
         case .gemini: "Gemini"
         case .elevenLabs: "ElevenLabs"
+        case .xai: "xAI"
+        case .groq: "Groq"
         }
     }
 
@@ -22,6 +28,8 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
         case .openAI: URL(string: "https://platform.openai.com/api-keys")!
         case .gemini: URL(string: "https://aistudio.google.com/apikey")!
         case .elevenLabs: URL(string: "https://elevenlabs.io/app/settings/api-keys")!
+        case .xai: URL(string: "https://console.x.ai")!
+        case .groq: URL(string: "https://console.groq.com/keys")!
         }
     }
 
@@ -30,11 +38,28 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
         case .openAI: "sk-…"
         case .gemini: "AIza…"
         case .elevenLabs: "sk_…"
+        case .xai: "xai-…"
+        case .groq: "gsk_…"
         }
     }
 
     /// A live conversation is only possible with a provider that holds one.
-    public var live: Bool { self != .elevenLabs }
+    public var live: Bool { self == .openAI || self == .gemini }
+
+    /// Whether it can hear speech (xAI reads replies only).
+    public var transcribes: Bool { self != .xai }
+
+    /// Whether it can read replies aloud (Groq hears only).
+    public var speaks: Bool { self != .groq }
+
+    /// A whole call needs both: xAI and Groq each do half.
+    public var carriesCalls: Bool { transcribes && speaks }
+
+    /// What a call's engine picker offers.
+    public static var callProviders: [VoiceProvider] { allCases.filter { $0.carriesCalls } }
+
+    /// What the dictation engine menu offers.
+    public static var dictationProviders: [VoiceProvider] { allCases.filter { $0.transcribes } }
 
     /// Used until the user picks one, and until the computer has said what's newest
     /// (`VoiceDefaults`, worked out daily from the provider's list).
@@ -42,7 +67,7 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
         switch self {
         case .openAI: "gpt-realtime-2.1"
         case .gemini: "gemini-3.8-live"
-        case .elevenLabs: ""
+        case .elevenLabs, .xai, .groq: ""
         }
     }
 
@@ -52,6 +77,8 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
         case .openAI: "gpt-transcribe"
         case .gemini: "gemini-3.8-flash"
         case .elevenLabs: "scribe_v1"
+        case .xai: ""
+        case .groq: "whisper-large-v3-turbo"
         }
     }
 
@@ -60,16 +87,21 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
         case .openAI: "gpt-4o-mini-tts"
         case .gemini: "gemini-3.8-flash-tts"
         case .elevenLabs: "eleven_flash_v2_5"
+        // xAI's speech route takes no model: the id names its one text-to-speech choice.
+        case .xai: "xai-tts"
+        case .groq: ""
         }
     }
 
     /// Longest stretch of a reply turned into audio at once: each clip has to fit one channel
-    /// message (1 MiB). Gemini returns uncompressed PCM, OpenAI AAC, ElevenLabs MP3.
+    /// message (1 MiB). Gemini and xAI return uncompressed PCM, OpenAI AAC, ElevenLabs MP3.
     public var speechChunk: Int {
         switch self {
         case .openAI: 600
         case .gemini: 150
         case .elevenLabs: 600
+        case .xai: 150
+        case .groq: 600
         }
     }
 
@@ -79,6 +111,8 @@ public enum VoiceProvider: String, CaseIterable, Codable, Sendable {
         case .gemini: ["Kore", "Puck", "Charon", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr"]
         // Rachel, until the account's own voices arrive.
         case .elevenLabs: ["21m00Tcm4TlvDq8ikWAM"]
+        case .xai: ["eve", "ara", "leo", "rex", "sal"]
+        case .groq: []
         }
     }
 }
@@ -143,6 +177,49 @@ public struct VoiceVoices: Decodable, Sendable {
     }
 }
 
+/// The local voice server this computer's speech goes through (host `voiceServer`): an
+/// OpenAI-compatible server the person runs, which carries dictation and spoken replies.
+public struct VoiceServer: Decodable, Sendable, Equatable {
+    /// The saved URL; empty when none is saved on the computer.
+    public var baseUrl: String
+    public var transcribeModel: String
+    public var speechModel: String
+    public var keySaved: Bool
+    /// Where speech requests actually go: the saved server, `CODYNC_OPENAI_BASE_URL`, or OpenAI.
+    public var effective: String
+    /// `effective` is not api.openai.com: Realtime is unavailable meanwhile.
+    public var custom: Bool
+    /// A developer's `CODYNC_OPENAI_BASE_URL` on the computer, when set.
+    public var environment: String?
+    public var suggestions: [String]
+
+    /// The models common local servers serve, until the computer reports its own list.
+    public static let localModelSuggestions = [
+        "parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026",
+    ]
+
+    public init(baseUrl: String = "", transcribeModel: String = "", speechModel: String = "", keySaved: Bool = false,
+                effective: String = "https://api.openai.com", custom: Bool = false, environment: String? = nil,
+                suggestions: [String] = VoiceServer.localModelSuggestions) {
+        self.baseUrl = baseUrl
+        self.transcribeModel = transcribeModel
+        self.speechModel = speechModel
+        self.keySaved = keySaved
+        self.effective = effective
+        self.custom = custom
+        self.environment = environment
+        self.suggestions = suggestions
+    }
+}
+
+/// What `testVoiceServer` answered: whether the server works, and why not.
+public struct VoiceServerTest: Decodable, Sendable {
+    public var ok: Bool
+    public var message: String
+    public var models: [String]?
+    public var effective: String?
+}
+
 public extension HostClient {
     func voiceStatus() async throws -> VoiceStatus { try await call("voiceStatus") }
 
@@ -166,6 +243,17 @@ public extension HostClient {
     /// The provider's own voices (ElevenLabs).
     func voiceVoices(_ provider: VoiceProvider) async throws -> VoiceVoices {
         try await call("voiceVoices", ["provider": provider.rawValue], timeout: 30)
+    }
+
+    /// The local voice server's saved URL, models and key state. A phone may read it; only the
+    /// computer changes it (`setVoiceServer` is loopback only).
+    func voiceServer() async throws -> VoiceServer {
+        try await call("voiceServer", timeout: 30)
+    }
+
+    /// Tries the saved local voice server and says why when it doesn't answer.
+    func testVoiceServer() async throws -> VoiceServerTest {
+        try await call("testVoiceServer", timeout: 30)
     }
 
     /// Speech to text for one utterance (a WAV file), with the computer's key.

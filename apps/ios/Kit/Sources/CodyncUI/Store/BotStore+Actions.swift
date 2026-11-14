@@ -77,6 +77,10 @@ extension BotStore {
     }
 
     public func stop(_ botId: String) { perform(replay: true) { try await $0.stop(botId) } }
+    /// A channel sub-task's controls: `stop`, `continue`, `reassign` (with `owner`) or `cancel`.
+    public func groupTask(_ botId: String, task: String, action: String, owner: String? = nil) {
+        perform { try await $0.groupTask(botId, taskId: task, action: action, ownerId: owner) }
+    }
     /// A call's audio is on: the lead speaks first, on the call (an older host, which has no lead, never gets this).
     public func callStarted(_ botId: String, call: String) {
         guard bots[botId]?.lead == true else { return }
@@ -116,6 +120,13 @@ extension BotStore {
             let e = try await client.react(entryId: entry.id, emoji: emoji)
             self.upsert(e)
         }
+    }
+
+    /// Sends a message on to another chat; the host copies its files and marks it forwarded there. The target's
+    /// events carry the new message.
+    func forward(_ entry: Entry, to botId: String) async throws {
+        let sent = try await withLink(replay: true) { try await $0.forward(entryId: entry.id, botId: botId) }
+        upsert(sent)
     }
 
     /// Sends a queued message now: into the bot's running turn when its agent can take it, else as its next turn. It
@@ -392,6 +403,24 @@ extension BotStore {
         perform(replay: true) { try await $0.deleteBot(bot.id) }
     }
 
+    /// Starts the bot's agent over with a fresh context; the chat keeps its messages (the host marks where).
+    public func newSession(_ botId: String) {
+        perform { try await $0.newSession(botId: botId) }
+    }
+
+    /// Removes the chat's messages and turns; its setup, memories, routines, artifacts and files stay.
+    public func deleteHistory(_ bot: Bot) {
+        entries[bot.id] = nil
+        windowFloors[bot.id] = nil
+        historyComplete.remove(bot.id)
+        perform { try await $0.deleteHistory(botId: bot.id) }
+    }
+
+    /// Asks the chat's agent (or every member of a group) to summarize what it keeps.
+    public func compactContext(_ bot: Bot) {
+        perform { try await $0.compactContext(botId: bot.id) }
+    }
+
     /// Creates a group chat (or opens the one these bots already share) and selects it.
     public func createGroup(name: String, description: String = "", members: [String]) async throws -> Bot {
         let group = putHostBot(try await ready().createGroup(GroupDraft(name: name, description: description, members: members)))
@@ -400,6 +429,13 @@ extension BotStore {
     }
 
     public func updateGroup(_ draft: GroupDraft) async throws {
+        putHostBot(try await ready().updateGroup(draft))
+    }
+
+    /// Takes a group out of the open roster, or brings it back; its conversation stays.
+    public func setGroupArchived(_ group: Bot, archived: Bool) async throws {
+        var draft = GroupDraft(group)
+        draft.archived = archived
         putHostBot(try await ready().updateGroup(draft))
     }
 
@@ -469,6 +505,18 @@ extension BotStore {
     public func weekSummary() async -> WeekSummary? {
         guard !retired, let client else { return nil }
         return try? await client.weekSummary()
+    }
+
+    /// How often each skill's text entered a turn; nil when the host can't say (an older one) or can't be reached.
+    public func refreshSkillUsage() async {
+        guard !retired, let client else { return }
+        if let usage = try? await client.skillUsage(), !Task.isCancelled { skillUsage = usage }
+    }
+
+    /// The computer's memory, CPU and disk; an older host leaves it nil.
+    public func refreshHealth() async {
+        guard !retired, let client else { return }
+        if let reading = try? await client.hostHealth(), !Task.isCancelled { health = reading }
     }
 
     /// Reads the network again; the host asks the other computers when what it heard is stale, and

@@ -18,6 +18,7 @@ struct ThreadSheet: View {
     @State private var info: ThreadInfo?
     @State private var unread = 0
     @State private var replyingTo: Entry?
+    @State private var forwardEntry: Entry?
     @State private var showTrace = false
     @State private var renaming = false
     @State private var renameText = ""
@@ -58,6 +59,7 @@ struct ThreadSheet: View {
             info = await model.readThread(botId, root: root) ?? info
         }
         .codyncSheet(isPresented: $showTrace) { TraceView(botId: botId) }
+        .codyncSheet(item: $forwardEntry) { ForwardSheet(entry: $0) }
         .codyncDialog("Rename thread", isPresented: $renaming, field: DialogField("A short name", text: $renameText)) {
             [DialogAction("Save") { model.renameThread(root, botId: botId, title: renameText) }]
         }
@@ -93,7 +95,8 @@ struct ThreadSheet: View {
         }
         if let entry = rootEntry {
             rows.append(ConversationRow("root") {
-                ChatRow(entry: entry, groupStart: true, chat: bot, openTrace: { showTrace = true }, reply: nil)
+                ChatRow(entry: entry, groupStart: true, chat: bot, openTrace: { showTrace = true }, reply: nil,
+                        forward: { forwardEntry = entry })
             })
             rows.append(ConversationRow("count") { CountLine(count: replies.count) })
         }
@@ -102,7 +105,7 @@ struct ThreadSheet: View {
             if unread > 0, index == newLineAfter { rows.append(ConversationRow("new") { UnreadLine() }) }
             rows.append(ConversationRow(reply.id) {
                 ChatRow(entry: reply, groupStart: index == 0 || replies[index - 1].kind == "user" || reply.kind == "user",
-                        chat: bot, openTrace: { showTrace = true }, reply: nil)
+                        chat: bot, openTrace: { showTrace = true }, reply: nil, forward: { forwardEntry = reply })
             })
         }
         if let bot, working {

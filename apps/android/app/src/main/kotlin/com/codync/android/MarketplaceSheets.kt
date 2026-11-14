@@ -166,23 +166,31 @@ private val WEEKDAYS = listOf("Sundays", "Mondays", "Tuesdays", "Wednesdays", "T
                     }
                 }
             }
-            if (app.setup == "local" && app.steps.isNotEmpty()) CardSection("Setup") {
+            ConnectionGuideCard(app.guide, app.name, state.hostName)
+            if (app.setup == "local" && app.guide == null && app.steps.isNotEmpty()) CardSection("Setup") {
                 for ((index, step) in app.steps.withIndex()) row { Text("${index + 1}. $step", style = Type.body, color = Palette.text) }
                 app.docsUrl?.let { url -> row { WebLink(app.docsLabel ?: tr("Open the guide"), url, Type.footnote) } }
             }
             if (app.setup == "key") CardSection("Setup") {
-                for ((index, step) in app.steps.withIndex()) row { Text("${index + 1}. $step", style = Type.body, color = Palette.secondary) }
+                if (app.guide == null) for ((index, step) in app.steps.withIndex()) row {
+                    Text("${index + 1}. $step", style = Type.body, color = Palette.secondary)
+                }
                 for (field in app.fields) row {
                     NotedInput(values[field.id].orEmpty(), { values = values + (field.id to it) },
                         field.placeholder ?: field.label, field.hint, secret = !field.url)
                 }
-                app.docsUrl?.let { url -> row { WebLink(app.docsLabel ?: tr("Get a key"), url, Type.footnote) } }
+                if (app.guide == null) app.docsUrl?.let { url -> row { WebLink(app.docsLabel ?: tr("Get a key"), url, Type.footnote) } }
             }
             if (app.setup == "link" || app.setup == "open") CardSection("Setup") {
                 row {
                     Text(if (app.setup == "link") tr("{name} asks you to sign in to your own account in the browser.").replace("{name}", app.name)
                         else tr("Nothing to fill in here."), style = Type.body, color = Palette.secondary)
                 }
+                for (field in app.fields) row {
+                    NotedInput(values[field.id].orEmpty(), { values = values + (field.id to it) },
+                        field.placeholder ?: field.label, field.hint, secret = !field.url)
+                }
+                if (app.guide == null && app.fields.isNotEmpty()) app.docsUrl?.let { url -> row { WebLink(app.docsLabel ?: tr("Open the guide"), url, Type.footnote) } }
             }
             if (app.prompts.isNotEmpty()) CardSection("Try it") {
                 for (prompt in app.prompts) row {

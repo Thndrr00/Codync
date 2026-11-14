@@ -41,6 +41,12 @@ export type LibraryItem =
   | { kind: 'file'; at: number; entryId: string; file: SharedFile }
   | { kind: 'attachment'; at: number; entryId: string; file: Attachment }
 
+/** One thing in a server's Library (`serverLibrary`): a chat's item, with the bot that shared it. */
+export type ServerLibraryItem = LibraryItem & { botId: string; botName: string; image: boolean }
+
+/** What a server's Library shows: everything, only images, or only other files. */
+export type ServerLibraryFilter = 'all' | 'images' | 'files'
+
 /** An artifact card in the chat (`data.artifact`): the artifact as it was published then. */
 export interface ArtifactCard {
   id: string
@@ -57,6 +63,14 @@ export const ARTIFACTS_HOST = '2.25.0'
 /** Whether the computer's host has the Library; an older one has no `library` method, so the app leaves it out. */
 export function hasLibrary(hostVersion: string | undefined): boolean {
   return !!hostVersion && !isBelow(hostVersion, ARTIFACTS_HOST)
+}
+
+/** The first host with the server's Library (`serverLibrary`). */
+export const SERVER_LIBRARY_HOST = '2.48.0'
+
+/** Whether the computer's host has the server's Library; an older one leaves the page out. */
+export function hasServerLibrary(hostVersion: string | undefined): boolean {
+  return !!hostVersion && !isBelow(hostVersion, SERVER_LIBRARY_HOST)
 }
 
 /** How a message about the artifact quotes its card (`chat::replies`) until the computer's own quote arrives; none

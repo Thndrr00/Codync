@@ -1,4 +1,4 @@
-import type { Bot, EntryData, Usage } from '@shared/models'
+import type { Bot, EntryData, SkillUsage, Usage } from '@shared/models'
 
 // The website demo's story, on two computers. The MacBook Pro: four bots on a small `pace` project (an
 // isoWeek / weeklyTotals bug), the "Ship room" group, replies quoting earlier messages and a pending
@@ -168,6 +168,13 @@ export const macMini: DemoComputer = {
     user('t1', 'tester', 95, 'Run the full e2e suite on main and tell me what fails.'),
     run('t2', 'tester', 94, 'npm run e2e', e2eRun),
     run('t3', 'tester', 87, 'npm run e2e -- --grep "recorded offline"', '1 passing (21s)'),
+    {
+      id: 't3b', botId: 'tester', kind: 'tool', at: 88,
+      data: {
+        title: 'gmail.send_message', toolKind: 'other', status: 'completed', author: 'tester',
+        output: 'Message sent.', caution: { reason: 'sensitive_content', findings: [{ category: 'credential_field', path: '$.api_key' }] },
+      },
+    },
     reply('t4', 'tester', 'tester', 86, '212 of 213 pass. `sync › uploads a run recorded offline` timed out after 30 s, then passed when I ran it alone, so it looks flaky rather than broken. Nothing else failed.'),
     user('h1', 'harbor', 30, 'Deploy to staging once the isoWeek fix is on main.'),
     reply('h2', 'harbor', 'harbor', 29, 'Will do. I\'m watching main: when the fix lands I\'ll build, deploy to staging and check `/health` before I tell you.'),
@@ -206,6 +213,16 @@ export function usage(now: number): Usage {
     services: [
       { id: 'claude', name: 'Claude', shown: true },
       { id: 'codex', name: 'Codex', shown: true },
+    ],
+  }
+}
+
+export function skillUsage(): SkillUsage {
+  return {
+    totalTokens: 4_800,
+    skills: [
+      { id: 'release-checklist', name: 'Release checklist', loads: 7, tokens: 3_200, costUsd: 0.0064, share: 0.67, agents: 2 },
+      { id: 'pdf', name: 'PDF', loads: 3, tokens: 1_600, costUsd: null, share: 0.33, agents: 1 },
     ],
   }
 }

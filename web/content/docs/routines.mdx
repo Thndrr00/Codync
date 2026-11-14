@@ -64,7 +64,7 @@ A routine can have several triggers; it runs when any of them fires.
 
 A run posts in the bot's chat: a line with the routine's name, such as "Routine · Morning summary", then the bot's reply, which is the result. The run's steps are in **Full conversation**. Tap the routine line to open the routine.
 
-Turn on **Run in a thread** under **Run settings** and its runs post in one thread of the bot's chat instead, keeping the main chat clean; the thread stays for every later run. Its line in the chat shows a dot while the thread has unread replies, and opens it.
+Turn on **Run in a thread** under **Run settings** (the **Thread** row, with space, in the terminal UI's editor) and its runs post in one thread of the bot's chat instead, keeping the main chat clean; the thread stays for every later run. Its line in the chat shows a dot while the thread has unread replies, and opens it.
 
 - A successful run sends you a notification with its reply.
 - If there's nothing to report and the instruction allows silence, the run finishes without a message.
@@ -101,11 +101,12 @@ Each run has a time limit: one hour unless you change it under **Run settings �
 
 ## Webhooks
 
-Choose **Webhook** under **When to run** and save. The editor then shows the routine's URL and key, with buttons to copy them, show the key, and **Replace key**. In the terminal UI, `w` copies a ready-made curl command and `W` replaces the key.
+Choose **Webhook** under **When to run** and save. The editor then shows the routine's URL and key, with buttons to copy them, show the key, and **Replace key**. In the terminal UI, `w` copies a ready-made curl command, `W` replaces the key and `s` takes a sender's own signing secret.
 
 Codync doesn't register the webhook with the other service. You (or the bot, with you) paste the URL and key into it. Until a real delivery has arrived, the bot reports the webhook as waiting to be connected.
 
 - **Any sender:** send a POST with the header `Authorization: Bearer <key>`. A JSON body reaches the routine as it is; any other body arrives as text.
+- **Services that sign with Standard Webhooks** (such as Composio and Svix): paste the signing secret the service shows into **Sender's signing secret** — it starts with `whsec_` — and the key becomes that secret. Deliveries signed with it (`webhook-id`, `webhook-timestamp` and `webhook-signature` headers) are accepted for five minutes.
 - **GitHub:** set the Payload URL to the routine's URL, the content type to `application/json`, and the secret to the key. GitHub's test ping succeeds without running the routine. Each delivery reaches the routine with its event (such as `pull_request.opened`), repository and sender, so the bot can set up an event trigger for just the events you want.
 - **Other services:** an event trigger can also match a JSON delivery by its `source` and `event` fields. Codync recognizes GitHub's deliveries by itself; for other senders, the JSON they post has to carry those fields.
 - A delivery that arrives twice with the same delivery ID runs once. Bodies can be up to 64 KB.
@@ -128,6 +129,8 @@ A routine's public URL goes through the Codync cloud, so services can reach your
 
 If **Reach from anywhere** is off for your computer, the routine has only a local URL starting with `http://127.0.0.1`, which only senders on the same computer can use. A public URL you gave a sender earlier still takes deliveries in the cloud: they wait there, readable, for up to 72 hours and run if you turn **Reach from anywhere** back on within that time. To stop them, remove the URL from the sender, or delete the routine or replace its key while **Reach from anywhere** is on. See [Remote access](/docs/remote-access) and [Privacy](/docs/privacy).
 
+Deliveries to a routine's **local** URL are capped per computer, so a script that loops can't spend your quota: 30, 60, 120, 300 or 1000 an hour, for all bots together, set under **Local scripts** in the computer's settings. Past it the local URL answers `429` and the script should try again later. Deliveries through the public URL don't count, and a retry of the same delivery doesn't spend a second slot. The counts reset when the host restarts.
+
 ## Keep the host running and awake
 
 Routines run only on your computer. The host checks for due work every second, whether or not an app is open, but it has to be running and the computer awake.
@@ -144,7 +147,7 @@ A workflow is a routine with a trigger and a chain of steps. Each step is anothe
 
 Add **Workflow Builder** from **Extensions → Agents** and describe the job, its trigger and the bots for each step. It creates the routine, links the bots, and runs one test when you agree. Open the workflow from the routine's canvas to watch the steps and their results. A workflow can start from a clock, a webhook, a watched file or URL, or a mention in Slack, Telegram or Discord; a GitHub webhook delivery can start one on an issue, pull request, review or failed check. Report what is still to connect before you rely on it: a webhook is not live until the sending service has its URL and key.
 
-A workflow can have **outputs** under **Outputs** in its editor: it delivers the last step's reply once, after that step, to a Slack channel, a Telegram chat, a WhatsApp chat, a Discord channel, as a Discord reaction on the message that started the run, as a comment, a label, an assignment or a review request on the issue or pull request that started it, or as a new issue. GitHub outputs need a connected GitHub account (Settings → GitHub).
+A workflow can have **outputs** under **Outputs** in its editor: it delivers the last step's reply once, after that step, to a Slack channel, a Telegram chat, a WhatsApp chat, a Discord channel, as a Discord reaction on the message that started the run, as a comment, a label, an assignment or a review request on the issue or pull request that started it, or as a new issue. GitHub outputs need a connected GitHub account (Settings → GitHub). That token also creates repositories when you name one under Settings → GitHub and the token allows Administration; the new repository is empty, ready for a workspace to push, and a workspace without an `origin` gets it set.
 
 The host queues each output separately. If its connection is missing or a failure occurs before sending, the report waits and retries without running the task again. If the host stops during a send or cannot tell whether the service accepted it, the outcome stays unknown and it is not resent automatically. This prevents a possibly received report or issue from being duplicated. Stopping the bot, pausing or deleting the routine, or disconnecting a workflow link cancels its pending outputs.
 

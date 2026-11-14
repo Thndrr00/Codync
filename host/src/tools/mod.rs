@@ -12,7 +12,8 @@ mod comfy_job;
 pub mod comfy_mcp;
 mod health;
 mod lifecycle;
-mod log;
+/// Each tool's log file; the voice error log writes through it too.
+pub(crate) mod log;
 pub mod runner;
 
 #[cfg(test)]

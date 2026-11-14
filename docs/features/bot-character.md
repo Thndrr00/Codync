@@ -10,6 +10,12 @@ Fields of a bot's config that only the person edits. A managing bot has no tool 
 | `backgroundModel` | The model routine runs and scheduled check-ins use instead of `model` (and without its options). A check-in on a bot with one runs in a session of its own (`check-in`), because a session's model is fixed when it starts. | `host/src/agent/bot/launch.rs`, `session.rs` |
 | `saver` | With a background model, once the bot's (or the fleet's) daily token budget reaches 80 percent, new sessions start on the background model until the next day, and the budget warning says so. A session already running keeps its model, and the context is not reduced: both would need the system prompt to change under a live session. | `host/src/budget.rs` (`saving`), `session.rs` |
 
+## Personality is not the server's update style
+
+A bot's soul, persona and heartbeat are its own character. How every agent on the computer posts
+updates between steps (Natural or Classic) is a server setting, not a bot field:
+[server settings](server-settings.md#personality-updates-between-steps).
+
 Edited in desktop, Android, iOS (not compiled) and the terminal.
 
 ## Your week and the Monday recap

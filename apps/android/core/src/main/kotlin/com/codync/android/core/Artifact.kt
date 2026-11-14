@@ -41,6 +41,12 @@ const val ARTIFACTS_HOST = "2.25.0"
 /** Whether the computer's host has the Library; an older one has no `library` method, so the app leaves it out. */
 fun hasLibrary(hostVersion: String?): Boolean = hostVersion != null && !AppVersion.isBelow(hostVersion, ARTIFACTS_HOST)
 
+/** The first host with the server's Library (`serverLibrary`). */
+const val SERVER_LIBRARY_HOST = "2.48.0"
+
+/** Whether the computer's host has the server's Library; an older one leaves the page out. */
+fun hasServerLibrary(hostVersion: String?): Boolean = hostVersion != null && !AppVersion.isBelow(hostVersion, SERVER_LIBRARY_HOST)
+
 /** What an artifact card in the chat carries (`data.artifact`): the artifact and the version it announced. */
 @Serializable data class ArtifactCard(val id: String, val title: String = "", val updatedAt: Long = 0)
 

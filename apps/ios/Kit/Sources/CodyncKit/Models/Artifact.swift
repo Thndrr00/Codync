@@ -19,6 +19,9 @@ public struct Artifact: Codable, Hashable, Sendable, Identifiable {
     /// The first host with artifacts and the Library.
     public static let firstHost = "2.25.0"
 
+    /// The first host with the server's Library (`serverLibrary`).
+    public static let serverLibraryHost = "2.48.0"
+
     /// How a message about the artifact quotes its card until the computer's own quote arrives.
     public var replyQuote: ReplyQuote? {
         entryId.map { ReplyQuote(id: $0, author: botId, text: "Artifact: \(title)", artifact: id) }

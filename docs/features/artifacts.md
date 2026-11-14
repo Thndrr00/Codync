@@ -43,6 +43,9 @@ title (`replies::quote`), and the bot reads `[Codync: this is about your artifac
     `{kind: "file", at, entryId, file: {id, name, size, sha256}}` (read with `readFile`) and files the user attached
     `{kind: "attachment", at, entryId, file: {id, name, size}}` (read with `readUpload`), from its newest 500 messages
     with files.
+  - `serverLibrary {filter?}` → `{items}`, every bot's artifacts and files on this computer, newest first, each with
+    `botId`, `botName` and `image` (the extensions the apps preview). `filter` is `images` or `files`; items are
+    deduplicated by kind and id, and a deleted bot is left out.
   - `readArtifact {botId, artifactId, offset}` → `{data: <base64>, size, artifact: Artifact}`, chunks of at most
     384 KiB like `readFile`.
   - `renameArtifact {botId, artifactId, title}` → `{artifact}`. Titles are trimmed, 1–200 bytes, no control
@@ -53,7 +56,8 @@ title (`replies::quote`), and the bot reads `[Codync: this is about your artifac
   Apps upsert what the events bring and fetch the `library` when they show it; one they can't read is skipped
   (no rewind), and older apps ignore it.
 - Additive: no `minApp` change. The apps show the Library only when the host's `hello` version is 2.25.0 or later
-  (an older host has no `library`); cards need no check, since only those hosts post them.
+  (an older host has no `library`), and the server's Library only from 2.48.0 (`serverLibrary`); cards need no check,
+  since only those hosts post them.
 - Analytics: `artifact_published {change, card}` and the `library` and `artifact` screens
   ([analytics events](../reference/analytics-events.md)).
 
@@ -84,6 +88,10 @@ All four clients show the same things; layout follows each platform.
   name and size. Empty: "Library is empty" / "Artifacts {name} makes and files shared in this chat show here."
   - Desktop: a Library tab in the conversation details panel (Details · Library · Memory · Settings).
   - iPhone and Android: the same tab in the bot's details sheet, which tapping the chat's title opens.
+- **Server's Library**: every bot's artifacts and files of one computer, newest first by day, with an
+  All / Images / Files filter and each row's bot name. Desktop: **Library** in the window bar's rail or the search
+  palette. iPhone: the book button beside the roster's filters. Android: **Library** in the roster's actions.
+  Terminal: `Ctrl+K` → **Library of every bot: artifacts and files…**.
 - **Terminal UI**: a card is a `▤ Artifact: <title>` line. On the selected message, `o` opens the artifact in the
   computer's browser (its HTML written to a temporary file) and `f` saves `<title>.html` to Downloads, like files.
   The Library is a tab of the bot's pages (`L`, ⇧← ⇧→): `↵`/`o` opens an artifact in the browser, `f` saves any row to

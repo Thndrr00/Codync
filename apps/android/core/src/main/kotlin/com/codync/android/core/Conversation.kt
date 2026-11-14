@@ -39,6 +39,8 @@ data class Entry(
     val status: String? get() = data.text("status")
     /** Files the bot shared in this message. */
     val files: List<SharedFile> get() = data["files"]?.let { WireJson.decodeFromJsonElement<List<SharedFile>>(it) }.orEmpty()
+    /** The subagents this turn started (`kind: "subagents"`), oldest first. */
+    val subagents: List<EntrySubagent> get() = data["subagents"]?.let { runCatching { WireJson.decodeFromJsonElement<List<EntrySubagent>>(it) }.getOrNull() }.orEmpty()
     /** The artifact a bot published in this message (an artifact card), read leniently: its text stands in for it. */
     val artifact: ArtifactCard? get() = (data["artifact"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ArtifactCard>(it) }.getOrNull() }
     /** A message of the user's waiting behind the bot's work: the computer hasn't given it to the agent yet. */
@@ -47,7 +49,7 @@ data class Entry(
     val isRemoved: Boolean get() = data["removed"]?.jsonPrimitive?.booleanOrNull == true
     /** Of memory and context, only a fresh conversation gets a line: memory lives in the bot's memory settings, a
      *  summary keeps the same conversation going, and a kept handoff changed nothing. */
-    val isChat: Boolean get() = !isInternal && (kind in listOf("user", "permission") ||
+    val isChat: Boolean get() = !isInternal && (kind in listOf("user", "permission", "subagents") ||
         kind == "notice" && "memory" !in data && "memoryFile" !in data && "compaction" !in data &&
             (data["handoff"] as? JsonObject)?.text("status") != "kept" ||
         kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true)
@@ -178,6 +180,8 @@ etwork` is null from hosts before the network view (or one this app can't read).
     data class EntryChanged(val entry: Entry) : MirrorEvent
     /** One message was deleted; its id and the deletion's rev. */
     data class EntryDeleted(val id: String, val rev: Long) : MirrorEvent
+    /** A chat's or group's messages and turns went; its side threads and setup stay. */
+    data class HistoryCleared(val botId: String, val rev: Long) : MirrorEvent
     data class Usage(val value: JsonObject) : MirrorEvent
     data class Screen(val value: JsonObject) : MirrorEvent
     /** An artifact was published, updated or renamed (the catch-up replays it too), never a checkpoint. */
@@ -209,6 +213,7 @@ etwork` is null from hosts before the network view (or one this app can't read).
             "bot" -> BotChanged(HostClient.decode(value.getValue("bot").jsonObject))
             "entry" -> EntryChanged(Entry.decode(value.getValue("entry").jsonObject))
             "entryDeleted" -> EntryDeleted(value.getValue("id").jsonPrimitive.content, value["rev"]?.jsonPrimitive?.longOrNull ?: 0)
+            "historyCleared" -> HistoryCleared(value.getValue("botId").jsonPrimitive.content, value["rev"]?.jsonPrimitive?.longOrNull ?: 0)
             "usage" -> Usage(value.getValue("usage").jsonObject)
             "screen" -> Screen(value.getValue("screen").jsonObject)
             // One this app can't read is passed over rather than fetching everything again: a card or the Library reads it again.
@@ -240,3 +245,20 @@ data class MirrorSnapshot(
     val usage: JsonObject = JsonObject(emptyMap()),
     val screen: JsonObject? = null,
 )
+
+/** One subagent an agent started in a turn (`kind: "subagents"`): its task, state, newest step and time. */
+@Serializable
+data class EntrySubagent(
+    val id: String,
+    val task: String = "",
+    /** running | done | failed | stopped */
+    val state: String = "running",
+    /** What it does now, as its tool call named it. */
+    val step: String = "",
+    val startedAt: Long = 0,
+    val endedAt: Long? = null,
+) {
+    /** Whether it still works: only then does its card's header follow the reader. */
+    val isRunning: Boolean get() = state == "running" || state.isEmpty()
+    val shownState: String get() = if (isRunning) "running" else state
+}

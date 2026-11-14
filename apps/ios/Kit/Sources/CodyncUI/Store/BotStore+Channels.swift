@@ -53,6 +53,11 @@ extension BotStore {
         try await ready().setGitHubToken(token)
     }
 
+    /// Creates a repository on that account; the answer carries `created` plus the fresh status.
+    public func githubCreateRepo(name: String, isPrivate: Bool, description: String) async throws -> GitHubStatus {
+        try await ready().githubCreateRepo(name: name, isPrivate: isPrivate, description: description)
+    }
+
     /// The computer's linked WhatsApp number.
     public func whatsapp() async throws -> WhatsAppLink { try await ready().whatsappState() }
 
@@ -73,5 +78,10 @@ extension BotStore {
     /// Lets a chat or person write, or takes them out. Returns the list as it is then.
     public func whatsappSetAllowed(_ jid: String, allowed: Bool) async throws -> [String] {
         try await ready().whatsappSetAllowed(jid: jid, allowed: allowed)
+    }
+
+    /// Approves or denies a person who asked to write; approved, they join the allowed chats.
+    public func whatsappAnswerRequest(_ code: String, approve: Bool) async throws -> [WhatsAppRequest] {
+        try await ready().whatsappAnswerRequest(code: code, approve: approve)
     }
 }

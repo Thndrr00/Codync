@@ -5,7 +5,10 @@ import { pref, type Pref } from '../../lib/prefs'
 // Voice on the user's own provider keys (host/src/voice.rs, kit Voice.swift + VoiceSettings).
 // The keys stay on the computer; these are this device's choices.
 
-export type VoiceProvider = 'openai' | 'gemini' | 'elevenlabs'
+export type VoiceProvider = 'openai' | 'gemini' | 'elevenlabs' | 'xai' | 'groq'
+
+/** Who reads a reply aloud: the call engine's own provider, xAI's speech route, or NeuTTS on the computer. */
+export type SpeechOutput = 'provider' | 'xai' | 'neutts'
 
 /** The provider's newest model for each voice mode, as the computer last found them. */
 export interface VoiceDefaults {
@@ -30,6 +33,25 @@ export interface VoiceModels {
 export interface VoiceVoices {
   voices: { id: string; name: string }[]
 }
+
+/** The local voice server this computer's speech goes through (host `voiceServer`). */
+export interface VoiceServer {
+  /** The saved URL; empty when none is saved here. */
+  baseUrl: string
+  transcribeModel: string
+  speechModel: string
+  keySaved: boolean
+  /** Where speech requests actually go: the saved server, `CODYNC_OPENAI_BASE_URL`, or OpenAI. */
+  effective: string
+  /** `effective` is not api.openai.com: Realtime is unavailable meanwhile. */
+  custom: boolean
+  /** A developer's `CODYNC_OPENAI_BASE_URL` on this computer, when set. */
+  environment?: string | null
+  suggestions: string[]
+}
+
+/** The models common local servers serve, until the computer reports its own list. */
+export const localModelSuggestions = ['parakeet-tdt-0.6b-v3', 'parakeet-unified-en-0.6b', 'whisper-turbo', 'cohere-transcribe-03-2026']
 
 export const voiceInfo: Record<VoiceProvider, {
   name: string
@@ -61,12 +83,36 @@ export const voiceInfo: Record<VoiceProvider, {
     defaults: { realtime: '', transcribe: 'scribe_v1', speech: 'eleven_flash_v2_5' },
     voices: ['21m00Tcm4TlvDq8ikWAM'],
   },
+  // Speech only (OpenBot 0.60): reads replies aloud; it hears nothing.
+  xai: {
+    name: 'xAI',
+    keyPage: 'https://console.x.ai',
+    keyPrompt: 'xai-…',
+    defaults: { realtime: '', transcribe: '', speech: 'xai-tts' },
+    voices: ['eve', 'ara', 'leo', 'rex', 'sal'],
+  },
+  // Dictation only (OpenBot 0.60): hears speech; it reads nothing.
+  groq: {
+    name: 'Groq',
+    keyPage: 'https://console.groq.com/keys',
+    keyPrompt: 'gsk_…',
+    defaults: { realtime: '', transcribe: 'whisper-large-v3-turbo', speech: '' },
+    voices: [],
+  },
 }
 
-/** Providers that hold a live conversation; ElevenLabs reads and hears only. */
-export const supportsRealtime = (p: VoiceProvider) => p !== 'elevenlabs'
+/** Providers that hold a live conversation; the others carry Speech, hear or read only. */
+export const supportsRealtime = (p: VoiceProvider) => p === 'openai' || p === 'gemini'
 
-export const isVoiceProvider = (s: string): s is VoiceProvider => s === 'openai' || s === 'gemini' || s === 'elevenlabs'
+/** Groq hears speech; xAI reads replies aloud and hears nothing. */
+export const canDictate = (p: VoiceProvider) => p !== 'xai'
+export const canSpeak = (p: VoiceProvider) => p !== 'groq'
+
+/** What can carry a whole call: it must hear and read aloud. xAI and Groq each do half. */
+export const isCallProvider = (p: VoiceProvider) => canDictate(p) && canSpeak(p)
+
+export const isVoiceProvider = (s: string): s is VoiceProvider =>
+  s === 'openai' || s === 'gemini' || s === 'elevenlabs' || s === 'xai' || s === 'groq'
 export const configured = (s: VoiceStatus, p: VoiceProvider) => s.providers.some((x) => x.provider === p && x.configured)
 
 /** `device` (on-device speech) or a provider. */
@@ -74,9 +120,14 @@ function enginePref(stored: Pref<string>): Pref<string> {
   return { ...stored, get: () => voiceEngine(stored.get(), window.codync.platform) }
 }
 
-export const engineOptions = () => voiceEngineIds(window.codync.platform).map((id) => ({
-  id, label: isVoiceProvider(id) ? voiceInfo[id].name : 'On device',
-}))
+/** The providers a call can use, then the ones that only dictate (Groq). */
+export const engineOptions = () => voiceEngineIds(window.codync.platform)
+  .filter((id) => !isVoiceProvider(id) || isCallProvider(id))
+  .map((id) => ({ id, label: isVoiceProvider(id) ? voiceInfo[id].name : 'On device' }))
+
+export const dictationEngineOptions = () => voiceEngineIds(window.codync.platform)
+  .filter((id) => !isVoiceProvider(id) || canDictate(id))
+  .map((id) => ({ id, label: isVoiceProvider(id) ? voiceInfo[id].name : 'On device' }))
 
 const storedCallEngine = pref('callEngine', 'device')
 /** Keep an old/default device choice available to call startup's configured-provider fallback. */
@@ -121,7 +172,10 @@ export const mode = (p: VoiceProvider) => keyed<string>(`callMode.${p}`, 'realti
 export const isSpeechMode = (p: VoiceProvider) => !supportsRealtime(p) || mode(p).get() === 'speech'
 
 /** Speech output only: recognition/realtime keep the user's existing provider connection. */
-export const speechOutput = keyed<string>('callSpeechOutput', 'provider')
+export const speechOutput = keyed<SpeechOutput>('callSpeechOutput', 'provider')
+/** Who reads replies aloud: the call engine's provider, xAI's own route, or NeuTTS. */
+export const speechProvider = (p: VoiceProvider) => (speechOutput.get() === 'xai' ? 'xai' : p)
+export const localSpeech = () => speechOutput.get() === 'neutts'
 const voicePref = (p: VoiceProvider) => keyed<string | null>(`callVoice.${p}`, null)
 const defaultsPref = (p: VoiceProvider) => keyed<VoiceDefaults | null>(`callDefaults.${p}`, null)
 /** The provider's model list as last fetched with the user's key. */
@@ -151,7 +205,7 @@ export function saveModel(p: VoiceProvider, kind: ModelKind, model: string) {
 export function chosenVoice(p: VoiceProvider) {
   const v = voicePref(p).get()
   if (v && (p === 'elevenlabs' || voiceInfo[p].voices.includes(v))) return v
-  return voiceInfo[p].voices[0]!
+  return voiceInfo[p].voices[0] ?? ''
 }
 
 export const saveVoice = (p: VoiceProvider, v: string) => voicePref(p).set(v)
@@ -178,6 +232,17 @@ export async function voiceStatus(c: HostClient) {
 
 /** Checks the key with the provider before the computer keeps it; an empty key removes it. */
 export const setVoiceKey = (c: HostClient, p: VoiceProvider, key: string) => c.call<VoiceStatus>('setVoiceKey', { provider: p, key }, 30_000)
+
+/** The local voice server's saved URL, models and key state. A phone may read it. */
+export const voiceServer = (c: HostClient) => c.call<VoiceServer>('voiceServer', {}, 30_000)
+
+/** Saves the local voice server (this computer only, like the voice keys). */
+export const setVoiceServer = (c: HostClient, body: Partial<Pick<VoiceServer, 'baseUrl' | 'transcribeModel' | 'speechModel'> & { key: string }>) =>
+  c.call<VoiceServer>('setVoiceServer', body, 30_000)
+
+/** Tries the saved server and says why when it doesn't answer. */
+export const testVoiceServer = (c: HostClient) =>
+  c.call<{ ok: boolean; message: string; models?: string[]; effective?: string }>('testVoiceServer', {}, 30_000)
 
 /** A short-lived credential for one call's audio session. */
 export const voiceSession = async (c: HostClient, p: VoiceProvider, model: string, voice: string) =>

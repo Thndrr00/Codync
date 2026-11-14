@@ -1,33 +1,44 @@
 //! Voice on the user's own provider keys: `OpenAI` Realtime and Gemini Live for
-//! a live call, and their speech models (plus `ElevenLabs`) for speech mode, where
-//! each utterance is transcribed and each reply is read aloud. The keys stay in
-//! this computer's vault; a client starting a live call gets a short-lived
+//! a live call, and their speech models (plus `ElevenLabs` and xAI) for speech mode, where
+//! each utterance is transcribed and each reply is read aloud; `Groq` dictates only. The keys
+//! stay in this computer's vault; a client starting a live call gets a short-lived
 //! credential minted here and then streams audio to the provider directly, so
 //! audio never crosses the channel or the relay.
 
 pub(crate) mod decisions;
 mod elevenlabs;
 mod endpoint;
+pub(crate) mod error_log;
+mod keys;
+mod models;
 pub(crate) mod neutts;
 pub(crate) mod receipts;
+mod server;
+mod speech;
 mod streaming;
 pub(crate) mod synthesis;
 mod transcript;
 pub(crate) mod transcription;
+mod xai;
+
+pub use models::models;
+pub use server::{save as set_server, state as server_state, test as test_server};
+/// Gemini's generate route serves both speech and transcription.
+pub(super) use speech::gemini_generate;
+pub use speech::speak;
 pub use transcription::transcribe;
-mod keys;
 
 use crate::store::Store;
 use anyhow::{Result, anyhow, bail};
-use base64::{Engine, engine::general_purpose::STANDARD};
-use endpoint::{openai_base, realtime_url};
+use base64::engine::general_purpose::STANDARD;
+use endpoint::realtime_url;
 use keys::Access;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::time::Duration;
 
-const TIMEOUT: Duration = Duration::from_secs(15);
+pub(super) const TIMEOUT: Duration = Duration::from_secs(15);
 /// Speech to text: keep the speaker's language and script, and coding terms as written.
 const TRANSCRIBE_HINT: &str = "Keep the speaker's language and script. Keep code, file and product names as written.";
 
@@ -40,16 +51,24 @@ pub enum Provider {
     /// Speech only: `ElevenLabs` holds no live conversation here.
     #[serde(rename = "elevenlabs")]
     ElevenLabs,
+    /// Speech only: xAI reads replies aloud and hears nothing (OpenBot 0.60).
+    #[serde(rename = "xai")]
+    Xai,
+    /// Dictation only: Groq's Whisper hears speech and reads nothing (OpenBot 0.60).
+    #[serde(rename = "groq")]
+    Groq,
 }
 
 impl Provider {
-    const ALL: [Self; 3] = [Self::OpenAi, Self::Gemini, Self::ElevenLabs];
+    const ALL: [Self; 5] = [Self::OpenAi, Self::Gemini, Self::ElevenLabs, Self::Xai, Self::Groq];
 
     pub fn parse(s: &str) -> Result<Self> {
         match s {
             "openai" => Ok(Self::OpenAi),
             "gemini" => Ok(Self::Gemini),
             "elevenlabs" => Ok(Self::ElevenLabs),
+            "xai" => Ok(Self::Xai),
+            "groq" => Ok(Self::Groq),
             _ => bail!("unknown voice provider `{s}`"),
         }
     }
@@ -59,6 +78,8 @@ impl Provider {
             Self::OpenAi => "openai",
             Self::Gemini => "gemini",
             Self::ElevenLabs => "elevenlabs",
+            Self::Xai => "xai",
+            Self::Groq => "groq",
         }
     }
 
@@ -67,6 +88,8 @@ impl Provider {
             Self::OpenAi => "OpenAI",
             Self::Gemini => "Gemini",
             Self::ElevenLabs => "ElevenLabs",
+            Self::Xai => "xAI",
+            Self::Groq => "Groq",
         }
     }
 
@@ -76,13 +99,27 @@ impl Provider {
             Self::OpenAi => ("gpt-realtime-2.1", "gpt-transcribe", "gpt-4o-mini-tts"),
             Self::Gemini => ("gemini-3.8-live", "gemini-3.8-flash", "gemini-3.8-flash-tts"),
             Self::ElevenLabs => ("", "scribe_v1", "eleven_flash_v2_5"),
+            // xAI's speech route takes no model: the id names its one text-to-speech choice.
+            Self::Xai => ("", "", "xai-tts"),
+            // Groq's Whisper is sent to it by name (OpenBot's `GROQ_MODELS`).
+            Self::Groq => ("", "whisper-large-v3-turbo", ""),
         };
         Defaults { realtime: realtime.into(), transcribe: transcribe.into(), speech: speech.into() }
     }
 
-    /// `ElevenLabs` reads replies and hears speech, but holds no live call.
+    /// Only OpenAI and Gemini hold a live conversation.
     fn live(self) -> bool {
-        self != Self::ElevenLabs
+        matches!(self, Self::OpenAi | Self::Gemini)
+    }
+
+    /// Whether it can hear speech (xAI reads replies only).
+    pub(super) fn transcribes(self) -> bool {
+        self != Self::Xai
+    }
+
+    /// Whether it can read replies aloud (Groq hears only).
+    fn speaks(self) -> bool {
+        self != Self::Groq
     }
 }
 
@@ -97,7 +134,7 @@ pub struct Defaults {
 
 const REFRESH_EVERY: Duration = Duration::from_hours(24);
 
-fn defaults_key(p: Provider) -> String {
+pub(super) fn defaults_key(p: Provider) -> String {
     format!("voice-defaults.{}", p.id())
 }
 
@@ -127,6 +164,27 @@ pub async fn refresh_loop(hub: std::sync::Arc<crate::hub::Hub>) {
 fn checked(s: &str) -> Result<&str> {
     let ok = !s.is_empty() && s.len() <= 100 && s.chars().all(|c| c.is_ascii_alphanumeric() || "-._".contains(c));
     if ok { Ok(s) } else { bail!("`{s}` isn't a model or voice name") }
+}
+
+/// Which half of a voice a model serves: hearing (`/v1/audio/transcriptions`) or reading
+/// (`/v1/audio/speech`). A local voice server saves one model for each.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Kind {
+    Transcribe,
+    Speech,
+}
+
+/// The model a request actually uses: the local voice server's saved model for the mode when
+/// there is one (the server serves what it serves), else the model the app picked, which is the
+/// provider's own default until the user chooses.
+pub(super) fn model_for(store: &Store, p: Provider, kind: Kind, chosen: &str) -> Result<String> {
+    if p == Provider::OpenAi && endpoint::is_custom(store)? {
+        let saved = server::model(store, kind == Kind::Transcribe);
+        if !saved.is_empty() {
+            return Ok(saved);
+        }
+    }
+    Ok(chosen.to_owned())
 }
 
 /// The provider's own message from an error body ("Incorrect API key provided…"), whatever shape
@@ -160,7 +218,7 @@ async fn mint(p: Provider, access: &Access, model: &str, voice: &str) -> Result<
                 "session": {"type": "realtime", "model": model, "audio": {"output": {"voice": voice}}},
             });
             // A compatible server on this computer has no Realtime credential minting.
-            realtime_url(openai_base()?.as_ref())?;
+            realtime_url(access.is_local())?;
             send(p, access.request(p, Method::POST, "/v1/realtime/client_secrets").json(&body)).await?
         }
         Provider::Gemini => {
@@ -173,11 +231,15 @@ async fn mint(p: Provider, access: &Access, model: &str, voice: &str) -> Result<
             send(p, access.request(p, Method::POST, "/v1alpha/auth_tokens").json(&body)).await?
         }
         Provider::ElevenLabs => bail!("{} doesn't hold live calls. Choose Speech mode.", p.name()),
+        Provider::Xai => {
+            bail!("{} reads replies aloud but doesn't hear you. Choose Speech with another provider.", p.name())
+        }
+        Provider::Groq => bail!("{} hears speech but doesn't read replies. Pick another provider for calls.", p.name()),
     };
     let field = match p {
         Provider::OpenAi => "value",
         Provider::Gemini => "name",
-        Provider::ElevenLabs => unreachable!(),
+        Provider::ElevenLabs | Provider::Xai | Provider::Groq => unreachable!(),
     };
     v[field]
         .as_str()
@@ -218,19 +280,22 @@ pub async fn voices(store: &Store, p: Provider) -> Result<Value> {
 pub async fn set_key(store: &Store, p: Provider, key: &str) -> Result<Value> {
     let key = key.trim();
     if !key.is_empty() {
-        if p == Provider::ElevenLabs {
-            elevenlabs::check(key).await?;
-        } else {
-            let access = Access::direct(p, key)?;
-            if p == Provider::OpenAi && openai_base()?.is_some() {
-                // Compatible speech servers may not implement Realtime credential minting.
+        match p {
+            Provider::ElevenLabs => elevenlabs::check(key).await?,
+            // Both answer a model list on the key; their speech routes take no model.
+            Provider::Xai | Provider::Groq => {
+                let access = Access::direct(store, p, key)?;
                 send(p, access.request(p, Method::GET, "/v1/models")).await?;
-            } else {
-                let voice = match p {
-                    Provider::OpenAi => "marin",
-                    _ => "Kore",
-                };
-                mint(p, &access, &defaults(store, p).realtime, voice).await?;
+            }
+            Provider::OpenAi | Provider::Gemini => {
+                let access = Access::direct(store, p, key)?;
+                if p == Provider::OpenAi && access.is_local() {
+                    // Compatible speech servers may not implement Realtime credential minting.
+                    send(p, access.request(p, Method::GET, "/v1/models")).await?;
+                } else {
+                    let voice = if p == Provider::OpenAi { "marin" } else { "Kore" };
+                    mint(p, &access, &defaults(store, p).realtime, voice).await?;
+                }
             }
         }
     }
@@ -245,163 +310,10 @@ pub async fn set_key(store: &Store, p: Provider, key: &str) -> Result<Value> {
 /// A credential for a call starting now.
 pub async fn session(store: &Store, p: Provider, model: &str, voice: &str) -> Result<Value> {
     if !p.live() {
-        bail!("{} doesn't hold live calls. Choose Speech mode.", p.name());
+        bail!("{} doesn't hold live calls. Choose Speech with a provider that hears and speaks.", p.name());
     }
     let access = keys::access(store, p)?;
     Ok(json!({"credential": mint(p, &access, checked(model)?, checked(voice)?).await?}))
-}
-
-/// Models the key can use, from the provider's own list: realtime (conversation),
-/// transcribe (speech to text) and speech (text to speech).
-pub async fn models(store: &Store, p: Provider) -> Result<Value> {
-    let access = keys::access(store, p)?;
-    let entries: Vec<Model> = match p {
-        Provider::OpenAi => {
-            let base = openai_base()?;
-            let v = send(p, access.request(p, Method::GET, "/v1/models")).await?;
-            v["data"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|m| {
-                    let id = m["id"].as_str()?;
-                    Some(Model {
-                        id: id.to_owned(),
-                        live: base.is_none() && id.contains("realtime"),
-                        generate: true,
-                        created: m["created"].as_i64(),
-                    })
-                })
-                .collect()
-        }
-        Provider::Gemini => {
-            let v = send(p, access.request(p, Method::GET, "/v1beta/models?pageSize=1000")).await?;
-            v["models"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|m| {
-                    let methods = m["supportedGenerationMethods"].as_array()?;
-                    Some(Model {
-                        id: m["name"].as_str()?.trim_start_matches("models/").to_owned(),
-                        live: methods.iter().any(|x| x == "bidiGenerateContent"),
-                        generate: methods.iter().any(|x| x == "generateContent"),
-                        created: None,
-                    })
-                })
-                .collect()
-        }
-        Provider::ElevenLabs => elevenlabs::models(access.secret()?).await?,
-    };
-    let (realtime, transcribe, speech) = classify(p, &entries);
-    let fallback = p.fallback();
-    let defaults = if p == Provider::ElevenLabs {
-        // Flash 2.5 is the low-latency model a call needs; Scribe v1 is on every plan.
-        Defaults {
-            realtime: String::new(),
-            transcribe: fallback.transcribe,
-            speech: newest(p, &entries, &speech).unwrap_or(fallback.speech),
-        }
-    } else {
-        Defaults {
-            realtime: newest(p, &entries, &realtime).unwrap_or(fallback.realtime),
-            transcribe: newest(p, &entries, &transcribe).unwrap_or(fallback.transcribe),
-            speech: newest(p, &entries, &speech).unwrap_or(fallback.speech),
-        }
-    };
-    store.kv_set(&defaults_key(p), &serde_json::to_string(&defaults)?)?;
-    Ok(json!({"models": realtime, "transcribe": transcribe, "speech": speech, "defaults": defaults}))
-}
-
-/// The provider's current model among `ids`, skipping dated snapshots and previews.
-/// `OpenAI` dates every model (`created`): its latest generation is whatever came out within a
-/// few months of the newest release, and in it the full model beats `mini` (`gpt-realtime-2.1`
-/// over `gpt-realtime-2.1-mini`, yet `gpt-4o-mini-tts` over the older `tts-1`). Gemini's names
-/// carry the version (`gemini-3.8-flash`); within one version the full, plain name wins
-/// (`-flash` over `-flash-lite`, `-live` over `-live-extended-thinking`).
-fn newest(p: Provider, models: &[Model], ids: &[String]) -> Option<String> {
-    const GENERATION: i64 = 120 * 24 * 60 * 60;
-    let lesser = |id: &str| ["mini", "lite"].iter().any(|w| id.contains(w));
-    let pinned = |id: &str| {
-        ["preview", "exp", "latest"].iter().any(|w| id.contains(w))
-            || id
-                .split('-')
-                .any(|part| part.len() == 4 && part.starts_with("20") && part.bytes().all(|c| c.is_ascii_digit()))
-    };
-    let version = |id: &str| -> Vec<u32> {
-        id.split('-')
-            .find(|part| {
-                part.starts_with(|c: char| c.is_ascii_digit()) && part.split('.').all(|n| n.parse::<u32>().is_ok())
-            })
-            .map(|v| v.split('.').filter_map(|n| n.parse().ok()).collect())
-            .unwrap_or_default()
-    };
-    let created = |id: &str| models.iter().find(|m| m.id == id).and_then(|m| m.created).unwrap_or(0);
-    let stable: Vec<&String> = ids.iter().filter(|id| !pinned(id)).collect();
-    let pool = if stable.is_empty() { ids.iter().collect() } else { stable };
-    match p {
-        Provider::OpenAi => {
-            let latest = pool.iter().map(|id| created(id)).max()?;
-            pool.into_iter()
-                .filter(|id| created(id) >= latest - GENERATION)
-                .max_by_key(|id| (!lesser(id), created(id)))
-                .cloned()
-        }
-        Provider::Gemini => pool
-            .into_iter()
-            .max_by(|a, b| (version(a), !lesser(a)).cmp(&(version(b), !lesser(b))).then_with(|| b.len().cmp(&a.len())))
-            .cloned(),
-        Provider::ElevenLabs => ["eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_flash_v2", "eleven_turbo_v2"]
-            .iter()
-            .find(|want| pool.iter().any(|id| id == *want))
-            .map(|want| (*want).to_owned())
-            .or_else(|| pool.first().map(|id| (*id).clone())),
-    }
-}
-
-struct Model {
-    id: String,
-    /// Holds a live conversation (`OpenAI` `realtime`, Gemini `bidiGenerateContent`).
-    live: bool,
-    generate: bool,
-    /// When `OpenAI` released it (Unix seconds); Gemini's list has no date.
-    created: Option<i64>,
-}
-
-/// Sorts a provider's model list into what each voice mode can use. Translation,
-/// diarization and live-transcription models can't serve either mode.
-fn classify(p: Provider, models: &[Model]) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let has = |id: &str, words: &[&str]| words.iter().any(|w| id.contains(w));
-    let pick = |f: &dyn Fn(&Model) -> bool| {
-        let mut ids: Vec<String> = models.iter().filter(|m| f(m)).map(|m| m.id.clone()).collect();
-        ids.sort();
-        ids.dedup();
-        ids
-    };
-    let realtime = pick(&|m| m.live && !has(&m.id, &["translate", "whisper", "transcribe", "tts"]));
-    let (transcribe, speech) = match p {
-        Provider::OpenAi => (
-            pick(&|m| {
-                (m.id.contains("transcribe") || m.id == "whisper-1") && !has(&m.id, &["diarize", "live", "realtime"])
-            }),
-            pick(&|m| m.id.contains("tts")),
-        ),
-        Provider::Gemini => (
-            pick(&|m| {
-                m.generate
-                    && m.id.starts_with("gemini")
-                    && m.id.contains("flash")
-                    && !has(&m.id, &["tts", "live", "image", "embedding", "native-audio", "translate"])
-            }),
-            pick(&|m| m.generate && m.id.contains("tts")),
-        ),
-        Provider::ElevenLabs => (
-            // Batch transcription is Scribe; the model list only covers text to speech.
-            vec!["scribe_v2".to_owned(), "scribe_v1".to_owned()],
-            pick(&|m| m.generate && !has(&m.id, &["music"])),
-        ),
-    };
-    (realtime, transcribe, speech)
 }
 
 /// Names a speaker is likely to say that speech-to-text would otherwise misspell: the app and
@@ -421,198 +333,9 @@ fn names_hint(names: &[String]) -> String {
     format!("Names that may come up: {}.", names.join(", "))
 }
 
-/// Text to speech for one stretch of a reply: `{audio: base64, format: "aac" | "wav" | "mp3"}`.
-pub async fn speak(store: &Store, p: Provider, model: &str, voice: &str, text: &str) -> Result<Value> {
-    let access = keys::access(store, p)?;
-    let (model, voice) = (checked(model)?, checked(voice)?);
-    if text.trim().is_empty() || text.len() > 4000 {
-        bail!("text must be 1–4000 bytes");
-    }
-    match p {
-        Provider::OpenAi => {
-            // A local server answers WAV (no AAC encoder needed); the phone plays both.
-            let format = if openai_base()?.is_some() { "wav" } else { "aac" };
-            let body = json!({"model": model, "voice": voice, "input": text, "response_format": format});
-            let res = access
-                .request(p, Method::POST, "/v1/audio/speech")
-                .json(&body)
-                .timeout(TIMEOUT * 4)
-                .send()
-                .await
-                .map_err(|_| anyhow!("Can't reach {}.", p.name()))?;
-            let status = res.status();
-            let bytes = res.bytes().await.map_err(|_| anyhow!("{} sent no audio.", p.name()))?;
-            if !status.is_success() {
-                let v: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
-                return Err(provider_error(p, status, &v));
-            }
-            Ok(json!({"audio": STANDARD.encode(&bytes), "format": format}))
-        }
-        Provider::Gemini => {
-            let body = json!({
-                "contents": [{"parts": [{"text": text}]}],
-                "generationConfig": {
-                    "responseModalities": ["AUDIO"],
-                    "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}},
-                },
-            });
-            let v = send(p, gemini_generate(&access, model).json(&body)).await?;
-            let pcm = v["candidates"][0]["content"]["parts"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .find_map(|part| part["inlineData"]["data"].as_str())
-                .ok_or_else(|| anyhow!("{} sent no audio.", p.name()))?;
-            let pcm = STANDARD.decode(pcm).map_err(|_| anyhow!("{} sent unreadable audio.", p.name()))?;
-            Ok(json!({"audio": STANDARD.encode(wav(&pcm, 24_000)), "format": "wav"}))
-        }
-        Provider::ElevenLabs => {
-            let bytes = elevenlabs::speech(access.secret()?, model, voice, text).await?;
-            Ok(json!({"audio": STANDARD.encode(bytes), "format": "mp3"}))
-        }
-    }
-}
-
-fn gemini_generate(access: &Access, model: &str) -> reqwest::RequestBuilder {
-    access
-        .request(Provider::Gemini, Method::POST, &format!("/v1beta/models/{model}:generateContent"))
-        .timeout(TIMEOUT * 4)
-}
-
-/// 16-bit mono PCM wrapped in a WAV header (Gemini speech is raw PCM).
-fn wav(pcm: &[u8], rate: u32) -> Vec<u8> {
-    let len = u32::try_from(pcm.len()).unwrap_or(u32::MAX);
-    let mut out = Vec::with_capacity(pcm.len() + 44);
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&(36 + len).to_le_bytes());
-    out.extend_from_slice(b"WAVEfmt ");
-    out.extend_from_slice(&16u32.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    out.extend_from_slice(&1u16.to_le_bytes()); // mono
-    out.extend_from_slice(&rate.to_le_bytes());
-    out.extend_from_slice(&(rate * 2).to_le_bytes());
-    out.extend_from_slice(&2u16.to_le_bytes());
-    out.extend_from_slice(&16u16.to_le_bytes());
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&len.to_le_bytes());
-    out.extend_from_slice(pcm);
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn ids(p: Provider, ids: &[&str]) -> (Vec<String>, Vec<String>, Vec<String>) {
-        let models: Vec<Model> = ids
-            .iter()
-            .map(|id| Model { id: (*id).to_owned(), live: id.contains("realtime"), generate: true, created: None })
-            .collect();
-        classify(p, &models)
-    }
-
-    #[test]
-    fn openai_models_sort_by_mode() {
-        let (realtime, transcribe, speech) = ids(
-            Provider::OpenAi,
-            &[
-                "gpt-realtime-2.1",
-                "gpt-realtime-translate",
-                "gpt-realtime-whisper",
-                "gpt-realtime",
-                "gpt-4o-transcribe",
-                "gpt-4o-transcribe-diarize",
-                "gpt-live-transcribe",
-                "whisper-1",
-                "gpt-4o-mini-tts",
-                "gpt-5",
-            ],
-        );
-        assert_eq!(realtime, ["gpt-realtime", "gpt-realtime-2.1"]);
-        assert_eq!(transcribe, ["gpt-4o-transcribe", "whisper-1"]);
-        assert_eq!(speech, ["gpt-4o-mini-tts"]);
-    }
-
-    fn dated(id: &str, created: i64) -> Model {
-        Model { id: id.to_owned(), live: id.contains("realtime"), generate: true, created: Some(created) }
-    }
-
-    #[test]
-    fn newest_openai_models_are_the_defaults() {
-        let day = 24 * 60 * 60;
-        let models = [
-            dated("gpt-realtime", 1_756_000_000),
-            dated("gpt-realtime-2", 1_778_000_000),
-            dated("gpt-realtime-2.1", 1_786_000_000),
-            dated("gpt-realtime-2.1-mini", 1_786_000_000 + 5 * day),
-            dated("gpt-realtime-mini-2025-12-15", 1_765_000_000),
-            dated("gpt-4o-transcribe", 1_742_000_000),
-            dated("gpt-4o-mini-transcribe", 1_742_000_000),
-            dated("gpt-transcribe", 1_785_000_000),
-            dated("whisper-1", 1_677_000_000),
-            dated("tts-1-hd", 1_699_000_000),
-            dated("gpt-4o-mini-tts", 1_742_000_000),
-            dated("gpt-4o-mini-tts-2025-12-15", 1_765_000_000),
-        ];
-        let (realtime, transcribe, speech) = classify(Provider::OpenAi, &models);
-        let pick = |ids: &[String]| newest(Provider::OpenAi, &models, ids);
-        assert_eq!(pick(&realtime).as_deref(), Some("gpt-realtime-2.1"));
-        assert_eq!(pick(&transcribe).as_deref(), Some("gpt-transcribe"));
-        assert_eq!(pick(&speech).as_deref(), Some("gpt-4o-mini-tts"));
-    }
-
-    #[test]
-    fn newest_gemini_models_are_the_defaults() {
-        let pick = |ids: &[&str]| {
-            let ids: Vec<String> = ids.iter().map(|s| (*s).to_owned()).collect();
-            newest(Provider::Gemini, &[], &ids)
-        };
-        assert_eq!(
-            pick(&[
-                "gemini-3.1-flash-live-preview",
-                "gemini-3.8-live",
-                "gemini-3.8-live-extended-thinking",
-                "gemini-2.5-flash-live"
-            ])
-            .as_deref(),
-            Some("gemini-3.8-live")
-        );
-        assert_eq!(
-            pick(&["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.9-flash-preview", "gemini-flash-latest"])
-                .as_deref(),
-            Some("gemini-3.8-flash")
-        );
-        assert_eq!(
-            pick(&["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"]).as_deref(),
-            Some("gemini-3.8-flash-tts")
-        );
-    }
-
-    #[test]
-    fn elevenlabs_models_and_defaults() {
-        let models = [
-            Model { id: "eleven_flash_v2_5".into(), live: false, generate: true, created: None },
-            Model { id: "eleven_multilingual_v2".into(), live: false, generate: true, created: None },
-            Model { id: "eleven_v3".into(), live: false, generate: true, created: None },
-            Model { id: "eleven_music".into(), live: false, generate: true, created: None },
-            Model { id: "not_a_voice_model".into(), live: false, generate: false, created: None },
-        ];
-        let (realtime, transcribe, speech) = classify(Provider::ElevenLabs, &models);
-        assert_eq!(realtime, Vec::<String>::new());
-        assert_eq!(transcribe, ["scribe_v2", "scribe_v1"]);
-        assert_eq!(speech, ["eleven_flash_v2_5", "eleven_multilingual_v2", "eleven_v3"]);
-        assert_eq!(newest(Provider::ElevenLabs, &models, &speech).as_deref(), Some("eleven_flash_v2_5"));
-        assert!(!Provider::ElevenLabs.live());
-        assert!(Provider::OpenAi.live());
-    }
-
-    #[test]
-    fn wav_header_matches_pcm() {
-        let out = wav(&[0, 0, 1, 0], 24_000);
-        assert_eq!(out.len(), 48);
-        assert_eq!(&out[..4], b"RIFF");
-        assert_eq!(u32::from_le_bytes([out[40], out[41], out[42], out[43]]), 4);
-    }
 
     #[test]
     fn names_are_checked() {
@@ -622,6 +345,90 @@ mod tests {
         assert!(checked("").is_err());
         assert!(Provider::parse("openai").is_ok());
         assert!(Provider::parse("elevenlabs").is_ok());
+        assert!(Provider::parse("xai").is_ok());
+        assert!(Provider::parse("groq").is_ok());
         assert!(Provider::parse("anthropic").is_err());
+    }
+
+    fn memory_store() -> Store {
+        Store::open(std::path::Path::new(":memory:")).expect("an in-memory store")
+    }
+
+    #[test]
+    fn the_local_servers_models_win_over_the_apps_choice() {
+        let store = memory_store();
+        // Other providers keep what the app picked, whatever a local server saves.
+        store.kv_set("voice.baseUrl", "http://127.0.0.1:8890").unwrap();
+        store.kv_set("voice.transcribeModel", "parakeet-tdt-0.6b-v3").unwrap();
+        store.kv_set("voice.speechModel", "whisper-turbo").unwrap();
+        assert_eq!(
+            model_for(&store, Provider::Gemini, Kind::Transcribe, "gemini-3.8-flash").unwrap(),
+            "gemini-3.8-flash"
+        );
+        assert_eq!(model_for(&store, Provider::ElevenLabs, Kind::Speech, "scribe_v1").unwrap(), "scribe_v1");
+        // OpenAI speech goes to the server, so its saved models are the ones it serves.
+        assert_eq!(
+            model_for(&store, Provider::OpenAi, Kind::Transcribe, "gpt-transcribe").unwrap(),
+            "parakeet-tdt-0.6b-v3"
+        );
+        assert_eq!(model_for(&store, Provider::OpenAi, Kind::Speech, "gpt-4o-mini-tts").unwrap(), "whisper-turbo");
+        // A mode with no model saved keeps the provider's default.
+        store.kv_delete("voice.speechModel").unwrap();
+        assert_eq!(model_for(&store, Provider::OpenAi, Kind::Speech, "gpt-4o-mini-tts").unwrap(), "gpt-4o-mini-tts");
+    }
+
+    #[tokio::test]
+    async fn a_local_server_reads_replies_with_its_saved_model_as_wav() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let store = memory_store();
+        store.kv_set("voice.baseUrl", &format!("http://{address}")).unwrap();
+        store.kv_set("voice.speechModel", "whisper-turbo").unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            let mut request = String::new();
+            stream.read_line(&mut request).await.unwrap();
+            let mut size = 0;
+            loop {
+                let mut line = String::new();
+                stream.read_line(&mut line).await.unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':')
+                    && name.eq_ignore_ascii_case("content-length")
+                {
+                    size = value.trim().parse::<usize>().unwrap();
+                }
+            }
+            let mut body = vec![0; size];
+            stream.read_exact(&mut body).await.unwrap();
+            let body = String::from_utf8_lossy(&body);
+            assert_eq!(request.trim(), "POST /v1/audio/speech HTTP/1.1");
+            assert!(body.contains("\"model\":\"whisper-turbo\""), "{body}");
+            assert!(body.contains("\"response_format\":\"wav\""), "{body}");
+            let audio = b"RIFFwavfixture";
+            stream
+                .get_mut()
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        audio.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            stream.get_mut().write_all(audio).await.unwrap();
+        });
+        let operation = async {
+            let clip = speak(&store, Provider::OpenAi, "gpt-4o-mini-tts", "marin", "Hello").await.unwrap();
+            assert_eq!(clip["format"], "wav");
+            assert_eq!(clip["audio"], STANDARD.encode(b"RIFFwavfixture"));
+            server.await.unwrap();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), operation).await.unwrap();
     }
 }

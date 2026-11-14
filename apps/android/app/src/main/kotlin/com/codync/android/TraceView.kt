@@ -164,20 +164,38 @@ internal fun workingSteps(entries: List<Entry>): List<Entry> {
     val diffs = (d["diffs"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
     val output = d.text("output").orEmpty()
     val title = d.text("title") ?: "Tool"
+    val caution = d["caution"] as? JsonObject
+    val findings = (caution?.get("findings") as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.text("path") }
     val label: @Composable () -> Unit = {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { Symbol(icon, size = 15.dp, tint = Palette.secondary) }
-            Text(if (title == "Tool") tr("Tool") else title, Modifier.weight(1f), style = Type.subheadline, color = Palette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            when (d.text("status")) {
-                "completed" -> Symbol("checkmark", size = 14.dp, tint = Palette.accent)
-                "failed" -> Symbol("xmark", size = 14.dp, tint = Palette.danger)
-                else -> ThinkingOrb(orb, 16.dp, Palette.secondary)
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { Symbol(icon, size = 15.dp, tint = Palette.secondary) }
+                Text(if (title == "Tool") tr("Tool") else title, Modifier.weight(1f), style = Type.subheadline, color = Palette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                when (d.text("status")) {
+                    "completed" -> Symbol("checkmark", size = 14.dp, tint = Palette.accent)
+                    "failed" -> Symbol("xmark", size = 14.dp, tint = Palette.danger)
+                    else -> ThinkingOrb(orb, 16.dp, Palette.secondary)
+                }
+            }
+            if (caution != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Symbol("key.fill", size = 12.dp, tint = Palette.warning)
+                    Text(
+                        tr(if (caution.text("reason") == "inspection_limit") "Could not check the arguments for a credential" else "Carries a credential"),
+                        style = Type.caption2, color = Palette.secondary,
+                    )
+                }
             }
         }
     }
-    if (output.isEmpty() && diffs.isEmpty()) label()
+    if (output.isEmpty() && diffs.isEmpty() && findings.isEmpty()) label()
     else Disclosure(expanded, { expanded = !expanded }, label = { label() }) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (findings.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    for (path in findings) Text(path, style = Type.caption2, color = Palette.tertiary)
+                }
+            }
             for (diff in diffs) DiffView(diff)
             if (output.isNotEmpty()) CodeBox(output)
         }

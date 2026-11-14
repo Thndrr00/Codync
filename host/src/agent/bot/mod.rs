@@ -25,6 +25,7 @@ mod compaction;
 mod fallback;
 mod fast_mode;
 mod files;
+mod governance;
 mod launch;
 mod lifecycle;
 mod model_override;
@@ -150,6 +151,8 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         announce: None,
         first_prompt: None,
         turn: None,
+        turn_skills: HashSet::new(),
+        turn_first_output: None,
         queue: VecDeque::new(),
         steers_in_flight: HashMap::new(),
         held_done: None,
@@ -163,6 +166,7 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         tools: HashMap::new(),
         watchdog: watchdog::Watchdog::default(),
         plan_entry: None,
+        subagents: crate::chat::subagents::Card::default(),
         last_text: None,
         sent: Vec::new(),
         reacted: Reacted::No,
@@ -347,6 +351,10 @@ struct Actor {
     /// The snapshot of a new session's first prompt, marked delivered once the agent answered it.
     first_prompt: Option<Snapshot>,
     turn: Option<i64>,
+    /// The skills whose text this turn already loaded: one load per skill per turn.
+    turn_skills: HashSet<String>,
+    /// When this turn first streamed text, a thought or a tool call, for `turn_finished`.
+    turn_first_output: Option<i64>,
     queue: VecDeque<Queued>,
     /// Queued messages handed to the agent to join the running turn, by entry id, until it answers (`steer`).
     steers_in_flight: HashMap<String, steer::InFlight>,
@@ -368,6 +376,8 @@ struct Actor {
     /// Watches the running turn for tool loops and silence.
     watchdog: watchdog::Watchdog,
     plan_entry: Option<String>,
+    /// The subagents this turn started, in their own chat card (`chat::subagents`).
+    subagents: crate::chat::subagents::Card,
     /// What it wrote last this turn, since its last `send_message` or `react`.
     last_text: Option<String>,
     /// Messages the bot sent the user this turn (`send_message`); none: its last text is the reply.
@@ -527,6 +537,30 @@ impl Actor {
             data["call"] = call.clone().into();
         }
         self.hub.add_entry(&self.lane, kind, turn, &data)
+    }
+
+    /// Writes the turn's subagent card, adding it the first time one starts. The card updates in
+    /// place, as a plan does, so a turn keeps one even when a second subagent starts.
+    fn save_subagents(&mut self, turn: i64) {
+        if self.subagents.is_empty() {
+            return;
+        }
+        let data = self.subagents.data();
+        match self.subagents.entry().map(str::to_owned) {
+            Some(id) if self.hub.store.entry(&id).is_some() => self.hub.set_entry(&id, &data),
+            _ => {
+                if let Some(entry) = self.add(EntryKind::Subagents, turn, data) {
+                    self.subagents.set_entry(entry.id);
+                }
+            }
+        }
+    }
+
+    /// A turn that ended ends the subagents it started: the runtime reports nothing more of them.
+    fn stop_subagents(&mut self, turn: i64) {
+        if self.subagents.running() && self.subagents.stop_running(now_ms()) {
+            self.save_subagents(turn);
+        }
     }
 
     /// A notice in the running turn's lane (or the bot's own chat between turns).

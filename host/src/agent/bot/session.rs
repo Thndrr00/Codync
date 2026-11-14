@@ -141,6 +141,8 @@ impl Actor {
         let mut servers: Vec<Value> =
             (if self.cfg.connectors.is_empty() { Vec::new() } else { crate::market::connectors(&self.hub.store)? })
                 .iter()
+                // Shared connectors and this bot's person's own; never another person's.
+                .filter(|c| crate::market::for_bot(c, self.cfg.person.as_deref()))
                 .filter(|c| self.cfg.connectors.contains(&c.id) && c.id != crate::tools::comfy::CONNECTOR_ID)
                 .filter_map(|c| c.acp(&exe, port))
                 .map(|mut server| {
@@ -314,7 +316,11 @@ impl Actor {
             self.hub.set_runtime(&self.cfg.id, |r| r.activity = "Resuming session…".into());
             let mut params = self.session_params(&servers, Some(&sid));
             if let Some(s) = &snapshot {
-                params["_meta"] = claude_meta(&self.cfg, &s.system);
+                params["_meta"] = claude_meta(
+                    &self.cfg,
+                    &s.system,
+                    crate::server_settings::Settings::load(&self.hub.store).claude_user_setup,
+                );
             }
             if instructions == Instructions::SystemPrompt {
                 params["systemPrompt"] = system_prompt(&self.snapshot(&sid).await?.system);
@@ -362,7 +368,13 @@ impl Actor {
         };
         let mut params = self.session_params(&servers, None);
         match instructions {
-            Instructions::ClaudeMeta => params["_meta"] = claude_meta(&self.cfg, &system),
+            Instructions::ClaudeMeta => {
+                params["_meta"] = claude_meta(
+                    &self.cfg,
+                    &system,
+                    crate::server_settings::Settings::load(&self.hub.store).claude_user_setup,
+                );
+            }
             Instructions::SystemPrompt => params["systemPrompt"] = system_prompt(&system),
             Instructions::FirstMessage => {}
         }

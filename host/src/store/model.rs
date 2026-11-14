@@ -99,6 +99,8 @@ pub enum EntryKind {
     Plan,
     Permission,
     Notice,
+    /// The subagents an agent started in one turn: one card per turn (see `chat::subagents`).
+    Subagents,
 }
 
 impl EntryKind {
@@ -111,6 +113,7 @@ impl EntryKind {
             Self::Plan => "plan",
             Self::Permission => "permission",
             Self::Notice => "notice",
+            Self::Subagents => "subagents",
         }
     }
 }
@@ -155,7 +158,8 @@ pub struct BotConfig {
     /// Optional geometric robot avatar look (`BOT_AVATAR_LOOKS`, Idea 21).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_look: Option<String>,
-    /// A small square photo as a data URL (PNG, JPEG or WebP), shown instead of the generated face.
+    /// A small square photo as a data URL (PNG, JPEG or WebP), shown instead of the generated face;
+    /// for a group, the channel picture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_photo: Option<String>,
     /// Empty for a group.
@@ -200,6 +204,10 @@ pub struct BotConfig {
     /// Connector ids (MCP servers) handed to the agent; see `market`.
     #[serde(default)]
     pub connectors: Vec<String>,
+    /// The person whose bot this is (`people`); empty means the owner's. Its connectors are shared ones
+    /// plus its person's, and only that person's devices see it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<String>,
     /// Skill ids the bot is told about; see `market`.
     #[serde(default)]
     pub skills: Vec<String>,
@@ -280,6 +288,16 @@ pub struct BotConfig {
     /// For a group chat, the member bot ID designated as Chief of Staff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chief_bot_id: Option<String>,
+    /// A group's short line under its name in the roster; empty for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// A group taken out of the open roster; its conversation stays and it can be restored.
+    #[serde(default)]
+    pub archived: bool,
+    /// A channel that keeps what its members learn in it ("Keep memories in this channel"): a member's
+    /// memory write there goes to the channel, not its own layer, so its other chats don't get it.
+    #[serde(default)]
+    pub keep_memories: bool,
     #[serde(default)]
     pub created_at: i64,
 }

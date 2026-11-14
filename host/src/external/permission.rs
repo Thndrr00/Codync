@@ -9,6 +9,7 @@ use crate::remote::push::{self, AlertKind};
 use crate::store::{BotConfig, EntryKind, Lane};
 use serde_json::{Value, json};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::oneshot;
 
 const ALLOW: &str = "allow";
@@ -75,7 +76,7 @@ pub(super) async fn request(hub: &Arc<Hub>, ev: &Event) -> Option<Decision> {
         return Some(Decision::Deny);
     }
     let title = data["title"].as_str().unwrap_or("Use a tool").to_owned();
-    wait_card(hub, ev, &bot, &config, &data, &title).await
+    wait_card(hub, ev, &bot, &config, &data, &title, None, DECISION_WAIT).await
 }
 
 /// The bot standing for the event's session and its settings.
@@ -86,6 +87,9 @@ pub(super) fn target(hub: &Arc<Hub>, ev: &Event) -> Option<(String, BotConfig)> 
 }
 
 /// Shows `data` as a card, tells the person and holds until it is answered; `None` when nobody answers in time.
+///
+/// With `starts_at` (epoch ms), the host answers the card's allow option itself at that time when nobody has
+/// answered first: the plan card's "Start the work" time. The person is told only when the card waits for them.
 pub(super) async fn wait_card(
     hub: &Arc<Hub>,
     ev: &Event,
@@ -93,20 +97,37 @@ pub(super) async fn wait_card(
     config: &BotConfig,
     data: &Value,
     title: &str,
+    starts_at: Option<i64>,
+    wait: Duration,
 ) -> Option<Decision> {
-    let entry = hub.add_entry(&Lane::main(bot), EntryKind::Permission, turn_of(hub, &ev.session), data)?;
+    let mut card = data.clone();
+    card["autoApproveAt"] = starts_at.map_or(Value::Null, |at| json!(at));
+    let entry = hub.add_entry(&Lane::main(bot), EntryKind::Permission, turn_of(hub, &ev.session), &card)?;
 
     let (tx, rx) = oneshot::channel();
     hub.external.state.locked().waiting.insert(entry.id.clone(), tx);
-    let waiting = Waiting { hub: hub.clone(), entry: entry.id, bot: bot.to_owned() };
+    let waiting = Waiting { hub: hub.clone(), entry: entry.id.clone(), bot: bot.to_owned() };
     hub.set_runtime(bot, |r| {
         r.status = BotStatus::NeedsInput;
         r.activity = format!("Needs approval: {title}");
         r.lane = Some(Lane::main(bot));
     });
-    push::notify(hub, config, Some(bot), &format!("{} needs you", config.name), title, AlertKind::NeedsInput);
+    if starts_at.is_none() {
+        push::notify(hub, config, Some(bot), &format!("{} needs you", config.name), title, AlertKind::NeedsInput);
+    }
+    if let Some(at) = starts_at {
+        let hub = hub.clone();
+        let entry = entry.id.clone();
+        tokio::spawn(async move {
+            let wait = at - crate::store::now_ms();
+            if wait > 0 {
+                tokio::time::sleep(Duration::from_millis(u64::try_from(wait).unwrap_or_default())).await;
+            }
+            answer(&hub.external, &hub, &entry, Some(ALLOW));
+        });
+    }
 
-    let answer = tokio::time::timeout(DECISION_WAIT, rx).await;
+    let answer = tokio::time::timeout(wait, rx).await;
     drop(waiting);
     answer.ok()?.ok()?
 }
@@ -125,6 +146,10 @@ pub(super) fn answer(external: &External, hub: &Hub, entry_id: &str, option_id: 
     let decision = match option_id {
         Some(ALLOW) => Some(Decision::Allow),
         Some(DENY) => Some(Decision::Deny),
+        // A question's options are their positions; Back is the row after them.
+        Some(id) if super::question::is_back(id) => {
+            entry.data["options"].as_array().and_then(|options| options.len().checked_sub(1)).map(Decision::Pick)
+        }
         Some(index) => index.parse().ok().map(Decision::Pick),
         None => None,
     };

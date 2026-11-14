@@ -35,14 +35,25 @@ public struct EntryData: Codable, Hashable, Sendable {
     /// tool: whether it's the bot's own bookkeeping (composing its message, keeping its memory), left out of the
     /// working steps; `nil` from a host older than 2.25.0.
     public var bookkeeping: Bool?
+    /// tool: a credential in the call's arguments, by category and path; `nil` from a host older than 2.48.0.
+    public var caution: CredentialCaution?
     public var output: String?
     public var diffs: [FileDiff]?
     public var locations: [Location]?
     public var options: [PermissionOption]?
     public var selected: String?
+    /// A plan card the host starts by itself: when (epoch ms). `nil` when it waits for the person.
+    public var autoApproveAt: Int64?
     public var command: String?
     public var detail: String?
     public var cwd: String?
+    /// A question card (`toolKind` "question"): which of the agent's questions it asks, of how many.
+    public var questionIndex: Int?
+    public var questionCount: Int?
+    /// The whole set, so the card shows its progress and the summary before the last answer.
+    public var questions: [QuestionCard]?
+    /// The questions answered before this card's, oldest first.
+    public var answers: [QuestionAnswer]?
     public var entries: [PlanItem]?
     /// notice: info | error
     public var style: String?
@@ -80,12 +91,31 @@ public struct EntryData: Codable, Hashable, Sendable {
     /// On a thread's root line: how many replies it has, how many are unread, when the last one landed and who
     /// wrote the recent ones. Absent until the thread has a reply.
     public var thread: ThreadSummary?
+    /// subagents: the subagents this turn started, in the order they started.
+    public var subagents: [EntrySubagent]?
 
     public init(text: String? = nil, status: String? = nil, clientNonce: String? = nil) {
         self.text = text
         self.status = status
         self.clientNonce = clientNonce
     }
+}
+
+/// One subagent an agent started in a turn (`kind: "subagents"`): its task, state, newest step and time.
+public struct EntrySubagent: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var task: String
+    /// running | done | failed | stopped
+    public var state: String
+    /// What it does now, as its tool call named it.
+    public var step: String
+    public var startedAt: Int64
+    public var endedAt: Int64?
+
+    /// Whether it still works: only then does its card's header follow the reader (`SubagentDock`).
+    public var isRunning: Bool { state == "running" || state.isEmpty }
+    /// The state as the card shows it, where a host older than the card never sends one.
+    public var shownState: String { isRunning ? "running" : state }
 }
 
 /// One line of a voice call: what the user said (`from: user`) or the voice answered (`voice`), with when (ms).
@@ -131,6 +161,24 @@ public struct ReplyQuote: Codable, Hashable, Sendable {
 
 /// A memory line from an older host, known only to keep it out of the chat.
 public struct MemoryLine: Codable, Hashable, Sendable {}
+
+/// One of the questions of a question card, with the choices the agent offers.
+public struct QuestionCard: Codable, Hashable, Sendable {
+    public var text: String
+    public var header: String?
+    public var options: [QuestionChoice]
+}
+
+public struct QuestionChoice: Codable, Hashable, Sendable {
+    public var label: String
+    public var description: String?
+}
+
+/// A question answered before the card's own, for the summary.
+public struct QuestionAnswer: Codable, Hashable, Sendable {
+    public var text: String
+    public var label: String
+}
 
 /// A root line's thread, as the chat's chip shows it: how many replied, how many are new, when the last one
 /// landed and who wrote the recent ones.

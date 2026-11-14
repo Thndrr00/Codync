@@ -5,6 +5,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use super::super::app::uploads::{FileUpload, UploadState};
 use super::super::app::{App, Click, Editor, Entry, Mark, SlashAction, Status};
 use super::super::l10n::tr;
 use super::super::md::{truncate, width as w};
@@ -109,11 +110,31 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         rput(buf, r.right() - 1, box_top + 1, hint, t.dim);
     }
     if fh > 0 {
+        let uploads = app.uploads_for(&b.id);
         let names: Vec<String> = files
             .iter()
-            .map(|p| format!("▤ {}", p.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()))
+            .map(|p| {
+                let name = p.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+                let upload = uploads.iter().find(|u| &u.path == p);
+                let mark = match upload.map(|u| &u.state) {
+                    Some(UploadState::Uploading) => format!(" {}%", upload.map_or(0, FileUpload::percent)),
+                    Some(UploadState::Failed(_)) => " failed".to_owned(),
+                    Some(UploadState::Cancelled) => " cancelled".to_owned(),
+                    Some(UploadState::Done) | None => String::new(),
+                };
+                format!("▤ {name}{mark}")
+            })
             .collect();
-        let hint = if draft.text.is_empty() { "⌫ removes" } else { "" };
+        let failed = uploads.iter().any(FileUpload::failed);
+        let hint = if failed {
+            "ctrl+r retries"
+        } else if uploads.iter().any(|u| u.state == UploadState::Uploading) {
+            "ctrl+x cancels"
+        } else if draft.text.is_empty() {
+            "⌫ removes"
+        } else {
+            ""
+        };
         let row = box_top + qh + 1;
         put(buf, r.x + 3, row, r.width.saturating_sub(u(w(hint)) + 6), &names.join("  "), t.secondary);
         rput(buf, r.right() - 1, row, hint, t.dim);
@@ -175,6 +196,8 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     }
 
     let strip_top = queue_band(buf, r, app, &b, box_top, typing);
+    // A channel's request tree shows over it: what waits for the members, and the keys that act on it.
+    let strip_top = super::tasks::tasks_band(buf, r, app, &b, strip_top, typing);
 
     // Transcript.
     let body = Rect::new(r.x, top + 1, r.width, strip_top.saturating_sub(top + 1));
@@ -195,9 +218,26 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     }
     app.chat_scroll = app.chat_scroll.min(max);
     app.chat_top = total > 0 && app.chat_scroll == max;
+    // The dock was clicked: its card's first line comes back into view.
+    if let Some(id) = app.scroll_to.take()
+        && let Some((_, from, _)) = built.messages.iter().find(|(entry, ..)| entry.as_str() == id.as_str())
+    {
+        app.chat_scroll = total.saturating_sub(h + *from);
+    }
     let start = total.saturating_sub(h + app.chat_scroll);
     for (i, l) in built.lines.iter().skip(start).take(h).enumerate() {
         put_line(buf, body.x, body.y + u(i), body.width, l);
+    }
+    // A card out of view while its subagents work: its header stays under the chat header, on the
+    // first line of the transcript, so showing it never moves the chat.
+    if let Some((id, _, from, to, line)) = built.subagents.iter().rev().find(|(_, running, ..)| *running)
+        && (*from >= start + h || *to <= start)
+        && h > 0
+    {
+        let bar = Rect::new(body.x, body.y, body.width, 1);
+        fill(buf, bar, t.panel);
+        put_line(buf, body.x, body.y, body.width, line);
+        app.hits.clicks.push((bar, Click::Subagents(id.clone())));
     }
     if let Some((from, to)) = picked {
         for li in from.max(start)..to.min(start + h) {

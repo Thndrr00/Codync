@@ -73,6 +73,27 @@ import Testing
     #expect(!status.configured(.gemini))
 }
 
+/// xAI reads replies aloud and Groq hears speech: neither carries a whole call.
+@Test func xaiReadsAndGroqHears() {
+    #expect(!VoiceProvider.xai.carriesCalls)
+    #expect(VoiceProvider.xai.speaks)
+    #expect(!VoiceProvider.xai.transcribes)
+    #expect(VoiceProvider.groq.transcribes)
+    #expect(!VoiceProvider.groq.speaks)
+    #expect(VoiceProvider.callProviders == [.openAI, .gemini, .elevenLabs])
+    #expect(VoiceProvider.dictationProviders == [.openAI, .gemini, .elevenLabs, .groq])
+}
+
+/// Speech output can leave recognition with the call's provider and give the replies to xAI.
+@Test func xaiReadsTheRepliesWhileTheCallProviderHears() {
+    defer { UserDefaults.standard.removeObject(forKey: VoiceSettings.speechOutputKey) }
+    UserDefaults.standard.set("xai", forKey: VoiceSettings.speechOutputKey)
+    #expect(VoiceSettings.speechProvider(.openAI) == .xai)
+    #expect(VoiceSettings.speechModel(.xai) == "xai-tts")
+    UserDefaults.standard.set("provider", forKey: VoiceSettings.speechOutputKey)
+    #expect(VoiceSettings.speechProvider(.openAI) == .openAI)
+}
+
 /// ElevenLabs holds no live conversation, and its account voices stay listed until the list arrives.
 @Test func elevenLabsIsAlwaysSpeechAndKeepsASavedVoice() {
     let p = VoiceProvider.elevenLabs

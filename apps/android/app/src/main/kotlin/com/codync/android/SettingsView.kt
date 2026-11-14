@@ -100,6 +100,7 @@ import com.codync.android.design.*
         NotificationsSection()
         GettingStartedSection(state)
         EnterpriseSection(state, store)
+        PeopleSection(state, store)
         BrowserSection(state, store)
         ComfySection(state, store)
         N8nSection(state, store)

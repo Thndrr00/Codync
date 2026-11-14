@@ -6,6 +6,8 @@ The chat shows your messages, the bot's messages, approval cards and short notic
 
 While the bot works, a line under the last message shows what it's doing and for how long. It reads **Typing…** while the bot writes you a message.
 
+When the bot hands work to its own subagents, the turn shows a **Subagents** card: their progress, the time they've taken, and a row for each with the task it was given, what it's doing now and how long it has taken. The card opens while a subagent works and can be folded. If you scroll the card out of view while its subagents are still working, its header stays just under the chat header with the progress, the current step and the time; select it to go back to the card. It disappears when the subagents finish. This works on the desktop, iPhone, Android and the terminal UI, where the header stays on the top line of the chat.
+
 To see more, turn on **Show thinking details** in Settings, under **Chat**. It's off by default and only changes the device you set it on. With it on, the line ends in an arrow. Tap or click it to unfold this turn's steps right in the chat: its thinking, what it said along the way, the tools and MCP tools it called and its plan. Tap a tool to see its output or diff. A long turn scrolls inside the line, which keeps showing the newest step. On the terminal UI, turn it on from `Ctrl-K` (**Show thinking details**), then press `>` or click the line. Each new turn starts folded, and the steps leave with the line when the bot finishes.
 
 Everything else the agent did (its narration, thinking, tool calls, diffs and plans) is in **Full conversation**:
@@ -59,7 +61,9 @@ Use the **+** button left of the message box.
 - **Desktop:** pick files, drop them on the box, or paste a copied image or file with Cmd+V (Ctrl+V on Windows and Linux).
 - **Terminal UI:** drag a file onto the terminal to paste its path. Backspace in an empty box removes the last file.
 
-A message can be files only. Each file can be up to 100 MB. The files are saved on the computer, in an `uploads` folder in the bot's personal workspace, or in Codync's data folder for a bot that works in a project folder. The agent gets your message with the path of each file and reads them with its own tools. While a file uploads, its card shows how much the computer has; a failed send keeps the files for **Resend**.
+A message can be files only. Each file can be up to 100 MB. The files are saved on the computer, in an `uploads` folder in the bot's personal workspace, or in Codync's data folder for a bot that works in a project folder. The agent gets your message with the path of each file and reads them with its own tools.
+
+Every file starts uploading as soon as you attach it, and its card shows a ring of how much the computer has. Click or tap the ring to cancel that file's upload; the others keep going. A file that fails stays in the box with the reason and **Retry**, which sends that file alone. A message waits until each of its files has arrived or been removed. In the terminal UI the file row shows the percentage, `ctrl+x` cancels the file that is uploading and `ctrl+r` retries a failed one. A failed send keeps the files for **Resend**.
 
 Bots can send files back when you ask, such as a report or a build. Each one shows as a card with its name and size and a download action. An image up to 20 MB also shows the picture itself in the iPhone, Android and desktop apps; SVG files preview too, and tap or click any image to see it full size. On Android, several pictures in one message show as a small stack you can swipe and open full size, and an MP4 plays in the full-size viewer. On desktop, image previews fit the whole picture inside a larger panel that adjusts to your window, and a click on a file's name opens it in its own tab over the chat: several files stay open side by side and close one by one. This also applies to images you send. To save a file:
 
@@ -71,6 +75,12 @@ Bots can send files back when you ask, such as a report or a build. Each one sho
 Codync keeps its own copy of each shared file, so it stays downloadable even if the bot later changes or deletes the original. Bots share files only in their own chat, not in group chats or routine runs.
 
 A report or a tracker you'll come back to can come as an [artifact](/docs/artifacts) instead: a page that opens from its card. Everything made or shared in a chat is also in its [Library](/docs/artifacts#the-library).
+
+## Mini-apps
+
+A bot can build a small app for you, such as a split bill, a tracker or a checklist. It shows in the chat as a card; tap or click it to open it. The app runs on your computer, not on a website, and Codync doesn't charge for it.
+
+Your computer keeps a limit on how many mini-apps all its bots may keep: 25, 50, 100, 250 or 1,000, **100** by default. It's a local safeguard, not a plan, and a bot changing an app it already made never counts. When the computer is full, a new app is refused and the bot is told the limit and the count; delete an app you no longer use or raise the limit to make room. Change it in **Settings > General > Local apps** on the desktop, in the computer's settings beside **Local scripts** on the iPhone and Android, or on the terminal UI's **Computer Status** page with `<` and `>`.
 
 ## Approval cards
 
@@ -92,6 +102,10 @@ When the bot talks through a bound Slack channel, Telegram bot or Discord channe
 The agent waits for your answer. If the turn ends before you answer, for example because you stopped it, the card reads **Expired — the agent moved on**.
 
 With **Approve automatically**, no cards appear: Codync allows each request for you. Your agent's own permission rules still apply under any setting. To change the setting, see [Bots](/docs/bots#permissions).
+
+### Questions
+
+When the agent asks you a question with a few answers, the card asks one question at a time: the bubble says **Question 1 of 3**, and **Back** returns to the question before, keeping the answer you gave. On the last question a **Summary** lists every answer before you send them with **Send answers**. The agent gets all the answers together, as if you had answered its form in one go. In the terminal UI the questions and their answers appear in the same card, one after another, and Back is one of its options.
 
 Some agents keep working after their reply, for example a background helper that finishes a long job. With **Approve automatically**, what that work asks is allowed too, unless you stopped the bot's latest reply; under any other setting it's declined, since no card can wait for you. Once the bot is idle there's no **Stop**: to stop approving that work, switch the bot to **Ask me**. When that work is done, the bot can still send you its result as a message in its chat, unless you stopped its latest reply.
 
@@ -131,7 +145,7 @@ Type `/` at the start of a message to see the bot's commands:
 - `/servers` (terminal UI): opens the bot's [dev servers](/docs/dev-servers), while it has some.
 - `/` followed by a skill's ID: tells the bot to read that skill first and follow it for this message. The bot's skills are listed after the built-in commands.
 
-Any other `/command` goes to the agent unchanged, so the agent's own commands keep working. In the terminal UI that includes `/servers` while the bot has no dev servers. There's no command to start a new session: Codync starts one on its own when a conversation needs it, for a Claude Code or Codex bot whose [Summarize long chats](/docs/bots#summarize-long-chats) isn't Auto. See [Bots](/docs/bots#sessions).
+Any other `/command` goes to the agent unchanged, so the agent's own commands keep working. In the terminal UI that includes `/servers` while the bot has no dev servers. Starting a new session is not a `/command`: it's **New conversation** in the chat's settings, or `S` in the terminal. Codync also starts one on its own when a conversation needs it, for a Claude Code or Codex bot whose [Summarize long chats](/docs/bots#summarize-long-chats) isn't Auto. See [Bots](/docs/bots#sessions).
 
 ## Fresh conversations
 
@@ -148,6 +162,16 @@ Before your next message, you can:
 Afterwards the card folds into one line that unfolds to what was carried.
 
 Fresh conversations come only from a Claude Code or Codex bot whose [Summarize long chats](/docs/bots#summarize-long-chats) setting is something other than Auto, the default. Changing it takes back a card the new setting no longer calls for, and the conversation carries on.
+
+### Delete history, start fresh, compact
+
+A chat's settings have three actions. They never touch the bot's setup, memories, routines, artifacts or files, and no other chat changes.
+
+- **Delete history** removes this chat's messages and turns, on every device. It asks you to type the chat's name first. On the desktop and the phones it's in the bot's Settings; in the terminal press `X`.
+- **New conversation** keeps the messages where they are and starts the agent fresh. On the desktop and the phones it's in the bot's Settings; in the terminal press `S`.
+- **Compact context** asks the agent to summarize the conversation it keeps, so the next turns send less. It's in the same place; in the terminal press `Z`. It's offered only for an agent Codync can compact.
+
+If you delete a bot's history while it's working, its running turn stops first.
 
 ## Notifications
 
@@ -181,7 +205,7 @@ When you send a message from the iPhone, a Live Activity for that bot appears on
 
 ## Usage limits
 
-Codync reads plan limits on your computer, without starting a conversation or model turn. It shows the agents your bots run. The button beside the computer's name opens every agent that can report, each with a switch and a handle, so you can turn on one no bot uses, hide one, or change their order: [which agents, and how](/docs/agents#usage-limits). To see them:
+Codync reads plan limits on your computer, without starting a conversation or model turn. It shows the agents your bots run. The button beside the computer's name opens every agent that can report, each with a switch and a handle, so you can turn on one no bot uses, hide one, or change their order: [which agents, and how](/docs/agents#usage-limits). The **Breakdown** has a **Limits** tab and a **Skills** tab: the Skills tab shows how many turns loaded each skill's text, its estimated tokens and cost, its share of all skill-load tokens, and how many bots used it. Above it, the same screen shows the computer's RAM, CPU and disk. To see them:
 
 - **iPhone and Android:** the **State** tab, then **Usage limits**. There's also a Usage widget.
 - **Desktop:** the menu bar or tray menu, or **Usage** in the account menu at the bottom of the sidebar.

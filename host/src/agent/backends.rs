@@ -99,15 +99,20 @@ pub fn installed(id: &str) -> bool {
 /// Every harness the phone can pick, installed ones first.
 pub fn list() -> Vec<Value> {
     let registry = registry::agents();
+    // Read once: an agent whose downloaded build was deleted stays off until a build is back.
+    let off = registry::turned_off_ids();
     let mut out: Vec<Value> = HARNESSES
         .iter()
         .filter(|h| workbuddy::offered(h.id))
         .map(|h| {
-            let path = installed_cli(h);
+            // The AG-UI agent needs no CLI: the host itself is its adapter, and it is always available.
+            let built_in = h.id == crate::agui::BACKEND;
+            let path = if built_in { crate::service::current_exe().ok() } else { installed_cli(h) };
             let creds = credentials::for_id(h.id);
             let reg = h.registry.and_then(|id| registry.iter().find(|a| a["id"] == id));
             let native = path.is_some() && h.local.is_some();
             let runnable = native || reg.is_some_and(|a| registry::launch_kind(a).is_some());
+            let downloaded = reg.is_some_and(registry::downloaded);
             let needs_node = if native { workbuddy::runs_on_node(h.id) } else { reg.is_some_and(registry::needs_node) };
             let node = if needs_node { node::state() } else { None };
             let signed_in = if h.signed_in.is_some() {
@@ -115,23 +120,28 @@ pub fn list() -> Vec<Value> {
             } else {
                 from_files_first(h.id, creds.signed_in)
             };
+            // A deleted build turns the agent off only when nothing else runs it here: an installed
+            // CLI, or a build downloaded again, is on. Accounts and sign-ins stay either way.
+            let turned_off = !built_in && path.is_none() && !downloaded && off.iter().any(|id| id == h.id);
             json!({
                 "id": h.id,
                 "name": h.name,
-                "installed": path.is_some(),
-                "available": path.is_some() && runnable,
+                "installed": built_in || path.is_some() || downloaded,
+                "available": built_in || (path.is_some() && runnable && !turned_off),
                 "path": path.map(|p| p.to_string_lossy().into_owned()),
                 "description": reg.and_then(|a| a["description"].as_str()).unwrap_or_default(),
                 "installHint": h.setup,
-                "signedIn": signed_in,
+                "signedIn": if built_in { Value::Null } else { json!(signed_in) },
                 "email": creds.email,
-                "canInstall": h.install.and_then(Install::command).is_some(),
+                "canInstall": !built_in && h.install.and_then(Install::command).is_some(),
                 "node": node.map(node::State::name),
                 "command": h.local.unwrap_or_default(),
                 "registry": h.registry,
                 "curated": true,
                 "accounts": profile_home(h.id).is_some(),
                 "signOut": sign_out_available(h.id),
+                "downloaded": downloaded,
+                "turnedOff": turned_off,
             })
         })
         .collect();
@@ -141,11 +151,13 @@ pub fn list() -> Vec<Value> {
         if id.is_empty() || HARNESSES.iter().any(|h| h.answers_to(id)) || id == "github-copilot" {
             continue;
         }
+        let downloaded = registry::downloaded(a);
+        let turned_off = !downloaded && off.iter().any(|known| known == id);
         out.push(json!({
             "id": id,
             "name": a["name"],
-            "installed": false,
-            "available": registry::launch_kind(a).is_some(),
+            "installed": downloaded,
+            "available": registry::launch_kind(a).is_some() && !turned_off,
             "path": null,
             "description": a["description"],
             "installHint": format!("Codync installs it automatically. Sign in to {} on this computer first if it needs an account.", a["name"].as_str().unwrap_or(id)),
@@ -157,10 +169,22 @@ pub fn list() -> Vec<Value> {
             "curated": false,
             "accounts": false,
             "signOut": false,
+            "downloaded": downloaded,
+            "turnedOff": turned_off,
         }));
     }
     out.sort_by_key(|v| (!v["installed"].as_bool().unwrap_or(false), !v["curated"].as_bool().unwrap_or(false)));
     out
+}
+
+/// Deletes the build Codync downloaded for `id` and turns the agent off, so its bots show as not
+/// installed until it is installed again. Its accounts, sign-ins, bots and chats stay.
+pub fn remove_download(id: &str) -> anyhow::Result<bool> {
+    let agent = harness(id).and_then(|h| h.registry).and_then(registry::agent).or_else(|| registry::agent(id));
+    let Some(agent) = agent else { anyhow::bail!("unknown agent {id}") };
+    let removed = registry::remove_download(&agent)?;
+    registry::set_turned_off(id, true)?;
+    Ok(removed)
 }
 
 /// `program` is some other harness's CLI (not `backend`'s own).
@@ -187,6 +211,16 @@ pub fn is_known(id: &str) -> bool {
 /// Ways to start this backend, best first: the installed CLI's own ACP mode, then the
 /// registry build, for a CLI that isn't installed, has no ACP mode of its own, or is too old for it.
 pub fn launch_candidates(id: &str) -> anyhow::Result<Vec<registry::Candidate>> {
+    // The AG-UI agent's adapter is this host binary: it speaks ACP to the bot and HTTP to the endpoint.
+    if id == crate::agui::BACKEND {
+        let exe = crate::service::current_exe().map_err(|error| {
+            acp::Failure::error(acp::FailureKind::NotSetUp, format!("Couldn't locate codync-host: {error}"))
+        })?;
+        return Ok(vec![registry::Candidate::Ready(registry::Cmd {
+            program: shell::quote(&exe.to_string_lossy()),
+            args: "agui-acp".into(),
+        })]);
+    }
     let h = harness(id);
     let build = h.map_or(Some(id), |h| h.registry).and_then(registry::agent);
     let out: Vec<_> = local_candidate(id)

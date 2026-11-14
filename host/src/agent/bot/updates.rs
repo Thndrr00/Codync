@@ -2,6 +2,7 @@
 
 use super::approval_age;
 use super::fast_mode::Listing;
+use super::governance;
 use super::stall::ToolOutcome;
 use super::tool_entry::{activity, mark_bookkeeping, merge_tool_content};
 use super::{Actor, Reacted, Seg, SegKind};
@@ -95,6 +96,11 @@ impl Actor {
 
     pub(super) fn on_update(&mut self, u: &Value) {
         let turn = self.turn.unwrap_or(0);
+        if self.turn_first_output.is_none()
+            && matches!(u["sessionUpdate"].as_str(), Some("agent_message_chunk" | "agent_thought_chunk" | "tool_call"))
+        {
+            self.turn_first_output = Some(crate::store::now_ms());
+        }
         match u["sessionUpdate"].as_str().unwrap_or_default() {
             "agent_message_chunk" => {
                 let t = acp::content_text(&u["content"]);
@@ -120,13 +126,37 @@ impl Actor {
                 });
                 merge_tool_content(&mut data, &u["content"]);
                 mark_bookkeeping(&self.cfg, &mut data);
+                if governance::mark(&mut data, &u["rawInput"]) {
+                    crate::analytics::tool_caution(&self.hub, &data["caution"]);
+                }
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
                 self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
                 let working = activity(&data).to_owned();
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
-                    self.tools.insert(tool_id, e.id);
+                    self.tools.insert(tool_id.clone(), e.id);
+                }
+                // A tool that starts the agent's own subagent gets a card of its own.
+                if self.subagents.start_with_tool(&tool_id, &title, &u["rawInput"], crate::store::now_ms()) {
+                    match status.as_str() {
+                        "completed" => {
+                            self.subagents.finish(
+                                &tool_id,
+                                crate::chat::subagents::State::Done,
+                                crate::store::now_ms(),
+                            );
+                        }
+                        "failed" => {
+                            self.subagents.finish(
+                                &tool_id,
+                                crate::chat::subagents::State::Failed,
+                                crate::store::now_ms(),
+                            );
+                        }
+                        _ => {}
+                    }
+                    self.save_subagents(turn);
                 }
                 self.set_activity(&working);
             }
@@ -145,6 +175,9 @@ impl Actor {
                 }
                 merge_tool_content(&mut e.data, &u["content"]);
                 mark_bookkeeping(&self.cfg, &mut e.data);
+                if governance::mark(&mut e.data, &u["rawInput"]) {
+                    crate::analytics::tool_caution(&self.hub, &e.data["caution"]);
+                }
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &e.data);
                 let working = (e.data["status"] == "in_progress").then(|| activity(&e.data).to_owned());
                 let status = e.data["status"].as_str().unwrap_or_default().to_owned();
@@ -152,6 +185,23 @@ impl Actor {
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
                     self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());
+                }
+                // A subagent's card follows its call: the newest step, then how it ended.
+                if self.subagents.has(tool_id) {
+                    let changed = match status.as_str() {
+                        "completed" => {
+                            self.subagents.finish(tool_id, crate::chat::subagents::State::Done, crate::store::now_ms())
+                        }
+                        "failed" => self.subagents.finish(
+                            tool_id,
+                            crate::chat::subagents::State::Failed,
+                            crate::store::now_ms(),
+                        ),
+                        _ => self.subagents.step(tool_id, &title),
+                    };
+                    if changed {
+                        self.save_subagents(turn);
+                    }
                 }
                 if let Some(working) = working {
                     self.set_activity(&working);

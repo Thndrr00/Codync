@@ -178,3 +178,20 @@
 .artifact-tab.active > button:first-child { color: var(--text); }
 .artifact-tab-close { display: flex; padding: 4px 8px 4px 4px; color: var(--tertiary); }
 .artifact-tab-close:hover { color: var(--text); }
+
+/* The server's Library (every bot's, in a sheet): the filter over a computer's groups. */
+.server-library-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 4px 20px 20px;
+}
+.server-library-tools {
+  padding: 2px 0 4px;
+}
+.server-library-group {
+  padding-top: 2px;
+}

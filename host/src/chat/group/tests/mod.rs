@@ -1,5 +1,7 @@
 use super::*;
-use serde_json::json;
+
+mod tasks;
+use serde_json::{Value, json};
 
 fn bot(id: &str, name: &str) -> BotConfig {
     serde_json::from_value(json!({"id": id, "name": name, "backend": "claude", "cwd": "/tmp"})).expect("valid bot")
@@ -447,4 +449,180 @@ fn pass_is_recognized_loosely() {
         assert!(is_pass(t), "{t:?}");
     }
     assert!(!is_pass("I'll pass this to Bob"));
+}
+
+/// A host whose `lead` manages the team, with `dev` and `mgr` as agents (only the lead can change channels).
+fn tool_hub(dir: &std::path::Path) -> Arc<Hub> {
+    let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+    for (id, manage) in [("lead", true), ("dev", false), ("mgr", true)] {
+        let cfg: BotConfig = serde_json::from_value(json!({"id": id, "name": id, "backend": "claude",
+            "cwd": dir.to_string_lossy(), "manageTeam": manage}))
+        .unwrap();
+        store.save_bot(&cfg).unwrap();
+    }
+    let hub = Hub::new(
+        store,
+        "group-tools-test".into(),
+        crate::remote::identity::Identity::load_or_create(dir).unwrap(),
+        "test".into(),
+        0,
+    );
+    hub.start().unwrap();
+    hub
+}
+
+fn tool_notices(hub: &Hub, bot: &str) -> Vec<Value> {
+    hub.store.history(bot, i64::MAX, 20).unwrap().into_iter().map(|e| e.data["text"].clone()).collect()
+}
+
+#[test]
+fn a_channels_title_archive_and_picture_round_trip_through_the_store() {
+    let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+    let cfg: BotConfig = serde_json::from_value(json!({
+        "id": "g", "kind": "group", "name": "Crew", "members": ["a"],
+        "title": "Ships the app", "archived": true, "avatarPhoto": "data:image/png;base64,iVBORw0KGgo=",
+    }))
+    .unwrap();
+    store.save_bot(&cfg).unwrap();
+    let back = store.bot("g").unwrap().unwrap().config;
+    assert_eq!(
+        (back.title.as_deref(), back.archived, back.avatar_photo.as_deref()),
+        (Some("Ships the app"), true, Some("data:image/png;base64,iVBORw0KGgo="))
+    );
+    // A row written before the fields existed still reads, with none and open.
+    let old: BotConfig =
+        serde_json::from_value(json!({"id": "old", "kind": "group", "name": "Old", "members": ["a"]})).unwrap();
+    assert_eq!((old.title, old.archived), (None, false));
+}
+
+#[tokio::test]
+async fn a_manager_creates_and_archives_a_channel() {
+    let dir = std::env::temp_dir().join(format!("codync-channel-tools-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = tool_hub(&dir);
+    let made = tools::call(
+        &hub,
+        "lead",
+        "create_channel",
+        &json!({"name": "Ship room", "title": "Ships 2.0", "instructions": "Ship the release.",
+            "memberAgentIds": ["dev", "dev"], "leadAgentId": "dev",
+            "picture": "data:image/png;base64,iVBORw0KGgo="}),
+    )
+    .await
+    .unwrap();
+    let id = made["channel"]["id"].as_str().unwrap().to_owned();
+    let cfg = hub.store.bot(&id).unwrap().unwrap().config;
+    assert_eq!(
+        (cfg.title.as_deref(), cfg.chief_bot_id.as_deref(), cfg.members.clone()),
+        (Some("Ships 2.0"), Some("dev"), vec!["dev".to_owned()])
+    );
+    assert_eq!(cfg.description, "Ship the release.");
+    assert!(cfg.avatar_photo.is_some());
+    assert!(!cfg.archived);
+    assert_eq!(made["channel"]["members"][0]["name"], "dev");
+
+    // Archiving takes it out of the open list, and by name restores it.
+    tools::call(&hub, "lead", "update_channel", &json!({"channelId": id, "archived": true})).await.unwrap();
+    assert!(hub.store.bot(&id).unwrap().unwrap().config.archived);
+    let open = crate::chat::group::with_members(&hub.store, &["dev".to_owned()]).unwrap();
+    assert_eq!(open, None, "an archived channel is not reopened by its members");
+    tools::call(&hub, "lead", "update_channel", &json!({"channelId": "Ship room", "archived": false})).await.unwrap();
+    assert!(!hub.store.bot(&id).unwrap().unwrap().config.archived);
+
+    // Members, lead and picture change too, and the notice names what did.
+    tools::call(
+        &hub,
+        "lead",
+        "update_channel",
+        &json!({"channelId": id, "addMemberAgentIds": ["mgr"], "leadAgentId": "mgr", "picture": null}),
+    )
+    .await
+    .unwrap();
+    let cfg = hub.store.bot(&id).unwrap().unwrap().config;
+    assert_eq!(
+        (cfg.members.clone(), cfg.chief_bot_id.as_deref(), cfg.avatar_photo.clone()),
+        (vec!["dev".to_owned(), "mgr".to_owned()], Some("mgr"), None)
+    );
+    assert_eq!(
+        tool_notices(&hub, "lead"),
+        [
+            json!("Created channel Ship room"),
+            json!("Updated Ship room: archived"),
+            json!("Updated Ship room: archived"),
+            json!("Updated Ship room: members, lead, picture"),
+        ]
+    );
+    hub.shutdown().await;
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[tokio::test]
+async fn a_bot_that_cannot_see_a_channel_is_refused() {
+    let dir = std::env::temp_dir().join(format!("codync-channel-refusal-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = tool_hub(&dir);
+    let made = tools::call(&hub, "lead", "create_channel", &json!({"name": "Quiet room", "memberAgentIds": ["dev"]}))
+        .await
+        .unwrap();
+    let id = made["channel"]["id"].as_str().unwrap().to_owned();
+    let refused = |bot: &'static str, name: &'static str, args: Value| {
+        let hub = hub.clone();
+        async move { tools::call(&hub, bot, name, &args).await.unwrap_err().to_string() }
+    };
+    let change = json!({"channelId": id, "title": "Mine now"});
+    let why = refused("mgr", "update_channel", change.clone()).await;
+    assert!(why.contains("can't see the channel"), "{why}");
+    assert_eq!(hub.store.bot(&id).unwrap().unwrap().config.title, None);
+    let why = refused("dev", "update_channel", change).await;
+    assert!(why.contains("may not manage channels"), "{why}");
+    let why = refused("lead", "update_channel", json!({"channelId": "missing", "title": "x"})).await;
+    assert!(why.contains("no channel has the id or name"), "{why}");
+    // A call naming no change changes nothing.
+    let why = refused("lead", "update_channel", json!({"channelId": id})).await;
+    assert!(why.contains("nothing to change"), "{why}");
+    hub.shutdown().await;
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[tokio::test]
+async fn a_denied_approval_creates_nothing() {
+    let dir = std::env::temp_dir().join(format!("codync-channel-denied-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let hub = tool_hub(&dir);
+    hub.update_bot(&json!({"id": "lead", "permission": "ask"})).unwrap();
+    let refused = tools::call(&hub, "lead", "create_channel", &json!({"name": "Nope", "memberAgentIds": ["dev"]}))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("didn't allow this change"), "{refused}");
+    assert!(hub.store.bots().unwrap().iter().all(|b| !b.config.is_group()), "a denied call creates no channel");
+    assert!(tool_notices(&hub, "lead").is_empty());
+    hub.shutdown().await;
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_channel_request_asks_the_members_it_names_or_its_lead() {
+    let members = [bot("a", "Ann"), bot("b", "Ben")];
+    let mut room = bot("g", "Ship room");
+    room.kind = BotKind::Group;
+    room.chief_bot_id = Some("b".into());
+    let ask = |room: &BotConfig, ids: Value| -> Vec<String> {
+        let mut request = said("check the release");
+        request.kind = "agent".into();
+        request.data = json!({"text": "check the release", "channelRequest": {"from": "x", "members": ids}});
+        requested(room, &members, &request).into_iter().map(|m| m.id.clone()).collect()
+    };
+    assert_eq!(ask(&room, json!(["a"])), ["a"], "the member it names");
+    assert_eq!(ask(&room, json!(["a", "b"])), ["a", "b"]);
+    assert_eq!(ask(&room, json!([])), ["b"], "none named: the lead routes it");
+    let mut leadless = room.clone();
+    leadless.chief_bot_id = None;
+    assert_eq!(ask(&leadless, json!([])), ["a"], "no lead: the first member routes it");
+
+    let mut request = said("check");
+    assert!(!is_channel_request(&request), "the user's own request is not a bot's");
+    request.kind = "agent".into();
+    request.data["channelRequest"] = json!({"from": "x", "members": []});
+    assert!(is_channel_request(&request));
 }

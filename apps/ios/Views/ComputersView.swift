@@ -57,6 +57,24 @@ struct ComputersView: View {
                     }
                 }
             }
+            if !archivedGroups.isEmpty {
+                CardSection("Archived groups") {
+                    ForEach(archivedGroups) { item in
+                        let store = item.store, bot = item.bot
+                        HStack {
+                            GroupAvatar(members: store.members(of: bot), size: 28, animated: false, photo: bot.avatarPhoto)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(bot.name)
+                                Text(bot.title ?? store.hostName).font(.caption).foregroundStyle(Palette.tertiary)
+                            }
+                            Spacer()
+                            IconButton("Restore", systemImage: "tray.and.arrow.up") {
+                                Task { try? await store.setGroupArchived(bot, archived: false) }
+                            }
+                        }
+                    }
+                }
+            }
             CardSection(footer: app.account.isSignedIn
                         ? "Computers in your account need your OK on the computer before this iPhone can use them."
                         : "Each bot runs on its own computer. Sign in to see the computers in your account.") {
@@ -135,6 +153,13 @@ struct ComputersView: View {
         }
     }
 
+    /// Groups taken out of the open roster, on every computer.
+    private var archivedGroups: [HiddenBot] {
+        accounts.computers.compactMap { accounts.store(for: $0.id) }.flatMap { store in
+            store.archivedGroups.map { HiddenBot(store: store, bot: $0, id: "\(store.computer.id)/\($0.id)") }
+        }
+    }
+
     /// The marketplace and screen open over the app, once this sheet has slid away.
     private func closeSheet(then open: @escaping @MainActor () -> Void) {
         dismissModal()
@@ -164,6 +189,11 @@ private struct ComputerRows: View {
     @State private var networkSheet = false
     @State private var channels = false
     @State private var whatsapp = false
+    @State private var localScripts = false
+    @State private var localApps = false
+    @State private var planCards = false
+    @State private var serverSettings = false
+    @State private var people = false
 
     var body: some View {
         summary
@@ -184,6 +214,16 @@ private struct ComputerRows: View {
                 Button { networkSheet = true } label: { RowLabel("Network", image: .codyncNetwork, chevron: true) }
                     .buttonStyle(.plain)
             }
+            Button { localScripts = true } label: { RowLabel("Local scripts", systemImage: "terminal", chevron: true) }
+                .buttonStyle(.plain)
+            Button { localApps = true } label: { RowLabel("Local apps", systemImage: "square.on.square", chevron: true) }
+                .buttonStyle(.plain)
+            Button { planCards = true } label: { RowLabel("Plan cards", systemImage: "list.bullet.rectangle", chevron: true) }
+                .buttonStyle(.plain)
+            Button { serverSettings = true } label: { RowLabel("Personality & remote control", systemImage: "slider.horizontal.3", chevron: true) }
+                .buttonStyle(.plain)
+            Button { people = true } label: { RowLabel("People", systemImage: "person.2", chevron: true) }
+                .buttonStyle(.plain)
         }
         ComputerNotificationsRow(store: store)
         ComputerConnectionRow(store: store)
@@ -235,6 +275,12 @@ private struct ComputerRows: View {
             if store.connection == .online, showsNetwork {
                 items.append(MenuItem("Network", image: .codyncNetwork) { networkSheet = true })
             }
+            if store.connection == .online {
+                items.append(MenuItem("Local scripts", icon: "terminal") { localScripts = true })
+                items.append(MenuItem("Local apps", icon: "square.on.square") { localApps = true })
+                items.append(MenuItem("Plan cards", icon: "list.bullet.rectangle") { planCards = true })
+                items.append(MenuItem("People", icon: "person.2") { people = true })
+            }
             if let revoke {
                 items.append(MenuItem("Revoke this iPhone's access", icon: "lock.slash", destructive: true, divider: true, action: revoke))
             }
@@ -247,6 +293,11 @@ private struct ComputerRows: View {
         .codyncSheet(isPresented: $networkSheet) { NetworkSheet().environment(store) }
         .codyncSheet(isPresented: $channels) { ChannelsSheet().environment(store) }
         .codyncSheet(isPresented: $whatsapp) { WhatsAppSheet().environment(store) }
+        .codyncSheet(isPresented: $localScripts) { LocalScriptsSheet().environment(store) }
+        .codyncSheet(isPresented: $localApps) { LocalAppsSheet().environment(store) }
+        .codyncSheet(isPresented: $planCards) { PlanStartSheet().environment(store) }
+        .codyncSheet(isPresented: $serverSettings) { ServerSettingsSheet().environment(store) }
+        .codyncSheet(isPresented: $people) { PeopleSheet().environment(store) }
         .codyncOverlay(isPresented: $coloring) { close in
             ZStack {
                 Color.black.opacity(0.35).ignoresSafeArea().onTapGesture(perform: close)
