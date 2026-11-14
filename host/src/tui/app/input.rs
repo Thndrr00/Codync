@@ -75,6 +75,10 @@ impl App {
             self.overlays.push(Overlay::RosterTools);
             return;
         }
+        if ctrl && k.code == KeyCode::Char('s') {
+            self.open_chat_search();
+            return;
+        }
         if ctrl && k.code == KeyCode::Char('k') {
             if matches!(self.overlays.last(), Some(Overlay::Goto(_))) {
                 self.overlays.pop();

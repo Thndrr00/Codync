@@ -28,6 +28,8 @@ pub enum Msg {
 #[derive(Clone)]
 pub enum After {
     Roster(u64, super::roster_tools::RosterRead),
+    /// A search inside one chat, and what it answered with.
+    ChatSearch(u64, super::ChatSearchRead),
     RosterStopped(String),
     Nothing,
     /// A permission card's answer arrived (or couldn't).

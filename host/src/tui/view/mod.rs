@@ -13,6 +13,7 @@ mod bot_chat;
 mod buffer;
 mod channels;
 mod chat;
+mod chat_search;
 mod computer_access;
 mod fallbacks;
 mod forms;

@@ -177,6 +177,10 @@ impl App {
             self.network_reply(n, r);
             return;
         }
+        if let After::ChatSearch(sequence, kind) = after {
+            self.chat_search_reply(sequence, kind, r);
+            return;
+        }
         let v = match r {
             Ok(v) => v,
             Err(e) => {
@@ -237,7 +241,8 @@ impl App {
             | After::Sent(_)
             | After::Connection(_, _)
             | After::Roster(_, _)
-            | After::RosterStopped(_) => {}
+            | After::RosterStopped(_)
+            | After::ChatSearch(_, _) => {}
             After::Installed => {
                 self.error = None;
                 self.flash("Host installed; connecting…");

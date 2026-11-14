@@ -60,6 +60,7 @@ impl App {
             Action::Channels => self.open_channels(),
             Action::Beliefs => self.open_beliefs(),
             Action::Proposals => self.open_proposals(),
+            Action::Search => self.open_chat_search(),
             Action::Demo => {
                 if self.demo {
                     self.quit = true;
@@ -155,6 +156,7 @@ impl App {
             Overlay::Channels(s) => self.channels_key(s, k),
             Overlay::Beliefs(s) => self.beliefs_key(s, k),
             Overlay::Proposals(s) => self.proposals_key(s, k),
+            Overlay::ChatSearch(s) => self.chat_search_key(s, k),
             Overlay::Always(s) => self.always_key(s, k),
             // A new code: after a failure, or in place of the one shown.
             Overlay::Pair(_) if k.code == KeyCode::Char('r') => {

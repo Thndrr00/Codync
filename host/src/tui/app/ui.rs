@@ -62,6 +62,7 @@ pub enum Action {
     Channels,
     Beliefs,
     Proposals,
+    Search,
     Demo,
     Usage,
     CheckUpdate,
@@ -73,7 +74,7 @@ pub enum Action {
     Appearance(super::super::appearance::Appearance),
 }
 
-pub const ACTIONS: [(&str, &str, Action); 26] = [
+pub const ACTIONS: [(&str, &str, Action); 27] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -89,6 +90,7 @@ pub const ACTIONS: [(&str, &str, Action); 26] = [
     ("Channels: Telegram and Slack…", "", Action::Channels),
     ("What this bot knows about you…", "", Action::Beliefs),
     ("Skills this bot proposes…", "", Action::Proposals),
+    ("Search this chat…", "^s", Action::Search),
     ("Demo mode: try it, or leave it", "", Action::Demo),
     ("Usage", "U", Action::Usage),
     ("Check for updates", "", Action::CheckUpdate),
@@ -400,6 +402,8 @@ pub enum Overlay {
     /// A read-only conversation between two bots.
     BotChat(BotChatSheet),
     Routines(RoutineList),
+    /// Searching one chat: what it said and what its pages hold.
+    ChatSearch(Box<super::ChatSearchSheet>),
     Flow(Box<FlowSheet>),
     Routine(Box<RoutineForm>),
     Library(Library),
