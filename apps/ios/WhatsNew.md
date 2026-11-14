@@ -6,6 +6,16 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.47.0
+
+### zh-Hant
+- 對話裡多了一個放大鏡：搜尋這段對話說過的話和它的頁面，結果依相關度排序，附上片段與日期。
+- 可以只看你、Bot 或所有人的話，也能選擇是否包含工具軌跡；點一則訊息會跳到它的上下文，點一頁就在原處開啟。
+
+### en-US
+- A magnifying glass inside a chat searches what it said and what its pages hold, best match first, each with its snippet and date.
+- Keep only your words, the bot's, or everyone's, and choose whether tool traces count; a message jumps to its context, a page opens in place.
+
 ## 2.46.0
 
 ### zh-Hant

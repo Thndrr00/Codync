@@ -58,6 +58,15 @@ public struct RosterSearchHit: Decodable, Identifiable, Hashable, Sendable {
     public let threadId: String?
     public let text: String
     public let seq: Int64
+
+    /// For a hit built on the phone instead of read from the host (a search inside one chat).
+    public init(id: String, botId: String, threadId: String?, text: String, seq: Int64) {
+        self.id = id
+        self.botId = botId
+        self.threadId = threadId
+        self.text = text
+        self.seq = seq
+    }
 }
 
 public struct RosterSearchPage: Decodable, Sendable {

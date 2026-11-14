@@ -11,6 +11,7 @@ public struct ThreadView: View {
     public init(botId: String) { self.botId = botId }
     @Environment(BotStore.self) var model
     @State var showTrace = false
+    @State var searching = false
     /// The message the composer's next send quotes.
     @State var replyingTo: Entry?
     @State var botChat: BotChatTarget?
@@ -69,7 +70,7 @@ public struct ThreadView: View {
                 model.rosterThreadRequest = nil
             }
             .readingConversation(botId)
-            .reviewReading(botId: botId, unobscured: following && !calling && !showTrace && botChat == nil
+            .reviewReading(botId: botId, unobscured: following && !calling && !showTrace && !searching && botChat == nil
                            && openArtifact == nil && openCall == nil && details == nil && !editingGroup
                            && model.composerDraft(for: botId).isEmpty && model.fileDownloads.export == nil)
             .onChange(of: model.voiceCallRequest, initial: true) { _, _ in
@@ -80,6 +81,7 @@ public struct ThreadView: View {
             .codyncSheet(isPresented: $showTrace) {
                 TraceView(botId: botId)
             }
+            .codyncSheet(isPresented: $searching) { ChatSearchView(botId: botId) }
             .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
             .codyncSheet(item: $openArtifact) { ArtifactView(target: $0) }
             .codyncSheet(item: $openCall) { CallConversationView(line: $0) }
@@ -391,6 +393,7 @@ extension ThreadView {
                         connectionSubtitle
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) { searchButton }
                 if model.screen != nil {
                     ToolbarItem(placement: .topBarTrailing) { computerButton }
                 }
@@ -405,6 +408,11 @@ extension ThreadView {
 
     private func openDetails() {
         if bot?.isGroup == true { editingGroup = true } else { details = DetailsRequest() }
+    }
+
+    /// Opens the search over this chat's messages and pages.
+    private var searchButton: some View {
+        Button(L10n.tr("Search this chat"), systemImage: "magnifyingglass") { searching = true }
     }
 
     /// Opens the computer's screen; pulses while this bot is operating it (watch, then take over).
