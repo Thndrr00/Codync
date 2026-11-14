@@ -37,6 +37,7 @@ mod keeper;
 mod local_api;
 mod market;
 mod mcp;
+mod media;
 mod n8n;
 mod n8n_program;
 mod n8n_remote;

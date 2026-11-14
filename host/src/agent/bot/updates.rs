@@ -25,6 +25,14 @@ fn is_hermes_clarification(tool: &Value) -> bool {
         && tool["rawInput"]["choices"].is_array()
 }
 
+/// What a completed media tool call made: its kind, what it left and what was asked for.
+fn media_of(update: &Value) -> Option<(crate::media::Kind, crate::media::Output, Option<String>)> {
+    let kind = crate::media::kind(update)?;
+    let output = crate::media::output(update)?;
+    let prompt = update["rawInput"]["prompt"].as_str().map(str::to_owned);
+    Some((kind, output, prompt))
+}
+
 /// Who waits for an approval card's answer.
 pub(super) enum Answer {
     /// The agent's `session/request_permission`, by its JSON-RPC id.
@@ -125,6 +133,13 @@ impl Actor {
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
                 self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
                 let working = activity(&data).to_owned();
+                if status == "completed"
+                    && let Some(media) = media_of(u)
+                {
+                    let (kind, output, prompt) = media;
+                    data["mediaShared"] = json!(true);
+                    self.begin_media(kind, output, prompt);
+                }
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
                     self.tools.insert(tool_id, e.id);
                 }
@@ -149,6 +164,12 @@ impl Actor {
                 let working = (e.data["status"] == "in_progress").then(|| activity(&e.data).to_owned());
                 let status = e.data["status"].as_str().unwrap_or_default().to_owned();
                 let title = e.data["title"].as_str().unwrap_or("Tool").to_owned();
+                // The picture or clip a media tool made goes to the chat once, as its own message.
+                let media = (status == "completed" && e.data["mediaShared"].is_null()).then(|| media_of(u)).flatten();
+                if let Some((kind, output, prompt)) = media {
+                    e.data["mediaShared"] = json!(true);
+                    self.begin_media(kind, output, prompt);
+                }
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
                     self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());

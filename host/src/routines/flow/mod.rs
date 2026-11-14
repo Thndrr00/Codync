@@ -1,12 +1,14 @@
-//! Routine flows: a routine's reply handed on from bot to bot.
+//! Routine flows: a routine's reply handed on from bot to bot, and to picture and video steps.
 //!
 //! The routine's own bot runs as it always has. When its run ends, its reply becomes the flow's
 //! first step; each link of the routine then puts that reply to the next bot, with the link's
 //! instruction, the way a bot message does (`chat::team::flow`). A bot with several inputs waits
 //! for all of them and gets them in one request. Every bot taking part in a run leaves a step
-//! (`store::flow_steps`). Rules: no cycles (checked when connecting and again when running), a
-//! depth limit, the routine's run timeout for each step, a failure skipping what hangs below it,
-//! and a cancelled flow cancelling its running steps. Steps a restart interrupted fail at startup.
+//! (`store::flow_steps`). A media step (`store::flow_media`) makes its picture or clip with the
+//! agent's own tool instead of a bot posting it anywhere, and hands the made file on.
+//! Rules: no cycles (checked when connecting and again when running), a depth limit, the
+//! routine's run timeout for each step, a failure skipping what hangs below it, and a cancelled
+//! flow cancelling its running steps. Steps a restart interrupted fail at startup.
 //!
 //! A link applies only to runs that began after it was made, so connecting a bot never sends it
 //! the reply of an earlier run.

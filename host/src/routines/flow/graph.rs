@@ -192,6 +192,16 @@ mod tests {
     }
 
     #[test]
+    fn a_media_step_is_hung_like_a_bot_and_can_close_a_loop() {
+        let links = [link("a", "media:1"), link("media:1", "b")];
+        let d = depths("a", &links).unwrap();
+        assert_eq!((d["media:1"], d["b"]), (1, 2));
+        assert_eq!(order(&d), [("media:1", 1), ("b", 2)]);
+        assert_eq!(connect_problem("a", &links, "b", "media:1", 5), Some(Problem::Cycle));
+        assert_eq!(connect_problem("a", &links, "media:1", "c", 2), None);
+    }
+
+    #[test]
     fn depth_is_limited_including_what_hangs_below_the_new_link() {
         let chain = [link("a", "b"), link("b", "c")];
         assert_eq!(connect_problem("a", &chain, "c", "d", 3), None);

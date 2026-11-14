@@ -65,7 +65,7 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             id TEXT PRIMARY KEY, run_id TEXT NOT NULL, routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL,
             bot_id TEXT NOT NULL, delivery_id TEXT, input TEXT NOT NULL, output TEXT,
             status TEXT NOT NULL CHECK(status IN ('running','succeeded','failed','skipped','cancelled')),
-            error TEXT, run_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+            error TEXT, files TEXT, run_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
             UNIQUE(run_id, bot_id));
          CREATE INDEX IF NOT EXISTS routine_flow_steps_routine ON routine_flow_steps(routine_id, run_at DESC);
          CREATE INDEX IF NOT EXISTS routine_flow_steps_status ON routine_flow_steps(status);
@@ -76,7 +76,14 @@ pub(super) fn open(c: &Connection) -> Result<()> {
          CREATE INDEX IF NOT EXISTS routine_flow_positions_node ON routine_flow_positions(node_key);
          CREATE TABLE IF NOT EXISTS routine_flow_placed(
             canvas_bot_id TEXT NOT NULL, bot_id TEXT NOT NULL, PRIMARY KEY(canvas_bot_id, bot_id));
-         CREATE INDEX IF NOT EXISTS routine_flow_placed_bot ON routine_flow_placed(bot_id);",
+         CREATE INDEX IF NOT EXISTS routine_flow_placed_bot ON routine_flow_placed(bot_id);
+         CREATE TABLE IF NOT EXISTS routine_flow_media(
+            id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('image','video')),
+            model TEXT NOT NULL, prompt TEXT NOT NULL DEFAULT '', aspect TEXT NOT NULL DEFAULT '1:1',
+            duration INTEGER NOT NULL DEFAULT 6, resolution TEXT NOT NULL DEFAULT '480p',
+            transparent INTEGER NOT NULL DEFAULT 0, voice TEXT, created_at INTEGER NOT NULL,
+            routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL);
+         CREATE INDEX IF NOT EXISTS routine_flow_media_routine ON routine_flow_media(routine_id);",
     )?;
     Ok(())
 }
@@ -125,11 +132,16 @@ pub(super) fn touch(tx: &Transaction, bots: impl IntoIterator<Item = String>) ->
     Ok(Some(FlowChange { rev, bots }))
 }
 
-/// The owner and every bot a link of `routine_id` names: whoever's canvas shows the routine.
+/// The owner and every bot a link of `routine_id` names: whoever's canvas shows the routine. Media
+/// node keys are left out, since only bots hold a canvas.
 pub(super) fn audience(c: &Connection, routine_id: &str, owner: &str) -> Result<BTreeSet<String>> {
     let mut bots = BTreeSet::from([owner.to_owned()]);
     for link in links_of(c, routine_id)? {
-        bots.extend([link.from_bot_id, link.to_bot_id]);
+        for end in [link.from_bot_id, link.to_bot_id] {
+            if !end.starts_with(super::flow_media::PREFIX) {
+                bots.insert(end);
+            }
+        }
     }
     Ok(bots)
 }
@@ -137,9 +149,9 @@ pub(super) fn audience(c: &Connection, routine_id: &str, owner: &str) -> Result<
 fn check_node_key(key: &str) -> Result<()> {
     let ok = key
         .split_once(':')
-        .is_some_and(|(kind, id)| matches!(kind, "routine" | "bot") && !id.is_empty() && !id.contains(':'));
+        .is_some_and(|(kind, id)| matches!(kind, "routine" | "bot" | "media") && !id.is_empty() && !id.contains(':'));
     if !ok || key.len() > 200 {
-        bail!("nodeKey must be routine:<id> or bot:<id>");
+        bail!("nodeKey must be routine:<id>, bot:<id> or media:<id>");
     }
     Ok(())
 }
@@ -339,6 +351,7 @@ impl Store {
             let tx = c.unchecked_transaction()?;
             let bots = audience(&tx, routine_id, owner)?;
             let mut gone = tx.execute("DELETE FROM routine_flow_links WHERE routine_id = ?1", [routine_id])?;
+            gone += super::flow_media::forget_routine(&tx, routine_id)?;
             gone += tx.execute("DELETE FROM routine_flow_steps WHERE routine_id = ?1", [routine_id])?;
             gone += tx
                 .execute("DELETE FROM routine_flow_positions WHERE node_key = ?1", [format!("routine:{routine_id}")])?;
@@ -369,6 +382,7 @@ impl Store {
                 "DELETE FROM routine_flow_links WHERE owner_bot_id = ?1 OR from_bot_id = ?1 OR to_bot_id = ?1",
                 [bot],
             )?;
+            gone += super::flow_media::forget_owner(&tx, bot)?;
             gone += tx.execute("DELETE FROM routine_flow_steps WHERE owner_bot_id = ?1 OR bot_id = ?1", [bot])?;
             gone += tx.execute(
                 "DELETE FROM routine_flow_positions WHERE canvas_bot_id = ?1 OR node_key = ?2",

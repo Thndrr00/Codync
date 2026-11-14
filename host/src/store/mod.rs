@@ -13,6 +13,7 @@ mod computer_activity;
 mod devices;
 mod documents;
 mod entries;
+pub mod flow_media;
 pub mod flow_steps;
 pub mod flows;
 mod inflight;
@@ -21,6 +22,7 @@ mod memory;
 mod model;
 pub(crate) mod native_channels;
 pub mod open_items;
+mod pins;
 mod research;
 mod roster;
 pub(crate) mod routine_delivery;
@@ -44,12 +46,14 @@ pub use channel_activity::ChannelActivity;
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceAccount, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
+pub use flow_media::FlowMedia;
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
 };
+pub use pins::{LIST_LIMIT, PINS_LIMIT};
 pub use week::Week;
 
 use crate::LockExt;

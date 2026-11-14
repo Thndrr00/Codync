@@ -62,6 +62,7 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
         "links": store.flow_links_for(&ids)?,
         "positions": store.flow_positions(bot)?,
         "placedBotIds": store.flow_placed_bots(bot)?,
+        "mediaNodes": store.flow_media_for(&ids)?,
     }))
 }
 

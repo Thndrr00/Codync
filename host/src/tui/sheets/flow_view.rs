@@ -2,7 +2,7 @@
 
 use super::{App, Buffer, Rect, centered, footer, frame_box, multiline, put, row, rput, theme, u, window};
 use crate::tui::l10n::tr;
-use crate::tui::manage::{FlowSheet, FlowStage, Target};
+use crate::tui::manage::{FlowSheet, FlowStage, Target, media_label};
 use crate::tui::md::truncate;
 use serde_json::Value;
 
@@ -23,7 +23,11 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
         let base = row(buf, inner, y, i == f.cursor);
         let indent = line.depth * 2;
         let arrow = if line.depth == 0 { "" } else { "→ " };
-        let label = format!("{}{arrow}{}", " ".repeat(indent), name(&line.bot));
+        let what = match line.media.as_ref() {
+            Some(_) => media_label(line.media.as_ref()),
+            None => name(&line.bot),
+        };
+        let label = format!("{}{arrow}{what}", " ".repeat(indent));
         put(
             buf,
             inner.x,
@@ -53,7 +57,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
             inner.x,
             y,
             inner.width,
-            &tr("Nothing is handed on yet. a connects a bot."),
+            &tr("Nothing is handed on yet. a connects a bot, p adds a picture."),
             t.secondary.patch(t.panel),
         );
     }
@@ -72,11 +76,17 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
             put(buf, inner.x, hint_y, inner.width, &hint, t.bold.patch(t.panel));
             multiline(buf, Rect::new(inner.x, hint_y + 1, inner.width, 3), text, "What it does with the reply", true);
         }
+        FlowStage::Media { kind, text, .. } => {
+            put(buf, inner.x, hint_y, inner.width, &hint, t.bold.patch(t.panel));
+            let about = tr("Describe the {kind} to make")
+                .replace("{kind}", &tr(if *kind == "video" { "clip" } else { "picture" }));
+            multiline(buf, Rect::new(inner.x, hint_y + 1, inner.width, 3), text, &about, true);
+        }
     }
     let keys = match f.stage {
-        FlowStage::Browse => "a connect a bot · e instruction · d disconnect · t test · esc",
+        FlowStage::Browse => "a connect a bot · p picture · v clip · e change · d remove · t test · esc",
         FlowStage::Pick { .. } => "↑↓ choose · ↵ next · esc",
-        FlowStage::Instruction { .. } => "↵ save · esc",
+        FlowStage::Instruction { .. } | FlowStage::Media { .. } => "↵ save · esc",
     };
     footer(buf, inner, None, keys);
 }
@@ -88,6 +98,10 @@ fn stage_hint(app: &App, f: &FlowSheet) -> String {
         FlowStage::Pick { .. } => tr("Hand the reply to:").into_owned(),
         FlowStage::Instruction { target: Target::New { to, .. }, .. } => format!("{} {}", tr("Ask"), name(to)),
         FlowStage::Instruction { target: Target::Link(_), .. } => tr("New instruction").into_owned(),
+        FlowStage::Media { kind, id: Some(_), .. } if *kind == "video" => tr("Clip step").into_owned(),
+        FlowStage::Media { id: Some(_), .. } => tr("Picture step").into_owned(),
+        FlowStage::Media { kind, .. } if *kind == "video" => tr("Add a clip step").into_owned(),
+        FlowStage::Media { .. } => tr("Add a picture step").into_owned(),
     }
 }
 

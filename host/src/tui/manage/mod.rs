@@ -26,6 +26,7 @@ mod network;
 mod network_rules;
 mod network_setup;
 mod pages;
+mod pins;
 mod replies;
 mod routines;
 mod scroll;
@@ -37,7 +38,7 @@ pub use analytics::AnalyticsSheet;
 pub use dev_servers::{DevServer, DevServerSummary, DevServersSheet, LogsView, summary as dev_server_summary};
 pub use documents::{DocumentReply, DocumentSheet};
 pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields};
-pub use flow::{FlowSheet, FlowStage, Target};
+pub use flow::{FlowSheet, FlowStage, Target, media_label};
 pub use library::{ArtifactTitles, LibraryItem};
 pub use memory::{MemoryMode, MemorySheet, Section};
 pub use network::{NetReply, NetworkSheet, Recovery, Step};
@@ -74,6 +75,11 @@ pub enum Reply {
     Routines(String),
     /// A canvas request, or a change to a flow that needs the canvas again.
     Flow(String),
+    /// A media step that was made; the host connects it after `from` (manage/flow.rs).
+    FlowMedia {
+        bot: String,
+        from: String,
+    },
     RoutineSaved,
     /// A bot's Library (`library {botId}`).
     Library(String),
@@ -94,6 +100,8 @@ pub enum Reply {
         bot: String,
         archived: bool,
     },
+    /// A chat's pinned messages (`pinnedMessages {botId}`).
+    Pins(String),
     /// A thread changed (renamed, archived) in the sheet with root `.1`.
     ThreadChanged(String),
     /// A thread was deleted: its sheet closes.
@@ -204,6 +212,25 @@ impl ThreadsSheet {
 
     pub fn current(&self) -> Option<&Value> {
         self.items.as_ref()?.get(self.cursor)
+    }
+}
+
+/// A chat's pinned messages, newest first, across the chat and its threads.
+pub struct PinsSheet {
+    pub bot: String,
+    /// The list; `None` while it loads.
+    pub pins: Option<Vec<Value>>,
+    pub cursor: usize,
+    pub error: Option<String>,
+}
+
+impl PinsSheet {
+    pub fn new(bot: &str) -> Self {
+        Self { bot: bot.to_owned(), pins: None, cursor: 0, error: None }
+    }
+
+    pub fn current(&self) -> Option<&Value> {
+        self.pins.as_ref()?.get(self.cursor)
     }
 }
 

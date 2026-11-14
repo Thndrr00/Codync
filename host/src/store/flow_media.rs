@@ -1,0 +1,233 @@
+//! The picture and clip steps of routine flows, ported from `OpenBot` 0.70.0's media workflow steps:
+//! besides bots, a flow hands work to a node that makes an image or a video with the agent's own
+//! tool (`crate::media`). A node's id is `media:<id>`, which is also what the flow links name.
+//!
+//! Every mutation stamps a rev for the routine's audience, the same way a link does.
+
+use super::flows::{audience, touch};
+use super::{Store, now_ms};
+use anyhow::{Result, bail};
+use rusqlite::{Connection, Transaction, params};
+use serde::Serialize;
+
+/// The most of a node's description that is kept.
+pub const MAX_PROMPT_BYTES: usize = 8_000;
+
+/// One picture or clip step of a routine's flow.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowMedia {
+    pub id: String,
+    /// What the clients show as the node's title: the picture step's own words.
+    pub kind: String,
+    /// The media model (`media::catalog`), which also names the agent backend that makes the file.
+    pub model: String,
+    pub prompt: String,
+    pub aspect: String,
+    /// Seconds; only a video uses it.
+    pub duration: u32,
+    /// Only a video uses it.
+    pub resolution: String,
+    pub transparent: bool,
+    pub voice: Option<String>,
+    pub created_at: i64,
+    pub routine_id: String,
+    #[serde(skip)]
+    pub owner_bot_id: String,
+}
+
+/// The prefix of a media node's key, which is also what the flow links name.
+pub const PREFIX: &str = "media:";
+
+/// The node key a media step answers to on a canvas.
+pub fn key(id: &str) -> String {
+    format!("{PREFIX}{id}")
+}
+
+fn row_media(r: &rusqlite::Row) -> rusqlite::Result<FlowMedia> {
+    Ok(FlowMedia {
+        id: r.get(0)?,
+        kind: r.get(1)?,
+        model: r.get(2)?,
+        prompt: r.get(3)?,
+        aspect: r.get(4)?,
+        duration: r.get(5)?,
+        resolution: r.get(6)?,
+        transparent: r.get(7)?,
+        voice: r.get(8)?,
+        created_at: r.get(9)?,
+        routine_id: r.get(10)?,
+        owner_bot_id: r.get(11)?,
+    })
+}
+
+const COLUMNS: &str =
+    "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id";
+
+fn media_of(c: &Connection, routine_id: &str) -> Result<Vec<FlowMedia>> {
+    let mut st =
+        c.prepare(&format!("SELECT {COLUMNS} FROM routine_flow_media WHERE routine_id = ?1 ORDER BY created_at, id"))?;
+    Ok(st.query_map([routine_id], row_media)?.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Takes every media node of a routine off its canvas, with the links that name them.
+pub(super) fn forget_routine(tx: &Transaction, routine_id: &str) -> Result<usize> {
+    let mut gone = 0;
+    for media in media_of(tx, routine_id)? {
+        gone += forget_node(tx, &media)?;
+    }
+    Ok(gone)
+}
+
+/// Takes every media node a bot owns off its routine.
+pub(super) fn forget_owner(tx: &Transaction, owner: &str) -> Result<usize> {
+    let media: Vec<FlowMedia> = {
+        let mut st = tx.prepare(&format!("SELECT {COLUMNS} FROM routine_flow_media WHERE owner_bot_id = ?1"))?;
+        st.query_map([owner], row_media)?.collect::<rusqlite::Result<_>>()?
+    };
+    let mut gone = 0;
+    for media in &media {
+        gone += forget_node(tx, media)?;
+    }
+    Ok(gone)
+}
+
+fn forget_node(tx: &Transaction, media: &FlowMedia) -> Result<usize> {
+    let key = key(&media.id);
+    let mut gone = tx.execute(
+        "DELETE FROM routine_flow_links WHERE routine_id = ?1 AND (from_bot_id = ?2 OR to_bot_id = ?2)",
+        params![media.routine_id, key],
+    )?;
+    gone += tx.execute("DELETE FROM routine_flow_positions WHERE node_key = ?1", [&key])?;
+    gone += tx.execute("DELETE FROM routine_flow_media WHERE id = ?1", [&media.id])?;
+    Ok(gone)
+}
+
+fn check_prompt(prompt: &str) -> Result<()> {
+    if prompt.len() > MAX_PROMPT_BYTES {
+        bail!("the description must be at most {MAX_PROMPT_BYTES} bytes");
+    }
+    Ok(())
+}
+
+impl Store {
+    /// The media nodes of a routine.
+    pub fn flow_media(&self, routine_id: &str) -> Result<Vec<FlowMedia>> {
+        self.with_connection(|c| media_of(c, routine_id))
+    }
+
+    pub fn flow_media_node(&self, id: &str) -> Result<Option<FlowMedia>> {
+        self.with_connection(|c| {
+            let mut st = c.prepare(&format!("SELECT {COLUMNS} FROM routine_flow_media WHERE id = ?1"))?;
+            Ok(st.query_map([id], row_media)?.next().transpose()?)
+        })
+    }
+
+    pub fn flow_media_for(&self, routine_ids: &[String]) -> Result<Vec<FlowMedia>> {
+        let mut all = vec![];
+        for id in routine_ids {
+            all.extend(self.flow_media(id)?);
+        }
+        Ok(all)
+    }
+
+    pub fn flow_add_media(&self, media: &FlowMedia) -> Result<super::flows::FlowChange> {
+        check_prompt(&media.prompt)?;
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            tx.execute(
+                &format!("INSERT INTO routine_flow_media({COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"),
+                params![
+                    media.id,
+                    media.kind,
+                    media.model,
+                    media.prompt,
+                    media.aspect,
+                    media.duration,
+                    media.resolution,
+                    media.transparent,
+                    media.voice,
+                    media.created_at,
+                    media.routine_id,
+                    media.owner_bot_id
+                ],
+            )?;
+            let bots = audience(&tx, &media.routine_id, &media.owner_bot_id)?;
+            let change = touch(&tx, bots)?.expect("the owner is always in the audience");
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
+    /// Rewrites a node's settings; the kind never changes.
+    pub fn flow_update_media(&self, media: &FlowMedia) -> Result<Option<super::flows::FlowChange>> {
+        check_prompt(&media.prompt)?;
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let gone = tx.execute(
+                "UPDATE routine_flow_media SET model = ?2, prompt = ?3, aspect = ?4, duration = ?5,
+                 resolution = ?6, transparent = ?7, voice = ?8 WHERE id = ?1",
+                params![
+                    media.id,
+                    media.model,
+                    media.prompt,
+                    media.aspect,
+                    media.duration,
+                    media.resolution,
+                    media.transparent,
+                    media.voice
+                ],
+            )?;
+            if gone == 0 {
+                return Ok(None);
+            }
+            let bots = audience(&tx, &media.routine_id, &media.owner_bot_id)?;
+            let change = touch(&tx, bots)?;
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
+    /// Takes a node off the flow with its links, its place on every canvas and its stored runs.
+    pub fn flow_remove_media(&self, id: &str) -> Result<Option<super::flows::FlowChange>> {
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let Some(media) = media_of_id(&tx, id)? else { return Ok(None) };
+            let bots = audience(&tx, &media.routine_id, &media.owner_bot_id)?;
+            let gone = forget_node(&tx, &media)?;
+            tx.execute("DELETE FROM routine_flow_steps WHERE bot_id = ?1", [key(id)])?;
+            let change = touch(&tx, bots)?;
+            tx.commit()?;
+            debug_assert!(gone > 0);
+            Ok(change)
+        })
+    }
+
+    /// A media node's own row for its routine; `None` when it belongs to another one.
+    pub fn flow_media_in(&self, id: &str, routine_id: &str) -> Result<Option<FlowMedia>> {
+        Ok(self.flow_media_node(id)?.filter(|media| media.routine_id == routine_id))
+    }
+}
+
+fn media_of_id(c: &Connection, id: &str) -> Result<Option<FlowMedia>> {
+    let mut st = c.prepare(&format!("SELECT {COLUMNS} FROM routine_flow_media WHERE id = ?1"))?;
+    Ok(st.query_map([id], row_media)?.next().transpose()?)
+}
+
+/// A node as it is made: the id and the times are the store's.
+pub fn new_media(id: String, routine_id: String, owner_bot_id: String) -> FlowMedia {
+    FlowMedia {
+        id,
+        kind: "image".into(),
+        model: String::new(),
+        prompt: String::new(),
+        aspect: "1:1".into(),
+        duration: 6,
+        resolution: "480p".into(),
+        transparent: false,
+        voice: None,
+        created_at: now_ms(),
+        routine_id,
+        owner_bot_id,
+    }
+}

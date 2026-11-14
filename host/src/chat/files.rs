@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const CHUNK_SIZE: usize = 384 * 1024;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SharedFile {
     pub id: String,
     pub name: String,

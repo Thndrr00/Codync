@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use super::super::app::{App, Editor, Overlay};
 use super::{Reply, RoutineList, s};
+use crate::tui::l10n::tr;
 
 /// Deepest chain the sheet draws; the host refuses longer flows anyway.
 const MAX_ROWS_DEPTH: usize = 16;
@@ -35,6 +36,15 @@ pub enum FlowStage {
         target: Target,
         text: Editor,
     },
+    /// Typing the description of a new picture or clip step, or a new one of an existing step.
+    Media {
+        /// The step that hands to the new one; empty when an existing step is being changed.
+        from: String,
+        kind: &'static str,
+        text: Editor,
+        /// The step being changed, `None` while a new one is typed.
+        id: Option<String>,
+    },
 }
 
 pub enum Target {
@@ -43,11 +53,14 @@ pub enum Target {
 }
 
 /// One line of the chain: a bot, how deep, the link that brought the reply to it and its step.
+/// `bot` also names a picture or clip step, as `media:<id>`.
 pub struct FlowRow {
     pub bot: String,
     pub depth: usize,
     pub link: Option<Value>,
     pub step: Option<Value>,
+    /// The picture or clip step of a `media:` row, from the canvas's `mediaNodes`.
+    pub media: Option<Value>,
 }
 
 /// The chain as lines: the routine's bot, then each link's bot under the one that hands to it. A bot
@@ -61,22 +74,44 @@ pub fn rows(canvas: &Value, routine: &str, owner: &str) -> Vec<FlowRow> {
         .flatten()
         .find(|r| r["routine"]["id"] == routine)
         .and_then(|r| r["steps"].as_array());
+    let media = canvas["mediaNodes"].as_array().into_iter().flatten().collect::<Vec<_>>();
     let mut out = vec![];
-    walk(&links, steps.map_or(&[], Vec::as_slice), (owner, 0, None), &mut out);
+    walk(&links, steps.map_or(&[], Vec::as_slice), &media, (owner, 0, None), &mut out);
     out
 }
 
-fn walk(links: &[&Value], steps: &[Value], (bot, depth, link): (&str, usize, Option<&Value>), out: &mut Vec<FlowRow>) {
+fn walk(
+    links: &[&Value],
+    steps: &[Value],
+    media: &[&Value],
+    (bot, depth, link): (&str, usize, Option<&Value>),
+    out: &mut Vec<FlowRow>,
+) {
     if out.len() >= MAX_ROWS {
         return;
     }
     let step = steps.iter().find(|st| st["botId"] == bot).cloned();
-    out.push(FlowRow { bot: bot.to_owned(), depth, link: link.cloned(), step });
+    let own = bot.strip_prefix("media:").and_then(|id| media.iter().find(|m| m["id"] == id).copied());
+    out.push(FlowRow { bot: bot.to_owned(), depth, link: link.cloned(), step, media: own.cloned() });
     if depth < MAX_ROWS_DEPTH {
         for next in links.iter().filter(|l| l["fromBotId"] == bot) {
-            walk(links, steps, (&s(next, "toBotId"), depth + 1, Some(next)), out);
+            walk(links, steps, media, (&s(next, "toBotId"), depth + 1, Some(next)), out);
         }
     }
+}
+
+/// What a media row is called: its kind and its description, else just the kind.
+pub fn media_label(media: Option<&Value>) -> String {
+    let video = media.and_then(|m| m["kind"].as_str()) == Some("video");
+    let kind = if video { tr("Clip") } else { tr("Picture") };
+    let prompt = media.and_then(|m| m["prompt"].as_str()).unwrap_or_default().trim();
+    if prompt.is_empty() { kind.into_owned() } else { format!("{kind}: {prompt}") }
+}
+
+/// The kind a media step makes, `None` for a bot row.
+pub fn media_kind(row: &FlowRow) -> Option<&'static str> {
+    let media = row.media.as_ref()?;
+    Some(if media["kind"] == "video" { "video" } else { "image" })
 }
 
 impl FlowSheet {
@@ -139,26 +174,42 @@ impl App {
                 }
                 KeyCode::Char('a') => FlowStage::Pick { cursor: 0 },
                 KeyCode::Char('e') => {
-                    if let Some(link) = link {
+                    if let Some(media) = row.and_then(|r| r.media.as_ref()) {
+                        FlowStage::Media {
+                            from: String::new(),
+                            kind: if media["kind"] == "video" { "video" } else { "image" },
+                            text: Editor::with(media["prompt"].as_str().unwrap_or_default()),
+                            id: media["id"].as_str().map(str::to_owned),
+                        }
+                    } else if let Some(link) = link {
                         FlowStage::Instruction {
                             target: Target::Link(s(&link, "id")),
                             text: Editor::with(&s(&link, "instruction")),
                         }
                     } else {
-                        self.flash("Pick a bot below the routine to change what it is asked");
+                        self.flash("Pick a bot or a picture below the routine to change what it is asked");
                         FlowStage::Browse
                     }
                 }
                 KeyCode::Char('d' | 'x') => {
-                    match link {
-                        Some(link) => {
-                            let body = json!({"linkId": link["id"]});
-                            self.sheet("disconnectRoutineFlow", body, Reply::Flow(f.bot.clone()));
+                    match row.and_then(|r| r.media.as_ref().and_then(|m| m["id"].as_str())) {
+                        Some(id) => {
+                            self.sheet("removeRoutineFlowMedia", json!({"mediaId": id}), Reply::Flow(f.bot.clone()));
                         }
-                        None => self.flash("The routine's own bot starts the flow; pick a bot below it to disconnect"),
+                        None => match link {
+                            Some(link) => {
+                                let body = json!({"linkId": link["id"]});
+                                self.sheet("disconnectRoutineFlow", body, Reply::Flow(f.bot.clone()));
+                            }
+                            None => self.flash(
+                                "The routine's own bot starts the flow; pick a bot or a picture below it to remove",
+                            ),
+                        },
                     }
                     FlowStage::Browse
                 }
+                KeyCode::Char('p' | 'i') => FlowStage::Media { from, kind: "image", text: Editor::default(), id: None },
+                KeyCode::Char('v') => FlowStage::Media { from, kind: "video", text: Editor::default(), id: None },
                 KeyCode::Char('t') => {
                     let body = json!({"botId": f.bot, "routineId": f.routine});
                     self.sheet("testRoutineFlow", body, Reply::Flow(f.bot.clone()));
@@ -196,6 +247,22 @@ impl App {
                     FlowStage::Instruction { target, text }
                 }
             },
+            FlowStage::Media { from, kind, mut text, id } => match k.code {
+                KeyCode::Esc => FlowStage::Browse,
+                KeyCode::Enter => {
+                    if text.text.trim().is_empty() {
+                        self.flash("Describe what to make first");
+                        FlowStage::Media { from, kind, text, id }
+                    } else {
+                        self.save_flow_media(&f, from, kind, id, text.text.trim());
+                        FlowStage::Browse
+                    }
+                }
+                _ => {
+                    text.key(k);
+                    FlowStage::Media { from, kind, text, id }
+                }
+            },
         };
         Some(Overlay::Flow(f))
     }
@@ -212,6 +279,35 @@ impl App {
                 self.sheet("updateRoutineFlowLink", json!({"linkId": id, "instruction": instruction}), reply);
             }
         }
+    }
+
+    /// Saves a picture or clip step: a new one is connected after `from` once the host made it.
+    fn save_flow_media(&mut self, f: &FlowSheet, from: String, kind: &'static str, id: Option<String>, prompt: &str) {
+        if let Some(id) = id {
+            let reply = Reply::Flow(f.bot.clone());
+            self.sheet("updateRoutineFlowMedia", json!({"mediaId": id, "prompt": prompt}), reply);
+        } else {
+            let reply = Reply::FlowMedia { bot: f.bot.clone(), from };
+            let body = json!({"routineId": f.routine, "kind": kind, "prompt": prompt});
+            self.sheet("addRoutineFlowMedia", body, reply);
+        }
+    }
+
+    /// A media step was made for the open sheet: connect it after the row it was added from.
+    pub(in crate::tui) fn flow_media_added(&mut self, bot: &str, from: &str, v: &Value) {
+        let Some(id) = v["media"]["id"].as_str() else {
+            self.flash("The step could not be added");
+            return;
+        };
+        let Some(routine) = self.overlays.iter().find_map(|o| match o {
+            Overlay::Flow(f) if f.bot == bot => Some(f.routine.clone()),
+            _ => None,
+        }) else {
+            return;
+        };
+        let body =
+            json!({"routineId": routine, "fromBotId": from, "toBotId": format!("media:{id}"), "instruction": ""});
+        self.sheet("connectRoutineFlow", body, Reply::Flow(bot.to_owned()));
     }
 
     /// The host changed a flow: an open sheet of that canvas loads it again.

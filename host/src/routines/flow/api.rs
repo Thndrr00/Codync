@@ -5,7 +5,7 @@ use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
 use crate::routines::{Routine, default_timeout};
-use crate::store::{FlowLink, now_ms};
+use crate::store::{FlowLink, FlowMedia, now_ms};
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -26,6 +26,9 @@ pub const METHODS: &[&str] = &[
     "connectRoutineFlow",
     "disconnectRoutineFlow",
     "updateRoutineFlowLink",
+    "addRoutineFlowMedia",
+    "updateRoutineFlowMedia",
+    "removeRoutineFlowMedia",
     "testRoutineFlow",
 ];
 
@@ -114,19 +117,31 @@ fn node_exists(hub: &Hub, key: &str) -> Result<()> {
     let known = match key.split_once(':') {
         Some(("routine", id)) => routine(hub, id).is_ok(),
         Some(("bot", id)) => hub.store.bot(id)?.is_some_and(|b| !b.deleted),
+        Some(("media", id)) => hub.store.flow_media_node(id)?.is_some(),
         _ => false,
     };
     if !known {
-        bail!("nodeKey must name an existing routine or bot (routine:<id> or bot:<id>)");
+        bail!("nodeKey must name an existing routine, bot or media step");
     }
     Ok(())
 }
 
+/// A step of a flow a link may end at: a bot that takes hand-offs or a media step of this routine.
+fn end_node(hub: &Hub, routine: &Routine, id: &str) -> Result<()> {
+    match id.strip_prefix(crate::store::flow_media::PREFIX) {
+        Some(media) => {
+            hub.store.flow_media_in(media, &routine.id)?.context("that media step is not part of this routine")?;
+            Ok(())
+        }
+        None => recipient(hub, id).map(drop),
+    }
+}
+
 /// Creates a link in `routine` from `from` to `to`; the routine's own bot is the flow's start.
 pub(super) fn connect(hub: &Hub, routine: &Routine, from: &str, to: &str, instruction: String) -> Result<FlowLink> {
-    recipient(hub, to)?;
+    end_node(hub, routine, to)?;
     if from != routine.bot_id {
-        recipient(hub, from).context("the bot handing work on can't take part in a flow")?;
+        end_node(hub, routine, from).context("the step handing work on can't take part in a flow")?;
     }
     let link = FlowLink {
         id: uuid::Uuid::new_v4().to_string(),
@@ -159,6 +174,123 @@ pub(super) fn disconnect(hub: &Hub, link_id: &str) -> Result<bool> {
     hub.routines.cancel_flow_deliveries(&hub.store, &link.routine_id)?;
     hub.emit_flow_change(|| Ok(((), hub.store.flow_remove_link(link_id)?)))?;
     Ok(true)
+}
+
+/// The kind of a media step being added.
+fn kind_arg(b: &Value) -> Result<crate::media::Kind> {
+    match str_arg(b, "kind")? {
+        "image" => Ok(crate::media::Kind::Image),
+        "video" => Ok(crate::media::Kind::Video),
+        other => bail!("`kind` must be image or video, not {other}"),
+    }
+}
+
+fn text_arg(b: &Value, key: &str) -> Result<Option<String>> {
+    match b.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) if text.chars().count() <= MAX_ID_CHARS => Ok(Some(text.clone())),
+        _ => bail!("`{key}` must be text of at most {MAX_ID_CHARS} characters"),
+    }
+}
+
+/// What a media step's settings say when it starts, before the request is checked.
+fn start_node(routine: &Routine, kind: crate::media::Kind, model: &'static crate::media::catalog::Model) -> FlowMedia {
+    let mut node = crate::store::flow_media::new_media(
+        uuid::Uuid::new_v4().to_string(),
+        routine.id.clone(),
+        routine.bot_id.clone(),
+    );
+    kind.as_str().clone_into(&mut node.kind);
+    model.id.clone_into(&mut node.model);
+    reset_node(&mut node, model, kind);
+    node
+}
+
+/// The choices a model makes, put back after the model changed.
+fn reset_node(node: &mut FlowMedia, model: &'static crate::media::catalog::Model, kind: crate::media::Kind) {
+    crate::media::catalog::aspects(model)[0].clone_into(&mut node.aspect);
+    node.duration = crate::media::catalog::durations(model)[0];
+    crate::media::catalog::resolutions(model)[0].clone_into(&mut node.resolution);
+    node.voice = None;
+    if kind == crate::media::Kind::Video {
+        node.transparent = false;
+    }
+}
+
+/// Applies the settings a request gives, leaving out the ones it omits.
+fn apply_settings(b: &Value, node: &mut FlowMedia) -> Result<()> {
+    if let Some(prompt) = text_arg(b, "prompt")? {
+        node.prompt = prompt;
+    }
+    if let Some(aspect) = text_arg(b, "aspect")? {
+        node.aspect = aspect;
+    }
+    if b.get("duration").is_some() {
+        node.duration =
+            b["duration"].as_u64().and_then(|value| u32::try_from(value).ok()).context("`duration` must be seconds")?;
+    }
+    if let Some(resolution) = text_arg(b, "resolution")? {
+        node.resolution = resolution;
+    }
+    if let Some(transparent) = b.get("transparent").filter(|value| !value.is_null()) {
+        node.transparent = transparent.as_bool().context("`transparent` must be true or false")?;
+    }
+    if b.get("voice").is_some() {
+        node.voice = text_arg(b, "voice")?.filter(|voice| !voice.trim().is_empty());
+    }
+    Ok(())
+}
+
+/// The model a step is set to, checked against its kind.
+fn model_for(b: &Value, kind: crate::media::Kind) -> Result<&'static crate::media::catalog::Model> {
+    let id = model_arg(b)?.context("`model` is required")?;
+    let model = crate::media::catalog::model(&id).context("unknown media model")?;
+    if !model.kinds.contains(&kind) {
+        bail!("{} does not make a {}", model.name, kind.as_str());
+    }
+    Ok(model)
+}
+
+pub(super) fn add_media(hub: &Hub, b: &Value) -> Result<Value> {
+    let routine_id = id_arg(b, "routineId")?;
+    let r = routine(hub, routine_id)?;
+    let kind = kind_arg(b)?;
+    let model = if let Some(id) = model_arg(b)? {
+        let model = crate::media::catalog::model(&id).context("unknown media model")?;
+        if !model.kinds.contains(&kind) {
+            bail!("{} does not make a {}", model.name, kind.as_str());
+        }
+        model
+    } else {
+        let backend = hub.store.bot(&r.bot_id)?.map(|bot| bot.config.backend).unwrap_or_default();
+        crate::media::catalog::first(&backend, kind)
+            .with_context(|| format!("no installed agent can make a {}", kind.as_str()))?
+    };
+    let mut node = start_node(&r, kind, model);
+    apply_settings(b, &mut node)?;
+    crate::media::check_settings(&node)?;
+    hub.emit_flow_change(|| Ok(((), Some(hub.store.flow_add_media(&node)?))))?;
+    Ok(json!({"media": node}))
+}
+
+fn update_media(hub: &Hub, b: &Value) -> Result<Value> {
+    let id = id_arg(b, "mediaId")?;
+    let mut node = hub.store.flow_media_node(id)?.context("media step not found")?;
+    let kind = if node.kind == "video" { crate::media::Kind::Video } else { crate::media::Kind::Image };
+    if b.get("model").is_some() {
+        let model = model_for(b, kind)?;
+        if model.id != node.model {
+            model.id.clone_into(&mut node.model);
+            reset_node(&mut node, model, kind);
+        }
+    }
+    apply_settings(b, &mut node)?;
+    crate::media::check_settings(&node)?;
+    let changed = hub.emit_flow_change(|| {
+        let change = hub.store.flow_update_media(&node)?;
+        Ok((change.is_some(), change))
+    })?;
+    Ok(json!({"media": node, "changed": changed}))
 }
 
 /// A deleted routine leaves its flow, and a running one stops.
@@ -272,6 +404,14 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
                 }
             })?;
             json!({"link": updated.context("link not found")?})
+        }
+        "addRoutineFlowMedia" => add_media(hub, b)?,
+        "updateRoutineFlowMedia" => update_media(hub, b)?,
+        "removeRoutineFlowMedia" => {
+            let id = id_arg(b, "mediaId")?;
+            hub.store.flow_media_node(id)?.context("media step not found")?;
+            hub.emit_flow_change(|| Ok(((), hub.store.flow_remove_media(id)?)))?;
+            json!({"ok": true})
         }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);

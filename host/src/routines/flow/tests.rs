@@ -448,6 +448,72 @@ async fn a_canvas_shows_the_flow_on_every_bot_it_passes_through() {
 }
 
 #[tokio::test]
+async fn a_media_step_is_added_linked_on_the_canvas_and_removed_with_its_links() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    let added =
+        f.call("addRoutineFlowMedia", json!({"routineId": r, "kind": "image", "prompt": "a red fox"})).await.unwrap();
+    let id = added["media"]["id"].as_str().unwrap().to_owned();
+    let key = format!("media:{id}");
+    assert_eq!(added["media"]["model"], "gpt-image", "the first image model when the backend makes none");
+    assert_eq!(added["media"]["aspect"], "1:1");
+    assert!(f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": "a", "toBotId": key})).await.is_ok());
+    f.call("saveRoutineFlowPosition", json!({"botId": "a", "nodeKey": key, "x": 2, "y": 3})).await.unwrap();
+    assert!(
+        f.call("saveRoutineFlowPosition", json!({"botId": "a", "nodeKey": "media:nope", "x": 1, "y": 1}))
+            .await
+            .is_err()
+    );
+    let canvas = f.call("routineFlowCanvas", json!({"botId": "a"})).await.unwrap();
+    assert_eq!(canvas["mediaNodes"][0]["id"], id.as_str());
+    assert_eq!(canvas["links"][0]["toBotId"], key.as_str());
+    assert_eq!(canvas["positions"][0]["nodeKey"], key.as_str());
+    // The kind never changes; a model must make it.
+    let video = f.call("addRoutineFlowMedia", json!({"routineId": r, "kind": "video"})).await.unwrap();
+    let video_id = video["media"]["id"].as_str().unwrap();
+    assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": video_id, "model": "gpt-image"})).await.is_err());
+    assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": id, "model": "nope"})).await.is_err());
+    let changed = f
+        .call("updateRoutineFlowMedia", json!({"mediaId": id, "prompt": "a blue fox", "aspect": "16:9"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        (changed["media"]["prompt"].as_str(), changed["media"]["aspect"].as_str()),
+        (Some("a blue fox"), Some("16:9"))
+    );
+    assert_eq!(changed["changed"], true);
+    assert!(f.call("updateRoutineFlowMedia", json!({"mediaId": "nope", "prompt": "x"})).await.is_err());
+    f.call("removeRoutineFlowMedia", json!({"mediaId": id})).await.unwrap();
+    assert!(f.hub.store.flow_links(&r).unwrap().is_empty(), "the links that named it go too");
+    assert_eq!(f.hub.store.flow_positions("a").unwrap(), Vec::new());
+    assert!(f.call("removeRoutineFlowMedia", json!({"mediaId": id})).await.is_err());
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_media_step_can_be_a_link_end_but_only_of_its_own_routine() {
+    let f = Fixture::new();
+    let (r, r2) = (f.routine("a"), f.routine("a"));
+    let added = f.call("addRoutineFlowMedia", json!({"routineId": r, "kind": "image"})).await.unwrap();
+    let key = format!("media:{}", added["media"]["id"].as_str().unwrap());
+    f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": "a", "toBotId": key})).await.unwrap();
+    f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": key, "toBotId": "b"})).await.unwrap();
+    let error = f
+        .call("connectRoutineFlow", json!({"routineId": r2, "fromBotId": "a", "toBotId": key}))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("not part of this routine"), "{error}");
+    let looped = f
+        .call("connectRoutineFlow", json!({"routineId": r, "fromBotId": "b", "toBotId": key}))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(looped.contains("loop"), "{looped}");
+    f.shutdown().await;
+}
+
+#[tokio::test]
 async fn changes_stamp_a_rev_and_reach_the_event_stream_and_catch_up() {
     let f = Fixture::new();
     let r = f.routine("a");
@@ -538,7 +604,7 @@ async fn a_bot_can_only_change_the_flow_of_its_own_routines_through_its_tools() 
     );
     tool_call(&f.hub, "a", "unlink_routine_bots", &json!({"routineId": r, "toBotId": "b"})).unwrap();
     assert_eq!(f.hub.store.flow_links(&r).unwrap().len(), 0);
-    assert_eq!(tool_list().len(), 3);
+    assert_eq!(tool_list().len(), 5);
     f.shutdown().await;
 }
 

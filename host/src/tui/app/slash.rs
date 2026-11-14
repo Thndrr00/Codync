@@ -1,6 +1,7 @@
 //! The composer's `/` commands, listed while the draft is just `/partial`: Fast mode runs here
 //! (`updateBot`; a new session is `S`); a skill fills in `/<id> `, which the host turns into "read
-//! this skill first" (`market::expand_command`). A group offers the same, over its members.
+//! this skill first" (`market::expand_command`); `/image` and `/video` fill themselves in the same
+//! way and the host writes the request (host/src/media). A group offers the same, over its members.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::json;
@@ -24,6 +25,8 @@ pub enum SlashAction {
     Edit,
     DevServers,
     Skill,
+    /// Fills in `/image ` or `/video `; the person then describes what to make.
+    Media,
 }
 
 /// A command the list offers.
@@ -41,7 +44,8 @@ impl SlashCommand {
         match self.action {
             SlashAction::Skill if self.detail.is_empty() => self.title.clone(),
             SlashAction::Skill => self.detail.replace('\n', " "),
-            SlashAction::Fast
+            SlashAction::Media
+            | SlashAction::Fast
             | SlashAction::Continue
             | SlashAction::Cancel
             | SlashAction::Steer
@@ -170,13 +174,18 @@ impl App {
                 action: SlashAction::Skill,
             })
         });
-        // A skill with the same id keeps the name: the host expands the skill first.
-        let tools = crate::chat::tool_commands::LISTED.into_iter().map(|(name, title, detail)| SlashCommand {
-            name: name.to_owned(),
-            title: title.to_owned(),
-            detail: tr(detail).into_owned(),
-            action: SlashAction::Skill,
-        });
+        // A skill with the same id keeps the name: the host expands the skill first. A group has no
+        // agent of its own, so `/image` and `/video` are offered only for a bot.
+        let own = self.bot().is_some_and(|bot| !bot.group);
+        let tools = crate::chat::tool_commands::LISTED
+            .into_iter()
+            .filter(|(name, ..)| own || !matches!(*name, "image" | "video"))
+            .map(|(name, title, detail)| SlashCommand {
+                name: name.to_owned(),
+                title: title.to_owned(),
+                detail: tr(detail).into_owned(),
+                action: if name == "image" || name == "video" { SlashAction::Media } else { SlashAction::Skill },
+            });
         let mut commands: Vec<SlashCommand> = self.built_in().into_iter().chain(skills).collect();
         let taken: Vec<String> = commands.iter().map(|c| c.name.clone()).collect();
         commands.extend(tools.filter(|t| !taken.contains(&t.name)));
@@ -205,7 +214,10 @@ impl App {
             KeyCode::Up => self.slash_pick = (typed, (sel + n - 1) % n),
             KeyCode::Tab | KeyCode::Enter => {
                 let picked = &commands[sel];
-                if k.code == KeyCode::Enter && picked.action == SlashAction::Skill && typed[1..] == picked.name {
+                if k.code == KeyCode::Enter
+                    && matches!(picked.action, SlashAction::Skill | SlashAction::Media)
+                    && typed[1..] == picked.name
+                {
                     return false;
                 }
                 self.run_slash(picked);
@@ -278,7 +290,7 @@ impl App {
                 self.open_dev_servers();
                 String::new()
             }
-            SlashAction::Skill => format!("/{} ", command.name),
+            SlashAction::Skill | SlashAction::Media => format!("/{} ", command.name),
         };
         if let Some(key) = self.selected.clone() {
             self.drafts.insert(key, Editor::with(&fill));
@@ -357,7 +369,7 @@ mod tests {
         let mut app = app_with(&json!({"id": "b", "name": "Bot", "skills": ["pdf"], "fastModeSupport": "unsupported"}));
         app.drafts.insert("b".into(), super::Editor::with("/"));
         let all: Vec<String> = app.slash_commands().into_iter().map(|c| c.name).collect();
-        assert_eq!(all, ["pdf", "n8n", "comfy"]);
+        assert_eq!(all, ["pdf", "image", "video", "n8n", "comfy"]);
         app.drafts.insert("b".into(), super::Editor::with("/com"));
         assert_eq!(app.slash_commands().remove(0).title, "ComfyUI");
         assert!(app.slash_key(key(KeyCode::Tab)), "Tab fills it in");
@@ -432,6 +444,16 @@ mod tests {
         app.drafts.insert("b".into(), super::Editor::with("/fa"));
         assert!(app.slash_key(key(KeyCode::Tab)), "a built-in command runs");
         assert_eq!(app.draft().text, "", "and the draft clears");
+    }
+
+    #[tokio::test]
+    async fn an_image_command_fills_itself_in_for_the_description() {
+        let mut app = app_with(&json!({"id": "b", "name": "Bot", "skills": [], "fastModeSupport": "unsupported"}));
+        app.drafts.insert("b".into(), super::Editor::with("/imag"));
+        assert!(app.slash_key(key(KeyCode::Enter)), "Return on /image fills it in");
+        assert_eq!(app.draft().text, "/image ");
+        app.drafts.insert("b".into(), super::Editor::with("/image"));
+        assert!(!app.slash_key(key(KeyCode::Enter)), "typed out, Return sends it to describe");
     }
 
     #[tokio::test]

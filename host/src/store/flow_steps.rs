@@ -56,6 +56,9 @@ pub struct FlowStep {
     pub output: Option<String>,
     pub status: StepStatus,
     pub error: Option<String>,
+    /// The pictures or clips a media step made, as shared files of the owner bot.
+    #[serde(default)]
+    pub files: Vec<crate::chat::files::SharedFile>,
     pub created_at: i64,
     pub updated_at: i64,
     #[serde(skip)]
@@ -89,7 +92,7 @@ pub struct NewStep<'a> {
 }
 
 const COLUMNS: &str = "id, run_id, bot_id, delivery_id, input, output, status, error, created_at, updated_at, \
-                       routine_id, owner_bot_id, run_at";
+                       routine_id, owner_bot_id, run_at, files";
 
 fn row_step(r: &rusqlite::Row) -> rusqlite::Result<FlowStep> {
     Ok(FlowStep {
@@ -106,6 +109,7 @@ fn row_step(r: &rusqlite::Row) -> rusqlite::Result<FlowStep> {
         routine_id: r.get(10)?,
         owner_bot_id: r.get(11)?,
         run_at: r.get(12)?,
+        files: r.get::<_, Option<String>>(13)?.and_then(|files| serde_json::from_str(&files).ok()).unwrap_or_default(),
     })
 }
 
@@ -129,7 +133,7 @@ impl Store {
             let added = tx.execute(
                 &format!(
                     "INSERT OR IGNORE INTO routine_flow_steps({COLUMNS})
-                     VALUES(?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11)"
+                     VALUES(?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11, NULL)"
                 ),
                 params![
                     id,
@@ -210,13 +214,15 @@ impl Store {
         status: StepStatus,
         output: Option<&str>,
         error: Option<&str>,
+        files: &[crate::chat::files::SharedFile],
     ) -> Result<Option<FlowChange>> {
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
+            let files = serde_json::to_string(files).ok();
             let changed = tx.execute(
-                "UPDATE routine_flow_steps SET status = ?2, output = ?3, error = ?4, updated_at = ?5
+                "UPDATE routine_flow_steps SET status = ?2, output = ?3, error = ?4, updated_at = ?5, files = ?6
                  WHERE id = ?1 AND status = 'running'",
-                params![id, status.as_str(), output.map(kept), error, now_ms()],
+                params![id, status.as_str(), output.map(kept), error, now_ms(), files],
             )?;
             if changed == 0 {
                 return Ok(None);

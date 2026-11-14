@@ -15,6 +15,9 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::task::JoinSet;
 
+/// Why a step after a cancelled flow never ran.
+const CANCELLED_BEFORE: &str = "The flow was cancelled before this step started";
+
 /// How the routine's own run ended.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Root {
@@ -64,8 +67,17 @@ struct Pending {
     hops: u8,
 }
 
+/// A media step ready to make its file.
+struct MediaPending {
+    step: FlowStep,
+    node: crate::store::FlowMedia,
+    /// What the steps before it handed on.
+    body: String,
+}
+
 enum Begin {
     Send(Box<Pending>),
+    Make(Box<MediaPending>),
     Done(Outcome),
 }
 
@@ -92,7 +104,18 @@ pub(super) fn record(hub: &Hub, new: &NewStep) -> Result<Option<FlowStep>> {
 }
 
 fn settle(hub: &Hub, id: &str, status: StepStatus, output: Option<&str>, error: Option<&str>) {
-    if let Err(e) = hub.emit_flow_change(|| Ok(((), hub.store.flow_settle_step(id, status, output, error)?))) {
+    settle_with(hub, id, status, output, error, &[]);
+}
+
+fn settle_with(
+    hub: &Hub,
+    id: &str,
+    status: StepStatus,
+    output: Option<&str>,
+    error: Option<&str>,
+    files: &[crate::chat::files::SharedFile],
+) {
+    if let Err(e) = hub.emit_flow_change(|| Ok(((), hub.store.flow_settle_step(id, status, output, error, files)?))) {
         tracing::error!(step = id, error = format!("{e:#}"), "couldn't save a routine flow step");
     }
 }
@@ -179,6 +202,12 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
                     let (hub, start, cancel) = (hub.clone(), start.clone(), running.cancel.clone());
                     tasks.spawn(async move { (pending.bot.clone(), send(&hub, &start, *pending, cancel).await) });
                 }
+                Begin::Make(pending) => {
+                    // Steps are keyed by their node, the same key the links use.
+                    let node = crate::store::flow_media::key(&pending.node.id);
+                    let (hub, start, cancel) = (hub.clone(), start.clone(), running.cancel.clone());
+                    tasks.spawn(async move { (node, make(&hub, &start, *pending, cancel).await) });
+                }
             }
         }
         while let Some(joined) = tasks.join_next().await {
@@ -243,20 +272,33 @@ fn begin(
     if depth > start.max_depth {
         return end(StepStatus::Skipped, &format!("Skipped: the flow reaches at most {} bots deep", start.max_depth));
     }
+    // A cancelled flow stops here, unless nothing reaches the step at all: then the bot before it
+    // was the one that got cancelled, and there is nothing left to hand on.
+    let cancelled = *cancel.borrow();
+    // A media step makes its file from its own description; whatever was handed on only adds to it.
+    if let Some(id) = bot.strip_prefix(crate::store::flow_media::PREFIX) {
+        return if cancelled {
+            end(StepStatus::Cancelled, CANCELLED_BEFORE)
+        } else {
+            begin_media(hub, start, id, &inputs)
+        };
+    }
     let Some((first, _)) = inputs.first() else {
         return end(StepStatus::Skipped, "Skipped: no bot before this one had anything to hand on");
     };
-    if *cancel.borrow() {
-        return end(StepStatus::Cancelled, "The flow was cancelled before this step started");
+    if cancelled {
+        return end(StepStatus::Cancelled, CANCELLED_BEFORE);
     }
     if let Err(error) = recipient(hub, bot) {
         return end(StepStatus::Failed, &format!("{error:#}"));
     }
-    let Some(from) = hub.store.bot(&first.from_bot_id)?.filter(|b| !b.deleted) else {
+    let Some(from) = hub.store.bot(from_id(&first.from_bot_id, &start.owner))?.filter(|b| !b.deleted) else {
         return end(StepStatus::Failed, "The bot that handed work on is gone");
     };
-    let names: Vec<(String, &str, &str)> =
-        inputs.iter().map(|(link, text)| (hub.bot_name(&link.from_bot_id), *text, link.instruction.as_str())).collect();
+    let names: Vec<(String, &str, &str)> = inputs
+        .iter()
+        .map(|(link, text)| (node_name(hub, &link.from_bot_id), *text, link.instruction.as_str()))
+        .collect();
     let body = handoff_text(&start.routine_name, &names);
     // A fan-in is one step: the first incoming link's model and options win, as its instruction leads the task.
     let model = inputs.iter().find_map(|(link, _)| override_of(link));
@@ -270,6 +312,22 @@ fn begin(
     }
 }
 
+/// The bot a step's sender stands for: a media step speaks as the routine's own bot.
+fn from_id<'a>(node: &'a str, owner: &'a str) -> &'a str {
+    if node.starts_with(crate::store::flow_media::PREFIX) { owner } else { node }
+}
+
+/// What a step is called in the text handed to the next bot.
+fn node_name(hub: &Hub, id: &str) -> String {
+    if id.starts_with(crate::store::flow_media::PREFIX) {
+        return match hub.store.flow_media_node(id).ok().flatten().map(|node| node.kind) {
+            Some(kind) if kind == "video" => "the video step".to_owned(),
+            _ => "the picture step".to_owned(),
+        };
+    }
+    hub.bot_name(id)
+}
+
 fn earlier_outcome(hub: &Hub, run_id: &str, bot: &str) -> Result<Outcome> {
     let step = hub.store.flow_run_steps(run_id)?.into_iter().find(|s| s.bot_id == bot).context("the step is gone")?;
     Ok(saved_outcome(step))
@@ -280,6 +338,70 @@ fn saved_outcome(step: FlowStep) -> Outcome {
         (StepStatus::Succeeded, Some(text)) => Outcome::Replied(text),
         _ => Outcome::Nothing,
     }
+}
+
+/// Decides a media step: the description it was saved with, plus whatever was handed on.
+fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)]) -> Result<Begin> {
+    let Some(node) = hub.store.flow_media_in(id, &start.routine_id)? else {
+        record_ended(hub, start, &crate::store::flow_media::key(id), StepStatus::Failed, "The media step is gone")?;
+        return Ok(Begin::Done(Outcome::Nothing));
+    };
+    let body = inputs
+        .iter()
+        .map(|(_, text)| text.trim())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n---\n\n");
+    let key = crate::store::flow_media::key(id);
+    match record(hub, &new_step(start, &key, &body, StepStatus::Running))? {
+        Some(step) => Ok(Begin::Make(Box::new(MediaPending { step, node, body }))),
+        None => Ok(Begin::Done(earlier_outcome(hub, &start.run_id, &key)?)),
+    }
+}
+
+/// Makes a media step's file, keeps it in the routine's own bot and hands what was made on.
+async fn make(hub: &Arc<Hub>, start: &Start, pending: MediaPending, cancel: watch::Receiver<bool>) -> Outcome {
+    let step = pending.step.id.clone();
+    let Some(owner) = hub.store.bot(&start.owner).ok().flatten().filter(|bot| !bot.deleted) else {
+        settle(hub, &step, StepStatus::Failed, None, Some("The routine's bot is gone"));
+        return Outcome::Nothing;
+    };
+    let request = match crate::media::request(&pending.node) {
+        Ok(request) => request,
+        Err(error) => {
+            settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+            return Outcome::Nothing;
+        }
+    };
+    let mut cancel = cancel;
+    let work = crate::media::flow::generate(hub, &owner.config, &request, &pending.body, start.timeout);
+    tokio::pin!(work);
+    let made = tokio::select! {
+        made = &mut work => made,
+        _ = cancel.wait_for(|stopped| *stopped) => {
+            settle(hub, &step, StepStatus::Cancelled, None, Some("The flow was cancelled while the file was being made"));
+            return Outcome::Nothing;
+        }
+    };
+    match made {
+        Ok(files) => {
+            let text = made_text(&request.prompt, &files, &start.owner);
+            settle_with(hub, &step, StepStatus::Succeeded, Some(&text), None, &files);
+            Outcome::Replied(text)
+        }
+        Err(error) => {
+            settle(hub, &step, StepStatus::Failed, None, Some(&format!("{error:#}")));
+            Outcome::Nothing
+        }
+    }
+}
+
+/// What a made file hands on: what it is and where the next bot finds it.
+fn made_text(prompt: &str, files: &[crate::chat::files::SharedFile], owner: &str) -> String {
+    let root = crate::chat::files::root(owner);
+    let listing: Vec<String> =
+        files.iter().map(|file| format!("{} ({})", file.name, root.join(&file.id).display())).collect();
+    format!("Made for \"{prompt}\":\n{}", listing.join("\n"))
 }
 
 async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Receiver<bool>) -> Outcome {
