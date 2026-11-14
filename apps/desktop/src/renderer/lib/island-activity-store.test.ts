@@ -41,7 +41,7 @@ test('a delayed island command cannot mute or end a replacement call', async () 
 
 function canvas(botId = 'bot'): FlowCanvas {
   return {
-    botId, rev: 1, links: [], positions: [], placedBotIds: [],
+    botId, rev: 1, links: [], positions: [], placedBotIds: [], mediaNodes: [],
     routines: [{
       routine: { id: 'routine', botId, name: 'Release', instruction: '', triggers: [], enabled: true, createdAt: 1, updatedAt: 1, triggerDescriptions: [] },
       upcomingRuns: [],

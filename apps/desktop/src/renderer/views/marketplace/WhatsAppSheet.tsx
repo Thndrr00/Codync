@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
-import { Button, CardForm, CardSection, Spinner } from '../../components/Controls'
+import { Button, CardForm, CardSection, RowLabel, Spinner, Switch } from '../../components/Controls'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { ModalHeader, SheetPage } from '../../components/Overlay'
@@ -101,6 +101,12 @@ export function WhatsAppSheet() {
               <>
                 <Text tone="text" weight="medium">{state.name || state.me}</Text>
                 <Text size="caption" tone="secondary">{tr('Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention.')}</Text>
+                <Switch on={state.workingMessage !== false} onChange={(on) => void store.whatsappSetWorkingMessage(on)}>
+                  <RowLabel
+                    label="“Working on it…” message"
+                    detail="A request gets it while the bot works, then the answer. Off sends only the answer."
+                  />
+                </Switch>
                 <HStack gap={8}>
                   <Button kind="secondary" onClick={() => void store.whatsappLogout()}>{tr('Unlink')}</Button>
                 </HStack>

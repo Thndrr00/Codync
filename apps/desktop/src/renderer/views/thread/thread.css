@@ -336,6 +336,13 @@
   display: grid;
   gap: 6px;
 }
+/* What was asked for, under a picture or clip a bot made. */
+.file-message-caption {
+  max-width: 480px;
+  color: var(--text);
+  font-size: var(--conversation);
+  line-height: 1.5;
+}
 .user-status-error {
   margin-right: 4px;
 }

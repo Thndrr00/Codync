@@ -19,22 +19,22 @@ test('typing / lists the bot\'s commands, and the keyboard moves, picks and hide
     botId = bot.id
     await page.locator('.roster-row', { hasText: name }).click()
 
-    // Fast mode first, then the bot's skill.
+    // Fast mode first, then the bot's skill, then the tool commands.
     await field.fill('/')
-    await expect(rows).toHaveCount(2)
+    await expect(rows).toHaveCount(6)
     await expect(rows.nth(0)).toContainText('Fast mode')
     await expect(rows.nth(1)).toContainText('Checks the list')
+    await expect(rows.nth(2)).toContainText('Image')
+    await expect(rows.nth(3)).toContainText('Video')
     // The outline every floating layer has.
     expect(await page.locator('.composer-menu').evaluate((el) => getComputedStyle(el, '::after').borderTopWidth)).toBe('1px')
 
     // ↑/↓ move the highlight, wrapping around the ends.
     await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true')
-    await field.press('ArrowDown')
-    await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true')
+    await field.press('ArrowUp')
+    await expect(rows.nth(5)).toHaveAttribute('aria-selected', 'true')
     await field.press('ArrowDown')
     await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true')
-    await field.press('ArrowUp')
-    await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true')
 
     // Off the end of the draft, they move the caret and leave the highlight.
     await field.press('Home')
@@ -56,13 +56,13 @@ test('typing / lists the bot\'s commands, and the keyboard moves, picks and hide
 
     // Escape hides the list and leaves the draft, until the draft changes.
     await field.fill('/')
-    await expect(rows).toHaveCount(2)
+    await expect(rows).toHaveCount(6)
     await field.press('Escape')
     await expect(list).toHaveCount(0)
     await expect(field).toHaveValue('/')
     await field.fill('')
     await field.fill('/')
-    await expect(rows).toHaveCount(2)
+    await expect(rows).toHaveCount(6)
 
     // Return runs Fast mode here: the box empties and the row now offers the opposite.
     await field.fill('/fa')

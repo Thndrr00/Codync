@@ -5,7 +5,7 @@ import { Icon } from '../../../components/Icon'
 import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
-import { routineTint, statusLabel, type FlowNode, type FlowRoutineCard, type FlowStep, type StepStatus } from '../../../lib/routine-flow.ts'
+import { routineTint, statusLabel, mediaTitle, type FlowMedia, type FlowNode, type FlowRoutineCard, type FlowStep, type StepStatus } from '../../../lib/routine-flow.ts'
 
 const STATUS_ICON: Record<StepStatus, string> = {
   running: 'arrow.triangle.2.circlepath',
@@ -81,6 +81,8 @@ interface Props {
   y: number
   bot?: Bot
   routine?: FlowRoutineCard
+  /** The picture or clip step this card stands for. */
+  media?: FlowMedia | null
   step: FlowStep | null
   unconnected: boolean
   selected: boolean
@@ -94,10 +96,11 @@ interface Props {
   onRun?: () => void
 }
 
-/** One node of the canvas: a routine with its week and last runs, or a bot with its latest step. */
-export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun }: Props) {
+/** One node of the canvas: a routine with its week and last runs, a bot with its latest step, or a step that makes a picture or a clip. */
+export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun }: Props) {
   const tr = useTr()
-  const title = node.kind === 'routine' ? (routine?.routine.name ?? '') : (bot?.name ?? tr('Unknown bot'))
+  const title = node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : (bot?.name ?? tr('Unknown bot'))
+  const kindName = node.kind === 'routine' ? tr('Routine') : node.kind === 'media' ? tr(media?.kind === 'video' ? 'Clip step' : 'Picture step') : tr('Bot')
   return (
     <div
       className="flow-node"
@@ -106,7 +109,7 @@ export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, sele
       data-target={connectTarget}
       role="button"
       tabIndex={0}
-      aria-label={`${tr(node.kind === 'routine' ? 'Routine' : 'Bot')}: ${title}`}
+      aria-label={`${kindName}: ${title}`}
       aria-pressed={selected}
       style={{ transform: `translate(${x}px, ${y}px)`, ...(node.kind === 'routine' ? { '--flow-tint': routineTint(node.id) } as CSSProperties : {}) }}
       onPointerDown={(event) => {
@@ -118,6 +121,8 @@ export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, sele
       <HStack gap={10} align="center" className="flow-node-head">
         {node.kind === 'routine' ? (
           <Icon name="clock.arrow.circlepath" size={26} />
+        ) : node.kind === 'media' ? (
+          <Icon name={media?.kind === 'video' ? 'film' : 'sparkles'} size={24} />
         ) : bot ? (
           <BotAvatar bot={bot} size={30} animated={false} />
         ) : (
@@ -127,6 +132,8 @@ export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, sele
           <Text weight="semibold" truncate>{title}</Text>
           {node.kind === 'bot' ? (
             <Text size="caption" tone="secondary" truncate>{bot?.model || bot?.backend || ''}</Text>
+          ) : node.kind === 'media' ? (
+            <Text size="caption" tone="secondary" truncate>{tr(media?.kind === 'video' ? 'Clip' : 'Picture')}</Text>
           ) : (
             <Text size="caption" tone="secondary" truncate>{routine?.routine.triggerDescriptions.join(' · ')}</Text>
           )}
@@ -161,12 +168,12 @@ export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, sele
       ) : (
         <StatusChip status={step?.status ?? null} />
       )}
-      {node.kind === 'bot' ? (
+      {node.kind !== 'routine' ? (
         <button
           type="button"
           className="flow-port"
-          title={tr('Drag to another bot to hand its reply on')}
-          aria-label={tr('Connect from this bot')}
+          title={tr(node.kind === 'media' ? 'Drag to another bot or step to hand its file on' : 'Drag to another bot to hand its reply on')}
+          aria-label={tr('Connect from this step')}
           disabled={disabled}
           onPointerDown={(event) => {
             event.stopPropagation()

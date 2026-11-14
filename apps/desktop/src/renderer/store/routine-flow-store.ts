@@ -1,6 +1,7 @@
+import type { MediaKind } from '@shared/media'
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
-import { clampCoordinate, type FlowCanvas, type FlowLink } from '../lib/routine-flow.ts'
+import { clampCoordinate, type FlowCanvas, type FlowLink, type FlowMedia } from '../lib/routine-flow.ts'
 
 /** What a view needs after a move: the node's new place, shown at once and saved on the host. */
 type Client = () => Promise<Pick<HostClient, 'call'>>
@@ -114,6 +115,21 @@ export class RoutineFlowStore extends Observable {
 
   async disconnect(linkId: string) {
     await this.change('disconnectRoutineFlow', { linkId })
+  }
+
+  /** Adds a picture or clip step to a routine, at its model's first settings. */
+  async addMedia(routineId: string, kind: MediaKind): Promise<FlowMedia | null> {
+    const answer = await this.change<{ media: FlowMedia }>('addRoutineFlowMedia', { routineId, kind })
+    return answer?.media ?? null
+  }
+
+  /** Saves a step's description, model and settings. */
+  async updateMedia(mediaId: string, settings: object) {
+    await this.change('updateRoutineFlowMedia', { mediaId, ...settings })
+  }
+
+  async removeMedia(mediaId: string) {
+    await this.change('removeRoutineFlowMedia', { mediaId })
   }
 
   /** Starts the flow with a sample reply, without running the routine. */

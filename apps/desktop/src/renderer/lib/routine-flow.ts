@@ -2,7 +2,10 @@
 // it validates every change and runs the flow. This file only shapes what the canvas shows: node
 // positions (saved, else automatic columns), edges, the list that mirrors the canvas, and a
 // pre-check of the connect rules so a drop that the host would refuse never leaves the app.
+// Media nodes follow OpenBot 0.70.0 `packages/ui/src/features/workflows/WorkflowImageNode.tsx`
+// (a step that makes a file is a node like any other, linked to the steps around it).
 
+import type { MediaKind } from '@shared/media'
 import type { Routine, RoutineRun } from '../views/routines/routine'
 
 export type StepStatus = 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'
@@ -32,6 +35,23 @@ export interface FlowStep {
   updatedAt: number
 }
 
+export interface FlowMedia {
+  id: string
+  kind: MediaKind
+  model: string
+  prompt: string
+  aspect: string
+  /** Seconds; only a video uses it. */
+  duration: number
+  /** Only a video uses it. */
+  resolution: string
+  transparent: boolean
+  voice: string | null
+  createdAt: number
+  /** The routine the step belongs to. */
+  routineId: string
+}
+
 export interface FlowPosition {
   nodeKey: string
   x: number
@@ -54,6 +74,8 @@ export interface FlowCanvas {
   links: FlowLink[]
   positions: FlowPosition[]
   placedBotIds: string[]
+  /** The picture and clip steps of these routines (host/src/store/flow_media.rs). */
+  mediaNodes: FlowMedia[]
 }
 
 /** The host's limit on how far a flow reaches from its routine's bot. */
@@ -74,11 +96,33 @@ export function routineTint(id: string): string {
 
 export const routineKey = (id: string) => `routine:${id}`
 export const botKey = (id: string) => `bot:${id}`
+export const mediaKey = (id: string) => `media:${id}`
+
+/** The canvas key of a link's end, which names a bot or a `media:` step. */
+export const flowKey = (id: string) => (id.startsWith('media:') ? mediaKey(id.slice(6)) : botKey(id))
+
+/** The media step a link end names, if it is one. */
+export function mediaEnd(id: string): string | null {
+  return id.startsWith('media:') ? id.slice(6) : null
+}
+
+/** The media step of this canvas a node id stands for. */
+export function mediaOf(canvas: FlowCanvas, id: string): FlowMedia | null {
+  const own = mediaEnd(id)
+  return own === null ? null : (canvas.mediaNodes.find((media) => media.id === own) ?? null)
+}
+
+/** What a media node is called: its own description, else its kind. */
+export function mediaTitle(media: FlowMedia | null): string {
+  const prompt = media?.prompt.trim()
+  if (prompt) return prompt
+  return media?.kind === 'video' ? 'Video' : 'Picture'
+}
 
 export interface FlowNode {
   key: string
-  kind: 'routine' | 'bot'
-  /** The routine's or the bot's id. */
+  kind: 'routine' | 'bot' | 'media'
+  /** The routine's, the bot's or the media step's id (`media:` steps keep their prefix). */
   id: string
   x: number
   y: number
@@ -147,39 +191,45 @@ export function connectProblem(canvas: FlowCanvas, routineId: string, from: stri
   const links = canvas.links.filter((link) => link.routineId === routineId)
   if (from === to) return "A bot can't hand work to itself."
   if (to === owner) return "The routine's own bot starts the flow, so nothing can hand work back to it."
+  const media = mediaOf(canvas, to)
+  if (media && media.routineId !== routineId) return 'That step is not part of this routine.'
   const reached = depths(owner, links)
   const here = reached.get(from)
   if (here === undefined) return "The flow doesn't reach that bot yet: connect it from the routine's bot first."
+  if (!media && !canvasBotIds(canvas).includes(to)) return 'That bot is not on this canvas.'
   if (links.some((link) => link.fromBotId === from && link.toBotId === to)) return 'These two bots are already connected in this routine.'
   if (reaches(links, to, from)) return 'That link would make the flow loop.'
   if (here + 1 + longestFrom(links, to) > maxDepth) return `A flow reaches at most ${maxDepth} bots deep.`
   return null
 }
 
-/** The bots a canvas shows: the canvas's own, every routine's bot, every link's ends and the bots placed by hand. */
+/** The bots a canvas shows: the canvas's own, every routine's bot, every link's bot ends and the bots placed by hand. */
 export function canvasBotIds(canvas: FlowCanvas): string[] {
   const ids = new Set<string>([canvas.botId])
-  for (const card of canvas.routines) ids.add(card.routine.botId)
-  for (const link of canvas.links) {
-    ids.add(link.fromBotId)
-    ids.add(link.toBotId)
+  const add = (id: string) => {
+    if (!id.startsWith('media:')) ids.add(id)
   }
-  for (const id of canvas.placedBotIds) ids.add(id)
+  for (const card of canvas.routines) add(card.routine.botId)
+  for (const link of canvas.links) {
+    add(link.fromBotId)
+    add(link.toBotId)
+  }
+  for (const id of canvas.placedBotIds) add(id)
   return [...ids]
 }
 
 /**
  * Every node with its place: the saved one, else an automatic column. Routines stand in the first
- * column; a bot goes one column right of the deepest routine flow that reaches it, bots no flow
- * reaches (placed by hand without a link) in the last column. A node never moved keeps its column
- * as the canvas grows, so the layout is stable.
+ * column; a bot or a media step goes one column right of the deepest routine flow that reaches it,
+ * nodes no flow reaches (placed by hand without a link) in the last column. A node never moved
+ * keeps its column as the canvas grows, so the layout is stable.
  */
 export function layoutNodes(canvas: FlowCanvas): FlowNode[] {
   const saved = new Map(canvas.positions.map((p) => [p.nodeKey, p]))
   const column = new Map<string, number>()
   for (const card of canvas.routines) {
     const reached = depths(card.routine.botId, canvas.links.filter((l) => l.routineId === card.routine.id))
-    for (const [bot, depth] of reached) column.set(bot, Math.max(column.get(bot) ?? 0, depth + 1))
+    for (const [node, depth] of reached) column.set(node, Math.max(column.get(node) ?? 0, depth + 1))
   }
   const lastColumn = Math.max(1, ...column.values()) + 1
   const rows = new Map<number, number>()
@@ -193,13 +243,17 @@ export function layoutNodes(canvas: FlowCanvas): FlowNode[] {
   }
   const nodes = canvas.routines.map((card) => place(routineKey(card.routine.id), 'routine', card.routine.id, 0))
   for (const id of canvasBotIds(canvas)) nodes.push(place(botKey(id), 'bot', id, column.get(id) ?? lastColumn))
+  for (const media of canvas.mediaNodes) {
+    const id = mediaKey(media.id)
+    nodes.push(place(id, 'media', id, column.get(id) ?? lastColumn))
+  }
   return nodes
 }
 
-/** Each routine's fixed edge to its bot, then the links. */
+/** Each routine's fixed edge to its bot, then the links (whose ends are bots or media steps). */
 export function flowEdges(canvas: FlowCanvas): FlowEdge[] {
   const starts = canvas.routines.map((card) => ({ id: `start:${card.routine.id}`, from: routineKey(card.routine.id), to: botKey(card.routine.botId), linkId: null }))
-  return [...starts, ...canvas.links.map((link) => ({ id: link.id, from: botKey(link.fromBotId), to: botKey(link.toBotId), linkId: link.id }))]
+  return [...starts, ...canvas.links.map((link) => ({ id: link.id, from: flowKey(link.fromBotId), to: flowKey(link.toBotId), linkId: link.id }))]
 }
 
 /** The latest step the canvas holds for a bot, across its routines. */
@@ -217,11 +271,14 @@ export function stepOf(card: FlowRoutineCard, botId: string): FlowStep | null {
   return card.steps.find((step) => step.botId === botId) ?? null
 }
 
-/** One line of the list that mirrors the canvas: a routine, or a bot under the bot that hands to it. */
+/** One line of the list that mirrors the canvas: a routine, or a bot or media step under the step that hands to it. */
 export interface FlowRow {
   key: string
   routineId: string
-  botId: string
+  /** The bot id, or the `media:` step id. */
+  nodeId: string
+  kind: 'bot' | 'media'
+  media: FlowMedia | null
   depth: number
   link: FlowLink | null
   step: FlowStep | null
@@ -234,10 +291,20 @@ export function flowRows(canvas: FlowCanvas): FlowRow[] {
   const rows: FlowRow[] = []
   for (const card of canvas.routines) {
     const links = canvas.links.filter((l) => l.routineId === card.routine.id)
-    const walk = (botId: string, depth: number, link: FlowLink | null, path: readonly string[]) => {
-      if (rows.length >= MAX_ROWS || path.includes(botId)) return
-      rows.push({ key: `${card.routine.id}/${link?.id ?? 'start'}`, routineId: card.routine.id, botId, depth, link, step: stepOf(card, botId) })
-      for (const next of links.filter((l) => l.fromBotId === botId)) walk(next.toBotId, depth + 1, next, [...path, botId])
+    const walk = (nodeId: string, depth: number, link: FlowLink | null, path: readonly string[]) => {
+      if (rows.length >= MAX_ROWS || path.includes(nodeId)) return
+      const media = mediaOf(canvas, nodeId)
+      rows.push({
+        key: `${card.routine.id}/${link?.id ?? 'start'}`,
+        routineId: card.routine.id,
+        nodeId,
+        kind: media ? 'media' : 'bot',
+        media,
+        depth,
+        link,
+        step: stepOf(card, nodeId),
+      })
+      for (const next of links.filter((l) => l.fromBotId === nodeId)) walk(next.toBotId, depth + 1, next, [...path, nodeId])
     }
     walk(card.routine.botId, 0, null, [])
   }

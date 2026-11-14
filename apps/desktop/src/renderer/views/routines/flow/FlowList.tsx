@@ -3,7 +3,7 @@ import type { Bot } from '@shared/models'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
-import { botKey, flowRows, isUnconnected, routineKey, statusLabel, type FlowCanvas } from '../../../lib/routine-flow.ts'
+import { flowKey, flowRows, isUnconnected, mediaTitle, routineKey, statusLabel, type FlowCanvas, type FlowMedia } from '../../../lib/routine-flow.ts'
 import type { FlowSelection } from './FlowCanvas'
 import { StatusChip } from './FlowNodeCard'
 
@@ -20,7 +20,7 @@ export function FlowList({ canvas, bots, selection, onSelect }: {
 }) {
   const tr = useTr()
   const rows = flowRows(canvas)
-  const name = (id: string) => bots.get(id)?.name ?? tr('Unknown bot')
+  const name = (id: string, media: FlowMedia | null) => (media ? tr(mediaTitle(media)) : (bots.get(id)?.name ?? tr('Unknown bot')))
   const walk = (event: KeyboardEvent) => {
     const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
     if (!step) return
@@ -48,13 +48,13 @@ export function FlowList({ canvas, bots, selection, onSelect }: {
               key={row.key}
               data-row
               className="flow-row"
-              data-selected={row.link ? selection?.kind === 'edge' && selection.id === row.link.id : selection?.kind === 'node' && selection.key === botKey(row.botId)}
-              aria-label={`${name(row.botId)}, ${tr(statusLabel(row.step?.status ?? null))}`}
+              data-selected={row.link ? selection?.kind === 'edge' && selection.id === row.link.id : selection?.kind === 'node' && selection.key === flowKey(row.nodeId)}
+              aria-label={`${name(row.nodeId, row.media)}, ${tr(statusLabel(row.step?.status ?? null))}`}
               onKeyDown={walk}
-              onClick={() => onSelect(row.link ? { kind: 'edge', id: row.link.id } : { kind: 'node', key: botKey(row.botId) })}
+              onClick={() => onSelect(row.link ? { kind: 'edge', id: row.link.id } : { kind: 'node', key: flowKey(row.nodeId) })}
             >
               <HStack gap={8} shrink className="flow-row-indent" data-depth={row.depth}>
-                <Text truncate>{row.depth > 0 ? '→ ' : ''}{name(row.botId)}</Text>
+                <Text truncate>{row.depth > 0 ? '→ ' : ''}{name(row.nodeId, row.media)}</Text>
                 {row.link?.instruction ? <Text size="caption" tone="secondary" truncate>{row.link.instruction}</Text> : null}
               </HStack>
               <Spacer />

@@ -3,7 +3,7 @@ import type { Bot } from '@shared/models'
 import { IconButton } from '../../../components/Controls'
 import { useTr } from '../../../lib/use-language'
 import {
-  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, flowEdges, isUnconnected, latestStep, layoutNodes, nodeAt, stepOf, zoomAt,
+  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, flowEdges, isUnconnected, latestStep, layoutNodes, mediaOf, nodeAt, stepOf, zoomAt,
   type FlowCanvas, type FlowNode, type View,
 } from '../../../lib/routine-flow.ts'
 import { FlowNodeCard } from './FlowNodeCard'
@@ -17,7 +17,7 @@ interface Props {
   disabled: boolean
   onSelect: (selection: FlowSelection) => void
   onMove: (nodeKey: string, x: number, y: number) => void
-  /** A bot's connection was dropped on another bot. */
+  /** A step's connection was dropped on another bot or media step. */
   onConnect: (fromBotId: string, toBotId: string, at: { x: number; y: number }) => void
   /** Runs this routine's flow now, from its card. */
   onRun: (routineId: string) => void
@@ -181,7 +181,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         setWire(null)
         const p = toCanvas(e.clientX, e.clientY)
         const target = nodeAt(nodes, p.x, p.y)
-        if (target && target.kind === 'bot' && target.id !== node.id) onConnect(node.id, target.id, { x: e.clientX, y: e.clientY })
+        if (target && target.kind !== 'routine' && target.id !== node.id) onConnect(node.id, target.id, { x: e.clientX, y: e.clientY })
       },
     )
   }
@@ -201,7 +201,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
 
   const placed = (node: FlowNode) => (live && live.key === node.key ? { ...node, x: live.x, y: live.y } : node)
   const byKey = new Map(nodes.map((n) => [n.key, placed(n)]))
-  const wireFrom = wire ? [...byKey.values()].find((n) => n.kind === 'bot' && n.id === wire.from) : null
+  const wireFrom = wire ? [...byKey.values()].find((n) => n.kind !== 'routine' && n.id === wire.from) : null
   const hovered = wire ? nodeAt([...byKey.values()], wire.x, wire.y) : null
   const zoom = (factor: number) => {
     const box = size()
@@ -234,7 +234,8 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
         {nodes.map((raw) => {
           const node = placed(raw)
           const card = raw.kind === 'routine' ? canvas.routines.find((c) => c.routine.id === raw.id) : undefined
-          const step = raw.kind === 'bot' ? latestStep(canvas, raw.id) : null
+          const media = raw.kind === 'media' ? mediaOf(canvas, raw.id) : null
+          const step = raw.kind === 'routine' ? null : latestStep(canvas, raw.id)
           return (
             <FlowNodeCard
               key={raw.key}
@@ -243,10 +244,11 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               y={node.y}
               bot={bots.get(raw.id)}
               routine={card}
+              media={media}
               step={card ? stepOf(card, card.routine.botId) : step}
               unconnected={card ? isUnconnected(canvas, card.routine.id) : false}
               selected={selection?.kind === 'node' && selection.key === raw.key}
-              connectTarget={hovered?.key === raw.key && raw.kind === 'bot' && raw.id !== wire?.from}
+              connectTarget={hovered?.key === raw.key && raw.kind !== 'routine' && raw.id !== wire?.from}
               disabled={disabled}
               onSelect={() => onSelect({ kind: 'node', key: raw.key })}
               onDragStart={(e) => startDrag(raw, e)}

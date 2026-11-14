@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  NODE_WIDTH, botKey, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, layoutNodes, nodeAt, routineKey, zoomAt,
-  type FlowCanvas, type FlowLink, type FlowStep,
+  NODE_WIDTH, botKey, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, layoutNodes, mediaKey, mediaTitle, nodeAt,
+  routineKey, zoomAt, type FlowCanvas, type FlowLink, type FlowMedia, type FlowStep,
 } from './routine-flow.ts'
 
 const link = (from: string, to: string, extra: Partial<FlowLink> = {}): FlowLink =>
@@ -13,7 +13,7 @@ const step = (botId: string, status: FlowStep['status'], updatedAt = 1): FlowSte
 
 function canvas(links: FlowLink[], extra: Partial<FlowCanvas> = {}, steps: FlowStep[] = []): FlowCanvas {
   const routine = { id: 'r', botId: 'a', name: 'Digest', instruction: '', triggers: [], enabled: true, createdAt: 0, updatedAt: 0, triggerDescriptions: [] }
-  return { botId: 'a', rev: 1, routines: [{ routine, recentRuns: [], upcomingRuns: [], steps }], links, positions: [], placedBotIds: [], ...extra }
+  return { botId: 'a', rev: 1, routines: [{ routine, recentRuns: [], upcomingRuns: [], steps }], links, positions: [], placedBotIds: [], mediaNodes: [], ...extra }
 }
 
 test('depth is the longest path from the routine bot, and a bot not reached is absent', () => {
@@ -22,7 +22,7 @@ test('depth is the longest path from the routine bot, and a bot not reached is a
 })
 
 test('the connect rules are the host\'s', () => {
-  const c = canvas([link('a', 'b'), link('b', 'c')])
+  const c = canvas([link('a', 'b'), link('b', 'c')], { placedBotIds: ['d'] })
   assert.match(connectProblem(c, 'r', 'b', 'b') ?? '', /itself/)
   assert.match(connectProblem(c, 'r', 'c', 'a') ?? '', /own bot starts/)
   assert.match(connectProblem(c, 'r', 'x', 'd') ?? '', /doesn't reach/)
@@ -59,12 +59,12 @@ test('edges: each routine to its bot, then one per link', () => {
 test('the list mirrors the canvas depth first with the latest step of each bot', () => {
   const c = canvas([link('a', 'b'), link('b', 'c'), link('a', 'd')], {}, [step('a', 'succeeded'), step('b', 'failed'), step('c', 'skipped')])
   const rows = flowRows(c)
-  assert.deepEqual(rows.map((r) => [r.botId, r.depth, r.step?.status ?? null]), [['a', 0, 'succeeded'], ['b', 1, 'failed'], ['c', 2, 'skipped'], ['d', 1, null]])
+  assert.deepEqual(rows.map((r) => [r.nodeId, r.depth, r.step?.status ?? null]), [['a', 0, 'succeeded'], ['b', 1, 'failed'], ['c', 2, 'skipped'], ['d', 1, null]])
 })
 
 test('a loop in the links can\'t run the list away', () => {
   const rows = flowRows(canvas([link('a', 'b'), link('b', 'a')]))
-  assert.deepEqual(rows.map((r) => r.botId), ['a', 'b'])
+  assert.deepEqual(rows.map((r) => r.nodeId), ['a', 'b'])
 })
 
 test('zoom keeps the point under the pointer still and stays within its bounds', () => {
@@ -88,4 +88,39 @@ test('edges leave the right side and a drop finds the card under it', () => {
   assert.match(edgePath(from, to), /^M \S+ \S+ C /)
   assert.equal(nodeAt([from, to], from.x + 5, from.y + 5)?.key, from.key)
   assert.equal(nodeAt([from, to], -999, -999), null)
+})
+
+const media = (id: string, kind: FlowMedia['kind'] = 'image', extra: Partial<FlowMedia> = {}): FlowMedia =>
+  ({ id, kind, model: 'gpt-image', prompt: '', aspect: '1:1', duration: 4, resolution: '720p', transparent: false, voice: null, createdAt: 1, routineId: 'r', ...extra })
+
+test('a media step is a node of its own, one column after the step that reaches it', () => {
+  const c = canvas([link('a', `media:m1`), link('a', 'b')], { mediaNodes: [media('m1'), media('m2', 'video', { routineId: 'other' })] })
+  const nodes = new Map(layoutNodes(c).map((n) => [n.key, n]))
+  const bot = nodes.get(botKey('a'))!
+  assert.equal(nodes.get(mediaKey('m1'))!.kind, 'media')
+  assert.ok(nodes.get(mediaKey('m1'))!.x > bot.x, 'a handed-on step follows the step before it')
+  assert.ok(nodes.get(mediaKey('m2'))!.x > bot.x, 'a step no flow reaches still has a place')
+  assert.deepEqual(flowEdges(c).map((e) => [e.from, e.to]), [[routineKey('r'), botKey('a')], [botKey('a'), mediaKey('m1')], [botKey('a'), botKey('b')]])
+})
+
+test('a media step stands in the connect rules like a bot, but only in its own routine', () => {
+  const c = canvas([link('a', 'b')], { mediaNodes: [media('m1'), media('m2'), media('m3', 'video', { routineId: 'other' })] })
+  assert.equal(connectProblem(c, 'r', 'a', 'media:m1'), null)
+  assert.equal(connectProblem(c, 'r', 'a', 'media:m2'), null, 'a join on a second path is fine')
+  assert.match(connectProblem(c, 'r', 'a', 'media:m3') ?? '', /not part of this routine/)
+  assert.match(connectProblem(c, 'nope', 'a', 'media:m1') ?? '', /not on this canvas/)
+  const looped = canvas([link('a', 'media:m1'), link('media:m1', 'b')], { mediaNodes: [media('m1')], placedBotIds: ['c'] })
+  assert.match(connectProblem(looped, 'r', 'b', 'media:m1') ?? '', /loop/)
+  assert.match(connectProblem(looped, 'r', 'media:m1', 'b') ?? '', /already connected/)
+  assert.equal(connectProblem(looped, 'r', 'media:m1', 'c'), null)
+})
+
+test('the list shows a media step under the step that hands to it', () => {
+  const c = canvas([link('a', 'media:m1'), link('media:m1', 'b')], { mediaNodes: [media('m1', 'image', { prompt: 'A red fox' })] },
+    [step('media:m1', 'succeeded')])
+  const rows = flowRows(c)
+  assert.deepEqual(rows.map((r) => [r.nodeId, r.kind, r.step?.status ?? null]), [['a', 'bot', null], ['media:m1', 'media', 'succeeded'], ['b', 'bot', null]])
+  assert.equal(mediaTitle(rows[1]!.media), 'A red fox')
+  assert.equal(mediaTitle(media('m9')), 'Picture')
+  assert.equal(mediaTitle(media('m9', 'video')), 'Video')
 })

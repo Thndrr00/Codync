@@ -240,6 +240,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
           Show thinking details
         </Switch>
       </CardSection>
+      <SendingSettings />
       <CardSection title="System">
         {window.codync.platform === 'darwin' ? <Switch on={showInDock} onChange={(on) => void window.codync.app.setShowInDock(on).then(setShowInDock)}>Show in Dock</Switch> : null}
         {window.codync.island.supported ? (
@@ -266,6 +267,24 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <DemoSection />
       <HiddenBotsSection />
     </CardForm>
+  )
+}
+
+/** Whether a message sent to a working bot joins its turn or waits for the next one (the computer's choice). */
+function SendingSettings() {
+  const app = useApp()
+  const local = useModel(app.local)
+  const running = local !== null && local.connection.kind === 'online'
+  const tr = useTr()
+  return (
+    <CardSection title="Sending" footer="A message you send while a bot works joins the reply in progress. Turn this off to keep messages waiting, to steer one by hand.">
+      <SwitchRow
+        title={tr('Steer the bot while it works')}
+        on={local?.steerWhileWorking ?? true}
+        onChange={(on) => void local?.setSteerWhileWorking(on).catch((e: unknown) => app.setError(errorText(e)))}
+        disabled={!running}
+      />
+    </CardSection>
   )
 }
 

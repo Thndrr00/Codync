@@ -20,6 +20,7 @@ export class FakeHost {
   private nextReply = new Map<string, number>()
   /** Already chosen, so the demo never asks for consent. */
   private analytics = true
+  private steerWhileWorking = true
   private n8nWorkflows = [{ id: '1', name: 'Daily report', active: true }, { id: '2', name: 'New leads to the sheet', active: false }]
   private n8n: N8nState = { enabled: false, state: 'stopped', error: null, url: null, port: 5679, path: null, mcp: false, auth: null }
 
@@ -177,7 +178,7 @@ export class FakeHost {
       case 'hello':
         return {
           hostId: this.hostId, computerId: this.computer.id, signKey: '', boxKey: '', cloud: null, name: this.computer.name,
-          version: this.version, minApp: this.version, os: 'macos', device: this.computer.device, home: '/Users/demo', rev: this.rev, analytics: this.analytics,
+          version: this.version, minApp: this.version, os: 'macos', device: this.computer.device, home: '/Users/demo', rev: this.rev, analytics: this.analytics, steerWhileWorking: this.steerWhileWorking,
           n8n: this.n8n,
           urls: [], backends: [
             { id: 'claude', name: 'Claude Code', available: true, installed: true, signedIn: true, command: 'claude', installHint: '' },
@@ -318,6 +319,9 @@ export class FakeHost {
       case 'setAnalytics':
         this.analytics = b.enabled === true
         return { enabled: this.analytics }
+      case 'setSteerWhileWorking':
+        this.steerWhileWorking = b.enabled !== false
+        return { steerWhileWorking: this.steerWhileWorking }
       case 'track':
         return {}
       case 'n8nStatus':

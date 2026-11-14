@@ -402,6 +402,7 @@ export function UserBubble({ entry, reply, forward, branch }: { entry: Entry; re
             items={() => [
               { title: 'Copy', icon: 'square.on.square', action: copy },
             { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+              { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
               { title: 'Bookmark', icon: 'bookmark', action: () => void store.saveBookmark(entry.botId, entry.id, entry.data.text ?? '', '', entry.data.author ?? 'user', entry.threadId ?? null) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(branch ? [{ title: 'Branch from here', icon: 'arrow.triangle.branch', action: branch }] : []),
@@ -456,6 +457,7 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
           items={() => [
             { title: 'Copy', icon: 'square.on.square', action: copy },
               { title: 'Quote', icon: 'text.quote', action: () => quoteEntry(store, entry) },
+              { title: entry.data.pinned ? 'Unpin' : 'Pin', icon: entry.data.pinned ? 'pin.slash' : 'pin', action: () => store.setPinnedMessage(entry, !entry.data.pinned) },
               ...(reply ? [{ title: 'Reply', icon: 'arrowshape.turn.up.left', action: reply }] : []),
               ...(branch ? [{ title: 'Branch from here', icon: 'arrow.triangle.branch', action: branch }] : []),
               ...(forward ? [{ title: 'Send to a channel…', icon: 'arrowshape.turn.up.right', action: forward }] : []),
@@ -467,7 +469,11 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
           {entry.data.artifact ? (
             <ArtifactCard botId={entry.botId} card={entry.data.artifact} open={() => openArtifact?.(entry.data.artifact!.id)} />
           ) : entry.data.files?.length ? (
-            <div className="file-message-cards">{entry.data.files.map((file) => <FileDownloadCard key={file.id} entry={entry} file={file} onOpen={openFile ? () => openFile(entry, file) : undefined} />)}</div>
+            <>
+              <div className="file-message-cards">{entry.data.files.map((file) => <FileDownloadCard key={file.id} entry={entry} file={file} onOpen={openFile ? () => openFile(entry, file) : undefined} />)}</div>
+              {/* A file a media tool made keeps what was asked for under it. */}
+              {entry.data.media && entry.data.text?.trim() ? <div className="file-message-caption"><MarkdownText text={entry.data.text} /></div> : null}
+            </>
           ) : (
             <MarkdownText text={entry.data.text ?? ''} />
           )}

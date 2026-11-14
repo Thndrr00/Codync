@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { showsAsImage, type Entry, type SharedFile } from '@shared/models'
+import { showsAsImage, showsAsVideo, type Entry, type SharedFile } from '@shared/models'
 import { useStore } from '../../store/context'
 import type { DownloadState } from '../../store/file-downloads'
 import { Icon } from '../../components/Icon'
 import { IconButtonBase } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
-import { AttachmentImage, AttachmentViewer, attachmentSymbol, byteCount, type ImageSource } from './Attachments'
+import { AttachmentImage, AttachmentViewer, attachmentSymbol, byteCount, SharedVideo, type ImageSource } from './Attachments'
 import { trNow } from '../../lib/l10n.ts'
 import './attachments.css'
 
@@ -32,8 +32,11 @@ export function FileDownloadCard({ entry, file, onOpen }: { entry: Entry; file: 
   const [action, detail] = [downloadAction(state), downloadDetail(state, file)]
   const [viewing, setViewing] = useState(false)
   const image: ImageSource = { file, entryId: entry.id }
+  // A file a media tool made shows itself: the picture at size, the clip playing in place.
+  const made = entry.data.media?.kind
+  const clip = made === 'video' || showsAsVideo(file)
   return <VStack gap={12} className="file-card">
-    {showsAsImage(file) ? <>
+    {clip ? <SharedVideo file={file} entryId={entry.id} /> : showsAsImage(file) ? <>
       <button className="file-card-image" aria-label={file.name} onClick={() => setViewing(true)}>
         <AttachmentImage source={image} fit="thumbnail" />
       </button>

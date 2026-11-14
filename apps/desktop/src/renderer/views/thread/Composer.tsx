@@ -18,10 +18,12 @@ import { pluginsFor } from '../marketplace/plugins'
 import { pastedFiles, readPicked } from './composer-files'
 import { composerEnter } from './composer-keyboard'
 import { CommandMenu, MentionMenu, useComposerMenu } from './ComposerMenu'
+import { MediaSheet } from './MediaSheet'
 import { ComposerAttachment } from './ComposerAttachment'
 import { QuoteRow } from './ChatRows'
 import { insertCodeBlock, wrapInCode, type ComposerEdit } from './composer-edits'
 import { useDictation } from './dictation-platform'
+import type { MediaKind } from '@shared/media'
 import { DictationEngineMenu } from './DictationEngineMenu'
 import { mentionSuggestions, returnMentions, withMention } from './mentions'
 import { builtInCommand, returnRuns, slashCommands, slashQuery, type SlashCommand } from './slash-commands'
@@ -139,6 +141,8 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
 
   const slash = slashQuery(draft)
   const commands = slash === null ? [] : slashCommands(bot, slash, plugins.installedSkills, members)
+  // The image and video picker: which command opened it.
+  const [media, setMedia] = useState<MediaKind | null>(null)
 
   const run = (command: SlashCommand) => {
     if (!bot) return
@@ -155,6 +159,9 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
         break
       case 'skill':
         setDraft(`/${command.action.id} `)
+        break
+      case 'media':
+        setMedia(command.action.media)
         break
     }
     field.current?.focus()
@@ -355,6 +362,17 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
       <Sheet open={voiceSettings} onClose={() => setVoiceSettings(false)}>
         <VoiceChatSettingsView />
       </Sheet>
+      <MediaSheet
+        botId={botId}
+        kind={media ?? 'image'}
+        draft={draft}
+        open={media !== null}
+        onClose={() => setMedia(null)}
+        onUse={(message) => {
+          setDraft(message)
+          field.current?.focus()
+        }}
+      />
     </VStack>
   )
 }

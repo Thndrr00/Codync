@@ -27,6 +27,8 @@ import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
 import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostHealth } from '@shared/health'
+import type { MediaAnswer } from '@shared/media'
+import type { PinnedMessage } from '@shared/pins'
 import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
@@ -217,6 +219,11 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('stop', { botId }), true)
   }
 
+  /** The images and videos this bot's agent can make, for the composer's picker (`mediaModels`). */
+  mediaModels(botId: string): Promise<MediaAnswer> {
+    return this.withLink((c) => c.call<MediaAnswer>('mediaModels', { botId }))
+  }
+
   /** Interrupts every bot on this computer that is working or waiting on the user. */
   stopAll() {
     this.perform((c) => c.call('stopAll', {}), true)
@@ -288,6 +295,18 @@ export class BotStore extends BotSync {
     this.changed()
   }
 
+  /** Whether a message to a working bot joins its turn (on unless the owner chose Queue). */
+  get steerWhileWorking() {
+    return this.hello?.steerWhileWorking !== false
+  }
+
+  /** Saves that choice for the whole computer; a message still only steers while the bot works. */
+  async setSteerWhileWorking(on: boolean) {
+    const res = await (await this.ready()).call<{ steerWhileWorking: boolean }>('setSteerWhileWorking', { enabled: on })
+    if (this.hello) this.hello = { ...this.hello, steerWhileWorking: res.steerWhileWorking }
+    this.changed()
+  }
+
   /** Toggles the user's reaction; shown at once, then replaced by the host's copy. */
   react(entry: Entry, emoji: string) {
     const list = this.entries.get(entry.botId)
@@ -308,7 +327,31 @@ export class BotStore extends BotSync {
     })
   }
 
-  /** A card's button: `entry` shows `choice` as answering (its spinner) while `op` runs. */
+  /** Pins or unpins a message; the pin shows at once, then the host's copy replaces it. */
+  setPinnedMessage(entry: Pick<Entry, 'id' | 'botId'>, pinned: boolean) {
+    const list = this.entries.get(entry.botId)
+    const i = list?.findIndex((e) => e.id === entry.id) ?? -1
+    if (list && i >= 0) {
+      const data = { ...list[i]!.data }
+      if (pinned) data.pinned = { by: { kind: 'person', device: null }, at: Date.now() }
+      else delete data.pinned
+      const next = [...list]
+      next[i] = { ...next[i]!, data }
+      this.entries.set(entry.botId, next)
+      this.changed()
+    }
+    void this.perform(async (c) => {
+      const res = await c.call<{ entry: Entry }>('pinMessage', { botId: entry.botId, messageId: entry.id, pinned })
+      this.upsert(res.entry)
+      this.changed()
+    })
+  }
+
+  /** The bot's pins, newest first, across its chats (`pinnedMessages`). */
+  pinnedMessages(botId: string): Promise<{ pins: PinnedMessage[] }> {
+    return this.withLink((c) => c.call<{ pins: PinnedMessage[] }>('pinnedMessages', { botId }))
+  }
+
   private answer(entry: Entry, choice: string, op: (c: HostClient) => Promise<unknown>) {
     if (this.answering.has(entry.id)) return
     this.answering.set(entry.id, choice)
@@ -525,6 +568,11 @@ export class BotStore extends BotSync {
     this.patchBot(bot, { hidden })
   }
 
+  /** Mutes the bot's notifications for everyone at this computer, or gives them back. */
+  setMuted(bot: Bot, muted: boolean) {
+    this.patchBot(bot, { notify: muted ? false : null })
+  }
+
   setFastMode(bot: Bot, fastMode: boolean) {
     this.patchBot(bot, { fastMode })
   }
@@ -716,6 +764,12 @@ export class BotStore extends BotSync {
   }
   async whatsappLogout() { return (await this.ready()).call('whatsappLogout') }
   async whatsappSetBot(botId: string | null) { return this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), bot: botId }, await (await this.ready()).call('whatsappSetBot', { botId: botId ?? '' }), this.changed() }
+  /** Whether a request gets the "Working on it…" line before its answer (on unless turned off). */
+  async whatsappSetWorkingMessage(on: boolean) {
+    const result = await (await this.ready()).call<{ workingMessage: boolean }>('whatsappSetWorkingMessage', { enabled: on })
+    this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), workingMessage: result.workingMessage }
+    this.changed()
+  }
   /** Lets a chat or person write, or takes them out; an empty list lets anyone in. */
   async whatsappSetAllowed(jid: string, allowed: boolean) {
     const result = await (await this.ready()).call<{ allowed: string[] }>('whatsappSetAllowed', { jid, allowed })

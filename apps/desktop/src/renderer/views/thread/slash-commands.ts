@@ -1,17 +1,21 @@
 // The composer's `/` commands, listed while the draft is just `/partial`: Fast mode runs here
 // through the host's `updateBot` (a new session is in the bot's menu); a skill fills in `/<id> `, and the host turns that message into "read this skill first"
-// (host/src/market/skills.rs `expand_command`). A group lists its members' commands: Fast mode
-// for all of them, and every skill one of them has. docs/features/marketplace.md, "Commands".
+// (host/src/market/skills.rs `expand_command`); `/image` and `/video` open the media picker, which
+// writes the command and its flags. A group lists its members' commands: Fast mode for all of them,
+// and every skill one of them has. docs/features/marketplace.md, "Commands", docs/features/media.md.
 import { fastModeDetail, fastModeShown, fastModeState, groupFastMode, type FastModeState } from '../../../shared/fast-mode.ts'
+import { mediaBot, type MediaKind } from '../../../shared/media.ts'
 import type { Bot } from '../../../shared/models.ts'
 
-/** The tools every bot can be asked to work with: `/n8n …` and `/comfy …`. The host adds a note and the bot uses the tool's own tools (host/src/chat/tool_commands.rs). */
+/** The tools every bot can be asked to work with: `/image …`, `/video …`, `/n8n …` and `/comfy …`. The host adds a note and the bot uses the tool's own tools (host/src/chat/tool_commands.rs, host/src/media). */
 const TOOL_COMMANDS = [
+  { name: 'image', icon: 'sparkles', title: 'Image', detail: "Make an image with your agent's subscription" },
+  { name: 'video', icon: 'film', title: 'Video', detail: "Make a short video with your agent's subscription" },
   { name: 'n8n', icon: 'point.3.connected.trianglepath.dotted', title: 'n8n', detail: "Do it with the computer's n8n workflows" },
   { name: 'comfy', icon: 'photo', title: 'ComfyUI', detail: 'Make an image with ComfyUI' },
-]
+] as const
 
-export type SlashAction = { kind: 'fast' } | { kind: 'skill'; id: string }
+export type SlashAction = { kind: 'fast' } | { kind: 'skill'; id: string } | { kind: 'media'; media: MediaKind }
 
 export interface SlashCommand {
   /** What follows the `/`. */
@@ -49,16 +53,29 @@ export function slashCommands(bot: Bot | null, query: string, installedSkills: {
   const skills = installedSkills
     .filter((s) => enabled.includes(s.id))
     .map((s): SlashCommand => ({ name: s.id, icon: 'book.pages', title: s.name, detail: s.description, warning: false, action: { kind: 'skill', id: s.id } }))
-  // A skill with the same id keeps the name: the host expands the skill first.
-  const tools = TOOL_COMMANDS.filter((t) => !skills.some((s) => s.name === t.name)).map((t): SlashCommand => ({ ...t, warning: false, action: { kind: 'skill', id: t.name } }))
+  // A skill with the same id keeps the name: the host expands the skill first. A group has no agent of its own.
+  const tools = TOOL_COMMANDS.filter((t) => !skills.some((s) => s.name === t.name) && ((t.name !== 'image' && t.name !== 'video') || !!mediaBot(bot))).map((t): SlashCommand =>
+    t.name === 'image' || t.name === 'video'
+      ? { ...t, warning: false, action: { kind: 'media', media: t.name } }
+      : { ...t, warning: false, action: { kind: 'skill', id: t.name } })
   const q = query.toLowerCase()
   return [...builtIn(bot, members), ...skills, ...tools].filter((c) => c.name.includes(q) || c.title.toLowerCase().includes(q))
 }
 
-/** A draft that is just a built-in command (`/fast`): sending it runs the command. */
+/**
+ * A draft that is just a built-in command (`/fast`): sending it runs the command. A bare `/image` or
+ * `/video` opens the picker, unless a skill of that name is on (the host expands the skill first).
+ */
 export function builtInCommand(bot: Bot | null, draft: string, members: Bot[] = []): SlashCommand | null {
   const name = slashQuery(draft.trim())
-  return bot && name !== null ? (builtIn(bot, members).find((c) => c.name === name) ?? null) : null
+  if (!bot || name === null) return null
+  const picked = builtIn(bot, members).find((c) => c.name === name)
+  if (picked) return picked
+  if ((bot.kind === 'group' ? members.flatMap((m) => m.skills) : bot.skills).includes(name)) return null
+  if (!mediaBot(bot)) return null
+  const media = TOOL_COMMANDS.find((t) => t.name === name)
+  if (!media || (media.name !== 'image' && media.name !== 'video')) return null
+  return { name: media.name, icon: media.icon, title: media.title, detail: media.detail, warning: false, action: { kind: 'media', media: media.name } }
 }
 
 /**

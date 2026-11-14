@@ -1,6 +1,7 @@
 import type { ApprovalRule } from './approval-rules'
 import type { ArtifactCard } from './artifacts'
 import type { CallLine } from './calls'
+import type { Pinner } from './pins'
 import { isInternalEntry } from './entry-visibility.ts'
 export { isInternalEntry } from './entry-visibility.ts'
 import { normalizeDevServer, type DevServer } from './dev-servers.ts'
@@ -308,8 +309,14 @@ export interface SharedFile extends Attachment { sha256: string }
 export const isImageName = (name: string) =>
   ['png', 'jpg', 'jpeg', 'heic', 'gif', 'webp', 'tiff', 'bmp', 'svg'].includes(name.split('.').pop()?.toLowerCase() ?? '')
 
+export const isVideoName = (name: string) =>
+  ['mov', 'mp4', 'm4v', 'webm'].includes(name.split('.').pop()?.toLowerCase() ?? '')
+
 /** A shared image small enough to show in the chat (the whole file is fetched for it). */
 export const showsAsImage = (file: SharedFile) => isImageName(file.name) && file.size <= 20 * 1024 * 1024
+
+/** A shared clip small enough to play in the chat (the whole file is fetched for it). */
+export const showsAsVideo = (file: SharedFile) => isVideoName(file.name) && file.size <= 60 * 1024 * 1024
 
 export interface ConnectionRequest {
   [key: string]: unknown
@@ -485,8 +492,12 @@ export interface EntryData {
   reactions?: string[]
   /** The bots' reactions, one per bot, oldest first. */
   botReactions?: BotReaction[]
+  /** Who pinned this message, and when: it is in the chat's pin list (`docs/features/chat-messages.md`). */
+  pinned?: { by: Pinner; at: number }
   attachments?: Attachment[]
   files?: SharedFile[]
+  /** agent: a file a media tool made; the picture shows and the clip plays in the chat. */
+  media?: { kind: 'image' | 'video' }
   /** agent: an artifact the bot published (or updated) in this turn. */
   artifact?: ArtifactCard
   /** On a thread's root line: how many replies it has, how many are unread, when the last one landed and who wrote
@@ -745,6 +756,8 @@ export interface Hello {
   cloud?: string | null
   /** Product analytics on this computer: on unless its owner turned it off. */
   analytics?: boolean
+  /** A message to a working bot joins its turn (missing: on). Off queues it for the next turn. */
+  steerWhileWorking?: boolean
 }
 
 export interface PairingInfo {
@@ -848,6 +861,8 @@ export interface WhatsAppState {
   bot?: string | null
   /** Chats and people allowed to write; empty means anyone. */
   allowed?: string[]
+  /** Answer each request with a "Working on it…" line (missing: on). Off sends only the answer. */
+  workingMessage?: boolean
 }
 
 export interface CloudStatus {

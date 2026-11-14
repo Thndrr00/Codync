@@ -1,0 +1,15 @@
+/* The image and video picker behind `/image` and `/video`: its settings, and the command they build. */
+.media-sheet {
+  padding: 0 18px 18px;
+}
+
+/* The message the choice builds, under the settings, in the box's own grey. */
+.media-preview {
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  background: var(--code-background);
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+

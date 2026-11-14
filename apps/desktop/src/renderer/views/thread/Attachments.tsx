@@ -113,3 +113,48 @@ export function AttachmentImage({ source, fit }: { source: ImageSource; fit: 'ic
   }
   return <img src={url} alt="" className={`attachment-image ${fit}`} />
 }
+
+/** What a clip's bytes are, by its extension, so the browser can play them. */
+const videoType = (name: string) => {
+  const types: Record<string, string> = { mov: 'video/quicktime', mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm' }
+  return types[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'video/mp4'
+}
+
+/** A clip a bot made, played in place; its bytes come from the computer like a picture's. */
+export function SharedVideo({ file, entryId }: { file: SharedFile; entryId: string }) {
+  const store = useStoreRef()
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let revoked = false
+    let made: string | null = null
+    const read = () => {
+      void store.sharedFileData(file, entryId).then((data) => {
+        if (!data || revoked || made) return
+        made = URL.createObjectURL(new Blob([data as BlobPart], { type: videoType(file.name) }))
+        setUrl(made)
+      })
+    }
+    // A chat shown before the computer connects reads its clips again once it comes online.
+    let online = store.connection.kind === 'online'
+    const stop = store.subscribe(() => {
+      const now = store.connection.kind === 'online'
+      if (now && !online && !made) read()
+      online = now
+    })
+    read()
+    return () => {
+      revoked = true
+      stop()
+      if (made) URL.revokeObjectURL(made)
+    }
+    // A file's id names its bytes for good; `file` is a new object once the entry is read again.
+  }, [store, file.id, entryId])
+  if (!url) {
+    return (
+      <div className="attachment-placeholder video">
+        <Icon name="film" size={13} color="var(--tertiary)" />
+      </div>
+    )
+  }
+  return <video src={url} className="attachment-video" controls playsInline preload="metadata" />
+}

@@ -5,7 +5,10 @@ import { normalizeBot } from '../../../shared/models.ts'
 import { builtInCommand, returnRuns, slashCommands, slashQuery } from './slash-commands.ts'
 
 /** The tool commands every bot lists after its skills. */
-const tools = ['n8n', 'comfy']
+const tools = ['image', 'video', 'n8n', 'comfy']
+
+/** A group has no agent of its own, so it lists the note-only tools. */
+const groupTools = ['n8n', 'comfy']
 
 const installed = [
   { id: 'pdf', name: 'PDF', description: 'PDFs' },
@@ -37,8 +40,8 @@ test('a group lists its bots\' commands: Fast mode for all of them, then every s
   const group = normalizeBot({ id: 'g', kind: 'group', members: ['a', 'b'] })
   const a = normalizeBot({ id: 'a', name: 'Ada', skills: ['pdf'], fastModeSupport: 'offered' })
   const b = normalizeBot({ id: 'b', name: 'Bo', skills: ['pdf', 'xlsx'], fastModeSupport: 'unsupported' })
-  assert.deepEqual(slashCommands(group, '', installed, [a, b]).map((c) => c.name), ['fast', 'pdf', 'xlsx', ...tools])
-  assert.deepEqual(slashCommands(group, '', installed, [b]).map((c) => c.name), ['pdf', 'xlsx', ...tools], 'no bot here has Fast mode')
+  assert.deepEqual(slashCommands(group, '', installed, [a, b]).map((c) => c.name), ['fast', 'pdf', 'xlsx', ...groupTools])
+  assert.deepEqual(slashCommands(group, '', installed, [b]).map((c) => c.name), ['pdf', 'xlsx', ...groupTools], 'no bot here has Fast mode')
   assert.equal(builtInCommand(group, '/fast', [a, b])?.action.kind, 'fast')
   assert.equal(builtInCommand(group, '/fast', [b]), null)
 
@@ -51,6 +54,19 @@ test('a group lists its bots\' commands: Fast mode for all of them, then every s
   assert.equal(refused?.state, 'refused')
   assert.match(refused?.detail ?? '', /^Bo: The agent turned it off: quota/)
   assert.deepEqual(groupFastMode([a, b])?.members.map((m) => m.id), ['a'], 'only the bots that have it')
+})
+
+test('an image or video command opens the picker instead of filling the box in', () => {
+  const bot = normalizeBot({ id: 'b', skills: [], fastModeSupport: 'unsupported' })
+  const [image] = slashCommands(bot, 'ima', [])
+  assert.deepEqual(image?.action, { kind: 'media', media: 'image' })
+  assert.deepEqual(slashCommands(bot, 'vid', []).map((c) => c.action), [{ kind: 'media', media: 'video' }])
+  assert.equal(returnRuns(image!, '/ima'), true, 'Return opens the picker')
+  assert.equal(builtInCommand(bot, '/image')?.action.kind, 'media', 'sending a bare /image opens it too')
+  const group = normalizeBot({ id: 'g', kind: 'group', members: ['b'] })
+  assert.equal(builtInCommand(group, '/image'), null, 'a group has no agent')
+  const own = [...installed, { id: 'image', name: 'image', description: 'mine' }]
+  assert.equal(slashCommands(normalizeBot({ id: 'b', skills: ['image'] }), 'image', own)[0]?.action.kind, 'skill', 'a skill with the name keeps it')
 })
 
 test('sending just a built-in command runs it; anything else is a message', () => {

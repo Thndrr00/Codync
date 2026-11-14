@@ -389,6 +389,11 @@ function ChatSplitView() {
     { title: 'Files', icon: 'folder', action: () => setFilesBot({ bot, store }) },
     ...(bot.kind === 'group' ? [] : [{ title: 'Duplicate', icon: 'square.on.square', action: () => void store.duplicateBot(bot) }]),
     { title: 'Mark as Read', icon: 'bell.badge', action: () => store.markAllRead(bot.id) },
+    {
+      title: bot.notify === false ? 'Unmute agent' : 'Mute agent',
+      icon: bot.notify === false ? 'bell' : 'bell.slash',
+      action: () => store.setMuted(bot, bot.notify !== false),
+    },
     { title: 'Edit Profile…', icon: 'square.and.pencil', action: () => setEditing({ id: crypto.randomUUID(), draft: draftOf(bot), store }) },
     { title: 'Copy conversation ID', icon: 'square.on.square', action: () => window.codync.app.copy(bot.id) },
     ...makeLeadItems(bot, store),

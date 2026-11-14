@@ -52,7 +52,9 @@ import { useKofiInviteAt } from '../../lib/use-kofi-invite'
 import './thread.css'
 import './composer.css'
 import './chat-controls.css'
+import './media.css'
 import { MessageContext } from '../MessageContext'
+import { PinsSheet } from './PinsSheet'
 
 const WIDE = 740
 
@@ -65,6 +67,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   const store = useStore()
   const bot = store.bots.get(botId) ?? null
   const [showTrace, setShowTrace] = useState(false)
+  /** The chat's pin list. */
+  const [showPins, setShowPins] = useState(false)
   const [replyTo, setReplyTo] = useState<Entry | null>(null)
   const cancelReply = useCallback(() => setReplyTo(null), [])
   const [botChat, setBotChat] = useState<string | null>(null)
@@ -231,6 +235,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         <div className="top-chrome">
           <TopFade />
           <div className="top-chrome-row">
+            {!store.mismatch ? <MacChatButton className="ringed" title="Pinned messages" icon="pin" onClick={() => setShowPins(true)} /> : null}
             <Spacer />
             {(!showSettings || !wide) && !compactDetails ? (
               <MacChatButton className="ringed" title="Conversation details" icon="chevron.left.2" direction={[-1, 0]} onClick={toggleDetails} />
@@ -344,6 +349,9 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       </Sheet>
       <Sheet open={showTrace} onClose={() => setShowTrace(false)} width={620} height={560}>
         <TraceView botId={botId} />
+      </Sheet>
+      <Sheet open={showPins} onClose={() => setShowPins(false)} width={460} height={520}>
+        {showPins ? <PinsSheet botId={botId} close={() => setShowPins(false)} openThread={openThread} /> : null}
       </Sheet>
       <Sheet open={templateDraft !== null} onClose={() => setTemplateDraft(null)}>
         {templateDraft ? <BotTemplateView draft={templateDraft} /> : null}

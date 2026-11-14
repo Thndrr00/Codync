@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { MediaKind } from '@shared/media'
 import { isGroup, type Bot } from '@shared/models'
 import { Button, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { ModalHeader, Sheet } from '../../../components/Overlay'
@@ -6,12 +7,15 @@ import { AnchoredMenu } from '../../../components/Menu'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
-import { NODE_WIDTH, canvasBotIds, connectProblem, layoutNodes, type FlowCanvas, type FlowLink } from '../../../lib/routine-flow.ts'
+import {
+  NODE_WIDTH, canvasBotIds, connectProblem, layoutNodes, mediaKey, mediaTitle,
+  type FlowCanvas, type FlowLink, type FlowMedia,
+} from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import { RoutineFlowStore } from '../../../store/routine-flow-store'
 import { FlowCanvasView, type FlowSelection } from './FlowCanvas'
-import { FlowInspector } from './FlowInspector'
+import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspector'
 import { FlowList } from './FlowList'
 import { RoutineEditorView } from '../RoutineEditorView'
 import './routine-flow.css'
@@ -77,8 +81,16 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     }
   }
 
-  const targets = (from: string): Bot[] =>
-    canvas ? roster.filter((bot) => bot.id !== from && connectable(canvas, from, bot.id).length > 0) : []
+  const targets = (from: string): FlowTarget[] => {
+    if (!canvas) return []
+    const bots: FlowTarget[] = roster
+      .filter((bot) => bot.id !== from && connectable(canvas, from, bot.id).length > 0)
+      .map((bot) => ({ id: bot.id, name: bot.name }))
+    const steps: FlowTarget[] = canvas.mediaNodes
+      .filter((media) => mediaKey(media.id) !== from && connectable(canvas, from, mediaKey(media.id)).length > 0)
+      .map((media) => ({ id: mediaKey(media.id), name: mediaTitle(media) }))
+    return [...bots, ...steps]
+  }
 
   if (flow.unsupported) {
     return <Text size="callout" tone="secondary" className="outlined-card flow-state">{tr('This computer\'s host doesn\'t support routine flows yet. Update Codync on it.')}</Text>
@@ -105,6 +117,16 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const disconnect = async (link: FlowLink) => {
     setSelection(null)
     await flow.disconnect(link.id)
+  }
+  const addMedia = async (routineId: string, kind: MediaKind) => {
+    setNote(null)
+    const media = await flow.addMedia(routineId, kind)
+    if (media) setSelection({ kind: 'node', key: mediaKey(media.id) })
+  }
+  const saveMedia = (media: FlowMedia, settings: MediaSettings) => void flow.updateMedia(media.id, settings)
+  const removeMedia = async (media: FlowMedia) => {
+    setSelection(null)
+    await flow.removeMedia(media.id)
   }
 
   return (
@@ -163,6 +185,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
             // No pointer position here: a routine choice, if needed, opens in the middle of the window.
             onConnectFrom={(from, to) => dropped(from, to, { x: window.innerWidth / 2, y: window.innerHeight / 2 })}
             onRemoveNode={(key) => void flow.removeNode(key)}
+            onAddMedia={(id, kind) => void addMedia(id, kind)}
+            onSaveMedia={saveMedia}
+            onRemoveMedia={(media) => void removeMedia(media)}
           />
         </HStack>
       )}

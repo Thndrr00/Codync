@@ -152,6 +152,10 @@
   fill: var(--accent);
   opacity: 0.7;
 }
+.flow-minimap rect[data-kind='media'] {
+  fill: var(--accent);
+  opacity: 0.3;
+}
 .flow-minimap rect.flow-minimap-view {
   fill: none;
   stroke: var(--accent);
@@ -187,6 +191,12 @@
 }
 .flow-node[data-kind='routine'] .flow-node-head > svg:first-child {
   color: var(--flow-tint, var(--accent));
+}
+.flow-node[data-kind='media'] {
+  background: color-mix(in srgb, var(--accent) 8%, var(--sheet));
+}
+.flow-node[data-kind='media'] .flow-node-head > svg:first-child {
+  color: var(--accent);
 }
 .flow-run-button {
   flex: none;

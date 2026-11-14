@@ -229,6 +229,7 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
       {!compact && revealed === key ? <div className="roster-row-actions">
         <button onClick={() => setPreview(item)}>Preview</button>
         <button disabled={item.store.connection.kind !== 'online'} onClick={() => item.store.setPinned(item.bot, !item.bot.pinned)}>{item.bot.pinned ? 'Unpin' : 'Pin'}</button>
+        <button disabled={item.store.connection.kind !== 'online'} onClick={() => item.store.setMuted(item.bot, item.bot.notify !== false)}>{item.bot.notify === false ? 'Unmute agent' : 'Mute agent'}</button>
         {['working', 'needsInput'].includes(item.bot.status) ? <button disabled={item.store.connection.kind !== 'online' || stops.pending.has(JSON.stringify([item.ref.computerId, item.bot.id]))}
           onClick={() => void stops.stop(item.store, item.bot).catch((e: unknown) => item.store.setError(e instanceof Error ? e.message : String(e)))}>
           {stops.pending.has(JSON.stringify([item.ref.computerId, item.bot.id])) ? 'Stopping…' : 'Stop'}</button> : null}

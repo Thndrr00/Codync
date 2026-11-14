@@ -64,6 +64,20 @@
   border-radius: var(--radius-m);
   overflow: hidden;
 }
+/* A clip a bot made, playing in place of its file card. */
+.attachment-video {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  max-height: 280px;
+  border-radius: var(--radius-m);
+  background: #000;
+}
+.attachment-placeholder.video {
+  width: 340px;
+  max-width: 100%;
+  height: 190px;
+}
 .file-card-detail {
   overflow-wrap: anywhere;
 }
