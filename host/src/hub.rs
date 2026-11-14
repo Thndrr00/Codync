@@ -99,6 +99,8 @@ pub struct Hub {
     pub network: crate::network::Network,
     /// Requests this computer's bots sent to bots on the other computers, until they're answered.
     pub waiting: crate::chat::team::remote::Waiting,
+    /// A2A requests this computer sent to agents on the other computers, until they're answered.
+    pub a2a: crate::a2a::Waiting,
     /// The user's cloud assistant: its requests to this computer's bots and their replies.
     pub assistant: crate::chat::team::assistant::Replies,
     pub store: Store,
@@ -173,6 +175,7 @@ impl Hub {
             groups: crate::chat::group::Rooms::default(),
             network: crate::network::Network::default(),
             waiting: crate::chat::team::remote::Waiting::default(),
+            a2a: crate::a2a::Waiting::default(),
             assistant: crate::chat::team::assistant::Replies::default(),
             store,
             host_id,

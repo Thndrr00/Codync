@@ -106,8 +106,8 @@ fn save_notes(store: &crate::store::Store, provider: &str, channel: &str, notes:
 fn channel_arg(body: &Value) -> anyhow::Result<(String, String)> {
     let provider = body["provider"].as_str().unwrap_or_default();
     anyhow::ensure!(
-        matches!(provider, "telegram" | "slack" | "discord" | "matrix"),
-        "Channels with notes are Telegram, Slack, Discord and Matrix."
+        matches!(provider, "telegram" | "slack" | "discord" | "matrix" | "signal" | "teams"),
+        "Channels with notes are Telegram, Slack, Discord, Matrix, Signal and Teams."
     );
     let channel = body["channel"].as_str().unwrap_or_default().trim();
     anyhow::ensure!(!channel.is_empty() && channel.chars().count() <= 200, "Choose a channel first.");

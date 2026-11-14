@@ -74,14 +74,10 @@ event id in `matrix_cards`, so a stale card cannot answer another approval.
 
 ## Teams
 
-The Adaptive Cards serializer from K5 already produces the Teams wire shape
-(`host/src/channels/render.rs`, `teams`), but there is no Bot Framework transport. Teams cannot be
-connected with a token and a paste: an app has to be registered in the Microsoft 365 Developer
-Program or the Azure portal, a bot resource and channel have to be provisioned, and every inbound
-message arrives through the Bot Framework connector with its own authentication, tenant and manifest
-rules. That registration is the concrete reason Teams stays out of scope for this channel work: it
-needs a registered bot, not a homeserver account. The serializer remains tested and ready for that
-transport.
+The Adaptive Cards serializer from K5 (`host/src/channels/render.rs`, `teams`) is now used by a Bot
+Framework transport: see [teams-channel.md](teams-channel.md). Teams needs a registered Azure Bot
+resource and a public HTTPS messaging endpoint, so it is configured separately from a homeserver
+account; the registration steps, the JWT check and the connector calls are documented there.
 
 ## Limits worth knowing
 

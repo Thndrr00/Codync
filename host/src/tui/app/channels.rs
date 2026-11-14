@@ -12,6 +12,8 @@ pub struct ChannelsSheet {
     pub bots: Vec<Value>,
     pub slack: Option<Value>,
     pub matrix: Option<Value>,
+    pub signal: Option<Value>,
+    pub teams: Option<Value>,
     pub sel: usize,
     /// The Telegram bot a pairing code was just asked for.
     pub pairing_for: Option<String>,
@@ -76,6 +78,36 @@ pub fn matrix_text(matrix: Option<&Value>) -> String {
     }
 }
 
+/// What the sheet says about the Signal connection.
+pub fn signal_text(signal: Option<&Value>) -> String {
+    match signal {
+        None => "Loading…".into(),
+        Some(s) if s["configured"] != true => "Signal is not set up.".into(),
+        Some(s) => format!(
+            "Connected as {} through {} — {} {}",
+            s["number"].as_str().unwrap_or_default(),
+            s["daemon"].as_str().unwrap_or_default(),
+            s["bindings"].as_array().map_or(0, Vec::len),
+            if s["bindings"].as_array().map_or(0, Vec::len) == 1 { "chat" } else { "chats" },
+        ),
+    }
+}
+
+/// What the sheet says about the Microsoft Teams connection.
+pub fn teams_text(teams: Option<&Value>) -> String {
+    match teams {
+        None => "Loading…".into(),
+        Some(t) if t["configured"] != true => "Microsoft Teams is not set up.".into(),
+        Some(t) => format!(
+            "App {} — {} — {} {}",
+            t["appId"].as_str().unwrap_or_default(),
+            t["endpoint"].as_str().unwrap_or_default(),
+            t["allowedUsers"].as_array().map_or(0, Vec::len),
+            "people allowed",
+        ),
+    }
+}
+
 /// One Telegram bot as the list shows it, on two lines.
 pub fn bot_lines(bot: &Value, now: i64) -> [String; 2] {
     let username = bot["username"].as_str().unwrap_or_default();
@@ -100,6 +132,8 @@ impl App {
         self.call("telegramStatus", json!({}), After::Channels);
         self.call("slackStatus", json!({}), After::ChannelsSlack);
         self.call("matrixStatus", json!({}), After::ChannelsMatrix);
+        self.call("signalStatus", json!({}), After::ChannelsSignal);
+        self.call("teamsStatus", json!({}), After::ChannelsTeams);
     }
 
     pub(super) fn channels_key(&mut self, mut s: Box<ChannelsSheet>, k: KeyEvent) -> Option<Overlay> {
@@ -111,6 +145,8 @@ impl App {
                 self.call("telegramStatus", json!({}), After::Channels);
                 self.call("slackStatus", json!({}), After::ChannelsSlack);
                 self.call("matrixStatus", json!({}), After::ChannelsMatrix);
+                self.call("signalStatus", json!({}), After::ChannelsSignal);
+                self.call("teamsStatus", json!({}), After::ChannelsTeams);
             }
             KeyCode::Char('p') => {
                 if let Some(name) = s.bots.get(s.sel).and_then(|b| b["name"].as_str()).map(str::to_owned) {
@@ -120,6 +156,12 @@ impl App {
             }
             KeyCode::Char('d') => {
                 self.call("disconnectMatrix", json!({}), After::ChannelsMatrix);
+            }
+            KeyCode::Char('s') => {
+                self.call("disconnectSignal", json!({}), After::ChannelsSignal);
+            }
+            KeyCode::Char('t') => {
+                self.call("disconnectTeams", json!({}), After::ChannelsTeams);
             }
             _ => {}
         }
@@ -146,6 +188,18 @@ impl App {
     pub(super) fn channels_matrix_loaded(&mut self, v: Value) {
         if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
             s.matrix = Some(v);
+        }
+    }
+
+    pub(super) fn channels_signal_loaded(&mut self, v: Value) {
+        if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
+            s.signal = Some(v);
+        }
+    }
+
+    pub(super) fn channels_teams_loaded(&mut self, v: Value) {
+        if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
+            s.teams = Some(v);
         }
     }
 }
@@ -191,5 +245,14 @@ mod tests {
                 "homeserver": "https://m.example", "bindings": [{}, {}]}))),
             "Connected as @bot:example.org on https://m.example · 2 rooms"
         );
+        assert_eq!(signal_text(None), "Loading…");
+        assert_eq!(signal_text(Some(&json!({"configured": false}))), "Signal is not set up.");
+        assert_eq!(
+            signal_text(Some(&json!({"configured": true, "number": "+15551234567",
+                "daemon": "http://127.0.0.1:7583", "bindings": [{}]}))),
+            "Connected as +15551234567 through http://127.0.0.1:7583 — 1 chat"
+        );
+        assert_eq!(teams_text(None), "Loading…");
+        assert_eq!(teams_text(Some(&json!({"configured": false}))), "Microsoft Teams is not set up.");
     }
 }

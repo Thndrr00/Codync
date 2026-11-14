@@ -283,6 +283,8 @@ impl Store {
         super::links::open(&c)?;
         super::discord::open(&c)?;
         super::matrix::open(&c)?;
+        super::signal::open(&c)?;
+        super::teams::open(&c)?;
         super::whatsapp::open(&c)?;
         super::slack::open(&c)?;
         super::native_channels::open(&c)?;

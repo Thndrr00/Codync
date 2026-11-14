@@ -41,7 +41,9 @@ mod workspaces;
 pub use visibility::is_internal;
 pub(crate) mod discord;
 pub(crate) mod matrix;
+pub(crate) mod signal;
 pub(crate) mod slack;
+pub(crate) mod teams;
 pub(crate) mod whatsapp;
 
 pub use apps::{AppLink, AppLinkMode, AppTotals, BotApp};

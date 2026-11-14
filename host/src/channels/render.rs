@@ -259,6 +259,31 @@ pub fn whatsapp(card: &[Block]) -> String {
     lines.join("\n")
 }
 
+/// A Signal message body: text, with the buttons as numbered options answered by a quoted reply.
+pub fn signal(card: &[Block]) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for block in card {
+        match block {
+            Block::Text(text) => lines.push(text.clone()),
+            Block::Fields(fields) => {
+                lines.extend(fields.iter().map(|field| format!("{}: {}", field.label, field.value)));
+            }
+            Block::Table { columns, rows } => lines.push(table_text(columns, rows)),
+            Block::Divider => lines.push(String::new()),
+            Block::Callout { tone, text } => lines.push(format!("{} {text}", tone.mark())),
+            Block::Buttons(buttons) if !buttons.is_empty() => {
+                lines.push(String::new());
+                lines.push("Reply to this message with the number of an option:".into());
+                lines.extend(
+                    buttons.iter().enumerate().map(|(index, button)| format!("{}) {}", index + 1, button.label)),
+                );
+            }
+            Block::Buttons(_) => {}
+        }
+    }
+    lines.join("\n")
+}
+
 /// A Teams bot message carrying an Adaptive Card. The Teams transport itself is K7; this is the wire shape.
 pub fn teams(card: &[Block]) -> Value {
     let mut body: Vec<Value> = Vec::new();
@@ -418,6 +443,13 @@ mod tests {
         assert!(text.starts_with("Needs you: Run a command\n⚠️ cargo test"));
         assert!(text.contains("*Tool*: execute"));
         assert!(text.ends_with("Responde con el número de una opción:\n1) Allow\n2) Reject"), "{text}");
+    }
+
+    #[test]
+    fn signal_numbers_its_options_in_english() {
+        let text = signal(&sample());
+        assert!(text.starts_with("Needs you: Run a command\n\u{26a0}\u{fe0f} cargo test"), "{text}");
+        assert!(text.ends_with("Reply to this message with the number of an option:\n1) Allow\n2) Reject"), "{text}");
     }
 
     #[test]

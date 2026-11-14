@@ -10,6 +10,8 @@ import { ChannelsStore } from '../../store/channels-store'
 import { ErrorText, Field } from '../marketplace/pieces'
 import { DiscordChannel } from './DiscordChannel'
 import { MatrixChannel } from './MatrixChannel'
+import { SignalChannel } from './SignalChannel'
+import { TeamsChannel } from './TeamsChannel'
 import { ChannelMemory } from './ChannelMemory'
 import { ChannelIconPicker } from './ChannelIconPicker'
 
@@ -30,12 +32,14 @@ export function ChannelsSection({ onExtensions }: { onExtensions?: () => void } 
   }, [model])
   const slack = model.slack
   const bots = (local?.roster ?? []).filter((b) => b.kind !== 'group' && b.backend !== 'external').map((b) => ({ id: b.id, label: b.name }))
-  return <CardSection title="Channels" footer="Talk to a bot from WhatsApp, Telegram, Slack, Discord or Matrix. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.">
+  return <CardSection title="Channels" footer="Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.">
     {onExtensions ? <Button kind="secondary" onClick={onExtensions}>Open channels in Extensions</Button> : null}
     {model.telegram.map((bot) => <TelegramRow key={bot.name} bot={bot} model={model} onRemove={() => setRemoving(bot.name)} />)}    {model.telegram.length === 0 ? <Text tone="secondary">No Telegram bots yet.</Text> : null}
     <AddTelegram model={model} bots={bots} />
     <DiscordChannel status={model.discord} model={model} bots={bots} />
     <MatrixChannel status={model.matrix} model={model} bots={bots} />
+    <SignalChannel status={model.signal} model={model} bots={bots} />
+    <TeamsChannel status={model.teams} model={model} bots={bots} />
     {slack?.configured ? <VStack gap={4} className="settings-stack">
       <Text>Slack {slack.socketMode ? '· Socket Mode' : '· HTTP endpoint'}</Text>
       <Text size="caption" tone="tertiary">{slack.workspaceId} · {slack.bindings?.length ?? 0} channel{slack.bindings?.length === 1 ? '' : 's'} bound</Text>

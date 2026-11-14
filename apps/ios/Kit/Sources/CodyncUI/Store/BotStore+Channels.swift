@@ -38,6 +38,26 @@ extension BotStore {
 
     public func disconnectMatrix() async throws -> MatrixStatus { try await ready().disconnectMatrix() }
 
+    public func signalStatus() async throws -> SignalStatus { try await ready().signalStatus() }
+
+    public func disconnectSignal() async throws -> SignalStatus { try await ready().disconnectSignal() }
+
+    public func setSignal(number: String, daemon: String, bindings: [SignalBinding]) async throws -> SignalStatus {
+        try await ready().setSignal(number: number, daemon: daemon, bindings: bindings)
+    }
+
+    public func teamsStatus() async throws -> TeamsStatus { try await ready().teamsStatus() }
+
+    public func disconnectTeams() async throws -> TeamsStatus { try await ready().disconnectTeams() }
+
+    public func setTeams(appId: String, tenantId: String, password: String, managedIdentity: Bool, botId: String,
+                         allowedUsers: [String], allowedTenants: [String], memory: String,
+                         icon: String) async throws -> TeamsStatus {
+        try await ready().setTeams(appId: appId, tenantId: tenantId, password: password,
+                                   managedIdentity: managedIdentity, botId: botId, allowedUsers: allowedUsers,
+                                   allowedTenants: allowedTenants, memory: memory, icon: icon)
+    }
+
     public func setMatrix(homeserver: String, user: String, accessToken: String, password: String,
                           bindings: [MatrixBinding]) async throws -> MatrixStatus {
         try await ready().setMatrix(homeserver: homeserver, user: user, accessToken: accessToken,

@@ -24,6 +24,9 @@ pub fn snapshot(hub: &Hub) -> Result<Value> {
             "telegram": crate::telegram::configuration_state(&hub.store),
             "slack": crate::slack::configuration_state(&hub.store),
             "discord": crate::discord::configuration_state(&hub.store),
+            "matrix": crate::matrix::configuration_state(&hub.store),
+            "signal": crate::signal::configuration_state(&hub.store),
+            "teams": crate::teams::configuration_state(&hub.store),
         },
         "log": log,
     }))

@@ -51,6 +51,8 @@ public struct ChannelsSheet: View {
                 telegram
                 discordSection
                 MatrixSection()
+                SignalSection()
+                TeamsSection()
                 githubSection
                 slackSection
                 if let error {

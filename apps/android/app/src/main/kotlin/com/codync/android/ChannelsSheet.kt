@@ -230,6 +230,8 @@ import kotlinx.coroutines.launch
                 }
             }
             MatrixSection(state, store)
+            SignalSection(state, store)
+            TeamsSection(state, store)
             CardSection(tr("GitHub"), footer = tr("A fine-grained token with the repository permissions your workflows need, plus Administration to create repositories. It stays on the computer; Codync never sends it anywhere else.")) {
                 val connected = github
                 row {

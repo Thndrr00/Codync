@@ -60,6 +60,53 @@ public extension HostClient {
 
     func disconnectMatrix() async throws -> MatrixStatus { try await call("disconnectMatrix", Empty()) }
 
+    func signalStatus() async throws -> SignalStatus { try await call("signalStatus", Empty()) }
+
+    func disconnectSignal() async throws -> SignalStatus { try await call("disconnectSignal", Empty()) }
+
+    /// Saves the signal-cli daemon and its chats; the host checks the daemon and its linked number first.
+    func setSignal(number: String, daemon: String, bindings: [SignalBinding]) async throws -> SignalStatus {
+        struct Body: Encodable {
+            var number: String
+            var daemon: String
+            var bindings: [Binding]
+        }
+        struct Binding: Encodable {
+            var chat: String
+            var botId: String
+            var allowedUsers: [String]
+        }
+        let body = Body(number: number.trimmed, daemon: daemon.trimmed,
+                        bindings: bindings.map { Binding(chat: $0.chat.trimmed, botId: $0.botId,
+                                                          allowedUsers: $0.allowedUsers.map(\.trimmed)) })
+        return try await call("setSignalChannel", body, timeout: 60)
+    }
+
+    func teamsStatus() async throws -> TeamsStatus { try await call("teamsStatus", Empty()) }
+
+    func disconnectTeams() async throws -> TeamsStatus { try await call("disconnectTeams", Empty()) }
+
+    /// Saves the Azure Bot registration and its allowed people; the host gets a Bot Framework token first.
+    func setTeams(appId: String, tenantId: String, password: String, managedIdentity: Bool, botId: String,
+                  allowedUsers: [String], allowedTenants: [String], memory: String, icon: String) async throws -> TeamsStatus {
+        struct Body: Encodable {
+            var appId: String
+            var tenantId: String
+            var appPassword: String
+            var managedIdentity: Bool
+            var botId: String
+            var allowedUsers: [String]
+            var allowedTenants: [String]
+            var memory: String
+            var icon: String
+        }
+        let body = Body(appId: appId.trimmed, tenantId: tenantId.trimmed, appPassword: password,
+                        managedIdentity: managedIdentity, botId: botId,
+                        allowedUsers: allowedUsers.map(\.trimmed), allowedTenants: allowedTenants.map(\.trimmed),
+                        memory: memory, icon: icon)
+        return try await call("setTeamsChannel", body, timeout: 60)
+    }
+
     /// Sets the Matrix session and its bound rooms up; the host signs in and checks every room first.
     func setMatrix(homeserver: String, user: String, accessToken: String, password: String,
                    bindings: [MatrixBinding]) async throws -> MatrixStatus {

@@ -71,6 +71,10 @@ pub async fn listen(hub: Arc<Hub>, network: String, mut inbox: mpsc::Receiver<Me
 }
 
 fn take(hub: &Arc<Hub>, network: &str, m: &Message) -> Result<()> {
+    // A2A letters carry their own JSON-RPC answer and never become a bot chat turn.
+    if crate::a2a::intercept(hub, network, m)? {
+        return Ok(());
+    }
     if let Some((id, waiter)) = m.reply_to.as_deref().and_then(|id| Some((id, hub.waiting.take(id)?))) {
         replied(hub, id, waiter, m);
         return Ok(());

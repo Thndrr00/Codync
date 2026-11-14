@@ -147,6 +147,15 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::matrix::METHODS.contains(&method) {
         return crate::matrix::call(hub, method, b).await;
     }
+    if crate::signal::METHODS.contains(&method) {
+        return crate::signal::call(hub, method, b).await;
+    }
+    if crate::teams::METHODS.contains(&method) {
+        return crate::teams::call(hub, method, b).await;
+    }
+    if crate::a2a::METHODS.contains(&method) {
+        return crate::a2a::call(hub, method, &b).await;
+    }
     if crate::slack::METHODS.contains(&method) {
         return crate::slack::call(hub, method, b).await;
     }

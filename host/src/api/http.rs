@@ -35,6 +35,8 @@ pub fn router(hub: Arc<Hub>) -> Router {
         )
         .route("/events", get(events))
         .route("/agui/{bot}", post(agui_run).layer(axum::extract::DefaultBodyLimit::max(crate::agui::MAX_BODY)))
+        .route("/a2a/{bot}/.well-known/agent-card.json", get(a2a_card))
+        .route("/a2a/{bot}", post(a2a_run).layer(axum::extract::DefaultBodyLimit::max(crate::a2a::server::MAX_BODY)))
         .route("/scim/v2/Users", get(scim_users).post(scim_create))
         .route("/scim/v2/Users/{id}", axum::routing::delete(scim_delete))
         .route("/api/{method}", post(command))
@@ -48,6 +50,13 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard));
     Router::new()
         .merge(main)
+        // A Bot Framework activity authenticates with its own JWT, not a bearer token or a browser
+        // origin, and arrives through a public HTTPS proxy whose Host is not loopback. It is kept
+        // outside the rebinding and origin guards for that reason; `teams::inbound` verifies the JWT.
+        .merge(Router::<Arc<Hub>>::new().route(
+            "/hooks/teams/{id}",
+            post(crate::teams::receive).layer(axum::extract::DefaultBodyLimit::max(256 * 1024)),
+        ))
         .merge(super::apps_runtime::router().layer(axum::middleware::from_fn(super::rebinding::guard)))
         .with_state(hub)
 }
@@ -202,6 +211,39 @@ async fn agui_run(
         return Err(unauthorized());
     }
     crate::agui::serve(hub, &bot, body).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
+}
+
+/// `GET /a2a/{bot}/.well-known/agent-card.json`: the A2A card of a bot offered to the network.
+async fn a2a_card(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::a2a::server::agent_card(hub, &bot).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
+}
+
+/// `POST /a2a/{bot}`: an A2A `message/send` or `message/stream` (see `a2a`).
+async fn a2a_run(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::a2a::server::serve(hub, &bot, body).await.map_err(|e| {
         let (status, message) = error_status(&e);
         ApiError(status, message)
     })

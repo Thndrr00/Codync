@@ -10,7 +10,9 @@ use tokio::task::JoinSet;
 pub fn start(hub: &Arc<Hub>) -> JoinSet<()> {
     tokio::spawn(crate::discord::run(hub.clone()));
     tokio::spawn(crate::matrix::run(hub.clone()));
+    tokio::spawn(crate::signal::run(hub.clone()));
     tokio::spawn(crate::slack::run(hub.clone()));
+    tokio::spawn(crate::teams::run(hub.clone()));
     tokio::spawn(crate::native_channels::run(hub.clone()));
     tokio::spawn(crate::telegram::run(hub.clone()));
     tokio::spawn(crate::health::run(hub.clone()));

@@ -235,6 +235,99 @@ public struct DiscordStatus: Decodable, Equatable, Sendable {
     }
 }
 
+/// One Signal chat bound to a bot: a phone number or `group:<id>`.
+public struct SignalBinding: Decodable, Identifiable, Equatable, Sendable {
+    public var chat: String
+    public var botId: String
+    public var allowedUsers: [String]
+    public var memory: String
+    public var icon: String
+
+    public var id: String { chat }
+
+    public init(chat: String, botId: String, allowedUsers: [String], memory: String = "", icon: String = "") {
+        self.chat = chat
+        self.botId = botId
+        self.allowedUsers = allowedUsers
+        self.memory = memory
+        self.icon = icon
+    }
+
+    private enum CodingKeys: String, CodingKey { case chat, botId, allowedUsers, memory, icon }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        chat = try c.decode(String.self, forKey: .chat)
+        botId = try c.decodeIfPresent(String.self, forKey: .botId) ?? ""
+        allowedUsers = try c.decodeIfPresent([String].self, forKey: .allowedUsers) ?? []
+        memory = try c.decodeIfPresent(String.self, forKey: .memory) ?? ""
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+    }
+}
+
+/// The signal-cli connection, as `signalStatus` reports it. A daemon that is not running is a
+/// state, and `setup` names the exact commands; the number stays on the computer.
+public struct SignalStatus: Decodable, Equatable, Sendable {
+    public var configured: Bool
+    public var number: String?
+    public var daemon: String?
+    public var bindings: [SignalBinding]
+    /// `ok`, `starting`, `notRunning: ...` or `error: ...`.
+    public var state: String
+    public var setup: String?
+
+    private enum CodingKeys: String, CodingKey { case configured, number, daemon, bindings, state, setup }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
+        number = try c.decodeIfPresent(String.self, forKey: .number)
+        daemon = try c.decodeIfPresent(String.self, forKey: .daemon)
+        bindings = try c.decodeIfPresent([SignalBinding].self, forKey: .bindings) ?? []
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? "starting"
+        setup = try c.decodeIfPresent(String.self, forKey: .setup)
+    }
+}
+
+/// The Microsoft Teams connection, as `teamsStatus` reports it.
+public struct TeamsStatus: Decodable, Equatable, Sendable {
+    public var configured: Bool
+    public var appId: String?
+    public var tenantId: String?
+    public var botId: String?
+    public var managedIdentity: Bool
+    public var allowedUsers: [String]
+    public var allowedTenants: [String]
+    public var memory: String
+    public var icon: String
+    /// The path the Azure Bot resource's messaging endpoint points at.
+    public var endpoint: String?
+    /// The Azure steps; the host cannot create the registration.
+    public var registration: String
+    public var state: String
+
+    private enum CodingKeys: String, CodingKey {
+        case configured, appId, tenantId, botId, managedIdentity, allowedUsers, allowedTenants, memory, icon,
+             endpoint, registration, state
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
+        appId = try c.decodeIfPresent(String.self, forKey: .appId)
+        tenantId = try c.decodeIfPresent(String.self, forKey: .tenantId)
+        botId = try c.decodeIfPresent(String.self, forKey: .botId)
+        managedIdentity = try c.decodeIfPresent(Bool.self, forKey: .managedIdentity) ?? false
+        allowedUsers = try c.decodeIfPresent([String].self, forKey: .allowedUsers) ?? []
+        allowedTenants = try c.decodeIfPresent([String].self, forKey: .allowedTenants) ?? []
+        memory = try c.decodeIfPresent(String.self, forKey: .memory) ?? ""
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+        endpoint = try c.decodeIfPresent(String.self, forKey: .endpoint)
+        registration = try c.decodeIfPresent(String.self, forKey: .registration) ?? ""
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? "starting"
+    }
+}
+
 /// The GitHub connection, as `githubStatus` reports it. Never carries the token.
 public struct GitHubStatus: Decodable, Equatable, Sendable {
     public var configured: Bool
@@ -390,6 +483,37 @@ public enum Channels {
         case "ok": "Connected"
         case "starting": "Connecting…"
         default: "Cannot reach Matrix"
+        }
+    }
+
+    /// A Signal chat: an E.164 number or `group:<id>`.
+    public static func signalChatOk(_ value: String) -> Bool {
+        let chat = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return chat.count <= 512 && (chat.wholeMatch(of: /\+[1-9]\d{6,14}/) != nil
+            || chat.wholeMatch(of: /group:[A-Za-z0-9+\/=_-]{8,512}/) != nil)
+    }
+
+    public static func signalNumberOk(_ value: String) -> Bool {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).wholeMatch(of: /\+[1-9]\d{6,14}/) != nil
+    }
+
+    public static func signalPersonOk(_ value: String) -> Bool {
+        signalNumberOk(value) || value.trimmingCharacters(in: .whitespacesAndNewlines).wholeMatch(of: /[0-9a-fA-F-]{32,64}/) != nil
+    }
+
+    public static func signalStateText(_ state: String) -> String {
+        switch state {
+        case "ok": "Connected"
+        case "starting": "Connecting…"
+        default: state.hasPrefix("notRunning") ? "signal-cli is not running" : "Cannot reach signal-cli"
+        }
+    }
+
+    public static func teamsStateText(_ state: String) -> String {
+        switch state {
+        case "ok": "Connected"
+        case "starting": "Connecting…"
+        default: "Not set up"
         }
     }
 

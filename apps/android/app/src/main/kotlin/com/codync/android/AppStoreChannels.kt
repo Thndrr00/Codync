@@ -5,8 +5,12 @@ import com.codync.android.core.DiscordBinding
 import com.codync.android.core.DiscordStatus
 import com.codync.android.core.MatrixBinding
 import com.codync.android.core.MatrixStatus
+import com.codync.android.core.SignalBinding
+import com.codync.android.core.SignalStatus
 import com.codync.android.core.SlackStatus
+import com.codync.android.core.TeamsStatus
 import com.codync.android.core.TelegramBot
+import com.codync.android.core.WireJson
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -70,6 +74,57 @@ suspend fun AppStore.setMatrix(
 suspend fun AppStore.matrixStatus(): MatrixStatus? = runCatching { Channels.decodeMatrix(hostQuery("matrixStatus", buildJsonObject { })) }.getOrNull()
 
 suspend fun AppStore.disconnectMatrix(): MatrixStatus = Channels.decodeMatrix(hostQuery("disconnectMatrix", buildJsonObject { }))
+
+suspend fun AppStore.signalStatus(): SignalStatus? = runCatching {
+    WireJson.decodeFromJsonElement(SignalStatus.serializer(), hostQuery("signalStatus", buildJsonObject { }))
+}.getOrNull()
+
+suspend fun AppStore.disconnectSignal(): SignalStatus =
+    WireJson.decodeFromJsonElement(SignalStatus.serializer(), hostQuery("disconnectSignal", buildJsonObject { }))
+
+/** Sets the signal-cli daemon and its chats up; the host checks the daemon and its linked number first. */
+suspend fun AppStore.setSignal(number: String, daemon: String, bindings: List<SignalBinding>): SignalStatus =
+    WireJson.decodeFromJsonElement(SignalStatus.serializer(), hostQuery("setSignalChannel", buildJsonObject {
+        put("number", number.trim())
+        put("daemon", daemon.trim())
+        put("bindings", buildJsonArray {
+            for (binding in bindings) add(buildJsonObject {
+                put("chat", binding.chat.trim())
+                put("botId", binding.botId)
+                put("allowedUsers", buildJsonArray { for (person in binding.allowedUsers) add(JsonPrimitive(person.trim())) })
+            })
+        })
+    }, timeoutMillis = 60_000))
+
+suspend fun AppStore.teamsStatus(): TeamsStatus? = runCatching {
+    WireJson.decodeFromJsonElement(TeamsStatus.serializer(), hostQuery("teamsStatus", buildJsonObject { }))
+}.getOrNull()
+
+suspend fun AppStore.disconnectTeams(): TeamsStatus =
+    WireJson.decodeFromJsonElement(TeamsStatus.serializer(), hostQuery("disconnectTeams", buildJsonObject { }))
+
+/** Sets the Azure Bot registration up; the host gets a Bot Framework token before saving it. */
+suspend fun AppStore.setTeams(
+    appId: String,
+    tenantId: String,
+    appPassword: String,
+    managedIdentity: Boolean,
+    botId: String,
+    allowedUsers: List<String>,
+    allowedTenants: List<String>,
+    memory: String,
+    icon: String,
+): TeamsStatus = WireJson.decodeFromJsonElement(TeamsStatus.serializer(), hostQuery("setTeamsChannel", buildJsonObject {
+    put("appId", appId.trim())
+    put("tenantId", tenantId.trim())
+    put("appPassword", appPassword)
+    put("managedIdentity", managedIdentity)
+    put("botId", botId)
+    put("allowedUsers", buildJsonArray { for (user in allowedUsers) add(JsonPrimitive(user.trim())) })
+    put("allowedTenants", buildJsonArray { for (tenant in allowedTenants) add(JsonPrimitive(tenant.trim())) })
+    put("memory", memory)
+    put("icon", icon)
+}, timeoutMillis = 60_000))
 
 /** Adds a Telegram bot the host will talk through, answered by [botId]; its token stays on the computer. */suspend fun AppStore.addTelegramBot(name: String, token: String, botId: String): List<TelegramBot> =
     Channels.decodeTelegram(hostQuery("addTelegramBot",

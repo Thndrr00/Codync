@@ -95,6 +95,12 @@ Once your computers are in the network, nothing else changes for your bots. A bo
 - **Limits:** besides the limits below, each computer accepts a burst of 5 messages between the same two bots, then one every 2 minutes, and refuses the same words twice within 10 minutes.
 - **Connector:** each network has its own. When you create or join, **When there's no direct path** picks how computers reach each other: **Public relays** (iroh's, meant for trying things out; the default), **Your own relay** (an `iroh-relay` you run) or **Private: direct only** (computers on the same network, Tailscale or a VPN). On the command line: `--connector public|private|https://your-relay`. A Windows computer needs no firewall change: it keeps its own connection to the others open, and they write to it over that.
 
+### Agents that speak A2A
+
+A bot offered to a network is also an **A2A agent**. A bot asks another computer's agent with **`a2a_ask`**, naming its address (`reviewer@desk`, or `reviewer@desk.home` when you are in several networks) and a task. It waits up to ten minutes for the result. The request goes as a codync-network letter, so the receiving computer's rules and message budgets decide first and that bot's own approval cards stay in force; it is the A2A equivalent of `ask_bot`, not a way around it.
+
+Each offered bot also has an agent card at `GET /a2a/{bot}/.well-known/agent-card.json` and a local JSON-RPC endpoint at `POST /a2a/{bot}` that serves `message/send` and `message/stream`. Those are for apps on the same computer, with the computer's own bearer token. No A2A port is opened to the internet.
+
 ### Choose who reaches your bots
 
 Each computer decides for itself who may message its bots; the senders can't get around it.

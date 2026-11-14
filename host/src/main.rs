@@ -2,6 +2,7 @@
 
 #![allow(dead_code, reason = "some host code is reached from clients and each other")]
 
+mod a2a;
 mod agent;
 mod agui;
 mod analytics;
@@ -61,8 +62,10 @@ mod sentinel;
 mod server_settings;
 mod service;
 mod shell;
+mod signal;
 mod slack;
 mod store;
+mod teams;
 mod telegram;
 #[cfg(debug_assertions)]
 mod testing;
