@@ -72,6 +72,11 @@ export async function typeMessage(page: Page, text: string) {
   await page.locator('.composer textarea').press('Enter')
 }
 
+/** The computer's sending choice: `false` waits in the queue behind the running turn, `true` (the default) joins it. */
+export async function setSteering(page: Page, on: boolean) {
+  await api(page, 'setSteerWhileWorking', { enabled: on })
+}
+
 /** Opens Settings from the account panel, on its General page. */
 export async function openGeneralSettings(page: Page) {
   await page.locator('.sidebar-account').click()

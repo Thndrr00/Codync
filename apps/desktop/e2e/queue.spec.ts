@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { canSteer } from '../src/renderer/views/thread/queued-messages.ts'
-import { api, attach, steerBot, typeMessage } from './sandbox.ts'
+import { api, attach, setSteering, steerBot, typeMessage } from './sandbox.ts'
 
 type History = { entries: { kind: string; data: { text?: string; status?: string } }[] }
 
@@ -15,6 +15,8 @@ test('a long queue scrolls, with its oldest message in reach', async () => {
   const name = `Long queue e2e ${Date.now()}`
   let botId: string | undefined
   try {
+    // What queues is the subject, so the messages wait for their turn instead of joining one.
+    await setSteering(page, false)
     const bot = await steerBot(page, name, 120)
     botId = bot.id
     await page.locator('.roster-row', { hasText: name }).click()
@@ -49,6 +51,37 @@ test('a long queue scrolls, with its oldest message in reach', async () => {
       await api(page, 'stop', { botId }).catch(() => {})
       await api(page, 'deleteBot', { botId }).catch(() => {})
     }
+    await setSteering(page, true)
+    await browser.close()
+  }
+})
+
+test('a message sent to a working bot joins its turn by default', async () => {
+  const { browser, page } = await attach()
+  const name = `Steer e2e ${Date.now()}`
+  let botId: string | undefined
+  try {
+    await setSteering(page, true)
+    const { version } = await api<{ version: string }>(page, 'hello', {})
+    test.skip(!canSteer(version), `the sandbox host (${version}) can't steer yet`)
+    const bot = await steerBot(page, name, 30)
+    botId = bot.id
+    await page.locator('.roster-row', { hasText: name }).click()
+    const transcript = page.locator('.transcript')
+
+    await api(page, 'send', { botId, text: 'first' })
+    await expect.poll(() => started(page, bot.id, 'first')).toBe(true)
+    // No trip through the queue: it goes straight into the chat and the reply takes it in.
+    await typeMessage(page, 'second')
+    await expect(transcript).toContainText('second')
+    await expect(transcript).toContainText('Got: ')
+    // A passed queue is the sending computer's choice, not this app's.
+    await expect(page.locator('.queued-row')).toHaveCount(0)
+  } finally {
+    if (botId) {
+      await api(page, 'stop', { botId }).catch(() => {})
+      await api(page, 'deleteBot', { botId }).catch(() => {})
+    }
     await browser.close()
   }
 })
@@ -58,6 +91,8 @@ test('a message sent while the bot works waits above the composer, then goes out
   const name = `Queue e2e ${Date.now()}`
   let botId: string | undefined
   try {
+    // Queue chosen: what waits is the subject, and *Send now* steers one by hand.
+    await setSteering(page, false)
     const { version } = await api<{ version: string }>(page, 'hello', {})
     test.skip(!canSteer(version), `the sandbox host (${version}) can't steer yet`)
     const bot = await steerBot(page, name, 30)
@@ -90,6 +125,7 @@ test('a message sent while the bot works waits above the composer, then goes out
       await api(page, 'stop', { botId }).catch(() => {})
       await api(page, 'deleteBot', { botId }).catch(() => {})
     }
+    await setSteering(page, true)
     await browser.close()
   }
 })
