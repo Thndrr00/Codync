@@ -180,6 +180,13 @@ pub async fn check(store: &Store, backend: &str) -> Result<Value> {
         status.signed_in = backends::signed_in(backend).or_else(|| backends::credential_state(backend).signed_in);
     }
     status.signed_in = backends::apply_prompt_refusal(backend, status.signed_in);
+    // The AG-UI agent has no sign-in: an unset endpoint reports unknown, which keeps its endpoint form open.
+    // Once the URL is saved it is ready; the bot's own Agent settings can change it later.
+    if backend == crate::agui::BACKEND {
+        status.signed_in = saved_value(store, backend, crate::agui::endpoint::URL_ENV)?
+            .filter(|url| !url.trim().is_empty())
+            .map(|_| true);
+    }
     backends::set_signed_in(backend, status.signed_in);
     CHECKED.locked().insert(backend.to_owned(), status.clone());
     let mut v = serde_json::to_value(&status)?;

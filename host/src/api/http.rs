@@ -34,6 +34,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
                 .layer(axum::extract::DefaultBodyLimit::max(20 * 1024 * 1024)),
         )
         .route("/events", get(events))
+        .route("/agui/{bot}", post(agui_run).layer(axum::extract::DefaultBodyLimit::max(crate::agui::MAX_BODY)))
         .route("/scim/v2/Users", get(scim_users).post(scim_create))
         .route("/scim/v2/Users/{id}", axum::routing::delete(scim_delete))
         .route("/api/{method}", post(command))
@@ -187,6 +188,23 @@ async fn statusline(
     };
     usage::ingest_statusline(&hub, &body);
     StatusCode::NO_CONTENT
+}
+
+/// `POST /agui/{bot}`: one bot turn as an AG-UI run over Server-Sent Events (see `agui`).
+async fn agui_run(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::agui::serve(hub, &bot, body).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
 }
 
 /// `POST /ingest/hook`: one event of an agent running in a terminal, from `codync-host hook`. A permission request

@@ -3,6 +3,7 @@
 #![allow(dead_code, reason = "some host code is reached from clients and each other")]
 
 mod agent;
+mod agui;
 mod analytics;
 mod analytics_cli;
 mod api;
@@ -284,6 +285,9 @@ enum Sub {
         #[command(subcommand)]
         server: McpServer,
     },
+    /// Presents a remote AG-UI endpoint to a bot as an ACP agent (started by the host, not by hand).
+    #[command(hide = true)]
+    AguiAcp,
 }
 
 #[derive(Subcommand)]
@@ -586,6 +590,7 @@ async fn main() -> Result<()> {
         }
         Sub::Node => agent::node::add().await,
         Sub::Keeper => keeper::run().await,
+        Sub::AguiAcp => agui::shim::run().await,
         Sub::Npm { args } => std::process::exit(agent::node::npm(&args).await?),
         Sub::Statusline { port, wrapped } => {
             statusline(port, wrapped.join(" ")).await;

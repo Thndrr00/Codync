@@ -95,6 +95,19 @@ Hermes Agent runs its own `hermes acp` mode, with the provider and model you pic
 
 When Hermes asks you to choose between answers, Codync shows the choices for you to select, even when the bot automatically approves tools.
 
+## AG-UI agents
+
+A bot can also run an agent that lives somewhere else and speaks [AG-UI](https://docs.ag-ui.com) instead of ACP. Set the bot's **Agent** to **AG-UI agent**, then open **Extensions** on that computer, choose **AG-UI agent**, and save the endpoint:
+
+- **Endpoint URL:** the address that accepts an AG-UI run and streams its events. Use HTTPS; HTTP works only for a server on this computer (`localhost` or a loopback address).
+- **Access token:** optional, sent as `Authorization: Bearer`.
+
+Both values stay in the host's vault on the computer and are given to the bot's adapter each time it starts. The bot streams the remote agent's text and tool calls into its chat like any other agent, and an approval the remote agent asks for appears as a normal Codync approval card. The remote agent's own tools run there; Codync's tools are not available to it, and the bot's model settings do not apply. You can also save the same two variables for one bot only, under that bot's **Agent** settings.
+
+## AG-UI clients
+
+The reverse works too: another app that speaks AG-UI can talk to a Codync bot. Send a run to `POST /agui/<bot id or name>` on the host's local API, with the same `Authorization: Bearer` token the other local API routes use, and read the events from the response stream. The newest user message in the run becomes a message in the bot's chat; the bot's reply, tool calls and approval cards stream back as AG-UI events. An approval is answered with `respondPermission`, using the `botId` and `entryId` the approval event carries. The endpoint only answers this computer's own apps and helpers; a browser-based client should call it from its server or be served from the host's own origin.
+
 ## Other agents from the ACP registry
 
 Codync also lists every other agent in the ACP registry, about 40 more. These need no install: Codync fetches one the first time a bot uses it, through `npx`, `uvx` or a build for your platform, which it keeps in `~/.codync/agents`. Codync refreshes its copy of the registry once a day.

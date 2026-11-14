@@ -105,7 +105,9 @@ pub fn list() -> Vec<Value> {
         .iter()
         .filter(|h| workbuddy::offered(h.id))
         .map(|h| {
-            let path = installed_cli(h);
+            // The AG-UI agent needs no CLI: the host itself is its adapter, and it is always available.
+            let built_in = h.id == crate::agui::BACKEND;
+            let path = if built_in { crate::service::current_exe().ok() } else { installed_cli(h) };
             let creds = credentials::for_id(h.id);
             let reg = h.registry.and_then(|id| registry.iter().find(|a| a["id"] == id));
             let native = path.is_some() && h.local.is_some();
@@ -120,18 +122,18 @@ pub fn list() -> Vec<Value> {
             };
             // A deleted build turns the agent off only when nothing else runs it here: an installed
             // CLI, or a build downloaded again, is on. Accounts and sign-ins stay either way.
-            let turned_off = path.is_none() && !downloaded && off.iter().any(|id| id == h.id);
+            let turned_off = !built_in && path.is_none() && !downloaded && off.iter().any(|id| id == h.id);
             json!({
                 "id": h.id,
                 "name": h.name,
-                "installed": path.is_some() || downloaded,
-                "available": path.is_some() && runnable && !turned_off,
+                "installed": built_in || path.is_some() || downloaded,
+                "available": built_in || (path.is_some() && runnable && !turned_off),
                 "path": path.map(|p| p.to_string_lossy().into_owned()),
                 "description": reg.and_then(|a| a["description"].as_str()).unwrap_or_default(),
                 "installHint": h.setup,
-                "signedIn": signed_in,
+                "signedIn": if built_in { Value::Null } else { json!(signed_in) },
                 "email": creds.email,
-                "canInstall": h.install.and_then(Install::command).is_some(),
+                "canInstall": !built_in && h.install.and_then(Install::command).is_some(),
                 "node": node.map(node::State::name),
                 "command": h.local.unwrap_or_default(),
                 "registry": h.registry,
@@ -209,6 +211,16 @@ pub fn is_known(id: &str) -> bool {
 /// Ways to start this backend, best first: the installed CLI's own ACP mode, then the
 /// registry build, for a CLI that isn't installed, has no ACP mode of its own, or is too old for it.
 pub fn launch_candidates(id: &str) -> anyhow::Result<Vec<registry::Candidate>> {
+    // The AG-UI agent's adapter is this host binary: it speaks ACP to the bot and HTTP to the endpoint.
+    if id == crate::agui::BACKEND {
+        let exe = crate::service::current_exe().map_err(|error| {
+            acp::Failure::error(acp::FailureKind::NotSetUp, format!("Couldn't locate codync-host: {error}"))
+        })?;
+        return Ok(vec![registry::Candidate::Ready(registry::Cmd {
+            program: shell::quote(&exe.to_string_lossy()),
+            args: "agui-acp".into(),
+        })]);
+    }
     let h = harness(id);
     let build = h.map_or(Some(id), |h| h.registry).and_then(registry::agent);
     let out: Vec<_> = local_candidate(id)
