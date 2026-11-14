@@ -14,16 +14,20 @@ impl WhatsApp {
         if group && !event["mentioned"].as_bool().unwrap_or(false) && !event["quoted"].as_bool().unwrap_or(false) {
             return;
         }
-        // With a list, only the owner, allowed people and allowed groups get through.
+        // With a list, only the owner, allowed people and allowed groups get through; an unknown direct
+        // sender on that restricted number gets one code for the owner, answered in the app.
         let allowed = allowed(hub);
         let me = self.state.lock().await.me.clone().unwrap_or_default();
-        let own = !me.is_empty() && (chat == me || sender == me);
-        if !allowed.is_empty() && !own {
-            let listed = if group { allowed.iter().any(|a| a == chat) } else { allowed.iter().any(|a| a == sender) };
-            if !listed {
+        match super::senders::gate(&allowed, &me, chat, sender, group) {
+            super::senders::Gate::Allow => {}
+            super::senders::Gate::Ignore => return,
+            super::senders::Gate::Pair => {
+                let name = event["name"].as_str().unwrap_or_default();
+                super::senders::greet_person(self, hub, &me, chat, sender, name).await;
                 return;
             }
         }
+        let own = !me.is_empty() && (chat == me || sender == me);
         // The orchestrator: an `@name` in the message picks that bot, anything else the chosen one.
         let roster: Vec<crate::store::BotRow> = hub
             .store
@@ -132,9 +136,18 @@ impl WhatsApp {
             return;
         }
         let id = entry_id(&["message", chat, event["id"].as_str().unwrap_or_default()]);
-        let prompt = format!(
-            "WhatsApp message from {}:\n\n{note}",
-            event["name"].as_str().unwrap_or_else(|| event["sender"].as_str().unwrap_or("someone"))
+        let name = event["name"].as_str().unwrap_or_default().to_owned();
+        if let Err(error) = hub.store.note_whatsapp_person(&me, sender, &name) {
+            tracing::warn!(%error, "WhatsApp could not keep a person's name");
+        }
+        let from = if name.is_empty() { sender } else { name.as_str() };
+        let mut prompt = format!("WhatsApp message from {from}:\n\n{note}");
+        if let Some(facts) = super::person::block(&hub.store, &me, sender) {
+            prompt.push_str(&format!("\n\n{facts}"));
+        }
+        prompt.push_str(
+            "\n\nSave a lasting fact this person gives, such as the repository or the account to use, with \
+             person_remember: every later conversation with them reads it.",
         );
         let lane = crate::store::Lane::in_thread(&bot, &root);
         let Ok((entry, _)) = hub.add_entry_once(

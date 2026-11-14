@@ -756,6 +756,13 @@ export class BotStore extends BotSync {
     this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), allowed: result.allowed }
     this.changed()
   }
+  /** Approves or denies a person who asked to write; approved, they join the allowed chats. */
+  async whatsappAnswerRequest(code: string, approve: boolean) {
+    const result = await (await this.ready()).call<{ requests: import('@shared/models').WhatsAppRequest[] }>(
+      'whatsappAnswerRequest', { code, approve })
+    this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), requests: result.requests }
+    this.changed()
+  }
 
   /** Removes one message on the computer. */
   async deleteEntry(id: string) {

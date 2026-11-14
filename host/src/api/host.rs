@@ -99,6 +99,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 view["bot"] = Value::String(bot);
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
+            view["requests"] = serde_json::to_value(crate::whatsapp::pending_requests(hub))?;
+            view["people"] = serde_json::to_value(crate::whatsapp::people(hub))?;
             view
         }
         "whatsappConnect" => {
@@ -129,6 +131,18 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let jid = str_arg(&b, "jid")?;
             let list = crate::whatsapp::set_allowed(hub, jid, b["allowed"].as_bool().unwrap_or(true))?;
             json!({"allowed": list})
+        }
+        "whatsappAnswerRequest" => {
+            let code = str_arg(&b, "code")?;
+            let approve = b["approve"].as_bool().unwrap_or(false);
+            if let Some(jid) = crate::whatsapp::answer_request(hub, code, approve)? {
+                // One line to the person who asked, so they know they may write now.
+                let line = "Tu solicitud fue aprobada. Ya puedes escribir a este asistente.";
+                if let Err(error) = hub.whatsapp.send_message(&jid, line, None, None, None).await {
+                    tracing::warn!(%error, "WhatsApp could not tell an approved person");
+                }
+            }
+            json!({"requests": crate::whatsapp::pending_requests(hub)})
         }
         "whatsappSend" => {
             let body: crate::whatsapp::SendBody = serde_json::from_value(b)?;

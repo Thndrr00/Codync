@@ -18,6 +18,26 @@ import kotlinx.serialization.json.jsonObject
     val bot: String? = null,
     /** Chats and people allowed to write; empty means anyone. */
     val allowed: List<String> = emptyList(),
+    /** People waiting for the owner's answer on a restricted number. */
+    val requests: List<WhatsAppRequest> = emptyList(),
+    /** People this number knows, with the facts they gave. */
+    val people: List<WhatsAppPerson> = emptyList(),
+)
+
+/** Someone waiting for the owner to let them write to a linked number. */
+@Serializable data class WhatsAppRequest(
+    val code: String,
+    val sender: String,
+    val name: String? = null,
+    /** When the request arrived, in Unix milliseconds. */
+    val at: Long = 0,
+)
+
+/** A person a linked number knows: their name and the facts they gave. */
+@Serializable data class WhatsAppPerson(
+    val sender: String,
+    val name: String? = null,
+    val facts: List<String> = emptyList(),
 )
 
 /** What the WhatsApp screen shows, and the words it uses; the host owns the meaning. */

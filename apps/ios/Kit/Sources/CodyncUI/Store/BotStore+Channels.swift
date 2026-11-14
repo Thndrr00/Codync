@@ -79,4 +79,9 @@ extension BotStore {
     public func whatsappSetAllowed(_ jid: String, allowed: Bool) async throws -> [String] {
         try await ready().whatsappSetAllowed(jid: jid, allowed: allowed)
     }
+
+    /// Approves or denies a person who asked to write; approved, they join the allowed chats.
+    public func whatsappAnswerRequest(_ code: String, approve: Bool) async throws -> [WhatsAppRequest] {
+        try await ready().whatsappAnswerRequest(code: code, approve: approve)
+    }
 }

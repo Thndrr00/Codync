@@ -934,6 +934,26 @@ export interface WhatsAppState {
   bot?: string | null
   /** Chats and people allowed to write; empty means anyone. */
   allowed?: string[]
+  /** People waiting for the owner's answer on a restricted number. */
+  requests?: WhatsAppRequest[]
+  /** People this number knows, with the facts they gave. */
+  people?: WhatsAppPerson[]
+}
+
+/** Someone waiting for the owner to let them write to a linked number. */
+export interface WhatsAppRequest {
+  code: string
+  sender: string
+  name?: string
+  /** When the request arrived, in Unix milliseconds. */
+  at: number
+}
+
+/** A person a linked number knows: their name and the facts they gave. */
+export interface WhatsAppPerson {
+  sender: string
+  name?: string
+  facts: string[]
 }
 
 export interface CloudStatus {

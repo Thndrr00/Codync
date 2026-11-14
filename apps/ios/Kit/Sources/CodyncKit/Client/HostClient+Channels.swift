@@ -144,4 +144,12 @@ public extension HostClient {
         let answer: Answer = try await call("whatsappSetAllowed", Body(jid: jid, allowed: allowed))
         return answer.allowed
     }
+
+    /// Approves or denies a person who asked to write; approved, they join the allowed chats.
+    func whatsappAnswerRequest(code: String, approve: Bool) async throws -> [WhatsAppRequest] {
+        struct Body: Encodable { var code: String; var approve: Bool }
+        struct Answer: Decodable { var requests: [WhatsAppRequest] }
+        let answer: Answer = try await call("whatsappAnswerRequest", Body(code: code, approve: approve))
+        return answer.requests
+    }
 }

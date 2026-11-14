@@ -159,6 +159,22 @@ public struct CreatedRepo: Decodable, Equatable, Sendable {
     public var originSet: Bool
 }
 
+/// Someone waiting for the owner to let them write to a linked number.
+public struct WhatsAppRequest: Decodable, Equatable, Sendable {
+    public var code: String
+    public var sender: String
+    public var name: String?
+    /// When the request arrived, in Unix milliseconds.
+    public var at: Int64
+}
+
+/// A person a linked number knows: their name and the facts they gave.
+public struct WhatsAppPerson: Decodable, Equatable, Sendable {
+    public var sender: String
+    public var name: String?
+    public var facts: [String]
+}
+
 /// The computer's linked WhatsApp number, as `whatsappState` reports it.
 public struct WhatsAppLink: Decodable, Equatable, Sendable {
     /// `disconnected`, `starting`, `qr`, `pairing`, `connected`, `loggedOut` or `error`.
@@ -173,8 +189,12 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
     public var bot: String?
     /// Chats and people allowed to write; empty means anyone.
     public var allowed: [String]
+    /// People waiting for the owner's answer on a restricted number.
+    public var requests: [WhatsAppRequest]
+    /// People this number knows, with the facts they gave.
+    public var people: [WhatsAppPerson]
 
-    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed }
+    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed, requests, people }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -186,6 +206,8 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
         error = try c.decodeIfPresent(String.self, forKey: .error)
         bot = try c.decodeIfPresent(String.self, forKey: .bot)
         allowed = try c.decodeIfPresent([String].self, forKey: .allowed) ?? []
+        requests = try c.decodeIfPresent([WhatsAppRequest].self, forKey: .requests) ?? []
+        people = try c.decodeIfPresent([WhatsAppPerson].self, forKey: .people) ?? []
     }
 }
 

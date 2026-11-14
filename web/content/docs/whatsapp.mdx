@@ -34,6 +34,12 @@ While the allowed list is empty, anyone who has the number can write. Add a chat
 (`5215555555555@s.whatsapp.net`) to restrict it to those; the owner is always let in. For a group,
 add the group id and the bot answers the allowed people there.
 
+With a list, someone new who writes to the number directly gets one short code instead of an answer.
+Approve or deny them under **Waiting to write** in the WhatsApp sheet: an approved person joins the
+allowed chats and gets one line saying they can write; a denied person hears nothing. At most three
+people wait at a time, a repeat message returns the same code, and a code waits a day. Waiting people
+survive a restart of Codync.
+
 ## Approval codes
 
 A run that needs a decision becomes a numbered list of all its options. The person who wrote the
@@ -45,8 +51,10 @@ A card that was already settled says so.
 ## Files
 
 Photos, videos, voice notes and documents are saved under the host's data folder and named in the
-prompt, so the bot can open them. The bot's replies come back into the same chat, with any files it
-attaches (images arrive as photos). A very large attachment is named but not saved.
+prompt, so the bot can open them. An SVG arrives as a `.svg` file. The bot's replies come back into the
+same chat, with any files it attaches: a JPEG, PNG or WebP arrives as a photo with its real size, so
+WhatsApp does not crop it, and everything else arrives as a document with its name and type (an SVG as
+`image/svg+xml`). A very large attachment is named but not saved.
 
 ### Voice notes
 
@@ -61,6 +69,14 @@ Transcription accepts recognized audio containers up to 20 MiB. If it fails, the
 attachment remains in the message and the bot is told it could not be transcribed. An unlink,
 change of assigned bot, or removal from the allowed list cancels affected queued inputs.
 Temporary disconnection preserves the pending message metadata for reconnecting.
+
+## What the bot remembers about a person
+
+The number keeps one record per person: their WhatsApp name and the facts they gave, such as the
+repository to use or the account to work in. Every conversation with that person reads it, so a new
+chat or a restart does not lose it, and nobody else's conversation sees it. The bot saves and forgets
+facts by itself when the person tells it something lasting; the WhatsApp sheet shows what is saved
+under **Saved facts**, and only the bot changes it.
 
 ## Limits
 

@@ -8,11 +8,15 @@ mod approvals;
 pub(crate) mod delivery;
 mod incoming;
 mod outgoing;
+mod person;
 mod receipts;
+mod senders;
 mod settings;
 mod transport;
 mod voice_notes;
-pub(crate) use settings::{set_allowed, set_bot};
+pub(crate) use person::{forget as person_forget, remember as person_remember};
+pub(crate) use senders::Pending;
+pub(crate) use settings::{answer_request, set_allowed, set_bot};
 mod inbox;
 pub(crate) use inbox::claim_prompt;
 
@@ -305,6 +309,18 @@ pub fn allowed(hub: &Hub) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The people still waiting for the owner's answer on this number.
+pub fn pending_requests(hub: &Hub) -> Vec<Pending> {
+    let account = hub.store.kv_get("whatsapp.link.account").unwrap_or_default();
+    senders::pending(&hub.store, &account).unwrap_or_default()
+}
+
+/// The people this number knows, with the facts they gave.
+pub fn people(hub: &Hub) -> Vec<crate::store::WhatsAppPerson> {
+    let account = hub.store.kv_get("whatsapp.link.account").unwrap_or_default();
+    person::people(&hub.store, &account)
+}
+
 /// A stable entry id from its parts (`whatsapp-<hash>`).
 fn entry_id(parts: &[&str]) -> String {
     let mut digest = Sha256::new();
@@ -350,6 +366,7 @@ async fn save_media(media: &serde_json::Map<String, Value>) -> Result<Option<Str
         Some("image/jpeg") => "jpg",
         Some("image/png") => "png",
         Some("image/webp") => "webp",
+        Some("image/svg+xml") => "svg",
         Some("video/mp4") => "mp4",
         Some("audio/ogg") => "ogg",
         Some("application/pdf") => "pdf",
@@ -434,6 +451,18 @@ mod tests {
         assert!(normalize_phone("55555555").is_ok());
         assert!(normalize_phone("5555 555").is_err());
         assert!(normalize_phone("1234567890123456").is_err());
+    }
+
+    #[tokio::test]
+    async fn an_svg_attachment_is_saved_with_its_own_extension() {
+        use base64::Engine as _;
+        let mut media = serde_json::Map::new();
+        media.insert("mimetype".to_owned(), json!("image/svg+xml"));
+        let data = base64::engine::general_purpose::STANDARD.encode(b"<svg xmlns='http://www.w3.org/2000/svg'/>");
+        media.insert("data".to_owned(), json!(data));
+        let path = save_media(&media).await.unwrap().expect("an attachment under the limit");
+        assert!(path.ends_with(".svg"), "{path}");
+        tokio::fs::remove_file(&path).await.ok();
     }
 
     #[test]

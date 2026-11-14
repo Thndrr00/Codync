@@ -2,6 +2,7 @@ package com.codync.android
 
 import com.codync.android.core.WhatsApp
 import com.codync.android.core.WhatsAppLink
+import com.codync.android.core.WhatsAppRequest
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -26,4 +27,10 @@ suspend fun AppStore.whatsappSetBot(botId: String?): JsonElement = hostQuery("wh
 suspend fun AppStore.whatsappSetAllowed(jid: String, allowed: Boolean): List<String> {
     val answer = hostQuery("whatsappSetAllowed", buildJsonObject { put("jid", jid); put("allowed", allowed) })
     return WhatsApp.decode(answer).allowed
+}
+
+/** Approves or denies a person who asked to write; approved, they join the allowed chats. */
+suspend fun AppStore.whatsappAnswerRequest(code: String, approve: Boolean): List<WhatsAppRequest> {
+    val answer = hostQuery("whatsappAnswerRequest", buildJsonObject { put("code", code); put("approve", approve) })
+    return WhatsApp.decode(answer).requests
 }
