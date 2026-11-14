@@ -31,9 +31,8 @@ or `runId` is generated. The body is limited to 1 MiB, and one text delta or too
 16 KiB, so a single SSE line stays bounded.
 
 The response is `text/event-stream`; each event is one `data: <json>` line and a blank line. The run starts with
-`RUN_STARTED`, then a `STATE_SNAPSHOT` of the state the client sent (Codync has no view state of its own yet;
-K4 would add `STATE_DELTA` patches), and ends with `RUN_FINISHED` or `RUN_ERROR`. A client that disconnects
-before the end stops the bot's turn.
+`RUN_STARTED`, then a `STATE_SNAPSHOT` of the state the client sent, and ends with `RUN_FINISHED` or `RUN_ERROR`. A
+client that disconnects before the end stops the bot's turn.
 
 ### Event mapping (Codync → AG-UI)
 
@@ -48,7 +47,7 @@ from the host's event bus. This is a view of the existing bus: there is no secon
 | `agent` entry, `final: true` | the last `TEXT_MESSAGE_CONTENT`, then `TEXT_MESSAGE_END` |
 | `tool` entry, first seen | `TOOL_CALL_START` (`toolCallId`, `toolCallName` = title), `TOOL_CALL_ARGS`, `TOOL_CALL_END` |
 | `tool` entry, `completed` / `failed` | `TOOL_CALL_RESULT` (`messageId`, `toolCallId`, `content`, role `tool`), once |
-| `permission` entry (created or answered) | `CUSTOM` name `codync.approval`, `value`: `entryId`, `botId`, `title`, `detail`, `toolKind`, `options`, `selected`, `status`, and `answer: {method: "respondPermission", params: {botId, entryId}}` |
+| `permission` entry (created or answered) | `CUSTOM` name `codync.approval`, `value`: `entryId`, `botId`, `title`, `detail`, `toolKind`, `options`, `selected`, `status`, `block` and `values` (a declarative form, card K3), and `answer: {method: "respondPermission", params: {botId, entryId}}` |
 | `notice` entry | `CUSTOM` name `codync.notice` (`entryId`, `text`, `style`) |
 | `plan` entry | `CUSTOM` name `codync.plan` (`entryId`, `entries`) |
 | user message gets `turnResult` `done` / `paused` / `truncated` / `stopped` | `RUN_FINISHED` with `result` = the final text (or `null`) |
@@ -62,13 +61,17 @@ An approval is answered through the host's existing method, with the body the cu
 {"botId": "…", "entryId": "…", "optionId": "allow"}
 ```
 
+A declarative block's form adds its fields in `values` (card K3, [declarative-ui.md](declarative-ui.md#k3-declarative-blocks)):
+`{"entryId": "…", "optionId": "approve", "values": {"nights": 2, "room": "double"}}`.
+
 `POST /api/respondPermission` with that body resolves the card; the change comes back as another
 `codync.approval` custom event with `status: "answered"` and `selected`.
 
 ### What the server does not do
 
 - `tools` in the request is accepted and ignored: the bot's tools are its own MCP servers, not the client's.
-- `state` is echoed, not changed. There is no view state until K4 lands.
+- `state` is echoed, not changed. AG-UI's run state stays the request's; Codync's own per-view state (card K4)
+  is separate and documented in [declarative-ui.md](declarative-ui.md#k4-shared-view-state-and-named-actions).
 - It streams one bot turn; it does not proxy the client's own messages into an existing Codync thread, and a
   browser client must be served from the host's own origin (or call it server-to-server, with no `Origin`), as
   with every other local API route.
@@ -122,7 +125,9 @@ than one run on one `threadId`.
   are not sent.
 - The adapter does not resume a remote conversation after a host or endpoint restart (`loadSession` is not
   advertised): the next turn starts a new thread with the bot's current context in the first message.
-- The `state` document is not sent back by the endpoint to Codync; it stays a client-side concern.
+- The `state` document is not sent back by the endpoint to Codync; it stays a client-side concern. Codync's own
+  per-view state (card K4, [declarative-ui.md](declarative-ui.md#k4-shared-view-state-and-named-actions)) is not
+  passed through this adapter.
 
 ## Tests
 

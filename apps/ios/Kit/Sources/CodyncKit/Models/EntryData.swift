@@ -93,6 +93,10 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var thread: ThreadSummary?
     /// subagents: the subagents this turn started, in the order they started.
     public var subagents: [EntrySubagent]?
+    /// permission: a declarative UI block the bot shows (`DeclarativeCard`, card K3).
+    public var block: DeclarativeBlock?
+    /// permission: a block's answers once the person answered, by field id.
+    public var values: [String: JSONValue]?
 
     public init(text: String? = nil, status: String? = nil, clientNonce: String? = nil) {
         self.text = text

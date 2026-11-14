@@ -20,6 +20,9 @@ public enum HostEvent: Sendable {
     /// A thread's unread count and summary reached its root line: the chip under the message stays current
     /// (`summary` is nil once the thread is gone).
     case thread(threadId: String, botId: String, unread: Int, summary: ThreadSummary?)
+    /// The newest view action the agent invoked (`chat:<botId>`, `routine:<botId>`); card K4. A view
+    /// handles each sequence once.
+    case viewAction(view: String, action: String, arguments: [String: JSONValue], rev: Int64)
     case resync
     /// An event this app version couldn't decode (host newer/older than the app).
     case undecodable(type: String)
@@ -161,6 +164,15 @@ public struct HostClient: Sendable {
             }
         case "resync":
             return .resync
+        case "viewAction":
+            struct ActionWrap: Decodable { var view: String; var action: String; var arguments: JSONValue?; var rev: Int64? }
+            guard let action = try? d.decode(ActionWrap.self, from: data) else { return .undecodable(type: "viewAction") }
+            return .viewAction(
+                view: action.view,
+                action: action.action,
+                arguments: action.arguments?.object ?? [:],
+                rev: action.rev ?? 0
+            )
         default:
             return nil
         }
@@ -459,9 +471,16 @@ public extension HostClient {
         let _: Empty = try await call("unqueue", ["botId": botId, "entryId": entryId])
     }
 
-    func respondPermission(entryId: String, optionId: String?) async throws {
-        struct Body: Encodable { var entryId: String; var optionId: String? }
-        let _: Empty = try await call("respondPermission", Body(entryId: entryId, optionId: optionId))
+    func respondPermission(entryId: String, optionId: String?, values: [String: JSONValue]? = nil) async throws {
+        struct Body: Encodable { var entryId: String; var optionId: String?; var values: [String: JSONValue]? }
+        let _: Empty = try await call("respondPermission", Body(entryId: entryId, optionId: optionId, values: values))
+    }
+
+    /// What a view shows (`chat:<botId>`, `routine:<botId>`): card K4. `baseRev` is the version this
+    /// device last had; the host answers `conflict` when another device wrote first.
+    func patchViewState(view: String, baseRev: Int64, ops: [[String: JSONValue]]) async throws -> ViewWrite {
+        struct Body: Encodable { var view: String; var baseRev: Int64; var ops: [[String: JSONValue]] }
+        return try await call("patchViewState", Body(view: view, baseRev: baseRev, ops: ops))
     }
 
     /// Push tickets are bound to this device's key; `pushKey` lets the host seal notification text (§6.7).
@@ -634,4 +653,11 @@ public extension HostClient {
 public struct ScreenAnswer: Codable, Sendable {
     public var session: String
     public var sdp: String
+}
+
+/// The host's answer to a view state patch (card K4): the saved version, or the current one when
+/// another device wrote first (`conflict`).
+public struct ViewWrite: Decodable, Sendable {
+    public var rev: Int64?
+    public var conflict: Bool?
 }

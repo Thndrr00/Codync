@@ -107,6 +107,23 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
   useReading(store, botId)
   // The chat window remounts this per conversation (`key`), so each one opened counts.
   useScreenViewed('chat')
+  // Card K4: what this window shows, told to the host so the bot can act on it.
+  useEffect(() => {
+    store.reportView(`chat:${botId}`, [
+      { op: 'set', path: '/open', value: true },
+      { op: 'set', path: '/thread', value: threadRoot },
+    ])
+  }, [store, botId, threadRoot])
+  useEffect(() => () => store.reportView(`chat:${botId}`, [{ op: 'set', path: '/open', value: false }]), [store, botId])
+  // And its named actions: `open_thread` opens the thread the bot points at.
+  const viewAction = store.lastViewAction
+  const handledViewAction = useRef(store.lastViewAction?.seq ?? 0)
+  useEffect(() => {
+    if (!viewAction || viewAction.seq <= handledViewAction.current || viewAction.view !== `chat:${botId}`) return
+    handledViewAction.current = viewAction.seq
+    const rootId = viewAction.arguments.rootId
+    if (viewAction.action === 'open_thread' && typeof rootId === 'string') setThreadRoot(rootId)
+  }, [viewAction, botId])
 
   useLayoutEffect(() => {
     const el = root.current

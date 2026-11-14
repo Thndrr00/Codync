@@ -99,6 +99,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::dev_servers::tools());
                 list.extend(crate::chat::group::drop::tools().as_array().into_iter().flatten().cloned());
                 list.push(crate::chat::group::send::tool());
+                list.push(crate::declarative::tool());
+                list.push(crate::views::tool());
             }
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }
@@ -219,6 +221,10 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
         // Posting a request into a channel waits on the same approval card the team changes use.
         Server::Chat if params["name"] == crate::chat::group::send::TOOL => {
             ("chatCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(25))
+        }
+        // A declarative block waits for the person to fill it in and answer.
+        Server::Chat if crate::declarative::TOOLS.contains(&params["name"].as_str().unwrap_or_default()) => {
+            ("chatCall", crate::declarative::ANSWER_TIMEOUT + Duration::from_secs(15))
         }
         Server::Chat => ("chatCall", Duration::from_secs(if params["name"] == "send_file" { 70 } else { 30 })),
         Server::Team => ("teamCall", crate::chat::team::tool_timeout(params["name"].as_str().unwrap_or_default())),

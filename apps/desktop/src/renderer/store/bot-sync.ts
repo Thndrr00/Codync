@@ -40,6 +40,13 @@ export class BotSync extends BotMirror {
   private readonly heardCues = new Map<string, number>()
   /** The newest `routineFlow` rev seen for each bot, which redraws its canvas. */
   private readonly flowRevs = new Map<string, number>()
+  /** The newest view action the agent invoked, with a sequence so a view handles each one once. */
+  lastViewAction: { view: string; action: string; arguments: Record<string, unknown>; rev: number; seq: number } | null = null
+  private viewActionSeq = 0
+  /** The rev this window last had of each view it reports, so its deltas never stomp another window. */
+  private readonly viewRevs = new Map<string, number>()
+  /** Each view's reports, one at a time, so a delta never races the one before it. */
+  private readonly viewQueues = new Map<string, Promise<void>>()
   private finishRefresh: ((error?: Error) => void) | null = null
   private heldDrop: Connection | null = null
   private dropTimer: ReturnType<typeof setTimeout> | null = null
@@ -50,6 +57,25 @@ export class BotSync extends BotMirror {
 
   flowRev(botId: string): number {
     return this.flowRevs.get(botId) ?? 0
+  }
+
+  /** Tells the host what this window shows (`chat:<botId>`, `routine:<botId>`), so the bot can act on it. */
+  reportView(view: string, ops: Record<string, unknown>[]) {
+    const previous = this.viewQueues.get(view) ?? Promise.resolve()
+    const next = previous
+      .then(async () => {
+        if (this.connection.kind !== 'online') return
+        const client = await this.ready()
+        const answer = await client.call<{ rev?: number; conflict?: boolean }>('patchViewState', {
+          view,
+          baseRev: this.viewRevs.get(view) ?? 0,
+          ops,
+        })
+        if (typeof answer.rev === 'number') this.viewRevs.set(view, answer.rev)
+      })
+      // An older host has no views: reporting what's on screen is best effort.
+      .catch(() => {})
+    this.viewQueues.set(view, next)
   }
   /** The `since` the current events connection asked for, and the per-bot floors snapshotted at its `hello`. */
   private requestedSince = 0
@@ -255,6 +281,13 @@ export class BotSync extends BotMirror {
       case 'routineFlow':
         for (const id of event.botIds) this.flowRevs.set(id, event.rev)
         this.changed()
+        break
+      case 'viewState':
+        this.viewRevs.set(event.view, event.rev)
+        break
+      case 'viewAction':
+        this.viewActionSeq += 1
+        this.lastViewAction = { view: event.view, action: event.action, arguments: event.arguments, rev: event.rev, seq: this.viewActionSeq }
         break
       case 'entryDeleted':
         this.removeEntry(event.id)

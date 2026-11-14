@@ -76,6 +76,9 @@ pub(super) fn answer(hub: &Hub, c: &Connector, generation: &str, user: &str, cha
         current.data["options"].as_array().is_some_and(|v| v.iter().any(|o| o["optionId"] == selected)),
         "Approval options changed"
     );
-    hub.send_cmd(&current.bot_id, Cmd::Permission { entry_id: entry, option_id: Some(selected.to_owned()) })?;
+    hub.send_cmd(
+        &current.bot_id,
+        Cmd::Permission { entry_id: entry, option_id: Some(selected.to_owned()), values: None },
+    )?;
     Ok(json!({"ok":true,"notice":"Your choice was submitted to Codync."}))
 }

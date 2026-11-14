@@ -57,8 +57,14 @@ struct ChatRow: View {
         case "permission":
             VStack(alignment: .leading, spacing: 4) {
                 if chat?.isGroup == true { AuthorLabel(botId: entry.data.author) }
-                PermissionCard(entry: entry, hostName: model.hostName, answering: model.answering[entry.id]) { option in
-                    model.respond(entry, option: option)
+                if entry.data.block != nil {
+                    DeclarativeCard(entry: entry, answering: model.answering[entry.id]) { option, values in
+                        model.respond(entry, option: option, values: values)
+                    }
+                } else {
+                    PermissionCard(entry: entry, hostName: model.hostName, answering: model.answering[entry.id]) { option in
+                        model.respond(entry, option: option)
+                    }
                 }
             }
             .padding(.top, 12)

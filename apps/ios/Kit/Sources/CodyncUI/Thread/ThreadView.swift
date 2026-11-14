@@ -40,6 +40,14 @@ public struct ThreadView: View {
 
     var bot: Bot? { model.bots[botId] }
 
+    /// Tells the host what this chat shows (card K4), so the bot can act on it.
+    private func reportChatView() {
+        model.reportView("chat:\(botId)", [
+            ["op": .string("set"), "path": .string("/open"), "value": .bool(true)],
+            ["op": .string("set"), "path": .string("/thread"), "value": openThread.map { .string($0.root) } ?? .null],
+        ])
+    }
+
     /// The messages (each platform's own `transcript`, in its `ThreadView+` file) and the
     /// composer, without the platform's top chrome.
     private var chat: some View {
@@ -94,6 +102,17 @@ public struct ThreadView: View {
                 model.rosterThreadRequest = nil
             }
             .readingConversation(botId)
+            // Card K4: what this chat shows, told to the host; and the agent's `open_thread` action.
+            .onAppear { reportChatView() }
+            .onDisappear {
+                model.reportView("chat:\(botId)", [["op": .string("set"), "path": .string("/open"), "value": .bool(false)]])
+            }
+            .onChange(of: openThread?.root) { _, _ in reportChatView() }
+            .onChange(of: model.lastViewAction) { _, action in
+                guard let action, action.view == "chat:\(botId)", action.action == "open_thread",
+                      let root = action.arguments["rootId"]?.string else { return }
+                openThread = ThreadTarget(botId: botId, root: root)
+            }
             .onChange(of: model.voiceCallRequest, initial: true) { _, _ in
                 if model.takeVoiceCallRequest(for: botId) { startShortcutCall() }
             }

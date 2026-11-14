@@ -128,6 +128,10 @@ export type HostEvent =
   | { type: 'call'; cue: CallCue }
   /** These bots' routine-flow canvases changed: load them again. */
   | { type: 'routineFlow'; rev: number; botIds: string[] }
+  /** What a view shows changed (`chat:<botId>`, `routine:<botId>`); card K4. */
+  | { type: 'viewState'; view: string; rev: number; state: Record<string, unknown>; by: string }
+  /** The agent invoked one of a view's named actions: the screen showing it follows. */
+  | { type: 'viewAction'; view: string; action: string; arguments: Record<string, unknown>; rev: number }
   | { type: 'whatsapp'; whatsapp: import('@shared/models').WhatsAppState }
   | { type: 'resync' }
   /** An event this app version couldn't read (host newer/older than the app). */
@@ -207,6 +211,18 @@ export function parseEvent(line: string): HostEvent | null {
     case 'routineFlow': {
       const botIds = Array.isArray(raw.botIds) ? raw.botIds.filter((id): id is string => typeof id === 'string') : null
       return botIds && typeof raw.rev === 'number' ? { type, rev: raw.rev, botIds } : { type: 'undecodable', kind: 'routineFlow' }
+    }
+    case 'viewState': {
+      const state = raw.state && typeof raw.state === 'object' && !Array.isArray(raw.state) ? (raw.state as Record<string, unknown>) : null
+      return typeof raw.view === 'string' && typeof raw.rev === 'number' && state
+        ? { type, view: raw.view, rev: raw.rev, state, by: typeof raw.by === 'string' ? raw.by : 'client' }
+        : { type: 'undecodable', kind: 'viewState' }
+    }
+    case 'viewAction': {
+      const args = raw.arguments && typeof raw.arguments === 'object' ? (raw.arguments as Record<string, unknown>) : {}
+      return typeof raw.view === 'string' && typeof raw.action === 'string'
+        ? { type, view: raw.view, action: raw.action, arguments: args, rev: typeof raw.rev === 'number' ? raw.rev : 0 }
+        : { type: 'undecodable', kind: 'viewAction' }
     }
     case 'thread': {
       const thread = raw.thread as import('@shared/models').ThreadSummary | null | undefined

@@ -10,6 +10,12 @@ the clients only show it and send intents. The design is ported from Openstark's
 Flows are built by talking to the bot ("when the digest is ready, give it to Ada to translate"),
 from the graphical canvas of the desktop and phone apps, or in the terminal UI (`f` on a routine).
 
+The desktop canvas also tells the host what you're looking at (card K4,
+[declarative-ui](declarative-ui.md#k4-shared-view-state-and-named-actions)): the open view, its mode and
+the selected node. Ask the bot for a routine while the canvas is open ("put a routine for Monday at 8")
+and it invokes the canvas's `create_routine` action, so the host's routine API creates and validates the
+routine and the card appears selected on the canvas.
+
 ## Model
 
 | Thing | Fields |

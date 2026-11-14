@@ -32,6 +32,20 @@ pub(super) enum Answer {
     Agent(Value),
     /// A Codync tool (`Cmd::Approve`): true when the user allowed it.
     Codync(oneshot::Sender<bool>),
+    /// A declarative block (`Cmd::Block`): the chosen action and the form's values, or none when the
+    /// card closed without an answer.
+    Block(oneshot::Sender<Option<Value>>),
+}
+
+impl Answer {
+    /// Whether whoever waited for this card has gone (its tool timed out or its call was dropped).
+    fn abandoned(&self) -> bool {
+        match self {
+            Self::Agent(_) => false,
+            Self::Codync(reply) => reply.is_closed(),
+            Self::Block(reply) => reply.is_closed(),
+        }
+    }
 }
 
 impl Actor {
@@ -378,18 +392,14 @@ impl Actor {
 
     /// A Codync card whose tool stopped waiting (it timed out, or its call was dropped) expires, buttons and all.
     pub(super) async fn expire_abandoned(&mut self) {
-        let gone: Vec<String> = self
-            .perms
-            .iter()
-            .filter(|(_, answer)| matches!(answer, Answer::Codync(reply) if reply.is_closed()))
-            .map(|(id, _)| id.clone())
-            .collect();
+        let gone: Vec<String> =
+            self.perms.iter().filter(|(_, answer)| answer.abandoned()).map(|(id, _)| id.clone()).collect();
         for id in gone {
-            self.answer_permission(&id, None).await;
+            self.answer_permission(&id, None, None).await;
         }
     }
 
-    pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>) {
+    pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>, values: Option<Value>) {
         self.waiting.answered(entry_id);
         let Some(answer) = self.perms.remove(entry_id) else {
             // No agent waits on it any more (its process went away): close the card, so it
@@ -419,10 +429,22 @@ impl Actor {
                     status = "expired";
                 }
             }
+            Answer::Block(reply) => {
+                // A form's fields go with the chosen action; a cancel carries neither.
+                let answer = option_id
+                    .as_deref()
+                    .map(|option| json!({"optionId": option, "values": values.clone().unwrap_or(Value::Null)}));
+                if reply.send(answer).is_err() {
+                    status = "expired";
+                }
+            }
         }
         if let Some(mut e) = self.hub.store.entry(entry_id) {
             e.data["status"] = status.into();
             e.data["selected"] = option_id.into();
+            if let Some(values) = values {
+                e.data["values"] = values;
+            }
             self.hub.set_entry(entry_id, &e.data);
         }
         if self.perms.is_empty() && self.turn.is_some() {

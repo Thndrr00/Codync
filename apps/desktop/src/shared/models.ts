@@ -1,6 +1,7 @@
 import type { ApprovalRule } from './approval-rules'
 import type { ArtifactCard } from './artifacts'
 import type { CallLine } from './calls'
+import type { DeclarativeBlock } from './declarative.ts'
 import { isInternalEntry } from './entry-visibility.ts'
 export { isInternalEntry } from './entry-visibility.ts'
 import { normalizeDevServer, type DevServer } from './dev-servers.ts'
@@ -567,6 +568,10 @@ export interface EntryData {
   transcript?: CallLine[]
   /** subagents: the subagents this turn started, in the order they started (`SubagentCard`). */
   subagents?: Subagent[]
+  /** permission: a declarative UI block the bot shows (`DeclarativeCard`, card K3). */
+  block?: DeclarativeBlock
+  /** permission: the form's answers once the person answered a block, by field id. */
+  values?: Record<string, string | number | boolean> | null
 }
 
 /** One subagent an agent started in a turn (`kind: 'subagents'`): its task, state, newest step and time. */

@@ -20,6 +20,7 @@ import { callLength, relativeTime } from './chat-items'
 import { MarkdownText } from './Markdown'
 import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
+import { DeclarativeCard } from './DeclarativeCard'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
 import { SubagentCard } from './Subagents'
@@ -104,7 +105,7 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
       return (
         <VStack gap={4} className="chat-row group-start">
           {chat && isGroup(chat) ? <AuthorLabel botId={entry.data.author} /> : null}
-          <LivePermission entry={entry} />
+          {entry.data.block ? <LiveBlock entry={entry} /> : <LivePermission entry={entry} />}
         </VStack>
       )
     case 'subagents':
@@ -305,6 +306,12 @@ function ChiefIncidentNotice({ entry }: { entry: Entry }) {
 function LivePermission({ entry }: { entry: Entry }) {
   const store = useLiveStore()
   return <PermissionCard entry={entry} hostName={store.hostName} answering={store.answering.get(entry.id) ?? null} respond={(o, rule) => store.respond(entry, o, rule)} propose={() => store.proposeRule(entry)} />
+}
+
+/** A declarative block (card K3): its answers go back through the same path as any approval. */
+function LiveBlock({ entry }: { entry: Entry }) {
+  const store = useLiveStore()
+  return <DeclarativeCard entry={entry} answering={store.answering.get(entry.id) ?? null} respond={(o, values) => store.respond(entry, o, undefined, values)} />
 }
 
 /** A message's thread, under it: who replied, how many, and how recently (or how many are new). */

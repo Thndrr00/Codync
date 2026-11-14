@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { isGroup, type Bot } from '@shared/models'
 import { Button, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { ModalHeader, Sheet } from '../../../components/Overlay'
@@ -50,6 +50,27 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   useEffect(() => {
     if (rev > 0) void flow.load()
   }, [rev, flow])
+  // Card K4: the canvas reports what the person sees, and follows the agent's named actions.
+  useEffect(() => {
+    store.reportView(`routine:${botId}`, [
+      { op: 'set', path: '/open', value: true },
+      { op: 'set', path: '/mode', value: mode },
+      { op: 'set', path: '/selected', value: selection ? { kind: selection.kind, key: selection.kind === 'node' ? selection.key : selection.id } : null },
+    ])
+  }, [store, botId, mode, selection])
+  useEffect(() => () => store.reportView(`routine:${botId}`, [{ op: 'set', path: '/open', value: false }]), [store, botId])
+  const viewAction = store.lastViewAction
+  const handledViewAction = useRef(store.lastViewAction?.seq ?? 0)
+  useEffect(() => {
+    if (!viewAction || viewAction.seq <= handledViewAction.current || viewAction.view !== `routine:${botId}`) return
+    handledViewAction.current = viewAction.seq
+    if (viewAction.action !== 'create_routine' && viewAction.action !== 'select_routine') return
+    const routineId = viewAction.arguments.routineId
+    if (typeof routineId !== 'string') return
+    setMode('canvas')
+    setSelection({ kind: 'node', key: `routine:${routineId}` })
+    void flow.load()
+  }, [viewAction, botId, flow])
 
   const canvas = model.canvas
   const bots = store.bots

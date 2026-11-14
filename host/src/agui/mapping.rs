@@ -156,6 +156,9 @@ impl Mapper {
                 "options": entry["data"]["options"],
                 "selected": entry["data"]["selected"],
                 "status": status,
+                // A declarative block (card K3) rides along with the answers it got, when it has one.
+                "block": entry["data"]["block"],
+                "values": entry["data"]["values"],
                 // How a client answers, through the host's existing permission method.
                 "answer": {
                     "method": "respondPermission",

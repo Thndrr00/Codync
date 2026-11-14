@@ -367,10 +367,16 @@ export class BotStore extends BotSync {
     }
   }
 
-  /** Answers a card; with `rule`, an "always allow" also keeps that rule for the bot. */
-  respond(entry: Entry, option: string | null, rule?: ApprovalRule) {
+  /** Answers a card; with `rule`, an "always allow" also keeps that rule for the bot; `values` carries a
+   * declarative block's form fields. */
+  respond(entry: Entry, option: string | null, rule?: ApprovalRule, values?: Record<string, string | number | boolean>) {
     this.answer(entry, option ?? '', async (c) => {
-      await c.call('respondPermission', { entryId: entry.id, optionId: option, ...(rule ? { rule } : {}) })
+      await c.call('respondPermission', {
+        entryId: entry.id,
+        optionId: option,
+        ...(rule ? { rule } : {}),
+        ...(values ? { values } : {}),
+      })
       // The card's own update follows on the events stream; hold the spinner until then.
       await sleep(2000)
     })

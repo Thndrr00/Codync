@@ -472,6 +472,7 @@
   "Features you use": "你使用的功能",
   "Files": "文件",
   "Files it changed on your computer stay as they are.": "它在电脑上改过的文件会保留。",
+  "Fill in the required fields to continue.": "填写必填项后继续。",
   "Filter this folder": "Filter this folder",
   "Find Codync in the list": "在列表里找到 Codync",
   "Find computers in your SSH config": "从 SSH 配置文件查找电脑",

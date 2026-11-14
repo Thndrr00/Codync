@@ -117,6 +117,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::dev_servers::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::group::drop::TOOLS.contains(&name) {
                 crate::chat::group::drop::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::declarative::TOOLS.contains(&name) {
+                crate::declarative::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::views::TOOLS.contains(&name) {
+                crate::views::call(hub, bot, name, &b["arguments"])?
             } else if name == crate::chat::group::send::TOOL {
                 crate::chat::group::send::call(hub, bot, &b["arguments"]).await?
             } else {
@@ -701,6 +705,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 bail!("That isn't an approval card");
             }
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            // A declarative block's form: its fields are checked against the block's own schema before
+            // the answer goes on, so a client can't smuggle values the form never offered.
+            let values = match b.get("values") {
+                Some(Value::Object(fields)) => Some(Value::Object(fields.clone())),
+                Some(Value::Null) | None => None,
+                Some(_) => bail!("`values` must be an object of the form's field ids"),
+            };
+            let values = crate::declarative::answers(&e.data["block"], values)?;
             // The card is the effect's key: the first decision is the one that happens. The same
             // answer again (another device, a retry) gets the card back; a different one is refused.
             match e.data["status"].as_str() {
@@ -727,7 +739,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
-            hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;
+            hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id, values })?;
             json!({})
         }
         _ => return Ok(ControlFlow::Continue(b)),

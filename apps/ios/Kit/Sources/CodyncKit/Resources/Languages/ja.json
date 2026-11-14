@@ -472,6 +472,7 @@
   "Features you use": "使用する機能",
   "Files": "ファイル",
   "Files it changed on your computer stay as they are.": "コンピュータ上で変更されたファイルはそのまま残ります。",
+  "Fill in the required fields to continue.": "必須項目を入力すると続行できます。",
   "Filter this folder": "Filter this folder",
   "Find Codync in the list": "リストで Codync を見つけます",
   "Find computers in your SSH config": "SSH 設定からコンピューターを探す",

@@ -159,9 +159,9 @@ extension BotStore {
         }
     }
 
-    public func respond(_ entry: Entry, option: String?) {
+    public func respond(_ entry: Entry, option: String?, values: [String: JSONValue]? = nil) {
         answer(entry, option ?? "") {
-            try await $0.respondPermission(entryId: entry.id, optionId: option)
+            try await $0.respondPermission(entryId: entry.id, optionId: option, values: values)
             // The card's own update follows on the events stream; hold the spinner until then.
             try? await Task.sleep(for: .seconds(2))
         }

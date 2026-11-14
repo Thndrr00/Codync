@@ -181,6 +181,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if documents::METHODS.contains(&method) {
         return documents::call(hub, method, b);
     }
+    if crate::views::METHODS.contains(&method) {
+        return crate::views::api_call(hub, caller, method, &b).await;
+    }
     if matches!(method, "listComputerActivity" | "exportComputerActivity") {
         return computer_activity::read(hub, method, &b);
     }

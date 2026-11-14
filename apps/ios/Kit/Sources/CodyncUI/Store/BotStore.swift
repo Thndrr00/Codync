@@ -167,6 +167,16 @@ public final class BotStore {
     /// a spinner on it and takes no second answer.
     public internal(set) var answering: [String: String] = [:]
 
+    /// The newest named action the agent invoked on a view (`chat:<botId>`, `routine:<botId>`); a
+    /// view handles each `seq` once. Card K4.
+    public internal(set) var lastViewAction: ViewActionEvent?
+    /// How many view actions this session has seen, so a repeated one isn't handled twice.
+    @ObservationIgnored var viewActionSeq = 0
+    /// The rev this device last had of each view it reports, so its deltas never stomp another device.
+    @ObservationIgnored var viewRevs: [String: Int64] = [:]
+    /// Each view's reports, one at a time, so a delta never races the one before it.
+    @ObservationIgnored var viewQueues: [String: Task<Void, Never>] = [:]
+
     /// The chats on screen, by the view showing each.
     @ObservationIgnored var readingViews: [UUID: String] = [:]
 
@@ -350,4 +360,14 @@ public struct OutgoingFile: Identifiable, Sendable {
 
     /// Anything larger is refused by the computer.
     public static let maxSize = 100 * 1024 * 1024
+}
+
+/// A named action the agent invoked on a view (`viewAction` event, card K4): the screen showing
+/// that view follows it, once per `seq`.
+public struct ViewActionEvent: Equatable, Sendable {
+    public var view: String
+    public var action: String
+    public var arguments: [String: JSONValue]
+    public var rev: Int64
+    public var seq: Int
 }

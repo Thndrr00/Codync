@@ -19,6 +19,7 @@ mod cli;
 mod cloud_cli;
 mod compat;
 mod computer;
+mod declarative;
 mod dev_servers;
 mod diagnostics;
 mod discord;
@@ -65,6 +66,7 @@ mod tools;
 mod tui;
 mod update;
 mod usage;
+mod views;
 mod voice;
 mod whatsapp;
 
