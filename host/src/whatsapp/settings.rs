@@ -82,7 +82,7 @@ mod tests {
     use super::*;
     use crate::remote::identity::Identity;
 
-    fn hub() -> (Hub, std::path::PathBuf) {
+    fn hub() -> (std::sync::Arc<Hub>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("codync-whatsapp-settings-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("store");

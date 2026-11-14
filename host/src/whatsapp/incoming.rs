@@ -81,7 +81,7 @@ impl WhatsApp {
         }
         // From this fence through enqueue there are no await points. Setting/link mutations use
         // the same lock, and the actor checks this fence again before starting a model turn.
-        let _configuration = crate::LockExt::locked(&hub.store.connector_lock);
+        let configuration = crate::LockExt::locked(&hub.store.connector_lock);
         match inbox::snapshot(hub, event, current_link.me.as_deref().unwrap_or_default()) {
             Ok(Some(current)) if current == expected => {}
             Ok(_) => return,
@@ -154,6 +154,8 @@ impl WhatsApp {
             if let Err(error) = hub.send_cmd(&bot, crate::agent::bot::Cmd::Send { lane, entry_id: entry.id, text }) {
                 tracing::warn!(%error, "Could not deliver a WhatsApp message to a bot");
             }
+            // The fence did its job at the enqueue; the acknowledgement is network work.
+            drop(configuration);
             self.acknowledge(
                 hub,
                 chat,
