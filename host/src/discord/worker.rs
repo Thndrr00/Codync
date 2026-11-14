@@ -1,6 +1,10 @@
 use super::{Arc, Hub, LockExt, Result, SLOT, client, json, load};
 use crate::{
     agent::bot::Cmd,
+    channels::{
+        approval::{self, Approval},
+        render,
+    },
     store::{EntryKind, Lane, discord::DiscordIncoming},
 };
 use std::time::Duration;
@@ -52,25 +56,10 @@ async fn card(hub: &Arc<Hub>, entry: &serde_json::Value) -> Result<()> {
     let settled = entry["data"]["discordSettled"] == true;
     match (entry["data"]["status"].as_str(), shown, settled) {
         (Some("pending"), false, _) => {
-            let buttons: Vec<(String, String)> = entry["data"]["options"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|o| {
-                    Some((o["name"].as_str()?.to_owned(), super::interactions::button(entry, o["optionId"].as_str()?)))
-                })
-                .collect();
-            if buttons.is_empty() {
-                return Ok(());
-            }
-            let message = client::card(
-                &super::Endpoint::discord(),
-                &c.bot_token,
-                channel,
-                &super::interactions::text(entry),
-                &buttons,
-            )
-            .await?;
+            let Some(model) = Approval::from_entry(entry) else { return Ok(()) };
+            let blocks = model.blocks(|option| approval::action(entry, option));
+            let body = render::discord(&blocks);
+            let message = client::card(&super::Endpoint::discord(), &c.bot_token, channel, &body).await?;
             let mut data = entry["data"].clone();
             data["discordCard"] = message.into();
             hub.set_entry(id, &data);

@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
+mod cards;
 pub(crate) mod ingress;
 mod socket;
 #[cfg(test)]
@@ -14,7 +15,7 @@ pub(crate) use worker::claim_prompt;
 
 /// Delivers replies and, when the app has an app-level token, listens over Socket Mode.
 pub(crate) async fn run(hub: Arc<Hub>) {
-    tokio::join!(worker::run(hub.clone()), socket::run(hub, socket::Endpoint::slack()));
+    tokio::join!(worker::run(hub.clone()), socket::run(hub.clone(), socket::Endpoint::slack()), cards::run(hub));
 }
 const SLOT: &str = "slack.channel";
 pub const METHODS: &[&str] =

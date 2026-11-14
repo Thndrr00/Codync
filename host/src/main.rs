@@ -61,6 +61,8 @@ mod shell;
 mod slack;
 mod store;
 mod telegram;
+#[cfg(debug_assertions)]
+mod testing;
 mod theme;
 mod tools;
 mod tui;
@@ -290,6 +292,11 @@ enum Sub {
     /// Presents a remote AG-UI endpoint to a bot as an ACP agent (started by the host, not by hand).
     #[command(hide = true)]
     AguiAcp,
+    /// Local mocks for offline agent tests: an OpenAI-compatible provider, MCP, A2A and AG-UI.
+    /// Debug builds only; a release binary has no such command.
+    #[cfg(debug_assertions)]
+    #[command(hide = true)]
+    Mock(testing::Args),
 }
 
 #[derive(Subcommand)]
@@ -593,6 +600,8 @@ async fn main() -> Result<()> {
         Sub::Node => agent::node::add().await,
         Sub::Keeper => keeper::run().await,
         Sub::AguiAcp => agui::shim::run().await,
+        #[cfg(debug_assertions)]
+        Sub::Mock(args) => testing::serve(args).await,
         Sub::Npm { args } => std::process::exit(agent::node::npm(&args).await?),
         Sub::Statusline { port, wrapped } => {
             statusline(port, wrapped.join(" ")).await;

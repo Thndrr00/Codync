@@ -1,6 +1,7 @@
 //! Outbound chat replies and approval cards stay bound to their original `WhatsApp` link.
 
 use super::{Arc, Hub, Result, WhatsApp, approvals, delivery, json};
+use crate::channels::{approval::Approval, render};
 
 impl WhatsApp {
     /// Sends the bot replies of this chat back to it. A file that left the chat follows its text.
@@ -50,18 +51,17 @@ impl WhatsApp {
         let account = binding[0].as_str().unwrap_or_default();
         for (chat, entry) in cards {
             let Some(card) = hub.store.entry(&entry) else { continue };
-            let Some(options) = card.data["options"].as_array().filter(|options| !options.is_empty()) else { continue };
+            if card.data["options"].as_array().is_none_or(Vec::is_empty) {
+                continue;
+            }
             let Some(sender) = approvals::sender(hub, &card, &chat)? else {
                 hub.store.exclude_whatsapp_card(&entry)?;
                 continue;
             };
-            let mut lines = vec![format!(
-                "{}\n\nResponde con el número de una opción:",
-                card.data["title"].as_str().unwrap_or("Aprobación")
-            )];
-            for (index, option) in options.iter().enumerate() {
-                lines.push(format!("{}) {}", index + 1, option["name"].as_str().unwrap_or_default()));
-            }
+            let Ok(value) = serde_json::to_value(&card) else { continue };
+            let Some(model) = Approval::from_entry(&value) else { continue };
+            // The buttons become numbered options, answered by their number in the chat.
+            let text = render::whatsapp(&model.blocks(|_| None));
             // Reserve before handing anything to the bridge. A missing acknowledgement can
             // mean the card was posted, so a later tick must not post it again automatically.
             {
@@ -71,7 +71,7 @@ impl WhatsApp {
                 }
                 hub.store.mark_whatsapp_card(&chat, &entry, &sender)?;
             }
-            self.send_bound_text(&hub.store, account, &binding, &chat, &lines.join("\n")).await?;
+            self.send_bound_text(&hub.store, account, &binding, &chat, &text).await?;
         }
         Ok(())
     }
