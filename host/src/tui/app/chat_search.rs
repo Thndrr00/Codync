@@ -1,6 +1,7 @@
-//! Search inside one chat: what it said and what its pages hold, best match first, each with its snippet and
-//! date. Typing narrows on Enter; a person can keep only one side of the chat, add the tool traces, open a
-//! match in its context, and read a page. The host does the searching; this sheet only keeps the keys.
+//! Search inside one chat: what it said, what its pages hold and what its memory keeps, best match first, each
+//! with its snippet and date. Typing narrows on Enter; a person can keep one side of the chat, one channel of it,
+//! add the tool traces, open a match in its context, and read a page or a note. The host does the searching; this
+//! sheet only keeps the keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
@@ -42,11 +43,48 @@ impl Side {
     }
 }
 
+/// Where in the chat the words are looked for: everywhere, the chat itself, or its side conversations.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum Scope {
+    #[default]
+    Everything,
+    Main,
+    Threads,
+}
+
+impl Scope {
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Everything => "Everything",
+            Self::Main => "This chat",
+            Self::Threads => "Threads",
+        }
+    }
+
+    fn next(self) -> Self {
+        match self {
+            Self::Everything => Self::Main,
+            Self::Main => Self::Threads,
+            Self::Threads => Self::Everything,
+        }
+    }
+
+    /// The `channel` the host understands; everywhere leaves it off.
+    fn wire(self) -> Option<&'static str> {
+        match self {
+            Self::Everything => None,
+            Self::Main => Some("main"),
+            Self::Threads => Some("threads"),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum ChatSearchRead {
     Search,
     Context,
     Page,
+    Note,
 }
 
 pub struct ChatSearchSheet {
@@ -54,6 +92,7 @@ pub struct ChatSearchSheet {
     pub bot_name: String,
     pub query: Editor,
     pub side: Side,
+    pub scope: Scope,
     pub tools: bool,
     pub hits: Vec<Value>,
     pub sel: usize,
@@ -62,8 +101,10 @@ pub struct ChatSearchSheet {
     pub context_offset: usize,
     /// The hit whose context is open or being fetched.
     pub anchor: Option<String>,
-    /// A page's title and body, shown over the results.
+    /// A page's or note's title and body, shown over the results.
     pub page: Option<(String, String)>,
+    /// Whether that page is a memory note rather than a document.
+    pub note: bool,
     pub loading: bool,
     pub error: Option<String>,
     pub sequence: u64,
@@ -79,6 +120,7 @@ impl ChatSearchSheet {
         self.context_offset = 0;
         self.anchor = None;
         self.page = None;
+        self.note = false;
         self.error = None;
     }
 
@@ -98,6 +140,7 @@ impl App {
             bot_name: bot.name.clone(),
             query: Editor::default(),
             side: Side::Everyone,
+            scope: Scope::Everything,
             tools: false,
             hits: Vec::new(),
             sel: 0,
@@ -105,6 +148,7 @@ impl App {
             context_offset: 0,
             anchor: None,
             page: None,
+            note: false,
             loading: false,
             error: None,
             sequence: 0,
@@ -119,6 +163,7 @@ impl App {
             KeyCode::Esc | KeyCode::Enter if s.context.is_some() || s.page.is_some() => {
                 s.context = None;
                 s.page = None;
+                s.note = false;
             }
             KeyCode::Esc => return None,
             KeyCode::Down if s.context.is_some() => {
@@ -132,6 +177,11 @@ impl App {
             KeyCode::Up => s.sel = s.sel.saturating_sub(1),
             KeyCode::Tab => {
                 s.side = s.side.next();
+                s.reset();
+                self.search_chat(&mut s, false);
+            }
+            KeyCode::Char('s') if control => {
+                s.scope = s.scope.next();
                 s.reset();
                 self.search_chat(&mut s, false);
             }
@@ -170,6 +220,9 @@ impl App {
         if let Some(author) = s.side.wire() {
             body["author"] = json!(author);
         }
+        if let Some(channel) = s.scope.wire() {
+            body["channel"] = json!(channel);
+        }
         self.call("search", body, After::ChatSearch(s.sequence, ChatSearchRead::Search));
     }
 
@@ -180,7 +233,18 @@ impl App {
         s.error = None;
         s.anchor = Some(id.to_owned());
         let sequence = s.sequence;
-        if hit["kind"] == "document" {
+        if hit["kind"] == "memory" {
+            s.note = true;
+            self.call(
+                "memoryFile",
+                json!({
+                    "botId": s.bot_id,
+                    "file": hit["title"].as_str().unwrap_or_default(),
+                    "shared": hit["shared"] == true,
+                }),
+                After::ChatSearch(sequence, ChatSearchRead::Note),
+            );
+        } else if hit["kind"] == "document" {
             self.call("getDocument", json!({"id": id}), After::ChatSearch(sequence, ChatSearchRead::Page));
         } else {
             self.call(
@@ -223,6 +287,12 @@ impl App {
                     s.page = Some((
                         document["title"].as_str().unwrap_or_default().to_owned(),
                         document["body"].as_str().unwrap_or_default().to_owned(),
+                    ));
+                }
+                ChatSearchRead::Note => {
+                    s.page = Some((
+                        value["file"].as_str().unwrap_or_default().to_owned(),
+                        value["content"].as_str().unwrap_or_default().to_owned(),
                     ));
                 }
             },

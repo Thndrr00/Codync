@@ -1,5 +1,5 @@
-//! Searching one chat from the terminal: the field, whose words were said, the matches, and a hit's context
-//! or page in place of the list.
+//! Searching one chat from the terminal: the field, whose words were said, where in the chat, the matches, and a
+//! hit's context, page or note in place of the list.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -27,7 +27,12 @@ pub(super) fn chat_search(buf: &mut Buffer, area: Rect, s: &ChatSearchSheet) {
         inner.x,
         inner.y + 1,
         inner.width,
-        &format!("{} · {} tools · tab side · ^t traces", tr(s.side.title()), if s.tools { "with" } else { "no" }),
+        &format!(
+            "{} · {} · {} tools · tab side · ^s where · ^t traces",
+            tr(s.side.title()),
+            tr(s.scope.title()),
+            tr(if s.tools { "with" } else { "no" })
+        ),
         t.dim,
     );
     let top = inner.y + 3;
@@ -40,7 +45,11 @@ pub(super) fn chat_search(buf: &mut Buffer, area: Rect, s: &ChatSearchSheet) {
             }
             put(buf, inner.x, y, inner.width, &truncate(line, width), t.secondary);
         }
-        footer(buf, inner, "A page of this bot · esc returns");
+        footer(
+            buf,
+            inner,
+            if s.note { "A note from its memory · esc returns" } else { "A page of this bot · esc returns" },
+        );
         return;
     }
     if let Some(entries) = &s.context {
@@ -102,7 +111,7 @@ pub(super) fn chat_search(buf: &mut Buffer, area: Rect, s: &ChatSearchSheet) {
             &tr("Type a few words, then Enter: every one of them has to appear"),
             t.dim,
         );
-        footer(buf, inner, "^t traces · tab side · esc close");
+        footer(buf, inner, "^t traces · tab side · ^s where · esc close");
         return;
     }
     let mut y = top;
@@ -113,6 +122,8 @@ pub(super) fn chat_search(buf: &mut Buffer, area: Rect, s: &ChatSearchSheet) {
         let selected = index == s.sel;
         let who = if hit["kind"] == "document" {
             format!("{} · {}", tr("Page"), hit["title"].as_str().unwrap_or_default())
+        } else if hit["kind"] == "memory" {
+            format!("{} · {}", tr("Note"), hit["title"].as_str().unwrap_or_default())
         } else {
             format!(
                 "{} · {}",

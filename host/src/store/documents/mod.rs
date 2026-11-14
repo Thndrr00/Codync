@@ -261,6 +261,8 @@ impl Store {
             )?;
             links::forget(&tx, id)?;
             super::search::forget(&tx, "document", id)?;
+            // Its conversation goes with it; the messages stay in the chat but nothing can open them by lane.
+            super::search::forget_channel(&tx, &doc.bot_id, Some(&format!("doc:{id}")))?;
         }
         tx.commit()?;
         Ok(DocumentDelete::Deleted { ids, rev })

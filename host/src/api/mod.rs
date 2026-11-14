@@ -193,8 +193,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return crate::chat::library::versions(hub, &b);
     }
     // What a chat said about some words: the message, its snippet and when. Tool traces and notices stay
-    // out unless asked for: what a person searches for is what was said. `author`, `since` and `until`
-    // narrow it further; a value that isn't one leaves that filter off, never an error.
+    // out unless asked for: what a person searches for is what was said. `author`, `channel` (`main`, `threads`
+    // or one thread id), `since` and `until` narrow it further; a value that isn't one leaves that filter off,
+    // never an error.
     if method == "search" {
         let bot = str_arg(&b, "botId")?;
         let query = b["query"].as_str().unwrap_or_default();
@@ -202,6 +203,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         let filters = crate::store::Filters {
             tools: b["tools"] == true,
             author: b["author"].as_str().and_then(crate::store::Author::parse),
+            channel: b["channel"].as_str().and_then(crate::store::Channel::parse),
             since: b["since"].as_i64(),
             until: b["until"].as_i64(),
         };

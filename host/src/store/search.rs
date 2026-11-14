@@ -1,10 +1,10 @@
-//! Search over what a bot knows: what was said in its chat and what its documents hold, found by
-//! words, with the source of each hit. One FTS5 index holds both kinds, filled as they are written
-//! and backfilled once for a database from before this existed.
+//! Search over what a bot knows: what was said in its chat, what its documents hold and what its
+//! memory files keep, found by words, with the source of each hit. One FTS5 index holds every kind,
+//! filled as they are written and backfilled once for a database from before this existed.
 //!
 //! Idea from agentes.chat's search (`packages/engine/src/search.ts`, AGPL-3.0-only): an index of
-//! several kinds of source, each with its own builder. The behavior, not the code; written against
-//! Codync's own `entries` and `documents`.
+//! several kinds of source, each with its own builder, narrowed by the channel a message lives in.
+//! The behavior, not the code; written against Codync's own `entries`, `documents` and memory tables.
 
 use super::Store;
 use crate::LockExt;
@@ -110,6 +110,59 @@ pub(super) fn forget(c: &Connection, kind: &str, source: &str) -> Result<()> {
     Ok(())
 }
 
+/// Indexes one memory file as it is saved, replacing what that note said before. The source is
+/// `layer/name`, with an empty layer for the shared memory.
+fn index_memory(c: &Connection, layer: &str, name: &str, at: i64, content: &str) -> Result<()> {
+    let source = format!("{layer}/{name}");
+    forget(c, "memory", &source)?;
+    insert(c, &document_body(name, content), "memory", &source, layer, at)
+}
+
+/// Brings the memory rows of the index in step with the memory files: a note that changed is indexed
+/// again, and the rows of a note that was deleted (or of a layer that is gone) leave. Memory is small,
+/// so doing it at search time, instead of on every write, keeps it fresh after a scan, a dream or a
+/// file edited outside Codync alike.
+fn sync_memory(c: &Connection) -> Result<()> {
+    c.execute(
+        "DELETE FROM search_fts WHERE kind = 'memory' AND NOT EXISTS (
+            SELECT 1 FROM memory_files m JOIN memory_file_versions v ON v.id = m.version
+            WHERE m.bot || '/' || m.name = search_fts.source_id AND m.hash <> '' AND search_fts.at = m.updated_at)",
+        [],
+    )?;
+    let stale: Vec<(String, String, i64, String)> = {
+        let mut statement = c.prepare(
+            "SELECT m.bot, m.name, m.updated_at, v.content FROM memory_files m
+             JOIN memory_file_versions v ON v.id = m.version
+             WHERE m.hash <> '' AND v.content IS NOT NULL AND NOT EXISTS (
+                 SELECT 1 FROM search_fts f WHERE f.kind = 'memory'
+                 AND f.source_id = m.bot || '/' || m.name AND f.at = m.updated_at)",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get::<_, Option<String>>(3)?.unwrap_or_default()))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    for (layer, name, at, content) in &stale {
+        index_memory(c, layer, name, *at, content)?;
+    }
+    Ok(())
+}
+
+/// Drops the messages of one channel (a lane: `main` when `thread` is empty) from the index: what
+/// deleting a page's conversation, or a whole chat, leaves unreachable.
+pub(super) fn forget_channel(c: &Connection, chat: &str, thread: Option<&str>) -> Result<()> {
+    match thread {
+        Some(thread) => c.execute(
+            "DELETE FROM search_fts WHERE kind = 'message'
+             AND source_id IN (SELECT id FROM entries WHERE bot_id = ?1 AND thread_id = ?2)",
+            params![chat, thread],
+        )?,
+        None => c.execute("DELETE FROM search_fts WHERE kind = 'message' AND bot_id = ?1", [chat])?,
+    };
+    Ok(())
+}
+
 /// What a hit's age costs it in the ranking: capped, so an old exact match still beats a vague recent one.
 fn age_penalty(at: i64, now: i64) -> f64 {
     #[allow(clippy::cast_precision_loss)]
@@ -154,13 +207,39 @@ impl Author {
     }
 }
 
+/// Which channel of a chat a search keeps: the chat itself, its side conversations (a page's
+/// conversation, a Slack thread), or one of them by its thread id.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Channel {
+    /// The chat itself, where messages answer each other.
+    Main,
+    /// Every side conversation of the chat, and only those.
+    Threads,
+    /// One side conversation, by its `thread_id` (`doc:<id>`, `slack-…`).
+    Thread(String),
+}
+
+impl Channel {
+    /// The wire value (`channel` in a request), if it names a channel. Anything else is a thread id.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "main" => Some(Self::Main),
+            "threads" => Some(Self::Threads),
+            "" => None,
+            thread => Some(Self::Thread(thread.to_owned())),
+        }
+    }
+}
+
 /// How a search narrows: everything worth reading, anywhere in time, by default.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Filters {
     /// Tool traces, thoughts, permission prompts and notices too.
     pub tools: bool,
     /// Only what this side said.
     pub author: Option<Author>,
+    /// Only one channel of the chat: pages and memory belong to none, so they stay out.
+    pub channel: Option<Channel>,
     /// Only hits from this moment on (epoch milliseconds).
     pub since: Option<i64>,
     /// Only hits up to this moment (epoch milliseconds).
@@ -168,8 +247,9 @@ pub struct Filters {
 }
 
 impl Store {
-    /// What this bot knows about `query`, best match first: the source, its kind and a snippet. Only what was
-    /// said is searched: tool traces and notices are the agent's working noise, `search_with_tools` keeps them.
+    /// What this bot knows about `query`, best match first: the source, its kind and a snippet. Its chat,
+    /// its pages and its memory are searched; tool traces and notices are the agent's working noise, so
+    /// `search_with_tools` keeps them.
     pub fn search(&self, bot: &str, query: &str, limit: u32) -> Result<Vec<Value>> {
         self.search_filtered(bot, query, limit, &Filters::default())
     }
@@ -188,16 +268,28 @@ impl Store {
         }
         let limit = i64::from(limit.clamp(1, MAX_HITS));
         self.backfill_search()?;
+        let shares = self.bot(bot)?.is_some_and(|row| crate::chat::memory::shared(&row.config));
         let mut args: Vec<Box<dyn rusqlite::ToSql>> =
             vec![Box::new(terms), Box::new(bot.to_owned()), Box::new(SNIPPET_TOKENS)];
         // The limit applies after the kinds are picked, so a page of traces doesn't fill the answer.
         let mut wanted = String::new();
         if !filters.tools {
-            wanted.push_str(" AND (f.kind = 'document' OR e.kind IN ('user', 'agent', 'plan'))");
+            wanted.push_str(" AND (f.kind IN ('document', 'memory') OR e.kind IN ('user', 'agent', 'plan'))");
         }
         if let Some(author) = filters.author {
             // The kinds are literal SQL already (`Author::kinds`), not bound values.
             let _ = write!(wanted, " AND f.kind = 'message' AND e.kind IN ({})", author.kinds());
+        }
+        if let Some(channel) = &filters.channel {
+            wanted.push_str(" AND f.kind = 'message'");
+            match channel {
+                Channel::Main => wanted.push_str(" AND e.thread_id IS NULL"),
+                Channel::Threads => wanted.push_str(" AND e.thread_id IS NOT NULL"),
+                Channel::Thread(thread) => {
+                    args.push(Box::new(thread.clone()));
+                    let _ = write!(wanted, " AND e.thread_id = ?{}", args.len());
+                }
+            }
         }
         if let Some(since) = filters.since {
             args.push(Box::new(since));
@@ -208,6 +300,9 @@ impl Store {
             let _ = write!(wanted, " AND f.at <= ?{}", args.len());
         }
         let c = self.db.locked();
+        // Shared memory belongs to no bot and is kept under an empty id: a bot that uses it reads it too.
+        let mine = if shares { "(f.bot_id = ?2 OR (f.bot_id = '' AND f.kind = 'memory'))" } else { "f.bot_id = ?2" };
+        sync_memory(&c)?;
         // More candidates than the limit: recency reorders what the rank found, so the cut has to wait.
         args.push(Box::new(limit * RANKED_FACTOR));
         let now = super::now_ms();
@@ -217,7 +312,7 @@ impl Store {
              FROM search_fts f
              LEFT JOIN entries e ON f.kind = 'message' AND e.id = f.source_id
              LEFT JOIN documents d ON f.kind = 'document' AND d.id = f.source_id
-             WHERE search_fts MATCH ?1 AND f.bot_id = ?2{wanted}
+             WHERE search_fts MATCH ?1 AND {mine}{wanted}
              ORDER BY rank LIMIT ?{}",
             args.len()
         );
@@ -227,9 +322,10 @@ impl Store {
             .query_map(params.as_slice(), |row| {
                 let kind: String = row.get(0)?;
                 let at: i64 = row.get(2)?;
+                let source: String = row.get(1)?;
                 let mut hit = json!({
                     "kind": kind,
-                    "id": row.get::<_, String>(1)?,
+                    "id": source,
                     "at": at,
                     "snippet": row.get::<_, String>(3)?,
                 });
@@ -241,6 +337,11 @@ impl Store {
                         .and_then(|data| data["author"].as_str().map(str::to_owned))
                         .into();
                     hit["threadId"] = row.get::<_, Option<String>>(8)?.into();
+                } else if kind == "memory" {
+                    // `layer/name`, an empty layer for the memory every bot shares.
+                    let (layer, name) = source.split_once('/').unwrap_or(("", source.as_str()));
+                    hit["title"] = name.into();
+                    hit["shared"] = layer.is_empty().into();
                 } else {
                     hit["title"] = row.get::<_, Option<String>>(6)?.into();
                 }
@@ -357,6 +458,24 @@ mod tests {
             DocumentWrite::Saved(document) => document.id,
             DocumentWrite::Conflict(_) => panic!("unexpected conflict"),
         }
+    }
+
+    /// Puts a memory file in as if it had been saved, at `at`, for a layer (`None`: the shared one).
+    fn memory(store: &Store, bot: Option<&str>, name: &str, text: &str, at: i64) {
+        let c = store.db.locked();
+        c.execute(
+            "INSERT INTO memory_file_versions(bot, name, content, author, author_bot, cause, at, rev)
+             VALUES (?1, ?2, ?3, 'user', NULL, 'user', ?4, 0)",
+            params![bot.unwrap_or(""), name, text, at],
+        )
+        .unwrap();
+        let version = c.last_insert_rowid();
+        c.execute(
+            "INSERT INTO memory_files(bot, name, hash, size, mtime, description, tokens, version, updated_at, rev)
+             VALUES (?1, ?2, ?3, 1, ?4, NULL, 1, ?5, ?4, 0)",
+            params![bot.unwrap_or(""), name, format!("h{at}"), at, version],
+        )
+        .unwrap();
     }
 
     #[test]
@@ -521,6 +640,114 @@ mod tests {
             .unwrap();
         assert_eq!(until.len(), 1, "only the earlier one");
         assert_eq!(until[0]["id"], old.id);
+    }
+
+    #[test]
+    fn a_channel_value_is_main_threads_or_a_thread_id() {
+        assert_eq!(Channel::parse("main"), Some(Channel::Main));
+        assert_eq!(Channel::parse("threads"), Some(Channel::Threads));
+        assert_eq!(Channel::parse("doc:p1"), Some(Channel::Thread("doc:p1".into())));
+        assert_eq!(Channel::parse("slack-1699.1"), Some(Channel::Thread("slack-1699.1".into())));
+        assert_eq!(Channel::parse(""), None);
+    }
+
+    #[test]
+    fn a_channel_keeps_only_that_conversation() {
+        let store = temp_store();
+        store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
+        said(&store, "b1", "the deploy is in the chat");
+        let root = store
+            .insert_entry(
+                &Lane::in_thread("b1", "doc:p1"),
+                EntryKind::User,
+                1,
+                &json!({"text": "the deploy is in a page"}),
+            )
+            .unwrap();
+        store
+            .insert_entry(
+                &Lane::in_thread("b1", "slack-1"),
+                EntryKind::User,
+                2,
+                &json!({"text": "the deploy is in slack"}),
+            )
+            .unwrap();
+
+        let main = store
+            .search_filtered("b1", "deploy", 10, &Filters { channel: Some(Channel::Main), ..Filters::default() })
+            .unwrap();
+        assert_eq!(main.len(), 1);
+        assert_eq!(main[0]["threadId"], Value::Null);
+        let threads = store
+            .search_filtered("b1", "deploy", 10, &Filters { channel: Some(Channel::Threads), ..Filters::default() })
+            .unwrap();
+        assert_eq!(threads.len(), 2, "both side conversations, and no chat");
+        let one = store
+            .search_filtered(
+                "b1",
+                "deploy",
+                10,
+                &Filters { channel: Some(Channel::Thread("doc:p1".into())), ..Filters::default() },
+            )
+            .unwrap();
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0]["id"], root.id);
+        assert_eq!(one[0]["threadId"], "doc:p1");
+    }
+
+    #[test]
+    fn deleting_a_page_takes_its_conversation_and_its_memory_alone_is_not_a_lane() {
+        let store = temp_store();
+        store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
+        let id = page(&store, "b1", "Deploy", "the deploy is a script");
+        store
+            .insert_entry(
+                &Lane::in_thread("b1", &format!("doc:{id}")),
+                EntryKind::User,
+                1,
+                &json!({"text": "deploy questions here"}),
+            )
+            .unwrap();
+
+        let hits = store
+            .search_filtered("b1", "deploy", 10, &Filters { channel: Some(Channel::Threads), ..Filters::default() })
+            .unwrap();
+        assert_eq!(hits.len(), 1);
+        store.delete_document(&id, 1).unwrap();
+        assert!(
+            store
+                .search_filtered("b1", "deploy", 10, &Filters { channel: Some(Channel::Threads), ..Filters::default() })
+                .unwrap()
+                .is_empty(),
+            "nothing can open that conversation anymore"
+        );
+        assert_eq!(store.search("b1", "deploy", 10).unwrap().len(), 0, "and the page itself is gone");
+    }
+
+    #[test]
+    fn memory_is_found_and_only_its_own_and_the_shared_one_a_bot_uses() {
+        let store = temp_store();
+        for (id, shared) in [("b1", true), ("b2", false)] {
+            store
+                .save_bot(&serde_json::from_value(json!({"id": id, "name": id, "sharedMemory": shared})).unwrap())
+                .unwrap();
+        }
+        let now = super::super::now_ms();
+        memory(&store, Some("b1"), "MEMORY.md", "- the office key is blue", now);
+        memory(&store, None, "roof.md", "the roof hatch sticks in winter", now + 1);
+
+        let hits = store.search("b1", "office key", 10).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0]["kind"], "memory");
+        assert_eq!(hits[0]["title"], "MEMORY.md");
+        assert_eq!(hits[0]["shared"], false);
+        assert_eq!(store.search("b1", "roof hatch", 10).unwrap()[0]["shared"], true, "b1 shares memory");
+        assert!(store.search("b2", "roof hatch", 10).unwrap().is_empty(), "b2 doesn't");
+
+        // A deleted note leaves: its hash empties as the file goes.
+        store.db.locked().execute("UPDATE memory_files SET hash = '' WHERE name = 'MEMORY.md'", []).unwrap();
+        assert_eq!(store.search("b1", "office key", 10).unwrap(), Vec::<Value>::new());
+        assert_eq!(store.search("b2", "office key", 10).unwrap().len(), 0, "no other bot's memory");
     }
 
     #[test]
