@@ -192,12 +192,22 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if method == "fileVersions" {
         return crate::chat::library::versions(hub, &b);
     }
-    // What a chat said about some words: the message, its snippet and when.
+    // What a chat said about some words: the message, its snippet and when. Tool traces and notices stay
+    // out unless asked for: what a person searches for is what was said.
     if method == "search" {
         let bot = str_arg(&b, "botId")?;
         let query = b["query"].as_str().unwrap_or_default();
         let limit = u32::try_from(b["limit"].as_u64().unwrap_or(20)).unwrap_or(20);
-        return Ok(serde_json::json!({"hits": hub.store.search(bot, query, limit)?}));
+        let hits = if b["tools"] == true {
+            hub.store.search_with_tools(bot, query, limit)?
+        } else {
+            hub.store.search(bot, query, limit)?
+        };
+        return Ok(serde_json::json!({"hits": hits}));
+    }
+    // Rebuilds the search index from the store: what a repair after a bad migration needs.
+    if method == "searchReindex" {
+        return Ok(serde_json::json!({"indexed": hub.store.reindex_search()?}));
     }
     // Each method group answers its own methods and hands the body back otherwise.
     let b = match host::call(hub, caller, method, b).await? {

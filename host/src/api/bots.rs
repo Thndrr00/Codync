@@ -532,7 +532,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"lessons": hub.store.approval_lessons(bot, None)})
         }
         "decideApprovalLesson" => {
-            let lesson = hub.store.approval_lesson(str_arg(&b, "lessonId")?).ok_or_else(|| anyhow!("unknown lesson"))?;
+            let lesson =
+                hub.store.approval_lesson(str_arg(&b, "lessonId")?).ok_or_else(|| anyhow!("unknown lesson"))?;
             let accept = b["accept"].as_bool().ok_or_else(|| anyhow!("`accept` is required"))?;
             if accept {
                 // The rule only exists once the person keeps it; a refused save leaves the lesson waiting.

@@ -207,14 +207,8 @@ mod tests {
             "options": [{"optionId": "yes", "name": "Allow", "kind": "allow_once"}],
             "approvedBy": "iPhone",
         });
-        let e = Entry {
-            id: "c1".into(),
-            seq: 1,
-            turn: 1,
-            kind: crate::tui::app::Kind::Permission,
-            data,
-            created_at: 0,
-        };
+        let e =
+            Entry { id: "c1".into(), seq: 1, turn: 1, kind: crate::tui::app::Kind::Permission, data, created_at: 0 };
         let mut out = Built { lines: Vec::new(), buttons: Vec::new(), messages: Vec::new() };
         decided_line(&mut out, &e);
         let text: String =

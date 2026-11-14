@@ -121,7 +121,8 @@ impl Store {
     /// edges are links that resolve to another page of the same bot.
     pub fn document_graph(&self, bot: &str) -> Result<Value> {
         let db = self.db.locked();
-        let mut pages = db.prepare("SELECT id, title FROM documents WHERE bot_id = ?1 AND deleted = 0 ORDER BY title")?;
+        let mut pages =
+            db.prepare("SELECT id, title FROM documents WHERE bot_id = ?1 AND deleted = 0 ORDER BY title")?;
         let nodes: Vec<Value> = pages
             .query_map([bot], |r| Ok(json!({"id": r.get::<_, String>(0)?, "title": r.get::<_, String>(1)?})))?
             .collect::<rusqlite::Result<_>>()?;
@@ -151,9 +152,9 @@ mod tests {
 
     #[test]
     fn a_broken_bracket_is_not_a_link() {
-        assert!(parse("an [[open bracket").is_empty());
-        assert!(parse("[[   ]]").is_empty());
-        assert!(parse("no links here").is_empty());
+        assert_eq!(parse("an [[open bracket").len(), 0);
+        assert_eq!(parse("[[   ]]").len(), 0);
+        assert_eq!(parse("no links here").len(), 0);
     }
 
     #[test]
@@ -163,6 +164,6 @@ mod tests {
 
     #[test]
     fn a_very_long_title_is_not_a_link() {
-        assert!(parse(&format!("[[{}]]", "x".repeat(MAX_TARGET + 1))).is_empty());
+        assert_eq!(parse(&format!("[[{}]]", "x".repeat(MAX_TARGET + 1))).len(), 0);
     }
 }

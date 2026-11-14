@@ -91,11 +91,18 @@ impl Store {
     pub fn update_entry(&self, id: &str, data: &Value) -> Result<Option<Entry>> {
         let c = self.db.locked();
         let rev = next_rev(&c)?;
+        let now = now_ms();
         c.execute(
             "UPDATE entries SET rev = ?2, data = ?3, updated_at = ?4 WHERE id = ?1",
-            params![id, rev, data.to_string(), now_ms()],
+            params![id, rev, data.to_string(), now],
         )?;
-        Ok(c.query_row(&format!("SELECT {ENTRY_COLS} FROM entries WHERE id = ?1"), [id], row_entry).optional()?)
+        let entry =
+            c.query_row(&format!("SELECT {ENTRY_COLS} FROM entries WHERE id = ?1"), [id], row_entry).optional()?;
+        // A message still streaming grows with each update: the index holds what it says now.
+        if let Some(entry) = entry.as_ref() {
+            super::search::index_message(&c, id, &entry.bot_id, entry.created_at, &entry.data)?;
+        }
+        Ok(entry)
     }
 
     /// Moves an entry back in time, for tests of what happens to old entries.
@@ -453,6 +460,7 @@ impl Store {
                 continue;
             }
             deleted += c.execute("DELETE FROM entries WHERE id = ?1", [&id])?;
+            super::search::forget(&c, "message", &id)?;
         }
         Ok(deleted)
     }
@@ -464,6 +472,7 @@ impl Store {
         if tx.execute("DELETE FROM entries WHERE id = ?1", [id])? == 0 {
             return Ok(None);
         }
+        super::search::forget(&tx, "message", id)?;
         let rev = next_rev(&tx)?;
         tx.commit()?;
         Ok(Some(rev))

@@ -236,6 +236,7 @@ mod tests {
             permission: Permission::Ask,
             action_rules: std::collections::BTreeMap::new(),
             proactive: ProactiveSettings::default(),
+            recall_chars: None,
             model: None,
             model_options: std::collections::BTreeMap::new(),
             fast_mode: false,

@@ -259,8 +259,8 @@ fn rewriting_a_page_drops_the_links_it_no_longer_makes() {
             )
             .unwrap(),
     );
-    assert!(store.document_links(&rewritten.id).unwrap().is_empty());
-    assert!(store.document_backlinks(&target.id).unwrap().is_empty());
+    assert_eq!(store.document_links(&rewritten.id).unwrap().len(), 0);
+    assert_eq!(store.document_backlinks(&target.id).unwrap().len(), 0);
 }
 
 #[test]

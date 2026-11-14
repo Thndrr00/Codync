@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
-use super::super::app::{App, Editor, Entry, Overlay};
+use super::super::app::{After, App, Editor, Entry, Overlay};
 use super::super::net::artifacts::ArtifactTo;
 use super::{Fields, Input, Library, Page, Reply, Submit};
 use crate::chat::artifacts::Artifact;
@@ -75,7 +75,13 @@ impl App {
         };
         let bot = b.id.clone();
         self.sheet("library", json!({"botId": bot}), Reply::Library(bot.clone()));
-        self.overlays.push(Overlay::Library(Library { bot, items: None, cursor: 0, versioning: None, versions: Vec::new() }));
+        self.overlays.push(Overlay::Library(Library {
+            bot,
+            items: None,
+            cursor: 0,
+            versioning: None,
+            versions: Vec::new(),
+        }));
     }
 
     pub(in crate::tui) fn library_key(&mut self, mut l: Library, k: KeyEvent) -> Option<Overlay> {
@@ -264,7 +270,13 @@ mod tests {
         .expect("a card parses")
         .1;
         assert_eq!(app.artifact_title(&card).as_deref(), Some("Old"));
-        app.overlays.push(Overlay::Library(Library { bot: "bot".into(), items: None, cursor: 0, versioning: None, versions: Vec::new() }));
+        app.overlays.push(Overlay::Library(Library {
+            bot: "bot".into(),
+            items: None,
+            cursor: 0,
+            versioning: None,
+            versions: Vec::new(),
+        }));
         let file = json!({"id": "x", "name": "a.csv", "size": 9, "sha256": "0".repeat(64)});
         app.library_loaded(
             "bot",

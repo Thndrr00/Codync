@@ -41,7 +41,13 @@ impl App {
             }
             DocumentReply::Graph(..) => {
                 let title = |id: &str| {
-                    sheet.items.iter().find(|doc| doc["id"] == id).and_then(|doc| doc["title"].as_str()).unwrap_or("?").to_owned()
+                    sheet
+                        .items
+                        .iter()
+                        .find(|doc| doc["id"] == id)
+                        .and_then(|doc| doc["title"].as_str())
+                        .unwrap_or("?")
+                        .to_owned()
                 };
                 let edges = value["edges"].as_array().cloned().unwrap_or_default();
                 let pairs: Vec<String> = edges

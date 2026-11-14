@@ -182,7 +182,12 @@ impl App {
             Err(e) => {
                 match after {
                     After::Hello => self.error = Some(e),
-                    After::Tracked | After::Week | After::RuleTest | After::Profiles | After::Health | After::RulesExtras
+                    After::Tracked
+                    | After::Week
+                    | After::RuleTest
+                    | After::Profiles
+                    | After::Health
+                    | After::RulesExtras
                     | After::LibraryVersions => {}
                     After::Channels | After::ChannelsSlack => self.flash(&format!("Channels: {e}")),
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),

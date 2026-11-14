@@ -189,7 +189,8 @@ fn first_warning(warnings: &[String]) -> String {
 
 /// The names an export may carry credentials under. They are never read: this only counts them, so the
 /// preview can say what stayed behind.
-const SECRET_KEYS: [&str; 8] = ["apiKey", "apiKeys", "keys", "secrets", "credentials", "password", "passwords", "tokens"];
+const SECRET_KEYS: [&str; 8] =
+    ["apiKey", "apiKeys", "keys", "secrets", "credentials", "password", "passwords", "tokens"];
 
 /// Counts the credentials anywhere in the manifest and says they were left out. A key never leaves the
 /// app it belongs to, so the person importing sees that nothing was carried over by accident.
@@ -215,9 +216,8 @@ fn credentials(value: &Value, warnings: &mut Vec<String>) {
     let mut found = 0;
     count(value, &mut found);
     if found > 0 {
-        warnings.push(format!(
-            "{found} credentials in the export were left out: a key never leaves the app it belongs to"
-        ));
+        warnings
+            .push(format!("{found} credentials in the export were left out: a key never leaves the app it belongs to"));
     }
 }
 
@@ -374,6 +374,6 @@ mod tests {
         let manifest = serde_json::json!({"agents": [{"name": "A", "description": "no keys here"}]});
         let mut warnings = Vec::new();
         credentials(&manifest, &mut warnings);
-        assert!(warnings.is_empty());
+        assert_eq!(warnings.len(), 0);
     }
 }

@@ -35,6 +35,13 @@ impl Actor {
         if let Some(document) = crate::documents::context(&self.hub, &self.lane.chat, self.lane.thread.as_deref())? {
             prompt = format!("{document}\n\n{prompt}");
         }
+        // What this chat already said about these words, within the bot's budget (`recall_chars`).
+        let budget = self.cfg.recall_chars.unwrap_or(crate::chat::recall::DEFAULT_CHARS);
+        if let Ok(recalled) = crate::chat::recall::block(&self.hub.store, &self.lane.chat, budget, text)
+            && !recalled.is_empty()
+        {
+            prompt = format!("{recalled}\n\n{prompt}");
+        }
         // The user's handoff first, then what the fallback chain carries in.
         for first in [self.relay.carried.take(), self.handoff.take()].into_iter().flatten() {
             prompt = format!("{first}\n\n{prompt}");

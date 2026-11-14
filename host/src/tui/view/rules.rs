@@ -151,7 +151,9 @@ pub(super) fn rules(buf: &mut Buffer, area: Rect, s: &RulesSheet) {
         Mode::List if s.quick_on.is_some() => {
             "a add · ↵ edit · d del · K J move · m t · P profile · Q quick · 1 2 3 · T try · ^s save"
         }
-        Mode::List => "a add · ↵ edit · d delete · K J move · m decision · t tool · P profile · B database · T try · ^s save",
+        Mode::List => {
+            "a add · ↵ edit · d delete · K J move · m decision · t tool · P profile · B database · T try · ^s save"
+        }
     };
     put(buf, inner.x, bottom - 1, inner.width, &truncate(&tr(footer), usize::from(inner.width)), t.dim.patch(t.panel));
 }

@@ -30,7 +30,7 @@ const KINDS = [{ id: '', label: 'Any tool' }, ...RULE_KINDS.map((id) => ({ id: i
  * A bot's approval rules, first match first: add, edit, reorder, delete, and try a command against them. The host
  * decides what a rule does (`testApprovalRule`); nothing here copies its logic.
  */
-export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
+export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick, lessons, onDecideLesson, history }: {
   rules: ApprovalRule[]
   onChange: (rules: ApprovalRule[]) => void
   /** Asks the host what the bot would do with `command` under `rules`; null when it can't say. */

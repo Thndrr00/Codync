@@ -305,8 +305,7 @@ impl Routines {
             .routines
             .iter()
             .find(|r| r.id == run.routine_id)
-            .map(|r| r.limit_policy.clone())
-            .unwrap_or_else(|| "wait".to_owned());
+            .map_or_else(|| "wait".to_owned(), |r| r.limit_policy.clone());
         Some(policy != "skip")
     }
 
@@ -637,9 +636,10 @@ mod tests {
             })
             .unwrap();
         routines.hold_at_limit(&store, &run, 1_000, false).unwrap();
+        // Before taking the state lock: `due` takes it too.
+        assert!(routines.due(1_000).is_empty());
         let state = routines.state.locked();
         assert_eq!(state.runs[0].status, Status::Cancelled);
         assert!(state.runs[0].detail.as_deref().is_some_and(|d| d.contains("budget")));
-        assert!(routines.due(1_000).is_empty());
     }
 }

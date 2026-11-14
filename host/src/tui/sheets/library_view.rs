@@ -64,7 +64,14 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, l: &Library) {
                 .collect();
             format!("{name}: {}", parts.join(" · "))
         };
-        put(buf, inner.x, inner.bottom() - 2, inner.width, &truncate(&listed, usize::from(inner.width)), t.dim.patch(t.panel));
+        put(
+            buf,
+            inner.x,
+            inner.bottom() - 2,
+            inner.width,
+            &truncate(&listed, usize::from(inner.width)),
+            t.dim.patch(t.panel),
+        );
     }
     footer(buf, inner, None, "↵ open an artifact in the browser · f save to Downloads · v versions · r rename · esc");
 }

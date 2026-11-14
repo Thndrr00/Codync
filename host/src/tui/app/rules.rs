@@ -271,7 +271,9 @@ impl App {
                     s.mode = Mode::List;
                 }
                 KeyCode::Esc => s.mode = Mode::List,
-                _ => s.editor.key(k),
+                _ => {
+                    s.editor.key(k);
+                }
             },
             Mode::List => match k.code {
                 KeyCode::Esc | KeyCode::Char('q') => return None,
@@ -365,10 +367,10 @@ impl App {
     pub(super) fn rules_extras(&mut self, v: &Value) {
         let Some(Overlay::Rules(s)) = self.overlays.last_mut() else { return };
         if let Some(lessons) = v["lessons"].as_array() {
-            s.lessons = lessons.clone();
+            s.lessons.clone_from(lessons);
         }
         if let Some(approvals) = v["approvals"].as_array() {
-            s.history = approvals.clone();
+            s.history.clone_from(approvals);
         }
         if let Some(path) = v.get("database") {
             s.database = path.as_str().map(str::to_owned);

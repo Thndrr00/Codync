@@ -36,7 +36,14 @@ impl Store {
             super::SearchScope::Main => sql.push_str(" AND thread_id IS NULL"),
             super::SearchScope::Threads => sql.push_str(" AND thread_id IS NOT NULL"),
         }
+        // The index, not a scan: every term required, each a prefix so "deploy" still finds "deployment".
+        // A term with no letter or digit (`%_`, an emoji) has no word to look for and stays a substring match.
+        let mut indexed: Vec<String> = Vec::new();
         for term in terms {
+            if term.chars().any(char::is_alphanumeric) {
+                indexed.push(format!("\"{}\"*", term.replace('"', "")));
+                continue;
+            }
             args.push(term.to_lowercase().into());
             write!(
                 sql,
@@ -44,8 +51,17 @@ impl Store {
                 args.len()
             )?;
         }
+        if !indexed.is_empty() {
+            args.push(indexed.join(" ").into());
+            write!(
+                sql,
+                " AND id IN (SELECT source_id FROM search_fts WHERE kind = 'message' AND search_fts MATCH ?{})",
+                args.len()
+            )?;
+        }
         args.push(limit.into());
         write!(sql, " ORDER BY seq DESC LIMIT ?{}", args.len())?;
+        self.backfill_search()?;
         let c = self.db.locked();
         let mut statement = c.prepare(&sql)?;
         Ok(statement.query_map(params_from_iter(args), row_entry)?.collect::<rusqlite::Result<_>>()?)

@@ -84,10 +84,7 @@ impl Store {
 
     pub fn approval_lesson(&self, id: &str) -> Option<Lesson> {
         let c = self.db.locked();
-        c.query_row(&format!("SELECT {COLS} FROM approval_lessons WHERE id = ?1"), [id], read)
-            .optional()
-            .ok()
-            .flatten()
+        c.query_row(&format!("SELECT {COLS} FROM approval_lessons WHERE id = ?1"), [id], read).optional().ok().flatten()
     }
 
     /// A bot's lessons, newest first, all of them or only the ones in `status`.
@@ -99,7 +96,9 @@ impl Store {
         )) else {
             return Vec::new();
         };
-        stmt.query_map(params![bot, status], read).map(|rows| rows.filter_map(std::result::Result::ok).collect()).unwrap_or_default()
+        stmt.query_map(params![bot, status], read)
+            .map(|rows| rows.filter_map(std::result::Result::ok).collect())
+            .unwrap_or_default()
     }
 
     /// Marks a lesson `accepted` or `dismissed`; `false` when it was already decided.
@@ -182,6 +181,6 @@ mod tests {
         assert_eq!(s.approval_lessons("a", None).len(), 1);
         assert_eq!(s.approval_lessons("a", Some("proposed")).len(), 1);
         assert_eq!(s.approval_lessons("a", Some("accepted")).len(), 0);
-        assert!(s.approval_lessons("b", None).is_empty());
+        assert_eq!(s.approval_lessons("b", None).len(), 0);
     }
 }

@@ -22,8 +22,20 @@ pub const TIMEOUT: Duration = Duration::from_secs(5);
 /// The words that write, attach a file or change the connection. Refused anywhere outside a string
 /// literal, even inside a CTE.
 const WRITES: [&str; 14] = [
-    "INSERT", "UPDATE", "DELETE", "REPLACE", "DROP", "ALTER", "CREATE", "TRUNCATE", "ATTACH", "DETACH", "PRAGMA",
-    "VACUUM", "REINDEX", "SAVEPOINT",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "REPLACE",
+    "DROP",
+    "ALTER",
+    "CREATE",
+    "TRUNCATE",
+    "ATTACH",
+    "DETACH",
+    "PRAGMA",
+    "VACUUM",
+    "REINDEX",
+    "SAVEPOINT",
 ];
 
 /// Whether `sql` is one read-only statement: a single `SELECT` or `WITH`, with no word that writes.
@@ -50,7 +62,7 @@ pub fn query(path: &Path, sql: &str) -> Result<Value> {
         .with_context(|| format!("opening {}", path.display()))?;
     connection.pragma_update(None, "query_only", true)?;
     let deadline = Instant::now() + TIMEOUT;
-    connection.progress_handler(10_000, Some(move || Instant::now() > deadline));
+    connection.progress_handler(10_000, Some(move || Instant::now() > deadline))?;
     let mut statement = connection.prepare(sql).context("preparing the statement")?;
     if statement.column_count() > MAX_COLUMNS {
         bail!("the question returns more than {MAX_COLUMNS} columns");

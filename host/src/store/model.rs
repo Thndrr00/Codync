@@ -242,6 +242,10 @@ pub struct BotConfig {
     /// Proactive check-ins, quiet hours, daily budget and background app toggle (Ideas 41, 44).
     #[serde(default)]
     pub proactive: ProactiveSettings,
+    /// Characters of earlier messages and pages recalled into each turn (`chat::recall`). Unset uses the
+    /// default; 0 turns recall off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recall_chars: Option<u32>,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
     /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it

@@ -40,7 +40,8 @@ pub(crate) mod whatsapp;
 pub use apps::{AppLink, AppLinkMode, BotApp};
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};
-pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
+#[allow(unused_imports, reason = "tests reach a document write's result through the store")]
+pub use documents::{Document, DocumentDraft, DocumentWrite, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
 pub use model::{

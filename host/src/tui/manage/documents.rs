@@ -133,6 +133,7 @@ impl DocumentSheet {
             | DocumentReply::Save(_, generation)
             | DocumentReply::Review(_, generation)
             | DocumentReply::Resolve(_, generation)
+            | DocumentReply::Graph(_, generation)
             | DocumentReply::Change(_, generation) => *generation == self.generation,
             DocumentReply::Csv(_) => true,
         }

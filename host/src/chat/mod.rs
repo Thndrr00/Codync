@@ -24,6 +24,7 @@ pub mod outbox;
 pub mod profile;
 pub mod prompt;
 pub mod reactions;
+pub mod recall;
 pub mod recap;
 pub mod replies;
 pub mod scratchpad;

@@ -7,6 +7,7 @@ mod schema;
 mod tests;
 mod types;
 
+#[allow(unused_imports, reason = "the link and write types are read through the store's own modules and tests")]
 pub use links::Link;
 pub use reviews::{ReviewDecision, ReviewStatus};
 pub use types::{Document, DocumentDelete, DocumentDraft, DocumentPage, DocumentSummary, DocumentWrite};
@@ -103,7 +104,7 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         db.execute("UPDATE documents SET title = ?2, body = ?3, revision = revision + 1, rev = ?4, updated_at = ?5 WHERE id = ?1",
             params![id, draft.title, draft.body, rev, now])?;
         links::reindex(db, bot, id, &draft.body)?;
-        super::search::index_document(db, bot, id, now, &draft.title, &draft.body)?;
+        super::search::index_document(db, id, bot, now, &draft.title, &draft.body)?;
         return Ok(DocumentWrite::Saved(Document {
             title: draft.title.clone(),
             body: draft.body.clone(),
@@ -136,7 +137,7 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         params![doc.id, bot, doc.parent_id, doc.title, doc.body, doc.rev, now],
     )?;
     links::reindex(db, bot, &doc.id, &doc.body)?;
-    super::search::index_document(db, bot, &doc.id, now, &doc.title, &doc.body)?;
+    super::search::index_document(db, &doc.id, bot, now, &doc.title, &doc.body)?;
     Ok(DocumentWrite::Saved(doc))
 }
 
