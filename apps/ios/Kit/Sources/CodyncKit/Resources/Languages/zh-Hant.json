@@ -2616,5 +2616,15 @@
   "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "對方的手機、機器人、對話和連接會歸你所有。不會刪除任何內容。",
   "This bot belongs to": "這個機器人屬於",
   "A member's phone only sees and changes what is theirs.": "成員的手機只能檢視和修改自己的內容。",
-  "Person": "成員"
+  "Person": "成員",
+  "People on this computer…": "這台電腦上的人…",
+  "No devices": "沒有裝置",
+  "n add · ↵ rename · x remove · tab devices · esc": "n 新增 · ↵ 重新命名 · x 移除 · tab 裝置 · esc",
+  "↵ assign · tab people · esc": "↵ 指派 · tab 人員 · esc",
+  "↑↓ choose · ↵ assign · esc back": "↑↓ 選擇 · ↵ 指派 · esc 返回",
+  "Rename {name}": "重新命名 {name}",
+  "Connectors become shared, so every bot on this computer can use them.": "連接器將變為共用，這台電腦上的每個機器人都可以使用它們。",
+  "Stop all remote control?": "停止所有遠端控制？",
+  "Every screen session ends now, including one open on this phone. Remote screen stays on.": "所有螢幕工作階段立即結束，包括這台手機上開啟的工作階段。遠端螢幕保持開啟。",
+  "Stopped {count} session(s) and gave control back to the bots.": "已停止 {count} 個工作階段，控制權已交還機器人。"
 }

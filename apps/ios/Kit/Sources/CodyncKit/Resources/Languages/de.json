@@ -2616,5 +2616,15 @@
   "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "Telefon, Bots, Chats und Verbindungen gehen an dich über. Nichts wird gelöscht.",
   "This bot belongs to": "Dieser Bot gehört zu",
   "A member's phone only sees and changes what is theirs.": "Das Telefon eines Mitglieds sieht und ändert nur, was ihm gehört.",
-  "Person": "Person"
+  "Person": "Person",
+  "People on this computer…": "Personen auf diesem Computer…",
+  "No devices": "Keine Geräte",
+  "n add · ↵ rename · x remove · tab devices · esc": "n hinzufügen · ↵ umbenennen · x entfernen · Tab Geräte · esc",
+  "↵ assign · tab people · esc": "↵ zuordnen · Tab Personen · esc",
+  "↑↓ choose · ↵ assign · esc back": "↑↓ wählen · ↵ zuordnen · esc zurück",
+  "Rename {name}": "{name} umbenennen",
+  "Connectors become shared, so every bot on this computer can use them.": "Verbindungen werden geteilt, sodass jeder Bot auf diesem Computer sie nutzen kann.",
+  "Stop all remote control?": "Gesamte Fernsteuerung beenden?",
+  "Every screen session ends now, including one open on this phone. Remote screen stays on.": "Jede Bildschirmsitzung endet jetzt, auch eine auf diesem Telefon. Der Bildschirmzugriff bleibt eingeschaltet.",
+  "Stopped {count} session(s) and gave control back to the bots.": "{count} Sitzung(en) beendet und die Steuerung an die Bots zurückgegeben."
 }

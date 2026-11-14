@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, CardSection, ChoicePicker, ValueRow } from '../../components/Controls'
+import { Dialog } from '../../components/Overlay'
 import { useModel } from '../../lib/observable'
 import { useTr } from '../../lib/use-language'
 import { useApp } from '../../store/context'
@@ -19,6 +20,7 @@ export function ServerSettingsSection() {
   const tr = useTr()
   const [error, setError] = useState<string | null>(null)
   const [closed, setClosed] = useState<number | null>(null)
+  const [confirmingStop, setConfirmingStop] = useState(false)
   useEffect(() => {
     void local?.refreshServerSettings()
   }, [local])
@@ -109,11 +111,20 @@ export function ServerSettingsSection() {
               : tr('Stopped {count} session(s).').replace('{count}', String(closed))
           }
         >
-          <Button kind="secondary" onClick={() => void stopAll()}>
+          <Button kind="secondary" onClick={() => setConfirmingStop(true)}>
             {tr('Stop all')}
           </Button>
         </ValueRow>
       </CardSection>
+
+      <Dialog
+        open={confirmingStop}
+        title={tr('Stop all remote control?')}
+        message={tr('Ends every remote control session now, without turning Remote screen off.')}
+        cancel="Cancel"
+        onClose={() => setConfirmingStop(false)}
+        actions={[{ title: 'Stop all', destructive: true, action: () => void stopAll() }]}
+      />
 
       {error ? (
         <CardSection title={tr('Something went wrong')}>

@@ -57,6 +57,7 @@ impl App {
             Action::ServerLibrary => self.open_server_library(),
             Action::RefreshAgents => self.call("refreshBackends", json!({}), After::Backends),
             Action::Pair => self.open_pair(),
+            Action::People => self.open_people(),
             Action::Network => self.open_network(),
             Action::Rules => self.open_rules(),
             Action::Channels => self.open_channels(),
@@ -158,6 +159,9 @@ impl App {
                         ConfirmAct::DeleteAgentDownload(id) => {
                             self.call("deleteAgentDownload", json!({"backend": id}), After::AgentBuildDeleted)
                         }
+                        ConfirmAct::RemovePerson(id) => {
+                            self.call("removePerson", json!({"id": id}), After::Sheet(Reply::PeopleSaved))
+                        }
                     }
                     None
                 }
@@ -186,6 +190,7 @@ impl App {
             Overlay::Analytics(s) => s.key(k),
             Overlay::Network(n) => self.network_key(n, k),
             Overlay::Voice(s) => self.voice_key(s, k),
+            Overlay::People(s) => self.people_key(s, k),
             Overlay::Rules(s) => self.approval_rules_key(s, k),
             Overlay::Channels(s) => self.channels_key(s, k),
             Overlay::Beliefs(s) => self.beliefs_key(s, k),

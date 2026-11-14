@@ -2616,5 +2616,15 @@
   "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "Их телефон, боты, чаты и коннекторы переходят к вам. Ничего не удаляется.",
   "This bot belongs to": "Этот бот принадлежит",
   "A member's phone only sees and changes what is theirs.": "Телефон участника видит и меняет только своё.",
-  "Person": "Человек"
+  "Person": "Человек",
+  "People on this computer…": "Люди на этом компьютере…",
+  "No devices": "Нет устройств",
+  "n add · ↵ rename · x remove · tab devices · esc": "n добавить · ↵ переименовать · x убрать · tab устройства · esc",
+  "↵ assign · tab people · esc": "↵ назначить · tab люди · esc",
+  "↑↓ choose · ↵ assign · esc back": "↑↓ выбрать · ↵ назначить · esc назад",
+  "Rename {name}": "Переименовать {name}",
+  "Connectors become shared, so every bot on this computer can use them.": "Коннекторы станут общими, и любой бот на этом компьютере сможет ими пользоваться.",
+  "Stop all remote control?": "Остановить всё удалённое управление?",
+  "Every screen session ends now, including one open on this phone. Remote screen stays on.": "Все сеансы экрана завершаются сейчас, включая открытый на этом телефоне. Удалённый экран остаётся включённым.",
+  "Stopped {count} session(s) and gave control back to the bots.": "Остановлено сеансов: {count}, управление возвращено ботам."
 }

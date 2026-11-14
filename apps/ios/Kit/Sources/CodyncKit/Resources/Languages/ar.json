@@ -572,5 +572,15 @@
   "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "هاتف هذا الشخص وروبوتاته ومحادثاته وموصلاته تصبح لك. لا يُحذف أي شيء.",
   "This bot belongs to": "هذا الروبوت يخص",
   "A member's phone only sees and changes what is theirs.": "هاتف العضو يرى ويغيّر ما يخصه فقط.",
-  "Person": "شخص"
+  "Person": "شخص",
+  "People on this computer…": "الأشخاص على هذا الحاسوب…",
+  "No devices": "لا توجد أجهزة",
+  "n add · ↵ rename · x remove · tab devices · esc": "n إضافة · ↵ إعادة تسمية · x إزالة · tab الأجهزة · esc",
+  "↵ assign · tab people · esc": "↵ تعيين · tab الأشخاص · esc",
+  "↑↓ choose · ↵ assign · esc back": "↑↓ اختيار · ↵ تعيين · esc رجوع",
+  "Rename {name}": "إعادة تسمية {name}",
+  "Connectors become shared, so every bot on this computer can use them.": "تصبح الموصلات مشتركة، فيمكن لكل روبوت على هذا الحاسوب استخدامها.",
+  "Stop all remote control?": "إيقاف كل التحكم عن بُعد؟",
+  "Every screen session ends now, including one open on this phone. Remote screen stays on.": "تنتهي الآن كل جلسات الشاشة، بما فيها جلسة مفتوحة على هذا الهاتف. تبقى الشاشة البعيدة قيد التشغيل.",
+  "Stopped {count} session(s) and gave control back to the bots.": "تم إيقاف {count} جلسة وإعادة التحكم إلى الروبوتات."
 }

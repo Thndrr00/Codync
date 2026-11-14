@@ -2616,5 +2616,15 @@
   "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "その人のスマートフォン、ボット、チャット、コネクタはあなたのものになります。何も削除されません。",
   "This bot belongs to": "このボットの所有者",
   "A member's phone only sees and changes what is theirs.": "メンバーのスマートフォンは自分のものだけを表示・変更できます。",
-  "Person": "ユーザー"
+  "Person": "ユーザー",
+  "People on this computer…": "このコンピュータのユーザー…",
+  "No devices": "デバイスなし",
+  "n add · ↵ rename · x remove · tab devices · esc": "n 追加 · ↵ 名前を変更 · x 削除 · tab デバイス · esc",
+  "↵ assign · tab people · esc": "↵ 割り当て · tab ユーザー · esc",
+  "↑↓ choose · ↵ assign · esc back": "↑↓ 選択 · ↵ 割り当て · esc 戻る",
+  "Rename {name}": "{name} の名前を変更",
+  "Connectors become shared, so every bot on this computer can use them.": "コネクタは共有になり、このコンピュータのすべてのボットが使えるようになります。",
+  "Stop all remote control?": "リモート操作をすべて停止しますか?",
+  "Every screen session ends now, including one open on this phone. Remote screen stays on.": "この電話で開いているものを含め、すべての画面セッションを今すぐ終了します。リモート画面はオンのままです。",
+  "Stopped {count} session(s) and gave control back to the bots.": "{count} 件のセッションを停止し、ボットに操作を戻しました。"
 }

@@ -24,12 +24,14 @@ mod flow_view;
 mod library_view;
 mod market_view;
 mod memory_view;
+mod people;
 mod server_library_view;
 pub use documents::draw as documents;
 pub use flow_view::draw as flow;
 pub use library_view::draw as library;
 pub use market_view::draw as market;
 pub use memory_view::draw as memory;
+pub use people::draw as people;
 pub use server_library_view::draw as server_library;
 
 use super::app::{App, Editor};

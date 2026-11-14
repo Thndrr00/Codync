@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 
 use super::super::app::{After, AgentModel, App, Entry, Overlay, Toggle};
-use super::{Market, MemoryMode, Reply, Shell, open_browser, s};
+use super::{Market, MemoryMode, Reply, Shell, Submit, open_browser, s};
 
 impl App {
     pub(in crate::tui) fn on_sheet_reply(&mut self, r: Reply, res: Result<Value, String>) {
@@ -49,6 +49,28 @@ impl App {
                     self.overlays.pop();
                 }
                 self.sheet("voiceStatus", json!({}), Reply::VoiceStatus);
+            }
+            Reply::People => {
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.fill_people(&v);
+                    }
+                }
+            }
+            Reply::PeopleDevices => {
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.fill_devices(&v);
+                    }
+                }
+            }
+            Reply::PeopleSaved => {
+                // The person's form goes away; the list behind it shows the new state.
+                if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::Person { .. }))
+                {
+                    self.overlays.pop();
+                }
+                self.load_people();
             }
             Reply::McpTools(reply) => self.mcp_tools_reply(&reply, Ok(v)),
             Reply::N8n(reply) => self.n8n_reply(&reply, Ok(v)),
@@ -576,6 +598,29 @@ impl App {
                 }
                 _ => self.flash(&e),
             },
+            Reply::People | Reply::PeopleDevices => {
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.busy = false;
+                        p.error = Some(e.clone());
+                    }
+                }
+            }
+            Reply::PeopleSaved => {
+                if let Some(Overlay::Fields(f)) = self.overlays.last_mut()
+                    && matches!(&f.submit, Submit::Person { .. })
+                {
+                    f.saving = false;
+                    f.error = Some(e);
+                } else {
+                    for o in &mut self.overlays {
+                        if let Overlay::People(p) = o {
+                            p.busy = false;
+                            p.error = Some(e.clone());
+                        }
+                    }
+                }
+            }
             _ => self.flash(&e),
         }
     }
@@ -655,6 +700,10 @@ impl App {
                     calls.push(("connectors", json!({}), After::Connectors));
                     calls.push(("skills", json!({}), After::Skills));
                     calls.push(("composioStatus", json!({}), After::Sheet(Reply::ComposioStatus)));
+                }
+                Overlay::People(_) => {
+                    calls.push(("people", json!({}), After::Sheet(Reply::People)));
+                    calls.push(("devices", json!({}), After::Sheet(Reply::PeopleDevices)));
                 }
                 _ => {}
             }

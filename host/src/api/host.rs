@@ -400,10 +400,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"answered": hub.screen.answer_consent(id, allow)?, "screen": hub.screen.state()})
         }
         "screenStopAll" => {
+            // A device needs the Screen scope (api/devices.rs), and the same policy that lets a
+            // phone control this computer: "Only this computer" keeps stopping to the computer.
             if !matches!(caller, Caller::Local) {
-                return Err(anyhow::anyhow!("Only this computer stops every remote control session."));
+                let policy = crate::server_settings::Settings::load(&hub.store).remote_control;
+                if !crate::server_settings::allows_remote(policy.access, crate::server_settings::RemoteRole::Device) {
+                    bail!("This computer only allows remote control from itself.");
+                }
             }
-            json!({"closed": hub.screen.stop_all().await?, "screen": hub.screen.state()})
+            let stopped = hub.screen.stop_all().await?;
+            json!({"closed": stopped.viewers, "takeover": stopped.takeover, "screen": hub.screen.state()})
         }
         "screenPrepare" => {
             if !hub.screen.enabled() {

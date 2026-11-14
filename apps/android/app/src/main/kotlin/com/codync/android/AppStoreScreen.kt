@@ -44,3 +44,14 @@ fun AppStore.screenTakeover(on: Boolean) {
         }
     }
 }
+
+/** Ends every remote control session on this computer; returns what it stopped and shows its new state. */
+suspend fun AppStore.screenStopAll(): ScreenStopped {
+    val response = hostQuery("screenStopAll", buildJsonObject { }).jsonObject
+    val stopped = ScreenStopped.decode(response)
+    response["screen"]?.jsonObject?.let { value ->
+        withContext(Dispatchers.IO) { database?.apply(MirrorEvent.Screen(value)) }
+    }
+    refresh()
+    return stopped
+}

@@ -175,9 +175,12 @@ Webhook deliveries are **not** end-to-end encrypted. The relay receives them ove
 
 - **Who can control:** **Every device** (the default), **Owners and admins**, or **Only this computer**. Codync has one owner and no member roles yet, so the middle option allows the same devices as the first; **Only this computer** never lets a phone control it.
 - **Ask on this computer:** when on, each session waits for you to allow or deny it here. A session nobody allows in 30 seconds does not start. The computer shows the question with a countdown.
-- **Stop all** ends every remote control session now, without turning Remote screen off.
+- **Stop all** ends every remote control session now, including any takeover, without turning Remote
+  screen off. It asks first and says how many sessions stopped. A phone with Remote screen access
+  can do this too, from its Remote desktop settings; if the computer is set to **Only this computer**,
+  only the computer can.
 
-Only the computer's own app can answer the question or stop all sessions.
+Only the computer's own app can answer the "Ask on this computer" question.
 
 ## Removing a device's access
 

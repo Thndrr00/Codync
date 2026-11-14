@@ -14,19 +14,39 @@ import com.codync.android.design.*
 /**
  * Settings that belong to this computer rather than to one bot: Personality (how its agents post
  * updates between steps), the Claude Code setup switch, and who may control it over remote desktop.
- * "Stop all" is on the computer itself: only its own app may end every session.
+ * A phone with the Screen scope can stop every remote control session, with a confirmation.
  */
 @Composable
 internal fun ServerSettingsSheet(store: AppStore) {
     var settings by remember { mutableStateOf<ServerSettings?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var confirmingStop by remember { mutableStateOf(false) }
+    var stopped by remember { mutableStateOf<String?>(null) }
     fun save(next: ServerSettings) {
         error = null
         store.action("server-settings") {
             busy = true
             try {
                 settings = store.setServerSettings(next)
+            } catch (failure: Exception) {
+                error = failure.message
+            } finally {
+                busy = false
+            }
+        }
+    }
+    fun stopAll() {
+        error = null
+        store.action("screen-stop-all") {
+            busy = true
+            try {
+                val result = store.screenStopAll()
+                stopped = if (result.takeover) {
+                    tr("Stopped {count} session(s) and gave control back to the bots.").replace("{count}", result.closed.toString())
+                } else {
+                    tr("Stopped {count} session(s).").replace("{count}", result.closed.toString())
+                }
             } catch (failure: Exception) {
                 error = failure.message
             } finally {
@@ -81,7 +101,7 @@ internal fun ServerSettingsSheet(store: AppStore) {
                 }
                 CardSection(
                     "Remote desktop",
-                    footer = "Every device you paired may control this computer. Codync has one owner and no member roles yet, so \"Owners and admins\" reads as every device; \"Only this computer\" never lets a phone control it. Stop all is on the computer itself.",
+                    footer = "Every device you paired may control this computer. Codync has one owner and no member roles yet, so \"Owners and admins\" reads as every device; \"Only this computer\" never lets a phone control it.",
                 ) {
                     row {
                         ValueRow("Who can control") {
@@ -112,9 +132,25 @@ internal fun ServerSettingsSheet(store: AppStore) {
                             }
                         }
                     }
+                    row {
+                        ValueRow(
+                            "Sessions",
+                            detail = stopped ?: tr("Ends every remote control session now, without turning Remote screen off."),
+                        ) {
+                            SecondaryButton(tr("Stop all"), enabled = !busy) { confirmingStop = true }
+                        }
+                    }
                 }
             }
             error?.let { message -> row { Text(message, style = Type.footnote, color = Palette.danger) } }
         }
+    }
+    CodyncDialog(
+        title = "Stop all remote control?",
+        isPresented = confirmingStop,
+        onDismiss = { confirmingStop = false },
+        message = "Every screen session ends now, including one open on this phone. Remote screen stays on.",
+    ) {
+        listOf(DialogAction(tr("Stop all"), destructive = true) { stopAll() })
     }
 }

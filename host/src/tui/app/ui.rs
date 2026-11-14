@@ -6,7 +6,8 @@ use std::time::Instant;
 
 use super::super::manage::{
     AgentSetup, AnalyticsSheet, BotChatSheet, DevServersSheet, DocumentSheet, Fields, FlowSheet, Library, Market,
-    MemorySheet, NetworkSheet, RoutineForm, RoutineList, ServerLibrary, SkillSheet, ThreadSheet, ThreadsSheet,
+    MemorySheet, NetworkSheet, PeopleSheet, RoutineForm, RoutineList, ServerLibrary, SkillSheet, ThreadSheet,
+    ThreadsSheet,
 };
 use super::{Editor, Mark, WhatsNew};
 
@@ -59,6 +60,7 @@ pub enum Action {
     ServerLibrary,
     RefreshAgents,
     Pair,
+    People,
     Network,
     Rules,
     Channels,
@@ -78,7 +80,7 @@ pub enum Action {
     ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 31] = [
+pub const ACTIONS: [(&str, &str, Action); 32] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -91,6 +93,7 @@ pub const ACTIONS: [(&str, &str, Action); 31] = [
     ("Library of every bot: artifacts and files…", "", Action::ServerLibrary),
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
+    ("People on this computer…", "", Action::People),
     ("Network: your other computers…", "N", Action::Network),
     ("Approval rules of this bot…", "", Action::Rules),
     ("Channels: Telegram and Slack…", "", Action::Channels),
@@ -144,6 +147,8 @@ pub enum ConfirmAct {
     },
     /// The build Codync downloaded for an agent, deleted; its accounts, sign-ins and bots stay.
     DeleteAgentDownload(String),
+    /// A person on this computer: their devices, bots, chats and connectors become the owner's.
+    RemovePerson(String),
 }
 
 pub struct Confirm {
@@ -489,6 +494,8 @@ pub enum Overlay {
     Network(Box<NetworkSheet>),
     /// The voice providers' keys (`voiceStatus`).
     Voice(Box<super::super::manage::VoiceSheet>),
+    /// Who uses this computer besides its owner (`people`, `devices`).
+    People(Box<PeopleSheet>),
     /// A bot's approval rules.
     Rules(Box<super::rules::RulesSheet>),
     /// "Always allow" on a card: the rule to keep, to edit.

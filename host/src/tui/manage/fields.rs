@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::super::app::{App, Editor, Entry, Overlay};
 use super::market::connector_inputs;
-use super::{Fields, Input, Reply, Submit, ctrl, newline};
+use super::{Fields, Input, Reply, Submit, ctrl, newline, person_body};
 
 impl App {
     pub(in crate::tui) fn fields_key(&mut self, mut f: Box<Fields>, k: KeyEvent) -> Option<Overlay> {
@@ -132,6 +132,20 @@ impl App {
             Submit::RenameArtifact { bot, artifact } => {
                 let body = json!({"botId": bot, "artifactId": artifact, "title": values["title"]});
                 self.sheet("renameArtifact", body, Reply::FieldsSaved);
+            }
+            Submit::Person { id } => {
+                let body = person_body(id.as_deref(), &values);
+                self.sheet(if id.is_some() { "updatePerson" } else { "addPerson" }, body, Reply::PeopleSaved);
+            }
+            Submit::Section(bot) => {
+                let name = values.get("name").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+                let section = if name.is_empty() { Value::Null } else { Value::String(name) };
+                self.sheet("updateBot", json!({"id": bot, "section": section}), Reply::FieldsSaved);
+            }
+            Submit::RenameSection(from) => {
+                let name = values.get("name").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+                let to = if name.is_empty() { Value::Null } else { Value::String(name) };
+                self.sheet("renameSection", json!({"from": from, "to": to}), Reply::FieldsSaved);
             }
         }
     }

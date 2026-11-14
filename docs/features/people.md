@@ -79,8 +79,11 @@ chat, and never revokes a device by itself: use **Revoke access** in the device 
   a member's view says **Shared** and **Mine**.
 - **iPhone and Android:** Computer management → People, with the same actions, for the owner's phone.
   The section is hidden when the host refuses it, which is what a member's phone gets.
-- **Terminal UI:** the host methods are the same ones the other apps call; its own People page is not
-  built yet, so people are managed from the desktop app or a phone today.
+- **Terminal UI:** Go to → People on this computer: the people and their email, the paired devices each
+  one uses, **n** to add someone, **↵** to rename or change their email, **x** to remove them, and
+  **Tab** to the device list where **↵** gives a device to a person or back to this computer's owner.
+  Removal asks first and says nothing is deleted. The host methods are the same ones the other apps
+  call.
 
 The desktop app and the phones talk to the same host methods; every check is in the host, never in a
 client.

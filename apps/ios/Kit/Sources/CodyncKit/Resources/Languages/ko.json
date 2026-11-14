@@ -2616,5 +2616,15 @@
   "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "그 사람의 휴대폰, 봇, 대화, 커넥터는 소유자의 것이 됩니다. 아무것도 삭제되지 않습니다.",
   "This bot belongs to": "이 봇의 소유자",
   "A member's phone only sees and changes what is theirs.": "멤버의 휴대폰은 자신의 것만 보고 바꿀 수 있습니다.",
-  "Person": "사람"
+  "Person": "사람",
+  "People on this computer…": "이 컴퓨터의 사람들…",
+  "No devices": "기기 없음",
+  "n add · ↵ rename · x remove · tab devices · esc": "n 추가 · ↵ 이름 변경 · x 제거 · tab 기기 · esc",
+  "↵ assign · tab people · esc": "↵ 지정 · tab 사람 · esc",
+  "↑↓ choose · ↵ assign · esc back": "↑↓ 선택 · ↵ 지정 · esc 뒤로",
+  "Rename {name}": "{name} 이름 변경",
+  "Connectors become shared, so every bot on this computer can use them.": "커넥터가 공유되어 이 컴퓨터의 모든 봇이 사용할 수 있습니다.",
+  "Stop all remote control?": "모든 원격 제어를 중지하시겠습니까?",
+  "Every screen session ends now, including one open on this phone. Remote screen stays on.": "이 휴대폰에서 열린 세션을 포함해 모든 화면 세션이 지금 종료됩니다. 원격 화면은 켜진 상태로 유지됩니다.",
+  "Stopped {count} session(s) and gave control back to the bots.": "{count}개 세션을 중지하고 봇에게 제어를 돌려주었습니다."
 }

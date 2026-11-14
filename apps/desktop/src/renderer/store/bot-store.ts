@@ -1008,7 +1008,7 @@ export class BotStore extends BotSync {
     this.changed()
   }
 
-  /** Only this computer stops every remote control session. */
+  /** Ends every remote control session; a phone with the Screen scope may call it too. */
   async stopAllRemoteControl() {
     const saved = await (await this.ready()).call<{ closed: number; screen: ScreenState }>('screenStopAll', {})
     this.screen = saved.screen

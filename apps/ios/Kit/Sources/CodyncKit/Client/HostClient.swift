@@ -529,11 +529,12 @@ public extension HostClient {
         try await call("screenTakeover", ["on": on])
     }
 
-    /// Only this computer stops every remote control session; returns how many ran and the new state.
-    func screenStopAll() async throws -> (closed: Int, screen: ScreenState) {
-        struct Res: Decodable { var closed: Int; var screen: ScreenState }
+    /// A phone with the Screen scope stops every remote control session; returns how many ran,
+    /// whether a phone had taken control, and the new state.
+    func screenStopAll() async throws -> (closed: Int, takeover: Bool, screen: ScreenState) {
+        struct Res: Decodable { var closed: Int; var takeover: Bool?; var screen: ScreenState }
         let res: Res = try await call("screenStopAll")
-        return (res.closed, res.screen)
+        return (res.closed, res.takeover ?? false, res.screen)
     }
 
     /// Only this computer answers a remote control request (the "Ask on this computer" policy).

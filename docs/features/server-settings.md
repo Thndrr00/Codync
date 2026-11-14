@@ -43,8 +43,11 @@ off by default.
   (`Screen::state`'s `consent`, with a 30 s `expiresAt`) and waits in the same request. The person
   here allows or denies it (`answerScreenRequest`, local only); nobody answering within 30 seconds
   ends the request with an error, and the session does not start.
-- `screenStopAll` (local only) closes every viewer session through the screen helper without turning
-  Remote screen off, so a later session can start again under the same policy.
+- `screenStopAll` closes every viewer session and ends any takeover through the screen helper without
+  turning Remote screen off, so a later session can start again under the same policy. It reports how
+  many viewer sessions ran and whether a takeover was active. This computer may always call it; a
+  paired device needs the Screen scope and a policy that allows devices (`owner` refuses it), so the
+  phones offer Stop all with a confirmation while a Control-only device is refused.
 
 Phones show the wait as "Connecting…" (their `screenPrepare` timeout is 45 s) and the host's reason
 when it is denied. The terminal UI has no video viewer and is unaffected.

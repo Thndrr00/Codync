@@ -56,7 +56,7 @@ pub use consent::ASK_WINDOW;
 pub use helper::serve_helpers;
 #[cfg(target_os = "linux")]
 pub use helper::supervise_linux_helper;
-pub use viewer::{IceConfig, watch_viewer};
+pub use viewer::{IceConfig, Stopped, watch_viewer};
 
 use crate::LockExt;
 use anyhow::{Result, anyhow, bail};

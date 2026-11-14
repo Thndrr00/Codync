@@ -10,11 +10,12 @@ extension BotStore {
         try await ready().setServerSettings(settings)
     }
 
-    /// Ends every remote control session; returns how many were running.
-    func stopAllRemoteControl() async throws -> Int {
+    /// Ends every remote control session; returns how many were running and whether a phone had
+    /// taken control, so the sheet can say what it stopped.
+    func stopAllRemoteControl() async throws -> (closed: Int, takeover: Bool) {
         let result = try await ready().screenStopAll()
         screen = result.screen
-        return result.closed
+        return (result.closed, result.takeover)
     }
 }
 
@@ -26,6 +27,8 @@ struct ServerSettingsSheet: View {
     @State private var error: String?
     @State private var busy = false
     @State private var closed: Int?
+    @State private var takeover = false
+    @State private var confirmingStop = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -102,10 +105,8 @@ struct ServerSettingsSheet: View {
                                     }
                                 )
                             )
-                            ValueRow("Sessions", detail: (closed.map {
-                                L10n.tr("Stopped {count} session(s).").replacingOccurrences(of: "{count}", with: String($0))
-                            } ?? L10n.tr("Ends every remote control session now, without turning Remote screen off."))) {
-                                Button(L10n.tr("Stop all")) { stopAll() }
+                            ValueRow("Sessions", detail: sessionsDetail) {
+                                Button(L10n.tr("Stop all")) { confirmingStop = true }
                                     .buttonStyle(.secondary)
                                     .disabled(busy)
                             }
@@ -121,6 +122,24 @@ struct ServerSettingsSheet: View {
         }
         .background(Palette.background)
         .task { settings = try? await store.serverSettings() }
+        .codyncDialog(
+            L10n.tr("Stop all remote control?"),
+            isPresented: $confirmingStop,
+            message: L10n.tr("Every screen session ends now, including one open on this phone. Remote screen stays on.")
+        ) {
+            [DialogAction(L10n.tr("Stop all"), destructive: true) { stopAll() }]
+        }
+    }
+
+    /// What stopping every session did, or what the button will do.
+    private var sessionsDetail: String {
+        guard let closed else {
+            return L10n.tr("Ends every remote control session now, without turning Remote screen off.")
+        }
+        let template = takeover
+            ? L10n.tr("Stopped {count} session(s) and gave control back to the bots.")
+            : L10n.tr("Stopped {count} session(s).")
+        return template.replacingOccurrences(of: "{count}", with: String(closed))
     }
 
     private func save(_ next: ServerSettings) {
@@ -142,7 +161,9 @@ struct ServerSettingsSheet: View {
         error = nil
         Task {
             do {
-                closed = try await store.stopAllRemoteControl()
+                let result = try await store.stopAllRemoteControl()
+                closed = result.closed
+                takeover = result.takeover
             } catch {
                 self.error = error.localizedDescription
             }

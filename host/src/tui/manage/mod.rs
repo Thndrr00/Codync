@@ -28,6 +28,7 @@ mod network;
 mod network_rules;
 mod network_setup;
 mod pages;
+mod people;
 mod replies;
 mod routines;
 mod scroll;
@@ -48,6 +49,7 @@ pub use network::{NetReply, NetworkSheet, Recovery, Step};
 pub use network_rules::{RuleField, RuleForm};
 pub use network_setup::{CONNECTORS, Setup, SetupField};
 pub use pages::Page;
+pub use people::{PeopleSection, PeopleSheet, PeopleStep, PersonAssign, person_body, person_fields};
 pub use scroll::Scroll;
 pub use server_library::{Preview, ServerFilter, ServerLibrary, ServerLibraryItem};
 pub use skill::SkillSheet;
@@ -119,6 +121,12 @@ pub enum Reply {
     VoiceStatus,
     /// A voice key was saved or removed: the sheet loads again.
     VoiceKeySaved,
+    /// The people on this computer (`people`).
+    People,
+    /// The paired devices and the person each acts as (`devices`).
+    PeopleDevices,
+    /// A person was added, renamed or removed, a device was assigned, or a device's person changed.
+    PeopleSaved,
     Skills,
     Apps,
     Catalog,
@@ -409,10 +417,18 @@ pub enum Submit {
     VoiceKey {
         provider: String,
     },
+    /// A person's name and email: `addPerson`, or `updatePerson` when `id` names one.
+    Person {
+        id: Option<String>,
+    },
     RenameArtifact {
         bot: String,
         artifact: String,
     },
+    /// A bot moved to a roster section (empty removes it).
+    Section(String),
+    /// A roster section renamed; empty merges it into no section.
+    RenameSection(String),
 }
 
 /// A few labeled text fields: an agent's keys, a connector's setup, a pasted MCP config.
@@ -453,6 +469,29 @@ pub struct Shell {
 
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or_default().to_owned()
+}
+
+/// One text field for a roster section: the name a bot moves to, or the new name of a section.
+pub fn section_fields(title: &str, note: &str, value: Option<&str>, submit: Submit) -> Fields {
+    Fields {
+        title: title.to_owned(),
+        note: note.to_owned(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![Input {
+            name: "name".into(),
+            label: "Name".into(),
+            secret: false,
+            required: false,
+            multiline: false,
+            placeholder: String::new(),
+            ed: Editor::with(value.unwrap_or_default()),
+        }],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit,
+    }
 }
 
 fn ctrl(k: KeyEvent) -> bool {
