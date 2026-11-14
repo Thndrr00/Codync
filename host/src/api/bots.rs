@@ -714,6 +714,33 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let member = hub.store.set_member_role(str_arg(&b, "id")?, str_arg(&b, "role")?)?;
             json!({"member": {"id": member.id, "name": member.name, "email": member.email, "role": member.role}})
         }
+        // The devices let into this computer, and which person each one signs in as.
+        "workspaceDevices" => {
+            let devices: Vec<Value> = hub
+                .store
+                .devices()?
+                .into_iter()
+                .map(|device| {
+                    json!({
+                        "key": device.key,
+                        "name": device.name,
+                        "platform": device.platform,
+                        "memberId": device.member_id,
+                        "createdAt": device.created_at,
+                        "lastSeenAt": device.last_seen_at,
+                    })
+                })
+                .collect();
+            json!({"devices": devices})
+        }
+        "assignDeviceMember" => {
+            let member = b["memberId"].as_str().filter(|id| !id.is_empty());
+            if let Some(id) = member {
+                anyhow::ensure!(hub.store.member(id)?.is_some(), "unknown member");
+            }
+            let assigned = hub.store.set_device_member(str_arg(&b, "key")?, member)?;
+            json!({"assigned": assigned})
+        }
         "recentNotices" => {
             let days = b["days"].as_i64().unwrap_or(7).clamp(1, 90);
             let limit = b["limit"].as_i64().unwrap_or(100).clamp(1, 500);

@@ -155,6 +155,8 @@ const WORKSPACE_ADMIN: &[&str] = &[
     "inviteWorkspaceMember",
     "removeWorkspaceMember",
     "setWorkspaceMemberRole",
+    "workspaceDevices",
+    "assignDeviceMember",
     "revokeDevice",
     "decidePairing",
     "setApproval",

@@ -67,6 +67,16 @@ export interface WorkspaceMember {
   lastSeenAt?: number | null
 }
 
+/** A device let into this computer; `memberId` says whose sign-in it carries. */
+export interface PairedDevice {
+  key: string
+  name: string
+  platform: string
+  memberId?: string | null
+  createdAt: number
+  lastSeenAt?: number | null
+}
+
 /** The host's upkeep calls the diagnostics page makes: bot check, daily token limits, failed runs, bot bundles. */
 export class MaintenanceStore extends Observable {
   report: DoctorReport | null = null
@@ -79,6 +89,7 @@ export class MaintenanceStore extends Observable {
   localModels: LocalModels | null = null
   members: WorkspaceMember[] = []
   memberToken: string | null = null
+  devices: PairedDevice[] = []
   compare: ModelCompareResult[] = []
   busy = false
   error: string | null = null
@@ -231,6 +242,22 @@ export class MaintenanceStore extends Observable {
       const { removed } = await c.call<{ removed: boolean }>('removeWorkspaceMember', { id })
       if (removed) this.members = this.members.filter((item) => item.id !== id)
       this.notice = removed ? 'Member removed.' : 'That person was already gone.'
+    })
+  }
+
+  /** The devices let into this computer, with the member each one signs in as. */
+  async loadDevices() {
+    await this.run(async (c) => {
+      this.devices = (await c.call<{ devices: PairedDevice[] }>('workspaceDevices', {})).devices
+    })
+  }
+
+  /** Ties a paired device to a person (or, with null, to no one). */
+  async assignDeviceMember(key: string, memberId: string | null) {
+    await this.run(async (c) => {
+      const { assigned } = await c.call<{ assigned: boolean }>('assignDeviceMember', { key, memberId })
+      this.devices = this.devices.map((device) => (device.key === key ? { ...device, memberId } : device))
+      this.notice = assigned ? 'Device updated.' : 'That device is no longer paired.'
     })
   }
 

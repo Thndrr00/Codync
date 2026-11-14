@@ -131,6 +131,14 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// Ties an already-paired device to a workspace member (or, with `None`, unties it). The channel
+    /// reads the member's current role on its next check, so a role change applies without re-pairing.
+    pub fn set_device_member(&self, key: &str, member: Option<&str>) -> Result<bool> {
+        let c = self.db.locked();
+        let changed = c.execute("UPDATE devices SET member_id = ?2 WHERE key = ?1", params![key, member])?;
+        Ok(changed > 0)
+    }
+
     /// The computer changed the account it belongs to: every device let in for another account goes, with its
     /// tickets. `None`: it left its account, and all go. Devices paired before devices recorded their account
     /// stay only with `keep_unrecorded` (a computer joining its first account keeps the phones it had).

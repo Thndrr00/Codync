@@ -20,7 +20,7 @@ export function MembersSection({ store, online }: { store: MaintenanceStore; onl
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('member')
   useEffect(() => {
-    if (online) void store.loadMembers()
+    if (online) void store.loadMembers().then(() => store.loadDevices())
   }, [online, store])
   const invite = () => {
     if (!name.trim()) return
@@ -43,6 +43,27 @@ export function MembersSection({ store, online }: { store: MaintenanceStore; onl
           onRemove={() => void store.removeMember(member.id)}
         />
       ))}
+      {model.devices.length ? (
+        <VStack gap={6}>
+          <Text size="callout" weight="semibold">Devices</Text>
+          <Text size="caption" tone="secondary">A paired phone works as the person it is tied to. Changing the role applies on its next check.</Text>
+          {model.devices.map((device) => (
+            <HStack key={device.key} gap={8} align="center" className="scheduled-row">
+              <VStack gap={2} grow>
+                <Text weight="semibold">{device.name}</Text>
+                <Text size="caption" tone="secondary">
+                  {device.platform}{device.lastSeenAt ? ` · seen ${relativeTime.day(device.lastSeenAt)}` : ''}
+                </Text>
+              </VStack>
+              <ChoicePicker
+                selection={device.memberId ?? ''}
+                options={[{ id: '', label: 'No one' }, ...model.members.map((member) => ({ id: member.id, label: member.name }))]}
+                onChange={(id) => void store.assignDeviceMember(device.key, id || null)}
+              />
+            </HStack>
+          ))}
+        </VStack>
+      ) : null}
       <VStack gap={6}>
         <Text size="callout" weight="semibold">Invite someone</Text>
         <HStack gap={8} align="end" wrap>

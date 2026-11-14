@@ -368,7 +368,9 @@ one-time token stored only as a SHA-256 hash. A phone redeems it on the pairing 
 (`pair_member`), and the device is saved with `member_id`, so the member caller's role is read from the
 member list on every connection and recheck: viewers may only read, members work with the bots,
 admins also invite, remove and re-role people, and removing a member closes their devices. The desktop
-has a Members page in Settings. A member client's invite-entry screen is next.
+has a Members page in Settings. A member client's invite-entry screen is next. A phone paired the
+usual way can be tied to a person from that page (Devices), which applies the role without pairing
+again.
 
 ## Later
 
