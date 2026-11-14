@@ -673,8 +673,47 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({})
         }
         "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
-        // Which alerts reach the phone, and the quiet hours around them.
-        "notificationRules" => json!({"rules": hub.store.notification_rules()?}),
+        // The people who share this computer: one owner, admins, members and viewers.
+        "workspaceMembers" => {
+            let members: Vec<Value> = hub
+                .store
+                .members()?
+                .into_iter()
+                .map(|member| {
+                    json!({
+                        "id": member.id,
+                        "name": member.name,
+                        "email": member.email,
+                        "role": member.role,
+                        "createdAt": member.created_at,
+                        "lastSeenAt": member.last_seen_at,
+                    })
+                })
+                .collect();
+            json!({"members": members})
+        }
+        "inviteWorkspaceMember" => {
+            let invite = hub.store.invite_member(
+                str_arg(&b, "name")?,
+                b["email"].as_str().unwrap_or_default(),
+                b["role"].as_str().unwrap_or("member"),
+            )?;
+            json!({
+                "member": {
+                    "id": invite.member.id,
+                    "name": invite.member.name,
+                    "email": invite.member.email,
+                    "role": invite.member.role,
+                    "createdAt": invite.member.created_at,
+                },
+                "token": invite.token,
+            })
+        }
+        "removeWorkspaceMember" => json!({"removed": hub.store.remove_member(str_arg(&b, "id")?)?}),
+        "setWorkspaceMemberRole" => {
+            let member = hub.store.set_member_role(str_arg(&b, "id")?, str_arg(&b, "role")?)?;
+            json!({"member": {"id": member.id, "name": member.name, "email": member.email, "role": member.role}})
+        }
         "recentNotices" => {
             let days = b["days"].as_i64().unwrap_or(7).clamp(1, 90);
             let limit = b["limit"].as_i64().unwrap_or(100).clamp(1, 500);
@@ -698,6 +737,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 .collect();
             json!({"notices": notices})
         }
+        // Which alerts reach the phone, and the quiet hours around them.
+        "notificationRules" => json!({"rules": hub.store.notification_rules()?}),
         "setNotificationRules" => {
             let rules: crate::store::NotificationRules =
                 serde_json::from_value(b["rules"].clone()).context("invalid notification rules")?;

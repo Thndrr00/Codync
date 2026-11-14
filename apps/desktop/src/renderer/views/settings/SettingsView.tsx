@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Screen } from '@shared/analytics'
 import { APPEARANCES, type Appearance } from '@shared/appearance'
 import { islandLabel } from '@shared/island'
@@ -38,13 +38,16 @@ import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
+import { MembersSection } from './MembersSection'
+import { MaintenanceStore } from '../../store/maintenance-store'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
-export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
+export type SettingsPage = 'general' | 'members' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
 
 const thisComputer = isMac ? 'This Mac' : 'This computer'
 const pages: { id: SettingsPage; title: string; label?: string; group: string; icon: string }[] = [
   { id: 'general', title: 'General', group: 'Personal', icon: 'gearshape' },
+  { id: 'members', title: 'Members', group: 'Personal', icon: 'person.2' },
   { id: 'computers', title: 'Computers & devices', label: 'Computers', group: thisComputer, icon: 'desktopcomputer' },
   { id: 'network', title: 'Network', group: thisComputer, icon: 'codync.network' },
   { id: 'access', title: 'Computer access', group: thisComputer, icon: 'hand.raised' },
@@ -56,7 +59,7 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
 ]
 
 /** Each page as `screen_viewed` names it; Computer access and Voice chat report themselves. */
-const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null }
+const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null, members: null }
 
 /** `page` is the window's: a command (the menu bar's network rows) can turn the open sheet to another page. */
 export function SettingsView({ page, setPage, onExtensions }: { page: SettingsPage; setPage: (page: SettingsPage) => void; onExtensions?: () => void }) {
@@ -110,6 +113,8 @@ function PageContent({ page, onExtensions, onPage }: { page: SettingsPage; onExt
       return <ComputerAccessView />
     case 'general':
       return <GeneralSettings onExtensions={onExtensions} onAccess={() => onPage('access')} />
+    case 'members':
+      return <MembersPage />
     case 'computers':
       return <ComputersView />
     case 'network':
@@ -137,6 +142,18 @@ function PageContent({ page, onExtensions, onPage }: { page: SettingsPage; onExt
     case 'n8n':
       return <N8nSettings />
   }
+}
+
+/** The members page needs the local computer's client for its workspace calls. */
+function MembersPage() {
+  const app = useApp()
+  const local = useModel(app.local)
+  const running = local !== null && local.connection.kind === 'online'
+  const store = useModel(useMemo(() => new MaintenanceStore(async () => {
+    if (!local) throw new Error('Start this computer’s host first.')
+    return local.ready()
+  }), [local]))
+  return <CardForm><MembersSection store={store} online={running} /></CardForm>
 }
 
 /** Account, window and app preferences. */

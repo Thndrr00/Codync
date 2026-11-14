@@ -57,6 +57,16 @@ export interface LocalModels {
   embeddingModel?: string
 }
 
+/** One person who shares this computer's workspace. */
+export interface WorkspaceMember {
+  id: string
+  name: string
+  email: string
+  role: 'owner' | 'admin' | 'member' | 'viewer'
+  createdAt: number
+  lastSeenAt?: number | null
+}
+
 /** The host's upkeep calls the diagnostics page makes: bot check, daily token limits, failed runs, bot bundles. */
 export class MaintenanceStore extends Observable {
   report: DoctorReport | null = null
@@ -67,6 +77,8 @@ export class MaintenanceStore extends Observable {
   links: SharedLink[] = []
   backupPath: string | null = null
   localModels: LocalModels | null = null
+  members: WorkspaceMember[] = []
+  memberToken: string | null = null
   compare: ModelCompareResult[] = []
   busy = false
   error: string | null = null
@@ -187,6 +199,38 @@ export class MaintenanceStore extends Observable {
   async loadLocalModels() {
     await this.run(async (c) => {
       this.localModels = await c.call<LocalModels>('localModels', {}, 10_000)
+    })
+  }
+
+  /** The people who share this computer. */
+  async loadMembers() {
+    await this.run(async (c) => {
+      this.members = (await c.call<{ members: WorkspaceMember[] }>('workspaceMembers', {})).members
+    })
+  }
+
+  /** Invites a person; their one-time token stays in `memberToken` until copied. */
+  async inviteMember(name: string, email: string, role: string) {
+    await this.run(async (c) => {
+      const answer = await c.call<{ member: WorkspaceMember; token: string }>('inviteWorkspaceMember', { name, email, role })
+      this.memberToken = answer.token
+      this.members = [...this.members, answer.member]
+      this.notice = `Invited ${answer.member.name}.`
+    })
+  }
+
+  async setMemberRole(id: string, role: string) {
+    await this.run(async (c) => {
+      const { member } = await c.call<{ member: WorkspaceMember }>('setWorkspaceMemberRole', { id, role })
+      this.members = this.members.map((item) => (item.id === id ? { ...item, ...member } : item))
+    })
+  }
+
+  async removeMember(id: string) {
+    await this.run(async (c) => {
+      const { removed } = await c.call<{ removed: boolean }>('removeWorkspaceMember', { id })
+      if (removed) this.members = this.members.filter((item) => item.id !== id)
+      this.notice = removed ? 'Member removed.' : 'That person was already gone.'
     })
   }
 
