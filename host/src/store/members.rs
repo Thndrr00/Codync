@@ -1,7 +1,8 @@
 //! The people who share this computer's Codync: one owner, admins, members and viewers. A member's
-//! token is handed out once when they are invited and stored only as a SHA-256 hash; it is the
-//! credential a future member client presents. Until member sign-in lands, paired devices carry the
-//! same roles through their own scopes.
+//! token is handed out once when they are invited and stored only as a SHA-256 hash; their phone
+//! redeems it on the pairing channel and connects as `Caller::Member`, so `permit` applies the
+//! role to every call (a viewer reads, a member works with the bots, admins also invite and
+//! remove people). Removing a member closes their devices on the next recheck.
 
 use super::Store;
 use crate::LockExt;
@@ -31,6 +32,29 @@ impl MemberRole {
             "viewer" => Self::Viewer,
             other => anyhow::bail!("unknown member role: {other}"),
         })
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Owner => "owner",
+            Self::Admin => "admin",
+            Self::Member => "member",
+            Self::Viewer => "viewer",
+        }
+    }
+
+    /// Owners and admins run the workspace: they may invite, remove and re-role people.
+    pub fn is_admin(self) -> bool {
+        matches!(self, Self::Owner | Self::Admin)
+    }
+
+    /// What a member's own device may do. Everyone can work with the bots (a viewer is
+    /// limited to read methods by `permit`); screen access is for admins only.
+    pub fn scopes(self) -> Vec<crate::store::Scope> {
+        match self {
+            Self::Owner | Self::Admin => vec![crate::store::Scope::Control, crate::store::Scope::Screen],
+            Self::Member | Self::Viewer => vec![crate::store::Scope::Control],
+        }
     }
 }
 
@@ -168,6 +192,37 @@ impl Store {
         }
         Ok(())
     }
+
+    /// The person a member token belongs to, and the hash the caller should record.
+    pub fn member_by_token(&self, token: &str) -> Result<Option<(Member, String)>> {
+        if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Ok(None);
+        }
+        let hash = hash(token);
+        Ok(self
+            .members()?
+            .into_iter()
+            .find(|member| member.token_hash.as_deref() == Some(hash.as_str()))
+            .map(|m| (m, hash)))
+    }
+
+    /// The person behind an id, for a channel that carries their role.
+    pub fn member(&self, id: &str) -> Result<Option<Member>> {
+        Ok(self.members()?.into_iter().find(|member| member.id == id))
+    }
+
+    /// Records that a member connected, without rehashing their token.
+    pub fn touch_member_id(&self, id: &str) -> Result<()> {
+        let mut members = self.members()?;
+        for member in &mut members {
+            if member.id == id {
+                member.last_seen_at = Some(crate::store::now_ms());
+                write(self, &members)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +252,20 @@ mod tests {
         assert_eq!(saved[1].token_hash.as_deref(), Some(hash(&invite.token).as_str()));
         store.touch_member(&hash(&invite.token)).unwrap();
         assert!(store.members().unwrap()[1].last_seen_at.is_some());
+    }
+
+    #[test]
+    fn a_member_token_finds_its_person_and_nothing_else() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        assert!(store.member_by_token("nope").unwrap().is_none());
+        let invite = store.invite_member("Ada", "", "member").unwrap();
+        let (member, hash) = store.member_by_token(&invite.token).unwrap().unwrap();
+        assert_eq!(member.id, invite.member.id);
+        assert_eq!(Some(hash), member.token_hash.clone());
+        assert!(store.member_by_token(&"0".repeat(64)).unwrap().is_none());
+        store.touch_member_id(&member.id).unwrap();
+        assert!(store.member(&member.id).unwrap().unwrap().last_seen_at.is_some());
+        assert!(store.member("gone").unwrap().is_none());
     }
 
     #[test]

@@ -4,7 +4,7 @@
 
 use crate::hub::Hub;
 use crate::remote::crypto;
-use crate::store::{Device, DeviceSource, Scope, now_ms};
+use crate::store::{Device, DeviceSource, MemberRole, Scope, now_ms};
 use serde::Serialize;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -14,6 +14,8 @@ pub enum Caller {
     Local,
     /// An authorized device over an E2E channel.
     Device { key: String, scopes: Vec<Scope> },
+    /// Someone who signed in with a workspace member token (their phone, paired with it).
+    Member { key: String, role: MemberRole },
     /// A channel opened to redeem a pairing code; may only call `pair`.
     Pairing { key: String },
 }
@@ -23,7 +25,16 @@ impl Caller {
     pub fn device_key(&self) -> &str {
         match self {
             Self::Local => "local",
-            Self::Device { key, .. } | Self::Pairing { key } => key,
+            Self::Device { key, .. } | Self::Member { key, .. } | Self::Pairing { key } => key,
+        }
+    }
+
+    /// Whether this caller may invite, remove and re-role people.
+    pub fn runs_workspace(&self) -> bool {
+        match self {
+            Self::Local => true,
+            Self::Member { role, .. } => role.is_admin(),
+            Self::Device { .. } | Self::Pairing { .. } => false,
         }
     }
 }
@@ -107,6 +118,53 @@ const LOCAL_ONLY: &[&str] = &[
 const SCREEN: &[&str] =
     &["screenPrepare", "screenOffer", "screenClose", "screenTakeover", "screenCandidate", "screenCandidates"];
 
+/// What a viewer may do: look at the bots and their chats, nothing that changes the workspace.
+const VIEWER: &[&str] = &[
+    "hello",
+    "bots",
+    "bot",
+    "history",
+    "callEntries",
+    "botConversation",
+    "searchMessages",
+    "botTasks",
+    "botActivity",
+    "botUsage",
+    "usage",
+    "boardTasks",
+    "teamTemplates",
+    "routines",
+    "routineCalendar",
+    "scheduledMessages",
+    "sharedLinks",
+    "workspaceMembers",
+    "notificationRules",
+    "listDocuments",
+    "getDocument",
+    "listDocumentReviews",
+    "getDocumentReview",
+    "listDocumentRevisions",
+    "listFiles",
+    "readFile",
+    "listComputerActivity",
+    "exportComputerActivity",
+];
+
+/// What only the owner and admins decide: who shares the workspace, and its enterprise settings.
+const WORKSPACE_ADMIN: &[&str] = &[
+    "inviteWorkspaceMember",
+    "removeWorkspaceMember",
+    "setWorkspaceMemberRole",
+    "revokeDevice",
+    "decidePairing",
+    "setApproval",
+    "setEnterprise",
+    "disconnectEnterprise",
+    "addMember",
+    "removeMember",
+    "rotateScim",
+];
+
 /// A method the caller isn't allowed to call (403).
 #[derive(Debug)]
 pub struct Forbidden;
@@ -125,7 +183,21 @@ pub fn permit(caller: &Caller, method: &str) -> Result<(), Forbidden> {
         Caller::Pairing { .. } => false,
         Caller::Device { scopes, .. } => {
             let needs = if SCREEN.contains(&method) { Scope::Screen } else { Scope::Control };
-            !LOCAL_ONLY.contains(&method) && method != "pair" && scopes.contains(&needs)
+            !LOCAL_ONLY.contains(&method)
+                && !WORKSPACE_ADMIN.contains(&method)
+                && method != "pair"
+                && scopes.contains(&needs)
+        }
+        Caller::Member { role, .. } => {
+            if LOCAL_ONLY.contains(&method) || method == "pair" {
+                false
+            } else if role.is_admin() {
+                !SCREEN.contains(&method) || role.scopes().contains(&Scope::Screen)
+            } else if *role == MemberRole::Viewer {
+                VIEWER.contains(&method)
+            } else {
+                !SCREEN.contains(&method) && !WORKSPACE_ADMIN.contains(&method)
+            }
         }
     };
     if ok { Ok(()) } else { Err(Forbidden) }
@@ -308,6 +380,33 @@ mod tests {
         assert!(permit(&Caller::Pairing { key: "k".into() }, "hello").is_err());
         assert_eq!(both.device_key(), "k");
         assert_eq!(Caller::Local.device_key(), "local");
+    }
+
+    #[test]
+    fn members_are_limited_by_their_role() {
+        let owner = Caller::Member { key: "k".into(), role: MemberRole::Owner };
+        let member = Caller::Member { key: "k".into(), role: MemberRole::Member };
+        let viewer = Caller::Member { key: "k".into(), role: MemberRole::Viewer };
+        assert!(permit(&owner, "send").is_ok());
+        assert!(permit(&owner, "inviteWorkspaceMember").is_ok());
+        assert!(permit(&owner, "screenOffer").is_ok(), "an admin member may share the screen");
+        assert!(permit(&member, "send").is_ok());
+        assert!(permit(&member, "history").is_ok());
+        assert!(permit(&member, "screenOffer").is_err());
+        assert!(permit(&member, "inviteWorkspaceMember").is_err());
+        assert!(permit(&member, "setEnterprise").is_err());
+        assert!(permit(&viewer, "bots").is_ok());
+        assert!(permit(&viewer, "history").is_ok());
+        assert!(permit(&viewer, "send").is_err());
+        assert!(permit(&viewer, "deleteBot").is_err());
+        assert!(permit(&viewer, "inviteWorkspaceMember").is_err());
+        for m in LOCAL_ONLY {
+            assert!(permit(&member, m).is_err(), "{m} stays at the computer");
+            assert!(permit(&viewer, m).is_err(), "{m} stays at the computer");
+        }
+        assert!(permit(&member, "pair").is_err());
+        assert_eq!(member.device_key(), "k");
+        assert!(owner.runs_workspace() && !member.runs_workspace() && !viewer.runs_workspace());
     }
 
     #[test]

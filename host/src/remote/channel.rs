@@ -191,8 +191,10 @@ pub async fn run(hub: Arc<Hub>, t: Transport, kind: ChannelKind) {
     };
     let opener = Opener::new(hs.keys.d2h, if hs.device.is_some() { MAX_INBOUND } else { 1 << 20 });
     let (code, reason) = if let Some(d) = hs.device {
-        ch.set_device(&d);
-        ch.serve(&mut incoming, opener, &mut writer).await
+        match ch.set_device(&d) {
+            Ok(()) => ch.serve(&mut incoming, opener, &mut writer).await,
+            Err(code) => ch.reject(code).await,
+        }
     } else {
         ch.caller = Arc::new(Caller::Pairing { key: ch.key.clone() });
         ch.pair(&mut incoming, opener, &kind.source()).await
@@ -364,8 +366,27 @@ fn err(id: u64, status: u16, message: &str) -> Value {
 }
 
 impl Channel {
-    fn set_device(&mut self, d: &Device) {
-        self.caller = Arc::new(Caller::Device { key: d.key.clone(), scopes: d.scopes.clone() });
+    fn set_device(&mut self, d: &Device) -> Result<(), RejectCode> {
+        // A member's device carries the role from the member list, so a role change or removal
+        // applies on the next recheck. A device whose member is gone is refused as revoked.
+        self.caller = match &d.member_id {
+            Some(id) => {
+                let member = self
+                    .hub
+                    .store
+                    .member(id)
+                    .map_err(|error| {
+                        tracing::warn!(error = format!("{error:#}"), "couldn't read a member");
+                        RejectCode::Unauthorized
+                    })?
+                    .ok_or(RejectCode::Revoked)?;
+                if let Err(error) = self.hub.store.touch_member_id(id) {
+                    tracing::warn!(error = format!("{error:#}"), "couldn't record a member's connection");
+                }
+                Arc::new(Caller::Member { key: d.key.clone(), role: member.role })
+            }
+            None => Arc::new(Caller::Device { key: d.key.clone(), scopes: d.scopes.clone() }),
+        };
         self.lease = match (d.source, d.lease_until) {
             (DeviceSource::Account, Some(until)) => {
                 let left = u64::try_from(until - now_ms()).unwrap_or(0) + 1;
@@ -373,6 +394,7 @@ impl Channel {
             }
             _ => None,
         };
+        Ok(())
     }
 
     async fn send(&self, v: Value) {
@@ -382,10 +404,13 @@ impl Channel {
     /// Re-checks the device; on failure sends `reject` and says how to close.
     async fn recheck(&mut self) -> Result<(), CloseWith> {
         match devices::authorize(&self.hub, &self.key) {
-            Ok(d) => {
-                self.set_device(&d);
-                Ok(())
-            }
+            Ok(d) => match self.set_device(&d) {
+                Ok(()) => Ok(()),
+                Err(code) => {
+                    tracing::info!(device = self.key, ?code, "closing channel: its member is gone");
+                    Err(self.reject(code).await)
+                }
+            },
             Err(code) => {
                 // Gone from the table while connected: it was revoked.
                 let code = if code == RejectCode::Unauthorized { RejectCode::Revoked } else { code };
@@ -821,6 +846,7 @@ mod tests {
             created_at: now_ms(),
             last_seen_at: None,
             account: None,
+            member_id: None,
         };
         hub.store.put_device(&device).unwrap();
         let mut p = Phone::direct(&hub, key.clone());

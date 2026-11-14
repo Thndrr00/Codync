@@ -191,7 +191,7 @@ pub fn observe_call(hub: &Hub, caller: &Caller, method: &str, b: &Value) -> Opti
         }
         _ => {}
     }
-    if let Caller::Device { key, .. } = caller {
+    if let Caller::Device { key, .. } | Caller::Member { key, .. } = caller {
         p.insert("platform".into(), platform_of(hub, key).into());
     }
     Some((event, p))
@@ -509,6 +509,7 @@ mod tests {
                 created_at: 0,
                 last_seen_at: None,
                 account: None,
+                member_id: None,
             })
             .unwrap();
         let (event, p) = observe_call(&hub, &phone, "respondPermission", &answer).unwrap();

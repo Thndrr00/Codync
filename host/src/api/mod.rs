@@ -149,7 +149,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     }
     if crate::computer::panel::METHODS.contains(&method) {
         let (kind, id) = match caller {
-            Caller::Device { key, .. } => ("device", key.as_str()),
+            Caller::Device { key, .. } | Caller::Member { key, .. } => ("device", key.as_str()),
             _ => ("owner", "local"),
         };
         return crate::computer::panel::call(hub, method, &b, kind, id).await;

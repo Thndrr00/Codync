@@ -38,6 +38,9 @@ impl Channel {
             return PROTOCOL;
         };
         let code = b["code"].as_str().unwrap_or_default();
+        if let Some(token) = b["memberToken"].as_str() {
+            return self.pair_member(id, name, platform, token, source).await;
+        }
         let account = match self.admit(id, &b, code, source).await {
             Ok(account) => account,
             Err(close) => return close,
@@ -118,12 +121,63 @@ impl Channel {
             created_at: now_ms(),
             last_seen_at: None,
             account: Some(account.user_id.clone()),
+            member_id: None,
         };
         if let Err(e) = self.hub.store.put_device(&device) {
             tracing::error!(error = format!("{e:#}"), "couldn't save a paired device");
             return Err(Kept::Unsaved);
         }
         Ok(owner)
+    }
+
+    /// A member of this workspace signs in with the token from their invite, rather than a QR
+    /// code and an account certificate: they join as the role the member list gives them, and
+    /// their device is saved with `member_id` so a role change or removal applies to it.
+    async fn pair_member(&self, id: u64, name: &str, platform: &str, token: &str, source: &str) -> CloseWith {
+        if !self.hub.pairing.locked().attempt(source) {
+            return self.reject(RejectCode::RateLimited).await;
+        }
+        let found = match self.hub.store.member_by_token(token) {
+            Ok(found) => found,
+            Err(error) => {
+                tracing::warn!(error = format!("{error:#}"), "couldn't read a member token");
+                self.send(err(id, 500, "couldn't check this invite")).await;
+                return (close::NORMAL, "");
+            }
+        };
+        let Some((member, hash)) = found else {
+            let message = "That invite isn't valid. Ask the owner for a new one.";
+            return self.refuse(id, message, "unauthorized").await;
+        };
+        let device = Device {
+            key: self.key.clone(),
+            name: name.to_owned(),
+            platform: platform.to_owned(),
+            source: DeviceSource::Local,
+            grant_id: None,
+            scopes: member.role.scopes(),
+            lease_until: None,
+            created_at: now_ms(),
+            last_seen_at: None,
+            account: None,
+            member_id: Some(member.id.clone()),
+        };
+        if let Err(e) = self.hub.store.put_device(&device) {
+            tracing::error!(error = format!("{e:#}"), "couldn't save a member's device");
+            self.send(err(id, 500, "couldn't save this device")).await;
+            return (close::NORMAL, "");
+        }
+        if let Err(e) = self.hub.store.touch_member(&hash) {
+            tracing::warn!(error = format!("{e:#}"), "couldn't record a member sign-in");
+        }
+        tracing::info!(device = self.key, platform, role = member.role.as_str(), "member signed in");
+        let ok = json!({
+            "computerId": self.hub.identity.computer_id(),
+            "name": crate::service::host_name(),
+            "member": {"id": member.id, "name": member.name, "role": member.role},
+        });
+        self.send(json!({"id": id, "ok": ok})).await;
+        (close::PAIRED, "paired")
     }
 
     /// This computer's account, or what to tell a phone of another account.

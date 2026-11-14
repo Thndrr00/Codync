@@ -8,7 +8,8 @@ use std::sync::Mutex;
 
 /// Current schema version (kv `schema`).
 /// 7: the account a device joined with (devices.account).
-const SCHEMA: i64 = 7;
+/// 8: the member a device signed in as (devices.member_id).
+const SCHEMA: i64 = 8;
 
 /// 3: authorized devices (keys, not push tickets) with their push and Live Activity
 /// tickets. The old ticket-only `devices` table is dropped; phones re-register on connect.
@@ -33,7 +34,8 @@ fn migrate(c: &Connection) -> Result<()> {
         migrate_5(c)?;
     }
     migrate_6(c)?;
-    migrate_7(c)
+    migrate_7(c)?;
+    migrate_8(c)
 }
 
 fn migrate_3(c: &Connection) -> Result<()> {
@@ -124,6 +126,17 @@ fn migrate_5(c: &Connection) -> Result<()> {
         )?;
     }
     tx.commit()?;
+    Ok(())
+}
+
+fn migrate_8(c: &Connection) -> Result<()> {
+    // A table built by this version already has the column.
+    let _ = c.execute("ALTER TABLE devices ADD COLUMN member_id TEXT", []);
+    c.execute_batch(
+        "BEGIN;
+         INSERT INTO kv(k, v) VALUES('schema', '8') ON CONFLICT(k) DO UPDATE SET v = '8';
+         COMMIT;",
+    )?;
     Ok(())
 }
 

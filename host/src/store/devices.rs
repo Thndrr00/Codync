@@ -42,6 +42,9 @@ pub struct Device {
     /// The account this device was let in for (a Clerk user ID); none for devices paired before 2.36.0.
     #[serde(skip)]
     pub account: Option<String>,
+    /// The workspace member this device belongs to, when it signed in with a member token.
+    #[serde(skip)]
+    pub member_id: Option<String>,
 }
 
 /// A push ticket with the device's push key (§6.7) and account context.
@@ -52,7 +55,7 @@ pub struct PushTicket {
 }
 
 const DEVICE_COLS: &str =
-    "key, name, platform, source, grant_id, scopes, lease_until, created_at, last_seen_at, account";
+    "key, name, platform, source, grant_id, scopes, lease_until, created_at, last_seen_at, account, member_id";
 
 /// A device with its push and Live Activity tickets; the number of device rows removed.
 fn delete_device(tx: &rusqlite::Transaction, key: &str) -> rusqlite::Result<usize> {
@@ -78,6 +81,7 @@ fn row_device(r: &rusqlite::Row) -> rusqlite::Result<Device> {
         created_at: r.get(7)?,
         last_seen_at: r.get(8)?,
         account: r.get(9)?,
+        member_id: r.get(10)?,
     })
 }
 
@@ -98,10 +102,10 @@ impl Store {
     pub fn put_device(&self, d: &Device) -> Result<()> {
         let c = self.db.locked();
         c.execute(
-            "INSERT INTO devices(key, name, platform, source, grant_id, scopes, lease_until, created_at, account)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "INSERT INTO devices(key, name, platform, source, grant_id, scopes, lease_until, created_at, account, member_id)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(key) DO UPDATE SET name = ?2, platform = ?3, source = ?4, grant_id = ?5,
-               scopes = ?6, lease_until = ?7, account = ?9",
+               scopes = ?6, lease_until = ?7, account = ?9, member_id = ?10",
             params![
                 d.key,
                 d.name,
@@ -111,7 +115,8 @@ impl Store {
                 serde_json::to_string(&d.scopes)?,
                 d.lease_until,
                 d.created_at,
-                d.account
+                d.account,
+                d.member_id
             ],
         )?;
         Ok(())
