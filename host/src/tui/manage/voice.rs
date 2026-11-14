@@ -109,6 +109,53 @@ impl App {
         self.sheet("voiceServer", json!({}), Reply::VoiceServer);
     }
 
+    /// The voice sheet's answers: the providers' keys, the local voice server, and its test.
+    pub(in crate::tui) fn voice_reply(&mut self, r: Reply, v: Value) {
+        // The saved form goes away; the sheet behind it shows what was saved.
+        if matches!(r, Reply::VoiceServerSaved)
+            && matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, super::Submit::VoiceServer))
+        {
+            self.overlays.pop();
+        }
+        let tested = matches!(r, Reply::VoiceServerTested)
+            .then(|| (v["ok"].as_bool().unwrap_or(false), super::s(&v, "message")));
+        for o in &mut self.overlays {
+            if let Overlay::Voice(sheet) = o {
+                match r {
+                    Reply::VoiceStatus => sheet.fill(&v),
+                    Reply::VoiceServer => sheet.fill_server(&v),
+                    Reply::VoiceServerSaved => {
+                        sheet.fill_server(&v);
+                        sheet.tested = None;
+                    }
+                    // Any other reply never reaches here; the test's is the last one.
+                    Reply::VoiceServerTested => sheet.tested = tested.clone(),
+                    _ => {}
+                }
+            }
+        }
+        if matches!(r, Reply::VoiceServerSaved) {
+            self.flash(&super::super::l10n::tr("Saved"));
+        }
+    }
+
+    /// A voice sheet's request failed: the sheet says why.
+    pub(in crate::tui) fn voice_error(&mut self, r: &Reply, e: &str) {
+        if matches!(r, Reply::VoiceServerSaved)
+            && let Some(Overlay::Fields(f)) = self.overlays.last_mut()
+            && matches!(&f.submit, super::Submit::VoiceServer)
+        {
+            f.saving = false;
+            f.error = Some(e.to_owned());
+            return;
+        }
+        for o in &mut self.overlays {
+            if let Overlay::Voice(sheet) = o {
+                sheet.error = Some(e.to_owned());
+            }
+        }
+    }
+
     pub(in crate::tui) fn voice_key(&mut self, mut sheet: Box<VoiceSheet>, k: KeyEvent) -> Option<Overlay> {
         let len = sheet.rows().len();
         match k.code {

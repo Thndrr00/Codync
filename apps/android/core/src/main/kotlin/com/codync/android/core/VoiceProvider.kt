@@ -78,7 +78,7 @@ enum class VoiceProvider(val id: String, val title: String, val keyPage: String,
  */
 @Serializable data class VoiceServer(val baseUrl: String = "", val transcribeModel: String = "", val speechModel: String = "",
     val keySaved: Boolean = false, val effective: String = "https://api.openai.com", val custom: Boolean = false,
-    val environment: String? = null, val suggestions: List<String> = localModelSuggestions) {
+    val environment: String? = null, val suggestions: List<String> = VoiceServer.localModelSuggestions) {
     companion object {
         /** The models common local servers serve, until the computer reports its own list. */
         val localModelSuggestions = listOf("parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026")

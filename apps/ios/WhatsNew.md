@@ -38,6 +38,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - 「資料庫」可從視窗列開啟，列出這台電腦上所有圖片與檔案。
 - 空的清單與搜尋會顯示氈毛玩偶。
 - LXC 容器中的伺服器更新時，不會再因 AppArmor 設定而中斷。
+- 語音設定可以把聽寫與朗讀回覆送到你在電腦上執行的 OpenAI 相容語音伺服器，使用它提供的模型；不會傳到 OpenAI。
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
@@ -68,6 +69,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - The Library opens from the window bar with every image and file on your computer.
 - Empty lists and searches show the felt plush.
 - A server in an LXC container updates without the AppArmor profile stopping it.
+- Voice settings can send dictation and spoken replies to an OpenAI-compatible voice server you run on your computer, with the models it serves; nothing goes to OpenAI.
 ## 2.39.0
 
 ### zh-Hant

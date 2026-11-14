@@ -39,6 +39,7 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - 「資料庫」可從視窗列開啟，列出這台電腦上所有圖片與檔案。
 - 空的清單與搜尋會顯示氈毛玩偶。
 - LXC 容器中的伺服器更新時，不會再因 AppArmor 設定而中斷。
+- 語音設定可以把聽寫與朗讀回覆送到你在電腦上執行的 OpenAI 相容語音伺服器，使用它提供的模型；不會傳到 OpenAI。
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
@@ -51,7 +52,7 @@ else a generic "Bug fixes and improvements" line. Delete old sections.
 - When a voice request fails, the computer writes the reason, provider, model and turn to logs/voice.log, with any keys removed.
 - Channels show a "Waiting for sub-tasks" list: stop a member's sub-task, then continue it, give it to another member, or cancel it and keep the messages.
 - Ask a channel's lead to drop earlier work: it cancels that whole run, with its running and queued sub-tasks, and the channel notes who asked.
-
+- Voice settings can send dictation and spoken replies to an OpenAI-compatible voice server you run on your computer, with the models it serves; nothing goes to OpenAI.
 ## 2.44.1
 ### zh-Hant
 - 有重要更新時，更新後第一次開啟 Codync 會跳出「新功能」視窗，列出這個版本改了什麼。一般的更新不會顯示。

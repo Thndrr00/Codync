@@ -220,7 +220,7 @@ fn server_error(status: reqwest::StatusCode, v: &Value) -> anyhow::Error {
         .as_str()
         .or_else(|| v["detail"]["message"].as_str())
         .or_else(|| v["detail"].as_str())
-        .map_or_else(|| anyhow!("The voice server answered {status}."), anyhow::Error::msg)
+        .map_or_else(|| anyhow!("The voice server answered {status}."), |message| anyhow!("{message}"))
 }
 
 /// 16 kHz mono 16-bit WAV of 0.25 s of silence: enough for any server to answer.
@@ -298,7 +298,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_server_that_answers_its_list_is_reported_as_working() {
-        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let store = store();
@@ -328,8 +328,6 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            let mut rest = Vec::new();
-            let _ = stream.read_to_end(&mut rest).await;
         });
         let operation = async {
             let answer = test(&store).await.unwrap();
@@ -342,22 +340,34 @@ mod tests {
 
     #[tokio::test]
     async fn a_refused_server_reports_the_servers_own_reason() {
-        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let store = store();
         save(&store, &json!({"baseUrl": format!("http://{address}"), "transcribeModel": "parakeet-tdt-0.6b-v3"}))
             .unwrap();
         let server = tokio::spawn(async move {
+            // The model list and the test recording arrive at once: two requests.
             for _ in 0..2 {
                 let (stream, _) = listener.accept().await.unwrap();
                 let mut stream = BufReader::new(stream);
+                let mut size = 0;
                 loop {
                     let mut line = String::new();
                     stream.read_line(&mut line).await.unwrap();
                     if line == "\r\n" || line.is_empty() {
                         break;
                     }
+                    if let Some((name, value)) = line.split_once(':')
+                        && name.eq_ignore_ascii_case("content-length")
+                    {
+                        size = value.trim().parse::<usize>().unwrap();
+                    }
+                }
+                // Read the body before answering, so the client isn't cut off mid-send.
+                let mut body = vec![0; size];
+                if size > 0 {
+                    stream.read_exact(&mut body).await.unwrap();
                 }
                 let answer = r#"{"error":{"message":"model 'parakeet-tdt-0.6b-v3' is not loaded"}}"#;
                 stream
