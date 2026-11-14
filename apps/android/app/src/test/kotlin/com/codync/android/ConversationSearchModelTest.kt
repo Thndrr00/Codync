@@ -15,14 +15,14 @@ import org.junit.Test
 class ConversationSearchModelTest {
     @Test fun `a late reply cannot replace a newer query even when transport ignores cancellation`() = runBlocking {
         val host = SearchHost()
-        val oldReply = DelayedReply<SearchPage>()
+        val oldReply = DelayedReply<List<ChatHit>>()
         val returned = CompletableDeferred<Unit>()
         host.search = { request ->
             if (request.query == "old") {
-                val page = oldReply.await()
+                val hits = oldReply.await()
                 returned.complete(Unit)
-                page
-            } else SearchPage(listOf(hit("new")), null)
+                hits
+            } else listOf(hit("new"))
         }
         val model = ConversationSearchModel(host, "bot", this)
         try {
@@ -30,14 +30,13 @@ class ConversationSearchModelTest {
             withTimeout(5_000) { oldReply.requested.await() }
             model.updateQuery("new")
             awaitState(model) { it.phase == SearchPhase.Ready }
-            oldReply.complete(SearchPage(listOf(hit("old")), 1L))
+            oldReply.complete(listOf(hit("old")))
             withTimeout(5_000) { returned.await() }
             yield()
             assertEquals(listOf("new"), model.state.hits.map { it.id })
-            assertNull(model.state.next)
             assertNull(model.state.error)
         } finally {
-            oldReply.complete(SearchPage(emptyList(), null))
+            oldReply.complete(emptyList())
             model.dispose()
         }
     }
@@ -53,7 +52,7 @@ class ConversationSearchModelTest {
     @Test fun `an unknown method probe leaves All search usable and scoped search disabled`() = runBlocking {
         val host = SearchHost()
         host.saved = { throw IOException("unknown method") }
-        host.search = { SearchPage(listOf(hit("found")), null) }
+        host.search = { listOf(hit("found")) }
         val model = ConversationSearchModel(host, "bot", this)
         try {
             model.loadShortcuts()
@@ -63,37 +62,81 @@ class ConversationSearchModelTest {
             model.updateQuery("release")
             awaitState(model) { it.phase == SearchPhase.Ready }
             assertEquals(MessageSearchScope.All, model.state.location)
-            assertEquals(listOf("all"), host.requests.map { it.location })
+            assertEquals(listOf("release"), host.requests.map { it.query })
             assertEquals(listOf("found"), model.state.hits.map { it.id })
         } finally { model.dispose() }
     }
 
-    @Test fun `a failed next page retains rows and cursor and retry completes the page`() = runBlocking {
+    @Test fun `a failed search shows the error and retry completes it`() = runBlocking {
         val host = SearchHost()
-        var moreRequests = 0
-        host.search = { request ->
-            if (request.before == null) SearchPage(listOf(hit("first")), 40L)
-            else {
-                moreRequests++
-                if (moreRequests == 1) throw IOException("Connection lost")
-                SearchPage(listOf(hit("second")), null)
-            }
+        var attempts = 0
+        host.search = {
+            attempts++
+            if (attempts == 1) throw IOException("Connection lost") else listOf(hit("found"))
         }
         val model = ConversationSearchModel(host, "bot", this)
         try {
             model.updateQuery("release")
-            awaitState(model) { it.phase == SearchPhase.Ready }
-            model.more()
             awaitState(model) { it.phase == SearchPhase.Failed }
-            assertEquals(listOf("first"), model.state.hits.map { it.id })
-            assertEquals(40L, model.state.next)
             assertEquals("Connection lost", model.state.error)
             model.retry()
             awaitState(model) { it.phase == SearchPhase.Ready }
-            assertEquals(listOf("first", "second"), model.state.hits.map { it.id })
-            assertEquals(listOf(null, 40L, 40L), host.requests.map { it.before })
-            assertNull(model.state.next)
+            assertEquals(listOf("found"), model.state.hits.map { it.id })
             assertNull(model.state.error)
+        } finally { model.dispose() }
+    }
+
+    @Test fun `whose words and tool traces travel to the host`() = runBlocking {
+        val host = SearchHost()
+        val model = ConversationSearchModel(host, "bot", this)
+        try {
+            model.updateSide(ChatSearchSide.Bot)
+            model.toggleTools()
+            model.updateQuery("release")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            assertEquals(listOf("release" to (ChatSearchSide.Bot to true)), host.requests.map { it.query to (it.side to it.tools) })
+        } finally { model.dispose() }
+    }
+
+    @Test fun `the scope keeps one side of the chat and leaves pages out of threads`() = runBlocking {
+        val host = SearchHost()
+        host.search = { listOf(pageHit("page"), hit("main"), hit("thread", threadId = "t1")) }
+        val model = ConversationSearchModel(host, "bot", this)
+        try {
+            model.loadShortcuts()
+            awaitState(model) { it.shortcutPhase == ShortcutPhase.Ready }
+            model.updateQuery("release")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            assertEquals(listOf("page", "main", "thread"), model.state.hits.map { it.id })
+            model.updateScope(MessageSearchScope.Main)
+            awaitState(model) { it.hits.size == 2 }
+            assertEquals(listOf("page", "main"), model.state.hits.map { it.id })
+            model.updateScope(MessageSearchScope.Threads)
+            awaitState(model) { it.hits.size == 1 }
+            assertEquals(listOf("thread"), model.state.hits.map { it.id })
+        } finally { model.dispose() }
+    }
+
+    @Test fun `a page opens in place while a message jumps into the chat`() = runBlocking {
+        val host = SearchHost()
+        host.search = { listOf(pageHit("doc"), hit("message")) }
+        host.page = { "Title" to "Body" }
+        val opened = mutableListOf<Pair<String, String?>>()
+        host.open = { botId, threadId -> opened += botId to threadId }
+        var closed = 0
+        val model = ConversationSearchModel(host, "bot", this)
+        try {
+            model.updateQuery("release")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            model.open(model.state.hits.first { it.isPage }) { closed++ }
+            awaitState(model) { it.page != null }
+            assertEquals("Title" to "Body", model.state.page)
+            assertEquals(0, closed)
+            model.closePage()
+            assertNull(model.state.page)
+            model.open(model.state.hits.first { !it.isPage }) { closed++ }
+            awaitState(model) { closed == 1 }
+            assertEquals(listOf("bot" to null), opened)
         } finally { model.dispose() }
     }
 
@@ -118,27 +161,26 @@ class ConversationSearchModelTest {
 
     private suspend fun rejectLateReply(scope: CoroutineScope, retire: (SearchHost, ConversationSearchModel) -> Unit) {
         val host = SearchHost()
-        val reply = DelayedReply<SearchPage>()
+        val reply = DelayedReply<List<ChatHit>>()
         val returned = CompletableDeferred<Unit>()
         host.search = {
-            val page = reply.await()
+            val hits = reply.await()
             returned.complete(Unit)
-            page
+            hits
         }
         val model = ConversationSearchModel(host, "bot", scope)
         try {
             model.updateQuery("release")
             withTimeout(5_000) { reply.requested.await() }
             retire(host, model)
-            reply.complete(SearchPage(listOf(hit("retired")), 40L))
+            reply.complete(listOf(hit("retired")))
             withTimeout(5_000) { returned.await() }
             yield()
             assertTrue(model.state.hits.isEmpty())
-            assertNull(model.state.next)
             assertNull(model.state.error)
             assertNotEquals(SearchPhase.Ready, model.state.phase)
         } finally {
-            reply.complete(SearchPage(emptyList(), null))
+            reply.complete(emptyList())
             model.dispose()
         }
     }
@@ -161,14 +203,16 @@ class ConversationSearchModelTest {
         }
     }
 
-    private data class Request(val bot: String, val query: String, val before: Long?, val location: String)
+    private data class Request(val bot: String, val query: String, val side: ChatSearchSide, val tools: Boolean)
     private class SearchHost : ConversationSearchHost {
         var current = true
         val requests = mutableListOf<Request>()
         val saves = mutableListOf<Pair<String, String>>()
-        var search: suspend (Request) -> SearchPage = { SearchPage(emptyList(), null) }
+        var search: suspend (Request) -> List<ChatHit> = { emptyList() }
         var saved: suspend () -> List<SearchShortcut> = { emptyList() }
         var save: suspend (String, String) -> List<SearchShortcut> = { _, _ -> emptyList() }
+        var page: suspend () -> Pair<String, String> = { "" to "" }
+        var open: (String, String?) -> Unit = { _, _ -> }
         override fun isCurrent() = current
         override suspend fun savedSearches() = saved()
         override suspend fun saveSearch(query: String, searchScope: String): List<SearchShortcut> {
@@ -176,16 +220,18 @@ class ConversationSearchModelTest {
             return save(query, searchScope)
         }
         override suspend fun deleteSavedSearch(id: String): List<SearchShortcut> = emptyList()
-        override suspend fun searchMessages(botId: String, query: String, beforeSeq: Long?, searchScope: String): SearchPage {
-            val request = Request(botId, query, beforeSeq, searchScope)
+        override suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, tools: Boolean): List<ChatHit> {
+            val request = Request(botId, query, side, tools)
             requests += request
             return search(request)
         }
+        override suspend fun searchPage(id: String): Pair<String, String> = page()
         override suspend fun loadMessageContext(botId: String, entryId: String) = Unit
-        override fun openBot(botId: String, threadId: String?) = Unit
+        override fun openBot(botId: String, threadId: String?) = open(botId, threadId)
     }
 
     companion object {
-        private fun hit(id: String) = SearchHit(id, "bot", null, id, 1L, 1L)
+        private fun hit(id: String, threadId: String? = null) = ChatHit("message", id, 1L, "[$id]", "agent", null, null, threadId)
+        private fun pageHit(id: String) = ChatHit("document", id, 1L, "[$id]", null, null, "Title", null)
     }
 }

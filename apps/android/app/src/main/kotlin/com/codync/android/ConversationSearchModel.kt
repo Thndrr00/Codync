@@ -14,16 +14,18 @@ import kotlinx.coroutines.launch
 internal enum class MessageSearchScope(val wire: String, val title: String) {
     All("all", "All"), Main("main", "Main chat"), Threads("threads", "Threads")
 }
-internal enum class SearchPhase { Idle, Searching, LoadingMore, Ready, Failed }
+internal enum class SearchPhase { Idle, Searching, Ready, Failed }
 internal enum class ShortcutPhase { Loading, Ready, Unavailable }
 
 internal data class ConversationSearchState(
     val query: String = "",
+    val side: ChatSearchSide = ChatSearchSide.Everyone,
+    val tools: Boolean = false,
     val location: MessageSearchScope = MessageSearchScope.All,
-    val hits: List<SearchHit> = emptyList(),
-    val next: Long? = null,
+    val hits: List<ChatHit> = emptyList(),
     val phase: SearchPhase = SearchPhase.Idle,
     val error: String? = null,
+    val page: Pair<String, String>? = null,
     val shortcuts: List<SearchShortcut> = emptyList(),
     val shortcutPhase: ShortcutPhase = ShortcutPhase.Loading,
     val shortcutError: String? = null,
@@ -32,7 +34,7 @@ internal data class ConversationSearchState(
     val opening: String? = null,
 )
 
-/** The host owns saved searches and filtering. This model owns request and screen lifetimes. */
+/** The host owns saved searches and searching. This model owns request and screen lifetimes. */
 internal class ConversationSearchModel(
     private val host: ConversationSearchHost,
     private val botId: String,
@@ -67,6 +69,20 @@ internal class ConversationSearchModel(
     fun updateScope(location: MessageSearchScope) {
         if (!active() || state.shortcutPhase != ShortcutPhase.Ready || location == state.location) return
         state = state.copy(location = location)
+        search()
+    }
+
+    /** Whose words to keep: everyone, only the person's, or only the bot's. */
+    fun updateSide(side: ChatSearchSide) {
+        if (!active() || side == state.side) return
+        state = state.copy(side = side)
+        search()
+    }
+
+    /** Tool traces, thoughts and notices too, for what a tool printed. */
+    fun toggleTools() {
+        if (!active()) return
+        state = state.copy(tools = !state.tools)
         search()
     }
 
@@ -136,31 +152,29 @@ internal class ConversationSearchModel(
         }
     }
 
-    fun retry() { search(more = state.hits.isNotEmpty() && state.next != null) }
-    fun more() { if (state.next != null && state.phase !in listOf(SearchPhase.Searching, SearchPhase.LoadingMore)) search(more = true) }
+    fun retry() { search() }
 
-    private fun search(more: Boolean = false) {
+    private fun search() {
         searchJob?.cancel()
         openingJob?.cancel()
         val request = ++sequence
         val query = state.query.trim()
-        val location = state.location
-        val before = if (more) state.next else null
-        val previous = if (more) state.hits else emptyList()
-        state = state.copy(hits = previous, next = before, error = null, opening = null,
-            phase = if (query.isEmpty()) SearchPhase.Idle else if (more) SearchPhase.LoadingMore else SearchPhase.Searching)
+        val side = state.side
+        val tools = state.tools
+        state = state.copy(hits = emptyList(), error = null, opening = null, page = null,
+            phase = if (query.isEmpty()) SearchPhase.Idle else SearchPhase.Searching)
         if (query.isEmpty() || !active()) return
-        // Main/Threads are offered only after the host has answered the feature probe.
-        if (location != MessageSearchScope.All && state.shortcutPhase != ShortcutPhase.Ready) {
-            state = state.copy(hits = emptyList(), next = null, phase = SearchPhase.Failed, error = "Scope filters are unavailable. Select All or retry saved searches.")
+        // Main and Threads are offered only after the host has answered the feature probe.
+        if (state.location != MessageSearchScope.All && state.shortcutPhase != ShortcutPhase.Ready) {
+            state = state.copy(phase = SearchPhase.Failed, error = "Scope filters are unavailable. Select All or retry saved searches.")
             return
         }
         searchJob = scope.launch {
             try {
-                if (!more) delay(300)
+                delay(300)
                 if (!current(request)) return@launch
-                val page = host.searchMessages(botId, query, before, location.wire)
-                if (current(request)) state = state.copy(hits = previous + page.hits, next = page.next, phase = SearchPhase.Ready)
+                val hits = host.searchChat(botId, query, side, tools)
+                if (current(request)) state = state.copy(hits = scoped(hits, state.location), phase = SearchPhase.Ready)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (current(request)) state = state.copy(phase = SearchPhase.Failed, error = error.message ?: "Search failed.")
@@ -168,8 +182,16 @@ internal class ConversationSearchModel(
         }
     }
 
-    fun open(hit: SearchHit, close: () -> Unit) {
-        if (!active() || state.opening != null || hit.botId != botId) return
+    /** What the chat said all came back; All and Threads keep one side of it here. Pages belong to no thread. */
+    private fun scoped(hits: List<ChatHit>, location: MessageSearchScope) = when (location) {
+        MessageSearchScope.All -> hits
+        MessageSearchScope.Main -> hits.filter { it.isPage || it.threadId == null }
+        MessageSearchScope.Threads -> hits.filter { !it.isPage && it.threadId != null }
+    }
+
+    fun open(hit: ChatHit, close: () -> Unit) {
+        if (!active() || state.opening != null) return
+        if (hit.isPage) { openPage(hit); return }
         val request = sequence
         state = state.copy(opening = hit.id, error = null)
         openingJob = scope.launch {
@@ -187,4 +209,23 @@ internal class ConversationSearchModel(
             }
         }
     }
+
+    /** A page opens in place, before its library. */
+    private fun openPage(hit: ChatHit) {
+        val request = sequence
+        state = state.copy(opening = hit.id, error = null)
+        openingJob = scope.launch {
+            try {
+                val page = host.searchPage(hit.id)
+                if (current(request)) state = state.copy(page = page)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (current(request)) state = state.copy(error = error.message ?: "Couldn't open this page.")
+            } finally {
+                if (current(request)) state = state.copy(opening = null)
+            }
+        }
+    }
+
+    fun closePage() { state = state.copy(page = null) }
 }

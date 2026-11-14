@@ -4,38 +4,58 @@ import com.codync.android.core.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 
-// Conversation search (idea 30): the host already pages chat-visible messages and returns the
-// context around a hit; this store exposes both so the search sheet can jump without inventing data.
+// Conversation search (idea 30): the host already knows what a chat said and returns the context
+// around a hit; this store exposes both so the search sheet can jump without inventing data.
 
-/** One hit from `searchMessages`: which message matched, its text, and the thread it lives in. */
-data class SearchHit(val id: String, val botId: String, val threadId: String?, val text: String, val seq: Long, val createdAt: Long)
+/** Whose words a chat search keeps; everyone sends no filter. */
+internal enum class ChatSearchSide(val wire: String?, val title: String) {
+    Everyone(null, "Everyone"), Me("user", "Me"), Bot("agent", "Bot")
+}
 
-/** A page of hits with the cursor for the next one (`null`: no more). */
-data class SearchPage(val hits: List<SearchHit>, val next: Long?)
+/** One hit inside a chat: a message with its snippet, or a page of the bot. */
+data class ChatHit(
+    val kind: String,
+    val id: String,
+    val at: Long,
+    val snippet: String,
+    val entryKind: String?,
+    val author: String?,
+    val title: String?,
+    val threadId: String?,
+) {
+    val isPage get() = kind == "document"
+    val isMine get() = entryKind == "user"
+}
 
-/** Searches one bot's chat-visible messages (main chat and threads) for [query], newest first. */
-suspend fun AppStore.searchMessages(botId: String, query: String, beforeSeq: Long? = null, searchScope: String = "all"): SearchPage {
+/** What this chat knows about [query]: its messages and its pages, best match first. */
+suspend fun AppStore.searchChat(botId: String, query: String, side: ChatSearchSide, tools: Boolean, limit: Int = 30): List<ChatHit> {
     val payload = buildJsonObject {
+        put("botId", botId)
         put("query", query)
-        put("scope", searchScope)
-        put("botIds", JsonArray(listOf(JsonPrimitive(botId))))
-        put("limit", 30)
-        beforeSeq?.let { put("beforeSeq", it) }
+        put("limit", limit)
+        put("tools", tools)
+        side.wire?.let { put("author", it) }
     }
-    val response = hostQuery("searchMessages", payload)
-    val hits = response.jsonObject.getValue("results").jsonArray.map { element ->
+    val response = hostQuery("search", payload)
+    return response.jsonObject.getValue("hits").jsonArray.map { element ->
         val o = element.jsonObject
-        SearchHit(
+        ChatHit(
+            kind = o.getValue("kind").jsonPrimitive.content,
             id = o.getValue("id").jsonPrimitive.content,
-            botId = o.getValue("botId").jsonPrimitive.content,
-            threadId = o["threadId"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.content,
-            text = o["text"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-            seq = o["seq"]?.jsonPrimitive?.longOrNull ?: 0L,
-            createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: 0L,
+            at = o["at"]?.jsonPrimitive?.longOrNull ?: 0L,
+            snippet = o["snippet"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            entryKind = o["entryKind"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.contentOrNull,
+            author = o["author"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.contentOrNull,
+            title = o["title"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.contentOrNull,
+            threadId = o["threadId"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.contentOrNull,
         )
     }
-    val next = response.jsonObject["next"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.longOrNull
-    return SearchPage(hits, next)
+}
+
+/** A page a search found: its title and body. */
+suspend fun AppStore.searchPage(id: String): Pair<String, String> {
+    val document = hostQuery("getDocument", body("id" to id)).jsonObject.getValue("document").jsonObject
+    return document["title"]?.jsonPrimitive?.contentOrNull.orEmpty() to document["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
 }
 
 data class SearchShortcut(val id: String, val query: String, val scope: String)
@@ -59,8 +79,3 @@ suspend fun AppStore.loadMessageContext(botId: String, entryId: String) {
     refresh()
 }
 
-/** A search hit's jump: load the span around it, then open its bot and thread (idea 30). */
-fun AppStore.openSearchHit(botId: String, entryId: String, threadId: String?) = action("search:" + entryId) {
-    try { loadMessageContext(botId, entryId) } catch (_: Exception) {}
-    openBot(botId, threadId)
-}
