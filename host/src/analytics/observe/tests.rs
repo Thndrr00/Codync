@@ -78,6 +78,10 @@ fn settings_routines_screen_and_devices() {
         Some((Event::SettingChanged, json!("cloud_assistants"), json!(true)))
     );
     assert_eq!(
+        setting("whatsappSetWorkingMessage", json!({"enabled": false})),
+        Some((Event::SettingChanged, json!("whatsapp_working_message"), json!(false)))
+    );
+    assert_eq!(
         props("networkJoin", &json!({"invite": "codync-network:…", "name": "laptop"})),
         Some((Event::NetworkJoined, json!({"via": "invite", "client": "local"})))
     );
@@ -199,9 +203,9 @@ fn a_bot_edit_names_the_settings_it_changes() {
     let stored: BotConfig =
         serde_json::from_value(json!({"id": "b1", "name": "Ada", "backend": "codex", "cwd": "/tmp", "model": "gpt-5"}))
             .unwrap();
-    let patch = json!({"id": "b1", "name": "Ada", "model": "gpt-6", "pinned": true, "harnessMemory": null,
+    let patch = json!({"id": "b1", "name": "Ada", "model": "gpt-6", "pinned": true, "notify": false, "harnessMemory": null,
         "sharedMemory": true, "secret": "x", "createdAt": 5});
-    assert_eq!(changed_fields(&stored, &patch), ["model", "pinned", "sharedMemory"]);
+    assert_eq!(changed_fields(&stored, &patch), ["model", "notify", "pinned", "sharedMemory"]);
     assert_eq!(changed_fields(&stored, &json!({"id": "b1", "name": "Ada"})), Vec::<String>::new());
 
     // Clients send `""` for the bot's own workspace, which the store keeps as its path.
@@ -227,6 +231,25 @@ fn sections_count_without_their_names() {
     .unwrap();
     assert_eq!(changed_fields(&stored, &json!({"id": "b1", "section": null})), ["section"]);
     assert_eq!(changed_fields(&stored, &json!({"id": "b1", "section": "Work"})), Vec::<String>::new());
+}
+
+#[test]
+fn a_pin_reports_which_way_it_went_never_the_message() {
+    assert_eq!(
+        props("pinMessage", &json!({"botId": "b1", "messageId": "e1", "pinned": true})),
+        Some((Event::MessagePinned, json!({"pinned": true, "client": "local"})))
+    );
+    assert_eq!(
+        props("pinMessage", &json!({"botId": "b1", "messageId": "e1", "pinned": false}))
+            .map(|(_, p)| p["pinned"].clone()),
+        Some(json!(false))
+    );
+    assert_eq!(
+        props("pinMessage", &json!({"botId": "b1", "messageId": "e1"})).map(|(_, p)| p["pinned"].clone()),
+        Some(json!(true)),
+        "a pin without the flag pins"
+    );
+    assert!(!props("pinMessage", &json!({"botId": "b1", "messageId": "e1"})).unwrap().1.to_string().contains("e1"));
 }
 
 #[test]
@@ -264,7 +287,7 @@ async fn store_lookups_add_fields_choice_and_platform() {
     let (hub, dir) = temp_hub();
     let cfg = serde_json::from_value(json!({"id": "b1", "name": "b", "backend": "codex", "cwd": "/tmp"})).unwrap();
     hub.store.save_bot(&cfg).unwrap();
-    let (_, p) = observe_call(&hub, &Caller::Local, "updateBot", &json!({"id": "b1", "permission": "auto"})).unwrap();
+    let (_, p) = observe_call(&hub, &Caller::Local, "updateBot", &json!({"id": "b1", "permission": "ask"})).unwrap();
     assert_eq!(p["fields"], json!(["permission"]));
     assert!(p.get("compaction").is_none());
     let (_, p) = observe_call(&hub, &Caller::Local, "updateBot", &json!({"id": "b1", "compaction": 120_000})).unwrap();

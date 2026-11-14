@@ -55,7 +55,8 @@ The file the tool left is published like a bot's own `send_file`: a snapshot und
 `data.media = {kind}`. The prompt is kept as the entry's text. `host/src/agent/bot/updates.rs`
 dedupes a share whose file the tool already published (`mediaShared`), so the picture appears once.
 A share happens quietly: a failure posts a `Notice` instead of breaking the turn, and
-`media_failed` records why.
+`media_failed` records why. Each made file also counts as `media_made` (`kind`, `agent`), never the
+description ([analytics events](../reference/analytics-events.md)).
 
 ## Routine flow steps
 

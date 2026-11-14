@@ -39,6 +39,10 @@ pub enum Event {
     TurnQueued,
     /// The user had a queued message handled now (`agent::bot::steer`).
     MessageSteered,
+    /// A message pinned to a chat's pin list, or taken out of it (`pinned`).
+    MessagePinned,
+    /// A bot's media tool made a picture or a clip (`kind`, `agent`; `agent::bot::files`).
+    MediaMade,
     QueuedMessageRemoved,
     TurnStopped,
     TurnFinished,
@@ -165,6 +169,8 @@ impl Event {
             Self::MessageSent => "message_sent",
             Self::TurnQueued => "turn_queued",
             Self::MessageSteered => "message_steered",
+            Self::MessagePinned => "message_pinned",
+            Self::MediaMade => "media_made",
             Self::QueuedMessageRemoved => "queued_message_removed",
             Self::TurnStopped => "turn_stopped",
             Self::TurnFinished => "turn_finished",

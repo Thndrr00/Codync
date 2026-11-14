@@ -99,6 +99,11 @@ impl Actor {
             }
             path.to_string_lossy().into_owned()
         };
+        // What was made and by which agent; never the description.
+        let mut properties = serde_json::Map::new();
+        properties.insert("kind".into(), kind.as_str().into());
+        properties.insert("agent".into(), self.cfg.backend.clone().into());
+        crate::analytics::capture(&self.hub, crate::analytics::Event::MediaMade, properties);
         let (reply, done) = oneshot::channel();
         self.files.quiet.push(done);
         let epoch = self.files.epoch;
