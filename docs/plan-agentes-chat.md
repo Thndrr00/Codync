@@ -69,9 +69,10 @@ recuerda qué se hizo, qué falta y por qué se paró.
 **Meta:** recuperar con evidencia. Hoy el contexto del turno es lo reciente; con búsqueda es lo
 relevante, con citas.
 
-**Estado:** 2, 3 (también al editar y al borrar), 5 (autor y fechas; falta canal), 6–17 y 19–20
-hechos, con la hoja de resultados por chat en las cuatro apps y el peso por recencia; 18 está hecho al
-borrar un bot. Falta el índice de memoria (4) y que 5 y 18 cubran también el canal.
+**Estado:** bloque completo. 2, 3 (también al editar y al borrar), 4, 5 (autor, canal y fechas), 6–17,
+18 (al borrar un bot, un canal y una página con su conversación) y 19–20, con la hoja de resultados por
+chat en las cuatro apps, el peso por recencia y el canal resuelto en el host (las apps solo mandan
+`main`, `threads` o un hilo).
 
 1. Leer los ADR de búsqueda y de contexto.
 2. Índice FTS5 sobre `entries` (texto del usuario, del agente y de las herramientas).

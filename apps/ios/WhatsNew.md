@@ -6,6 +6,16 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.48.0
+
+### zh-Hant
+- 搜尋也能找到 Bot 的記憶：筆記和它與你共用的記憶都會出現在結果裡，點一下就能讀。
+- 可以只看主要對話或只看各個討論串，頁面和記憶都歸類在「全部」。
+
+### en-US
+- Search now reaches into the bot's memory too: its notes, and the shared ones, show up in the results and open with a tap.
+- Keep just the main chat or just the threads; pages and memory stay under "Everything".
+
 ## 2.47.0
 
 ### zh-Hant
