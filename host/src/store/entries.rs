@@ -46,7 +46,7 @@ impl Store {
             params![id, lane.chat, rev, kind.as_str(), turn, data.to_string(), now, lane.thread],
         )?;
         ensure!(added == 1, "the chat was deleted");
-        super::search::index(&c, &id, &lane.chat, now, data)?;
+        super::search::index_message(&c, &id, &lane.chat, now, data)?;
         Ok(Entry {
             id,
             seq: c.last_insert_rowid(),
@@ -82,7 +82,7 @@ impl Store {
         let added = tx.execute(&format!("INSERT INTO entries(id, bot_id, rev, kind, turn, data, created_at, updated_at, thread_id) SELECT ?1, ?2, ?3, ?4, ?7, ?5, ?6, ?6, ?8 {LIVE_CHAT}"),
             params![id, lane.chat, rev, kind.as_str(), data.to_string(), now, turn, lane.thread])?;
         ensure!(added == 1, "the chat was deleted");
-        super::search::index(&tx, id, &lane.chat, now, data)?;
+        super::search::index_message(&tx, id, &lane.chat, now, data)?;
         let entry = tx.query_row(&format!("SELECT {ENTRY_COLS} FROM entries WHERE id = ?"), [id], row_entry)?;
         tx.commit()?;
         Ok((entry, true))

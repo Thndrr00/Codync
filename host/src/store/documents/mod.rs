@@ -103,6 +103,7 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         db.execute("UPDATE documents SET title = ?2, body = ?3, revision = revision + 1, rev = ?4, updated_at = ?5 WHERE id = ?1",
             params![id, draft.title, draft.body, rev, now])?;
         links::reindex(db, bot, id, &draft.body)?;
+        super::search::index_document(db, bot, id, now, &draft.title, &draft.body)?;
         return Ok(DocumentWrite::Saved(Document {
             title: draft.title.clone(),
             body: draft.body.clone(),
@@ -135,6 +136,7 @@ fn save(db: &Connection, bot: &str, draft: &DocumentDraft) -> Result<DocumentWri
         params![doc.id, bot, doc.parent_id, doc.title, doc.body, doc.rev, now],
     )?;
     links::reindex(db, bot, &doc.id, &doc.body)?;
+    super::search::index_document(db, bot, &doc.id, now, &doc.title, &doc.body)?;
     Ok(DocumentWrite::Saved(doc))
 }
 
@@ -257,6 +259,7 @@ impl Store {
                 params![id, rev, now_ms()],
             )?;
             links::forget(&tx, id)?;
+            super::search::forget(&tx, "document", id)?;
         }
         tx.commit()?;
         Ok(DocumentDelete::Deleted { ids, rev })
