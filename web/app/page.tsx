@@ -3,6 +3,7 @@ import Hero from "./components/hero";
 import BringYourOwn from "./components/bring-your-own";
 import Demo from "./components/demo";
 import Features from "./components/features";
+import Multiplayer from "./components/multiplayer";
 import Away from "./components/away";
 import Privacy from "./components/privacy";
 import Compare from "./components/compare";
@@ -21,6 +22,7 @@ export default function Home() {
         <Demo />
         <BringYourOwn />
         <Features />
+        <Multiplayer />
         <Away />
         <Privacy />
         <Compare />
