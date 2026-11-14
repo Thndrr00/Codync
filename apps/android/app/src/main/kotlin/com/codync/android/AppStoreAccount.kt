@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import android.app.Application
 import android.os.Build

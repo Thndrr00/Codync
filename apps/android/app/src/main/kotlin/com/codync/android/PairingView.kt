@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import android.content.ClipData
 import androidx.activity.compose.BackHandler
@@ -249,7 +249,7 @@ private enum class ComputerOS { Mac, Windows, Linux }
             Text("Scan the pairing code", style = PAGE_TITLE, color = Palette.text)
             Text(when (os) {
                 ComputerOS.Mac -> "On your Mac, click Codync in the menu bar, then Pair phone."
-                ComputerOS.Windows -> "On Windows, right-click Codync in the system tray, then choose Pair phone. You can also open Settings â†’ Computers and click the QR code button."
+                ComputerOS.Windows -> "On Windows, right-click Codync in the system tray, then choose Pair phone. You can also open Settings → Computers and click the QR code button."
                 ComputerOS.Linux -> "On your computer, run this in a terminal:"
             }, style = Type.body, color = Palette.secondary)
             if (os == ComputerOS.Linux) CommandBlock("codync-host pair")
@@ -274,7 +274,7 @@ private enum class ComputerOS { Mac, Windows, Linux }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(error.orEmpty(), style = Type.footnote, color = Palette.danger)
                 // The usual cause: the phone has no road to the computer yet.
-                IconLabel("Check that this phone and the computer are on the same Wi-Fi or both on Tailscale, or that â€œReach from anywhereâ€ is on in Codync on the computer.",
+                IconLabel("Check that this phone and the computer are on the same Wi-Fi or both on Tailscale, or that “Reach from anywhere” is on in Codync on the computer.",
                     "wifi.exclamationmark", Palette.secondary)
             }
         }

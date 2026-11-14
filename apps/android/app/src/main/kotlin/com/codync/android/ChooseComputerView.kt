@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

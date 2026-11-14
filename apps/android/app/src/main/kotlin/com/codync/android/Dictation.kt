@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import android.content.Context
 import android.os.Build

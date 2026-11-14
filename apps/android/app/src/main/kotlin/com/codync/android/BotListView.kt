@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.snap
@@ -448,7 +448,7 @@ private fun Bot.movesWith(other: Bot) = band == other.band
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         CharacterAvatar("cloud", "green", 72.dp)
         Text("No bots yet", style = Type.title3.semibold, color = Palette.text)
-        Text(if (hasComputer) "Create a bot for each kind of work â€” a reviewer, a fixer, a docs writer â€” and point it at a project."
+        Text(if (hasComputer) "Create a bot for each kind of work — a reviewer, a fixer, a docs writer — and point it at a project."
             else "Ask one of your account's computers for access, or pair one with its code.",
             style = Type.subheadline, color = Palette.secondary, textAlign = TextAlign.Center)
         if (canCreate) PrimaryButton("Create your first bot", action = create)
@@ -481,7 +481,7 @@ private fun Bot.movesWith(other: Bot) = band == other.band
         listOfNotNull(
             MenuItem("All computers", icon = "checkmark").takeIf { state.computers.size <= 1 },
             *state.computers.map { computer ->
-                if (computer.id == shown) MenuItem("${state.hostName} Â· ${connectionLabel(state)}", icon = "checkmark")
+                if (computer.id == shown) MenuItem("${state.hostName} · ${connectionLabel(state)}", icon = "checkmark")
                 else MenuItem(computer.name, icon = "desktopcomputer") { store.switchComputer(computer.id) }
             }.toTypedArray(),
             MenuItem(

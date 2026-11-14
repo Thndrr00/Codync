@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -248,10 +248,10 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
             add(MenuItem(if (reading) "Stop reading" else "Read aloud", icon = if (reading) "stop.fill" else "play.circle") {
                 store.readAloud(entry)
             })
-            if (speeds != null) add(MenuItem("Reading speedâ€¦", icon = "waveform", action = speeds))
+            if (speeds != null) add(MenuItem("Reading speed…", icon = "waveform", action = speeds))
         }
     }
-    if (forward != null) add(MenuItem("Send to a channelâ€¦", icon = "arrowshape.turn.up.right", action = forward))
+    if (forward != null) add(MenuItem("Send to a channel…", icon = "arrowshape.turn.up.right", action = forward))
     if (store != null) add(MenuItem("Delete", icon = "trash") { store.deleteEntry(entry) })
     if (trace != null) add(MenuItem("Show what it did", icon = "list.bullet", action = trace))
 }
@@ -275,7 +275,7 @@ private fun messageMenu(context: android.content.Context, entry: Entry, reply: (
     }
 }
 
-internal val quickReactions = listOf("ðŸ‘", "â¤ï¸", "ðŸ˜‚", "ðŸŽ‰", "ðŸ‘€", "âœ…")
+internal val quickReactions = listOf("👍", "❤️", "😂", "🎉", "👀", "✅")
 
 private fun reactionPick(entry: Entry, store: AppStore) = ReactionPick(quickReactions, entry.reactions) { emoji ->
     store.command("react", body("entryId" to entry.id, "emoji" to emoji), "react:" + entry.id)
@@ -343,11 +343,11 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     val compact = LocalUiDensity.current == UiDensity.Compact
     Column(Modifier.fillMaxWidth().padding(top = if (groupStart) (if (compact) 8.dp else 12.dp) else (if (compact) 2.dp else 4.dp)).padding(start = 56.dp),
         horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (file in send.files) Text(file.name + " Â· " + formatBytes(file.size), Modifier.clip(RoundedRectangle(14.dp))
+        for (file in send.files) Text(file.name + " · " + formatBytes(file.size), Modifier.clip(RoundedRectangle(14.dp))
             .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.chatFootnote, color = Palette.text)
         if (send.text.isNotEmpty() || send.replyTo != null) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text, send.replyTo) }
         when (send.status) {
-            SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files Â· $it%" } ?: "Sendingâ€¦",
+            SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files · $it%" } ?: "Sending…",
                 style = Type.caption2, color = Palette.tertiary)
             SendStatus.Delivering -> Text("Delivered to the computer", style = Type.caption2, color = Palette.tertiary)
             SendStatus.Waiting, SendStatus.Held -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -480,7 +480,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         seconds != null -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Symbol("waveform", size = 15.dp, tint = Palette.secondary)
             Spacer(Modifier.width(6.dp))
-            Text("$text Â· %02d:%02d".format(seconds / 60, seconds % 60), style = Type.chatFootnote.monospacedDigit, color = Palette.secondary)
+            Text("$text · %02d:%02d".format(seconds / 60, seconds % 60), style = Type.chatFootnote.monospacedDigit, color = Palette.secondary)
         }
         entry.data.text("style") == "divider" -> Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -536,10 +536,10 @@ internal fun currentThinking(entries: List<Entry>, botId: String, thread: String
         BotAvatar(bot, state.bots, 72.dp)
         Text(bot.name, style = Type.title2.semibold, color = Palette.text)
         val lines = if (bot.kind == "group") listOfNotNull(
-            members.joinToString(" Â· ") { it.name }.takeIf { bot.name != members.joinToString(", ") { it.name } },
+            members.joinToString(" · ") { it.name }.takeIf { bot.name != members.joinToString(", ") { it.name } },
             bot.description.ifEmpty { null }) else listOfNotNull(
-            if (bot.managedWorkspace) "${backendName(state, bot.backend)} Â· Personal workspace" else "${backendName(state, bot.backend)} in ${bot.cwd}",
-            if (bot.managedWorkspace) "${backendName(state, bot.backend)} Â· ${tr("Personal workspace")}"
+            if (bot.managedWorkspace) "${backendName(state, bot.backend)} · Personal workspace" else "${backendName(state, bot.backend)} in ${bot.cwd}",
+            if (bot.managedWorkspace) "${backendName(state, bot.backend)} · ${tr("Personal workspace")}"
             else fill(tr("{agent} in {path}"), "agent" to backendName(state, bot.backend), "path" to bot.cwd),
             bot.description.ifEmpty { null })
         for (line in lines) Text(line, style = Type.chatSubheadline, color = Palette.secondary, textAlign = TextAlign.Center)

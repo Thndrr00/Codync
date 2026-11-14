@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,11 +25,11 @@ import com.codync.android.core.CloudMachine
 import com.codync.android.core.CloudPlacement
 import com.codync.android.design.*
 
-/** "Runs on Boat Â· EU": under the computer's name. */
-@Composable internal fun CloudPlacement.runsOn(): String = tr("Runs on {provider} Â· {region}").replace("{provider}", providerName).replace("{region}", region)
+/** "Runs on Boat · EU": under the computer's name. */
+@Composable internal fun CloudPlacement.runsOn(): String = tr("Runs on {provider} · {region}").replace("{provider}", providerName).replace("{region}", region)
 
 private val CloudMachine.stateLabel: String get() = when {
-    preparing -> "Preparing your cloud computerâ€¦"
+    preparing -> "Preparing your cloud computer…"
     state == "starting" -> "Starting"
     state == "running" -> "Running"
     state == "stopping" -> "Going to sleep"
@@ -39,7 +39,7 @@ private val CloudMachine.stateLabel: String get() = when {
 }
 
 /**
- * Computers â†’ Codync Cloud: the computers Codync runs for this account on the user's own provider accounts, each with its
+ * Computers → Codync Cloud: the computers Codync runs for this account on the user's own provider accounts, each with its
  * menu (rename, its provider's key, delete its snapshots, delete it), and "+" for another on the provider picked in New
  * cloud computer, whose keys open from there too. Shown only to an account that has one or may create one (the feature
  * isn't public yet).
@@ -70,7 +70,7 @@ private val CloudMachine.stateLabel: String get() = when {
             val problem = offer.providers.firstOrNull { it.provider == machine.provider }?.credential?.problem
             row {
                 MachineRow(machine, problem, state.cloudMachineBusy(machine.cloudComputerId)) { buildList {
-                    add(MenuItem("Renameâ€¦", icon = "pencil") {
+                    add(MenuItem("Rename…", icon = "pencil") {
                         naming = Naming("Rename cloud computer", machine.name) { store.renameCloudComputer(machine.cloudComputerId, it) }
                     })
                     // Its provider's key, to replace it or see what to fix.
@@ -115,7 +115,7 @@ private val CloudMachine.stateLabel: String get() = when {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(machine.name, style = Type.body, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(buildAnnotatedString {
-                append("${machine.providerName} Â· ${machine.region} Â· ")
+                append("${machine.providerName} · ${machine.region} · ")
                 withStyle(SpanStyle(color = stateInk)) { append(tr(problem ?: machine.stateLabel)) }
             }, style = Type.footnote, color = Palette.secondary)
         }

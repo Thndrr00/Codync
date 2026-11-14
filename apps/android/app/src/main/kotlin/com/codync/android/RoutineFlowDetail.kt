@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -111,7 +111,7 @@ internal data class FlowTarget(val id: String, val name: String)
     LaunchedEffect(link.model) { model = link.model }
     var options by remember(link.id) { mutableStateOf(link.modelOptions) }
     LaunchedEffect(link.modelOptions) { options = link.modelOptions }
-    Text("${name(link.fromBotId)} â†’ ${name(link.toBotId)}", style = Type.headline, color = Palette.text)
+    Text("${name(link.fromBotId)} → ${name(link.toBotId)}", style = Type.headline, color = Palette.text)
     Text(tr("What the next bot is asked to do with the reply. It can be empty."), style = Type.caption, color = Palette.secondary)
     Field("Instruction") { FieldBox(text, { text = it.take(8000) }, "e.g. Summarize it in three lines", 3, 8, fill = Palette.bubbleUser) }
     Field("Model", "The model this step runs on. Default is the bot's own.") {
@@ -132,7 +132,7 @@ internal data class FlowTarget(val id: String, val name: String)
     val routine = card.routine
     val linked = !RoutineFlow.isUnconnected(canvas, routine.id)
     Text(routine.name, style = Type.headline, color = Palette.text)
-    Text(routine.triggerDescriptions.joinToString(" Â· "), style = Type.footnote, color = Palette.secondary)
+    Text(routine.triggerDescriptions.joinToString(" · "), style = Type.footnote, color = Palette.secondary)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(tr(if (routine.enabled) "Active" else "Paused"), Modifier.weight(1f), style = Type.footnote, color = Palette.text)
         CodyncSwitch(routine.enabled, { store.setFlowRoutineEnabled(owner.id, routine.id, it) },
@@ -191,8 +191,8 @@ internal data class FlowTarget(val id: String, val name: String)
     DropdownMenu({ options.map { (target, routines) ->
         if (routines.size == 1) MenuItem(target.name) { connect(routines.single().routine.id, target.id) }
         else MenuItem(target.name, children = routines.map { card -> MenuItem(card.routine.name) { connect(card.routine.id, target.id) } })
-    } }, enabled = online && !busy && options.isNotEmpty(), label = tr("Hand its reply on toâ€¦")) {
-        Text(tr(if (options.isEmpty()) "No step to hand on to" else "Hand its reply on toâ€¦"),
+    } }, enabled = online && !busy && options.isNotEmpty(), label = tr("Hand its reply on to…")) {
+        Text(tr(if (options.isEmpty()) "No step to hand on to" else "Hand its reply on to…"),
             Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp)).background(Palette.bubbleUser).padding(14.dp), style = Type.footnote, color = Palette.text)
     }
     val removable = id in canvas.placedBotIds && canvas.links.none { it.fromBotId == id || it.toBotId == id }
@@ -250,13 +250,13 @@ private fun FlowMedia.choice() = MediaChoice(kind, model, aspect, duration, reso
             failed -> Text(tr("This computer's host is not answering."), style = Type.body, color = Palette.warning)
             answer == null -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Spinner()
-                Text(tr("Checking what this bot can makeâ€¦"), style = Type.body, color = Palette.secondary)
+                Text(tr("Checking what this bot can make…"), style = Type.body, color = Palette.secondary)
             }
-            answer?.agent == null -> Text(tr("This botâ€™s agent has no image tool. Pick one that does, or use ComfyUI."),
+            answer?.agent == null -> Text(tr("This bot’s agent has no image tool. Pick one that does, or use ComfyUI."),
                 style = Type.body, color = Palette.secondary)
-            models.isEmpty() -> Text(tr("This botâ€™s agent makes no {kind}.").replace("{kind}", kind), style = Type.body, color = Palette.warning)
+            models.isEmpty() -> Text(tr("This bot’s agent makes no {kind}.").replace("{kind}", kind), style = Type.body, color = Palette.warning)
             else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (answer?.installed == false) Text(tr("This botâ€™s agent is not installed on this computer yet."),
+                if (answer?.installed == false) Text(tr("This bot’s agent is not installed on this computer yet."),
                     style = Type.caption, color = Palette.warning)
                 if (models.size > 1) {
                     DropdownMenu({ models.map { each -> MenuItem(each.name, selected = each.id == choice.model) { choice = choice.onModel(each) } } },
@@ -312,8 +312,8 @@ private fun FlowMedia.choice() = MediaChoice(kind, model, aspect, duration, reso
                 store.connectFlow(owner.id, card.routine.id, nodeKey, target.id) { link -> reselect(FlowSelection.OfLink(link.id)) }
             }
         })
-    } }, enabled = online && !busy && options.isNotEmpty(), label = tr("Hand its file on toâ€¦")) {
-        Text(tr(if (options.isEmpty()) "No step to hand on to" else "Hand its file on toâ€¦"),
+    } }, enabled = online && !busy && options.isNotEmpty(), label = tr("Hand its file on to…")) {
+        Text(tr(if (options.isEmpty()) "No step to hand on to" else "Hand its file on to…"),
             Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp)).background(Palette.bubbleUser).padding(14.dp), style = Type.footnote, color = Palette.text)
     }
     step?.error?.let { Text(it, style = Type.caption, color = Palette.danger, maxLines = 4, overflow = TextOverflow.Ellipsis) }

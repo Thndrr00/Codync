@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
@@ -57,7 +57,7 @@ import kotlin.math.sin
 @Composable internal fun WelcomeView(state: AppState, store: AppStore, start: () -> Unit) {
     AnalyticsOnAppear(AnalyticsEvent.OnboardingStepViewed(OnboardingStep.Welcome))
     val still = reduceMotion()
-    // 0 = nothing yet â€¦ 4 = everything shown. Each beat enters in turn.
+    // 0 = nothing yet … 4 = everything shown. Each beat enters in turn.
     var beat by remember { mutableIntStateOf(if (still) 4 else 0) }
     LaunchedEffect(Unit) {
         for (next in beat + 1..4) { delay(if (next == 1) 150 else 280); beat = next }
@@ -137,7 +137,7 @@ private val CREW = listOf(
                     fadeOut(Motion.fade())
             }, label = "Reply") { done ->
                 if (done) Bubble("Done. It raced the session refresh; tests pass on fix/login.", Palette.bubbleAgent)
-                else Text("Workingâ€¦", style = Type.subheadline, color = Palette.tertiary)
+                else Text("Working…", style = Type.subheadline, color = Palette.tertiary)
             }
         }
     }

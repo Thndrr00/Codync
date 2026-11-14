@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -76,14 +76,14 @@ import com.codync.android.design.*
                         failed -> Text(tr("This computer's host is not answering."), style = Type.body, color = Palette.warning)
                         answer == null -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Spinner()
-                            Text(tr("Checking what this bot can makeâ€¦"), style = Type.body, color = Palette.secondary)
+                            Text(tr("Checking what this bot can make…"), style = Type.body, color = Palette.secondary)
                         }
-                        answer?.agent == null -> Text(tr("This botâ€™s agent has no image tool. Pick one that does, or use ComfyUI."),
+                        answer?.agent == null -> Text(tr("This bot’s agent has no image tool. Pick one that does, or use ComfyUI."),
                             style = Type.body, color = Palette.secondary)
-                        models.isEmpty() -> Text(tr("This botâ€™s agent makes no {kind}.").replace("{kind}", tr(kind.title()).lowercase()),
+                        models.isEmpty() -> Text(tr("This bot’s agent makes no {kind}.").replace("{kind}", tr(kind.title()).lowercase()),
                             style = Type.body, color = Palette.secondary)
                         else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (answer?.installed == false) Text(tr("This botâ€™s agent is not installed on this computer yet."),
+                            if (answer?.installed == false) Text(tr("This bot’s agent is not installed on this computer yet."),
                                 style = Type.footnote, color = Palette.warning)
                             if (models.size > 1) ChoiceList(choice?.model.orEmpty(), models.map { Triple(it.id, it.name, mediaDetail(it, answer?.installed != false)) }, { id ->
                                 models.firstOrNull { it.id == id }?.let { next -> choice = choice?.onModel(next) }

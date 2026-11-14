@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import android.content.ClipData
 import androidx.compose.foundation.background

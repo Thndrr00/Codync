@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import com.codync.android.core.*
 import kotlinx.coroutines.*

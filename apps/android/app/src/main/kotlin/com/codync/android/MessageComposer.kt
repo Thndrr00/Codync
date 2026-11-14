@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -149,11 +149,11 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         else -> Trailing.Send
     }
     val placeholder = when {
-        terminal -> "This bot runs in your terminal â€” reply there; approvals still work here"
-        about != null -> tr("Message about â€œ{title}â€").replace("{title}", about)
-        replyQuote != null -> tr("Replyâ€¦")
-        thread != null -> "Replyâ€¦"
-        bot.kind == "group" -> "Message everyone Â· @ to ask one bot"
+        terminal -> "This bot runs in your terminal — reply there; approvals still work here"
+        about != null -> tr("Message about “{title}”").replace("{title}", about)
+        replyQuote != null -> tr("Reply…")
+        thread != null -> "Reply…"
+        bot.kind == "group" -> "Message everyone · @ to ask one bot"
         working -> "Queue a message for ${bot.name}"
         else -> "Ask ${bot.name}"
     }

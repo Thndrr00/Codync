@@ -1,4 +1,4 @@
-﻿package com.codync.android
+package com.codync.android
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
