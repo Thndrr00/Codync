@@ -198,6 +198,7 @@ impl Store {
         super::approvals::open(&c)?;
         super::approval_lessons::open(&c)?;
         super::flows::open(&c)?;
+        super::search::open(&c)?;
         codync_mem::schema::migrate(&c)?;
         let secret_key = if path == Path::new(":memory:") {
             let mut key = vec![0; 32];

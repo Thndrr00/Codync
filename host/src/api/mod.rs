@@ -192,6 +192,13 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if method == "fileVersions" {
         return crate::chat::library::versions(hub, &b);
     }
+    // What a chat said about some words: the message, its snippet and when.
+    if method == "search" {
+        let bot = str_arg(&b, "botId")?;
+        let query = b["query"].as_str().unwrap_or_default();
+        let limit = u32::try_from(b["limit"].as_u64().unwrap_or(20)).unwrap_or(20);
+        return Ok(serde_json::json!({"hits": hub.store.search(bot, query, limit)?}));
+    }
     // Each method group answers its own methods and hands the body back otherwise.
     let b = match host::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
