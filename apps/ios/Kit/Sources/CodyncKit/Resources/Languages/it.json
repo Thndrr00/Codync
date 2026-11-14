@@ -2626,5 +2626,22 @@
   "Connectors become shared, so every bot on this computer can use them.": "I connettori diventano condivisi, così ogni bot su questo computer può usarli.",
   "Stop all remote control?": "Interrompere tutto il controllo remoto?",
   "Every screen session ends now, including one open on this phone. Remote screen stays on.": "Ogni sessione dello schermo termina ora, compresa quella aperta su questo telefono. Lo schermo remoto resta attivo.",
-  "Stopped {count} session(s) and gave control back to the bots.": "Interrotte {count} sessioni e controllo restituito ai bot."
+  "Stopped {count} session(s) and gave control back to the bots.": "Interrotte {count} sessioni e controllo restituito ai bot.",
+  "Local voice server": "Server vocale locale",
+  "Server URL": "Indirizzo del server",
+  "Dictation model": "Modello di dettatura",
+  "Speech model": "Modello di lettura",
+  "Optional key": "Chiave facoltativa",
+  "Test server": "Prova il server",
+  "Server works": "Il server funziona",
+  "The server didn't answer": "Il server non ha risposto",
+  "Type the model name your server serves.": "Digita il nome del modello che il tuo server offre.",
+  "Runs on this computer: Codync sends your dictation and spoken replies there, and no audio goes to OpenAI.": "Funziona su questo computer: Codync vi invia la dettatura e le risposte lette, e nessun audio va a OpenAI.",
+  "Codync ships no models. Run an OpenAI-compatible server on this computer, such as a sherpa-onnx or whisper server, and enter its URL here.": "Codync non include modelli. Esegui un server compatibile OpenAI su questo computer, ad esempio un server sherpa-onnx o whisper, e inserisci qui il suo indirizzo.",
+  "In use: {url}": "In uso: {url}",
+  "Set on the computer. Add or change it in Codync on {name}.": "Impostato sul computer. Aggiungilo o modificalo in Codync su {name}.",
+  "Keep the saved key": "Mantieni la chiave salvata",
+  "Remove the saved key": "Rimuovi la chiave salvata",
+  "No local voice server is set. Add the URL of the server on this computer.": "Nessun server vocale locale impostato. Aggiungi l'indirizzo del server su questo computer.",
+  "No key needed": "Nessuna chiave necessaria"
 }

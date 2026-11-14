@@ -124,6 +124,25 @@ impl App {
                     Reply::VoiceKeySaved,
                 );
             }
+            Submit::VoiceServer => {
+                // Empty fields count here: emptying one turns that part of the setting off.
+                let typed = |name: &str| {
+                    f.inputs.iter().find(|i| i.name == name).map(|i| i.ed.text.trim().to_owned()).unwrap_or_default()
+                };
+                let mut body = json!({
+                    "baseUrl": typed("baseUrl"),
+                    "transcribeModel": typed("transcribeModel"),
+                    "speechModel": typed("speechModel"),
+                });
+                // An empty key field keeps the saved key, unless the form says to remove it.
+                let key = typed("key");
+                if !key.is_empty() {
+                    body["key"] = Value::String(key);
+                } else if !f.choices.is_empty() && f.choice == 1 {
+                    body["key"] = Value::String(String::new());
+                }
+                self.sheet("setVoiceServer", body, Reply::VoiceServerSaved);
+            }
             Submit::ProtectedFill { id, code } => {
                 let mut body = json!({"id":id});
                 body[if *code { "code" } else { "loginId" }] = values["value"].clone();
@@ -226,6 +245,68 @@ pub fn voice_key_fields(provider: &str, name: &str) -> Fields {
         error: None,
         saving: false,
         submit: Submit::VoiceKey { provider: provider.into() },
+    }
+}
+
+/// The local voice server: its URL, the models it serves, and an optional key. Edited on this
+/// computer only (the host takes `setVoiceServer` from loopback), because the server runs here.
+pub fn voice_server_fields(state: Option<&Value>) -> Fields {
+    let value = |key: &str| state.and_then(|v| v[key].as_str()).unwrap_or_default();
+    let saved = state.and_then(|v| v["keySaved"].as_bool()).unwrap_or(false);
+    let note = super::super::l10n::tr(
+        "Codync ships no models. Run an OpenAI-compatible server on this computer, such as a sherpa-onnx or whisper server, and enter its URL here.",
+    )
+    .into_owned();
+    // An empty key field keeps the saved one.
+    let placeholder = if saved { "Saved. Type a new one to replace it." } else { "No key needed" };
+    Fields {
+        title: super::super::l10n::tr("Local voice server").into_owned(),
+        note,
+        // Only a saved key needs the choice: the empty field keeps it otherwise.
+        choices: if saved { vec!["Keep the saved key".into(), "Remove the saved key".into()] } else { Vec::new() },
+        choice: 0,
+        inputs: vec![
+            Input {
+                name: "baseUrl".into(),
+                label: "Server URL".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "http://127.0.0.1:8890".into(),
+                ed: Editor::with(value("baseUrl")),
+            },
+            Input {
+                name: "transcribeModel".into(),
+                label: "Dictation model".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "parakeet-tdt-0.6b-v3".into(),
+                ed: Editor::with(value("transcribeModel")),
+            },
+            Input {
+                name: "speechModel".into(),
+                label: "Speech model".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "whisper-turbo".into(),
+                ed: Editor::with(value("speechModel")),
+            },
+            Input {
+                name: "key".into(),
+                label: "Optional key".into(),
+                secret: true,
+                required: false,
+                multiline: false,
+                placeholder: placeholder.into(),
+                ed: Editor::default(),
+            },
+        ],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::VoiceServer,
     }
 }
 

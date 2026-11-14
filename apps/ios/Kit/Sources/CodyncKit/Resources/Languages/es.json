@@ -2626,5 +2626,22 @@
   "Connectors become shared, so every bot on this computer can use them.": "Los conectores pasan a ser compartidos, así que cualquier bot de este ordenador puede usarlos.",
   "Stop all remote control?": "¿Detener todo el control remoto?",
   "Every screen session ends now, including one open on this phone. Remote screen stays on.": "Todas las sesiones de pantalla terminan ahora, incluida una abierta en este teléfono. La pantalla remota sigue activada.",
-  "Stopped {count} session(s) and gave control back to the bots.": "Se detuvieron {count} sesión(es) y el control volvió a los bots."
+  "Stopped {count} session(s) and gave control back to the bots.": "Se detuvieron {count} sesión(es) y el control volvió a los bots.",
+  "Local voice server": "Servidor de voz local",
+  "Server URL": "Direcci?n del servidor",
+  "Dictation model": "Modelo de dictado",
+  "Speech model": "Modelo de lectura",
+  "Optional key": "Clave opcional",
+  "Test server": "Probar el servidor",
+  "Server works": "El servidor funciona",
+  "The server didn't answer": "El servidor no respondi?",
+  "Type the model name your server serves.": "Escribe el nombre del modelo que sirve tu servidor.",
+  "Runs on this computer: Codync sends your dictation and spoken replies there, and no audio goes to OpenAI.": "Se ejecuta en este ordenador: Codync env?a all? tu dictado y las respuestas le?das, y ning?n audio va a OpenAI.",
+  "Codync ships no models. Run an OpenAI-compatible server on this computer, such as a sherpa-onnx or whisper server, and enter its URL here.": "Codync no incluye modelos. Ejecuta un servidor compatible con OpenAI en este ordenador, por ejemplo uno de sherpa-onnx o whisper, e introduce su direcci?n aqu?.",
+  "In use: {url}": "En uso: {url}",
+  "Set on the computer. Add or change it in Codync on {name}.": "Se ajusta en el ordenador. A??delo o c?mbialo en Codync en {name}.",
+  "Keep the saved key": "Conservar la clave guardada",
+  "Remove the saved key": "Eliminar la clave guardada",
+  "No local voice server is set. Add the URL of the server on this computer.": "No hay ning?n servidor de voz local configurado. A?ade la direcci?n del servidor en este ordenador.",
+  "No key needed": "No hace falta clave"
 }

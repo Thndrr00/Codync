@@ -2,7 +2,7 @@
 //! answer shape, returned as base64 audio with the format the clients play.
 
 use super::keys::Access;
-use super::{Provider, STANDARD, TIMEOUT, checked, elevenlabs, endpoint::openai_base, send, xai};
+use super::{Kind, Provider, STANDARD, TIMEOUT, checked, elevenlabs, model_for, send, xai};
 use crate::store::Store;
 use anyhow::{Result, anyhow, bail};
 use base64::Engine as _;
@@ -18,7 +18,8 @@ pub async fn speak(store: &Store, p: Provider, model: &str, voice: &str, text: &
         );
     }
     let access = super::keys::access(store, p)?;
-    let (model, voice) = (checked(model)?, checked(voice)?);
+    let model = model_for(store, p, Kind::Speech, model)?;
+    let (model, voice) = (model.as_str(), checked(voice)?);
     if text.trim().is_empty() || text.len() > 4000 {
         bail!("text must be 1–4000 bytes");
     }
@@ -27,7 +28,7 @@ pub async fn speak(store: &Store, p: Provider, model: &str, voice: &str, text: &
         match p {
             Provider::OpenAi => {
                 // A local server answers WAV (no AAC encoder needed); the phone plays both.
-                let format = if openai_base()?.is_some() { "wav" } else { "aac" };
+                let format = if access.is_local() { "wav" } else { "aac" };
                 let body = json!({"model": model, "voice": voice, "input": text, "response_format": format});
                 let res = access
                     .request(p, Method::POST, "/v1/audio/speech")

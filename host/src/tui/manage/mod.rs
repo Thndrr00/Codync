@@ -41,7 +41,7 @@ mod when;
 pub use analytics::AnalyticsSheet;
 pub use dev_servers::{DevServer, DevServerSummary, DevServersSheet, LogsView, summary as dev_server_summary};
 pub use documents::{DocumentReply, DocumentSheet};
-pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields, voice_key_fields};
+pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields, voice_key_fields, voice_server_fields};
 pub use flow::{FlowSheet, FlowStage, Target};
 pub use library::{ArtifactTitles, LibraryItem};
 pub use memory::{MemoryMode, MemorySheet, Section};
@@ -119,6 +119,12 @@ pub enum Reply {
     },
     /// The voice providers and whether this computer holds each key.
     VoiceStatus,
+    /// The local voice server's saved URL, models and key state (`voiceServer`).
+    VoiceServer,
+    /// The local voice server was saved: the sheet shows the answer.
+    VoiceServerSaved,
+    /// What `testVoiceServer` answered about the saved server.
+    VoiceServerTested,
     /// A voice key was saved or removed: the sheet loads again.
     VoiceKeySaved,
     /// The people on this computer (`people`).
@@ -417,6 +423,8 @@ pub enum Submit {
     VoiceKey {
         provider: String,
     },
+    /// The local voice server (`setVoiceServer`): its URL, the models it serves and an optional key.
+    VoiceServer,
     /// A person's name and email: `addPerson`, or `updatePerson` when `id` names one.
     Person {
         id: Option<String>,

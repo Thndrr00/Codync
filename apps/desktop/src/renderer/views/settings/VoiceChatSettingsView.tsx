@@ -12,6 +12,7 @@ import { useScreenViewed } from '../../store/analytics'
 import { errorText, liveClient } from './parts'
 import * as voice from './voice-settings'
 import type { VoiceModels, VoiceProvider } from './voice-settings'
+import { LocalVoiceServerSettings } from './LocalVoiceServerSettings'
 import { useTr } from '../../lib/use-language'
 import { fill } from '../../lib/fill.ts'
 
@@ -100,6 +101,7 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
             ? <ProviderVoiceSettings key="speech-xai" provider="xai" speechOnly />
             : null}
           {dictationProvider ? <ProviderVoiceSettings key={`dictation-${dictationProvider}`} provider={dictationProvider} dictationOnly /> : null}
+          <LocalVoiceServerSettings />
         </CardForm>
       </div>
     </SheetPage>

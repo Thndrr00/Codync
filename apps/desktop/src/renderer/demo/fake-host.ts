@@ -312,6 +312,16 @@ export class FakeHost {
         return { devices: [] }
       case 'voiceStatus':
         return { providers: [] }
+      case 'voiceServer':
+        return {
+          baseUrl: '', transcribeModel: '', speechModel: '', keySaved: false,
+          effective: 'https://api.openai.com', custom: false, environment: null,
+          suggestions: ['parakeet-tdt-0.6b-v3', 'parakeet-unified-en-0.6b', 'whisper-turbo', 'cohere-transcribe-03-2026'],
+        }
+      case 'testVoiceServer':
+        return { ok: false, message: 'No local voice server is set. Add the URL of the server on this computer.' }
+      case 'setVoiceServer':
+        return this.call('voiceServer', {})
       case 'composioStatus':
         return { configured: false, keyUrl: '' }
       case 'credentialStatus':

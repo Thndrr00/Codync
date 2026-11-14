@@ -81,6 +81,7 @@ import kotlinx.coroutines.launch
             if (provider != null && speech && speechOutput == "xai") key("xai") { ProviderVoiceSettings(VoiceProvider.Xai, true, state, store, choices, speechOnly = true) }
             val dictation = choices.dictation
             if (dictation != null && dictation != provider) key("dictation-${dictation.id}") { ProviderVoiceSettings(dictation, false, state, store, choices, dictationOnly = true) }
+            LocalVoiceServerSection(state, store)
             CardSection("Call receipts", "Applies to the next call. Text is stored with this bot on the host. Realtime transcription can add provider charges. Text may be incomplete and does not confirm playback or decisions.") {
                 row { SwitchRow("Save call transcripts", null, transcripts, { transcripts = it; VoicePreferences.transcripts(context, it) }) }
             }

@@ -283,6 +283,14 @@ internal suspend fun AppStore.voiceModels(provider: VoiceProvider): VoiceModels 
 internal suspend fun AppStore.voiceVoices(provider: VoiceProvider): VoiceVoices =
     WireJson.decodeFromJsonElement(hostCall("voiceVoices", body("provider" to provider.id), 30_000))
 
+/** The local voice server's saved URL, models and key state. A phone may read it; only the computer changes it. */
+internal suspend fun AppStore.voiceServer(): VoiceServer =
+    WireJson.decodeFromJsonElement(hostCall("voiceServer", JsonObject(emptyMap()), 30_000))
+
+/** Tries the saved local voice server and says why when it doesn't answer. */
+internal suspend fun AppStore.testVoiceServer(): VoiceServerTest =
+    WireJson.decodeFromJsonElement(hostCall("testVoiceServer", JsonObject(emptyMap()), 30_000))
+
 /** A short-lived credential, which checks a key in the call settings. */
 internal suspend fun AppStore.voiceSession(provider: VoiceProvider, model: String, voice: String): String =
     hostCall("voiceSession", body("provider" to provider.id, "model" to model, "voice" to voice), 30_000).jsonObject["credential"]

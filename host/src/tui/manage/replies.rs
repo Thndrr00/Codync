@@ -42,6 +42,36 @@ impl App {
                     }
                 }
             }
+            Reply::VoiceServer => {
+                for o in &mut self.overlays {
+                    if let Overlay::Voice(s) = o {
+                        s.fill_server(&v);
+                    }
+                }
+            }
+            Reply::VoiceServerSaved => {
+                // The form goes away; the sheet behind it shows what was saved.
+                if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::VoiceServer))
+                {
+                    self.overlays.pop();
+                }
+                for o in &mut self.overlays {
+                    if let Overlay::Voice(s) = o {
+                        s.fill_server(&v);
+                        s.tested = None;
+                    }
+                }
+                self.flash(&super::super::l10n::tr("Saved"));
+            }
+            Reply::VoiceServerTested => {
+                let ok = v["ok"].as_bool().unwrap_or(false);
+                let message = s(&v, "message");
+                for o in &mut self.overlays {
+                    if let Overlay::Voice(sheet) = o {
+                        sheet.tested = Some((ok, message.clone()));
+                    }
+                }
+            }
             Reply::VoiceKeySaved => {
                 // The key form goes away; the sheet behind it shows the new state.
                 if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, super::Submit::VoiceKey { .. }))
@@ -591,6 +621,20 @@ impl App {
                     }
                 }
             }
+            Reply::VoiceServer | Reply::VoiceServerTested => {
+                for o in &mut self.overlays {
+                    if let Overlay::Voice(sheet) = o {
+                        sheet.error = Some(e.clone());
+                    }
+                }
+            }
+            Reply::VoiceServerSaved => match self.overlays.last_mut() {
+                Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::VoiceServer) => {
+                    f.saving = false;
+                    f.error = Some(e);
+                }
+                _ => self.flash(&e),
+            },
             Reply::VoiceKeySaved => match self.overlays.last_mut() {
                 Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::VoiceKey { .. }) => {
                     f.saving = false;

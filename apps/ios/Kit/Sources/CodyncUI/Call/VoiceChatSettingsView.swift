@@ -58,6 +58,7 @@ public struct VoiceChatSettingsView: View {
                 if let provider = dictationProvider {
                     ProviderVoiceSettings(provider: provider, dictationOnly: true).id("dictation-\(provider.rawValue)")
                 }
+                LocalVoiceServerSection()
             }
         }
         .background(Palette.background)

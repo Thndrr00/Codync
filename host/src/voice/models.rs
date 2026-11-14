@@ -15,7 +15,7 @@ pub async fn models(store: &Store, p: Provider) -> Result<Value> {
     let access = super::keys::access(store, p)?;
     let entries: Vec<Model> = match p {
         Provider::OpenAi => {
-            let base = openai_base()?;
+            let base = openai_base(store)?;
             let v = send(p, access.request(p, Method::GET, "/v1/models")).await?;
             v["data"]
                 .as_array()

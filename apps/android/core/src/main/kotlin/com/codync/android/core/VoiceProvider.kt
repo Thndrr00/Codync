@@ -73,6 +73,23 @@ enum class VoiceProvider(val id: String, val title: String, val keyPage: String,
 }
 
 /**
+ * The local voice server this computer's speech goes through (iOS `VoiceServer`): an
+ * OpenAI-compatible server the person runs there. Codync runs no model itself.
+ */
+@Serializable data class VoiceServer(val baseUrl: String = "", val transcribeModel: String = "", val speechModel: String = "",
+    val keySaved: Boolean = false, val effective: String = "https://api.openai.com", val custom: Boolean = false,
+    val environment: String? = null, val suggestions: List<String> = localModelSuggestions) {
+    companion object {
+        /** The models common local servers serve, until the computer reports its own list. */
+        val localModelSuggestions = listOf("parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026")
+    }
+}
+
+/** What `testVoiceServer` answered: whether the server works, and why not. */
+@Serializable data class VoiceServerTest(val ok: Boolean = false, val message: String = "", val models: List<String>? = null,
+    val effective: String? = null)
+
+/**
  * The call settings kept on this phone (iOS `VoiceSettings`): the engine, each provider's mode,
  * models and voice, and this month's minutes. A default model isn't stored, so a newer one reaches the user.
  */

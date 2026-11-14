@@ -300,6 +300,12 @@
   color: var(--danger);
 }
 
+/* The local voice server's model suggestions: the ids common servers serve, fillable by click. */
+.voice-model-suggestions .styled-button {
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+}
+
 /* A row that appears fades in. */
 .settings-appear {
   animation: fade-in var(--layout) both;

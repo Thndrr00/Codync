@@ -1,12 +1,13 @@
 //! The voice providers' keys, as a terminal sheet: which providers this computer holds a key for,
-//! and what each one does. Keys are added and removed here; models and voices are picked per device
-//! in the apps, so this sheet never guesses them.
+//! what each one does, and the local voice server its speech can go through. Keys are added and
+//! removed here; models and voices are picked per device in the apps, so this sheet never guesses
+//! them (the local server's models are this computer's own setting, so they are edited here).
 
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::{Value, json};
 
 use super::super::app::{App, Confirm, ConfirmAct, Overlay};
-use super::{Reply, voice_key_fields};
+use super::{Reply, voice_key_fields, voice_server_fields};
 
 /// One provider, as `voiceStatus` reports it.
 pub struct VoiceProviderRow {
@@ -21,13 +22,17 @@ pub struct VoiceProviderRow {
 pub struct VoiceSheet {
     /// `None` until `voiceStatus` answers.
     pub providers: Option<Vec<VoiceProviderRow>>,
+    /// The local voice server (`voiceServer`): its URL, models and whether a key is saved.
+    pub server: Option<Value>,
+    /// What `testVoiceServer` answered: whether it works and why not.
+    pub tested: Option<(bool, String)>,
     pub cursor: usize,
     pub error: Option<String>,
 }
 
 impl VoiceSheet {
     pub fn new() -> Self {
-        Self { providers: None, cursor: 0, error: None }
+        Self { providers: None, server: None, tested: None, cursor: 0, error: None }
     }
 
     pub fn rows(&self) -> &[VoiceProviderRow] {
@@ -58,6 +63,17 @@ impl VoiceSheet {
         self.providers = Some(providers);
         self.error = None;
     }
+
+    /// Takes `voiceServer`'s answer.
+    pub fn fill_server(&mut self, value: &Value) {
+        self.server = Some(value.clone());
+        self.error = None;
+    }
+
+    /// The server's address as requests use it (the saved one, or the environment's).
+    pub fn server_line(&self) -> String {
+        self.server.as_ref().and_then(|v| v["effective"].as_str()).unwrap_or_default().to_owned()
+    }
 }
 
 /// The product names, which are not translated.
@@ -84,7 +100,13 @@ fn provider_role(id: &str) -> &'static str {
 impl App {
     pub(in crate::tui) fn open_voice(&mut self) {
         self.overlays.push(Overlay::Voice(Box::new(VoiceSheet::new())));
+        self.load_voice();
+    }
+
+    /// Both halves of the sheet: the providers' keys and the local voice server.
+    fn load_voice(&self) {
         self.sheet("voiceStatus", json!({}), Reply::VoiceStatus);
+        self.sheet("voiceServer", json!({}), Reply::VoiceServer);
     }
 
     pub(in crate::tui) fn voice_key(&mut self, mut sheet: Box<VoiceSheet>, k: KeyEvent) -> Option<Overlay> {
@@ -98,6 +120,16 @@ impl App {
                     let fields = voice_key_fields(&row.id, &row.name);
                     self.overlays.push(Overlay::Fields(Box::new(fields)));
                 }
+            }
+            // The local voice server's URL, models and optional key: this computer's own setting.
+            KeyCode::Char('s') => {
+                let fields = voice_server_fields(sheet.server.as_ref());
+                self.overlays.push(Overlay::Fields(Box::new(fields)));
+                sheet.tested = None;
+            }
+            KeyCode::Char('t') => {
+                sheet.tested = None;
+                self.sheet("testVoiceServer", json!({}), Reply::VoiceServerTested);
             }
             KeyCode::Char('d' | 'x') => {
                 if let Some(row) = sheet.current().filter(|row| row.configured) {
@@ -114,7 +146,9 @@ impl App {
             // Loads again, after a key was added on another device.
             KeyCode::Char('r') => {
                 sheet.providers = None;
-                self.sheet("voiceStatus", json!({}), Reply::VoiceStatus);
+                sheet.server = None;
+                sheet.tested = None;
+                self.load_voice();
             }
             _ => {}
         }
@@ -151,5 +185,13 @@ mod tests {
         sheet.fill(&json!({"providers": [{"provider": "groq"}]}));
         assert_eq!(sheet.cursor, 0);
         assert!(sheet.current().is_some());
+    }
+
+    #[test]
+    fn the_sheet_says_where_speech_actually_goes() {
+        let mut sheet = VoiceSheet::new();
+        assert_eq!(sheet.server_line(), "");
+        sheet.fill_server(&json!({"effective": "http://127.0.0.1:8890", "custom": true}));
+        assert_eq!(sheet.server_line(), "http://127.0.0.1:8890");
     }
 }

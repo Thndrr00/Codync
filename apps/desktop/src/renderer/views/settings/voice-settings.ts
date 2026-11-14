@@ -34,6 +34,25 @@ export interface VoiceVoices {
   voices: { id: string; name: string }[]
 }
 
+/** The local voice server this computer's speech goes through (host `voiceServer`). */
+export interface VoiceServer {
+  /** The saved URL; empty when none is saved here. */
+  baseUrl: string
+  transcribeModel: string
+  speechModel: string
+  keySaved: boolean
+  /** Where speech requests actually go: the saved server, `CODYNC_OPENAI_BASE_URL`, or OpenAI. */
+  effective: string
+  /** `effective` is not api.openai.com: Realtime is unavailable meanwhile. */
+  custom: boolean
+  /** A developer's `CODYNC_OPENAI_BASE_URL` on this computer, when set. */
+  environment?: string | null
+  suggestions: string[]
+}
+
+/** The models common local servers serve, until the computer reports its own list. */
+export const localModelSuggestions = ['parakeet-tdt-0.6b-v3', 'parakeet-unified-en-0.6b', 'whisper-turbo', 'cohere-transcribe-03-2026']
+
 export const voiceInfo: Record<VoiceProvider, {
   name: string
   keyPage: string
@@ -213,6 +232,17 @@ export async function voiceStatus(c: HostClient) {
 
 /** Checks the key with the provider before the computer keeps it; an empty key removes it. */
 export const setVoiceKey = (c: HostClient, p: VoiceProvider, key: string) => c.call<VoiceStatus>('setVoiceKey', { provider: p, key }, 30_000)
+
+/** The local voice server's saved URL, models and key state. A phone may read it. */
+export const voiceServer = (c: HostClient) => c.call<VoiceServer>('voiceServer', {}, 30_000)
+
+/** Saves the local voice server (this computer only, like the voice keys). */
+export const setVoiceServer = (c: HostClient, body: Partial<Pick<VoiceServer, 'baseUrl' | 'transcribeModel' | 'speechModel'> & { key: string }>) =>
+  c.call<VoiceServer>('setVoiceServer', body, 30_000)
+
+/** Tries the saved server and says why when it doesn't answer. */
+export const testVoiceServer = (c: HostClient) =>
+  c.call<{ ok: boolean; message: string; models?: string[]; effective?: string }>('testVoiceServer', {}, 30_000)
 
 /** A short-lived credential for one call's audio session. */
 export const voiceSession = async (c: HostClient, p: VoiceProvider, model: string, voice: string) =>

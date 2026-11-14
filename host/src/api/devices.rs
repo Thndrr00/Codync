@@ -51,6 +51,9 @@ const LOCAL_ONLY: &[&str] = &[
     "reportError",
     // Voice keys are entered on the computer itself; phones only use them.
     "setVoiceKey",
+    // So is the local voice server the computer's speech goes through: a phone reads its state
+    // and tests it, but the URL and models are this computer's own setting.
+    "setVoiceServer",
     // An export file is a path on this computer.
     "previewImport",
     "importBots",

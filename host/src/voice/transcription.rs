@@ -1,7 +1,10 @@
 //! Shared host transcription for calls and messaging attachments.
 
 use super::keys::{self, Access};
-use super::{Provider, STANDARD, TRANSCRIBE_HINT, checked, defaults, gemini_generate, names_hint, send, spoken_names};
+use super::{
+    Kind, Provider, STANDARD, TRANSCRIBE_HINT, checked, defaults, gemini_generate, model_for, names_hint, send,
+    spoken_names,
+};
 use crate::store::Store;
 use anyhow::{Context, Result, anyhow, ensure};
 use base64::Engine as _;
@@ -79,7 +82,7 @@ pub(crate) async fn note(store: &Store, bytes: &[u8]) -> Result<String> {
         .filter(|p| p.transcribes())
         .find(|p| keys::configured(store, *p).unwrap_or(false))
         .context("Configure a speech provider in Codync call settings to transcribe voice notes")?;
-    let model = defaults(store, provider).transcribe;
+    let model = model_for(store, provider, Kind::Transcribe, &defaults(store, provider).transcribe)?;
     // Equal audio is reusable only within the same provider connection and spelling context.
     // Keep credentials and endpoint details out of the cache itself and out of logs.
     let request = SpeechRequest::new(store, provider)?;
@@ -102,7 +105,8 @@ pub async fn transcribe(store: &Store, p: Provider, model: &str, audio: &str) ->
     ensure!(audio.len() <= MAX_NOTE_BYTES.div_ceil(3) * 4, "Audio exceeds 20 MiB");
     let wav = STANDARD.decode(audio).map_err(|_| anyhow!("audio must be base64"))?;
     let request = SpeechRequest::new(store, p)?;
-    transcribe_bytes(p, model, &wav, Container::Wav, &request).await
+    let model = model_for(store, p, Kind::Transcribe, model)?;
+    transcribe_bytes(p, &model, &wav, Container::Wav, &request).await
 }
 
 async fn transcribe_bytes(
@@ -140,33 +144,21 @@ async fn transcribe_at(
     let names = &request.names;
     let text = match p {
         Provider::OpenAi => {
-            let boundary = format!("codync-{}", uuid::Uuid::new_v4().simple());
-            let mut body = Vec::with_capacity(wav.len() + 512);
-            body.extend_from_slice(
-                format!("--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{model}\r\n").as_bytes(),
-            );
-            // Keeps Traditional Chinese from coming back Simplified, and code terms intact.
-            let mut field = |name: &str, value: &str| {
-                body.extend_from_slice(
-                    format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n")
-                        .as_bytes(),
-                );
-            };
-            field("prompt", &format!("{TRANSCRIBE_HINT} {}", names_hint(names)));
-            // Only gpt-transcribe takes keywords; the older models reject the field.
-            if model.starts_with("gpt-transcribe") {
-                for name in names {
-                    field("keywords[]", name);
+            // A local server gets the portable subset (`file`, `model`, `response_format=json`):
+            // the provider's own hints are unknown to it, and the saved model is its own.
+            let prompt = format!("{TRANSCRIBE_HINT} {}", names_hint(names));
+            let mut fields: Vec<(&str, &str)> = Vec::new();
+            if request.access.is_local() {
+                fields.push(("response_format", "json"));
+            } else {
+                // Keeps Traditional Chinese from coming back Simplified, and code terms intact.
+                fields.push(("prompt", &prompt));
+                // Only gpt-transcribe takes keywords; the older models reject the field.
+                if model.starts_with("gpt-transcribe") {
+                    fields.extend(names.iter().map(|name| ("keywords[]", name.as_str())));
                 }
             }
-            body.extend_from_slice(
-                format!(
-                    "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.{extension}\"\r\nContent-Type: {mime}\r\n\r\n"
-                )
-                .as_bytes(),
-            );
-            body.extend_from_slice(wav);
-            body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+            let (boundary, body) = multipart(model, wav, container, &fields);
             let req = request
                 .access
                 .request(p, Method::POST, "/v1/audio/transcriptions")
@@ -178,23 +170,7 @@ async fn transcribe_at(
         // `transcribeRecording` in `voice-server-service.ts`): its OpenAI-compatible route takes
         // multipart `file`, `model` and `response_format=json`; the answer is `{text}`.
         Provider::Groq => {
-            let boundary = format!("codync-{}", uuid::Uuid::new_v4().simple());
-            let mut body = Vec::with_capacity(wav.len() + 512);
-            body.extend_from_slice(
-                format!("--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{model}\r\n").as_bytes(),
-            );
-            body.extend_from_slice(
-                format!("--{boundary}\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\njson\r\n")
-                    .as_bytes(),
-            );
-            body.extend_from_slice(
-                format!(
-                    "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.{extension}\"\r\nContent-Type: {mime}\r\n\r\n"
-                )
-                .as_bytes(),
-            );
-            body.extend_from_slice(wav);
-            body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+            let (boundary, body) = multipart(model, wav, container, &[("response_format", "json")]);
             let req = request
                 .access
                 .request(p, Method::POST, "/v1/audio/transcriptions")
@@ -222,6 +198,34 @@ async fn transcribe_at(
         Provider::Xai => anyhow::bail!("{} reads replies aloud but doesn't hear you.", p.name()),
     };
     Ok(json!({"text": text.trim()}))
+}
+
+/// A multipart body for `/v1/audio/transcriptions`: the model, the given fields in order, then
+/// the audio file. Returns the boundary and the body. The local voice server and Groq take the
+/// minimal set of fields; the provider's own hints stay away from servers that never asked.
+fn multipart(model: &str, wav: &[u8], container: Container, fields: &[(&str, &str)]) -> (String, Vec<u8>) {
+    let boundary = format!("codync-{}", uuid::Uuid::new_v4().simple());
+    let mut body = Vec::with_capacity(wav.len() + 512);
+    let mut field = |name: &str, value: &str| {
+        body.extend_from_slice(
+            format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").as_bytes(),
+        );
+    };
+    field("model", model);
+    for (name, value) in fields {
+        field(name, value);
+    }
+    body.extend_from_slice(
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.{}\"\r\nContent-Type: {}\r\n\r\n",
+            container.extension(),
+            container.mime()
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(wav);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    (boundary, body)
 }
 
 #[cfg(test)]
@@ -277,6 +281,59 @@ mod tests {
                     .await
                     .unwrap();
             assert_eq!(result["text"], "hello world");
+            server.await.unwrap();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), operation).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_local_server_gets_the_portable_fields_and_no_provider_hints() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = reqwest::Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            let mut size = None;
+            let mut authorization = false;
+            loop {
+                let mut line = String::new();
+                let count = stream.read_line(&mut line).await.unwrap();
+                assert!(count > 0, "request ended before its headers");
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':') {
+                    if name.eq_ignore_ascii_case("content-length") {
+                        size = Some(value.trim().parse::<usize>().unwrap());
+                    }
+                    if name.eq_ignore_ascii_case("authorization") {
+                        authorization = true;
+                    }
+                }
+            }
+            let size = size.expect("bounded multipart body must advertise its length");
+            let mut body = vec![0; size];
+            stream.read_exact(&mut body).await.unwrap();
+            let body = String::from_utf8_lossy(&body);
+            assert!(body.contains("name=\"model\"\r\n\r\nparakeet-tdt-0.6b-v3"), "{body}");
+            assert!(body.contains("name=\"response_format\"\r\n\r\njson"), "{body}");
+            assert!(body.contains("name=\"file\"; filename=\"speech.wav\""), "{body}");
+            // A server that wants no authentication gets no header, and no OpenAI-only hints.
+            assert!(!authorization, "no key was saved, so no Authorization goes out");
+            assert!(!body.contains("name=\"prompt\""), "{body}");
+            assert!(!body.contains("keywords"), "{body}");
+            let answer = r#"{"text":"parakeet heard this"}"#;
+            stream.get_mut().write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}", answer.len()).as_bytes()).await.unwrap();
+        });
+        let request =
+            SpeechRequest { access: Access::local_at(endpoint.as_str().trim_end_matches('/'), None), names: vec![] };
+        let operation = async {
+            let result =
+                transcribe_bytes(Provider::OpenAi, "parakeet-tdt-0.6b-v3", b"RIFFfixture", Container::Wav, &request)
+                    .await
+                    .unwrap();
+            assert_eq!(result["text"], "parakeet heard this");
             server.await.unwrap();
         };
         tokio::time::timeout(std::time::Duration::from_secs(5), operation).await.unwrap();

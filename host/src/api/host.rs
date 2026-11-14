@@ -176,6 +176,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"scheduled": true})
         }
         "voiceStatus" => crate::voice::status(&hub.store)?,
+        "voiceServer" => crate::voice::server_state(&hub.store)?,
+        "setVoiceServer" => crate::voice::set_server(&hub.store, &b)?,
+        "testVoiceServer" => crate::voice::test_server(&hub.store).await?,
         "setVoiceKey" => {
             let provider = crate::voice::Provider::parse(str_arg(&b, "provider")?)?;
             crate::voice::set_key(&hub.store, provider, b["key"].as_str().unwrap_or_default()).await?

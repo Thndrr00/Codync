@@ -13,6 +13,7 @@ mod keys;
 mod models;
 pub(crate) mod neutts;
 pub(crate) mod receipts;
+mod server;
 mod speech;
 mod streaming;
 pub(crate) mod synthesis;
@@ -21,6 +22,7 @@ pub(crate) mod transcription;
 mod xai;
 
 pub use models::models;
+pub use server::{save as set_server, state as server_state, test as test_server};
 /// Gemini's generate route serves both speech and transcription.
 pub(super) use speech::gemini_generate;
 pub use speech::speak;
@@ -29,7 +31,7 @@ pub use transcription::transcribe;
 use crate::store::Store;
 use anyhow::{Result, anyhow, bail};
 use base64::engine::general_purpose::STANDARD;
-use endpoint::{openai_base, realtime_url};
+use endpoint::realtime_url;
 use keys::Access;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -164,6 +166,27 @@ fn checked(s: &str) -> Result<&str> {
     if ok { Ok(s) } else { bail!("`{s}` isn't a model or voice name") }
 }
 
+/// Which half of a voice a model serves: hearing (`/v1/audio/transcriptions`) or reading
+/// (`/v1/audio/speech`). A local voice server saves one model for each.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Kind {
+    Transcribe,
+    Speech,
+}
+
+/// The model a request actually uses: the local voice server's saved model for the mode when
+/// there is one (the server serves what it serves), else the model the app picked, which is the
+/// provider's own default until the user chooses.
+pub(super) fn model_for(store: &Store, p: Provider, kind: Kind, chosen: &str) -> Result<String> {
+    if p == Provider::OpenAi && endpoint::is_custom(store)? {
+        let saved = server::model(store, kind == Kind::Transcribe);
+        if !saved.is_empty() {
+            return Ok(saved);
+        }
+    }
+    Ok(chosen.to_owned())
+}
+
 /// The provider's own message from an error body ("Incorrect API key provided…"), whatever shape
 /// it uses: `error.message` for `OpenAI` and Gemini, `detail` for `ElevenLabs`.
 pub(super) fn provider_error(p: Provider, status: reqwest::StatusCode, v: &Value) -> anyhow::Error {
@@ -195,7 +218,7 @@ async fn mint(p: Provider, access: &Access, model: &str, voice: &str) -> Result<
                 "session": {"type": "realtime", "model": model, "audio": {"output": {"voice": voice}}},
             });
             // A compatible server on this computer has no Realtime credential minting.
-            realtime_url(openai_base()?.as_ref())?;
+            realtime_url(access.is_local())?;
             send(p, access.request(p, Method::POST, "/v1/realtime/client_secrets").json(&body)).await?
         }
         Provider::Gemini => {
@@ -261,12 +284,12 @@ pub async fn set_key(store: &Store, p: Provider, key: &str) -> Result<Value> {
             Provider::ElevenLabs => elevenlabs::check(key).await?,
             // Both answer a model list on the key; their speech routes take no model.
             Provider::Xai | Provider::Groq => {
-                let access = Access::direct(p, key)?;
+                let access = Access::direct(store, p, key)?;
                 send(p, access.request(p, Method::GET, "/v1/models")).await?;
             }
             Provider::OpenAi | Provider::Gemini => {
-                let access = Access::direct(p, key)?;
-                if p == Provider::OpenAi && openai_base()?.is_some() {
+                let access = Access::direct(store, p, key)?;
+                if p == Provider::OpenAi && access.is_local() {
                     // Compatible speech servers may not implement Realtime credential minting.
                     send(p, access.request(p, Method::GET, "/v1/models")).await?;
                 } else {
@@ -325,5 +348,87 @@ mod tests {
         assert!(Provider::parse("xai").is_ok());
         assert!(Provider::parse("groq").is_ok());
         assert!(Provider::parse("anthropic").is_err());
+    }
+
+    fn memory_store() -> Store {
+        Store::open(std::path::Path::new(":memory:")).expect("an in-memory store")
+    }
+
+    #[test]
+    fn the_local_servers_models_win_over_the_apps_choice() {
+        let store = memory_store();
+        // Other providers keep what the app picked, whatever a local server saves.
+        store.kv_set("voice.baseUrl", "http://127.0.0.1:8890").unwrap();
+        store.kv_set("voice.transcribeModel", "parakeet-tdt-0.6b-v3").unwrap();
+        store.kv_set("voice.speechModel", "whisper-turbo").unwrap();
+        assert_eq!(
+            model_for(&store, Provider::Gemini, Kind::Transcribe, "gemini-3.8-flash").unwrap(),
+            "gemini-3.8-flash"
+        );
+        assert_eq!(model_for(&store, Provider::ElevenLabs, Kind::Speech, "scribe_v1").unwrap(), "scribe_v1");
+        // OpenAI speech goes to the server, so its saved models are the ones it serves.
+        assert_eq!(
+            model_for(&store, Provider::OpenAi, Kind::Transcribe, "gpt-transcribe").unwrap(),
+            "parakeet-tdt-0.6b-v3"
+        );
+        assert_eq!(model_for(&store, Provider::OpenAi, Kind::Speech, "gpt-4o-mini-tts").unwrap(), "whisper-turbo");
+        // A mode with no model saved keeps the provider's default.
+        store.kv_delete("voice.speechModel").unwrap();
+        assert_eq!(model_for(&store, Provider::OpenAi, Kind::Speech, "gpt-4o-mini-tts").unwrap(), "gpt-4o-mini-tts");
+    }
+
+    #[tokio::test]
+    async fn a_local_server_reads_replies_with_its_saved_model_as_wav() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let store = memory_store();
+        store.kv_set("voice.baseUrl", &format!("http://{address}")).unwrap();
+        store.kv_set("voice.speechModel", "whisper-turbo").unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            let mut request = String::new();
+            stream.read_line(&mut request).await.unwrap();
+            let mut size = 0;
+            loop {
+                let mut line = String::new();
+                stream.read_line(&mut line).await.unwrap();
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':')
+                    && name.eq_ignore_ascii_case("content-length")
+                {
+                    size = value.trim().parse::<usize>().unwrap();
+                }
+            }
+            let mut body = vec![0; size];
+            stream.read_exact(&mut body).await.unwrap();
+            let body = String::from_utf8_lossy(&body);
+            assert_eq!(request.trim(), "POST /v1/audio/speech HTTP/1.1");
+            assert!(body.contains("\"model\":\"whisper-turbo\""), "{body}");
+            assert!(body.contains("\"response_format\":\"wav\""), "{body}");
+            let audio = b"RIFFwavfixture";
+            stream
+                .get_mut()
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        audio.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            stream.get_mut().write_all(audio).await.unwrap();
+        });
+        let operation = async {
+            let clip = speak(&store, Provider::OpenAi, "gpt-4o-mini-tts", "marin", "Hello").await.unwrap();
+            assert_eq!(clip["format"], "wav");
+            assert_eq!(clip["audio"], STANDARD.encode(b"RIFFwavfixture"));
+            server.await.unwrap();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), operation).await.unwrap();
     }
 }

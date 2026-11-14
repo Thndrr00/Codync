@@ -177,6 +177,49 @@ public struct VoiceVoices: Decodable, Sendable {
     }
 }
 
+/// The local voice server this computer's speech goes through (host `voiceServer`): an
+/// OpenAI-compatible server the person runs, which carries dictation and spoken replies.
+public struct VoiceServer: Decodable, Sendable, Equatable {
+    /// The saved URL; empty when none is saved on the computer.
+    public var baseUrl: String
+    public var transcribeModel: String
+    public var speechModel: String
+    public var keySaved: Bool
+    /// Where speech requests actually go: the saved server, `CODYNC_OPENAI_BASE_URL`, or OpenAI.
+    public var effective: String
+    /// `effective` is not api.openai.com: Realtime is unavailable meanwhile.
+    public var custom: Bool
+    /// A developer's `CODYNC_OPENAI_BASE_URL` on the computer, when set.
+    public var environment: String?
+    public var suggestions: [String]
+
+    /// The models common local servers serve, until the computer reports its own list.
+    public static let localModelSuggestions = [
+        "parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026",
+    ]
+
+    public init(baseUrl: String = "", transcribeModel: String = "", speechModel: String = "", keySaved: Bool = false,
+                effective: String = "https://api.openai.com", custom: Bool = false, environment: String? = nil,
+                suggestions: [String] = VoiceServer.localModelSuggestions) {
+        self.baseUrl = baseUrl
+        self.transcribeModel = transcribeModel
+        self.speechModel = speechModel
+        self.keySaved = keySaved
+        self.effective = effective
+        self.custom = custom
+        self.environment = environment
+        self.suggestions = suggestions
+    }
+}
+
+/// What `testVoiceServer` answered: whether the server works, and why not.
+public struct VoiceServerTest: Decodable, Sendable {
+    public var ok: Bool
+    public var message: String
+    public var models: [String]?
+    public var effective: String?
+}
+
 public extension HostClient {
     func voiceStatus() async throws -> VoiceStatus { try await call("voiceStatus") }
 
@@ -200,6 +243,17 @@ public extension HostClient {
     /// The provider's own voices (ElevenLabs).
     func voiceVoices(_ provider: VoiceProvider) async throws -> VoiceVoices {
         try await call("voiceVoices", ["provider": provider.rawValue], timeout: 30)
+    }
+
+    /// The local voice server's saved URL, models and key state. A phone may read it; only the
+    /// computer changes it (`setVoiceServer` is loopback only).
+    func voiceServer() async throws -> VoiceServer {
+        try await call("voiceServer", timeout: 30)
+    }
+
+    /// Tries the saved local voice server and says why when it doesn't answer.
+    func testVoiceServer() async throws -> VoiceServerTest {
+        try await call("testVoiceServer", timeout: 30)
     }
 
     /// Speech to text for one utterance (a WAV file), with the computer's key.

@@ -218,20 +218,49 @@ OpenAI and Gemini each have two **modes** (ElevenLabs has only Speech, and xAI a
   (`Hans-Hant`) for a reader whose first Chinese language, or region, is Traditional. Only a
   model the user picks is saved; the default isn't, so a newer default reaches everyone.
 
-**OpenAI-compatible server.** Set `CODYNC_OPENAI_BASE_URL` in the host's environment (for example
-`http://127.0.0.1:8890` or `http://127.0.0.1:8890/v1`) to send speech requests
-(`/v1/models`, `/v1/audio/transcriptions`, `/v1/audio/speech`) to that server instead
-of `https://api.openai.com`. A trailing `/v1` is normalized; reverse-proxy path prefixes are
-preserved. HTTPS is required except for HTTP on localhost or loopback IP addresses. URLs with
-userinfo, query parameters or fragments are rejected, and OpenAI requests never follow redirects.
-The configured server receives the saved OpenAI bearer key, so configure only a server you trust;
-use its own token or a non-secret placeholder for a server that needs no authentication.
-Saving a key tests the custom server's model-list endpoint, not Realtime credential creation.
-Speech clips use WAV, so the server needs no AAC encoder. **OpenAI Realtime is rejected while a
-custom endpoint is configured**, because clients connect directly to official OpenAI and cannot
-use local speech credentials. Custom model lists expose no Realtime choices. Remove the variable
-and restore an official OpenAI key to use OpenAI Realtime; Gemini is unaffected. Unset, existing
-official-provider behavior is preserved. The host environment applies to every connected client.
+**Local voice server (an OpenAI-compatible server on the computer).** Voice chat settings has a
+**Local voice server** section: the server's URL, the model it serves for dictation, the model it
+serves for spoken replies, an optional key, and **Test server**. Point it at any server speaking
+OpenAI's audio protocol (`/v1/models`, `/v1/audio/transcriptions`, `/v1/audio/speech`) — a
+sherpa-onnx or whisper server, or a wrapper around Parakeet TDT/Unified or Cohere Transcribe — and
+the OpenAI engine's Speech-mode dictation and speech go there instead of `api.openai.com`. Codync
+ships no model runtime: nothing is bundled, downloaded or inferred here.
+
+- **Precedence: the saved setting wins; `CODYNC_OPENAI_BASE_URL` is its fallback.** A server saved
+  in settings applies on every connected client; with none saved, the environment variable applies
+  (so a developer's variable keeps working); with neither, speech goes to `https://api.openai.com`.
+  A saved URL that no longer validates (edited by hand, or saved by an older build) is reported
+  once in the host log and skipped — speech falls back to the environment, then OpenAI. Nothing
+  panics.
+- **The same rules as the variable:** HTTPS, or HTTP only on `localhost` or a loopback IP; no
+  userinfo, query or fragment; a trailing `/v1` is normalized and a reverse-proxy path prefix is
+  preserved; speech requests never follow redirects. An invalid URL or model name is refused when
+  the form is saved, with the reason.
+- **Models:** `voiceTranscribe` and `voiceSpeak` use the saved dictation/speech model when one is
+  set (`voice.transcribeModel`, `voice.speechModel` in `kv`), whatever model the app sent; with
+  none set they keep the model the app picked (the provider's own default). The field is free
+  text with suggestions — `parakeet-tdt-0.6b-v3`, `parakeet-unified-en-0.6b`, `whisper-turbo`,
+  `cohere-transcribe-03-2026` — so the exact name the server serves can be typed.
+- **The key** is optional and stays in this computer's vault (slot `voice:server`), never logged or
+  shown. With a local server set, a request carries that key, else an OpenAI key this computer also
+  had (which the variable always sent), else no `Authorization` header at all: a local server that
+  needs no key works without an OpenAI key, and `voiceStatus` reports OpenAI as configured.
+- **Dictation to a local server** sends the portable multipart subset (`file`, `model`,
+  `response_format=json`). The provider-only hints (the transcript `prompt` and gpt-transcribe's
+  `keywords`) are left out, because a strict server may reject fields it doesn't know; the model
+  is the server's own, not one of OpenAI's. Speech clips use WAV, so the server needs no AAC
+  encoder.
+- **Realtime stays unavailable** while a server is set: clients connect to official OpenAI
+  directly and cannot use local speech credentials. Use Speech mode (or Gemini), and custom model
+  lists expose no Realtime choices. Removing the URL restores OpenAI Realtime with an official key.
+- **Where it can be set:** the desktop app's Voice chat settings, including a computer reached over
+  SSH (the connection is loopback), and the terminal UI (**Go to → Voice providers…**, `s`), because
+  the server runs on that computer. The iPhone and Android apps show the saved server, its models
+  and **Test server**, and say where to change it: like the voice keys, `setVoiceServer` is
+  accepted from this computer only (`voiceServer` and `testVoiceServer` answer any control-scope
+  device). Test tries the server and reports its own reason when it fails; with a dictation model
+  set it sends a quarter second of silence through `/v1/audio/transcriptions` (the path that has to
+  work), otherwise it reads `/v1/models`.
 
 **Default models follow the provider.** Nothing pins a model version: once a day (and whenever a
 key is saved or the model list is opened) the host reads each keyed provider's model list and
@@ -267,7 +296,9 @@ the key's models instead of minting a call credential. Picking **xAI voice** for
 an xAI section of its own (key, `Text to speech`, voice, "Read replies aloud with your own xAI
 key."), because xAI hears nothing and cannot carry the call. The terminal UI has no microphone, so
 it has no model or voice pickers; **Go to → Voice providers…** lists every provider with what it
-does and whether this computer holds its key, and adds or removes a key. The model list comes from the provider through the computer (`voiceModels`: OpenAI `GET /v1/models`
+does and whether this computer holds its key, and adds or removes a key, and `s` edits this
+computer's **Local voice server** (URL, dictation and speech models, optional key; `t` tests it).
+The model list comes from the provider through the computer (`voiceModels`: OpenAI `GET /v1/models`
 ids sorted into realtime, transcribe and tts models; Gemini `GET v1beta/models` by
 `bidiGenerateContent` / `generateContent` and name; ElevenLabs `GET /v1/models`, its text-to-speech
 models, with Scribe v1/v2 for transcription; xAI and Groq `GET /v1/models` to check the key, then
@@ -286,6 +317,11 @@ shows the provider's name next to the dots whenever audio leaves the device.
   {provider, key}` (checked with the provider before it's kept: one credential mint for
   OpenAI/Gemini, `GET /v1/models` for xAI and Groq, and for ElevenLabs the voice list plus one
   character read aloud; empty removes it),
+  `voiceServer` (the local voice server's saved URL, dictation and speech models, whether an
+  optional key is saved, the URL requests actually go to, and the model suggestions),
+  `setVoiceServer {baseUrl?, transcribeModel?, speechModel?, key?}` (this computer only: a field
+  left out is kept, an empty one turns that part off, an invalid URL or model name is refused),
+  `testVoiceServer` (tries the saved server; a failure is an answer with the server's reason),
   `voiceSession {provider, model, voice}` → `{credential}`, `voiceModels {provider}` → `{models,
   transcribe, speech}`, `voiceVoices {provider}` → `{voices}` (ElevenLabs' account voices),
   `voiceTranscribe {provider, model, audio}` (base64 16 kHz WAV) → `{text}` (Groq through
@@ -311,14 +347,15 @@ spoken text and the audio are never written. OpenBot keeps the same record for a
 
 ### What Codync does not port from OpenBot's voice
 
-OpenBot 0.60–0.65 also has local dictation models (Parakeet TDT/Unified, Cohere Transcribe, and
-retired Bark), a user-run "voice server", and dictation threads. They are **not ported**: every one
-needs OpenBot's shipped native `sherpa-onnx` addon (`voice-transcription-host.ts`, one binary per
-platform) or a local HTTP server Codync doesn't run, and Codync has no such runtime. Local speech in
-Codync is its existing **NeuTTS** engine (`voice/neutts.rs`, Hermes's prepared model) for reading
-replies, and provider dictation (OpenAI, Gemini, ElevenLabs, Groq) for hearing speech; nothing here
-pretends a local model exists. Porting them would mean shipping and supervising a per-platform
-inference runtime, which is its own card.
+OpenBot 0.60–0.65 has its own native dictation models (Parakeet TDT/Unified, Cohere Transcribe,
+and retired Bark), a user-run "voice server", and dictation threads. Codync **ships no native
+runtime**: it neither bundles OpenBot's `sherpa-onnx` addon nor downloads or supervises an
+inference engine. What it does instead is speak OpenAI's audio protocol to a server the person
+runs: the **Local voice server** setting above (or `CODYNC_OPENAI_BASE_URL`) points the OpenAI
+engine's dictation and spoken replies at that server, so a sherpa-onnx, whisper, Parakeet or Cohere
+Transcribe server on the computer carries speech with no model inside Codync. Dictation threads stay
+unported. Local speech *inside* Codync is its existing **NeuTTS** engine (`voice/neutts.rs`,
+Hermes's prepared model) for reading replies.
 
 ### The call on the host
 
