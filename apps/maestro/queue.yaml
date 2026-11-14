@@ -1,5 +1,6 @@
 # A message sent while the bot works waits above the composer: Send now joins the running turn, whose reply answers it,
-# and Remove takes it back. The phone must already be signed in and paired with the host (a worktree's sandbox,
+# and Remove takes it back. The computer is put on Queue first, since a message would otherwise join the turn by itself.
+# The phone must already be signed in and paired with the host (a worktree's sandbox,
 # docs/guides/dev-app.md#worktree-sandboxes), so run it apart from `welcome`, whose clearState undoes that; the flow makes
 # its own bot there:
 #   maestro --device "<simulator udid>,<adb serial>" test --shard-all 2 --include-tags composer \
@@ -15,6 +16,10 @@ onFlowComplete:
         CLEANUP: "true"
 ---
 - runScript: queue.js
+- runScript:
+    file: queue.js
+    env:
+      STEER: "false"
 - runFlow:
     when:
       platform: iOS
@@ -30,7 +35,7 @@ onFlowComplete:
       - launchApp:
           appId: com.pokai.Codync.android.dev
 - tapOn: ${output.bot.name}
-- tapOn: "Queue a message for.*"
+- tapOn: "Message .*"
 - inputText: "second"
 - tapOn: "Send"
 - assertVisible: "second"
@@ -42,7 +47,7 @@ onFlowComplete:
     file: queue.js
     env:
       SEND: "third"
-- tapOn: "Queue a message for.*"
+- tapOn: "Message .*"
 - inputText: "never sent"
 - tapOn: "Send"
 - assertVisible: "never sent"
@@ -57,7 +62,7 @@ onFlowComplete:
     env:
       FILL: "25"
 - assertVisible: "Waiting 1"
-- assertVisible: "Queue a message for.*"
+- assertVisible: "Message .*"
 - takeScreenshot: queue-long
 - repeat:
     while:
@@ -84,7 +89,7 @@ onFlowComplete:
           direction: DOWN
 - assertVisible: "Waiting 1"
 # One typed here scrolls into view; the ones the computer got from elsewhere didn't.
-- tapOn: "Queue a message for.*"
+- tapOn: "Message .*"
 - inputText: "typed here"
 - tapOn: "Send"
 - assertVisible: "typed here"

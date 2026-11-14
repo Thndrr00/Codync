@@ -2,6 +2,9 @@
 // HOST_TOKEN, passed with `-e`). Its agent is host/tests/fixtures/steer_agent.py (STEER_AGENT, its full path), whose turn
 // waits until a steered message joins it. `SEND` instead starts another turn with that text, `FILL` queues that many
 // messages behind it, and `CLEANUP`, when the flow completes, deletes the bot again.
+//
+// A message to a working bot joins its turn by default; `queue.yaml` is about the queue, so it runs this with STEER
+// "false" to put the computer on Queue first, and every CLEANUP gives the default back afterwards.
 const api = (method, body) => {
   const res = http.post(`http://127.0.0.1:${HOST_PORT}/api/${method}`, {
     headers: { Authorization: `Bearer ${HOST_TOKEN}`, 'Content-Type': 'application/json' },
@@ -12,7 +15,10 @@ const api = (method, body) => {
 }
 
 if (typeof CLEANUP !== 'undefined') {
+  api('setSteerWhileWorking', { enabled: true })
   if (output.bot) api('deleteBot', { botId: output.bot.id })
+} else if (typeof STEER !== 'undefined') {
+  api('setSteerWhileWorking', { enabled: STEER !== 'false' })
 } else if (typeof SEND !== 'undefined') {
   api('send', { botId: output.bot.id, text: SEND })
 } else if (typeof FILL !== 'undefined') {

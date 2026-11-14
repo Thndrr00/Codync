@@ -25,7 +25,7 @@ onFlowComplete:
           arguments:
             "-reviewInvitation.v1": "<7b2270726f6d707473223a332c227265717565737473223a5b5d2c2272657175657374656456657273696f6e73223a5b5d7d>"
       - tapOn: ${output.bot.name}
-      - tapOn: "Queue a message for.*"
+      - tapOn: "Message .*"
       - inputText: "fourth"
       - tapOn: "Send"
       - assertVisible: "fourth"
@@ -35,7 +35,7 @@ onFlowComplete:
           timeout: 4000
           optional: true
       - assertNotVisible: "Enjoying .*"
-      - tapOn: "Queue a message for.*"
+      - tapOn: "Message .*"
       - inputText: "fifth"
       - tapOn: "Send"
       - extendedWaitUntil:
