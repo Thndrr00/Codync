@@ -198,6 +198,7 @@ async fn connects_publishes_acl_past_a_stale_version_and_delivers_mail() {
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         })
         .unwrap();
     let injected = b64(grant_key.verifying_key().as_bytes());
@@ -344,6 +345,7 @@ async fn account_mail_waits_for_a_state_pull_instead_of_failing() {
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         })
         .unwrap();
     *fake.state.lock().unwrap() =
@@ -392,6 +394,7 @@ async fn a_private_relay_gets_its_token_only_to_enroll_and_never_changes_account
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         })
         .unwrap();
     *fake.state.lock().unwrap() = json!({"owner": null, "grants": [], "requests": []});

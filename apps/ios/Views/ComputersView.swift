@@ -192,6 +192,7 @@ private struct ComputerRows: View {
     @State private var localScripts = false
     @State private var planCards = false
     @State private var serverSettings = false
+    @State private var people = false
 
     var body: some View {
         summary
@@ -217,6 +218,8 @@ private struct ComputerRows: View {
             Button { planCards = true } label: { RowLabel("Plan cards", systemImage: "list.bullet.rectangle", chevron: true) }
                 .buttonStyle(.plain)
             Button { serverSettings = true } label: { RowLabel("Personality & remote control", systemImage: "slider.horizontal.3", chevron: true) }
+                .buttonStyle(.plain)
+            Button { people = true } label: { RowLabel("People", systemImage: "person.2", chevron: true) }
                 .buttonStyle(.plain)
         }
         ComputerNotificationsRow(store: store)
@@ -272,6 +275,7 @@ private struct ComputerRows: View {
             if store.connection == .online {
                 items.append(MenuItem("Local scripts", icon: "terminal") { localScripts = true })
                 items.append(MenuItem("Plan cards", icon: "list.bullet.rectangle") { planCards = true })
+                items.append(MenuItem("People", icon: "person.2") { people = true })
             }
             if let revoke {
                 items.append(MenuItem("Revoke this iPhone's access", icon: "lock.slash", destructive: true, divider: true, action: revoke))
@@ -288,6 +292,7 @@ private struct ComputerRows: View {
         .codyncSheet(isPresented: $localScripts) { LocalScriptsSheet().environment(store) }
         .codyncSheet(isPresented: $planCards) { PlanStartSheet().environment(store) }
         .codyncSheet(isPresented: $serverSettings) { ServerSettingsSheet().environment(store) }
+        .codyncSheet(isPresented: $people) { PeopleSheet().environment(store) }
         .codyncOverlay(isPresented: $coloring) { close in
             ZStack {
                 Color.black.opacity(0.35).ignoresSafeArea().onTapGesture(perform: close)

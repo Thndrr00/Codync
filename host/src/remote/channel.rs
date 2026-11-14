@@ -831,6 +831,7 @@ mod tests {
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         };
         hub.store.put_device(&device).unwrap();
         let mut p = Phone::direct(&hub, key.clone());

@@ -141,6 +141,8 @@ impl Actor {
         let mut servers: Vec<Value> =
             (if self.cfg.connectors.is_empty() { Vec::new() } else { crate::market::connectors(&self.hub.store)? })
                 .iter()
+                // Shared connectors and this bot's person's own; never another person's.
+                .filter(|c| crate::market::for_bot(c, self.cfg.person.as_deref()))
                 .filter(|c| self.cfg.connectors.contains(&c.id) && c.id != crate::tools::comfy::CONNECTOR_ID)
                 .filter_map(|c| c.acp(&exe, port))
                 .map(|mut server| {

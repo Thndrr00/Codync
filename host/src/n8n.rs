@@ -542,6 +542,7 @@ impl N8n {
             url: Some(format!("http://127.0.0.1:{port}/mcp-server/http")),
             headers,
             oauth: None,
+            person: None,
         };
         crate::market::update_connectors(store, |all| {
             match all.iter_mut().find(|c| c.id == CONNECTOR_ID) {

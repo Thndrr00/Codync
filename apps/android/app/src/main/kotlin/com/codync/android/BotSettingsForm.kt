@@ -67,7 +67,7 @@ internal enum class FormPart { All, Often, Rarely }
                     notifyRow(draft, change); computerUseRow(state, store, draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change)
                 }
                 bot?.let { HistoryActions(it, store) }
-                Plugins(state, draft, change) { viewingSkill = it }
+                Plugins(state, store, draft, change) { viewingSkill = it }
                 draft.id?.let { MemoryCard(it, state, store) }
                 state.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
             }
@@ -87,7 +87,7 @@ internal enum class FormPart { All, Often, Rarely }
                 // The agent and its model are on the Details page; what's left is where it works.
                 CardSection("Workspace") { computerRow(state, online); placeRows(state, store, draft, bot?.securityProfile, change) { folders = true } }
                 CardSection("Activity") { notifyRow(draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change) }
-                Plugins(state, draft, change) { viewingSkill = it }
+                Plugins(state, store, draft, change) { viewingSkill = it }
             }
         }
         if (part != FormPart.Often) ForkBotSettings(state, store, draft, change)
@@ -287,11 +287,12 @@ private fun CardRows.reachRows(state: AppState, draft: BotDraft, change: (BotDra
     }
 }
 
-@Composable private fun Plugins(state: AppState, draft: BotDraft, change: (BotDraft) -> Unit, viewSkill: (SkillRef) -> Unit) {
+@Composable private fun Plugins(state: AppState, store: AppStore, draft: BotDraft, change: (BotDraft) -> Unit, viewSkill: (SkillRef) -> Unit) {
     val plugins = state.plugins
     PluginToggles("Connectors", "No connectors yet. Add GitHub, Linear, Notion and more from Extensions.",
         plugins?.connectors.orEmpty().map { Triple(it.id, it.name, it.lastFailure?.let { failure -> "⚠ ${failure.kind.uppercase()}: ${failure.message}" } ?: (it.command ?: it.url.orEmpty())) },
         draft.connectors ?: plugins?.connectors.orEmpty().map { it.id }, { change(draft.copy(connectors = it)) })
+    PersonPicker(store, draft.person) { change(draft.copy(person = it)) }
     PluginToggles("Skills", "No skills yet. Get some from Extensions, or write your own.",
         plugins?.skills.orEmpty().map { Triple(it.id, it.name, it.description) }, draft.skills.orEmpty(), { change(draft.copy(skills = it)) }) { id ->
         plugins?.skills?.firstOrNull { it.id == id }?.let { viewSkill(SkillRef(it.id, it.name, it.description)) }

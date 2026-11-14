@@ -1,4 +1,5 @@
 import { Observable, useModel } from '../../lib/observable'
+import type { Person } from '@shared/models'
 import type { BotStore } from '../../store/bot-store'
 import { market, needsSignIn, sleep, type InstalledConnector, type InstalledSkill, type MarketApp, type MarketConnector } from './market-models'
 import { signInCode } from './sign-in-code'
@@ -7,6 +8,8 @@ import { signInCode } from './sign-in-code'
 export class Plugins extends Observable {
   installedConnectors: InstalledConnector[] = []
   installedSkills: InstalledSkill[] = []
+  /** Who is on this computer, for a connector's badge and the bot editor's picker; empty on a member's phone. */
+  people: Person[] = []
 
   constructor(readonly store: BotStore) {
     super()
@@ -15,9 +18,10 @@ export class Plugins extends Observable {
   async refresh() {
     const client = this.store.client
     if (!client) return
-    const [c, s] = await Promise.allSettled([market.connectors(client), market.skills(client)])
+    const [c, s, p] = await Promise.allSettled([market.connectors(client), market.skills(client), market.people(client)])
     if (c.status === 'fulfilled') this.installedConnectors = c.value
     if (s.status === 'fulfilled') this.installedSkills = s.value
+    if (p.status === 'fulfilled') this.people = p.value
     this.changed()
   }
 

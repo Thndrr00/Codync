@@ -76,7 +76,6 @@ const LOCAL_ONLY: &[&str] = &[
     "updateConnector",
     "claimSign",
     "unclaim",
-    "devices",
     "revokeDevice",
     "accessRequests",
     "decideAccessRequest",
@@ -118,6 +117,28 @@ const SCREEN: &[&str] =
 /// A method the caller isn't allowed to call (403).
 #[derive(Debug)]
 pub struct Forbidden;
+
+/// Methods a member's device may not call, though the owner may from this computer or from their own phone:
+/// who is on the computer, and the devices it lists. A device with no person is the owner's.
+pub const OWNER_ONLY: &[&str] = &[
+    "people",
+    "addPerson",
+    "updatePerson",
+    "removePerson",
+    "setDevicePerson",
+    "devices",
+    // The computer's lead bot and its roster sections belong to its owner, not to one person's phone.
+    "setLead",
+    "renameSection",
+];
+
+/// Refuses one of [`OWNER_ONLY`] to a device assigned to a person.
+pub fn permit_owner(hub: &Hub, caller: &Caller, method: &str) -> Result<(), Forbidden> {
+    if OWNER_ONLY.contains(&method) && crate::people::caller_person(hub, caller).is_some() {
+        return Err(Forbidden);
+    }
+    Ok(())
+}
 
 impl std::fmt::Display for Forbidden {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -17,6 +17,7 @@ fn connector(command: &str, args: &[&str]) -> Connector {
         url: None,
         headers: BTreeMap::new(),
         oauth: None,
+        person: None,
     }
 }
 

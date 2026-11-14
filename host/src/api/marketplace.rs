@@ -13,9 +13,13 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<ControlFlow<Value, Value>> {
+    // The person a member's device acts as; `None` is the owner (this computer or its own phones).
+    // Connectors are shared or one person's, and every write below is checked against it.
+    let person = crate::people::caller_person(hub, caller);
     Ok(ControlFlow::Break(match method {
         "credentialUpdateConnector" => {
             let id = str_arg(&b, "id")?;
+            owned_connector(hub, id, person.as_deref())?;
             let previous_native = crate::native_channels::snapshot(hub, id)?;
             let fields = b["fields"].as_object().ok_or_else(|| anyhow!("Credential fields are required"))?;
             market::update_connectors(&hub.store, |all| {
@@ -89,7 +93,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "connectorInfo" => market::connector_info(&hub.store, str_arg(&b, "registryName")?).await?,
         "connectorRequestFinish" => market::requests::finish(hub, &b).await?,
-        "connectorVerify" => market::verify::verify(&hub.store, str_arg(&b, "id")?, hub.port).await?,
+        "connectorVerify" => {
+            owned_connector(hub, str_arg(&b, "id")?, person.as_deref())?;
+            market::verify::verify(&hub.store, str_arg(&b, "id")?, hub.port).await?
+        }
         "composioPrepareCall" | "composioDispatchCall" => {
             if !matches!(caller, Caller::Local) {
                 bail!("This method is restricted to the local MCP proxy.");
@@ -104,7 +111,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"result": market::composio::call(&hub.store, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?})
         }
         "composioStatus" => market::composio::status(&hub.store)?,
-        "setComposioKey" => market::composio::set_key(&hub.store, b["key"].as_str().unwrap_or_default()).await?,
+        "setComposioKey" => {
+            // One Composio key serves every connected app on this computer, so only the owner sets it.
+            if person.is_some() {
+                bail!("Composio is set up by the owner of this computer.");
+            }
+            market::composio::set_key(&hub.store, b["key"].as_str().unwrap_or_default()).await?
+        }
         "composioToolkits" => {
             market::composio::toolkits(
                 &hub.store,
@@ -113,8 +126,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             )
             .await?
         }
-        "composioConnect" => market::composio::connect(&hub.store, str_arg(&b, "toolkit")?).await?,
+        "composioConnect" => {
+            owner_only(person.as_deref(), "Composio apps are connected by the owner of this computer.")?;
+            market::composio::connect(&hub.store, str_arg(&b, "toolkit")?).await?
+        }
         "composioConnectFields" => {
+            owner_only(person.as_deref(), "Composio apps are connected by the owner of this computer.")?;
             let fields = b["fields"].as_object().ok_or_else(|| anyhow!("`fields` is required"))?;
             let before = connector_ids(&hub.store)?;
             let r = market::composio::connect_with_fields(
@@ -160,10 +177,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 Err(error) => return Err(error),
             }
         }
-        "connectors" => market::list_connectors(&hub.store)?,
+        "connectors" => market::list_connectors_for(&hub.store, person.as_deref())?,
         "importConnectors" => {
             let before = connector_ids(&hub.store)?;
-            let added = market::import_connectors(&hub.store, str_arg(&b, "config")?).await?;
+            let added = market::import_connectors(&hub.store, str_arg(&b, "config")?, person.as_deref()).await?;
             enable_new(hub, Installed::Connectors, &before)?;
             added
         }
@@ -176,10 +193,11 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     str_arg(&b, "registryName")?,
                     str_arg(&b, "option")?,
                     &b["inputs"],
+                    person.as_deref(),
                 )
                 .await?
             } else {
-                market::add_custom_connector(&hub.store, &b).await?
+                market::add_custom_connector_as(&hub.store, &b, person.as_deref()).await?
             };
             enable_new(hub, Installed::Connectors, &before)?;
             for previous in native_before {
@@ -198,11 +216,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "installMarketApp" => {
             let before = connector_ids(&hub.store)?;
-            let c = market::install_app(&hub.store, str_arg(&b, "id")?, &b["values"]).await?;
+            let c = market::install_app_as(&hub.store, str_arg(&b, "id")?, &b["values"], person.as_deref()).await?;
             enable_new(hub, Installed::Connectors, &before)?;
             json!({"connector": c})
         }
         "connectorSignIn" => {
+            owned_connector(hub, str_arg(&b, "id")?, person.as_deref())?;
             // The browser can only reach this host's loopback page when it runs on this computer.
             let callback = if matches!(caller, Caller::Local) {
                 market::oauth::Callback::Host
@@ -227,6 +246,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "removeConnector" => {
             let id = str_arg(&b, "id")?;
+            // Only the connector's own person removes it; a member can't touch a shared or another's.
+            owned_connector(hub, id, person.as_deref())?;
             let previous_native = crate::native_channels::snapshot(hub, id)?;
             match id.strip_prefix(market::composio::PREFIX) {
                 Some(toolkit) => market::composio::disconnect(&hub.store, toolkit).await?,
@@ -284,4 +305,23 @@ fn refresh_tools_for_bots_using(hub: &Hub, id: &str) {
             tracing::warn!(bot = %row.config.id, error = format!("{error:#}"), "couldn't refresh a bot's tools");
         }
     }
+}
+
+/// The connector `id`, refusing one the caller doesn't own: a member changes only their own, and a shared
+/// connector (the owner's) is the owner's alone.
+fn owned_connector(hub: &Hub, id: &str, person: Option<&str>) -> Result<market::Connector> {
+    let c =
+        market::connectors(&hub.store)?.into_iter().find(|c| c.id == id).ok_or_else(|| anyhow!("Unknown connector"))?;
+    if !market::owned_by(&c, person) {
+        bail!("That connector belongs to someone else on this computer.");
+    }
+    Ok(c)
+}
+
+/// Refuses a computer-wide setting to a member's device.
+fn owner_only(person: Option<&str>, message: &str) -> Result<()> {
+    if person.is_some() {
+        bail!("{message}");
+    }
+    Ok(())
 }

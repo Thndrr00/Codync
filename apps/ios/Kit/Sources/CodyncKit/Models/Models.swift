@@ -437,6 +437,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var hidden: Bool?
     public var notify: Bool?
     public var connectors: [String]?
+    /// The person whose bot this is (`people`); nil is the owner's.
+    public var person: String?
     public var skills: [String]?
     public var computer: Bool?
     public var manageTeam: Bool?
@@ -487,6 +489,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         hidden = bot.hidden
         notify = bot.notify
         connectors = bot.connectors
+        person = bot.person
         skills = bot.skills
         computer = bot.computer
         manageTeam = bot.manageTeam

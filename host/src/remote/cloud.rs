@@ -613,6 +613,7 @@ pub async fn decide(hub: &Hub, id: &str, approve: bool, how: Approval) -> Result
         last_seen_at: None,
         // Approved through the account the computer is in.
         account: super::owner::owner(&hub.store).map_or(DeviceAccount::Unrecorded, |o| DeviceAccount::Of(o.user_id)),
+        person_id: None,
     };
     hub.store.put_device(&device)?;
     tracing::info!(grant_id = grant, "account device approved");
@@ -718,6 +719,7 @@ mod tests {
             created_at: now_ms(),
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         }
     }
 

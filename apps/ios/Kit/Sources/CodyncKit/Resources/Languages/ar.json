@@ -556,5 +556,21 @@
   "Uploading {percent}%": "جارٍ الرفع {percent}%",
   "Subagents": "وكلاء فرعيون",
   "{finished} of {total}": "{finished} من {total}",
-  "Go to the subagents": "الانتقال إلى الوكلاء الفرعيين"
+  "Go to the subagents": "الانتقال إلى الوكلاء الفرعيين",
+  "People": "الأشخاص",
+  "Owner": "المالك",
+  "People on this computer": "الأشخاص على هذا الحاسوب",
+  "Someone who uses this computer with their own phone or their own bots.": "شخص يستخدم هذا الحاسوب بهاتفه الخاص أو بروبوتاته الخاصة.",
+  "Add a person": "إضافة شخص",
+  "Email (optional)": "البريد الإلكتروني (اختياري)",
+  "No one else yet": "لا يوجد أحد آخر بعد",
+  "This computer's owner": "مالك هذا الحاسوب",
+  "Assign a device": "تعيين جهاز",
+  "Mine": "الخاصة بي",
+  "Only {name}": "فقط {name}",
+  "Anyone on this computer": "كل من على هذا الحاسوب",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "هاتف هذا الشخص وروبوتاته ومحادثاته وموصلاته تصبح لك. لا يُحذف أي شيء.",
+  "This bot belongs to": "هذا الروبوت يخص",
+  "A member's phone only sees and changes what is theirs.": "هاتف العضو يرى ويغيّر ما يخصه فقط.",
+  "Person": "شخص"
 }

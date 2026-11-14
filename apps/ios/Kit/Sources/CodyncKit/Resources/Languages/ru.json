@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "Загрузка {percent}%",
   "Subagents": "Субагенты",
   "{finished} of {total}": "{finished} из {total}",
-  "Go to the subagents": "К субагентам"
+  "Go to the subagents": "К субагентам",
+  "People on this computer": "Люди на этом компьютере",
+  "Someone who uses this computer with their own phone or their own bots.": "Тот, кто пользуется этим компьютером со своим телефоном или своими ботами.",
+  "Add a person": "Добавить человека",
+  "Email (optional)": "Эл. почта (необязательно)",
+  "No one else yet": "Пока больше никого",
+  "This computer's owner": "Владелец этого компьютера",
+  "Assign a device": "Назначить устройство",
+  "Mine": "Мои",
+  "Only {name}": "Только {name}",
+  "Anyone on this computer": "Все на этом компьютере",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "Их телефон, боты, чаты и коннекторы переходят к вам. Ничего не удаляется.",
+  "This bot belongs to": "Этот бот принадлежит",
+  "A member's phone only sees and changes what is theirs.": "Телефон участника видит и меняет только своё.",
+  "Person": "Человек"
 }

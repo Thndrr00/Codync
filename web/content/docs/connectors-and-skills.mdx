@@ -138,4 +138,15 @@ Custom connectors are never updated automatically.
 
 ## Who owns a connector
 
-Connectors are installed on the computer and handed to bots by each bot's list under **Turn connectors and skills on or off per bot**. Codync has one owner per computer and no member roles: the people in the company directory are SCIM records, not people who sign in to the computer. So everyone who can use the computer shares one set of connectors; a bot with **Manage the team** can create bots and change the setup of the bots it created, never another bot's connectors.
+Connectors are installed on the computer and handed to bots by each bot's list under **Turn connectors and skills on or off per bot**. By default a connector is shared: every bot on the computer can use it. Codync has one owner per computer and no member accounts; the people in the company directory are SCIM records, not people who sign in to the computer. A bot with **Manage the team** can create bots and change the setup of the bots it created, never another bot's connectors.
+
+## People and shared connectors
+
+If several people use your computer with their own phones, the owner can add them under **Settings → People** (desktop) or **Computer management → People** (iPhone and Android), and assign a paired phone or a bot to each one. There is no member password: a person is a label the owner puts on a device or a bot, and the computer checks every request against it.
+
+- A person's phone lists the connectors shared with everyone plus their own. It can add, sign in to and remove only its own; a shared connector stays the owner's.
+- A bot gets the shared connectors plus its person's, never another person's.
+- A person sees only their own bots and chats, and searching a bot's history never reaches the owner's chats.
+- The owner still sees everything on the computer. Removing a person moves their devices, bots, chats and connectors back to the owner without deleting anything.
+
+Two people can connect the same app with different accounts: each gets their own connector and sign-in. Composio apps belong to the whole computer, and only the owner connects or removes one.

@@ -14,12 +14,19 @@ use std::sync::Arc;
 #[path = "catalog_tests.rs"]
 mod tests;
 
-pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<ControlFlow<Value, Value>> {
+pub(super) async fn call(
+    hub: &Arc<Hub>,
+    caller: &super::devices::Caller,
+    method: &str,
+    b: Value,
+) -> Result<ControlFlow<Value, Value>> {
+    // Bots a member's device installs belong to that person, like one made with `createBot`.
+    let person = crate::people::caller_person(hub, caller);
     Ok(ControlFlow::Break(match method {
         "botCatalog" => json!(catalog::catalog()),
         "installTeam" => {
             let team = catalog::team(str_arg(&b, "id")?)?;
-            install_team(hub, team, b["backend"].as_str(), b["model"].as_str()).await?
+            install_team(hub, team, b["backend"].as_str(), b["model"].as_str(), person.as_deref()).await?
         }
         "marketAgents" => {
             let installed = installed_agents(hub)?;
@@ -35,7 +42,10 @@ pub(super) async fn call(hub: &Arc<Hub>, method: &str, b: Value) -> Result<Contr
             let id = str_arg(&b, "id")?;
             openbot::agent_details(id, installed_agents(hub)?.iter().any(|a| a == id))?
         }
-        "installAgent" => install_agent(hub, str_arg(&b, "id")?, b["backend"].as_str(), b["model"].as_str()).await?,
+        "installAgent" => {
+            install_agent(hub, str_arg(&b, "id")?, b["backend"].as_str(), b["model"].as_str(), person.as_deref())
+                .await?
+        }
         "marketSkills" => {
             let installed = installed_skills(hub);
             let mut items = openbot::browse_skills(&installed);
@@ -86,7 +96,13 @@ fn installed_apps(hub: &Arc<Hub>) -> Result<Vec<String>> {
 
 /// Creates the bot with the agent's instructions, look and skills, then its routines. All or nothing:
 /// a failed routine removes the bot this call created.
-async fn install_agent(hub: &Arc<Hub>, id: &str, backend: Option<&str>, model: Option<&str>) -> Result<Value> {
+async fn install_agent(
+    hub: &Arc<Hub>,
+    id: &str,
+    backend: Option<&str>,
+    model: Option<&str>,
+    person: Option<&str>,
+) -> Result<Value> {
     let agent = openbot::agent(id)?;
     let mut skills = Vec::new();
     for skill in &agent.skills {
@@ -101,8 +117,9 @@ async fn install_agent(hub: &Arc<Hub>, id: &str, backend: Option<&str>, model: O
         "model": model,
         "skills": skills,
         "catalog": agent.id,
+        "person": person,
     });
-    let bot = create(hub, body).await?;
+    let bot = create(hub, body, person).await?;
     let bot_id = bot["id"].as_str().context("created bot has an id")?.to_owned();
     for routine in &agent.routines {
         let body = json!({
@@ -150,9 +167,10 @@ async fn install_team(
     team: &'static TeamProfile,
     backend: Option<&str>,
     model: Option<&str>,
+    person: Option<&str>,
 ) -> Result<Value> {
     let mut created = Vec::new();
-    let result = create_team(hub, team, backend, model, &mut created).await;
+    let result = create_team(hub, team, backend, model, person, &mut created).await;
     if result.is_err() {
         for id in created {
             let hub = hub.clone();
@@ -174,10 +192,11 @@ async fn create_team(
     team: &'static TeamProfile,
     backend: Option<&str>,
     model: Option<&str>,
+    person: Option<&str>,
     created: &mut Vec<String>,
 ) -> Result<Value> {
     for profile in team.profiles()? {
-        let bot = create(hub, profile.draft(backend, model)).await?;
+        let bot = create(hub, profile.draft(backend, model), person).await?;
         created.push(bot["id"].as_str().context("created bot has an id")?.to_owned());
     }
     let group = json!({
@@ -186,12 +205,15 @@ async fn create_team(
         "description": team.purpose,
         "members": created,
         "chiefBotId": created.first(),
+        "person": person,
     });
-    let group = create(hub, group).await?;
+    let group = create(hub, group, person).await?;
     Ok(json!({"bot": group}))
 }
 
-async fn create(hub: &Arc<Hub>, body: Value) -> Result<Value> {
+async fn create(hub: &Arc<Hub>, body: Value, person: Option<&str>) -> Result<Value> {
+    let mut body = body;
+    body["person"] = json!(person);
     let cfg = crate::agent::new_bot::with_defaults(hub, body).await?;
     let hub = hub.clone();
     tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await?

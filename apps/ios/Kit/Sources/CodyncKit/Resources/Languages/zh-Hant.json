@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "正在上傳 {percent}%",
   "Subagents": "子代理",
   "{finished} of {total}": "{total} 個中的 {finished} 個",
-  "Go to the subagents": "前往子代理"
+  "Go to the subagents": "前往子代理",
+  "People on this computer": "這台電腦上的人",
+  "Someone who uses this computer with their own phone or their own bots.": "用自己的手機或自己的機器人使用這台電腦的人。",
+  "Add a person": "新增成員",
+  "Email (optional)": "電子郵件（選填）",
+  "No one else yet": "還沒有其他人",
+  "This computer's owner": "這台電腦的擁有者",
+  "Assign a device": "指派裝置",
+  "Mine": "我的",
+  "Only {name}": "僅 {name}",
+  "Anyone on this computer": "這台電腦上的所有人",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "對方的手機、機器人、對話和連接會歸你所有。不會刪除任何內容。",
+  "This bot belongs to": "這個機器人屬於",
+  "A member's phone only sees and changes what is theirs.": "成員的手機只能檢視和修改自己的內容。",
+  "Person": "成員"
 }

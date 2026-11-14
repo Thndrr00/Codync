@@ -23,6 +23,7 @@ mod memory;
 mod model;
 pub(crate) mod native_channels;
 pub mod open_items;
+pub mod people;
 mod research;
 mod roster;
 pub(crate) mod routine_delivery;

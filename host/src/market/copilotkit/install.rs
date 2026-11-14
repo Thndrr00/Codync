@@ -22,7 +22,18 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 /// Installs catalogue app `id` with the values the user typed (`{fieldId: value}`).
+#[cfg(test)]
 pub async fn install_app(store: &crate::store::Store, id: &str, values: &Value) -> Result<Value> {
+    install_app_as(store, id, values, None).await
+}
+
+/// As [`install_app`], into `person`'s library (`None` = the owner's, shared with every bot).
+pub async fn install_app_as(
+    store: &crate::store::Store,
+    id: &str,
+    values: &Value,
+    person: Option<&str>,
+) -> Result<Value> {
     let a = app(id)?;
     if a.builtin {
         return Ok(builtin_public(a));
@@ -41,6 +52,7 @@ pub async fn install_app(store: &crate::store::Store, id: &str, values: &Value) 
         url: Some(url.clone()),
         headers: BTreeMap::new(),
         oauth: None,
+        person: person.map(str::to_owned),
     };
     let input = |key: &str| values[key].as_str().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
     match a.auth.kind.as_str() {

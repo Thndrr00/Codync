@@ -8,9 +8,16 @@ Under the open section, one line says where that section comes from: agents from
 | --- | --- | --- |
 | Apps | `host/src/market/copilotkit/` (its `install.rs` is the bridge) | Browse the bundled app catalogue and install one as an MCP connector with its sign-in, key or nothing at all; Composio's key and its 1,000+ apps end the same list; the MCP Registry and custom connectors stay in the same Apps tab |
 | Agents | `host/src/agent/backends.rs`, `host/src/agent/registry.rs`, `host/src/agent/node.rs` | Detect installed harnesses, resolve ACP registry adapters, provide Node.js for npm agents |
-| Connectors | `host/src/market/mod.rs`, `registry.rs`, `install.rs`, `custom.rs` | Discover MCP servers or add one manually; install per computer; on for every bot unless a bot turns it off |
-| Connected apps | `host/src/market/composio.rs` | Expose connected Composio apps as connectors |
+| Connectors | `host/src/market/mod.rs`, `registry.rs`, `install.rs`, `custom.rs` | Discover MCP servers or add one manually; install per computer as shared, or into one person's library ([people](people.md)); shared ones are on for every bot unless a bot turns them off |
+| Connected apps | `host/src/market/composio.rs` | Expose connected Composio apps as connectors; the whole computer shares them, and only the owner connects one |
 | Skills | `host/src/market/skills.rs`, `host/src/market/openbot/` | Instruction folders containing `SKILL.md`, stored under `~/.codync/skills/<id>`; the bundled OpenBot catalog installs offline, and anthropics/skills stays available; on for every bot unless a bot turns it off |
+
+A connector is shared by default, so every bot on the computer can use it. A **person** on the
+computer ([people](people.md)) may have connectors of their own: they see shared plus their own, and
+their bots get the same. A member's phone can add, sign in to and remove only its own; a shared
+connector, and another person's, stay out of reach. Settings → People shows who is on the computer and
+which paired phone is theirs. There is no member sign-in: the owner assigns a device or a bot to a
+person on the computer, and the host authorizes every call by that assignment.
 
 Three catalogues ship with the host, and they are not mixed:
 

@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "正在上传 {percent}%",
   "Subagents": "子代理",
   "{finished} of {total}": "{total} 个中的 {finished} 个",
-  "Go to the subagents": "前往子代理"
+  "Go to the subagents": "前往子代理",
+  "People on this computer": "这台电脑上的人",
+  "Someone who uses this computer with their own phone or their own bots.": "用自己手机或自己的机器人使用这台电脑的人。",
+  "Add a person": "添加成员",
+  "Email (optional)": "邮箱（可选）",
+  "No one else yet": "还没有其他人",
+  "This computer's owner": "这台电脑的所有者",
+  "Assign a device": "分配设备",
+  "Mine": "我的",
+  "Only {name}": "仅 {name}",
+  "Anyone on this computer": "这台电脑上的所有人",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "对方的手机、机器人、聊天和连接会归你所有。不会删除任何内容。",
+  "This bot belongs to": "这个机器人属于",
+  "A member's phone only sees and changes what is theirs.": "成员的手机只能查看和修改自己的内容。",
+  "Person": "成员"
 }

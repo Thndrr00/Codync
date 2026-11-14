@@ -25,6 +25,7 @@ import { UsageSection } from './UsageLimits'
 import { ThemePaletteSection } from './ThemePaletteSection'
 import { ChatAppearanceSection } from './ChatAppearanceSection'
 import { EnterpriseSection } from './EnterpriseSection'
+import { PeopleSection } from './PeopleSection'
 import { DiagnosticsButton } from './DiagnosticsButton'
 import { GettingStartedSection } from './GettingStartedSection'
 import { WeekSummaryView } from './WeekSummaryView'
@@ -224,6 +225,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <SwitchRow title="Show agent logos" detail="Marks each bot with its agent's logo when your bots use more than one agent." on={agentLogos} onChange={setAgentLogos} />
       </CardSection>
       <EnterpriseSection />
+      <PeopleSection />
       <ServerSettingsSection />
       <ChatAppearanceSection />
       <ThemePaletteSection />

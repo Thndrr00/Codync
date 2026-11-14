@@ -204,6 +204,10 @@ pub struct BotConfig {
     /// Connector ids (MCP servers) handed to the agent; see `market`.
     #[serde(default)]
     pub connectors: Vec<String>,
+    /// The person whose bot this is (`people`); empty means the owner's. Its connectors are shared ones
+    /// plus its person's, and only that person's devices see it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<String>,
     /// Skill ids the bot is told about; see `market`.
     #[serde(default)]
     pub skills: Vec<String>,

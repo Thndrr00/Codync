@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "업로드 중 {percent}%",
   "Subagents": "하위 에이전트",
   "{finished} of {total}": "{total}개 중 {finished}개",
-  "Go to the subagents": "하위 에이전트로 이동"
+  "Go to the subagents": "하위 에이전트로 이동",
+  "People on this computer": "이 컴퓨터의 사람들",
+  "Someone who uses this computer with their own phone or their own bots.": "자기 휴대폰이나 자기 봇으로 이 컴퓨터를 사용하는 사람.",
+  "Add a person": "사람 추가",
+  "Email (optional)": "이메일(선택)",
+  "No one else yet": "아직 다른 사람이 없습니다",
+  "This computer's owner": "이 컴퓨터의 소유자",
+  "Assign a device": "기기 지정",
+  "Mine": "내 것",
+  "Only {name}": "{name}만",
+  "Anyone on this computer": "이 컴퓨터의 모든 사람",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "그 사람의 휴대폰, 봇, 대화, 커넥터는 소유자의 것이 됩니다. 아무것도 삭제되지 않습니다.",
+  "This bot belongs to": "이 봇의 소유자",
+  "A member's phone only sees and changes what is theirs.": "멤버의 휴대폰은 자신의 것만 보고 바꿀 수 있습니다.",
+  "Person": "사람"
 }

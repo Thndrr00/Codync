@@ -62,6 +62,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var notify: Bool?
     /// Installed connector / skill ids this bot uses (see `Market.swift`).
     public var connectors: [String]
+    /// The person whose bot this is (`people`); nil is the owner's.
+    public var person: String?
     public var skills: [String]
     /// The bot can see and operate the computer's desktop (the built-in `computer` tools).
     public var computer: Bool
@@ -169,6 +171,7 @@ extension Bot {
         chiefBotId = try c.decodeIfPresent(String.self, forKey: .chiefBotId)
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify)
         connectors = try c.decodeIfPresent([String].self, forKey: .connectors) ?? []
+        person = try c.decodeIfPresent(String.self, forKey: .person)
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
         computer = try c.decodeIfPresent(Bool.self, forKey: .computer) ?? false
         manageTeam = try c.decodeIfPresent(Bool.self, forKey: .manageTeam)

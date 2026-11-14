@@ -43,6 +43,7 @@ mod n8n_remote;
 mod native_channels;
 mod network;
 mod network_cli;
+mod people;
 mod proactive;
 mod prompt;
 mod remote;

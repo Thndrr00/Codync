@@ -12,9 +12,11 @@ pub async fn with_defaults(hub: &Arc<Hub>, mut b: Value) -> Result<BotConfig> {
     b["id"] = "".into();
     // Only the host makes the lead (`chat::lead`).
     b["lead"] = false.into();
-    // Connectors are on for a new bot unless the client picked them.
+    // The person the host put on it (a member's device); a bot with none is the owner's.
+    let person = b["person"].as_str().filter(|p| !p.is_empty()).map(str::to_owned);
+    // Connectors are on for a new bot unless the client picked them: the shared ones and its person's.
     if b["connectors"].is_null() && b["kind"] != "group" {
-        b["connectors"] = default_connectors(hub).await?;
+        b["connectors"] = default_connectors(hub, person.as_deref()).await?;
     }
     // Skills too: every installed one is on unless the client picked them, but a bot's skill stays with that bot.
     if b["skills"].is_null() && b["kind"] != "group" {
@@ -30,13 +32,13 @@ pub async fn with_defaults(hub: &Arc<Hub>, mut b: Value) -> Result<BotConfig> {
 
 /// Every connector a new bot gets. With none saved the credential store stays shut, which is what keeps the
 /// lead bot of a new computer from opening it at start-up.
-async fn default_connectors(hub: &Arc<Hub>) -> Result<Value> {
+async fn default_connectors(hub: &Arc<Hub>, person: Option<&str>) -> Result<Value> {
     if !market::connectors_saved(&hub.store)? {
         return Ok(json!([]));
     }
     // Without a credential store (headless Linux) no connector can run, so the bot starts with none.
     Ok(match market::vault::unlock(hub.clone()).await {
-        Ok(()) => json!(market::connector_ids(&hub.store)?),
+        Ok(()) => json!(market::connector_ids_for(&hub.store, person)?),
         Err(e) => {
             tracing::warn!(error = format!("{e:#}"), "credential store unavailable; new bot starts without connectors");
             json!([])

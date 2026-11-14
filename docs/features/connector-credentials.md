@@ -247,14 +247,28 @@ turn: the MCP call is flagged and the local edit next to it stays quiet.
 
 ## Who owns an MCP server
 
-Every MCP server is installed on the computer and handed to a bot by its `connectors` list; the
-person who owns the computer chooses that list in the bot's settings. Codync has one owner per
-computer and no member roles: `enterprise` members are SCIM directory records, not people who sign in
-to the computer, so "a member manages their own MCP servers" cannot be narrower than "the owner
-manages every server". OpenBot's member-owned servers (0.64) are therefore represented by the
-owner's per-bot lists plus the `manage` server: a bot with `manageTeam` can create bots and change the
-setup of the bots it created, never another bot's connectors.
+Every MCP server is installed on the computer. By default it is **shared**: handed to a bot by its
+`connectors` list, and the person who owns the computer chooses that list in the bot's settings. A
+connector can instead belong to one **person** (`Connector.person`, [people](people.md)), and then
+only that person's bots and devices see it.
+
+A person is a record the owner creates on the computer, not a member account: Codync has one owner
+per computer and no member sign-in. `enterprise` members are SCIM directory records; they do not sign
+in to the computer. The owner can assign a paired phone to a person, and that phone then acts as that
+person in every host call. The host authorizes by `Caller::Device` → `device.person_id`, so a member's
+phone lists shared connectors plus its own, and cannot read, change, sign in to or remove a shared one
+or another person's. A bot sees shared connectors plus its own person's, never another person's
+([people](people.md), `market::visible_to`, `market::for_bot`).
+
+Each personal connector keeps its own id and its own credentials in the same encrypted vault, so two
+people can connect the same app with different accounts and neither sees the other's token. OAuth
+state, verification results and sign-in are keyed by that id.
+
+OpenBot's member-owned servers (0.64) are represented this way: person-scoped connectors, plus the
+owner's per-bot lists and the `manage` server (a bot with `manageTeam` can create bots and change the
+setup of the bots it created, never another bot's connectors). Composio connections remain
+computer-wide and only the owner adds or removes one.
 
 An agent can read and search its other chats: `search_history` and `read_history` cover its own chat,
 its side threads and the group chats it answers in ([context and memory](context-and-memory.md)).
-Another bot's chats stay out of reach.
+Another bot's chats stay out of reach, and a member's bot never reads the owner's chats.

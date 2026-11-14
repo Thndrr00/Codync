@@ -46,6 +46,8 @@ data class Bot(
     val fastModeIssue: String? = null,
     val notify: Boolean? = null,
     val connectors: List<String> = emptyList(),
+    /** The person whose bot this is (`people`); null is the owner's. */
+    val person: String? = null,
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,
     /** The bot can create bots (which can too) and change its own setup and the bots it created (the built-in `manage` tools); null from an older host. */

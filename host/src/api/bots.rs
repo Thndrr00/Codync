@@ -220,6 +220,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let mut b = b;
             // Only a bot's `create_bot` records who made one.
             b["createdBy"] = Value::Null;
+            let asked = b["person"].as_str().map(str::to_owned);
+            let person = new_bot_person(hub, caller, asked.as_deref())?;
+            if let Some(member) = person.as_deref() {
+                crate::people::check_group_members(hub, &b, member)?;
+            }
+            b["person"] = json!(person);
             let cfg = crate::agent::new_bot::with_defaults(hub, b).await?;
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??})
@@ -233,6 +239,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let mut b = b;
             if let Some(patch) = b.as_object_mut() {
                 patch.remove(crate::chat::instruction_history::AUTHOR);
+            }
+            // A bot keeps its person: a member's device can't move a bot to the owner (or to anyone else),
+            // and the owner's choice has to name a person that exists.
+            if let Some(person) = crate::people::caller_person(hub, caller) {
+                crate::people::check_group_members(hub, &b, &person)?;
+                b["person"] = json!(person);
+            } else if let Some(person) = b["person"].as_str()
+                && hub.store.person(person).is_none()
+            {
+                bail!("unknown person");
             }
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&b)).await??})
@@ -735,4 +751,17 @@ fn save_always_rule(hub: &Hub, card: &crate::store::Entry, option_id: Option<&st
     let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
     hub.update_bot(&json!({"id": card.bot_id, "approvalRules": rules}))?;
     Ok(())
+}
+
+/// The person a new bot belongs to: a member's device always makes its own (the body can't name another),
+/// and the owner may name one, or leave it empty for their own.
+fn new_bot_person(hub: &Hub, caller: &Caller, asked: Option<&str>) -> Result<Option<String>> {
+    if let Some(person) = crate::people::caller_person(hub, caller) {
+        return Ok(Some(person));
+    }
+    let Some(person) = asked.filter(|p| !p.is_empty()) else { return Ok(None) };
+    if hub.store.person(person).is_none() {
+        bail!("unknown person");
+    }
+    Ok(Some(person.to_owned()))
 }

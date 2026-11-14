@@ -1,4 +1,4 @@
-import type { AgentAccount, ConnectorFailure } from '@shared/models'
+import type { AgentAccount, ConnectorFailure, Person } from '@shared/models'
 import type { HostClient } from '../../client/host-client'
 
 // Marketplace wire types (host/src/market/): connectors are MCP servers,
@@ -21,6 +21,8 @@ export interface InstalledConnector {
   auth?: string | null
   /** Last MCP connection/tool failure classified by the host (Idea 50). */
   lastFailure?: ConnectorFailure | null
+  /** The person whose connector this is (`people`); null is shared with every bot on the computer. */
+  person?: string | null
 }
 
 export const needsSignIn = (c: InstalledConnector) => c.auth === 'signedOut'
@@ -293,6 +295,8 @@ const s = (n: number) => n * 1000
 
 export const market = {
   connectors: async (c: HostClient) => (await c.call<{ items: InstalledConnector[] }>('connectors')).items,
+  /** The people on this computer (the owner's own list; a member's phone never sees it). */
+  people: async (c: HostClient) => (await c.call<{ people: Person[] }>('people')).people,
   /** A page of the MCP Registry (featured first), or of a search (can take ~30 s). */
   marketConnectors: async (c: HostClient, search: string, cursor: string | null = null) => {
     const res = await c.call<{ items: MarketConnector[]; nextCursor?: string | null }>('marketConnectors', { search, cursor: cursor ?? '' }, s(60))

@@ -199,6 +199,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const backend = backends.find((b) => b.id === draft.backend)
   const connectors = plugins?.connectors ?? []
   const skills = plugins?.skills ?? []
+  const people = plugins?.people ?? []
 
   // The agent's own models; a model that is set but not listed (an older host, another agent) stays pickable.
   const backgroundChoices = [
@@ -527,6 +528,23 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
           selection={draft.connectors ?? []}
           onChange={(ids) => set('connectors', ids)}
         />
+        {people.length ? (
+          <CardSection
+            title={tr('This bot belongs to')}
+            footer={tr("A member's phone only sees and changes what is theirs.")}
+          >
+            <Field label={tr('Person')}>
+              <ChoicePicker
+                selection={draft.person ?? ''}
+                options={[
+                  { id: '', label: tr('Anyone on this computer') },
+                  ...people.map((p) => ({ id: p.id, label: p.name })),
+                ]}
+                onChange={(id) => set('person', id || null)}
+              />
+            </Field>
+          </CardSection>
+        ) : null}
         <PluginToggles
           title="Skills"
           empty="No skills yet. Get some from Extensions, or write your own."

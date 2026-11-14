@@ -120,6 +120,8 @@ export interface Bot {
   hidden: boolean
   notify?: boolean | null
   connectors: string[]
+  /** The person whose bot this is (`people`); empty means the owner's. */
+  person?: string | null
   skills: string[]
   /** The bot can see and operate the computer's desktop. */
   computer: boolean
@@ -930,6 +932,18 @@ export interface AuthorizedDevice {
   createdAt?: number | null
   lastSeenAt?: number | null
   connected?: boolean | null
+  /** The person this phone acts as; null is one of the owner's own. */
+  personId?: string | null
+  /** That person's name, as the computer knows it. */
+  person?: string | null
+}
+
+/** Someone who uses a computer with their own phone or bots (`people` on the host). */
+export interface Person {
+  id: string
+  name: string
+  email?: string | null
+  createdAt: number
 }
 
 export interface CloudOwner {
@@ -1046,6 +1060,8 @@ export interface BotDraft {
   hidden?: boolean
   notify?: boolean | null
   connectors?: string[]
+  /** The person whose bot this is (`people`); null means the owner's. */
+  person?: string | null
   skills?: string[]
   computer?: boolean
   manageTeam?: boolean
@@ -1096,6 +1112,7 @@ export function draftOf(bot: Bot): BotDraft {
     hidden: bot.hidden,
     notify: bot.notify ?? null,
     connectors: bot.connectors,
+    person: bot.person ?? null,
     skills: bot.skills,
     computer: bot.computer,
     manageTeam: bot.manageTeam ?? undefined,

@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "מעלה {percent}%",
   "Subagents": "תת-סוכנים",
   "{finished} of {total}": "{finished} מתוך {total}",
-  "Go to the subagents": "עבור לתת-הסוכנים"
+  "Go to the subagents": "עבור לתת-הסוכנים",
+  "People on this computer": "אנשים במחשב הזה",
+  "Someone who uses this computer with their own phone or their own bots.": "מי שמשתמש במחשב הזה עם הטלפון שלו או הבוטים שלו.",
+  "Add a person": "הוספת אדם",
+  "Email (optional)": "דוא\"ל (אופציונלי)",
+  "No one else yet": "אין עוד אף אחד",
+  "This computer's owner": "הבעלים של המחשב הזה",
+  "Assign a device": "שיוך מכשיר",
+  "Mine": "שלי",
+  "Only {name}": "רק {name}",
+  "Anyone on this computer": "כולם במחשב הזה",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "הטלפון, הבוטים, הצ׳אטים והמחברים שלהם עוברים אליך. שום דבר לא נמחק.",
+  "This bot belongs to": "הבוט הזה שייך ל",
+  "A member's phone only sees and changes what is theirs.": "הטלפון של חבר רואה ומשנה רק את מה ששייך לו.",
+  "Person": "אדם"
 }

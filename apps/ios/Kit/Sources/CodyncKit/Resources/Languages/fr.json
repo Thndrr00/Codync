@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "Envoi {percent} %",
   "Subagents": "Sous-agents",
   "{finished} of {total}": "{finished} sur {total}",
-  "Go to the subagents": "Aller aux sous-agents"
+  "Go to the subagents": "Aller aux sous-agents",
+  "People on this computer": "Personnes sur cet ordinateur",
+  "Someone who uses this computer with their own phone or their own bots.": "Quelqu'un qui utilise cet ordinateur avec son propre téléphone ou ses propres bots.",
+  "Add a person": "Ajouter une personne",
+  "Email (optional)": "E-mail (facultatif)",
+  "No one else yet": "Personne d'autre pour l'instant",
+  "This computer's owner": "Le propriétaire de cet ordinateur",
+  "Assign a device": "Attribuer un appareil",
+  "Mine": "Les miens",
+  "Only {name}": "Seulement {name}",
+  "Anyone on this computer": "Tout le monde sur cet ordinateur",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "Leur téléphone, bots, conversations et connecteurs vous reviennent. Rien n'est supprimé.",
+  "This bot belongs to": "Ce bot appartient à",
+  "A member's phone only sees and changes what is theirs.": "Le téléphone d'un membre ne voit et ne modifie que ce qui lui appartient.",
+  "Person": "Personne"
 }

@@ -496,6 +496,31 @@ branch, except F11.16:
   "Nothing installed", and with Reduce Motion the same screens show it still. The repo has no
   harness for client rendering, and the decision is pure presentation, so no unit test fits.
 
+### F11.19 People and member-scoped MCP servers
+
+- **What.** A person on the computer (a record the owner creates, with an optional email) stands in
+  for a member account, which Codync does not have. A paired phone assigned to a person acts as that
+  person, and a bot can belong to one. Connectors are shared or one person's: a member's phone lists
+  shared plus its own and can change only its own; a bot gets shared plus its person's; a member's
+  cross-chat search never reads the owner's chats. Removing a person unassigns their devices, bots
+  and connectors instead of deleting anything. This replaces the "a member manages their own MCP
+  servers" gap with the narrowest model one owner per computer allows.
+- **Where.** `host/src/store/people.rs` (`people`, `devices.person_id`), `host/src/people.rs`
+  (`people`, `addPerson`, `updatePerson`, `removePerson`, `setDevicePerson`, `caller_person`,
+  `check_bot`), `Connector.person` and `BotConfig.person`, the kind-11 migration in
+  `host/src/store/schema.rs`, `market::visible_to` / `for_bot` / `owned_by`, `agent::bot::session`
+  (MCP servers), `chat::memory::chats` (search and memory sources), and the event filter in
+  `host/src/api/events.rs`. Clients: Settings → People on desktop, Computer management → People on
+  iOS and Android, Manage → People in the terminal UI. Model: [people](../features/people.md).
+- **Test.** Host tests cover a member listing only shared + own connectors, an install from a member
+  setting their person even when the body names another, a member being refused on a shared
+  connector, a new bot getting shared + its person's, and a member's cross-chat search refusing the
+  owner's message. E2E: add a person, assign a paired phone, pair it, and check its roster,
+  connectors and a bot's tools; then remove the person and check the phone, bots and connectors move
+  to the owner.
+- **Clients.** Desktop, iOS and Android manage people; the terminal UI can call the same host methods
+  but its own People page is still to build. Model: [people](../features/people.md).
+
 ## How to use this
 
 The cards above shipped on this branch except F11.16, which stays deferred until Codync hosts

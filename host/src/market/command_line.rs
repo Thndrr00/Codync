@@ -55,7 +55,7 @@ mod tests {
         add_custom_connector(&store, &json!({"name": "One", "command": "npx server", "args": null}))
             .await
             .expect("null args");
-        import_connectors(&store, r#"{"mcpServers": {"Two": {"command": "uvx tool", "args": null}}}"#)
+        import_connectors(&store, r#"{"mcpServers": {"Two": {"command": "uvx tool", "args": null}}}"#, None)
             .await
             .expect("null args");
         let lines = |store: &crate::store::Store| -> Vec<(Option<String>, Vec<String>)> {
@@ -70,7 +70,7 @@ mod tests {
         let bad = json!({"name": "Three", "command": "node", "args": ["--port", 8080]});
         assert!(add_custom_connector(&store, &bad).await.is_err());
         let pasted = r#"{"mcpServers": {"Four": {"command": "node"}, "Five": {"command": "node", "args": [1]}}}"#;
-        assert!(import_connectors(&store, pasted).await.is_err());
+        assert!(import_connectors(&store, pasted, None).await.is_err());
         assert_eq!(lines(&store), split, "a refused install or paste adds nothing");
     }
 }

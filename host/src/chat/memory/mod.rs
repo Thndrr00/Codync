@@ -35,6 +35,19 @@ pub fn shared(cfg: &BotConfig) -> bool {
     cfg.shared_memory.unwrap_or_else(|| crate::agent::workspace::is_managed(cfg))
 }
 
+/// The chats a bot may read: its own chat (its side threads share the id), and the groups it answers in that
+/// belong to its person. A member's bot never reads the owner's chats, even in a group both answer in.
+pub fn chats(hub: &Hub, cfg: &BotConfig) -> Vec<String> {
+    let groups = hub.store.groups_with(&cfg.id).unwrap_or_default().into_iter().filter(|group| {
+        hub.store
+            .bot(group)
+            .ok()
+            .flatten()
+            .is_some_and(|row| !row.deleted && row.config.person.as_deref() == cfg.person.as_deref())
+    });
+    std::iter::once(cfg.id.clone()).chain(groups).collect()
+}
+
 /// The memory section of a bot's instructions: each `MEMORY.md` it sees, then the index of its notes.
 pub fn opening(store: &Store, cfg: &BotConfig) -> String {
     let memory = match store.memory_read(|c| codync_mem::opening::load(c, &cfg.id, shared(cfg))) {

@@ -207,7 +207,7 @@ pub fn apps() -> &'static [App] {
 
 /// Installs catalog app `id` with the values the user typed: its fields fill its server's URL,
 /// headers or environment, and the result is added as a custom connector.
-pub async fn install_app(store: &crate::store::Store, id: &str, values: &Value) -> Result<Value> {
+pub async fn install_app(store: &crate::store::Store, id: &str, values: &Value, person: Option<&str>) -> Result<Value> {
     let a = apps().iter().find(|a| a.id == id).ok_or_else(|| anyhow!("Unknown app"))?;
     let typed = |field: &Field| values[&field.id].as_str().unwrap_or_default().trim().to_owned();
     let mut url = a.server.url.clone();
@@ -235,7 +235,7 @@ pub async fn install_app(store: &crate::store::Store, id: &str, values: &Value) 
         "catalog": a.id,
         "description": a.description,
     });
-    super::custom::add_custom_connector(store, &body).await
+    super::custom::add_custom_connector_as(store, &body, person).await
 }
 
 /// The catalog agents `search` and `category` keep, with whether the computer has each one.

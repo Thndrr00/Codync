@@ -2602,5 +2602,19 @@
   "Uploading {percent}%": "{percent}% アップロード中",
   "Subagents": "サブエージェント",
   "{finished} of {total}": "{total} 件中 {finished} 件",
-  "Go to the subagents": "サブエージェントへ移動"
+  "Go to the subagents": "サブエージェントへ移動",
+  "People on this computer": "このコンピュータのユーザー",
+  "Someone who uses this computer with their own phone or their own bots.": "自分のスマートフォンや自分のボットでこのコンピュータを使う人。",
+  "Add a person": "ユーザーを追加",
+  "Email (optional)": "メール（任意）",
+  "No one else yet": "まだ他の人はいません",
+  "This computer's owner": "このコンピュータの所有者",
+  "Assign a device": "デバイスを割り当てる",
+  "Mine": "自分のもの",
+  "Only {name}": "「{name}」のみ",
+  "Anyone on this computer": "このコンピュータの全員",
+  "Their phone, bots, chats and connectors become yours. Nothing is deleted.": "その人のスマートフォン、ボット、チャット、コネクタはあなたのものになります。何も削除されません。",
+  "This bot belongs to": "このボットの所有者",
+  "A member's phone only sees and changes what is theirs.": "メンバーのスマートフォンは自分のものだけを表示・変更できます。",
+  "Person": "ユーザー"
 }

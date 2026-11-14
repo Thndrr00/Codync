@@ -277,6 +277,7 @@ mod tests {
             section: None,
             notify: None,
             connectors: vec![],
+            person: None,
             skills: vec![],
             computer: false,
             approval_rules: vec![],

@@ -198,7 +198,7 @@ async fn search_memory(hub: &Arc<Hub>, cfg: &BotConfig, query: &str) -> Result<V
             Ok((hits, sources))
         })?;
         // A shared fact may come from another bot's chat, which search_history can't open.
-        let chats = std::iter::once(cfg.id.clone()).chain(hub.store.groups_with(&cfg.id)?).collect::<Vec<_>>();
+        let chats = super::chats(hub, &cfg);
         sources.retain(|(layer, _), message| {
             layer.is_some() || hub.store.entry(message).is_some_and(|e| chats.contains(&e.bot_id))
         });
@@ -234,7 +234,7 @@ async fn search_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result
     let hub = hub.clone();
     let bot = cfg.id.clone();
     // The bot's own chat, its side threads (same chat id) and the group chats it answers in.
-    let chats = std::iter::once(bot.clone()).chain(hub.store.groups_with(&bot)?).collect::<Vec<_>>();
+    let chats = super::chats(hub, cfg);
     let search = hub.clone();
     let (rows, next) = tokio::task::spawn_blocking(move || -> Result<_> {
         let from = match from {
@@ -289,7 +289,7 @@ async fn read_history(hub: &Arc<Hub>, cfg: &BotConfig, args: &Value) -> Result<V
     let around = usize::try_from(args["around"].as_i64().unwrap_or(4).clamp(1, 15)).unwrap_or(4);
     let hub = hub.clone();
     let bot = cfg.id.clone();
-    let chats = std::iter::once(bot.clone()).chain(hub.store.groups_with(&bot)?).collect::<Vec<_>>();
+    let chats = super::chats(hub, cfg);
     let messages = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
         let anchor = hub
             .store

@@ -38,7 +38,7 @@ public struct Empty: Codable, Sendable {
 /// A full editor update must explicitly clear a previous model override.
 struct BotUpdate: Encodable {
     let draft: BotDraft
-    private enum CodingKeys: String, CodingKey { case model, account }
+    private enum CodingKeys: String, CodingKey { case model, account, person }
 
     func encode(to encoder: Encoder) throws {
         try draft.encode(to: encoder)
@@ -49,6 +49,11 @@ struct BotUpdate: Encodable {
         if draft.account == nil {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encodeNil(forKey: .account)
+        }
+        // Clearing the person gives the bot back to the owner; the key has to be there to say so.
+        if draft.person == nil {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeNil(forKey: .person)
         }
     }
 }

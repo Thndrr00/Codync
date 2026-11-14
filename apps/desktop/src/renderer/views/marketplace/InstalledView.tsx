@@ -24,6 +24,13 @@ export function InstalledView({ back, connectorId }: { back: () => void; connect
   const targeted = plugins.installedConnectors.find((connector) => connector.id === connectorId)
   const connectors = targeted ? [targeted, ...plugins.installedConnectors.filter((connector) => connector.id !== connectorId)] : plugins.installedConnectors
   const empty = plugins.installedConnectors.length === 0 && plugins.installedSkills.length === 0
+  // A connector's badge: shared with every bot, or one person's. A member's phone has no people list, so its
+  // own connectors read "Mine" and never show anyone else's name.
+  const badge = (personId?: string | null) => {
+    if (!personId) return tr('Shared')
+    const person = plugins.people.find((p) => p.id === personId)
+    return person ? tr('Only {name}').replaceAll('{name}', person.name) : tr('Mine')
+  }
 
   const signIn = async (id: string) => {
     setSigningIn(id)
@@ -63,6 +70,7 @@ export function InstalledView({ back, connectorId }: { back: () => void; connect
                       icon={c.kind === 'composio' ? <AppLogo url={c.logo} name={c.name} /> : <ServiceLogo name={c.name} registryName={c.registryName} />}
                       trailing={(
                         <>
+                          <Text size="caption" tone="tertiary">{badge(c.person)}</Text>
                           {signingIn === c.id ? <Spinner /> : (needsSignIn(c) || c.lastFailure?.kind === 'auth') ? <Button onClick={() => void signIn(c.id)}>{c.lastFailure?.kind === 'auth' ? 'Re-authenticate' : 'Sign in'}</Button> : null}
                           <Button kind="secondary" onClick={() => setTools(c)}>Tools &amp; requests</Button>
                           <RemoveButton title={c.name} onClick={() => setRemoving({ id: c.id, name: c.name, isSkill: false })} />
