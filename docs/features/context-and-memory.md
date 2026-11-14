@@ -55,6 +55,14 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
     (`health/allergies.md`), starting with frontmatter whose `description:` says when to read it; at most 2,000
     tokens a note and 20 notes a layer, marked when passed, never cut. Links (a topic folder too: the host never
     reads or writes through one), hidden files and folders, and folders deeper than three are ignored.
+- **A channel's layer.** A group keeps a layer of its own in `<data>/bots/<group id>/bot-memory/`, beside its members'
+  own and "yours". Every member reads its `MEMORY.md` in the room only (`chat::memory::channel::block`, once per
+  session and again when `memory.revision.<group>` changes); a member's own chats never see it. `channel_remember` and
+  `channel_forget_memory` (in the `memory` MCP server) save one line of at most 500 characters, correcting rather than
+  duplicating the same text, within the layer's usual 1,200-token cap. With `keepMemories` on, a member's ordinary
+  `edit_memory` of its own layer in a room turn goes to the channel instead, so its other chats don't get it; the
+  shared layer is unaffected. Channel writes still pass `check_change`, but skip the "only in the user's own chat"
+  rule (`Writer.channel`).
 - **The opening** holds each `MEMORY.md` the bot sees in full (over its cap: marked, never cut), then the index of
   its notes (path, description, tokens). It doesn't change for a memory change, so the prompt cache holds: every
   change (the bot's, another bot's in "yours", dreaming's, an edit on the computer) reaches each session of the

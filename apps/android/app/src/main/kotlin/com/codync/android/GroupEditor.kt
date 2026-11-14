@@ -28,9 +28,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +61,10 @@ import java.io.ByteArrayOutputStream
     var confirmDelete by remember { mutableStateOf(false) }
     val saving = "editor" in state.busy
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val memory = remember(initial.id) { initial.id?.let { MemoryModel(it, store, scope) } }
+    val memoryRev = state.bots.firstOrNull { it.id == draft.id }?.memoryRev
+    LaunchedEffect(draft.id, memoryRev) { memory?.load() }
     var pictureError by remember { mutableStateOf<String?>(null) }
     val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
@@ -111,6 +117,20 @@ import java.io.ByteArrayOutputStream
                         Text(tr("Archived"), style = Type.body)
                     }
                 }
+                ValueRow(tr("Keep memories in this channel"), detail = tr("What its members learn here stays in this channel; their other chats don't get it.")) {
+                    CodyncSwitch(draft.keepMemories, { draft = draft.copy(keepMemories = it) }) {
+                        Text(tr("Keep memories in this channel"), style = Type.body)
+                    }
+                }
+            }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(tr("Memory"), style = Type.subheadline.semibold, color = Palette.secondary)
+                Text(tr("Every member reads these here. To change one, ask a member to remember or forget it."), style = Type.caption, color = Palette.tertiary)
+                val entries = memory?.view?.channel?.entries.orEmpty()
+                if (entries.isEmpty()) {
+                    Text(tr("Nothing yet. What the channel learns shows up here."), style = Type.caption, color = Palette.tertiary)
+                }
+                for (entry in entries) Text(entry.text, style = Type.body, color = Palette.text)
             }
             Column(Modifier.fillMaxWidth().animateContentSize(Motion.layoutSize)) {
                 Text("Members", Modifier.padding(bottom = 4.dp), style = Type.subheadline.semibold, color = Palette.secondary)

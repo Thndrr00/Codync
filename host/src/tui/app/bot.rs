@@ -102,6 +102,8 @@ pub struct Bot {
     pub title: String,
     /// A group taken out of the open roster; it shows under ARCHIVED.
     pub archived: bool,
+    /// A group that keeps what its members learn in it; their own chats don't get it.
+    pub keep_memories: bool,
     /// For a group, the member that leads it; `None` for none.
     pub lead_bot: Option<String>,
     /// A group's request tree: what waits, and the controls on each row (host `bot.tasks`).
@@ -293,6 +295,7 @@ impl Bot {
             group: v["kind"] == "group",
             title: s("title"),
             archived: v["archived"].as_bool().unwrap_or(false),
+            keep_memories: v["keepMemories"].as_bool().unwrap_or(false),
             lead_bot: v["chiefBotId"].as_str().map(str::to_owned),
             tasks: v["tasks"].as_array().into_iter().flatten().filter_map(Task::parse).collect(),
             has_photo: v["avatarPhoto"].as_str().is_some_and(|p| !p.is_empty()),

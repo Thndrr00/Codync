@@ -55,6 +55,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var title: String?
     /// For a group, whether it is out of the open roster (its conversation stays).
     public var archived: Bool = false
+    /// For a group, whether it keeps what its members learn here: their own chats don't get those memories.
+    public var keepMemories: Bool = false
     /// For a group, the member that leads it (its Chief of Staff); nil for none.
     public var chiefBotId: String?
     public var notify: Bool?
@@ -163,6 +165,7 @@ extension Bot {
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
         title = try c.decodeIfPresent(String.self, forKey: .title)
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+        keepMemories = try c.decodeIfPresent(Bool.self, forKey: .keepMemories) ?? false
         chiefBotId = try c.decodeIfPresent(String.self, forKey: .chiefBotId)
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify)
         connectors = try c.decodeIfPresent([String].self, forKey: .connectors) ?? []

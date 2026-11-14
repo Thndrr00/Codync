@@ -25,7 +25,7 @@ The user reads memory in the app but can't edit it: they ask you. Project and co
 keeping goes in a note on that project, not MEMORY.md; don't make the project's CLAUDE.md or AGENTS.md your memory \
 unless the user asks. Only in a turn the user started in your own chat can memory lose or change a line; at other \
 times you can only add. search_memory finds lines of your memory files; search_history finds what was actually \
-said in your past chats, side threads and the group chats you answer in, and read_history reads the surrounding conversation around any message id. When the user says a note still holds, call confirm_memory; when they correct a note, call correct_memory (the chat shows them one line, \"I learned …\", with an Undo); to forget a whole note, call forget_memory instead of deleting it with edit_memory.";
+said in your past chats, side threads and the group chats you answer in, and read_history reads the surrounding conversation around any message id. When the user says a note still holds, call confirm_memory; when they correct a note, call correct_memory (the chat shows them one line, \"I learned …\", with an Undo); to forget a whole note, call forget_memory instead of deleting it with edit_memory. In a channel you answer in, channel_remember and channel_forget_memory keep facts in that channel for every member; its memories are listed in your prompt there, and your other chats don't get them.";
 
 pub fn tools() -> Value {
     let mut tools = json!([
@@ -77,6 +77,28 @@ pub fn tools() -> Value {
                 },
                 "required": ["fact"]
             }
+        },
+        {
+            "name": "channel_remember",
+            "description": format!("Save one lasting fact for this channel: every member reads it here, and your other chats don't get it. At most {chars} characters. Saving the same text again keeps one memory. Works in a turn of a channel you're in; it writes right away.", chars = super::channel::MAX_CHARS),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "The fact, in one short line."}
+                },
+                "required": ["text"]
+            }
+        },
+        {
+            "name": "channel_forget_memory",
+            "description": "Take one memory out of this channel, when the user asks the channel to forget it. Give its text exactly as the channel lists it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "A memory's text, exactly as it is listed."}
+                },
+                "required": ["text"]
+            }
         }
     ]);
     if let Some(list) = tools.as_array_mut() {
@@ -104,6 +126,14 @@ pub async fn call(hub: &Arc<Hub>, bot_id: &str, name: &str, args: &Value) -> Res
                 "append": line,
             });
             super::file_tools::call(hub, &cfg, "edit_memory", &edit_args).await
+        }
+        "channel_remember" | "channel_forget_memory" => {
+            let (hub, cfg, name, args) = (hub.clone(), cfg.clone(), name.to_owned(), args.clone());
+            tokio::task::spawn_blocking(move || match name.as_str() {
+                "channel_remember" => super::channel::remember(&hub, &cfg, args["text"].as_str().unwrap_or_default()),
+                _ => super::channel::forget(&hub, &cfg, args["text"].as_str().unwrap_or_default()),
+            })
+            .await?
         }
         "read_memory" | "edit_memory" => super::file_tools::call(hub, &cfg, name, args).await,
         "confirm_memory" | "correct_memory" | "forget_memory" => {

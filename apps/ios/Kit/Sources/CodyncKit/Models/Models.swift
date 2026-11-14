@@ -362,6 +362,8 @@ public struct GroupDraft: Codable, Hashable, Sendable {
     public var title: String?
     /// Out of the open roster.
     public var archived = false
+    /// Keeps what its members learn in the channel; their own chats don't get it.
+    public var keepMemories = false
     /// The channel picture as a data URL; nil for none.
     public var avatarPhoto: String?
     /// The member that leads the channel; nil for none.
@@ -381,12 +383,13 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         pinned = group.pinned
         title = group.title
         archived = group.archived
+        keepMemories = group.keepMemories
         avatarPhoto = group.avatarPhoto
         chiefBotId = group.chiefBotId
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, name, description, members, pinned, title, archived, avatarPhoto, chiefBotId
+        case id, kind, name, description, members, pinned, title, archived, keepMemories, avatarPhoto, chiefBotId
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -399,6 +402,7 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         try c.encodeIfPresent(pinned, forKey: .pinned)
         try c.encode(title, forKey: .title)
         try c.encode(archived, forKey: .archived)
+        try c.encode(keepMemories, forKey: .keepMemories)
         try c.encode(avatarPhoto, forKey: .avatarPhoto)
         try c.encode(chiefBotId, forKey: .chiefBotId)
     }

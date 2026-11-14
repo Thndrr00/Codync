@@ -14,6 +14,8 @@ public struct GroupEditorView: View {
     @State private var members: [String]
     @State private var chiefBotId: String?
     @State private var archived: Bool
+    @State private var keepMemories: Bool
+    @State private var memory: MemoryStore?
     @State private var photo: String?
     @State private var photoItem: PhotosPickerItem?
     @State private var pickingPhoto = false
@@ -32,6 +34,7 @@ public struct GroupEditorView: View {
         _members = State(initialValue: group.members)
         _chiefBotId = State(initialValue: group.chiefBotId)
         _archived = State(initialValue: group.archived)
+        _keepMemories = State(initialValue: group.keepMemories)
         _photo = State(initialValue: group.avatarPhoto)
     }
 
@@ -94,6 +97,36 @@ public struct GroupEditorView: View {
                         ValueRow("Archived", detail: "Archived groups leave the open roster; their conversation stays.") {
                             Toggle("", isOn: $archived).toggleStyle(.codync)
                                 .accessibilityLabel(L10n.tr("Archived"))
+                        }
+                        ValueRow("Keep memories in this channel", detail: "What its members learn here stays in this channel; their other chats don't get it.") {
+                            Toggle("", isOn: $keepMemories).toggleStyle(.codync)
+                                .accessibilityLabel(L10n.tr("Keep memories in this channel"))
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(L10n.tr("Memory"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Palette.secondary)
+                            .padding(.bottom, 4)
+                        Text(L10n.tr("Every member reads these here. To change one, ask a member to remember or forget it."))
+                            .font(.caption)
+                            .foregroundStyle(Palette.tertiary)
+                        if let entries = memory?.view?.channel?.entries, !entries.isEmpty {
+                            ForEach(entries) { entry in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.text).foregroundStyle(Palette.text)
+                                    Text("\(author(entry)) · \(Date(milliseconds: entry.updatedAt).formatted(.relative(presentation: .named)))")
+                                        .font(.caption)
+                                        .foregroundStyle(Palette.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 6)
+                            }
+                        } else {
+                            Text(L10n.tr("Nothing yet. What the channel learns shows up here."))
+                                .font(.caption)
+                                .foregroundStyle(Palette.tertiary)
+                                .padding(.vertical, 6)
                         }
                     }
                     DocumentsView(botId: groupId)
@@ -184,7 +217,22 @@ public struct GroupEditorView: View {
                 photoItem = nil
             }
         }
+        .task(id: "\(groupId)-\(model.bots[groupId]?.memoryRev ?? 0)") {
+            let store = memory ?? MemoryStore(botId: groupId) { try await model.ready() }
+            memory = store
+            await store.load()
+        }
         .deleteBotConfirmation($confirmDelete) { dismiss() }
+    }
+
+    /// Who wrote a channel memory, as the memory screen says it.
+    private func author(_ entry: MemoryEntry) -> String {
+        switch entry.author {
+        case "user": return L10n.tr("You wrote it")
+        case "bot": return "\(model.bots[entry.authorBot ?? ""]?.name ?? "A bot") remembered it"
+        case "dream": return L10n.tr("Dreaming")
+        default: return L10n.tr("Moved from the old memory")
+        }
     }
 
     /// "Alice, Bob" when no name is typed.
@@ -226,6 +274,7 @@ public struct GroupEditorView: View {
                 draft.pinned = model.bots[groupId]?.pinned
                 draft.title = typedTitle.isEmpty ? nil : typedTitle
                 draft.archived = archived
+                draft.keepMemories = keepMemories
                 draft.avatarPhoto = photo
                 draft.chiefBotId = chiefBotId
                 try await model.updateGroup(draft)

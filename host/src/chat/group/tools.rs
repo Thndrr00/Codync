@@ -27,6 +27,7 @@ pub fn tools() -> Value {
         "leadAgentId": {"type": "string", "description": "The member that routes requests naming nobody. Omit it for the first member; null leaves no lead."},
         "picture": {"type": "string", "description": "The channel picture: the path of a PNG, JPEG or WebP file up to 300 KB (absolute, or relative to your folder), or a data URL. In update_channel, null removes it."},
         "archived": {"type": "boolean", "description": "true archives the channel and takes it out of the open roster; false brings it back."},
+        "keepMemories": {"type": "boolean", "description": "true keeps what its members learn here in the channel: their own chats don't get those memories."},
     });
     let mut create = fields.clone();
     create["memberAgentIds"] = json!({"type": "array", "items": {"type": "string"}, "description": "Ids from list_team of the bots in the channel."});
@@ -89,6 +90,9 @@ async fn create(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
         "kind": "group", "name": name, "members": members, "archived": archived,
         "description": instructions.unwrap_or_default(),
     });
+    if let Some(keep) = args["keepMemories"].as_bool() {
+        body["keepMemories"] = keep.into();
+    }
     if let Some(title) = title {
         body["title"] = title.into();
     }
@@ -108,6 +112,9 @@ async fn create(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
     }
     if cfg.archived {
         shown.insert("archived".into(), true.into());
+    }
+    if cfg.keep_memories {
+        shown.insert("keepMemories".into(), true.into());
     }
     if cfg.avatar_photo.is_some() {
         shown.insert("avatarPhoto".into(), "new".into());
@@ -166,6 +173,10 @@ async fn update(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
         let archived = args["archived"].as_bool().context("archived must be true or false")?;
         patch.insert("archived".into(), archived.into());
     }
+    if !args["keepMemories"].is_null() {
+        let keep = args["keepMemories"].as_bool().context("keepMemories must be true or false")?;
+        patch.insert("keepMemories".into(), keep.into());
+    }
     if args.get("picture").is_some() {
         let picture = picture(source, &args["picture"])?;
         patch.insert("avatarPhoto".into(), picture.map(Value::String).unwrap_or(Value::Null));
@@ -184,7 +195,7 @@ async fn update(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
 }
 
 /// The channel `key` names (its id, or its name, case aside) when `source` can see it.
-fn find_channel(hub: &Hub, source: &BotConfig, key: &str) -> Result<BotConfig> {
+pub(super) fn find_channel(hub: &Hub, source: &BotConfig, key: &str) -> Result<BotConfig> {
     let rows = hub.store.bots()?;
     let groups: Vec<BotConfig> =
         rows.into_iter().filter(|r| !r.deleted && r.config.is_group()).map(|r| r.config).collect();
@@ -214,6 +225,7 @@ fn channel_value(hub: &Hub, id: &str) -> Result<Value> {
         "id": cfg.id, "name": cfg.name, "title": cfg.title, "instructions": cfg.description,
         "members": cfg.members.iter().map(|m| json!({"agentId": m, "name": hub.bot_name(m)})).collect::<Vec<_>>(),
         "leadAgentId": cfg.chief_bot_id, "archived": cfg.archived, "hasPicture": cfg.avatar_photo.is_some(),
+        "keepMemories": cfg.keep_memories,
     }))
 }
 
@@ -343,6 +355,9 @@ fn describe(hub: &Hub, cfg: &BotConfig, patch: &Map<String, Value>) -> String {
     if let Some(value) = patch.get("archived") {
         lines.push(format!("Archived: {}", if value == true { "yes" } else { "no" }));
     }
+    if let Some(value) = patch.get("keepMemories") {
+        lines.push(format!("Keeps memories in this channel: {}", if value == true { "yes" } else { "no" }));
+    }
     if let Some(value) = patch.get("avatarPhoto") {
         lines.push(format!("Picture: {}", if value.is_null() { "removed" } else { "new" }));
     }
@@ -364,6 +379,7 @@ fn changed_names(patch: &Value) -> Vec<String> {
         ("members", "members"),
         ("chiefBotId", "lead"),
         ("archived", "archived"),
+        ("keepMemories", "channel memory"),
         ("avatarPhoto", "picture"),
     ];
     labels.iter().filter(|(key, _)| patch.get(*key).is_some()).map(|(_, label)| (*label).to_owned()).collect()

@@ -16,6 +16,8 @@ data class GroupDraft(
     val title: String = "",
     /** Out of the open roster. */
     val archived: Boolean = false,
+    /** Keeps what its members learn in the channel; their own chats don't get it. */
+    val keepMemories: Boolean = false,
     /** The channel picture as a data URL; null for none. */
     val avatarPhoto: String? = null,
 ) {
@@ -36,6 +38,7 @@ data class GroupDraft(
             put("pinned", pinned)
             put("chiefBotId", chiefBotId?.let { JsonPrimitive(it) } ?: JsonNull)
             put("archived", archived)
+            put("keepMemories", keepMemories)
             put("avatarPhoto", avatarPhoto?.let { JsonPrimitive(it) } ?: JsonNull)
         }
     }
@@ -44,7 +47,7 @@ data class GroupDraft(
         fun from(bot: Bot): GroupDraft {
             require(bot.kind == "group")
             return GroupDraft(bot.id, bot.name, bot.description, bot.members, bot.pinned, bot.chiefBotId,
-                bot.title, bot.archived, bot.avatarPhoto)
+                bot.title, bot.archived, bot.keepMemories, bot.avatarPhoto)
         }
     }
 }

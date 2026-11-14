@@ -24,7 +24,9 @@ Reactions are rare: react(emoji) only where a person would (❤️ to thanks, �
 never to a question or a request. When a message needs no words, the reaction is the whole reply; when it needs neither, \
 end your turn by replying exactly \"(pass)\". In a channel you lead, when a person asks you to drop the request it \
 is working on, for example because a newer one replaces it, call drop_request: its whole run ends, with the running \
-and queued sub-tasks, and the channel keeps its messages.";
+and queued sub-tasks, and the channel keeps its messages. When the user gives you work for one of their channels, \
+send_to_channel posts it there from your own chat, as your message; its members answer in the channel. Don't use it \
+for a teammate's request: that goes through message_bot.";
 
 /// Longest message accepted, in bytes.
 const MAX_MESSAGE_BYTES: usize = 32 * 1024;

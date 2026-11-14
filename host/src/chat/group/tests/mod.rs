@@ -600,3 +600,29 @@ async fn a_denied_approval_creates_nothing() {
     hub.shutdown().await;
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_channel_request_asks_the_members_it_names_or_its_lead() {
+    let members = [bot("a", "Ann"), bot("b", "Ben")];
+    let mut room = bot("g", "Ship room");
+    room.kind = BotKind::Group;
+    room.chief_bot_id = Some("b".into());
+    let ask = |room: &BotConfig, ids: Value| -> Vec<String> {
+        let mut request = said("check the release");
+        request.kind = "agent".into();
+        request.data = json!({"text": "check the release", "channelRequest": {"from": "x", "members": ids}});
+        requested(room, &members, &request).into_iter().map(|m| m.id.clone()).collect()
+    };
+    assert_eq!(ask(&room, json!(["a"])), ["a"], "the member it names");
+    assert_eq!(ask(&room, json!(["a", "b"])), ["a", "b"]);
+    assert_eq!(ask(&room, json!([])), ["b"], "none named: the lead routes it");
+    let mut leadless = room.clone();
+    leadless.chief_bot_id = None;
+    assert_eq!(ask(&leadless, json!([])), ["a"], "no lead: the first member routes it");
+
+    let mut request = said("check");
+    assert!(!is_channel_request(&request), "the user's own request is not a bot's");
+    request.kind = "agent".into();
+    request.data["channelRequest"] = json!({"from": "x", "members": []});
+    assert!(is_channel_request(&request));
+}

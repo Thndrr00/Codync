@@ -287,6 +287,10 @@ pub struct BotConfig {
     /// A group taken out of the open roster; its conversation stays and it can be restored.
     #[serde(default)]
     pub archived: bool,
+    /// A channel that keeps what its members learn in it ("Keep memories in this channel"): a member's
+    /// memory write there goes to the channel, not its own layer, so its other chats don't get it.
+    #[serde(default)]
+    pub keep_memories: bool,
     #[serde(default)]
     pub created_at: i64,
 }

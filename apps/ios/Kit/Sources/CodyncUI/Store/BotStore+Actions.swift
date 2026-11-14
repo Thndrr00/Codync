@@ -122,6 +122,13 @@ extension BotStore {
         }
     }
 
+    /// Sends a message on to another chat; the host copies its files and marks it forwarded there. The target's
+    /// events carry the new message.
+    func forward(_ entry: Entry, to botId: String) async throws {
+        let sent = try await withLink(replay: true) { try await $0.forward(entryId: entry.id, botId: botId) }
+        upsert(sent)
+    }
+
     /// Sends a queued message now: into the bot's running turn when its agent can take it, else as its next turn. It
     /// leaves the queue once the computer says so.
     public func steer(_ entry: Entry) {

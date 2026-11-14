@@ -362,11 +362,12 @@ pub enum GroupField {
     Lead,
     Picture,
     Archived,
+    KeepMemories,
     Bots,
 }
 
 impl GroupField {
-    /// The field after this one; a new group has no About, Lead, Picture or Archived (they are set
+    /// The field after this one; a new group has no About, Lead, Picture, Archived or Channel memory (they are set
     /// afterwards, in the editor).
     pub(super) fn next(self, existing: bool) -> Self {
         match self {
@@ -376,7 +377,8 @@ impl GroupField {
             Self::Title => Self::Bots,
             Self::Lead => Self::Picture,
             Self::Picture => Self::Archived,
-            Self::Archived => Self::Bots,
+            Self::Archived => Self::KeepMemories,
+            Self::KeepMemories => Self::Bots,
             Self::Bots => Self::Name,
         }
     }
@@ -384,8 +386,9 @@ impl GroupField {
     pub(super) fn prev(self, existing: bool) -> Self {
         match self {
             Self::Name => Self::Bots,
-            Self::Bots if existing => Self::Archived,
+            Self::Bots if existing => Self::KeepMemories,
             Self::Bots => Self::Title,
+            Self::KeepMemories => Self::Archived,
             Self::Archived => Self::Picture,
             Self::Picture => Self::Lead,
             Self::Lead => Self::Title,
@@ -408,6 +411,8 @@ pub struct GroupForm {
     pub title: Editor,
     /// Whether the group shows under ARCHIVED.
     pub archived: bool,
+    /// Keeps what its members learn in the channel; their own chats don't get it.
+    pub keep_memories: bool,
     /// Whether the group has a picture (the apps add it; the terminal can remove it).
     pub has_photo: bool,
     /// The picture is removed on save.

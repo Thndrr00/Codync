@@ -85,6 +85,8 @@ import kotlinx.serialization.json.put
     val shared: Boolean = false,
     val yours: MemoryLayer,
     val bot: MemoryLayer,
+    /** A group's own layer, which every member reads in the room; null for a bot. */
+    val channel: MemoryLayer? = null,
     val dreams: List<DreamRun> = emptyList(),
     /** Claude Code's own notes for the bot's project folder, read-only. */
     val projectMemory: Project? = null,

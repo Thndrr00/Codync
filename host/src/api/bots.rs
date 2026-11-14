@@ -117,6 +117,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::dev_servers::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::group::drop::TOOLS.contains(&name) {
                 crate::chat::group::drop::call(hub, bot, name, &b["arguments"]).await?
+            } else if name == crate::chat::group::send::TOOL {
+                crate::chat::group::send::call(hub, bot, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }

@@ -84,7 +84,11 @@ fn read(hub: &Hub, cfg: &BotConfig, args: &Value) -> Result<Value> {
 
 fn edit(hub: &Hub, cfg: &BotConfig, args: &Value) -> Result<Value> {
     let name = args["file"].as_str().ok_or_else(|| anyhow!("file required"))?;
-    let layer = layer(cfg, args)?;
+    let own = layer(cfg, args)?;
+    // A channel that keeps memories takes its members' own memory writes here, so their other chats don't get them.
+    let kept = own.as_ref().and_then(|_| super::channel::write_layer(hub, cfg));
+    let channel = kept.is_some();
+    let layer = kept.map_or(own, Some);
     files::scan(hub, cfg);
     let before = files::read(layer.as_deref(), name)?;
     let after = if args["delete"] == true {
@@ -119,7 +123,7 @@ fn edit(hub: &Hub, cfg: &BotConfig, args: &Value) -> Result<Value> {
     let expected = before.as_deref().map(mf::hash);
     let cause = if after.is_some() { Cause::Edit } else { Cause::Delete };
     let message = hub.runtime(&cfg.id).message;
-    let writer = Writer { author: Author::Bot, bot: Some(cfg), cause, message: message.as_deref() };
+    let writer = Writer { author: Author::Bot, bot: Some(cfg), cause, message: message.as_deref(), channel };
     files::write(hub, layer.as_deref(), name, after.as_deref(), expected.as_deref(), writer)?;
-    Ok(json!({"status": "saved", "file": name}))
+    Ok(json!({"status": "saved", "file": name, "keptIn": if channel { Some("channel") } else { None }}))
 }

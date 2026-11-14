@@ -19,6 +19,8 @@ public struct ThreadView: View {
     @State var botChat: BotChatTarget?
     @State var openArtifact: ArtifactTarget?
     @State var openCall: Entry?
+    /// The message the "Send to a channel" sheet is sending on.
+    @State var forwardEntry: Entry?
     @State var editingGroup = false
     @State var details: DetailsRequest?
     @State var calling = false
@@ -95,6 +97,7 @@ public struct ThreadView: View {
             .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
             .codyncSheet(item: $openArtifact) { ArtifactView(target: $0) }
             .codyncSheet(item: $openCall) { CallConversationView(line: $0) }
+            .codyncSheet(item: $forwardEntry) { ForwardSheet(entry: $0) }
             .codyncSheet(item: $details) { request in
                 BotDetailsView(botId: request.botId ?? botId, request: request) { artifact in
                     details = nil
@@ -136,6 +139,7 @@ public struct ThreadView: View {
                         reply: e.isReplyable && model.mismatch == nil ? { reply(to: e) } : nil,
                         // A reply can be followed apart from the chat, as a thread of its own.
                         branch: e.isReplyable ? { startThread(from: e) } : nil,
+                        forward: { forwardEntry = e },
                         // Its thread, opened from the chip under the message.
                         openThread: e.data.thread == nil ? nil : { openThread = ThreadTarget(botId: botId, root: e.id) },
                         // In a group, the bot whose agent failed.

@@ -327,6 +327,13 @@ public extension HostClient {
         return res.entry
     }
 
+    /// Sends a message on to another chat; the host copies its files and marks it forwarded there.
+    func forward(entryId: String, botId: String) async throws -> Entry {
+        struct Res: Decodable { var entry: Entry }
+        let res: Res = try await call("forward", ["entryId": entryId, "botId": botId])
+        return res.entry
+    }
+
     /// `replyTo`: the chat message this one quotes.
     /// `pasted`: what the user pasted rather than typed, which memory never takes as their own words.
     /// `call`: the voice call it was said in (on-device or speech to text).

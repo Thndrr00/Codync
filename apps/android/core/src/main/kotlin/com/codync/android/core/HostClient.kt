@@ -20,6 +20,8 @@ data class Bot(
     val title: String = "",
     /** A group taken out of the open roster; its conversation stays. */
     val archived: Boolean = false,
+    /** A group that keeps what its members learn in it: their own chats don't get those memories. */
+    val keepMemories: Boolean = false,
     val description: String = "",
     val avatarColor: String = "blue",
     val avatarShape: String = "blob",

@@ -22,7 +22,11 @@ Open the group's settings to change it:
 - **Desktop:** click the group's name at the top of the chat. The details panel lists the members, with **Add Member** and an X to remove each one.
 - **Terminal UI:** select the group and press `e`.
 
-In the editor you can rename the group, add or remove members, fill in **What this group works on**, give it a short **title** under its name, choose a **picture**, pick its **Chief of Staff** (the member that leads it) and **archive** it. Every member reads the "What this group works on" line, so use it to say what the room is for.
+In the editor you can rename the group, add or remove members, fill in **What this group works on**, give it a short **title** under its name, choose a **picture**, pick its **Chief of Staff** (the member that leads it), **archive** it, and turn on **Keep memories in this channel**. Every member reads the "What this group works on" line, so use it to say what the room is for.
+
+**Keep memories in this channel** keeps what its members learn while answering here in the channel itself: their own chats don't get those memories. Each member still has its own memory, and everything [shared by all your bots](/docs/memory) still reaches every chat. The editor also lists the channel's memories, read-only; to change one, ask a member to remember or forget it.
+
+A channel's memory is one shared layer beside each member's own: every member reads it when it answers in the room, and its own chats never do. A member adds to it with `channel_remember` ("Remember that our releases ship on Fridays") and removes one with `channel_forget_memory`. A memory holds up to 500 characters, the channel keeps its full list within the usual memory limit, and saving the same text again keeps one memory instead of two.
 
 The picture is a small image shown in place of the members' faces everywhere the group appears. On iPhone and Android choose one from your photos; on the desktop choose a PNG, JPEG or WebP file of 300 KB or less. The terminal shows a `▣` next to a group with a picture and can remove it.
 
@@ -53,6 +57,21 @@ members). A picture is a PNG, JPEG or WebP file of 300 KB or less.
 - A created channel appears on every device like one you made yourself, with its title, members,
   lead and picture. If an open channel with exactly those bots already exists, the bot is told so
   and asked to change that one instead.
+
+## Send work to a channel from a bot's chat
+
+A bot you talk to one-on-one can hand work to one of your channels: "Send this to Ship room for
+Ben". It has a `send_to_channel` tool that posts the request into the channel as its own message
+and starts an exchange there, exactly like a message you send in the group. The members it names
+answer; with none, the channel's lead routes it. The bot's own chat gets a line saying where the
+request went, and the tool returns the channel's id.
+
+- Under **Asks before acting**, the bot waits for your Allow on a card showing the channel, the
+  members asked and the request.
+- It only reaches a channel the bot can see (one it is in, made, or leads); another channel is
+  refused with a line saying to ask you to add it.
+- It is for work you give a channel. A request from a teammate still goes through the bots'
+  own messaging, or an @-mention when the bot is answering in the channel.
 
 ## Who answers
 
@@ -121,6 +140,7 @@ When a newer request replaces one the group is still working on, ask its **Chief
 - **What it's shown.** On each turn, a member reads the room's messages since it last spoke there, the most recent ones if there are many, plus who's in the room and what the group is for.
 - **Private chats.** Members are told not to reveal what you discussed with them one-on-one. That's only an instruction to the agent: the same session holds both conversations.
 - **Long-term memory.** In a group, a bot can add to its [memory](/docs/memory) but can't change or remove what's there. Group chats don't feed dreaming, and a bot's history search covers only its own chat.
+- **The channel's memory.** What the channel keeps with `channel_remember` is listed in every member's turn there, and in none of their own chats. With **Keep memories in this channel** on, a member's ordinary memory writes in the room go to the channel too.
 
 ## Notifications
 

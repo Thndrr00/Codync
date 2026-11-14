@@ -15,6 +15,7 @@
 
 pub mod drop;
 mod rooms;
+pub mod send;
 pub mod tasks;
 pub mod tools;
 
@@ -173,15 +174,15 @@ async fn run(
     // The request's task tree: the room asks no member whose branch was stopped, and a resumed turn asks
     // only the rows that waited.
     let opening = group(hub, group_id)?;
-    let opening_since = since_last_user_message(hub, lane)?;
-    let request = opening_since.first().filter(|e| e.kind == EntryKind::User.as_str());
+    let opening_since = since_last_request(hub, lane)?;
+    let request = opening_since.first().filter(|e| e.kind == EntryKind::User.as_str() || is_channel_request(e));
     let tree = request
         .map(|request| tasks::open(hub, &opening, lane, request, turn.late.is_none() && !resumed, resumed))
         .transpose()?;
     'rounds: for round in 0..MAX_ROUNDS {
         let group = group(hub, group_id)?;
         let members = members(hub, &group);
-        let since_user = since_last_user_message(hub, lane)?;
+        let since_user = since_last_request(hub, lane)?;
         let since_late = turn.late.map(|seq| hub.store.messages_after(lane, seq - 1, HISTORY_LINES)).transpose()?;
         // The rows that waited (a resumed branch) are asked first, whatever the room's mentions say.
         let queued = match &tree {
@@ -193,7 +194,22 @@ async fn run(
         if !resumed_rows {
             asking = speakers(&members, &since_user, since_late.as_deref(), round, asked);
         }
-        if !resumed_rows && since_late.is_none() && round == 0 && asking.len() == members.len() && members.len() > 1 {
+        // A bot's `send_to_channel` request asks the members it names, and its lead when it names nobody.
+        let channel_request = since_user.first().filter(|e| is_channel_request(e));
+        if !resumed_rows
+            && since_late.is_none()
+            && round == 0
+            && let Some(request) = channel_request
+        {
+            asking = requested(&group, &members, request);
+        }
+        if !resumed_rows
+            && since_late.is_none()
+            && round == 0
+            && channel_request.is_none()
+            && asking.len() == members.len()
+            && members.len() > 1
+        {
             let candidates: Vec<crate::chat::decider::BotCandidate> = members
                 .iter()
                 .map(|m| crate::chat::decider::BotCandidate {
@@ -397,7 +413,7 @@ pub fn refresh(hub: &Hub, turn: &mut GroupTurn, me: &str) -> Result<()> {
     let members = members(hub, &group);
     let me = members.iter().find(|m| m.id == me).ok_or_else(|| anyhow!("no longer in the group"))?;
     (turn.prompt, turn.shown) = ask(hub, &group, &members, me, &turn.lane)?;
-    turn.answers = answers(&since_last_user_message(hub, &turn.lane)?);
+    turn.answers = answers(&since_last_request(hub, &turn.lane)?);
     Ok(())
 }
 
@@ -411,7 +427,7 @@ fn ask(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotConfig, lane
     Ok((member_prompt(hub, group, members, me, lane)?, shown))
 }
 
-fn members(hub: &Hub, group: &BotConfig) -> Vec<BotConfig> {
+pub(super) fn members(hub: &Hub, group: &BotConfig) -> Vec<BotConfig> {
     group
         .members
         .iter()
@@ -421,16 +437,42 @@ fn members(hub: &Hub, group: &BotConfig) -> Vec<BotConfig> {
         .collect()
 }
 
-/// The lane's messages since the user last wrote there, that message included.
-fn since_last_user_message(hub: &Hub, lane: &Lane) -> Result<Vec<Entry>> {
+/// The lane's messages since the user last wrote there or a bot posted a channel request, that message included.
+fn since_last_request(hub: &Hub, lane: &Lane) -> Result<Vec<Entry>> {
     let recent = hub.store.messages_after(lane, 0, HISTORY_LINES)?;
-    let start = recent.iter().rposition(|e| e.kind == EntryKind::User.as_str()).unwrap_or(0);
+    let start = recent.iter().rposition(|e| e.kind == EntryKind::User.as_str() || is_channel_request(e)).unwrap_or(0);
     Ok(recent[start..].to_vec())
 }
 
-/// The user's message a room turn answers: the first of `since` (see [`since_last_user_message`]).
+/// The message a room turn answers: the first of `since` (see [`since_last_request`]).
 fn answers(since: &[Entry]) -> Vec<String> {
-    since.first().filter(|e| e.kind == EntryKind::User.as_str()).map(|e| e.id.clone()).into_iter().collect()
+    since
+        .first()
+        .filter(|e| e.kind == EntryKind::User.as_str() || is_channel_request(e))
+        .map(|e| e.id.clone())
+        .into_iter()
+        .collect()
+}
+
+/// A bot's `send_to_channel` request in the room (`chat::group::send`): the room shows it as that bot's message,
+/// and it starts a room turn like the user's own request.
+pub fn is_channel_request(entry: &Entry) -> bool {
+    entry.kind == EntryKind::Agent.as_str() && entry.data["channelRequest"].is_object()
+}
+
+/// Who a channel request asks in its first round: the members it names, or its lead when it names nobody.
+fn requested<'a>(group: &BotConfig, members: &'a [BotConfig], request: &Entry) -> Vec<&'a BotConfig> {
+    let ids: Vec<&str> = request.data["channelRequest"]["members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    if ids.is_empty() {
+        let lead = group.chief_bot_id.as_deref().or_else(|| group.members.first().map(String::as_str));
+        return members.iter().filter(|member| Some(member.id.as_str()) == lead).collect();
+    }
+    ids.iter().filter_map(|id| members.iter().find(|member| member.id == *id)).collect()
 }
 
 /// Who speaks in `round`, each round starting one member later so the same bot doesn't always speak first. The
@@ -559,6 +601,9 @@ fn member_prompt(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotCo
              queued sub-tasks, and the channel keeps its messages."
                 .into(),
         );
+    }
+    if let Some(memory) = crate::chat::memory::channel::block(hub, group, &me.id)? {
+        out.push(memory);
     }
     out.push(String::new());
 

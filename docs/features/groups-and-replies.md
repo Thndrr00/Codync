@@ -18,8 +18,9 @@ quotes itself.
 
 - Bot: `kind` (`agent` | `group`), `members` (group: one or more distinct agent bot IDs on the
   same computer; no nested groups), `workingChat` (where the running turn talks). A group also has
-  `title` (a short line under its name, `null` for none), `archived` (out of the open roster) and
-  `avatarPhoto` (the channel picture as a data URL: PNG, JPEG or WebP, at most 300 KB). A group's
+  `title` (a short line under its name, `null` for none), `archived` (out of the open roster),
+  `avatarPhoto` (the channel picture as a data URL: PNG, JPEG or WebP, at most 300 KB) and
+  `keepMemories` (its members' memory writes in the room stay in the channel). A group's
   `status` / `activity` are its busy member's (`"Alice: Writing a reply…"`); its `lastMessage`
   names who spoke (`"Alice: …"`).
 - Entry: `data.author` (the bot that wrote it; every agent-made entry has one); on a reply,
@@ -35,8 +36,8 @@ quotes itself.
 | Method | Body | Notes |
 |---|---|---|
 | `send` | `botId, text, clientNonce, replyTo?` | `botId` is a bot or a group. `replyTo`: the id of a user message or final reply in that chat; anything else is refused. Works in the relay mailbox too. |
-| `createBot` | `{kind:"group", name, description?, title?, members, chiefBotId?, archived?, avatarPhoto?}` | Returns the existing open group when these exact bots already share one. |
-| `updateBot` | `{id, name?, description?, title?, members?, chiefBotId?, pinned?, hidden?, archived?, avatarPhoto?, section?}` | A group can't become a bot or the reverse. `title`: a short line, `null` clears it. `archived`: out of the open roster, `false` restores. `avatarPhoto`: a data URL picture, `null` clears it. `section`: a name, or `null` for none. |
+| `createBot` | `{kind:"group", name, description?, title?, members, chiefBotId?, archived?, avatarPhoto?, keepMemories?}` | Returns the existing open group when these exact bots already share one. |
+| `updateBot` | `{id, name?, description?, title?, members?, chiefBotId?, pinned?, hidden?, archived?, avatarPhoto?, keepMemories?, section?}` | A group can't become a bot or the reverse. `title`: a short line, `null` clears it. `archived`: out of the open roster, `false` restores. `avatarPhoto`: a data URL picture, `null` clears it. `keepMemories`: its members' memory writes in the room stay in the channel. `section`: a name, or `null` for none. |
 | `deleteBot` | `botId` | A group's bots stay. A deleted bot leaves its groups. |
 | `reorderBots` | `ids` | The roster as the user dragged it, top first; groups count as rows. See [bot order](computer-order.md#bot-order). |
 | `renameSection` | `from, to` | Every row in section `from` moves to `to`, groups too; an existing name merges them, `null` removes the section. See [bot order](computer-order.md#bot-order). |
@@ -132,6 +133,51 @@ under Auto it applies at once. Either way the channel gets a notice naming who a
 asked to drop this request: …") and the lead's lane a notice that it was dropped. `dropRequest`
 (`botId`, optional `by`) does the same from a client, with `by` naming the person.
 
+## A bot posts work into a channel (`host/src/chat/group/send.rs`)
+
+A bot can also hand work to a channel from its own chat. Every bot has `send_to_channel` in the
+`codync-chat` MCP server (registered in `host/src/mcp.rs`, dispatched by `chatCall` in
+`host/src/api/bots.rs`):
+
+| Tool | Fields | Notes |
+|---|---|---|
+| `send_to_channel` | `channel` (an id or a name), `request` (at most 8,000 characters), `members?` (ids or names) | Posts the request into the channel as the asking bot's message (`kind: "agent"`, `author`, `final`) and starts a room turn there. The named members answer it; with none, its lead routes it; with no lead, the first member. Returns the channel id. |
+
+- It works only in the bot's own chat: in a channel turn it is refused, with the @-mention to use
+  instead, so a room can't recurse into another room.
+- The channel must be one the bot can see (a member, its creator or its lead), through the same
+  `tools::find_channel` check `update_channel` uses; anything else is refused with what to do.
+- Under Ask the post waits on the card `chat::manage::approve` uses (`Send to <channel>`, listing
+  the members asked and the request); under Auto it applies at once. Either way a notice in the
+  caller's chat says where the request went.
+- The room derives the request from the entry: `since_last_request` starts at the last user
+  message or channel request, `tasks::open` makes its task tree, and `requested` asks the names
+  in `data.channelRequest.members` (or the lead). Later rounds and late answers work as usual.
+
+## A channel's memory (`host/src/chat/memory/channel.rs`)
+
+A group keeps a memory layer of its own, beside each member's own and the shared one
+(`files::folder(Some(group))`). Its `MEMORY.md` is what every member reads in the room; a member's
+own chats never see it.
+
+| Tool (memory MCP server) | Fields | Notes |
+|---|---|---|
+| `channel_remember` | `text` (at most 500 characters) | Adds one line to the channel's `MEMORY.md`, or corrects the line with the same text (case aside) instead of adding a second. Refuses over the per-memory limit or when the layer's `MEMORY.md` is full, naming the limit. |
+| `channel_forget_memory` | `text` | Removes the line with that text (exactly, else case aside); an unmatched text is refused with what to try. |
+
+- Both work only in a turn of a channel the caller is a member of; the channel is
+  `hub.runtime(bot).lane.chat`. Elsewhere they are refused with the actionable reason.
+- Writes go through `files::write` with `Writer { channel: true }`: the usual checks still run
+  (`check_change`), the "only in the user's own chat" rule doesn't apply, and the change is
+  recorded against the channel layer, not the member's.
+- A member's prompt gains the list (`channel::block`) before the room history, once per session
+  and again when the channel's memory revision (`memory.revision.<group>`) changes.
+- With `keepMemories` on, an ordinary `edit_memory` of the member's own layer made in a channel
+  turn goes to the channel layer instead (`file_tools::edit`), so its other chats don't get it.
+  `remember_for_all_bots` and shared memory are unaffected.
+- `memory {botId}` accepts a group and returns its layer as `channel` (`yours` and `bot` empty),
+  which the group settings show read-only on every client and in the terminal's memory sheet.
+
 ## How a group answers (`host/src/chat/group.rs`, `group/rooms.rs`, Grok Bot's design)
 
 - The user's message starts a *room turn* in the group: up to 3 rounds, 10 replies in all.
@@ -203,7 +249,7 @@ placeholder reads "Reply…", and sending includes `replyTo`; leaving the chat c
 user message with `data.replyTo` shows the quote at the top of its bubble. Every client shows a
 quote as its first non-empty line without Markdown markers (the roster's message preview rule). Reactions under
 a message (the user's: tap to take back; the bots': emoji plus the avatars of who chose it),
-group create/edit (name, title, picture, lead, archive, members), Stop in a group calls `stop` with the group id and pauses its request tree. Every client also shows **Waiting for sub-tasks** above the composer while a request has rows: each row's owner, state and line, Stop on a row that waits or runs, and Continue, Reassign and Cancel on a stopped one (host `groupTask`).
+group create/edit (name, title, picture, lead, archive, the **Keep memories in this channel** switch and the channel's read-only **Memory** list), Stop in a group calls `stop` with the group id and pauses its request tree. Every client's message menu also offers **Send to a channel**, which calls `forward` with the target chat or group (the desktop and Android had it; the iPhone gained it with `apps/ios/Kit/Sources/CodyncUI/Thread/ForwardSheet.swift`). Every client also shows **Waiting for sub-tasks** above the composer while a request has rows: each row's owner, state and line, Stop on a row that waits or runs, and Continue, Reassign and Cancel on a stopped one (host `groupTask`).
 
 Slack-style reply threads were removed for quote replies; [threads for teams](../plans/threads-for-teams.md)
 lists where their code lived and how to bring it back.

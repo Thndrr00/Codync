@@ -70,6 +70,8 @@ export interface Bot {
   title?: string | null
   /** A group taken out of the open roster; its conversation stays and it can be restored. */
   archived: boolean
+  /** A group that keeps what its members learn in it: their own chats don't get those memories. */
+  keepMemories: boolean
   customIcon?: import('./custom-icons').CustomIcon
   name: string
   description: string
@@ -239,6 +241,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     chiefBotId: raw.chiefBotId ?? null,
     title: raw.title ?? null,
     archived: raw.archived ?? false,
+    keepMemories: raw.keepMemories ?? false,
     autoName: raw.autoName ?? false,
     createdAt,
     rev: raw.rev ?? 0,
@@ -1094,6 +1097,8 @@ export interface GroupDraft {
   title?: string | null
   /** Out of the open roster. */
   archived?: boolean
+  /** Keeps what its members learn in the channel; their own chats don't get it. */
+  keepMemories?: boolean
   /** The channel picture as a data URL; null removes it. */
   avatarPhoto?: string | null
   customIcon?: import('./custom-icons').CustomIcon

@@ -41,12 +41,19 @@ fn view(hub: &Hub, cfg: &BotConfig) -> Result<Value> {
             facts.iter().filter(|fact| seen.insert(mf::fact_id(&fact.text))).map(|fact| entry(layer, fact)).collect();
         Ok(json!({"entries": entries, "used": codync_mem::tokens::estimate(&content), "cap": mf::cap(layer)}))
     };
+    // A channel keeps its own layer beside its members' own and the shared one; a group has no memory of its own
+    // beyond it, so its other layers stay empty.
+    let channel = cfg.is_group().then(|| super::channel::view(hub, bot)).transpose()?;
+    let empty = || json!({"entries": [], "used": 0, "cap": mf::cap(Some(bot))});
     Ok(json!({
         "shared": super::shared(cfg),
-        "yours": layer(None)?,
-        "bot": layer(Some(bot))?,
+        "yours": if cfg.is_group() { empty() } else { layer(None)? },
+        "bot": if cfg.is_group() { empty() } else { layer(Some(bot))? },
+        "channel": channel,
         "files": super::file_api::listing(hub, cfg)?,
-        "dreams": hub.store.memory_read(|c| codync_mem::dream::recent(c, bot, DREAMS_SHOWN))?,
+        "dreams": if cfg.is_group() { json!([]) } else {
+            hub.store.memory_read(|c| codync_mem::dream::recent(c, bot, DREAMS_SHOWN))?
+        },
         "projectMemory": project_memory(cfg),
         "memoryRev": hub.store.memory_rev(),
     }))
@@ -54,7 +61,7 @@ fn view(hub: &Hub, cfg: &BotConfig) -> Result<Value> {
 
 /// A fact as the apps show a memory: who wrote it and where it was learned. One the user changed in the file
 /// themselves (outside Codync) is theirs.
-fn entry(layer: Option<&str>, fact: &Fact) -> Value {
+pub(super) fn entry(layer: Option<&str>, fact: &Fact) -> Value {
     let author = match fact.author {
         Author::User | Author::Computer => "user",
         Author::Bot => "bot",
@@ -103,11 +110,8 @@ fn project_memory(cfg: &BotConfig) -> Value {
 }
 
 fn bot(hub: &Hub, id: &str) -> Result<BotConfig> {
-    let cfg = hub.store.bot(id)?.filter(|b| !b.deleted).ok_or_else(|| anyhow!("unknown bot"))?.config;
-    if cfg.is_group() {
-        bail!("a group has no memory of its own");
-    }
-    Ok(cfg)
+    // A group's own layer is its channel memory (`channel`), which its members read in the room.
+    Ok(hub.store.bot(id)?.filter(|b| !b.deleted).ok_or_else(|| anyhow!("unknown bot"))?.config)
 }
 
 fn str_arg<'a>(b: &'a Value, k: &str) -> Result<&'a str> {
