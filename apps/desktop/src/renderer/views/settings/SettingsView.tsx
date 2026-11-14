@@ -45,6 +45,7 @@ import { ArchivedGroupsSection } from './ArchivedGroupsSection'
 import { LocalScriptsSection } from './LocalScriptsSection'
 import { PlanStartSection } from './PlanStartSection'
 import { ServerSettingsSection } from './ServerSettingsSection'
+import { useIslandAgentDock } from '../island/island-preferences'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
 export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
@@ -165,6 +166,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   useEffect(() => void window.codync.app.launchAtLogin().then(setLaunchAtLogin), [])
   const [island, setIsland] = useState(false)
   useEffect(() => void window.codync.island.enabled().then(setIsland), [])
+  const [dock, setDock] = useIslandAgentDock()
   const [voiceShortcut, setVoiceShortcut] = useState<VoiceShortcut>('off')
   useEffect(() => void window.codync.speech.shortcut().then(setVoiceShortcut), [])
   const tr = useTr()
@@ -255,6 +257,16 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
           <Switch on={island} onChange={(on) => void window.codync.island.setEnabled(on).then(setIsland)}>
             {islandLabel(window.codync.platform)}
           </Switch>
+        ) : null}
+        {/* The dock rides on the island: meaningless without it, so it follows the switch above. */}
+        {window.codync.island.supported ? (
+          <SwitchRow
+            title="Agent dock"
+            detail="Shows the agents on this computer in the island, at its edge, and opens on their roster. Needs the island."
+            on={dock}
+            onChange={setDock}
+            disabled={!island}
+          />
         ) : null}
         {/* On-device speech, so macOS only. */}
         {window.codync.speech.available ? (

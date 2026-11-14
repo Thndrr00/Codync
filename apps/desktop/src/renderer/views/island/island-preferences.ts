@@ -3,6 +3,16 @@ import { pref, usePref } from '../../lib/prefs'
 
 export const islandUsage = pref<IslandUsagePreferences>('islandUsagePreferences', defaultUsagePreferences)
 
+/**
+ * The agent dock: a compact roster of this computer's bots in the island, on the island's own edge.
+ * Off by default, and a device setting like the rest of the island's options.
+ */
+export const islandAgentDock = pref('islandAgentDock', false)
+
+export function useIslandAgentDock() {
+  return usePref(islandAgentDock)
+}
+
 export function useIslandUsage() {
   const [raw, set] = usePref(islandUsage)
   const value: IslandUsagePreferences = {

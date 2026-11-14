@@ -11,6 +11,7 @@ import { UsageMeter, UsageView } from './IslandUsage'
 import { IntegrationsView } from './IslandIntegrations'
 import { WorkspaceView } from './IslandWorkspace'
 import { ActivityView, StatusView, OptionsView } from './IslandControls'
+import { AgentsView } from './IslandAgents'
 import './island.css'
 import './island-views.css'
 import './island-usage.css'
@@ -129,6 +130,8 @@ function View({ model, mode }: { model: IslandModel; mode: IslandMode }) {
       return <UsageView model={model} />
     case 'integrations':
       return <IntegrationsView model={model} />
+    case 'agents':
+      return <AgentsView model={model} />
     case 'workspace':
       return <WorkspaceView model={model} />
     case 'activity':
@@ -153,15 +156,19 @@ const TABS: { tab: IslandTab; icon: string; label: string }[] = [
   { tab: 'options', icon: 'slider.horizontal.3', label: 'Island options' },
 ]
 
+/** The agent dock's own tab: shown only while the dock is on, so the island is unchanged without it. */
+const AGENTS_TAB: { tab: IslandTab; icon: string; label: string } = { tab: 'agents', icon: 'person.2', label: 'Agents' }
+
 /** Tabs on the left of the notch; the working count, the usage meter and Codync on the right. */
 function Header({ model, mode }: { model: IslandModel; mode: IslandMode }) {
   const tr = useTr()
   const selected = mode === 'overview' || mode === 'empty' ? 'bots' : mode
   const count = model.activeCount
+  const tabs = model.agentDock ? [AGENTS_TAB, ...TABS] : TABS
   return (
     <div className="island-header" style={{ top: (model.screen.notch?.height ?? 0) + 2 }}>
       <div className="island-tabs">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t.tab} className={`island-tab ${selected === t.tab ? 'selected' : ''}`} title={tr(t.label)} aria-label={tr(t.label)} onClick={() => model.setTab(t.tab)}>
             <Icon name={t.icon} size={13} scaled={false} />
           </button>
