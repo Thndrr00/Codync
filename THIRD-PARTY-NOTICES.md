@@ -28,6 +28,25 @@ WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEM
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## OpenBot
+
+Used in: the media work and the pins (see [docs/plans/openbot-0.70.0.md](docs/plans/openbot-0.70.0.md)
+and [docs/plans/openbot-0.69.0.md](docs/plans/openbot-0.69.0.md)). `host/src/media/` (the `/image` and
+`/video` command notes, `mediaStepPrompt`/`mediaInputText` of `src/backend/workflows/workflow-walk.ts`,
+the transparent-background words, the provider tool names and the made-file names), with changes: the
+commands are chat commands and flow steps instead of workflow steps, and the notes are built for one
+file. Pins: the behavior and copy of `pinMessage`/`pinnedMessages` and the `pin_message` tool, changed
+to a marker on the entry instead of a table. Also the released version numbers of the desktop's
+Electron.
+
+Source: https://github.com/nightly-labs/openbot
+
+PolyForm Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0)
+
+Copyright 2026 Synthetify Labs spółka z ograniczoną odpowiedzialnością
+
+This product includes software developed by Synthetify Labs spółka z ograniczoną odpowiedzialnością.
+
 ## Rakazo
 
 Used in: `apps/desktop/src/shared/agent-import.ts` and `host/src/chat/memory/agent_import.rs` (importing the folder of an
