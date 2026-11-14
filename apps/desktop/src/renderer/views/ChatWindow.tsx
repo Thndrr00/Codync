@@ -64,6 +64,7 @@ import { useTr } from '../lib/use-language'
 import type { ExtensionSection } from './marketplace/market-models'
 import { useTool } from '../lib/use-tool'
 import { useChatNavigation } from './chat-navigation'
+import { InspectorOverlay } from './inspector/InspectorOverlay'
 
 
 /** Native desktop chat: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
@@ -275,6 +276,8 @@ function ChatSplitView() {
   const newButton = useRef<HTMLButtonElement>(null)
   const railNewButton = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  /** The last page action each store showed, so a re-render doesn't navigate twice (card K15). */
+  const webMcpSeen = useRef(new Map<string, number>())
   useModels([...app.stores.values()])
 
   useEffect(() => {
@@ -295,6 +298,20 @@ function ChatSplitView() {
   const localOnline = !!app.local && onlineStores.includes(app.local)
   const roster = useComputerRoster(app, shown)
   const visibleRoster = roster.items
+
+  // Card K15: a granted action from a host-served page opens the bot it names. ThreadView finishes
+  // the action (an artifact, a call) once that bot is on screen; open_chat only selects it.
+  useEffect(() => {
+    for (const store of app.stores.values()) {
+      const action = store.lastWebMcpAction
+      if (!action) continue
+      if ((webMcpSeen.current.get(store.computer.id) ?? 0) >= action.seq) continue
+      webMcpSeen.current.set(store.computer.id, action.seq)
+      const wanted = action.action === 'show_artifact' ? action.botId : action.arguments.botId
+      const botId = typeof wanted === 'string' ? wanted : action.botId
+      if (store.bots.get(botId)) app.select({ computerId: store.computer.id, botId })
+    }
+  })
 
   const create = (kind: CreateTarget['kind']) => {
     // The selected bot's computer if it's online, else this computer, else any online one.
@@ -658,6 +675,7 @@ function ChatSplitView() {
       <NameDialog naming={naming} placeholder="Section name" limit={limitSectionName} clean={sectionName} onClose={() => setNaming(null)} />
       <Dialog open={errorMessage !== null} title={tr('Something went wrong')} message={errorMessage} actions={[]} cancel="OK" onClose={() => app.clearErrors()} />
       <SignInCodeDialog />
+      {import.meta.env.DEV ? <InspectorOverlay /> : null}
     </div>
   )
 }

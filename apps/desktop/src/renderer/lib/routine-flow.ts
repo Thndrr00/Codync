@@ -38,6 +38,14 @@ export interface FlowPosition {
   y: number
 }
 
+/** One agent working a card: its bot, how deep in the flow it runs and how its last step went. */
+export interface FlowLane {
+  botId: string
+  name: string
+  depth: number
+  status: StepStatus | null
+}
+
 export interface FlowRoutineCard {
   routine: Routine
   /** Newest first. */
@@ -45,6 +53,8 @@ export interface FlowRoutineCard {
   upcomingRuns: number[]
   /** The steps of the newest run that has any, oldest first. */
   steps: FlowStep[]
+  /** The agents that work this card, the routine's own bot first (card K14). */
+  lanes: FlowLane[]
 }
 
 export interface FlowCanvas {

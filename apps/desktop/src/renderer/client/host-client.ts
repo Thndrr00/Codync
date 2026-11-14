@@ -132,6 +132,8 @@ export type HostEvent =
   | { type: 'viewState'; view: string; rev: number; state: Record<string, unknown>; by: string }
   /** The agent invoked one of a view's named actions: the screen showing it follows. */
   | { type: 'viewAction'; view: string; action: string; arguments: Record<string, unknown>; rev: number }
+  /** A host-served mini-app page asked for one of its granted Codync actions (card K15). */
+  | { type: 'webMcpAction'; action: string; arguments: Record<string, unknown>; botId: string; slug: string }
   | { type: 'whatsapp'; whatsapp: import('@shared/models').WhatsAppState }
   | { type: 'resync' }
   /** An event this app version couldn't read (host newer/older than the app). */
@@ -223,6 +225,12 @@ export function parseEvent(line: string): HostEvent | null {
       return typeof raw.view === 'string' && typeof raw.action === 'string'
         ? { type, view: raw.view, action: raw.action, arguments: args, rev: typeof raw.rev === 'number' ? raw.rev : 0 }
         : { type: 'undecodable', kind: 'viewAction' }
+    }
+    case 'webMcpAction': {
+      const args = raw.arguments && typeof raw.arguments === 'object' ? (raw.arguments as Record<string, unknown>) : {}
+      return typeof raw.action === 'string' && typeof raw.botId === 'string' && typeof raw.slug === 'string'
+        ? { type, action: raw.action, arguments: args, botId: raw.botId, slug: raw.slug }
+        : { type: 'undecodable', kind: 'webMcpAction' }
     }
     case 'thread': {
       const thread = raw.thread as import('@shared/models').ThreadSummary | null | undefined

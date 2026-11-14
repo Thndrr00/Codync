@@ -113,6 +113,9 @@ const LOCAL_ONLY: &[&str] = &[
     "networkRecover",
     // Who may write to this computer's bots is decided at the computer, like who is in.
     "setNetworkRules",
+    // Which Codync panels a host-served page may open is decided at the computer.
+    "webMcpState",
+    "setWebMcpGrant",
 ];
 const SCREEN: &[&str] = &[
     "screenPrepare",

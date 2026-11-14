@@ -108,6 +108,20 @@ everyone. Their bots get the shared connectors and their own. The owner can stil
 the computer. Removing a person gives their bots, chats, connectors and devices back to the owner
 without deleting anything. See [Connectors and skills](/docs/connectors-and-skills#people-and-shared-connectors).
 
+## Apps built by bots
+
+A bot can build a small web app that runs in its own page on your computer. That page can read and
+write its own collections and message its bot, and nothing else. It can also ask Codync to open one of
+three panels — a bot chat, one of its artifacts, or a voice call — but only after you turn that action
+on under **Browser actions** in the app's panel, and only while the app is open. A page never receives
+keys, file paths, other host calls or your messages. Turning an action off takes effect at once.
+
+## Inspector in development builds
+
+Unpackaged development builds of the desktop app include an **Inspector** (⌘/Ctrl + Shift + .) that lists
+recent host events, running turns and view state. It is for diagnosing a malformed event, redacts
+credentials, prompts and file paths before showing anything, and is not part of packaged releases.
+
 ## Removing your data
 
 Delete a bot to remove its conversation. To remove everything from a computer, see "Uninstalling" in [Updates](/docs/updates). On the iPhone, **Start over** on the **Settings** tab signs out and forgets every computer; your computers keep their bots and chats. Deleting the iPhone app removes its cache.

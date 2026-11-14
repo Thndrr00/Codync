@@ -187,6 +187,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::views::METHODS.contains(&method) {
         return crate::views::api_call(hub, caller, method, &b).await;
     }
+    if crate::webmcp::METHODS.contains(&method) {
+        return crate::webmcp::api(hub, method, &b);
+    }
     if matches!(method, "listComputerActivity" | "exportComputerActivity") {
         return computer_activity::read(hub, method, &b);
     }

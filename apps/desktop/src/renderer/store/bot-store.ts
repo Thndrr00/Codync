@@ -44,6 +44,7 @@ import type { ServerSettings } from './bot-mirror'
 import { DocumentsStore } from './documents-store'
 import type { VoiceTranscript } from '../lib/voice-transcript'
 import { createAppShareLink } from '../lib/app-links'
+import { normalizeActions, type WebMcpAction } from '@shared/webmcp'
 import { filesToResend, type OutgoingFile } from './outgoing-files.ts'
 
 export { builtInBackendName, type Connection, type ServerSettings } from './bot-mirror'
@@ -828,6 +829,17 @@ export class BotStore extends BotSync {
 
   async revokeAppLink(botId: string, slug: string, token: string): Promise<void> {
     await (await this.ready()).call('revokeAppLink', { botId, slug, token })
+  }
+
+  /** What a host-served mini-app page may ask Codync to do (card K15). */
+  async webMcpState(botId: string, slug: string): Promise<WebMcpAction[]> {
+    const answer = await (await this.ready()).call<{ actions?: unknown }>('webMcpState', { botId, slug })
+    return normalizeActions(answer.actions)
+  }
+
+  /** Turns the app's declared actions on or off; the whole list is replaced. */
+  async setWebMcpGrant(botId: string, slug: string, actions: string[]): Promise<void> {
+    await (await this.ready()).call('setWebMcpGrant', { botId, slug, actions })
   }
 
   async deleteBotApp(botId: string, slug: string): Promise<void> {

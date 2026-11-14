@@ -474,6 +474,40 @@ async fn a_canvas_shows_the_flow_on_every_bot_it_passes_through() {
 }
 
 #[tokio::test]
+async fn two_agents_work_one_card_in_their_own_lanes_across_a_reload() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": "a", "toBotId": "b"})).await.unwrap();
+    f.link(&r, "b", "c", "Translate it");
+    execute(f.hub.clone(), f.start(&r, "run1", Root::Replied("Seven items today".into()))).await;
+
+    // Both lanes come from saved links and steps, so a fresh canvas (a reload) shows them again.
+    for _ in 0..2 {
+        let canvas = f.call("routineFlowCanvas", json!({"botId": "a"})).await.unwrap();
+        let card = &canvas["routines"][0];
+        let lanes = card["lanes"].as_array().unwrap();
+        assert_eq!(lanes.iter().map(|lane| lane["botId"].as_str().unwrap()).collect::<Vec<_>>(), ["a", "b", "c"]);
+        assert_eq!(lanes[0]["depth"], 0);
+        assert_eq!(lanes[1]["depth"], 1);
+        assert_eq!(lanes[2]["depth"], 2);
+        assert!(lanes.iter().all(|lane| lane["status"] == "succeeded"), "{lanes:?}");
+        assert_eq!(lanes[0]["name"], "a");
+    }
+
+    // Another bot's canvas shows the same card with the same lanes, in the same order.
+    let through_b = f.call("routineFlowCanvas", json!({"botId": "b"})).await.unwrap();
+    assert_eq!(
+        through_b["routines"][0]["lanes"],
+        json!([
+            {"botId": "a", "name": "a", "depth": 0, "status": "succeeded"},
+            {"botId": "b", "name": "b", "depth": 1, "status": "succeeded"},
+            {"botId": "c", "name": "c", "depth": 2, "status": "succeeded"},
+        ])
+    );
+    f.shutdown().await;
+}
+
+#[tokio::test]
 async fn changes_stamp_a_rev_and_reach_the_event_stream_and_catch_up() {
     let f = Fixture::new();
     let r = f.routine("a");

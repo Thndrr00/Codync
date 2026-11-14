@@ -53,6 +53,7 @@ Source review, a passing build, local integration tests and production acceptanc
 - [File attachments](features/file-attachments.md)
 - [Artifacts and the Library](features/artifacts.md)
 - [Declarative UI and shared view state](features/declarative-ui.md) (AG-UI cards K3 and K4: forms in the chat, and the agent acting on the view you have open)
+- [Inspector and WebMCP](features/inspector-webmcp.md) (a development-only event panel, and the declared actions a host-served mini-app may ask for)
 - [Remote screen](features/remote-screen.md) and [computer use](features/computer-use.md)
 - [Computer identity and list ordering](features/computer-order.md)
 - [Notch island (desktop)](features/notch-island.md)

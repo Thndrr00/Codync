@@ -73,6 +73,7 @@ mod update;
 mod usage;
 mod views;
 mod voice;
+mod webmcp;
 mod whatsapp;
 
 use agent::backends;

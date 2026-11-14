@@ -50,6 +50,7 @@ import { FormSheet } from '../marketplace/pieces'
 import { CallView } from '../call/CallView'
 import { MacChatButton } from './MacChatButton'
 import { ArtifactView } from '../library/ArtifactView'
+import { useWebMcpAction } from './use-web-mcp-action'
 import { KofiInviteCard } from './KofiInvite'
 import { useKofiInviteAt } from '../../lib/use-kofi-invite'
 import './thread.css'
@@ -195,6 +196,13 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     setActiveArtifact(id)
     setCompactDetails(false)
   }, [])
+  // Card K15: a granted page action shows this bot's artifact or starts its call.
+  useWebMcpAction(store, botId, { onArtifact: openArtifact, onCall: () => setCalling(true) })
+  const loadWebActions = useCallback((slug: string) => store.webMcpState(botId, slug), [store, botId])
+  const saveWebActions = useCallback(
+    (slug: string, actions: string[]) => store.setWebMcpGrant(botId, slug, actions),
+    [store, botId],
+  )
   const openIslandMemory = useCallback(() => { setDetailsTab('memory'); setShowSettings(true); setCompactDetails(!wide) }, [wide])
   const openIslandOperation = useCallback((panel: 'trace' | 'computer' | 'documents', documentId?: string) => {
     if (panel === 'trace') { setShowTrace(true); return }
@@ -385,6 +393,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         onRevokeShareLink={async (slug, token) => {
           await store.revokeAppLink(botId, slug, token)
         }}
+        onLoadActions={loadWebActions}
+        onSetActions={saveWebActions}
       />
     </div>
   )

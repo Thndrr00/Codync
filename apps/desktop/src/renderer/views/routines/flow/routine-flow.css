@@ -246,6 +246,40 @@
 .flow-node-foot {
   min-width: 0;
 }
+/* The agents that work one card, one lane each (card K14); no border, the tint marks the pick. */
+.flow-lanes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.flow-lane {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 110px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(var(--text-rgb), 0.06);
+  color: var(--secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.flow-lane:hover {
+  background: rgba(var(--text-rgb), 0.11);
+}
+.flow-lane[data-selected='true'] {
+  background: color-mix(in srgb, var(--flow-tint, var(--accent)) 22%, transparent);
+  color: var(--text);
+}
+.flow-lane[data-selected='true'] svg {
+  color: var(--flow-tint, var(--accent));
+}
+.flow-lane-more {
+  align-self: center;
+}
 .flow-runs {
   display: inline-flex;
   align-items: center;

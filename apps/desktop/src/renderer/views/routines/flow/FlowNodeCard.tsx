@@ -5,7 +5,7 @@ import { Icon } from '../../../components/Icon'
 import { HStack, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
-import { routineTint, statusLabel, type FlowNode, type FlowRoutineCard, type FlowStep, type StepStatus } from '../../../lib/routine-flow.ts'
+import { routineTint, statusLabel, type FlowLane, type FlowNode, type FlowRoutineCard, type FlowStep, type StepStatus } from '../../../lib/routine-flow.ts'
 
 const STATUS_ICON: Record<StepStatus, string> = {
   running: 'arrow.triangle.2.circlepath',
@@ -84,9 +84,12 @@ interface Props {
   step: FlowStep | null
   unconnected: boolean
   selected: boolean
+  /** The lane of this card the person picked, if any (card K14). */
+  selectedLane: string | null
   connectTarget: boolean
   disabled: boolean
   onSelect: () => void
+  onSelectLane: (botId: string) => void
   onDragStart: (event: PointerEvent) => void
   onPortStart: (event: PointerEvent) => void
   onKey: (event: KeyboardEvent) => void
@@ -94,8 +97,33 @@ interface Props {
   onRun?: () => void
 }
 
-/** One node of the canvas: a routine with its week and last runs, or a bot with its latest step. */
-export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun }: Props) {
+/** One agent's lane on a shared card: who it is, and how its step of the latest run went. */
+function LaneRow({ lane, selected, onSelect }: { lane: FlowLane; selected: boolean; onSelect: () => void }) {
+  const tr = useTr()
+  return (
+    <button
+      type="button"
+      className="flow-lane"
+      data-selected={selected}
+      aria-pressed={selected}
+      title={tr(statusLabel(lane.status))}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation()
+        onSelect()
+      }}
+    >
+      <Icon name={lane.status ? STATUS_ICON[lane.status] : 'circle.dashed'} size={10} />
+      <Text size="caption" truncate>{lane.name}</Text>
+    </button>
+  )
+}
+
+/** One node of the canvas: a routine with its week, last runs and its agents' lanes, or a bot with its latest step. */
+export function FlowNodeCard({
+  node, x, y, bot, routine, step, unconnected, selected, selectedLane, connectTarget, disabled, onSelect, onSelectLane,
+  onDragStart, onPortStart, onKey, onRun,
+}: Props) {
   const tr = useTr()
   const title = node.kind === 'routine' ? (routine?.routine.name ?? '') : (bot?.name ?? tr('Unknown bot'))
   return (
@@ -151,6 +179,23 @@ export function FlowNodeCard({ node, x, y, bot, routine, step, unconnected, sele
       {node.kind === 'routine' ? (
         <>
           <WeekStrip upcoming={routine?.upcomingRuns ?? []} />
+          {routine && (routine.lanes?.length ?? 0) > 1 ? (
+            <div className="flow-lanes" role="group" aria-label={tr('Bots on this routine')}>
+              {routine.lanes.slice(0, 3).map((lane) => (
+                <LaneRow
+                  key={lane.botId}
+                  lane={lane}
+                  selected={selectedLane === lane.botId}
+                  onSelect={() => onSelectLane(lane.botId)}
+                />
+              ))}
+              {routine.lanes.length > 3 ? (
+                <Text size="caption" tone="secondary" className="flow-lane-more">
+                  +{routine.lanes.length - 3}
+                </Text>
+              ) : null}
+            </div>
+          ) : null}
           <HStack gap={8} align="center" className="flow-node-foot">
             <RunDots runs={routine?.recentRuns ?? []} />
             <Text size="caption" tone="secondary" truncate>

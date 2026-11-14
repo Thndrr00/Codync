@@ -32,7 +32,9 @@ pub fn tool() -> Value {
             invokes one of its actions; the host checks the action against the view's declared list and performs it \
             through the same host API the apps use, so the person's screen updates and the database is never changed \
             from the model. Views: chat:<botId> and routine:<botId> (your own bot only). Actions: chat open_thread \
-            {rootId}; routine create_routine {name, instruction, schedule} and select_routine {routineId}. A schedule is \
+            {rootId}; routine create_routine {name, instruction, schedule}, select_routine {routineId} and focus_lane \
+            {routineId, botId}. A card of the routine canvas has one lane per bot its flow reaches: use focus_lane to \
+            show your lane of a card two agents work, and the other agent keeps its own. A schedule is \
             the routine editor's draft: {kind: cron, calendarStyle: daily|weekdays|weekly|monthly|yearly|hours, hour, \
             minute, weekday, monthDay, zone}, {kind: once, at: epoch ms} or {kind: interval, amount, unit}. Use it when \
             the person says \"put a routine for Monday at 8\" while the routine canvas is open: create it there instead \

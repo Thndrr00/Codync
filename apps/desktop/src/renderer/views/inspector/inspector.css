@@ -1,0 +1,92 @@
+/* The development Inspector (card K15): a quiet, monospaced side panel over the chat. */
+.inspector {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2000;
+  width: min(420px, 46vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: var(--shadow-m);
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text);
+}
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inspector-head strong {
+  font-size: 12px;
+}
+.inspector-head button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.inspector-dev {
+  color: var(--attention, var(--secondary));
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+.inspector section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inspector h4 {
+  margin: 0;
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.inspector-empty,
+.inspector-dim {
+  color: var(--secondary);
+}
+.inspector-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.inspector-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-events {
+  min-height: 0;
+}
+.inspector details {
+  min-width: 0;
+}
+.inspector summary {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector pre {
+  margin: 4px 0 6px;
+  padding: 6px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--radius-s);
+  background: var(--group);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

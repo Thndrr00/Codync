@@ -19,16 +19,18 @@ impl Fixture {
         let dir = std::env::temp_dir().join(format!("codync-views-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let store = Store::open(&dir.join("test.db")).unwrap();
-        let cwd = dir.join("a");
-        std::fs::create_dir_all(&cwd).unwrap();
-        store
-            .save_bot(
-                &serde_json::from_value::<BotConfig>(json!({
-                    "id": "a", "name": "A", "backend": "fixture", "cwd": cwd, "notify": false,
-                }))
-                .unwrap(),
-            )
-            .unwrap();
+        for id in ["a", "b"] {
+            let cwd = dir.join(id);
+            std::fs::create_dir_all(&cwd).unwrap();
+            store
+                .save_bot(
+                    &serde_json::from_value::<BotConfig>(json!({
+                        "id": id, "name": id.to_uppercase(), "backend": "fixture", "cwd": cwd, "notify": false,
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+        }
         let identity = crate::remote::identity::Identity::load_or_create(&dir).unwrap();
         let hub = Hub::new(store, "test-host".into(), identity, "test-token".into(), 19223);
         Self { hub, dir }
@@ -146,5 +148,100 @@ async fn the_agent_creates_a_routine_through_the_view_action() {
     let read = f.tool(json!({"op": "read", "view": "routine:a"})).unwrap();
     assert_eq!(read["state"]["routineId"], id);
     assert!(read["actions"].as_array().unwrap().iter().any(|action| action.as_str() == Some("create_routine")));
+    f.shutdown();
+}
+
+#[tokio::test]
+async fn two_agents_lanes_merge_and_survive_a_conflict() {
+    let f = Fixture::new();
+    let routine = "shared".to_owned();
+    let path = |bot: &str| format!("/lanes/{routine}/{bot}");
+
+    // Each agent writes its own lane; the second write sees the first one's lane.
+    let first = f
+        .call(
+            "patchViewState",
+            json!({"view": "routine:a", "baseRev": 0, "ops": [{"op": "set", "path": path("a"), "value": {"seen": true}}]}),
+        )
+        .await
+        .unwrap();
+    let second = f
+        .call(
+            "patchViewState",
+            json!({"view": "routine:a", "baseRev": first["rev"], "ops": [{"op": "set", "path": path("b"), "value": {"seen": true}}]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second["state"]["lanes"][routine.as_str()]["a"], json!({"seen": true}));
+    assert_eq!(second["state"]["lanes"][routine.as_str()]["b"], json!({"seen": true}));
+
+    // A stale writer is told the version and keeps both lanes; re-sending its delta adds nothing.
+    let stale = f
+        .call(
+            "patchViewState",
+            json!({"view": "routine:a", "baseRev": 0, "ops": [{"op": "set", "path": path("a"), "value": {"seen": false}}]}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stale["conflict"], true);
+    assert_eq!(stale["state"]["lanes"][routine.as_str()]["a"], json!({"seen": true}));
+    assert_eq!(stale["state"]["lanes"][routine.as_str()]["b"], json!({"seen": true}));
+
+    // A new client reads the same two lanes.
+    let read = f.call("readViewState", json!({"view": "routine:a"})).await.unwrap();
+    assert_eq!(read["rev"], second["rev"]);
+    assert_eq!(read["state"]["lanes"][routine.as_str()]["b"], json!({"seen": true}));
+    f.shutdown();
+}
+
+#[tokio::test]
+async fn an_agent_focuses_its_lane_and_not_another_cards() {
+    let f = Fixture::new();
+    let routine = f
+        .tool(json!({
+            "op": "act", "view": "routine:a", "action": "create_routine",
+            "arguments": {"name": "Shared review", "instruction": "Write it",
+                "triggers": [{"type": "interval", "seconds": 86400}]}
+        }))
+        .unwrap()["result"]["routineId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    f.hub
+        .store
+        .flow_add_link(
+            &crate::store::FlowLink {
+                id: uuid::Uuid::new_v4().to_string(),
+                routine_id: routine.clone(),
+                owner_bot_id: "a".into(),
+                from_bot_id: "a".into(),
+                to_bot_id: "b".into(),
+                instruction: String::new(),
+                model: None,
+                model_options: std::collections::BTreeMap::new(),
+                created_at: 1,
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+
+    let answer = f
+        .tool(json!({"op": "act", "view": "routine:a", "action": "focus_lane",
+                     "arguments": {"routineId": routine, "botId": "b"}}))
+        .unwrap();
+    assert_eq!(answer["state"]["selected"], json!({"kind": "lane", "routineId": routine, "botId": "b"}));
+    assert_eq!(answer["result"]["botId"], "b");
+
+    // A bot that doesn't work the card is refused, and so is a routine off the canvas.
+    let wrong_lane = f
+        .tool(json!({"op": "act", "view": "routine:a", "action": "focus_lane",
+                     "arguments": {"routineId": routine, "botId": "missing"}}))
+        .unwrap_err();
+    assert!(wrong_lane.to_string().contains("its lanes are a, b"), "{wrong_lane:#}");
+    let off_canvas = f
+        .tool(json!({"op": "act", "view": "routine:a", "action": "focus_lane",
+                     "arguments": {"routineId": "missing", "botId": "a"}}))
+        .unwrap_err();
+    assert!(off_canvas.to_string().contains("isn't on this canvas"), "{off_canvas:#}");
     f.shutdown();
 }

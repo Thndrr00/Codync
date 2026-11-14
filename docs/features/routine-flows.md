@@ -16,6 +16,31 @@ the selected node. Ask the bot for a routine while the canvas is open ("put a ro
 and it invokes the canvas's `create_routine` action, so the host's routine API creates and validates the
 routine and the card appears selected on the canvas.
 
+### Shared cards and lanes (card K14)
+
+Two or more bots can work the same card. When a routine's links reach another bot, that bot is a
+**lane** of the card, and the card keeps one lane per participating bot. The host derives the lanes from
+the saved links and the latest run's steps (`lanes` below), so every client shows the same two (or more)
+lanes and a reload shows them again; nothing about a lane lives only in one window.
+
+The person can pick a lane on the routine card, which reports `/selected {kind:"lane", routineId, botId}`
+through the K4 view state, and an agent can ask for its own lane with the canvas's `focus_lane` action.
+Both agents keep their lanes: a lane report is just a scoped `set` on the same view document, and a
+conflict (two windows or an agent wrote first) re-applies the delta to the current version rather than
+dropping it. The generated cards stay consistent because both lanes render through the same routine card,
+step list and status vocabulary — no agent-specific UI; a block either agent declares goes through the
+same validated K3 schema and the same card renderer. The iPhone app has no flow canvas yet, so its
+routine screen lists the same steps without lanes; Android and the terminal list them under the routine.
+
+**OpenIntelligentUI verdict (contrast only, no dependency).** Its generative-UI model lets a model compose
+arbitrary layout at run time, which is stronger for one-off, exploratory boards: it can invent a shape
+nobody built. It is weaker where Codync needs guarantees: an arbitrary tree has no validated schema, so
+the host cannot bound what renders, what it costs or which actions a page declares; two agents can
+produce visually inconsistent cards; and every new agent needs the whole layout vocabulary in its prompt.
+Codync keeps its validated declarative blocks (K3) and the fixed routine card (lanes, status chips, week
+strip), where the host checks every field, both agents produce the same card, and the same renderer
+exists on desktop and iPhone. Read it as a reference for freer composition, not as a renderer to add.
+
 ## Model
 
 | Thing | Fields |
@@ -98,7 +123,11 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
                  "createdAt": 0, "updatedAt": 0 },
     "recentRuns": [ /* the newest 10 routine runs, newest first, as in `routines` */ ],
     "upcomingRuns": [1730000000000],
-    "steps": [ /* the steps of the routine's newest run that has any, oldest first */ ]
+    "steps": [ /* the steps of the routine's newest run that has any, oldest first */ ],
+    "lanes": [
+      { "botId": "…", "name": "…", "depth": 0, "status": "succeeded" },
+      { "botId": "…", "name": "…", "depth": 1, "status": "running" }
+    ]
   }],
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
   "positions": [ { "nodeKey": "routine:…", "x": 0.0, "y": 0.0 } ],
@@ -107,7 +136,9 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 ```
 
 `upcomingRuns` are the next fire times in the next 7 days (at most 400; empty while paused or for a webhook or
-watch routine). All times are Unix milliseconds.
+watch routine). All times are Unix milliseconds. `lanes` lists every bot the routine's flow reaches, the routine's
+own bot first and then by depth, with the status of that bot's step in the newest run (`null` before it has one).
+A single-bot routine has one lane; the card only draws the lane strip when there are two or more.
 
 **Event**: `{"type": "routineFlow", "rev": N, "botIds": ["…"]}` — the canvases of these bots changed (a link, a
 step, a position, a placement); fetch `routineFlowCanvas` again. The event carries no data on purpose: a client
@@ -137,7 +168,7 @@ ignore the new method names and `routineFlow` events (the TUI and apps skip unkn
 
 ## Screens
 
-In each client, a bot's routines screen has a **List | Flow** selector. Flow shows the canvas of that bot: routine and bot nodes, a fixed dashed edge from each routine to its own bot, link edges, saved positions (nodes never moved sit in automatic columns by depth), and each bot's latest step status (icon and words, never colour alone). A **list** of the same flow is the keyboard and screen-reader equivalent (and the phone's default with TalkBack on or on narrow screens). Both open the same inspector: a routine (pause/resume, test, latest steps, run history), a bot (hand its reply on to…, remove if placed by hand) or a link (instruction, model and its options, disconnect). States: loading, no routines, not connected, no runs yet, error with retry, offline (read-only) and a host without the methods (the canvas says to update Codync there). The desktop rail's **Bot canvas** button opens the selected bot's flow in the same large sheet.
+In each client, a bot's routines screen has a **List | Flow** selector. Flow shows the canvas of that bot: routine and bot nodes, a fixed dashed edge from each routine to its own bot, link edges, saved positions (nodes never moved sit in automatic columns by depth), and each bot's latest step status (icon and words, never colour alone). A shared routine card also carries a lane chip per participating agent; picking one focuses that agent's step in the inspector. A **list** of the same flow is the keyboard and screen-reader equivalent (and the phone's default with TalkBack on or on narrow screens). Both open the same inspector: a routine (pause/resume, test, latest steps, run history), a lane (that agent's step and output), a bot (hand its reply on to…, remove if placed by hand) or a link (instruction, model and its options, disconnect). States: loading, no routines, not connected, no runs yet, error with retry, offline (read-only) and a host without the methods (the canvas says to update Codync there). The desktop rail's **Bot canvas** button opens the selected bot's flow in the same large sheet.
 
 - **Desktop** (`apps/desktop/src/renderer/views/routines/flow/`, model `lib/routine-flow.ts`, state `store/routine-flow-store.ts`): hand-written pan/zoom/drag; connect by dragging from a bot's dot onto another bot, or from the inspector. Choosing **Flow** opens the canvas in a large sheet (the details column is too narrow for a graph); the same canvas can be reopened from its expand button. A routine card shows the next seven days as seven tick columns and its newest runs as status dots, with a play button that tests the flow (disabled until a bot is linked).
 - **Android** (`RoutineFlow*.kt`, model `core/RoutineFlow.kt`): pan, pinch and node dragging; connect from the bot's detail sheet; the same week strip, run dots and play button on a routine card.

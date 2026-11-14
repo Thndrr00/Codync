@@ -8,8 +8,9 @@ use serde_json::{Value, json};
 
 /// A chat's actions: open one of its side threads.
 pub const CHAT: [&str; 1] = ["open_thread"];
-/// A routine canvas's actions: create a routine and show it, or focus one already there.
-pub const ROUTINE: [&str; 2] = ["create_routine", "select_routine"];
+/// A routine canvas's actions: create a routine and show it, focus one already there, or focus the
+/// lane of one agent working a shared card.
+pub const ROUTINE: [&str; 3] = ["create_routine", "select_routine", "focus_lane"];
 
 pub fn names(kind: Kind) -> &'static [&'static str] {
     match kind {
@@ -26,6 +27,7 @@ pub fn invoke(hub: &Hub, view: &ViewId, action: &str, args: &Value) -> Result<Va
         (Kind::Chat, "open_thread") => open_thread(hub, view, args),
         (Kind::Routine, "create_routine") => create_routine(hub, view, args),
         (Kind::Routine, "select_routine") => select_routine(hub, view, args),
+        (Kind::Routine, "focus_lane") => focus_lane(hub, view, args),
         _ => bail!("view \"{}\" has no action \"{action}\"", view.as_str()),
     }
 }
@@ -70,14 +72,29 @@ fn create_routine(hub: &Hub, view: &ViewId, args: &Value) -> Result<Value> {
     answer(hub, view, "create_routine", &announced, state, json!({"routine": routine, "routineId": id}))
 }
 
-/// Focuses a routine that's already on the canvas.
+/// Focuses a routine that's already on the canvas (its own or one its flow passes through).
 fn select_routine(hub: &Hub, view: &ViewId, args: &Value) -> Result<Value> {
     let id = text(args, "routineId")?;
-    if !hub.routines.owns(&view.bot, &id) {
-        bail!("routine \"{id}\" isn't one of this bot's: open the canvas or call list_routines");
+    if crate::routines::flow::lane_bot_ids(hub, &view.bot, &id)?.is_none() {
+        bail!("routine \"{id}\" isn't on this canvas: open the canvas or call list_routines");
     }
     let state = json!({"selected": {"kind": "routine", "id": id}});
     answer(hub, view, "select_routine", args, state, json!({"routineId": id}))
+}
+
+/// Focuses one agent's lane of a shared card: the person sees that agent's step, and both agents can
+/// ask for their own lane without hiding the other.
+fn focus_lane(hub: &Hub, view: &ViewId, args: &Value) -> Result<Value> {
+    let routine_id = text(args, "routineId")?;
+    let bot_id = text(args, "botId")?;
+    let Some(lanes) = crate::routines::flow::lane_bot_ids(hub, &view.bot, &routine_id)? else {
+        bail!("routine \"{routine_id}\" isn't on this canvas: open the canvas or call list_routines");
+    };
+    if !lanes.contains(&bot_id) {
+        bail!("bot \"{bot_id}\" doesn't work routine \"{routine_id}\": its lanes are {}", lanes.join(", "));
+    }
+    let state = json!({"selected": {"kind": "lane", "routineId": routine_id, "botId": bot_id}});
+    answer(hub, view, "focus_lane", args, state, json!({"routineId": routine_id, "botId": bot_id}))
 }
 
 /// Saves the view's new state (the agent wrote it, so it wins) and announces the action so every

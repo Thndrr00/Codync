@@ -3,6 +3,15 @@
 Cards K3 and K4 of the CopilotKit survey. Both are implemented from their public behaviour: Codync
 has no runtime dependency on A2UI, CopilotKit or `@a2ui/*` packages.
 
+## Contrast: OpenIntelligentUI (card K14; reference only, no dependency)
+
+Its generative-UI model lets a model compose arbitrary layout at run time: better for one-off,
+exploratory boards, worse for Codync's guarantees. An arbitrary tree has no validated schema, so the
+host cannot bound what renders, what it costs or which actions a page declares, and two agents can
+produce visually inconsistent cards. Codync keeps these validated blocks and the fixed routine card,
+where both agents render through the same schema and the same renderer. See
+[routine flows](routine-flows.md#shared-cards-and-lanes-card-k14) for the multi-agent canvas.
+
 | Card | Where | What |
 | --- | --- | --- |
 | K3 | `host/src/declarative/` | A bot shows a form, an approval, a table or a chart; the host checks it against Codync's own catalogue and posts it as an approval card. |
@@ -150,6 +159,7 @@ something it never offered.
 | `chat:<bot>` | `open_thread` | `{rootId}` | Opens that side thread on screen. |
 | `routine:<bot>` | `create_routine` | `{name, instruction, schedule}` or `{name, instruction, triggers}` | Creates the routine through `Routines::save` — the API behind `saveRoutine` — and focuses it on the canvas. |
 | `routine:<bot>` | `select_routine` | `{routineId}` | Focuses a routine already on the canvas. |
+| `routine:<bot>` | `focus_lane` | `{routineId, botId}` | Focuses one agent's lane of a shared routine card (card K14). |
 
 An action saves the view's next state and broadcasts:
 
@@ -180,8 +190,9 @@ unknown view, kind or action is refused with what the view declares.
 
 - **Desktop**: `BotSync.reportView(view, ops)` patches with the last rev it saw and swallows failures
   (an older host has no views). `ThreadView` reports `chat:<botId>` (`open`, `thread`) and handles
-  `open_thread`; `RoutineFlowView` reports `routine:<botId>` (`open`, `mode`, `selected`) and follows
-  `create_routine`/`select_routine` by reloading the canvas and selecting the node.
+  `open_thread`; `RoutineFlowView` reports `routine:<botId>` (`open`, `mode`, `selected`, including
+  a lane) and follows `create_routine`/`select_routine`/`focus_lane` by reloading the canvas and
+  selecting the node or lane.
 - **iPhone**: `ThreadView` reports `chat:<botId>` and opens the thread an `open_thread` action names.
 - **Android: phase 2**, like block rendering. It neither reports view state nor handles actions yet;
   the host treats a view with no recent delta as empty.

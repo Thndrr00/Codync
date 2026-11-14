@@ -266,14 +266,18 @@ extension BotStore {
     }
 
     /// Tells the host what this view shows (`chat:<botId>`, `routine:<botId>`, card K4), so the bot
-    /// can act on it. Best effort: an older host has no views.
+    /// can act on it. A conflict (another window or an agent's action wrote first) re-applies the
+    /// same delta to the current version, so two agents' lanes both stay. Best effort otherwise.
     func reportView(_ view: String, _ ops: [[String: JSONValue]]) {
         let previous = viewQueues[view]
         viewQueues[view] = Task {
             _ = await previous?.value
             guard let client, connection == .online else { return }
             do {
-                let answer = try await client.patchViewState(view: view, baseRev: viewRevs[view] ?? 0, ops: ops)
+                var answer = try await client.patchViewState(view: view, baseRev: viewRevs[view] ?? 0, ops: ops)
+                if answer.conflict == true {
+                    answer = try await client.patchViewState(view: view, baseRev: answer.rev ?? 0, ops: ops)
+                }
                 if let rev = answer.rev { viewRevs[view] = rev }
             } catch {
                 // Reporting what is on screen never interrupts the conversation.
