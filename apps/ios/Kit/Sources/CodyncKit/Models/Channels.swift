@@ -158,8 +158,10 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
     public var bot: String?
     /// Chats and people allowed to write; empty means anyone.
     public var allowed: [String]
+    /// Answer each request with a "Working on it…" line (missing: on). Off sends only the answer.
+    public var workingMessage: Bool
 
-    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed }
+    private enum CodingKeys: String, CodingKey { case state, qr, pairCode, me, name, error, bot, allowed, workingMessage }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -171,6 +173,7 @@ public struct WhatsAppLink: Decodable, Equatable, Sendable {
         error = try c.decodeIfPresent(String.self, forKey: .error)
         bot = try c.decodeIfPresent(String.self, forKey: .bot)
         allowed = try c.decodeIfPresent([String].self, forKey: .allowed) ?? []
+        workingMessage = try c.decodeIfPresent(Bool.self, forKey: .workingMessage) ?? true
     }
 }
 

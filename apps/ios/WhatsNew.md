@@ -6,6 +6,22 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.47.0
+
+### zh-Hant
+- 可以把訊息置頂：長按一則訊息再點「置頂」。聊天標題列的置頂按鈕列出已置頂的訊息，點一則就跳到它；誰都可以取消置頂。每個聊天最多 50 則，bot 也會置頂重要的訊息。
+- 直接用 `/image` 和 `/video` 產生圖片與影片：選模型、比例、長度與解析度，還能要求透明背景。成品會出現在聊天裡,影片當場播放。
+- 從側邊欄的選單可以「靜音」一個 bot：它的通知停下來，需要你時仍會通知；選「取消靜音」回到電腦的設定。
+- bot 工作時傳的訊息預設會併入目前的回覆；在電腦的「傳送」設定關掉，訊息就會排隊。
+- WhatsApp 每個訊息都會收到 👀 反應，並可關掉「Trabajando en ello…」這行，只收回答。
+
+### en-US
+- Pin a message: touch and hold it, then Pin. The pin button in the chat header lists the chat's pins and a pin opens its message; anyone can unpin. A chat keeps up to 50 pins, and bots pin important messages too.
+- Make a picture or clip with `/image` and `/video`: pick the model, aspect, length and resolution, and ask for a transparent background. The result shows in the chat and a clip plays in place.
+- Mute a bot from its menu in the sidebar: its notifications stop, and it still reaches you when it needs you. Unmute gives it the computer's choice again.
+- A message you send while a bot works now joins its running turn; turn it off in the computer's Sending setting to keep messages queued.
+- WhatsApp reacts with a 👀 to each message, and a switch turns off the "Trabajando en ello…" line so only the answer comes.
+
 ## 2.39.0
 
 ### zh-Hant

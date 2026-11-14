@@ -184,6 +184,10 @@ private struct ComputerRows: View {
                 Button { networkSheet = true } label: { RowLabel("Network", image: .codyncNetwork, chevron: true) }
                     .buttonStyle(.plain)
             }
+            Toggle(isOn: Binding(get: { store.steerWhileWorking }, set: { store.setSteerWhileWorking($0) })) {
+                RowLabel("Steer while working", systemImage: "arrow.turn.down.right")
+            }
+            .toggleStyle(.codync)
         }
         ComputerNotificationsRow(store: store)
         ComputerConnectionRow(store: store)

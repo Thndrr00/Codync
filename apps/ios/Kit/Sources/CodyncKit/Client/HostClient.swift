@@ -169,6 +169,14 @@ public extension HostClient {
         let _: Empty = try await call("installHostUpdate")
     }
 
+    /// Whether a message to a working bot joins its turn; false keeps messages waiting for it.
+    @discardableResult
+    func setSteerWhileWorking(_ on: Bool) async throws -> Bool {
+        struct Body: Encodable { var enabled: Bool }
+        struct Res: Decodable { var steerWhileWorking: Bool }
+        return try await call("setSteerWhileWorking", Body(enabled: on)).steerWhileWorking
+    }
+
     /// The computer signs `claim` for the account this phone paired from (`Hello.joinAccount`), as JSON to
     /// pass on to `CloudClient.completeClaim` as it came.
     func joinAccount(_ claim: CloudClaim) async throws -> Data {
@@ -314,6 +322,21 @@ public extension HostClient {
         struct Res: Decodable { var entry: Entry }
         let res: Res = try await call("react", ["entryId": entryId, "emoji": emoji])
         return res.entry
+    }
+
+    /// Pins a chat message into the chat's pin list, or takes it out; returns the message's new copy.
+    func setPinned(botId: String, messageId: String, pinned: Bool) async throws -> Entry {
+        struct Body: Encodable { var botId: String; var messageId: String; var pinned: Bool }
+        struct Res: Decodable { var entry: Entry }
+        let res: Res = try await call("pinMessage", Body(botId: botId, messageId: messageId, pinned: pinned))
+        return res.entry
+    }
+
+    /// The bot's pinned messages, newest first.
+    func pinnedMessages(botId: String) async throws -> [PinnedMessage] {
+        struct Res: Decodable { var pins: [PinnedMessage] }
+        let res: Res = try await call("pinnedMessages", ["botId": botId])
+        return res.pins
     }
 
     /// `replyTo`: the chat message this one quotes.

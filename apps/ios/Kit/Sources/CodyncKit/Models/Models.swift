@@ -255,6 +255,8 @@ public struct Hello: Codable, Sendable {
     public var latestVersion: String?
     /// This phone paired without the computer joining its account: it calls `joinAccount` to finish (older hosts: nil).
     public var joinAccount: Bool?
+    /// A message to a working bot joins its turn (missing from older hosts: on); off keeps it queued.
+    public var steerWhileWorking: Bool?
 }
 
 public struct RecentWorkspace: Codable, Sendable, Identifiable {

@@ -16,6 +16,8 @@ public struct ThreadView: View {
     /// An open thread, and whether the thread list is showing.
     @State var openThread: ThreadTarget?
     @State var showingThreads = false
+    /// Whether the chat's pin list is showing.
+    @State var showingPins = false
     @State var botChat: BotChatTarget?
     @State var openArtifact: ArtifactTarget?
     @State var openCall: Entry?
@@ -84,6 +86,9 @@ public struct ThreadView: View {
             .codyncSheet(item: $openThread) { ThreadSheet(botId: botId, root: $0.root) }
             .codyncSheet(isPresented: $showingThreads) {
                 ThreadsView(botId: botId) { root in openThread = ThreadTarget(botId: botId, root: root) }
+            }
+            .codyncSheet(isPresented: $showingPins) {
+                PinsSheet(botId: botId) { root in openThread = ThreadTarget(botId: botId, root: root) }
             }
             .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
             .codyncSheet(item: $openArtifact) { ArtifactView(target: $0) }
@@ -447,6 +452,7 @@ extension ThreadView {
                 if model.screen != nil {
                     ToolbarItem(placement: .topBarTrailing) { computerButton }
                 }
+                ToolbarItem(placement: .topBarTrailing) { pinButton }
             }
     }
 
@@ -458,6 +464,11 @@ extension ThreadView {
 
     private func openDetails() {
         if bot?.isGroup == true { editingGroup = true } else { details = DetailsRequest() }
+    }
+
+    /// Opens the chat's pinned messages.
+    private var pinButton: some View {
+        Button(L10n.tr("Pinned messages"), systemImage: "pin") { showingPins = true }
     }
 
     /// Opens the computer's screen; pulses while this bot is operating it (watch, then take over).

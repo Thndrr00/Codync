@@ -10,7 +10,11 @@ struct FileDownloadCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if file.showsAsImage { preview }
+            if file.showsAsVideo || entry.data.media?.isVideo == true {
+                AttachmentVideo(file: file, entryId: entry.id)
+            } else if file.showsAsImage {
+                preview
+            }
             row
         }
         .padding(14)

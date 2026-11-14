@@ -400,6 +400,9 @@ struct BotListView: View {
                     ? MenuItem("Edit group", icon: "person.2") { editingGroup = GroupTarget(computerId: item.ref.computerId, group: bot) }
                     : MenuItem("Edit profile", icon: "pencil") { editing = EditTarget(computerId: item.ref.computerId, draft: BotDraft(bot)) },
                 MenuItem("Mark as read", icon: "checkmark.message") { store.markAllRead(bot.id) },
+                MenuItem(bot.notify == false ? "Unmute agent" : "Mute agent", icon: bot.notify == false ? "bell" : "bell.slash") {
+                    store.setMuted(bot, bot.notify != false)
+                },
             ]
             if !bot.lead && !bot.isGroup && store.supportsLeadChoice {
                 items.append(MenuItem("Make lead agent", icon: "star") { store.setLead(bot) })

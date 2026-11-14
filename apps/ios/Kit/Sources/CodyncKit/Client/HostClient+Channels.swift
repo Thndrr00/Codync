@@ -127,4 +127,11 @@ public extension HostClient {
         let answer: Answer = try await call("whatsappSetAllowed", Body(jid: jid, allowed: allowed))
         return answer.allowed
     }
+
+    /// Whether a request gets the "Working on it…" line before its answer; false sends only the answer.
+    func whatsappSetWorkingMessage(_ on: Bool) async throws -> Bool {
+        struct Body: Encodable { var enabled: Bool }
+        struct Answer: Decodable { var workingMessage: Bool }
+        return try await call("whatsappSetWorkingMessage", Body(enabled: on)).workingMessage
+    }
 }

@@ -38,6 +38,8 @@ struct Composer: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @FocusState private var focused: Bool
     @State private var dictation = Dictation()
+    /// The image or video picker: which command opened it.
+    @State private var media: MediaKind?
     /// One line of the field's text, following Dynamic Type: the send button centers on the last line.
     @ScaledMetric(relativeTo: .body) private var lineHeight: CGFloat = 22
 
@@ -152,6 +154,12 @@ struct Composer: View {
                 guard !items.isEmpty else { return }
                 photoItems = []
                 Task { await addPhotos(items) }
+            }
+            .codyncSheet(item: $media) { kind in
+                MediaSheet(botId: botId, kind: kind, draft: draft) { message in
+                    draft = message
+                    focused = true
+                }
             }
         .padding(.horizontal, 16)
         .padding(.top, 6)
@@ -389,6 +397,8 @@ struct Composer: View {
             draft = ""
         case .skill(let id):
             draft = "/\(id) "
+        case .media(let kind):
+            media = kind
         }
         focused = true
     }

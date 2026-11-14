@@ -10,6 +10,12 @@ private let installed = [("pdf", "PDF"), ("code-review", "Code Review"), ("xlsx"
     InstalledSkill(id: $0.0, name: $0.1, description: "", source: "custom", path: "")
 }
 
+/// The tool commands every bot lists after its skills.
+private let tools = ["image", "video", "n8n", "comfy"]
+
+/// A group has no agent of its own, so it lists the note-only tools.
+private let groupTools = ["n8n", "comfy"]
+
 @Test func aLeadingSlashOpensTheListUntilTheNameEnds() {
     #expect(SlashCommands.query("/") == "")
     #expect(SlashCommands.query("/pd") == "pd")
@@ -19,12 +25,12 @@ private let installed = [("pdf", "PDF"), ("code-review", "Code Review"), ("xlsx"
 
 @Test func builtInCommandsComeFirstThenOnlyTheBotsOwnSkills() throws {
     let offered = try bot(#"{"id":"b","skills":["pdf","code-review"],"fastModeSupport":"offered"}"#)
-    #expect(SlashCommands.list(for: offered, query: "", skills: installed).map(\.name) == ["fast", "pdf", "code-review"])
+    #expect(SlashCommands.list(for: offered, query: "", skills: installed).map(\.name) == ["fast", "pdf", "code-review"] + tools)
     #expect(SlashCommands.list(for: offered, query: "review", skills: installed).map(\.name) == ["code-review"])
     #expect(SlashCommands.list(for: offered, query: "new", skills: installed).isEmpty, "a new session is in the bot's menu")
     #expect(SlashCommands.list(for: try bot(#"{"id":"b","skills":["pdf"]}"#), query: "xl", skills: installed).isEmpty)
-    #expect(SlashCommands.list(for: try bot(#"{"id":"b"}"#), query: "", skills: []).map(\.name) == ["fast"], "offered until the agent says otherwise")
-    #expect(SlashCommands.list(for: try bot(#"{"id":"b","fastModeSupport":"unsupported"}"#), query: "", skills: []).isEmpty, "no Fast mode on offer")
+    #expect(SlashCommands.list(for: try bot(#"{"id":"b"}"#), query: "", skills: []).map(\.name) == ["fast"] + tools, "offered until the agent says otherwise")
+    #expect(SlashCommands.list(for: try bot(#"{"id":"b","fastModeSupport":"unsupported"}"#), query: "", skills: []).map(\.name) == tools, "no Fast mode on offer")
 }
 
 @Test func aGroupListsItsMembersFastModeAndTheirSkills() throws {
@@ -33,12 +39,12 @@ private let installed = [("pdf", "PDF"), ("code-review", "Code Review"), ("xlsx"
     let b = try bot(#"{"id":"b","name":"Bo","skills":["xlsx","pdf"],"fastModeSupport":"offered"}"#)
     let none = try bot(#"{"id":"c","name":"Cy","fastModeSupport":"unsupported"}"#)
     let list = SlashCommands.list(for: group, members: [a, b, none], query: "", skills: installed)
-    #expect(list.map(\.name) == ["fast", "pdf", "xlsx"], "Fast mode, then every member's skills once")
+    #expect(list.map(\.name) == ["fast", "pdf", "xlsx"] + groupTools, "Fast mode, then every member's skills once")
     #expect(list.first?.detail == "Turn on for every bot here: faster replies and more usage")
     let skilledOnly = try bot(#"{"id":"d","skills":["code-review"],"fastModeSupport":"unsupported"}"#)
-    #expect(SlashCommands.list(for: group, members: [none, skilledOnly], query: "", skills: installed).map(\.name) == ["code-review"],
+    #expect(SlashCommands.list(for: group, members: [none, skilledOnly], query: "", skills: installed).map(\.name) == ["code-review"] + groupTools,
             "no member shows Fast mode: only skills")
-    #expect(SlashCommands.list(for: group, members: [none], query: "", skills: installed).isEmpty)
+    #expect(SlashCommands.list(for: group, members: [none], query: "", skills: installed).map(\.name) == groupTools)
     #expect(SlashCommands.builtIn(for: group, members: [a, b], draft: "/fast")?.action == .fast)
     #expect(SlashCommands.builtIn(for: group, members: [none], draft: "/fast") == nil)
 }
@@ -65,6 +71,18 @@ private let installed = [("pdf", "PDF"), ("code-review", "Code Review"), ("xlsx"
     #expect(SlashCommands.builtIn(for: offered, draft: "/new") == nil, "reaches the agent as typed")
     #expect(SlashCommands.builtIn(for: offered, draft: "/fast please") == nil)
     #expect(SlashCommands.builtIn(for: try bot(#"{"id":"b","fastModeSupport":"unsupported"}"#), draft: "/fast") == nil, "without Fast mode it reaches the agent")
+}
+
+@Test func aBareImageCommandOpensThePickerUnlessASkillHasItsName() throws {
+    let b = try bot(#"{"id":"b","fastModeSupport":"unsupported"}"#)
+    #expect(SlashCommands.builtIn(for: b, draft: "/image")?.action == .media(.image))
+    #expect(SlashCommands.builtIn(for: b, draft: "/video ")?.action == .media(.video))
+    #expect(SlashCommands.list(for: b, query: "imag", skills: []).map(\.name) == ["image"])
+    #expect(SlashCommands.list(for: b, query: "vid", skills: []).map(\.title) == ["Video"])
+    #expect(SlashCommands.builtIn(for: try bot(#"{"id":"b","skills":["image"]}"#), draft: "/image") == nil,
+            "the host expands a skill named image")
+    let group = try bot(#"{"id":"g","kind":"group","members":[]}"#)
+    #expect(SlashCommands.builtIn(for: group, draft: "/image") == nil, "a group has no agent")
 }
 
 @Test func aMentionStartsAfterASpaceAndAFullNameEndsIt() throws {

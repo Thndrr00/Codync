@@ -98,7 +98,12 @@ struct AttachmentList: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
             ForEach(attachments) { file in
-                if file.isImage {
+                if file.isVideo {
+                    AttachmentVideo(file: file, botId: botId)
+                        .frame(maxWidth: 220, maxHeight: 280)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .accessibilityLabel(file.name)
+                } else if file.isImage {
                     AttachmentImage(file: file, botId: botId, maxPixels: 720)
                         .frame(maxWidth: 220, maxHeight: 280)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

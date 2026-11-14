@@ -109,8 +109,14 @@ struct AuthorLabel: View {
     }
 }
 
-/// The message a reply quotes, as its first line without Markdown markers.
-struct QuoteLine: View {
+/// Pin or Unpin on a message: a pin stays at hand in the chat's pin list.
+private func pinItem(_ entry: Entry, _ model: BotStore) -> MenuItem {
+    entry.data.pinned == nil
+        ? MenuItem("Pin", icon: "pin") { model.setPinned(entry) }
+        : MenuItem("Unpin", icon: "pin.slash") { model.setPinned(entry) }
+}
+
+/// The message a reply quotes, as its first line without Markdown markers.struct QuoteLine: View {
     let text: String
 
     var body: some View {
@@ -163,6 +169,7 @@ struct UserBubble: View {
                     var items = [MenuItem("Copy", icon: "square.on.square") { Pasteboard.copy(entry.data.text) }]
                     if let reply { items.append(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply)) }
                     if let branch { items.append(MenuItem("Branch from here", icon: "arrow.triangle.branch", action: branch)) }
+                    items.append(pinItem(entry, model))
                     return items
                 }
     }
@@ -215,6 +222,13 @@ struct AgentBubble: View {
                     ArtifactCard(botId: entry.botId, ref: artifact) { openArtifact?(artifact) }
                 } else if let files = entry.data.files, !files.isEmpty {
                     ForEach(files) { file in FileDownloadCard(entry: entry, file: file) }
+                    // A file a media tool made keeps what was asked for under it.
+                    if entry.data.media != nil, let asked = entry.data.text, !asked.isEmpty {
+                        MarkdownText(asked).equatable()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Palette.bubbleAgent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
                 } else {
                     MarkdownText(entry.data.text ?? "").equatable()
                         .padding(.horizontal, 16)
@@ -229,6 +243,7 @@ struct AgentBubble: View {
                     ]
                     if let reply { items.insert(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply), at: 1) }
                     if let branch { items.insert(MenuItem("Branch from here", icon: "arrow.triangle.branch", action: branch), at: items.count) }
+                    items.insert(pinItem(entry, model), at: items.count - 1)
                     return items
                 }
         }

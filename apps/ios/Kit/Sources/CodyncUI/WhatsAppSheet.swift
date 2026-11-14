@@ -87,6 +87,16 @@ public struct WhatsAppSheet: View {
                         .font(.footnote)
                         .foregroundStyle(Palette.secondary)
                 }
+                SwitchRow("“Working on it…” message",
+                          detail: "A request gets it while the bot works, then the answer. Off sends only the answer.",
+                          isOn: Binding(
+                              get: { link?.workingMessage != false },
+                              set: { on in act {
+                                  try await store.whatsappSetWorkingMessage(on)
+                                  link = try? await store.whatsapp()
+                              } }
+                          ))
+                    .disabled(busy)
             }
             if link?.state != "starting", link?.state != "connected", link?.state != "qr", link?.state != "pairing" {
                 VStack(alignment: .leading, spacing: 8) {

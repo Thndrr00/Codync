@@ -17,6 +17,9 @@ public struct SharedFile: Codable, Hashable, Sendable, Identifiable {
     /// An image small enough to show in the chat (the phone fetches all of it).
     public var showsAsImage: Bool { Attachment.isImage(name) && size <= 20 * 1024 * 1024 }
 
+    /// A clip small enough to play in the chat (the phone fetches all of it).
+    public var showsAsVideo: Bool { Attachment.isVideo(name) && size <= 20 * 1024 * 1024 }
+
     public func validate() throws {
         guard size >= 0, size <= 100 * 1024 * 1024,
               sha256.count == 64, sha256.allSatisfy({ "0123456789abcdef".contains($0) }),

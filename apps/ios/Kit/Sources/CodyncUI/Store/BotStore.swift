@@ -75,6 +75,8 @@ public final class BotStore {
     public internal(set) var archivedThreads: [String: [ThreadInfo]] = [:]
     /// The lines of the threads read here, by root id; the chat keeps its own in `entries`.
     public internal(set) var threadEntries: [String: [Entry]] = [:]
+    /// Each chat's pinned messages, newest first.
+    public internal(set) var pins: [String: [PinnedMessage]] = [:]
     public internal(set) var usage: Usage
     /// The newest order still to send, and the task sending them (`setUsageOrder`).
     @ObservationIgnored var usageOrderWaiting: [String]?

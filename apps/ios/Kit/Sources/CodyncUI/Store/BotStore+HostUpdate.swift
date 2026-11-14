@@ -96,4 +96,21 @@ extension BotStore {
             }
         }
     }
+
+    /// A message sent while a bot works joins its reply; on unless the computer's owner chose Queue.
+    public var steerWhileWorking: Bool { hello?.steerWhileWorking != false }
+
+    /// Saves that choice for the whole computer, taking it back if the computer refuses.
+    public func setSteerWhileWorking(_ on: Bool) {
+        let before = hello?.steerWhileWorking
+        hello?.steerWhileWorking = on
+        Task {
+            do {
+                try await withLink(replay: true) { try await $0.setSteerWhileWorking(on) }
+            } catch {
+                hello?.steerWhileWorking = before
+                lastError = error.localizedDescription
+            }
+        }
+    }
 }

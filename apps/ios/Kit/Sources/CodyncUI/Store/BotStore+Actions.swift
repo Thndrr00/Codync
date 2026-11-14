@@ -222,6 +222,14 @@ extension BotStore {
         perform(replay: true) { _ = try await $0.updateBot(d) }
     }
 
+    /// Mutes the bot's notifications on every device, or gives them back.
+    public func setMuted(_ bot: Bot, _ muted: Bool) {
+        var d = BotDraft(bot)
+        d.notify = muted ? false : nil
+        bots[bot.id]?.notify = muted ? false : nil
+        perform(replay: true) { _ = try await $0.updateBot(d) }
+    }
+
     /// Whether the bot may see and use the computer's screen.
     public func setComputer(_ bot: Bot, _ computer: Bool) {
         var d = BotDraft(bot)
@@ -469,6 +477,12 @@ extension BotStore {
     public func weekSummary() async -> WeekSummary? {
         guard !retired, let client else { return nil }
         return try? await client.weekSummary()
+    }
+
+    /// What this bot's agent can make, for the `/image` and `/video` picker.
+    public func mediaModels(_ botId: String) async throws -> MediaAnswer {
+        guard !retired, let client else { throw CancellationError() }
+        return try await client.mediaModels(botId: botId)
     }
 
     /// Reads the network again; the host asks the other computers when what it heard is stale, and

@@ -58,12 +58,16 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var replyTo: ReplyQuote?
     /// The user's emoji reactions, oldest first.
     public var reactions: [String]?
+    /// Who pinned it, and when: it is in the chat's pin list.
+    public var pinned: Pinned?
     /// The bots' reactions, one per bot, oldest first.
     public var botReactions: [BotReaction]?
     /// Files sent with a user message.
     public var attachments: [Attachment]?
     /// Immutable files explicitly sent by the bot.
     public var files: [SharedFile]?
+    /// agent: a file a media tool made: its picture shows, its clip plays in the chat.
+    public var media: MadeMedia?
     /// notice: a finished voice call's length.
     public var callSeconds: Int?
     /// The voice call it was said in (user), answered during (agent), or that it ends (notice); the chat shows those
@@ -177,5 +181,22 @@ public struct Attachment: Codable, Hashable, Sendable, Identifiable {
     public static func isImage(_ name: String) -> Bool {
         ["png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp"].contains((name as NSString).pathExtension.lowercased())
     }
+
+    public var isVideo: Bool { Self.isVideo(name) }
+
+    public static func isVideo(_ name: String) -> Bool {
+        ["mov", "mp4", "m4v", "webm"].contains((name as NSString).pathExtension.lowercased())
+    }
+}
+
+/// The kind of file a media tool made (`image` or `video`), so the chat shows the picture or plays the clip.
+public struct MadeMedia: Codable, Hashable, Sendable {
+    public var kind: String
+
+    public init(kind: String) {
+        self.kind = kind
+    }
+
+    public var isVideo: Bool { kind == "video" }
 }
 

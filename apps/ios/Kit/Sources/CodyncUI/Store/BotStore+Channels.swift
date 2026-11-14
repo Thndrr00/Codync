@@ -74,4 +74,9 @@ extension BotStore {
     public func whatsappSetAllowed(_ jid: String, allowed: Bool) async throws -> [String] {
         try await ready().whatsappSetAllowed(jid: jid, allowed: allowed)
     }
+
+    /// Whether a request gets the "Working on it…" line before its answer.
+    public func whatsappSetWorkingMessage(_ on: Bool) async throws {
+        _ = try await ready().whatsappSetWorkingMessage(on)
+    }
 }
