@@ -69,7 +69,8 @@ public struct ThreadView: View {
                     Composer(botId: botId, replyingTo: $replyingTo,
                              queued: model.chat(botId).hidingCalls().queue(working: busy),
                              onCall: !calling && bot != nil ? { calling = true } : nil,
-                             onInterrupt: callSpeaking ? interruptCall : nil)
+                             onInterrupt: callSpeaking ? interruptCall : nil,
+                             onOpenThread: { root in openThread = ThreadTarget(botId: botId, root: root) })
                 }
             }
             .animation(Motion.reduced(Motion.layout, reduceMotion), value: model.mismatch)

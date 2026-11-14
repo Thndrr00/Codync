@@ -24,6 +24,9 @@ struct LocalVoiceServerSection: View {
                     if !saved.speechModel.isEmpty {
                         ValueRow("Speech model", value: saved.speechModel)
                     }
+                    if let voice = saved.speechVoice, !voice.isEmpty {
+                        ValueRow("Speech voice", value: voice)
+                    }
                 } else {
                     Text(L10n.tr("No local voice server is set. Add the URL of the server on this computer."))
                         .foregroundStyle(Palette.secondary)

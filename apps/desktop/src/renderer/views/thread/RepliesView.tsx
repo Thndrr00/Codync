@@ -94,6 +94,7 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
           {loading && <Text as="div" tone="secondary" role="status">Loading conversation…</Text>}
           {loadError && <div role="alert"><Text as="div" tone="danger">{loadError}</Text><Button kind="secondary" onClick={() => setRetry((n) => n + 1)}>Retry loading conversation</Button></div>}
           {!doc && info?.branchText ? <BranchLine text={info.branchText} open={close} /> : null}
+          {!doc && info?.source === 'dictation' ? <DictationLine text={info.sourceText} open={close} /> : null}
           {root ? (
             <>
               <ChatRow entry={root} groupStart={true} chat={chat} openTrace={openTrace} onForward={store.mismatch ? undefined : setForwardEntry} />
@@ -173,8 +174,26 @@ function BranchLine({ text, open }: { text: string; open: () => void }) {
   )
 }
 
-/** How many replies a thread has, above them. */
-function CountLine({ count }: { count: number }) {
+/** A thread kept from a dictation: where it was said, and a way back to that chat. */
+function DictationLine({ text, open }: { text: string | null; open: () => void }) {
+  const tr = useTr()
+  return (
+    <button className="thread-branch press" onClick={open} aria-label={tr('Kept from a dictation in this chat')}>
+      <span className="thread-branch-icon" aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="6" y="2" width="4" height="8" rx="2" />
+          <path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2" />
+        </svg>
+      </span>
+      <span className="thread-branch-copy">
+        <Text as="span" size="caption2" weight="medium" tone="tertiary">{tr('Kept from a dictation')}</Text>
+        {text ? <Text as="span" size="caption" tone="secondary" lines={2}>{text}</Text> : null}
+      </span>
+    </button>
+  )
+}
+
+/** How many replies a thread has, above them. */function CountLine({ count }: { count: number }) {
   const label = count === 0 ? 'No replies yet' : count === 1 ? '1 reply' : `${count} replies`
   return (
     <div className="thread-count">

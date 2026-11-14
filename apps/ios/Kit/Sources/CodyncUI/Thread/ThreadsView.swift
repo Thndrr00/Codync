@@ -109,6 +109,12 @@ private struct ThreadRow: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
+                        if thread.source == "dictation" {
+                            Image(systemName: "mic")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Palette.tertiary)
+                                .accessibilityLabel(L10n.tr("Kept from a dictation"))
+                        }
                         Text(thread.name)
                             .font(.body.weight(.medium))
                             .foregroundStyle(Palette.text)

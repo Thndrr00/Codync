@@ -2728,5 +2728,19 @@
   "{n} minutes": "{n} мин",
   "Diagrams open on desktop to edit them": "Диаграммы редактируются в приложении для компьютера",
   "1 element": "1 элемент",
-  "{n} elements": "{n} элементов"
+  "{n} elements": "{n} элементов",
+  "Keep as thread": "Сохранить как ветку",
+  "Kept from a dictation": "Сохранено из диктовки",
+  "Kept from a dictation in this chat": "Сохранено из диктовки в этом чате",
+  "Speech voice": "Голос чтения",
+  "A local engine reads replies here, such as Supertonic 3.": "Здесь ответы читает локальный движок, например Supertonic 3.",
+  "The voice your server reads with, when it names its own.": "Голос, которым читает ваш сервер, если у него есть свои.",
+  "Use my Codex sign-in": "Использовать мой вход в Codex",
+  "Live voice through Codex never asks for an OpenAI key: the call runs on your ChatGPT plan.": "Живой голос через Codex не требует ключа OpenAI: звонок идёт по вашему тарифу ChatGPT.",
+  "Signed in with ChatGPT as {account}.": "Вход в ChatGPT выполнен как {account}.",
+  "Signed in with ChatGPT in Codex.": "В Codex выполнен вход в ChatGPT.",
+  "Codync is checking the sign-in.": "Codync проверяет вход.",
+  "Codex isn't signed in on this computer.": "Codex не выполнил вход на этом компьютере.",
+  "Credit Codync in commits": "Указывать Codync в коммитах",
+  "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.": "Завершает каждое сообщение коммита, написанное агентом, строкой соавтора Codync. Автором остаётесь вы."
 }

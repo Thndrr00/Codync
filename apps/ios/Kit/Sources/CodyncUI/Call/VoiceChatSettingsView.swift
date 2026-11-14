@@ -59,6 +59,7 @@ public struct VoiceChatSettingsView: View {
                     ProviderVoiceSettings(provider: provider, dictationOnly: true).id("dictation-\(provider.rawValue)")
                 }
                 LocalVoiceServerSection()
+                CodexVoiceSection()
             }
         }
         .background(Palette.background)

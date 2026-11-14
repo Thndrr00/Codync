@@ -685,5 +685,19 @@
   "{n} minutes": "{n} دقائق",
   "Diagrams open on desktop to edit them": "تُحرّر الرسوم البيانية في تطبيق سطح المكتب",
   "1 element": "عنصر واحد",
-  "{n} elements": "{n} عناصر"
+  "{n} elements": "{n} عناصر",
+  "Keep as thread": "الاحتفاظ كسلسلة محادثة",
+  "Kept from a dictation": "محفوظة من إملاء صوتي",
+  "Kept from a dictation in this chat": "محفوظة من إملاء صوتي في هذه المحادثة",
+  "Speech voice": "صوت القراءة",
+  "A local engine reads replies here, such as Supertonic 3.": "يقرأ محرك محلي الردود هنا، مثل Supertonic 3.",
+  "The voice your server reads with, when it names its own.": "الصوت الذي يقرأ به خادمك، عندما يحدد أصواته.",
+  "Use my Codex sign-in": "استخدام تسجيل دخولي إلى Codex",
+  "Live voice through Codex never asks for an OpenAI key: the call runs on your ChatGPT plan.": "الصوت المباشر عبر Codex لا يحتاج مفتاح OpenAI: تستخدم المكالمة خطة ChatGPT لديك.",
+  "Signed in with ChatGPT as {account}.": "تم تسجيل الدخول إلى ChatGPT باسم {account}.",
+  "Signed in with ChatGPT in Codex.": "تم تسجيل الدخول إلى ChatGPT في Codex.",
+  "Codync is checking the sign-in.": "يتحقق Codync من تسجيل الدخول.",
+  "Codex isn't signed in on this computer.": "لم يتم تسجيل الدخول إلى Codex على هذا الكمبيوتر.",
+  "Credit Codync in commits": "ذكر Codync في عمليات الالتزام",
+  "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.": "يُنهي كل رسالة التزام يكتبها الوكيل بسطر المشارك في التأليف الخاص بـ Codync. تبقى أنت المؤلف."
 }

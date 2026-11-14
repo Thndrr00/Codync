@@ -13,6 +13,7 @@ import { errorText, liveClient } from './parts'
 import * as voice from './voice-settings'
 import type { VoiceModels, VoiceProvider } from './voice-settings'
 import { LocalVoiceServerSettings } from './LocalVoiceServerSettings'
+import { CodexVoiceSettings } from './CodexVoiceSettings'
 import { useTr } from '../../lib/use-language'
 import { fill } from '../../lib/fill.ts'
 
@@ -102,6 +103,7 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
             : null}
           {dictationProvider ? <ProviderVoiceSettings key={`dictation-${dictationProvider}`} provider={dictationProvider} dictationOnly /> : null}
           <LocalVoiceServerSettings />
+        <CodexVoiceSettings />
         </CardForm>
       </div>
     </SheetPage>

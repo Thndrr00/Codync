@@ -5,6 +5,7 @@
 //! credential minted here and then streams audio to the provider directly, so
 //! audio never crosses the channel or the relay.
 
+mod codex;
 pub(crate) mod decisions;
 mod elevenlabs;
 mod endpoint;
@@ -257,7 +258,7 @@ pub fn status(store: &Store) -> Result<Value> {
             Ok(json!({"provider": p.id(), "configured": keys::configured(store, p)?, "defaults": defaults}))
         })
         .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({"providers": providers}))
+    Ok(json!({"providers": providers, "codex": codex::access().json()}))
 }
 
 /// The voices the key can read with, for the picker. Other providers have a fixed list.

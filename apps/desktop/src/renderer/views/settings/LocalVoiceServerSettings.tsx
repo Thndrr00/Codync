@@ -21,6 +21,7 @@ export function LocalVoiceServerSettings() {
   const [url, setUrl] = useState('')
   const [transcribe, setTranscribe] = useState('')
   const [speech, setSpeech] = useState('')
+  const [speechVoice, setSpeechVoice] = useState('')
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
@@ -34,6 +35,7 @@ export function LocalVoiceServerSettings() {
     setUrl(state.baseUrl)
     setTranscribe(state.transcribeModel)
     setSpeech(state.speechModel)
+    setSpeechVoice(state.speechVoice ?? '')
   }
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export function LocalVoiceServerSettings() {
         baseUrl: url.trim(),
         transcribeModel: transcribe.trim(),
         speechModel: speech.trim(),
+        speechVoice: speechVoice.trim(),
         ...(key.trim() ? { key: key.trim() } : {}),
       })
       show(state)
@@ -100,6 +103,8 @@ export function LocalVoiceServerSettings() {
     })
 
   const suggestions = saved?.suggestions?.length ? saved.suggestions : voice.localModelSuggestions
+  const speechSuggestions = saved?.speechSuggestions?.length ? saved.speechSuggestions : voice.localSpeechSuggestions
+  const speechVoices = saved?.speechVoices?.length ? saved.speechVoices : voice.localSpeechVoices
   const field = (value: string, set: (v: string) => void, placeholder: string, label: string) => (
     <input
       className="settings-key-input"
@@ -112,9 +117,9 @@ export function LocalVoiceServerSettings() {
       onChange={(e) => set(e.target.value)}
     />
   )
-  const chips = (set: (v: string) => void) => (
+  const chips = (models: string[], set: (v: string) => void) => (
     <HStack gap={6} wrap className="voice-model-suggestions">
-      {suggestions.map((model) => (
+      {models.map((model) => (
         <Button key={model} kind="secondary" onClick={() => set(model)} disabled={!canEdit}>
           {model}
         </Button>
@@ -143,11 +148,19 @@ export function LocalVoiceServerSettings() {
           <ValueRow label={tr('Dictation model')} detail={tr('Type the model name your server serves.')}>
             {field(transcribe, setTranscribe, 'parakeet-tdt-0.6b-v3', 'Dictation model')}
           </ValueRow>
-          {chips(setTranscribe)}
+          {chips(suggestions, setTranscribe)}
         </VStack>
         <VStack gap={6}>
-          <ValueRow label={tr('Speech model')}>{field(speech, setSpeech, 'whisper-turbo', 'Speech model')}</ValueRow>
-          {chips(setSpeech)}
+          <ValueRow label={tr('Speech model')} detail={tr('A local engine reads replies here, such as Supertonic 3.')}>
+            {field(speech, setSpeech, 'supertonic-3', 'Speech model')}
+          </ValueRow>
+          {chips(speechSuggestions, setSpeech)}
+        </VStack>
+        <VStack gap={6}>
+          <ValueRow label={tr('Speech voice')} detail={tr('The voice your server reads with, when it names its own.')}>
+            {field(speechVoice, setSpeechVoice, 'F1', 'Speech voice')}
+          </ValueRow>
+          {chips(speechVoices, setSpeechVoice)}
         </VStack>
         <HStack gap={8} className="settings-row">
           <input

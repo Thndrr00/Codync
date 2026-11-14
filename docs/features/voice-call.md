@@ -100,6 +100,11 @@ on-device (its window doesn't reach the host).
   A missing key opens Voice chat settings, with a card for a dictation-only provider.
 - The terminal UI has no microphone, so no mic.
 
+A dictation can also be kept as a thread of its own, linked to the chat it was dictated in, instead of
+filling the composer: **Keep as thread** appears beside the composer after a dictation on the desktop
+and the iPhone, and the host method behind it is `keepDictation`. See
+[dictation-threads.md](dictation-threads.md). The terminal UI has no dictation, so it has no action.
+
 ### Voice input shortcut
 
 Desktop on macOS, set in **Settings → General → System** (*Voice input shortcut*: off, the right ⌘
@@ -241,6 +246,16 @@ ships no model runtime: nothing is bundled, downloaded or inferred here.
   none set they keep the model the app picked (the provider's own default). The field is free
   text with suggestions — `parakeet-tdt-0.6b-v3`, `parakeet-unified-en-0.6b`, `whisper-turbo`,
   `cohere-transcribe-03-2026` — so the exact name the server serves can be typed.
+- **Supertonic 3 is the local speech suggestion.** OpenBot 0.60+ ships Supertonic 3 (~145 MB) as its
+  local text-to-speech engine. Codync ships no runtime, so the speech field suggests `supertonic-3`
+  (a separate `speechSuggestions` list; the dictation list never offers it) and a wrapper the person
+  runs can serve it through the same protocol:
+  `POST /v1/audio/speech` with `{"model":"supertonic-3","input":"…","voice":"F1","response_format":"wav"}`
+  answering `audio/wav` (24 kHz, 16-bit mono PCM), `GET /v1/models` listing `supertonic-3`, and
+  Supertonic's styles `F1`–`F5` and `M1`–`M5` in the **Speech voice** field (`voice.speechVoice`) or
+  the `voice` id the server maps. Codync sends the saved speech voice for the local server's
+  `/v1/audio/speech` calls, so a wrapper can pass it straight through. Without such a server,
+  Supertonic isn't available; NeuTTS remains the engine built into Codync.
 - **The key** is optional and stays in this computer's vault (slot `voice:server`), never logged or
   shown. With a local server set, a request carries that key, else an OpenAI key this computer also
   had (which the variable always sent), else no `Authorization` header at all: a local server that
@@ -317,10 +332,12 @@ shows the provider's name next to the dots whenever audio leaves the device.
   {provider, key}` (checked with the provider before it's kept: one credential mint for
   OpenAI/Gemini, `GET /v1/models` for xAI and Groq, and for ElevenLabs the voice list plus one
   character read aloud; empty removes it),
-  `voiceServer` (the local voice server's saved URL, dictation and speech models, whether an
-  optional key is saved, the URL requests actually go to, and the model suggestions),
-  `setVoiceServer {baseUrl?, transcribeModel?, speechModel?, key?}` (this computer only: a field
-  left out is kept, an empty one turns that part off, an invalid URL or model name is refused),
+  `voiceServer` (the local voice server's saved URL, dictation and speech models, the speech voice,
+  whether an optional key is saved, the URL requests actually go to, and the model and voice
+  suggestions),
+  `setVoiceServer {baseUrl?, transcribeModel?, speechModel?, speechVoice?, key?}` (this computer only:
+  a field left out is kept, an empty one turns that part off, an invalid URL, model or voice name is
+  refused),
   `testVoiceServer` (tries the saved server; a failure is an answer with the server's reason),
   `voiceSession {provider, model, voice}` → `{credential}`, `voiceModels {provider}` → `{models,
   transcribe, speech}`, `voiceVoices {provider}` → `{voices}` (ElevenLabs' account voices),
@@ -348,14 +365,37 @@ spoken text and the audio are never written. OpenBot keeps the same record for a
 ### What Codync does not port from OpenBot's voice
 
 OpenBot 0.60–0.65 has its own native dictation models (Parakeet TDT/Unified, Cohere Transcribe,
-and retired Bark), a user-run "voice server", and dictation threads. Codync **ships no native
+and retired Bark) and its own local speech engine (Supertonic 3). Codync **ships no native
 runtime**: it neither bundles OpenBot's `sherpa-onnx` addon nor downloads or supervises an
 inference engine. What it does instead is speak OpenAI's audio protocol to a server the person
 runs: the **Local voice server** setting above (or `CODYNC_OPENAI_BASE_URL`) points the OpenAI
 engine's dictation and spoken replies at that server, so a sherpa-onnx, whisper, Parakeet or Cohere
-Transcribe server on the computer carries speech with no model inside Codync. Dictation threads stay
-unported. Local speech *inside* Codync is its existing **NeuTTS** engine (`voice/neutts.rs`,
-Hermes's prepared model) for reading replies.
+Transcribe server on the computer carries speech with no model inside Codync, and the speech field
+suggests Supertonic 3 for a wrapper that serves it (see "Local voice server"). Local speech *inside*
+Codync is its existing **NeuTTS** engine (`voice/neutts.rs`, Hermes's prepared model) for reading
+replies. Dictation threads are ported: see [dictation-threads.md](dictation-threads.md).
+
+### Live voice with the Codex sign-in
+
+OpenBot 0.65 runs live voice on the user's own Codex / ChatGPT sign-in: Codex brokers the call's
+WebRTC offer to OpenAI, so no API key is needed and the audio goes between the Mac and OpenAI.
+Codync decides whether the computer's Codex sign-in can carry that call:
+
+- `host/src/voice/codex.rs` reads Codex's own file (`CODEX_HOME`, else `~/.codex/auth.json`) and
+  reports `{available, reason, account}` as `voiceStatus.codex`. A ChatGPT sign-in whose access token
+  hasn't expired is available; an API-key sign-in, a missing file, a damaged file and an expired
+  token each answer with a reason that says what to do (`codex login`, or an OpenAI key under Voice
+  chat). Only the account id or email is reported, never a token.
+- Voice settings shows **Use my Codex sign-in** with that answer and **Check again**.
+- A ChatGPT sign-in does not hand out a client secret the apps could dial with: Codex brokers the
+  call itself (`codex app-server`, `thread/realtime/start` with `transport: {type: "webrtc", sdp}`,
+  answering with the SDP). Codync's call engines today dial the provider with a short-lived
+  credential, so the audio handoff through Codex is a following change; until it ships, a call keeps
+  the engine picked under **Voice engine** and the row says why the sign-in isn't used. This is the
+  honest limit of "host-side only": the decision and the sign-in reading live in the host; the
+  engine's WebRTC offer has to come from the app.
+- Tests: `host/src/voice/codex.rs` covers no file, a ChatGPT sign-in, an API-key sign-in, an expired
+  token, a damaged file, and that a token is never reported.
 
 ### The call on the host
 

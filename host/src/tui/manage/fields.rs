@@ -290,8 +290,17 @@ pub fn voice_server_fields(state: Option<&Value>) -> Fields {
                 secret: false,
                 required: false,
                 multiline: false,
-                placeholder: "whisper-turbo".into(),
+                placeholder: "supertonic-3".into(),
                 ed: Editor::with(value("speechModel")),
+            },
+            Input {
+                name: "speechVoice".into(),
+                label: "Speech voice".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: "F1".into(),
+                ed: Editor::with(value("speechVoice")),
             },
             Input {
                 name: "key".into(),

@@ -98,6 +98,8 @@ export interface Bot {
   modelOptions: Record<string, string>
   /** The agent's Fast mode (Claude Code, Codex): faster replies for more usage. */
   fastMode: boolean
+  /** Adds Codync's co-author trailer to the commits the agent writes (off unless the user turns it on). */
+  commitCoauthor: boolean
   /** What the agent says about Fast mode: `unknown` (no session yet), `offered`, `unsupported`,
    *  or `refused` (it turned it off; `fastModeIssue` says why). */
   fastModeSupport: string
@@ -206,6 +208,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     fastMode: raw.fastMode ?? false,
     fastModeSupport: raw.fastModeSupport ?? 'unknown',
     fastModeIssue: raw.fastModeIssue ?? null,
+    commitCoauthor: raw.commitCoauthor ?? false,
     account: raw.account ?? null,
     fallbacks: raw.fallbacks ?? [],
     selfFallbacks: raw.selfFallbacks ?? null,
@@ -619,6 +622,12 @@ export interface ThreadInfo {
   fromEntry: string | null
   /** That message's text, for "Branched from …". */
   branchText: string | null
+  /** What kept the thread besides the drawer: `dictation` for a kept dictation. */
+  source: string | null
+  /** For a dictation, the chat message it was dictated under. */
+  sourceEntry: string | null
+  /** That message's text, so the thread says where the dictation came from. */
+  sourceText: string | null
   archived: boolean
   createdAt: number
   updatedAt: number
@@ -1058,6 +1067,8 @@ export interface BotDraft {
   model?: string | null
   modelOptions?: Record<string, string>
   fastMode?: boolean
+  /** Adds Codync's co-author trailer to the commits the agent writes. */
+  commitCoauthor?: boolean
   account?: string | null
   fallbacks?: Fallback[]
   selfFallbacks?: boolean
@@ -1110,6 +1121,7 @@ export function draftOf(bot: Bot): BotDraft {
     model: bot.model ?? null,
     modelOptions: bot.modelOptions,
     fastMode: bot.fastMode,
+    commitCoauthor: bot.commitCoauthor,
     account: bot.account ?? null,
     fallbacks: bot.fallbacks,
     selfFallbacks: bot.selfFallbacks ?? undefined,

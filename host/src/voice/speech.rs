@@ -19,7 +19,13 @@ pub async fn speak(store: &Store, p: Provider, model: &str, voice: &str, text: &
     }
     let access = super::keys::access(store, p)?;
     let model = model_for(store, p, Kind::Speech, model)?;
-    let (model, voice) = (model.as_str(), checked(voice)?);
+    // A local server voices its own speech: the voice saved for it wins over the app's provider list.
+    let voice = if p == Provider::OpenAi && access.is_local() {
+        super::server::speech_voice(store).unwrap_or_else(|| voice.to_owned())
+    } else {
+        voice.to_owned()
+    };
+    let (model, voice) = (model.as_str(), checked(&voice)?);
     if text.trim().is_empty() || text.len() > 4000 {
         bail!("text must be 1–4000 bytes");
     }

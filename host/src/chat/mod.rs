@@ -4,6 +4,7 @@
 pub mod apps;
 pub mod artifacts;
 pub mod calls;
+pub mod commit_coauthor;
 pub mod context;
 pub mod decider;
 pub mod diagrams;

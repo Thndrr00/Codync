@@ -41,9 +41,14 @@ impl Actor {
         let fast_changed = cfg.fast_mode != self.cfg.fast_mode;
         let mode_changed = cfg.mode != self.cfg.mode;
         let threshold_changed = cfg.compaction != self.cfg.compaction;
+        // The commit trailer is part of the profile, so the agent hears the new one next turn.
+        let commits_changed = cfg.commit_coauthor != self.cfg.commit_coauthor;
         // Name, description and skill changes reach the agent as a profile update
         // on the next message (see `context`).
         self.cfg = cfg;
+        if commits_changed && let Err(error) = crate::chat::context::invalidate(&self.hub.store, &self.cfg.id) {
+            tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't re-render the profile");
+        }
         if threshold_changed {
             self.threshold_changed();
         }

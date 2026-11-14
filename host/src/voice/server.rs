@@ -13,12 +13,19 @@ use serde_json::{Value, json};
 const BASE: &str = "voice.baseUrl";
 const TRANSCRIBE: &str = "voice.transcribeModel";
 const SPEECH: &str = "voice.speechModel";
+/// The voice the local server reads with, when it voices speech (Supertonic's `F1`…`M5`).
+const SPEECH_VOICE: &str = "voice.speechVoice";
 /// The optional key this server takes, in this computer's vault: never logged, never shown.
 const SLOT: &str = "voice:server";
 
-/// Model ids the common local servers serve, offered as suggestions; any name can be typed.
+/// Model ids the common local servers serve for dictation, offered as suggestions; any name can be typed.
 pub const SUGGESTIONS: [&str; 4] =
     ["parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026"];
+/// Local text-to-speech models served through the same OpenAI-compatible route. Supertonic 3 is the
+/// local engine OpenBot ships; here a server the person runs carries it (see docs/features/voice-call.md).
+pub const SPEECH_SUGGESTIONS: [&str; 1] = ["supertonic-3"];
+/// Supertonic 3's voice styles: five female and five male.
+pub const SPEECH_VOICES: [&str; 10] = ["F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5"];
 
 /// The saved URL, as typed (a trailing `/v1` was dropped when it was saved); empty: none.
 pub(super) fn base_url(store: &Store) -> Option<String> {
@@ -28,6 +35,11 @@ pub(super) fn base_url(store: &Store) -> Option<String> {
 /// The model saved for one mode; empty keeps the provider's own default.
 pub(super) fn model(store: &Store, transcribe: bool) -> String {
     store.kv_get(if transcribe { TRANSCRIBE } else { SPEECH }).unwrap_or_default().trim().to_owned()
+}
+
+/// The voice a local server reads with, when one is saved (Supertonic's styles).
+pub(super) fn speech_voice(store: &Store) -> Option<String> {
+    store.kv_get(SPEECH_VOICE).map(|s| s.trim().to_owned()).filter(|s| !s.is_empty())
 }
 
 /// The optional key this server takes, when one is saved.
@@ -45,6 +57,7 @@ pub fn state(store: &Store) -> Result<Value> {
         "baseUrl": base_url(store).unwrap_or_default(),
         "transcribeModel": model(store, true),
         "speechModel": model(store, false),
+        "speechVoice": speech_voice(store).unwrap_or_default(),
         "keySaved": key(store)?.is_some(),
         "effective": effective,
         // Requests go somewhere other than api.openai.com: Realtime is unavailable meanwhile.
@@ -52,6 +65,8 @@ pub fn state(store: &Store) -> Result<Value> {
         // A developer's variable applies while no server is saved here.
         "environment": std::env::var("CODYNC_OPENAI_BASE_URL").ok().filter(|v| !v.trim().is_empty()),
         "suggestions": SUGGESTIONS,
+        "speechSuggestions": SPEECH_SUGGESTIONS,
+        "speechVoices": SPEECH_VOICES,
     }))
 }
 
@@ -80,6 +95,16 @@ pub fn save(store: &Store, b: &Value) -> Result<Value> {
         }
         models.push((slot, typed.to_owned()));
     }
+    let voice = match b.get("speechVoice").filter(|v| !v.is_null()) {
+        None => None,
+        Some(value) => {
+            let typed = value.as_str().ok_or_else(|| anyhow!("speechVoice must be a string"))?.trim();
+            if !typed.is_empty() {
+                super::checked(typed).map_err(|_| anyhow!("`{typed}` isn't a voice name"))?;
+            }
+            Some(typed.to_owned())
+        }
+    };
     let key = match b.get("key").filter(|v| !v.is_null()) {
         None => None,
         Some(value) => {
@@ -100,6 +125,13 @@ pub fn save(store: &Store, b: &Value) -> Result<Value> {
             store.kv_delete(slot)?;
         } else {
             store.kv_set(slot, &model)?;
+        }
+    }
+    if let Some(voice) = voice {
+        if voice.is_empty() {
+            store.kv_delete(SPEECH_VOICE)?;
+        } else {
+            store.kv_set(SPEECH_VOICE, &voice)?;
         }
     }
     if let Some(key) = key {
@@ -282,6 +314,26 @@ mod tests {
         assert_eq!(off["custom"], false);
         assert_eq!(off["effective"], "https://api.openai.com");
         assert_eq!(off["transcribeModel"], "parakeet-tdt-0.6b-v3");
+    }
+
+    #[test]
+    fn a_local_server_voices_speech_with_its_own_model_and_voice() {
+        let store = store();
+        let saved = save(&store, &json!({"speechModel": "supertonic-3", "speechVoice": "F3"})).unwrap();
+        assert_eq!(saved["speechModel"], "supertonic-3");
+        assert_eq!(saved["speechVoice"], "F3");
+        // Supertonic is offered under the speech field only, with its voice styles.
+        assert!(SUGGESTIONS.iter().all(|model| *model != "supertonic-3"));
+        assert!(
+            saved["speechSuggestions"].as_array().unwrap().iter().any(|model| model.as_str() == Some("supertonic-3"))
+        );
+        assert!(saved["speechVoices"].as_array().unwrap().iter().any(|voice| voice.as_str() == Some("M5")));
+        assert_eq!(speech_voice(&store).as_deref(), Some("F3"));
+        // An empty field turns it off; an invalid one changes nothing.
+        assert_eq!(save(&store, &json!({"speechVoice": ""})).unwrap()["speechVoice"], "");
+        assert_eq!(speech_voice(&store), None);
+        let error = save(&store, &json!({"speechVoice": "F 3"})).unwrap_err().to_string();
+        assert!(error.contains("isn't a voice name"), "{error}");
     }
 
     #[test]

@@ -66,8 +66,12 @@ export class Dictation extends Observable {
   level = 0
   /** Why the last dictation ended early (no microphone, speech recognition not allowed), until the next. */
   error: string | null = null
+  /** The words the last finished dictation added to the box, until the next one starts: "Keep as thread" keeps them. */
+  dictated = ''
   /** The box up to the words still being recognized. */
   private before = ''
+  /** The words this dictation added so far (on device, each final utterance; a provider, its transcript). */
+  private added = ''
   private off: (() => void) | null = null
   private recording: Recording | null = null
   private done: (() => void) | null = null
@@ -106,6 +110,8 @@ export class Dictation extends Observable {
     this.startedAt = 0
     this.byShortcut = byShortcut
     this.error = null
+    this.dictated = ''
+    this.added = ''
     this.before = draft
     this.changed()
     const { speech } = this.platform
@@ -136,11 +142,19 @@ export class Dictation extends Observable {
   cancel() {
     this.byShortcut = false
     this.error = null
+    this.added = ''
+    this.dictated = ''
     if (!this.busy) return
     this.generation++
     if (this.off) this.platform.speech?.stop()
     this.done = null
     this.end()
+  }
+
+  /** Drops the offer to keep the last dictation as a thread; the words stay in the box. */
+  forget() {
+    this.dictated = ''
+    this.changed()
   }
 
   /**
@@ -156,7 +170,10 @@ export class Dictation extends Observable {
   private event(e: SpeechEvent) {
     if (e.type === 'level') this.level = e.value
     if (e.type === 'partial' || e.type === 'final') this.edit(() => joinDictated(this.before, e.text))
-    if (e.type === 'final') this.before = joinDictated(this.before, e.text)
+    if (e.type === 'final') {
+      this.before = joinDictated(this.before, e.text)
+      this.added = joinDictated(this.added, e.text)
+    }
     if (e.type === 'error') {
       // Nothing to send, and the helper (which may still hold the microphone) goes too.
       this.byShortcut = false
@@ -217,6 +234,7 @@ export class Dictation extends Observable {
       if (generation !== this.generation) return
       const said = texts.map((t) => t.trim()).filter(Boolean).reduce(joinDictated, '')
       this.edit((box) => joinDictated(box, said))
+      this.added = said
       this.end()?.()
     } catch (e) {
       if (generation === this.generation) this.fail(messageOf(e))
@@ -251,6 +269,9 @@ export class Dictation extends Observable {
     if (active === this) active = null
     const done = this.done
     this.done = null
+    // What the dictation added stays offerable ("Keep as thread"), unless the shortcut's send took it.
+    if (!this.error && this.added.trim()) this.dictated = done ? '' : this.added
+    this.added = ''
     this.changed()
     return done
   }

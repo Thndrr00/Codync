@@ -19,6 +19,17 @@ export interface VoiceDefaults {
 
 export interface VoiceStatus {
   providers: { provider: VoiceProvider; configured: boolean; defaults?: VoiceDefaults | null }[]
+  /** Whether the computer's Codex / ChatGPT sign-in can carry live voice, and why not. */
+  codex?: CodexVoiceAccess | null
+}
+
+/** What the computer's Codex sign-in offers live voice (`host/src/voice/codex.rs`). */
+export interface CodexVoiceAccess {
+  available: boolean
+  /** Why the sign-in can't carry a call, when it can't. */
+  reason: string | null
+  /** The account the sign-in names, never a token. */
+  account: string | null
 }
 
 export interface VoiceModels {
@@ -40,6 +51,8 @@ export interface VoiceServer {
   baseUrl: string
   transcribeModel: string
   speechModel: string
+  /** The voice the local server reads with (Supertonic's `F1`…`M5`); empty uses the app's own pick. */
+  speechVoice: string
   keySaved: boolean
   /** Where speech requests actually go: the saved server, `CODYNC_OPENAI_BASE_URL`, or OpenAI. */
   effective: string
@@ -48,10 +61,18 @@ export interface VoiceServer {
   /** A developer's `CODYNC_OPENAI_BASE_URL` on this computer, when set. */
   environment?: string | null
   suggestions: string[]
+  /** Speech models common local servers serve (Supertonic 3 reads replies aloud on its own server). */
+  speechSuggestions?: string[]
+  /** The voice styles a local speech server may offer (Supertonic 3's five female and five male). */
+  speechVoices?: string[]
 }
 
 /** The models common local servers serve, until the computer reports its own list. */
 export const localModelSuggestions = ['parakeet-tdt-0.6b-v3', 'parakeet-unified-en-0.6b', 'whisper-turbo', 'cohere-transcribe-03-2026']
+/** Local text-to-speech models served through the same OpenAI-compatible route. */
+export const localSpeechSuggestions = ['supertonic-3']
+/** Supertonic 3's voice styles. */
+export const localSpeechVoices = ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5']
 
 export const voiceInfo: Record<VoiceProvider, {
   name: string
@@ -237,7 +258,7 @@ export const setVoiceKey = (c: HostClient, p: VoiceProvider, key: string) => c.c
 export const voiceServer = (c: HostClient) => c.call<VoiceServer>('voiceServer', {}, 30_000)
 
 /** Saves the local voice server (this computer only, like the voice keys). */
-export const setVoiceServer = (c: HostClient, body: Partial<Pick<VoiceServer, 'baseUrl' | 'transcribeModel' | 'speechModel'> & { key: string }>) =>
+export const setVoiceServer = (c: HostClient, body: Partial<Pick<VoiceServer, 'baseUrl' | 'transcribeModel' | 'speechModel' | 'speechVoice'> & { key: string }>) =>
   c.call<VoiceServer>('setVoiceServer', body, 30_000)
 
 /** Tries the saved server and says why when it doesn't answer. */

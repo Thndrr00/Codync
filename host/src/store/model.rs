@@ -194,6 +194,10 @@ pub struct BotConfig {
     /// Ask the agent for its Fast mode (Claude Code, Codex): faster replies for more usage.
     #[serde(default)]
     pub fast_mode: bool,
+    /// The agent ends the commit messages it writes with Codync's co-author trailer (see
+    /// `chat::commit_coauthor`). Off unless the user turns it on.
+    #[serde(default)]
+    pub commit_coauthor: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
     /// Agents that carry on, in order, when the bot's own can't answer (see `agent::fallback`).

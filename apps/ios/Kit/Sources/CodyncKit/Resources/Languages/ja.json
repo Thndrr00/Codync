@@ -2728,5 +2728,19 @@
   "{n} minutes": "{n} 分",
   "Diagrams open on desktop to edit them": "図の編集はデスクトップ版で行えます",
   "1 element": "1 個の要素",
-  "{n} elements": "{n} 個の要素"
+  "{n} elements": "{n} 個の要素",
+  "Keep as thread": "スレッドとして残す",
+  "Kept from a dictation": "音声入力から",
+  "Kept from a dictation in this chat": "このチャットの音声入力から残しました",
+  "Speech voice": "読み上げ音声",
+  "A local engine reads replies here, such as Supertonic 3.": "ここではローカルエンジン（Supertonic 3 など）が返信を読み上げます。",
+  "The voice your server reads with, when it names its own.": "サーバーが独自の音声名を持つ場合、読み上げに使う音声。",
+  "Use my Codex sign-in": "Codex のサインインを使う",
+  "Live voice through Codex never asks for an OpenAI key: the call runs on your ChatGPT plan.": "Codex 経由のライブ音声は OpenAI キーを必要としません。通話は ChatGPT プランで動きます。",
+  "Signed in with ChatGPT as {account}.": "ChatGPT で {account} としてサインインしています。",
+  "Signed in with ChatGPT in Codex.": "Codex で ChatGPT にサインインしています。",
+  "Codync is checking the sign-in.": "Codync がサインインを確認しています。",
+  "Codex isn't signed in on this computer.": "このコンピューターの Codex はサインインしていません。",
+  "Credit Codync in commits": "コミットに Codync を共作者として記載",
+  "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.": "エージェントが書く各コミットメッセージの末尾に Codync の共作者行を加えます。作者はあなたのままです。"
 }

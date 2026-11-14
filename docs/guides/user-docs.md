@@ -18,7 +18,7 @@ the change.
 | Page | Covers | Sources |
 | --- | --- | --- |
 | `getting-started` | Install, pair, first bot | `README.md`, [updates](updates.md), [dev app](dev-app.md) for names only |
-| `bots` | Creating, settings, workspaces, hiding, permissions, new session, importing from Grok Bot | [bot workspaces](../features/bot-workspaces.md), [conversation runtime](../architecture/conversation-runtime.md), [bot import](../features/bot-import.md) |
+| `bots` | Creating, settings, workspaces, hiding, permissions, new session, importing from Grok Bot | [bot workspaces](../features/bot-workspaces.md), [conversation runtime](../architecture/conversation-runtime.md), [bot import](../features/bot-import.md), [commit co-author](../features/commit-coauthor.md) |
 | `agents` | Known agents, registry, custom command, Extensions, sign-in, models | [extensions](../features/marketplace.md), `host/src/agent/backends.rs` |
 | `conversations` | Messages, files, approval cards, stop, replies, reactions, commands, fresh conversations, notifications, sending from a script (`codync-host send`) | `README.md` (`codync-host send`), [chat messages](../features/chat-messages.md), [file attachments](../features/file-attachments.md), [context and memory](../features/context-and-memory.md), [notifications](../design/push-and-live-activity.md) |
 | `groups` | Group chats | [groups and replies](../features/groups-and-replies.md) |
@@ -31,7 +31,7 @@ the change.
 | `connectors-and-skills` | MCP connectors, apps, skills | [connector credentials](../features/connector-credentials.md), [extensions](../features/marketplace.md) |
 | `agent-fallbacks` | The fallback chain | [agent fallbacks](../features/agent-fallback.md) |
 | `computer-use` | Remote screen, computer use | [remote screen](../features/remote-screen.md), [computer use](../features/computer-use.md) |
-| `voice` | Calls, dictation, engines and keys | [voice calls](../features/voice-call.md) |
+| `voice` | Calls, dictation, engines and keys | [voice calls](../features/voice-call.md), [dictation threads](../features/dictation-threads.md) |
 | `remote-access` | Relay, direct routes, pairing, accounts, reverse proxy, SSH computers | [remote protocol](../reference/remote-relay.md), [accounts and SSH](accounts-and-ssh.md) |
 | `codync-cloud` | Cloud computers on the user's own Boat or InstaBox account: keys and what Codync does with them, create, sleep and wake, rename, snapshots, delete | [Codync Cloud](../plans/codync-cloud.md), [cloud computer testing](cloud-computer-testing.md), `cloud/src/cloud-credentials.ts` |
 | `linux-servers` | Headless install, reaching it, firewall, approvals | [Linux servers](linux-servers.md) |

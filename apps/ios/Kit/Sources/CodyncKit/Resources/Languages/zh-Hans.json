@@ -2728,5 +2728,19 @@
   "{n} minutes": "{n} 分钟",
   "Diagrams open on desktop to edit them": "请在桌面版编辑图表",
   "1 element": "1 个元素",
-  "{n} elements": "{n} 个元素"
+  "{n} elements": "{n} 个元素",
+  "Keep as thread": "保留为话题",
+  "Kept from a dictation": "来自听写",
+  "Kept from a dictation in this chat": "保留自本会话中的听写",
+  "Speech voice": "朗读声音",
+  "A local engine reads replies here, such as Supertonic 3.": "本地引擎在此朗读回复，例如 Supertonic 3。",
+  "The voice your server reads with, when it names its own.": "你的服务器朗读时使用的声音（若它自带声音名称）。",
+  "Use my Codex sign-in": "使用我的 Codex 登录",
+  "Live voice through Codex never asks for an OpenAI key: the call runs on your ChatGPT plan.": "通过 Codex 的实时语音无需 OpenAI 密钥：通话使用你的 ChatGPT 方案。",
+  "Signed in with ChatGPT as {account}.": "已以 ChatGPT 身份登录：{account}。",
+  "Signed in with ChatGPT in Codex.": "已在 Codex 中登录 ChatGPT。",
+  "Codync is checking the sign-in.": "Codync 正在检查登录状态。",
+  "Codex isn't signed in on this computer.": "此电脑上的 Codex 尚未登录。",
+  "Credit Codync in commits": "在提交中署名 Codync",
+  "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.": "在代理写的每条提交信息末尾加上 Codync 的共作者署名。你仍是作者。"
 }

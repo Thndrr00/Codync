@@ -92,16 +92,34 @@ If you run an OpenAI-compatible speech server on the computer — a sherpa-onnx 
 
 1. Start the server on the computer and note its address and the model names it serves. It should answer `/v1/models`, `/v1/audio/transcriptions` and `/v1/audio/speech`, like OpenAI's audio API.
 2. In the desktop app on that computer, open **Settings → Voice chat** and find **Local voice server**.
-3. Enter the **Server URL** (for example `http://127.0.0.1:8890`), then the **Dictation model** and **Speech model** names your server uses. The fields suggest `parakeet-tdt-0.6b-v3`, `parakeet-unified-en-0.6b`, `whisper-turbo` and `cohere-transcribe-03-2026`; type exactly what your server lists. If the server asks for a key, paste it under the key field.
+3. Enter the **Server URL** (for example `http://127.0.0.1:8890`), then the **Dictation model** and **Speech model** names your server uses. The dictation field suggests `parakeet-tdt-0.6b-v3`, `parakeet-unified-en-0.6b`, `whisper-turbo` and `cohere-transcribe-03-2026`; the speech field suggests `supertonic-3` (see below). Type exactly what your server lists. If the server asks for a key, paste it under the key field.
 4. Press **Save**, then **Test server**. With a dictation model set, Codync sends a fraction of a second of silence to the server's transcription address and tells you what it answered; without one it reads the server's model list. A failure says why.
 
 Then pick **OpenAI** as the engine and **Speech** as the mode: its dictation and its replies go to your server. The other engines keep working as before.
+
+**Supertonic 3.** OpenBot ships Supertonic 3 as its local voice; Codync doesn't bundle it, but a server you run can serve it with the same OpenAI-compatible audio API:
+
+- `GET /v1/models` lists `supertonic-3`.
+- `POST /v1/audio/speech` with `{"model":"supertonic-3","input":"…","voice":"F1","response_format":"wav"}` answers `audio/wav` (24 kHz, 16-bit mono PCM).
+- Its voice styles are `F1`–`F5` and `M1`–`M5`. Set the one your server should use in **Speech voice** (`voice.speechVoice`); Codync sends it with every spoken reply to that server.
+
+A wrapper around a Supertonic runtime, or any server that speaks this protocol, is enough. Codync downloads nothing and runs no model itself.
 
 - **Your audio stays on the computer.** A recording reaches the computer over the encrypted connection as usual, and the computer sends it to the server on the same machine. Nothing goes to OpenAI, and no OpenAI key is needed — the optional key is only for your server. Spoken replies come back the same way.
 - **The models are whatever your server serves.** Codync uses the saved dictation and speech models for every request; with one left empty, the app's own default name is sent instead, which a local server is unlikely to know.
 - **The setting is the computer's.** One server serves every device on it. The iPhone and Android apps show the saved address and models and can test them; changing them happens on the computer, like the voice keys (in the desktop app, including a computer reached over SSH, or with `s` in the terminal UI's **Voice providers** sheet).
 - **A live (Realtime) call isn't available** while a local server is set: those calls connect to OpenAI directly. Use **Speech** mode with OpenAI, or Gemini.
 - If a developer set `CODYNC_OPENAI_BASE_URL` on the computer, a server saved in settings wins; with none saved, that variable is used.
+
+### Live voice with your Codex sign-in
+
+If Codex on your computer is signed in with a ChatGPT account, that sign-in can carry live voice without an OpenAI key (as OpenBot does). **Settings → Voice chat** shows **Use my Codex sign-in** with the answer from the computer and **Check again**:
+
+- **Signed in with ChatGPT** (with the account, when Codex names one): the sign-in is there and can carry a call.
+- **Signed in with an API key:** that key doesn't carry live voice; sign in with ChatGPT in Codex, or keep using your OpenAI key under Voice chat.
+- **Not signed in, expired or unreadable:** it says so and what to do, usually `codex login` in a terminal on that computer.
+
+Codex brokers this kind of call itself, so the app hands it the call's audio offer and Codex answers: the row is ready for that handoff, and until your app version includes it a call keeps the engine you picked under **Voice engine**. Codync never copies the ChatGPT token: it reads only whether the sign-in can carry a call, and the account name it shows.
 
 ## Add your API key
 
@@ -170,8 +188,9 @@ pending frames too. The voice is fixed to Jo for this engine.
 
 Codync has no local dictation models built in: nothing like Parakeet or Cohere Transcribe ships
 with it, it never downloads a model, and it runs no inference itself. What it can do is use a voice
-server you run on the computer (see "A voice server on your computer" above), and read replies with
-NeuTTS. Dictation threads aren't included.
+server you run on the computer (see "A voice server on your computer" above), which can serve
+Supertonic 3 for spoken replies, and read replies with NeuTTS. Dictation threads are included (see
+"Keep a dictation as a thread").
 
 ### Foreground wake phrase on phones
 
@@ -210,6 +229,16 @@ If dictation uses a provider that your calls don't, Voice chat settings show a s
 Sending a message, starting a call or switching chats drops a dictation that is still recording or transcribing. A call takes the microphone.
 
 In the desktop app on Windows and Linux, the microphone works with OpenAI, Gemini or ElevenLabs; On device is hidden, and an earlier On device selection uses OpenAI instead.
+
+### Keep a dictation as a thread
+
+Instead of sending what you dictated in the chat, you can keep it as a thread of its own:
+
+- Right after a dictation fills the box, **Keep as thread** appears above the message box (the desktop app and the iPhone). Choose it and Codync creates a thread linked to the chat you dictated in, sends the dictated words as its first message, clears them from the box, and opens the thread. The bot answers there.
+- The thread list marks it with a microphone, and the thread starts with **Kept from a dictation** and the message it came from. Everything else about a thread works as usual: rename, archive, unread counts, delete.
+- The `x` beside the offer drops it and leaves the words in the box. Starting another dictation, switching chats or sending a message also drops it.
+
+The terminal UI has no microphone, so it has no dictation and no such action. Android doesn't have it yet.
 
 ### Voice input shortcut (Mac)
 

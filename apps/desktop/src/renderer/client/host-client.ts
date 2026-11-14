@@ -330,6 +330,15 @@ export class HostClient {
     return this.call('renameThread', { threadId, title })
   }
 
+  /** Keeps a dictation as a thread of its own, linked to the chat it was dictated in. */
+  async keepDictation(botId: string, text: string, sourceEntryId: string | null = null) {
+    return this.call<{ threadId: string; entry: Entry }>('keepDictation', {
+      botId,
+      text,
+      ...(sourceEntryId ? { sourceEntryId } : {}),
+    })
+  }
+
   async archiveThread(threadId: string, archived = true) {
     return this.call('archiveThread', { threadId, archived })
   }

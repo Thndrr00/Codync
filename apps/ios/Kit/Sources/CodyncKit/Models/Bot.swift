@@ -32,6 +32,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var modelOptions: [String: String] = [:]
     /// The agent's Fast mode (Claude Code, Codex): faster replies for more usage.
     public var fastMode: Bool = false
+    /// The agent ends the commit messages it writes with Codync's co-author trailer. Off unless the user turns it on.
+    public var commitCoauthor: Bool = false
     /// What the agent says about Fast mode: `unknown` (no session yet), `offered`, `unsupported`,
     /// or `refused` (it turned it off; `fastModeIssue` says why).
     public var fastModeSupport: String = "unknown"
@@ -154,6 +156,7 @@ extension Bot {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         modelOptions = try c.decodeIfPresent([String: String].self, forKey: .modelOptions) ?? [:]
         fastMode = try c.decodeIfPresent(Bool.self, forKey: .fastMode) ?? false
+        commitCoauthor = try c.decodeIfPresent(Bool.self, forKey: .commitCoauthor) ?? false
         fastModeSupport = try c.decodeIfPresent(String.self, forKey: .fastModeSupport) ?? "unknown"
         fastModeIssue = try c.decodeIfPresent(String.self, forKey: .fastModeIssue)
         account = try c.decodeIfPresent(String.self, forKey: .account)

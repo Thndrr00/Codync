@@ -36,6 +36,17 @@ extension BotStore {
         return root
     }
 
+    /// Keeps a dictation as a thread of its own, linked to the chat it was dictated in: the
+    /// transcript is the thread's first message and the bot answers there. Returns its id.
+    @discardableResult
+    func keepDictation(_ botId: String, text: String, sourceEntryId: String? = nil) async -> String? {
+        guard let root = try? await withLink(replay: true) {
+            try await $0.keepDictation(botId: botId, text: text, sourceEntryId: sourceEntryId)
+        } else { return nil }
+        _ = await readThread(botId, root: root)
+        return root
+    }
+
     func renameThread(_ root: String, botId: String, title: String) {
         let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
         patch(botId: botId, root: root) { $0.title = trimmed }

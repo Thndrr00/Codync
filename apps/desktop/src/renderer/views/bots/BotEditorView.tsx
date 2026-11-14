@@ -300,6 +300,12 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
           <CardSection title="Agent">
             {step}
             {agent}
+            <SwitchRow
+              title="Credit Codync in commits"
+              detail="Ends each commit message the agent writes with Codync's co-author trailer. You stay the author."
+              on={draft.commitCoauthor ?? false}
+              onChange={(on) => set('commitCoauthor', on)}
+            />
             {fallbacks}
             {compaction}
           </CardSection>

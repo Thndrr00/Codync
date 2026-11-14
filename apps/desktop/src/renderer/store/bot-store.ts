@@ -699,6 +699,16 @@ export class BotStore extends BotSync {
     return id
   }
 
+  /**
+   * Keeps a dictation as a thread of its own, linked to the chat it was dictated in: the transcript
+   * is the thread's first message and the bot answers there, instead of the composer.
+   */
+  async keepDictation(botId: string, text: string, sourceEntryId: string | null = null) {
+    const { threadId } = await (await this.ready()).keepDictation(botId, text, sourceEntryId)
+    await this.refreshThreads(botId)
+    return threadId
+  }
+
   async renameThread(botId: string, threadId: string, title: string) {
     const named = title.trim()
     await (await this.ready()).renameThread(threadId, named)

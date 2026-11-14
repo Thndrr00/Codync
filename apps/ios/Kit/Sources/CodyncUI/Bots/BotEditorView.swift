@@ -122,6 +122,7 @@ struct BotSettingsForm: View {
             CardSection("Agent") {
                 fallbackBanner
                 modelPicker
+                commitCredit
                 fallbackList
                 compactionPicker
             }
@@ -210,6 +211,15 @@ struct BotSettingsForm: View {
         if let bot, let step = bot.agentStep { FallbackBanner(bot: bot, step: step) }
     }
 
+    /// Ends the commits the agent writes with Codync's co-author trailer (off unless turned on).
+    @ViewBuilder private var commitCredit: some View {
+        SwitchRow("Credit Codync in commits",
+                  detail: "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.",
+                  isOn: Binding(get: { draft.commitCoauthor ?? false }, set: { on in
+                      withAnimation(Motion.reduced(Motion.fade, reduceMotion)) { draft.commitCoauthor = on }
+                  }))
+    }
+
     /// Only from a host that has fallbacks (its bots say).
     @ViewBuilder private var fallbackList: some View {
         if draft.fallbacks != nil { FallbackList(draft: $draft, bot: bot) }
@@ -268,6 +278,7 @@ struct BotSettingsForm: View {
                 }
                 if part == .all {
                     modelPicker
+                    commitCredit
                     fallbackList
                     compactionPicker
                 }

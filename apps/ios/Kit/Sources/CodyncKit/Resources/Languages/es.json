@@ -2728,5 +2728,19 @@
   "{n} minutes": "{n} minutos",
   "Diagrams open on desktop to edit them": "Los diagramas se editan en la app de escritorio",
   "1 element": "1 elemento",
-  "{n} elements": "{n} elementos"
+  "{n} elements": "{n} elementos",
+  "Keep as thread": "Guardar como hilo",
+  "Kept from a dictation": "Guardado de un dictado",
+  "Kept from a dictation in this chat": "Guardado de un dictado en este chat",
+  "Speech voice": "Voz de lectura",
+  "A local engine reads replies here, such as Supertonic 3.": "Un motor local lee las respuestas aquí, por ejemplo Supertonic 3.",
+  "The voice your server reads with, when it names its own.": "La voz con la que lee tu servidor, cuando usa las suyas.",
+  "Use my Codex sign-in": "Usar mi inicio de sesión de Codex",
+  "Live voice through Codex never asks for an OpenAI key: the call runs on your ChatGPT plan.": "La voz en directo por Codex no pide ninguna clave de OpenAI: la llamada usa tu plan de ChatGPT.",
+  "Signed in with ChatGPT as {account}.": "Sesión iniciada en ChatGPT como {account}.",
+  "Signed in with ChatGPT in Codex.": "Sesión iniciada en ChatGPT en Codex.",
+  "Codync is checking the sign-in.": "Codync está comprobando el inicio de sesión.",
+  "Codex isn't signed in on this computer.": "Codex no ha iniciado sesión en este ordenador.",
+  "Credit Codync in commits": "Acreditar a Codync en los commits",
+  "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.": "Termina cada mensaje de commit que escribe el agente con la línea de coautor de Codync. Tú sigues siendo el autor."
 }

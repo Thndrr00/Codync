@@ -246,6 +246,27 @@
   height: 25px;
   margin-bottom: var(--first-line-inset);
 }
+/* The last dictation, offered as a thread of its own instead of this chat's next message. */
+.composer-kept {
+  align-items: center;
+  padding: 2px 10px 0 12px;
+}
+.composer-kept-action {
+  color: var(--accent);
+  font-size: var(--text-caption, 12px);
+  font-weight: 600;
+}
+.composer-kept-dismiss {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--tertiary);
+}
+.composer-kept-dismiss:hover {
+  color: var(--text);
+}
 .composer-send {
   width: 25px;
   height: 25px;

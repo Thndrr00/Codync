@@ -311,12 +311,14 @@ export class FakeHost {
       case 'devices':
         return { devices: [] }
       case 'voiceStatus':
-        return { providers: [] }
+        return { providers: [], codex: { available: false, reason: "Codex isn't signed in on this computer. Run `codex login` in a terminal, then try again.", account: null } }
       case 'voiceServer':
         return {
-          baseUrl: '', transcribeModel: '', speechModel: '', keySaved: false,
+          baseUrl: '', transcribeModel: '', speechModel: '', speechVoice: '', keySaved: false,
           effective: 'https://api.openai.com', custom: false, environment: null,
           suggestions: ['parakeet-tdt-0.6b-v3', 'parakeet-unified-en-0.6b', 'whisper-turbo', 'cohere-transcribe-03-2026'],
+          speechSuggestions: ['supertonic-3'],
+          speechVoices: ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5'],
         }
       case 'testVoiceServer':
         return { ok: false, message: 'No local voice server is set. Add the URL of the server on this computer.' }

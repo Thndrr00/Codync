@@ -429,6 +429,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var model: String?
     public var modelOptions: [String: String] = [:]
     public var fastMode: Bool?
+    /// Ends the commits the agent writes with Codync's co-author trailer. Nil from an older host.
+    public var commitCoauthor: Bool?
     public var account: String?
     /// Nil where the host has none (an older one), so it isn't sent.
     public var fallbacks: [BotFallback]?
@@ -482,6 +484,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         model = bot.model
         modelOptions = bot.modelOptions
         fastMode = bot.fastMode
+        commitCoauthor = bot.commitCoauthor
         account = bot.account
         fallbacks = bot.fallbacks
         selfFallbacks = bot.selfFallbacks
@@ -511,7 +514,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         }
         follow(\.name); follow(\.description); follow(\.avatarColor); follow(\.avatarShape); follow(\.backend)
         follow(\.command); follow(\.cwd); follow(\.permission); follow(\.mode); follow(\.model); follow(\.modelOptions)
-        follow(\.fastMode); follow(\.fallbacks); follow(\.selfFallbacks); follow(\.pinned); follow(\.hidden)
+        follow(\.fastMode); follow(\.commitCoauthor); follow(\.fallbacks); follow(\.selfFallbacks); follow(\.pinned); follow(\.hidden)
         follow(\.notify); follow(\.connectors); follow(\.skills); follow(\.computer); follow(\.manageTeam)
         follow(\.sharedMemory); follow(\.harnessMemory); follow(\.offeredToNetwork); follow(\.reachableByAssistants)
         follow(\.verifyCommand); follow(\.backgroundModel); follow(\.saver); follow(\.personality)

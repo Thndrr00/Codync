@@ -305,6 +305,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
                 cancelReply={cancelReply}
                 onCall={!calling && bot ? () => setCalling(true) : null}
                 onInterrupt={callSpeaking ? () => interruptCall.current?.() : null}
+                onOpenThread={openThread}
               />
             </>
           )}

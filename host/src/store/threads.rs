@@ -22,7 +22,9 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             title TEXT NOT NULL DEFAULT '',
             from_entry TEXT,
             archived INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            source TEXT,
+            source_entry TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_threads_bot ON threads(bot_id, archived);
         CREATE INDEX IF NOT EXISTS entries_thread ON entries(thread_id, seq);",
@@ -68,6 +70,13 @@ pub struct ThreadInfo {
     pub from_entry: Option<String>,
     /// That message's text, for "Branched from …".
     pub branch_text: Option<String>,
+    /// What kept the thread, when something other than the drawer did: `dictation` for a kept
+    /// dictation (see [`Store::create_dictation_thread`]).
+    pub source: Option<String>,
+    /// For a dictation, the chat message it was dictated under.
+    pub source_entry: Option<String>,
+    /// That message's text, so the thread can say where the dictation came from.
+    pub source_text: Option<String>,
     pub archived: bool,
     pub created_at: i64,
     pub updated_at: i64,
@@ -96,19 +105,22 @@ impl Store {
     }
 
     fn thread_info(c: &Connection, id: &str) -> Result<ThreadInfo> {
-        let row: Option<(String, Option<String>, bool, i64, String)> = c
-            .query_row("SELECT title, from_entry, archived, created_at, bot_id FROM threads WHERE id = ?1", [id], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
-            })
+        let row: Option<(String, Option<String>, bool, i64, String, Option<String>, Option<String>)> = c
+            .query_row(
+                "SELECT title, from_entry, archived, created_at, bot_id, source, source_entry
+                 FROM threads WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+            )
             .optional()?;
-        let (title, from_entry, archived, created_at, bot_id) = row.unwrap_or_else(|| {
+        let (title, from_entry, archived, created_at, bot_id, source, source_entry) = row.unwrap_or_else(|| {
             let bot = c
                 .query_row("SELECT bot_id FROM entries WHERE thread_id = ?1 ORDER BY seq LIMIT 1", [id], |r| {
                     r.get::<_, String>(0)
                 })
                 .ok()
                 .unwrap_or_default();
-            (String::new(), None, false, 0, bot)
+            (String::new(), None, false, 0, bot, None, None)
         });
         let last: Option<(Option<String>, String, i64)> = c
             .query_row(
@@ -130,12 +142,21 @@ impl Store {
                 .optional()?,
             None => None,
         };
+        let source_text = match &source_entry {
+            Some(entry) => c
+                .query_row("SELECT json_extract(data, '$.text') FROM entries WHERE id = ?1", [entry], |r| r.get(0))
+                .optional()?,
+            None => None,
+        };
         Ok(ThreadInfo {
             id: id.to_owned(),
             bot_id,
             title,
             from_entry: from_entry.clone(),
             branch_text,
+            source,
+            source_entry,
+            source_text,
             archived,
             created_at: created_at.max(created.unwrap_or(0)),
             updated_at: last.as_ref().map_or_else(|| created_at.max(created.unwrap_or(0)), |l| l.2),
@@ -206,6 +227,28 @@ impl Store {
         Ok(id)
     }
 
+    /// Keeps a dictation as a thread of `bot`: a thread of its own (never another message's), titled from
+    /// the transcript, that remembers the chat message it was dictated under (`source_entry`), so a client
+    /// can go back to the conversation it came from. The caller posts the transcript into it.
+    pub fn create_dictation_thread(
+        &self,
+        bot_id: &str,
+        transcript: &str,
+        source_entry: Option<&str>,
+    ) -> Result<String> {
+        let title = dictation_title(transcript)?;
+        let source_entry =
+            source_entry.filter(|id| self.entry(id).is_some_and(|e| e.bot_id == bot_id && e.thread_id.is_none()));
+        let id = format!("thread:{}", uuid::Uuid::new_v4());
+        let c = self.db.locked();
+        c.execute(
+            "INSERT INTO threads(id, bot_id, title, archived, created_at, source, source_entry)
+             VALUES(?1, ?2, ?3, 0, ?4, 'dictation', ?5)",
+            params![id, bot_id, title, now_ms(), source_entry],
+        )?;
+        Ok(id)
+    }
+
     pub fn rename_thread(&self, id: &str, title: &str) -> Result<()> {
         let title = title.trim();
         if title.chars().count() > MAX_TITLE {
@@ -253,6 +296,21 @@ fn ensure_row(c: &Connection, id: &str) -> Result<()> {
     let Some(bot) = bot else { bail!("unknown thread") };
     c.execute("INSERT OR IGNORE INTO threads(id, bot_id, created_at) VALUES(?1, ?2, ?3)", params![id, bot, now_ms()])?;
     Ok(())
+}
+
+/// A kept dictation's name in the thread list: its first words, on one line, at most [`MAX_TITLE`].
+fn dictation_title(transcript: &str) -> Result<String> {
+    let text = transcript.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.is_empty() {
+        bail!("A kept dictation needs words");
+    }
+    let letters = text.chars().count();
+    let mut title: String = text.chars().take(MAX_TITLE).collect();
+    if letters > MAX_TITLE {
+        title.pop();
+        title.push('…');
+    }
+    Ok(title)
 }
 
 #[cfg(test)]
@@ -328,5 +386,30 @@ mod tests {
         assert!(s.create_thread("b", &long, None).is_err());
         let id = s.create_thread("b", "ok", None).unwrap();
         assert!(s.rename_thread(&id, &long).is_err());
+    }
+
+    #[test]
+    fn a_kept_dictation_is_its_own_thread_linked_to_the_chat_it_came_from() {
+        let s = temp_store();
+        let said = s.insert_entry(&Lane::main("b"), EntryKind::Agent, 1, &json!({"text": "Tests pass."})).unwrap();
+        let id =
+            s.create_dictation_thread("b", "  Deploy the   new build\nwhen the tests pass  ", Some(&said.id)).unwrap();
+        assert!(id.starts_with("thread:"), "a dictation thread never takes a message's id: {id}");
+        let listed = s.threads("b", false).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].source.as_deref(), Some("dictation"));
+        assert_eq!(listed[0].source_entry.as_deref(), Some(said.id.as_str()));
+        assert_eq!(listed[0].source_text.as_deref(), Some("Tests pass."));
+        assert_eq!(listed[0].title, "Deploy the new build when the tests pass");
+        assert!(listed[0].branch_text.is_none(), "a dictation is not a branch of the message");
+        // A kept dictation of another bot, or of a message already in a thread, is not linked.
+        let other = s.insert_entry(&Lane::main("other"), EntryKind::User, 1, &json!({"text": "hi"})).unwrap();
+        let loose = s.create_dictation_thread("b", "note", Some(&other.id)).unwrap();
+        assert_eq!(s.thread_by_id(&loose).unwrap().unwrap().source_entry, None);
+        assert!(s.create_dictation_thread("b", "   ", None).is_err(), "nothing said, nothing to keep");
+        let long = s.create_dictation_thread("b", &"word ".repeat(40), None).unwrap();
+        let title = s.thread_by_id(&long).unwrap().unwrap().title;
+        assert_eq!(title.chars().count(), MAX_TITLE);
+        assert!(title.ends_with('…'));
     }
 }

@@ -2728,5 +2728,19 @@
   "{n} minutes": "{n}분",
   "Diagrams open on desktop to edit them": "다이어그램은 데스크톱 앱에서 편집하세요",
   "1 element": "요소 1개",
-  "{n} elements": "요소 {n}개"
+  "{n} elements": "요소 {n}개",
+  "Keep as thread": "스레드로 보관",
+  "Kept from a dictation": "받아쓰기에서 보관함",
+  "Kept from a dictation in this chat": "이 채팅의 받아쓰기에서 보관함",
+  "Speech voice": "읽기 목소리",
+  "A local engine reads replies here, such as Supertonic 3.": "여기에서는 로컬 엔진(예: Supertonic 3)이 답변을 읽습니다.",
+  "The voice your server reads with, when it names its own.": "서버가 자체 목소리 이름을 가질 때 읽기에 쓰는 목소리.",
+  "Use my Codex sign-in": "내 Codex 로그인 사용",
+  "Live voice through Codex never asks for an OpenAI key: the call runs on your ChatGPT plan.": "Codex를 통한 실시간 음성은 OpenAI 키가 필요 없습니다. 통화는 ChatGPT 요금제로 실행됩니다.",
+  "Signed in with ChatGPT as {account}.": "ChatGPT에 {account}(으)로 로그인되어 있습니다.",
+  "Signed in with ChatGPT in Codex.": "Codex에서 ChatGPT에 로그인되어 있습니다.",
+  "Codync is checking the sign-in.": "Codync가 로그인을 확인하는 중입니다.",
+  "Codex isn't signed in on this computer.": "이 컴퓨터의 Codex에 로그인되어 있지 않습니다.",
+  "Credit Codync in commits": "커밋에 Codync 공동 작성자 표시",
+  "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.": "에이전트가 작성하는 각 커밋 메시지 끝에 Codync 공동 작성자 줄을 붙입니다. 작성자는 그대로 사용자입니다."
 }

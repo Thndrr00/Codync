@@ -488,6 +488,35 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             json!({"entry": crate::chat::messages::post_in_lane(hub, &row.config, lane, data)?})
         }
+        // A dictation kept as a thread of its own, linked to the chat it was dictated in: the
+        // transcript is the thread's first message and the bot answers there. The client opens it.
+        "keepDictation" => {
+            let bot = str_arg(&b, "botId")?;
+            let text = b["text"].as_str().unwrap_or_default().trim();
+            if text.is_empty() {
+                bail!("empty dictation");
+            }
+            let row = hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            if crate::external::is_external(&row.config) {
+                bail!("this bot runs in your terminal: a dictation can't be kept for it here");
+            }
+            let asked = b["sourceEntryId"].as_str().filter(|id| !id.is_empty()).map(str::to_owned);
+            let source = asked.or_else(|| {
+                hub.store
+                    .history(bot, i64::MAX, 10)
+                    .ok()
+                    .and_then(|entries| entries.into_iter().rev().find(|e| matches!(e.kind.as_str(), "user" | "agent")))
+                    .map(|e| e.id)
+            });
+            let thread = hub.store.create_dictation_thread(bot, text, source.as_deref())?;
+            let entry = crate::chat::messages::post_in_lane(
+                hub,
+                &row.config,
+                Lane::in_thread(bot, &thread),
+                json!({"text": text}),
+            )?;
+            json!({"threadId": thread, "entry": entry})
+        }
         // A waiting message rewritten before it goes out.
         "editQueued" => {
             let (reply, answer) = tokio::sync::oneshot::channel();

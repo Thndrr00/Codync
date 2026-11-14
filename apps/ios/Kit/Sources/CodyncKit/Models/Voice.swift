@@ -141,10 +141,22 @@ public struct VoiceStatus: Decodable, Sendable {
     }
 
     public var providers: [Provider]
+    /// Whether the computer's Codex / ChatGPT sign-in can carry live voice, and why not. Missing from hosts
+    /// before this version.
+    public var codex: CodexVoiceAccess?
 
     public func configured(_ provider: VoiceProvider) -> Bool {
         providers.first { $0.provider == provider.rawValue }?.configured == true
     }
+}
+
+/// What the computer's Codex sign-in offers live voice (`host/src/voice/codex.rs`).
+public struct CodexVoiceAccess: Decodable, Sendable, Equatable {
+    public var available: Bool
+    /// Why the sign-in can't carry a call, when it can't.
+    public var reason: String?
+    /// The account the sign-in names, never a token.
+    public var account: String?
 }
 
 public struct VoiceModels: Codable, Sendable {
@@ -184,6 +196,9 @@ public struct VoiceServer: Decodable, Sendable, Equatable {
     public var baseUrl: String
     public var transcribeModel: String
     public var speechModel: String
+    /// The voice the local server reads with (Supertonic's `F1`…`M5`); nil or empty uses the app's own pick.
+    /// Missing from hosts before this version.
+    public var speechVoice: String?
     public var keySaved: Bool
     /// Where speech requests actually go: the saved server, `CODYNC_OPENAI_BASE_URL`, or OpenAI.
     public var effective: String
@@ -192,23 +207,35 @@ public struct VoiceServer: Decodable, Sendable, Equatable {
     /// A developer's `CODYNC_OPENAI_BASE_URL` on the computer, when set.
     public var environment: String?
     public var suggestions: [String]
+    /// Speech models common local servers serve (Supertonic 3 reads replies aloud on its own server).
+    public var speechSuggestions: [String]?
+    /// The voice styles a local speech server may offer (Supertonic 3's five female and five male).
+    public var speechVoices: [String]?
 
     /// The models common local servers serve, until the computer reports its own list.
     public static let localModelSuggestions = [
         "parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026",
     ]
+    /// Local text-to-speech models served through the same OpenAI-compatible route.
+    public static let localSpeechSuggestions = ["supertonic-3"]
+    /// Supertonic 3's voice styles.
+    public static let localSpeechVoices = ["F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5"]
 
-    public init(baseUrl: String = "", transcribeModel: String = "", speechModel: String = "", keySaved: Bool = false,
-                effective: String = "https://api.openai.com", custom: Bool = false, environment: String? = nil,
-                suggestions: [String] = VoiceServer.localModelSuggestions) {
+    public init(baseUrl: String = "", transcribeModel: String = "", speechModel: String = "", speechVoice: String? = nil,
+                keySaved: Bool = false, effective: String = "https://api.openai.com", custom: Bool = false,
+                environment: String? = nil, suggestions: [String] = VoiceServer.localModelSuggestions,
+                speechSuggestions: [String]? = nil, speechVoices: [String]? = nil) {
         self.baseUrl = baseUrl
         self.transcribeModel = transcribeModel
         self.speechModel = speechModel
+        self.speechVoice = speechVoice
         self.keySaved = keySaved
         self.effective = effective
         self.custom = custom
         self.environment = environment
         self.suggestions = suggestions
+        self.speechSuggestions = speechSuggestions
+        self.speechVoices = speechVoices
     }
 }
 

@@ -231,6 +231,14 @@ public extension HostClient {
         let _: Empty = try await call("renameThread", ["threadId": threadId, "title": title])
     }
 
+    /// Keeps a dictation as a thread of its own, linked to the chat it was dictated in.
+    func keepDictation(botId: String, text: String, sourceEntryId: String? = nil) async throws -> String {
+        struct Body: Encodable { var botId: String; var text: String; var sourceEntryId: String? }
+        struct Res: Decodable { var threadId: String }
+        let res: Res = try await call("keepDictation", Body(botId: botId, text: text, sourceEntryId: sourceEntryId))
+        return res.threadId
+    }
+
     func archiveThread(_ threadId: String, archived: Bool = true) async throws {
         struct Body: Encodable { var threadId: String; var archived: Bool }
         let _: Empty = try await call("archiveThread", Body(threadId: threadId, archived: archived))

@@ -50,6 +50,9 @@ final class Dictation {
     /// Why the last dictation didn't start or ended early (a permission, the microphone, the network, the recognizer),
     /// until the next.
     var failure: String?
+    /// The words the last finished dictation added to the box, until the next one starts or the box takes them:
+    /// "Keep as thread" keeps them.
+    private(set) var dictated = ""
     var needsKey = false
     @ObservationIgnored private lazy var engine = AVAudioEngine()
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -92,6 +95,7 @@ final class Dictation {
         guard !listening, !transcribing else { return }
         failure = nil
         needsKey = false
+        dictated = ""
         generation += 1
         before = draft
         if let provider = service.picked() {
@@ -114,12 +118,18 @@ final class Dictation {
                 let said = try await service.transcribe(recording.pcm, recording.provider, recording.model)
                 guard generation == self.generation else { return }
                 edit? { Self.join($0, said) }
+                dictated = said.trimmingCharacters(in: .whitespacesAndNewlines)
             } catch {
                 guard generation == self.generation else { return }
                 failure = error.localizedDescription
             }
             transcribing = false
         }
+    }
+
+    /// Drops the offer to keep the last dictation as a thread; the words stay in the box.
+    func forget() {
+        dictated = ""
     }
 
     /// Stops now and drops anything still on its way.
@@ -269,7 +279,10 @@ final class Dictation {
         guard generation == self.generation else { return }
         let before = before
         edit? { _ in Self.join(before, text) }
-        if final { stop() }
+        if final {
+            dictated = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            stop()
+        }
     }
 
     private nonisolated static func results(_ dictation: Dictation, generation: Int) -> @Sendable (SFSpeechRecognitionResult?, (any Error)?) -> Void {
