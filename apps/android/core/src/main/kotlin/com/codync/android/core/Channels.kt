@@ -38,6 +38,26 @@ import kotlinx.serialization.json.jsonObject
     val state: String = "starting",
 )
 
+/** One bound Matrix room: the host bot that answers it and the people allowed in it. */
+@Serializable data class MatrixBinding(
+    val roomId: String,
+    val botId: String = "",
+    val allowedUsers: List<String> = emptyList(),
+    val memory: String = "",
+    val icon: String = "",
+)
+
+/** The Matrix connection, as `matrixStatus` reports it. */
+@Serializable data class MatrixStatus(
+    val configured: Boolean = false,
+    val homeserver: String? = null,
+    val userId: String? = null,
+    val deviceId: String? = null,
+    val bindings: List<MatrixBinding>? = null,
+    /** `ok`, `starting`, or `error: …`. */
+    val state: String = "starting",
+)
+
 /** What the Channels screen shows, and the words it uses; the host owns the meaning. */
 object Channels {
     /** A short name the host accepts for a Telegram bot. */
@@ -53,12 +73,30 @@ object Channels {
     fun discordTokenOk(token: String): Boolean =
         token.length <= 200 && Regex("^[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{20,}$").matches(token)
 
+    /** A homeserver address: https, or http to a server on the computer's own network. */
+    fun matrixHomeserverOk(url: String): Boolean =
+        url.trim().length <= 300 && Regex("^https?://[^\\s/]+(/[^\\s]*)?$").matches(url.trim())
+
+    /** A full Matrix user id: `@name:server`. */
+    fun matrixUserOk(id: String): Boolean = id.trim().length <= 255 && Regex("^@[^:\\s]+:[^\\s]+$").matches(id.trim())
+
+    /** A room id or alias: `!opaque:server` or `#alias:server`. */
+    fun matrixRoomOk(id: String): Boolean = id.trim().length <= 255 && Regex("^[!#][^:\\s]+:[^\\s]+$").matches(id.trim())
+
+    fun matrixStateText(state: String): String = when (state) {
+        "ok" -> "Connected"
+        "starting" -> "Connecting…"
+        else -> "Cannot reach Matrix"
+    }
+
     fun decodeTelegram(response: JsonElement): List<TelegramBot> =
         WireJson.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(TelegramBot.serializer()), response.jsonObject.getValue("bots"))
 
     fun decodeSlack(response: JsonElement): SlackStatus = WireJson.decodeFromJsonElement(SlackStatus.serializer(), response)
 
     fun decodeDiscord(response: JsonElement): DiscordStatus = WireJson.decodeFromJsonElement(DiscordStatus.serializer(), response)
+
+    fun decodeMatrix(response: JsonElement): MatrixStatus = WireJson.decodeFromJsonElement(MatrixStatus.serializer(), response)
 
     fun discordStateText(state: String): String = when (state) {
         "ok" -> "Connected"

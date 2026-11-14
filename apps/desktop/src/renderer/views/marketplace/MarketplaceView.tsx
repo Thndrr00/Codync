@@ -107,6 +107,7 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
     telegram: channelModel.telegram,
     slack: channelModel.slack,
     discord: channelModel.discord,
+    matrix: channelModel.matrix,
   }, botNames), query)
 
   useEffect(() => {

@@ -144,6 +144,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::discord::METHODS.contains(&method) {
         return crate::discord::call(hub, method, b).await;
     }
+    if crate::matrix::METHODS.contains(&method) {
+        return crate::matrix::call(hub, method, b).await;
+    }
     if crate::slack::METHODS.contains(&method) {
         return crate::slack::call(hub, method, b).await;
     }
@@ -207,6 +210,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     }
     if matches!(method, "channelNotes" | "addChannelNote" | "removeChannelNote") {
         return crate::channels::call(hub, method, &b);
+    }
+    if crate::docs::METHODS.contains(&method) {
+        return crate::docs::call(hub, method, &b);
     }
     if method == "listFiles" {
         return files::list(hub, &b).await;

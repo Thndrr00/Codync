@@ -1,6 +1,6 @@
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
-import type { DiscordStatus, SlackStatus, TelegramBotStatus } from '../../shared/channels'
+import type { DiscordStatus, MatrixStatus, SlackStatus, TelegramBotStatus } from '../../shared/channels'
 
 interface TelegramReply { bots: TelegramBotStatus[]; result?: { code?: string; expiresAt?: number } }
 
@@ -9,6 +9,7 @@ export class ChannelsStore extends Observable {
   telegram: TelegramBotStatus[] = []
   slack: SlackStatus | null = null
   discord: DiscordStatus | null = null
+  matrix: MatrixStatus | null = null
   loading = false
   busy = false
   error: string | null = null
@@ -25,15 +26,17 @@ export class ChannelsStore extends Observable {
     this.loading = true; this.error = null; this.changed()
     try {
       const host = await this.client()
-      const [telegram, slack, discord] = await Promise.all([
+      const [telegram, slack, discord, matrix] = await Promise.all([
         host.call<TelegramReply>('telegramStatus', {}),
         host.call<SlackStatus>('slackStatus', {}),
         host.call<DiscordStatus>('discordStatus', {}),
+        host.call<MatrixStatus>('matrixStatus', {}),
       ])
       if (!this.active) return
       this.telegram = telegram.bots
       this.slack = slack
       this.discord = discord
+      this.matrix = matrix
     } catch (error) { if (this.active) this.error = String(error) }
     finally { if (this.active) { this.loading = false; this.changed() } }
   }
@@ -66,7 +69,7 @@ export class ChannelsStore extends Observable {
   }
 
   /** Saves what the bot should know about a channel (a Telegram bot's name, or a Slack or Discord channel). */
-  async setMemory(provider: 'slack' | 'discord' | 'telegram', channel: string, memory: string) {
+  async setMemory(provider: 'slack' | 'discord' | 'telegram' | 'matrix', channel: string, memory: string) {
     if (!this.active || this.busy) return false
     this.busy = true; this.error = null; this.changed()
     try {
@@ -77,7 +80,7 @@ export class ChannelsStore extends Observable {
   }
 
   /** Gives a channel a picture (an SF Symbol name), or clears it. */
-  async setIcon(provider: 'slack' | 'discord' | 'telegram', channel: string, icon: string) {
+  async setIcon(provider: 'slack' | 'discord' | 'telegram' | 'matrix', channel: string, icon: string) {
     if (!this.active || this.busy) return false
     this.busy = true; this.error = null; this.changed()
     try {
@@ -88,19 +91,19 @@ export class ChannelsStore extends Observable {
   }
 
   /** Small facts this channel keeps, given to the bot with its memory. */
-  async notes(provider: 'slack' | 'discord' | 'telegram', channel: string): Promise<string[]> {
+  async notes(provider: 'slack' | 'discord' | 'telegram' | 'matrix', channel: string): Promise<string[]> {
     const answer = await (await this.client()).call<{ notes: string[] }>('channelNotes', { provider, channel })
     return answer.notes ?? []
   }
 
   /** Adds one note; the host checks its length and the channel's count. */
-  async addNote(provider: 'slack' | 'discord' | 'telegram', channel: string, text: string): Promise<string[]> {
+  async addNote(provider: 'slack' | 'discord' | 'telegram' | 'matrix', channel: string, text: string): Promise<string[]> {
     const answer = await (await this.client()).call<{ notes: string[] }>('addChannelNote', { provider, channel, text })
     return answer.notes ?? []
   }
 
   /** Removes the note at `index`, as the channel's list has it. */
-  async removeNote(provider: 'slack' | 'discord' | 'telegram', channel: string, index: number): Promise<string[]> {
+  async removeNote(provider: 'slack' | 'discord' | 'telegram' | 'matrix', channel: string, index: number): Promise<string[]> {
     const answer = await (await this.client()).call<{ notes: string[] }>('removeChannelNote', { provider, channel, index })
     return answer.notes ?? []
   }
@@ -135,6 +138,32 @@ export class ChannelsStore extends Observable {
     this.busy = true; this.error = null; this.changed()
     try {
       this.discord = await (await this.client()).call<DiscordStatus>('disconnectDiscord', {})
+    } catch (error) { if (this.active) this.error = String(error) }
+    finally { if (this.active) { this.busy = false; this.changed() } }
+  }
+
+  /** Saves the Matrix connection; the host signs in and checks every room first. */
+  async setMatrix(body: {
+    homeserver: string
+    user: string
+    accessToken: string
+    password: string
+    bindings: { roomId: string; botId: string; allowedUsers: string[] }[]
+  }) {
+    if (!this.active || this.busy) return false
+    this.busy = true; this.error = null; this.changed()
+    try {
+      this.matrix = await (await this.client()).call<MatrixStatus>('setMatrixChannel', body, 60_000)
+      return true
+    } catch (error) { if (this.active) this.error = String(error); return false }
+    finally { if (this.active) { this.busy = false; this.changed() } }
+  }
+
+  async disconnectMatrix() {
+    if (!this.active || this.busy) return
+    this.busy = true; this.error = null; this.changed()
+    try {
+      this.matrix = await (await this.client()).call<MatrixStatus>('disconnectMatrix', {})
     } catch (error) { if (this.active) this.error = String(error) }
     finally { if (this.active) { this.busy = false; this.changed() } }
   }

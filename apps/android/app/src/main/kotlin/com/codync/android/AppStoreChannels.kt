@@ -3,6 +3,8 @@ package com.codync.android
 import com.codync.android.core.Channels
 import com.codync.android.core.DiscordBinding
 import com.codync.android.core.DiscordStatus
+import com.codync.android.core.MatrixBinding
+import com.codync.android.core.MatrixStatus
 import com.codync.android.core.SlackStatus
 import com.codync.android.core.TelegramBot
 import kotlinx.serialization.json.JsonElement
@@ -44,8 +46,32 @@ suspend fun AppStore.setDiscord(
     })
 }, timeoutMillis = 60_000))
 
-/** Adds a Telegram bot the host will talk through, answered by [botId]; its token stays on the computer. */
-suspend fun AppStore.addTelegramBot(name: String, token: String, botId: String): List<TelegramBot> =
+/** Sets the Matrix session and its bound rooms up; the host signs in and checks every room first. */
+suspend fun AppStore.setMatrix(
+    homeserver: String,
+    user: String,
+    accessToken: String,
+    password: String,
+    bindings: List<MatrixBinding>,
+): MatrixStatus = Channels.decodeMatrix(hostQuery("setMatrixChannel", buildJsonObject {
+    put("homeserver", homeserver.trim())
+    put("user", user.trim())
+    put("accessToken", accessToken.trim())
+    put("password", password)
+    put("bindings", buildJsonArray {
+        for (binding in bindings) add(buildJsonObject {
+            put("roomId", binding.roomId.trim())
+            put("botId", binding.botId)
+            put("allowedUsers", buildJsonArray { for (person in binding.allowedUsers) add(JsonPrimitive(person.trim())) })
+        })
+    })
+}, timeoutMillis = 60_000))
+
+suspend fun AppStore.matrixStatus(): MatrixStatus? = runCatching { Channels.decodeMatrix(hostQuery("matrixStatus", buildJsonObject { })) }.getOrNull()
+
+suspend fun AppStore.disconnectMatrix(): MatrixStatus = Channels.decodeMatrix(hostQuery("disconnectMatrix", buildJsonObject { }))
+
+/** Adds a Telegram bot the host will talk through, answered by [botId]; its token stays on the computer. */suspend fun AppStore.addTelegramBot(name: String, token: String, botId: String): List<TelegramBot> =
     Channels.decodeTelegram(hostQuery("addTelegramBot",
         body("name" to name.trim(), "token" to token.trim(), "botId" to botId), timeoutMillis = 60_000))
 

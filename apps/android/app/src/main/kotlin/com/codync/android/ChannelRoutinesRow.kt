@@ -25,7 +25,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-private fun channelFilterKey(provider: String) = if (provider == "telegram") "chat" else "channel"
+private fun channelFilterKey(provider: String) = when (provider) {
+    "telegram" -> "chat"
+    "matrix" -> "room"
+    else -> "channel"
+}
 
 private suspend fun AppStore.channelRoutines(botId: String): JsonArray =
     hostQuery("routines", buildJsonObject { put("botId", botId) }).jsonObject["routines"]?.jsonArray ?: JsonArray(emptyList())

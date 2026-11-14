@@ -119,6 +119,7 @@ import kotlinx.coroutines.launch
     var telegramBots by remember { mutableStateOf<List<com.codync.android.core.TelegramBot>>(emptyList()) }
     var slackStatus by remember { mutableStateOf<com.codync.android.core.SlackStatus?>(null) }
     var discordStatus by remember { mutableStateOf<com.codync.android.core.DiscordStatus?>(null) }
+    var matrixStatus by remember { mutableStateOf<com.codync.android.core.MatrixStatus?>(null) }
     var whatsappLink by remember { mutableStateOf<com.codync.android.core.WhatsAppLink?>(null) }
     var writingSkill by remember { mutableStateOf(false) }
     var viewingSkill by remember { mutableStateOf<SkillRef?>(null) }
@@ -166,9 +167,10 @@ import kotlinx.coroutines.launch
         telegramBots = runCatching { store.telegramBots() }.getOrNull() ?: telegramBots
         slackStatus = runCatching { store.slackStatus() }.getOrDefault(slackStatus)
         discordStatus = runCatching { store.discordStatus() }.getOrDefault(discordStatus)
+        matrixStatus = runCatching { store.matrixStatus() }.getOrDefault(matrixStatus)
         whatsappLink = runCatching { store.whatsapp() }.getOrNull() ?: whatsappLink
     }
-    val channels = channelSummaries(telegramBots, slackStatus, discordStatus, whatsappLink)
+    val channels = channelSummaries(telegramBots, slackStatus, discordStatus, matrixStatus, whatsappLink)
     val shownChannels = matchChannelSummaries(channels, query)
     val backends = agentBackends(state)
     val agents = backends.filter { it.available || it.installed || it.curated }.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }

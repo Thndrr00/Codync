@@ -31,7 +31,8 @@ channel that cannot express a block still says everything the card says. A butto
 | Discord | message body: `{content, embeds, components}` | Text, callout and table in `content`; fields as one embed's `fields`; a `components` action row (`type: 1`) of `type: 2` buttons, five per row. |
 | Telegram | `sendMessage` body: `{text, parse_mode: "HTML", reply_markup}` | Text and fields as HTML lines, the table in `<pre>`, callout with its emoji, an `inline_keyboard` with two buttons per row. Callback data is limited to 64 bytes: a longer action leaves that option out, as Telegram would refuse the message. |
 | WhatsApp | text | Text, fields as `*label*: value`, the table as lines, callout with its emoji, and buttons as numbered options under `Responde con el número de una opción:`. The existing numbered answer path is unchanged. |
-| Teams | Bot Framework message carrying an Adaptive Card | The serializer (`render::teams`) and its wire shape are defined: an attachment with `contentType: application/vnd.microsoft.card.adaptive` and an `AdaptiveCard` 1.5 `body` (`TextBlock`, `FactSet`, `Table`, separator, emphasized `Container` for a callout) plus `Action.Submit` actions whose `data.codyncAction` is the button action. The Teams transport is K7; nothing sends it yet. |
+| Matrix | `m.room.message` content: `{msgtype, body, format, formatted_body}` | The block model's plain text as `body` and its HTML form as `formatted_body` (bold labels, `<pre>` table, an ordered list of options). Approvals also get a reaction per option (1️⃣…5️⃣); a numbered reply or a reaction answers them. `host/src/matrix/render.rs`. |
+| Teams | Bot Framework message carrying an Adaptive Card | The serializer (`render::teams`) and its wire shape are defined: an attachment with `contentType: application/vnd.microsoft.card.adaptive` and an `AdaptiveCard` 1.5 `body` (`TextBlock`, `FactSet`, `Table`, separator, emphasized `Container` for a callout) plus `Action.Submit` actions whose `data.codyncAction` is the button action. Teams stays out of scope: it needs a bot registered in the Microsoft 365 Developer Program or Azure with a Bot Framework channel, not a token; see [the Matrix channel](matrix-channel.md#teams). |
 
 ## Approval cards
 
@@ -39,7 +40,8 @@ channel that cannot express a block still says everything the card says. A butto
 warning callout with the command, fields for the tool kind and details, and one button per option.
 Buttons carry `p|<entry id>|<option>|<print>`, where the print digests the title and option ids so
 a button from a card that changed cannot answer another. Slack, Discord and Telegram read that code
-back; WhatsApp answers by number.
+back; WhatsApp answers by number, and Matrix by number or reaction (the card event is mapped to the
+entry in `matrix_cards`).
 
 Every answer still goes through the host's `respondPermission` method, so channel buttons and
 Codync's own clients share one answer path and the first answer wins. Telegram's card is sent with

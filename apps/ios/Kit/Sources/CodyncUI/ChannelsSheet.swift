@@ -50,6 +50,7 @@ public struct ChannelsSheet: View {
             CardForm {
                 telegram
                 discordSection
+                MatrixSection()
                 githubSection
                 slackSection
                 if let error {

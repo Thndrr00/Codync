@@ -11,6 +11,7 @@ use super::{After, App, Overlay};
 pub struct ChannelsSheet {
     pub bots: Vec<Value>,
     pub slack: Option<Value>,
+    pub matrix: Option<Value>,
     pub sel: usize,
     /// The Telegram bot a pairing code was just asked for.
     pub pairing_for: Option<String>,
@@ -58,6 +59,23 @@ pub fn slack_text(slack: Option<&Value>) -> String {
     }
 }
 
+/// What the sheet says about the Matrix connection.
+pub fn matrix_text(matrix: Option<&Value>) -> String {
+    match matrix {
+        None => "Loading…".into(),
+        Some(m) if m["configured"] != true => "Matrix is not connected.".into(),
+        Some(m) => {
+            let rooms = m["bindings"].as_array().map_or(0, Vec::len);
+            format!(
+                "Connected as {} on {} · {rooms} {}",
+                m["userId"].as_str().unwrap_or_default(),
+                m["homeserver"].as_str().unwrap_or_default(),
+                if rooms == 1 { "room" } else { "rooms" },
+            )
+        }
+    }
+}
+
 /// One Telegram bot as the list shows it, on two lines.
 pub fn bot_lines(bot: &Value, now: i64) -> [String; 2] {
     let username = bot["username"].as_str().unwrap_or_default();
@@ -81,6 +99,7 @@ impl App {
         self.overlays.push(Overlay::Channels(Box::default()));
         self.call("telegramStatus", json!({}), After::Channels);
         self.call("slackStatus", json!({}), After::ChannelsSlack);
+        self.call("matrixStatus", json!({}), After::ChannelsMatrix);
     }
 
     pub(super) fn channels_key(&mut self, mut s: Box<ChannelsSheet>, k: KeyEvent) -> Option<Overlay> {
@@ -91,12 +110,16 @@ impl App {
             KeyCode::Char('r') => {
                 self.call("telegramStatus", json!({}), After::Channels);
                 self.call("slackStatus", json!({}), After::ChannelsSlack);
+                self.call("matrixStatus", json!({}), After::ChannelsMatrix);
             }
             KeyCode::Char('p') => {
                 if let Some(name) = s.bots.get(s.sel).and_then(|b| b["name"].as_str()).map(str::to_owned) {
                     self.call("pairTelegram", json!({"name": name}), After::Channels);
                     s.pairing_for = Some(name);
                 }
+            }
+            KeyCode::Char('d') => {
+                self.call("disconnectMatrix", json!({}), After::ChannelsMatrix);
             }
             _ => {}
         }
@@ -117,6 +140,12 @@ impl App {
     pub(super) fn channels_slack_loaded(&mut self, v: Value) {
         if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
             s.slack = Some(v);
+        }
+    }
+
+    pub(super) fn channels_matrix_loaded(&mut self, v: Value) {
+        if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
+            s.matrix = Some(v);
         }
     }
 }
@@ -154,6 +183,13 @@ mod tests {
         assert_eq!(
             slack_text(Some(&json!({"configured": true, "socketMode": true, "workspaceId": "T1"}))),
             "Connected through Socket Mode · T1"
+        );
+        assert_eq!(matrix_text(None), "Loading…");
+        assert_eq!(matrix_text(Some(&json!({"configured": false}))), "Matrix is not connected.");
+        assert_eq!(
+            matrix_text(Some(&json!({"configured": true, "userId": "@bot:example.org",
+                "homeserver": "https://m.example", "bindings": [{}, {}]}))),
+            "Connected as @bot:example.org on https://m.example · 2 rooms"
         );
     }
 }

@@ -2,6 +2,7 @@ package com.codync.android
 
 import com.codync.android.core.Channels
 import com.codync.android.core.DiscordStatus
+import com.codync.android.core.MatrixStatus
 import com.codync.android.core.SlackStatus
 import com.codync.android.core.TelegramBot
 import com.codync.android.core.WhatsAppLink
@@ -12,6 +13,7 @@ internal enum class ChannelProvider(val title: String, val icon: String, val des
     Telegram("Telegram", "paperplane", "Talk to a bot from Telegram. Only people you pair can write."),
     Slack("Slack", "number", "Answers in the Slack channels you bind. Keys stay in the computer."),
     Discord("Discord", "gamecontroller", "Answers in your server's channels, approvals included."),
+    Matrix("Matrix", "bubble.left.and.bubble.right", "Answers in the Matrix rooms you bind, from any homeserver. The session stays in the computer."),
 }
 
 /** One row in Extensions: whether it is connected and the line under its name. */
@@ -24,17 +26,19 @@ internal data class ChannelSummary(
 
 internal fun stateOf(raw: String): String = Channels.stateText(raw)
 
-/** The four channels, from what the host already reports (same rules as the desktop catalog). */
+/** The five channels, from what the host already reports (same rules as the desktop catalog). */
 internal fun channelSummaries(
     bots: List<TelegramBot>,
     slack: SlackStatus?,
     discord: DiscordStatus?,
+    matrix: MatrixStatus?,
     whatsapp: WhatsAppLink?,
 ): List<ChannelSummary> {
     val whatsappConnected = whatsapp?.state == "connected"
     val telegramConnected = bots.isNotEmpty()
     val slackConnected = slack?.configured == true
     val discordConnected = discord?.configured == true
+    val matrixConnected = matrix?.configured == true
     return listOf(
         ChannelSummary(
             ChannelProvider.WhatsApp,
@@ -60,6 +64,12 @@ internal fun channelSummaries(
             discordConnected,
             discordConnected && discord?.state?.startsWith("error") == true,
             if (!discordConnected) "Not connected" else "${discord?.bindings?.size ?: 0} channels",
+        ),
+        ChannelSummary(
+            ChannelProvider.Matrix,
+            matrixConnected,
+            matrixConnected && matrix?.state?.startsWith("error") == true,
+            if (!matrixConnected) "Not connected" else "${matrix?.bindings?.size ?: 0} channels",
         ),
     )
 }

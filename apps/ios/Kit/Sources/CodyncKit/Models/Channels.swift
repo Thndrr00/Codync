@@ -67,6 +67,59 @@ public struct TelegramPairing: Decodable, Sendable {
     }
 }
 
+/// One bound Matrix room: the host bot that answers it and the people allowed in it.
+public struct MatrixBinding: Decodable, Identifiable, Equatable, Sendable {
+    public var roomId: String
+    public var botId: String
+    public var allowedUsers: [String]
+    public var memory: String
+    public var icon: String
+
+    public var id: String { roomId }
+
+    public init(roomId: String, botId: String, allowedUsers: [String], memory: String = "", icon: String = "") {
+        self.roomId = roomId
+        self.botId = botId
+        self.allowedUsers = allowedUsers
+        self.memory = memory
+        self.icon = icon
+    }
+
+    private enum CodingKeys: String, CodingKey { case roomId, botId, allowedUsers, memory, icon }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        roomId = try c.decode(String.self, forKey: .roomId)
+        botId = try c.decodeIfPresent(String.self, forKey: .botId) ?? ""
+        allowedUsers = try c.decodeIfPresent([String].self, forKey: .allowedUsers) ?? []
+        memory = try c.decodeIfPresent(String.self, forKey: .memory) ?? ""
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+    }
+}
+
+/// The Matrix connection, as `matrixStatus` reports it.
+public struct MatrixStatus: Decodable, Equatable, Sendable {
+    public var configured: Bool
+    public var homeserver: String?
+    public var userId: String?
+    public var deviceId: String?
+    public var bindings: [MatrixBinding]
+    /// `ok`, `starting`, or `error: …`.
+    public var state: String
+
+    private enum CodingKeys: String, CodingKey { case configured, homeserver, userId, deviceId, bindings, state }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
+        homeserver = try c.decodeIfPresent(String.self, forKey: .homeserver)
+        userId = try c.decodeIfPresent(String.self, forKey: .userId)
+        deviceId = try c.decodeIfPresent(String.self, forKey: .deviceId)
+        bindings = try c.decodeIfPresent([MatrixBinding].self, forKey: .bindings) ?? []
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? "starting"
+    }
+}
+
 /// The Slack connection, as `slackStatus` reports it.
 public struct SlackStatus: Decodable, Equatable, Sendable {
     public var configured: Bool
@@ -257,6 +310,32 @@ public enum Channels {
         case "ok": "Connected"
         case "starting": "Connecting…"
         default: "Cannot reach Discord"
+        }
+    }
+
+    /// A homeserver address: https, or http to a server on the computer's own network.
+    public static func matrixHomeserverOk(_ value: String) -> Bool {
+        let url = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return url.count <= 300 && url.wholeMatch(of: /https?:\/\/[^\s\/]+(\/[^\s]*)?/) != nil
+    }
+
+    /// A full Matrix user id: `@name:server`.
+    public static func matrixUserOk(_ value: String) -> Bool {
+        let id = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return id.count <= 255 && id.wholeMatch(of: /@[^:\s]+:[^\s]+/) != nil
+    }
+
+    /// A room id or alias: `!opaque:server` or `#alias:server`.
+    public static func matrixRoomOk(_ value: String) -> Bool {
+        let id = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return id.count <= 255 && id.wholeMatch(of: /[!#][^:\s]+:[^\s]+/) != nil
+    }
+
+    public static func matrixStateText(_ state: String) -> String {
+        switch state {
+        case "ok": "Connected"
+        case "starting": "Connecting…"
+        default: "Cannot reach Matrix"
         }
     }
 

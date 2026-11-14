@@ -23,6 +23,39 @@ export interface SlackStatus {
   bindings: { channelId: string; botId: string; allowedUsers: string[]; memory?: string; icon?: string }[] | null
 }
 
+/** The Matrix connection, as `matrixStatus` reports it. Room ids look like `!opaque:server`. */
+export interface MatrixBinding {
+  roomId: string
+  botId: string
+  allowedUsers: string[]
+  memory?: string
+  icon?: string
+}
+
+export interface MatrixStatus {
+  configured: boolean
+  homeserver: string | null
+  userId: string | null
+  deviceId: string | null
+  bindings: MatrixBinding[] | null
+  /** `ok`, `starting`, or `error: …`. */
+  state: string
+  deliveries: { id: string; state: string }[]
+}
+
+/** A homeserver address: https, or http to a server on this computer's own network. */
+export const matrixHomeserverOk = (url: string) => url.length <= 300 && /^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(url)
+/** A full Matrix user id: `@name:server`. */
+export const matrixUserOk = (id: string) => id.length <= 255 && /^@[^:\s]+:[^\s]+$/.test(id)
+/** A room id or alias: `!opaque:server` or `#alias:server`. */
+export const matrixRoomOk = (id: string) => id.length <= 255 && /^[!#][^:\s]+:[^\s]+$/.test(id)
+
+export function matrixStateText(state: string): string {
+  if (state === 'ok') return 'Connected'
+  if (state === 'starting') return 'Connecting…'
+  return 'Cannot reach Matrix'
+}
+
 /** The Discord connection, as `discordStatus` reports it. Snowflakes are digits. */
 export interface DiscordStatus {
   configured: boolean

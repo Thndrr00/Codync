@@ -39,6 +39,7 @@ pub(crate) mod week;
 mod workspaces;
 pub use visibility::is_internal;
 pub(crate) mod discord;
+pub(crate) mod matrix;
 pub(crate) mod slack;
 pub(crate) mod whatsapp;
 

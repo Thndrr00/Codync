@@ -277,7 +277,9 @@ impl App {
                     | After::Profiles
                     | After::Health
                     | After::Comfy => {}
-                    After::Channels | After::ChannelsSlack => self.flash(&format!("Channels: {e}")),
+                    After::Channels | After::ChannelsSlack | After::ChannelsMatrix => {
+                        self.flash(&format!("Channels: {e}"))
+                    }
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),
                     After::RulesSaved => self.rules_saved(Err(e)),
@@ -379,6 +381,7 @@ impl App {
             After::Profiles => self.profiles = v["profiles"].as_array().cloned().unwrap_or_default(),
             After::Channels => self.channels_loaded(&v),
             After::ChannelsSlack => self.channels_slack_loaded(v),
+            After::ChannelsMatrix => self.channels_matrix_loaded(v),
             After::Proposals => self.proposals_loaded(&v),
             After::Beliefs => self.beliefs_loaded(&v),
             After::BeliefsChanged => self.beliefs_changed(),

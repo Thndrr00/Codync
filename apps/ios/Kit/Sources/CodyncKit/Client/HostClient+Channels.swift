@@ -56,6 +56,32 @@ public extension HostClient {
 
     func disconnectDiscord() async throws -> DiscordStatus { try await call("disconnectDiscord", Empty()) }
 
+    func matrixStatus() async throws -> MatrixStatus { try await call("matrixStatus", Empty()) }
+
+    func disconnectMatrix() async throws -> MatrixStatus { try await call("disconnectMatrix", Empty()) }
+
+    /// Sets the Matrix session and its bound rooms up; the host signs in and checks every room first.
+    func setMatrix(homeserver: String, user: String, accessToken: String, password: String,
+                   bindings: [MatrixBinding]) async throws -> MatrixStatus {
+        struct Body: Encodable {
+            var homeserver: String
+            var user: String
+            var accessToken: String
+            var password: String
+            var bindings: [Binding]
+        }
+        struct Binding: Encodable {
+            var roomId: String
+            var botId: String
+            var allowedUsers: [String]
+        }
+        let body = Body(homeserver: homeserver.trimmed, user: user.trimmed, accessToken: accessToken.trimmed,
+                        password: password,
+                        bindings: bindings.map { Binding(roomId: $0.roomId.trimmed, botId: $0.botId,
+                                                        allowedUsers: $0.allowedUsers.map(\.trimmed)) })
+        return try await call("setMatrixChannel", body, timeout: 60)
+    }
+
     /// Sets the Discord bot and its bound channels up; the host checks the token before saving anything.
     func setDiscord(guildId: String, botUserId: String, botToken: String,
                     bindings: [DiscordBinding]) async throws -> DiscordStatus {

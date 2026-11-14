@@ -9,6 +9,7 @@ use tokio::task::JoinSet;
 /// Starts the host's background work. Answers the tasks that run the computer's agent CLIs, for [`stop_agent_checks`].
 pub fn start(hub: &Arc<Hub>) -> JoinSet<()> {
     tokio::spawn(crate::discord::run(hub.clone()));
+    tokio::spawn(crate::matrix::run(hub.clone()));
     tokio::spawn(crate::slack::run(hub.clone()));
     tokio::spawn(crate::native_channels::run(hub.clone()));
     tokio::spawn(crate::telegram::run(hub.clone()));

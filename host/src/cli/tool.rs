@@ -19,6 +19,7 @@ enum Server {
     Team,
     Manage,
     Memory,
+    Docs,
 }
 
 impl Server {
@@ -31,6 +32,7 @@ impl Server {
             Self::Team => mcp::Server::Team,
             Self::Manage => mcp::Server::Manage,
             Self::Memory => mcp::Server::Memory,
+            Self::Docs => mcp::Server::Docs,
         }
     }
 }

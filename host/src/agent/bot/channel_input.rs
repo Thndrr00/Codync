@@ -9,6 +9,7 @@ pub(super) fn claim(hub: &Hub, id: &str) -> Result<bool> {
         Some("native-channel") => crate::native_channels::claim_prompt(hub, id),
         Some("slack") => crate::slack::claim_prompt(hub, id),
         Some("discord") => crate::discord::claim_prompt(hub, id),
+        Some("matrix") => crate::matrix::claim_prompt(hub, id),
         Some("whatsapp") => crate::whatsapp::claim_prompt(hub, id),
         Some("telegram") => crate::telegram::claim_prompt(hub, id),
         _ => Ok(true),

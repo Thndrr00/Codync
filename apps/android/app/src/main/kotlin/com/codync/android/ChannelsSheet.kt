@@ -227,6 +227,7 @@ import kotlinx.coroutines.launch
                     }
                 }
             }
+            MatrixSection(state, store)
             CardSection(tr("GitHub"), footer = tr("A fine-grained token with the repository permissions your workflows need, plus Administration to create repositories. It stays on the computer; Codync never sends it anywhere else.")) {
                 val connected = github
                 row {
@@ -322,7 +323,7 @@ import kotlinx.coroutines.launch
 }
 
 /** What the bot should know about one channel, given before every message from it. */
-@Composable private fun ChannelMemoryField(channel: String, value: String, save: suspend (String) -> Unit) {
+@Composable internal fun ChannelMemoryField(channel: String, value: String, save: suspend (String) -> Unit) {
     var text by remember(channel, value) { mutableStateOf(value) }
     var saving by remember(channel) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -344,7 +345,7 @@ private val CHANNEL_ICONS = listOf(
 )
 
 /** The pictures a channel can wear; the first clears it. */
-@Composable private fun ChannelIconRow(value: String, save: suspend (String) -> Unit) {
+@Composable internal fun ChannelIconRow(value: String, save: suspend (String) -> Unit) {
     val scope = rememberCoroutineScope()
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         for (icon in listOf("") + CHANNEL_ICONS) {

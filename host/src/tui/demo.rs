@@ -98,7 +98,8 @@ pub fn answer(method: &str, now: i64) -> Result<Value, String> {
             "triggerDescriptions": ["Every weekday at 9:00"], "nextRunAt": now + 12 * 3_600_000, "timeoutSeconds": 600, "lastError": null,
         }], "runs": []})),
         "usage" | "weekSummary" | "skillUsage" | "markRead" | "track" | "securityProfiles" | "hostHealth"
-        | "toolStatus" | "telegramStatus" | "slackStatus" | "skillProposals" | "beliefs" | "memory" => Ok(json!({})),
+        | "toolStatus" | "telegramStatus" | "slackStatus" | "matrixStatus" | "discordStatus" | "skillProposals"
+        | "beliefs" | "memory" => Ok(json!({})),
         _ => Err("Demo mode: nothing is sent or changed. Leave it to use your bots.".to_owned()),
     }
 }

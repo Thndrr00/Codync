@@ -34,6 +34,16 @@ extension BotStore {
         try await ready().setDiscord(guildId: guildId, botUserId: botUserId, botToken: botToken, bindings: bindings)
     }
 
+    public func matrixStatus() async throws -> MatrixStatus { try await ready().matrixStatus() }
+
+    public func disconnectMatrix() async throws -> MatrixStatus { try await ready().disconnectMatrix() }
+
+    public func setMatrix(homeserver: String, user: String, accessToken: String, password: String,
+                          bindings: [MatrixBinding]) async throws -> MatrixStatus {
+        try await ready().setMatrix(homeserver: homeserver, user: user, accessToken: accessToken,
+                                    password: password, bindings: bindings)
+    }
+
     /// Adds a Telegram bot the host will talk through, answered by `botId`.
     public func addTelegramBot(name: String, token: String, botId: String) async throws -> [TelegramBot] {
         try await ready().addTelegramBot(name: name, token: token, botId: botId)

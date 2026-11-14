@@ -14,7 +14,7 @@ const telegramBot = {
 }
 
 test('a connected Telegram bot is one channel with its people and bot', () => {
-  const [whatsapp, telegram] = buildChannelCatalog({ whatsapp: null, telegram: [telegramBot], slack: null, discord: null })
+  const [whatsapp, telegram] = buildChannelCatalog({ whatsapp: null, telegram: [telegramBot], slack: null, discord: null, matrix: null })
   assert.equal(whatsapp.connected, false)
   assert.equal(telegram.connected, true)
   assert.equal(telegram.items[0].label, 'home')
@@ -30,6 +30,7 @@ test('a failing bot asks for attention and says so', () => {
     telegram: [{ ...telegramBot, state: 'error: token revoked' }],
     slack: null,
     discord: null,
+    matrix: null,
   })
   assert.equal(telegram.needsAttention, true)
   assert.equal(telegram.items[0].state, 'error')
@@ -38,7 +39,7 @@ test('a failing bot asks for attention and says so', () => {
 })
 
 test('Slack and Discord list one row per bound channel, using the connection state', () => {
-  const [, , slack, discord] = buildChannelCatalog({
+  const [, , slack, discord, matrix] = buildChannelCatalog({
     whatsapp: null,
     telegram: [],
     slack: {
@@ -55,6 +56,15 @@ test('Slack and Discord list one row per bound channel, using the connection sta
       deliveries: [],
       bindings: [{ channelId: 'D1', botId: 'b', allowedUsers: [], memory: '' }],
     },
+    matrix: {
+      configured: true,
+      homeserver: 'https://m.example',
+      userId: '@bot:example.org',
+      deviceId: 'D',
+      state: 'ok',
+      deliveries: [],
+      bindings: [{ roomId: '!r:example.org', botId: 'b', allowedUsers: ['@ana:example.org'], memory: '' }],
+    },
   }, (id) => (id === 'b' ? 'Desk' : null))
   assert.equal(slack.connected, true)
   assert.equal(slack.items[0].channel, 'C1')
@@ -62,6 +72,7 @@ test('Slack and Discord list one row per bound channel, using the connection sta
   assert.equal(slack.items[0].memory, 'ship it')
   assert.equal(discord.items[0].state, 'starting')
   assert.equal(discord.items[0].botName, 'Desk')
+  assert.equal(matrix.items[0].channel, '!r:example.org')
 })
 
 test('a linked WhatsApp number is its own channel, and an unlinked one is not listed', () => {
@@ -70,20 +81,21 @@ test('a linked WhatsApp number is its own channel, and an unlinked one is not li
     telegram: [],
     slack: null,
     discord: null,
+    matrix: null,
   })[0]
   assert.equal(connected.connected, true)
   assert.equal(connected.items[0].label, 'Work')
   assert.equal(connected.items[0].subtitle, '+34 600')
   assert.deepEqual(connected.items[0].people.map((p) => p.label), ['Person Ana'])
-  assert.equal(buildChannelCatalog({ whatsapp: { state: 'qr' }, telegram: [], slack: null, discord: null })[0].items.length, 0)
+  assert.equal(buildChannelCatalog({ whatsapp: { state: 'qr' }, telegram: [], slack: null, discord: null, matrix: null })[0].items.length, 0)
 })
 
 test('search finds a channel by provider, bot or channel name', () => {
-  const entries = buildChannelCatalog({ whatsapp: null, telegram: [telegramBot], slack: null, discord: null })
+  const entries = buildChannelCatalog({ whatsapp: null, telegram: [telegramBot], slack: null, discord: null, matrix: null })
   assert.deepEqual(matchChannels(entries, 'home').map((e) => e.id), ['telegram'])
   assert.deepEqual(matchChannels(entries, 'desk').map((e) => e.id), ['telegram'])
   assert.deepEqual(matchChannels(entries, 'discord').map((e) => e.id), ['discord'])
-  assert.deepEqual(matchChannels(entries, '').map((e) => e.id), ['whatsapp', 'telegram', 'slack', 'discord'])
+  assert.deepEqual(matchChannels(entries, '').map((e) => e.id), ['whatsapp', 'telegram', 'slack', 'discord', 'matrix'])
 })
 
 test('state words are the ones the apps show', () => {

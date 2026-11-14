@@ -1,4 +1,4 @@
-Talk to your bots from WhatsApp, Telegram, Slack or Discord. Only the people you allow can write to a bot there, and the bot answers with its own agent, folder and permissions.
+Talk to your bots from WhatsApp, Telegram, Slack, Discord or Matrix. Only the people you allow can write to a bot there, and the bot answers with its own agent, folder and permissions.
 
 ## Connect a channel
 
@@ -8,6 +8,7 @@ Channels belong to a computer and are set up on it. Open **Extensions → Channe
 - **Telegram:** add the bot @BotFather gave you, choose the Codync bot it answers for, then send `/start` with its pairing code from Telegram.
 - **Slack:** connect the workspace's app with its bot token, app token and signing secret; each channel is bound to a Codync bot and to the Slack users allowed in it.
 - **Discord:** connect the server's bot token, then bind channel ids to Codync bots and list the people allowed in each.
+- **Matrix:** sign in with the bot account's homeserver and an access token or password, then bind a room id or alias to a Codync bot and list the Matrix users allowed there. Invite the account to the rooms first; encrypted rooms are not decrypted yet.
 
 The same controls remain in **Settings → General → Channels**, with a shortcut to Extensions. Each channel's page shows its state, the bot that answers, the people allowed, its memory and its picture.
 
@@ -43,7 +44,7 @@ kept as unknown rather than automatically duplicated.
 
 ## Channel memory
 
-Each Telegram bot, Slack channel and Discord channel has a **Channel memory**: what the bot should know about that conversation, such as the project it covers or how its people like answers. It is given to the bot before every message from that channel and saved on its own, so it survives a reconnect.
+Each Telegram bot, Slack channel, Discord channel and Matrix room has a **Channel memory**: what the bot should know about that conversation, such as the project it covers or how its people like answers. It is given to the bot before every message from that channel and saved on its own, so it survives a reconnect.
 
 A channel also wears a **Channel picture**: one of twenty icons or, the first choice, the faces of its members. It shows beside the channel in Settings.
 
@@ -51,4 +52,4 @@ Keep it short and stable. Anything that changes per message belongs in the messa
 
 ## Approvals and routines
 
-An [approval card](/docs/conversations#approval-cards) arrives in the channel with a button per option; anyone allowed there may answer, and the first answer wins. Slack shows buttons on the card, Discord and Telegram show them under it, and WhatsApp lists the options as numbered replies. Mentioning the bot in a Slack or Telegram channel can also start a [routine](/docs/routines); those triggers are edited on the computer.
+An [approval card](/docs/conversations#approval-cards) arrives in the channel with a button per option; anyone allowed there may answer, and the first answer wins. Slack shows buttons on the card, Discord and Telegram show them under it, WhatsApp lists the options as numbered replies, and Matrix shows a numbered card answered by a reply or a reaction. Mentioning the bot in a Slack or Telegram channel can also start a [routine](/docs/routines); those triggers are edited on the computer.

@@ -76,6 +76,8 @@ pub enum After {
     Channels,
     /// `slackStatus`.
     ChannelsSlack,
+    /// `matrixStatus`.
+    ChannelsMatrix,
     /// `skillProposals` and the calls that answer with the inbox.
     Proposals,
     /// `beliefs`: the notes of the bot as beliefs.
