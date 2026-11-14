@@ -87,7 +87,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             view
         }
         "whatsappSetWorkingMessage" => {
-            let on = crate::whatsapp::set_working_message(hub, b["enabled"].as_bool().context("enabled must be a boolean")?)?;
+            let on = crate::whatsapp::set_working_message(
+                hub,
+                b["enabled"].as_bool().context("enabled must be a boolean")?,
+            )?;
             json!({"workingMessage": on})
         }
         "whatsappLogout" => {

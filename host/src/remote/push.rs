@@ -239,8 +239,7 @@ mod tests {
     }
 
     fn bot(hidden: bool, notify: Option<bool>) -> BotConfig {
-        serde_json::from_value(json!({"id": "b", "name": "Ada", "hidden": hidden, "notify": notify}))
-            .expect("a bot")
+        serde_json::from_value(json!({"id": "b", "name": "Ada", "hidden": hidden, "notify": notify})).expect("a bot")
     }
 
     #[test]
