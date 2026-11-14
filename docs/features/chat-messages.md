@@ -67,6 +67,25 @@ it has no pointer tooltip or link-opening action.
 - Clients never stream text into a bubble: the chat shows user messages, `final` agent entries,
   permission cards and notices (`isChat`). Nothing pops in and out while a turn runs.
 
+## Pins
+
+- `pinMessage {messageId, pinned}` on the `chat` server (`host/src/chat/pins.rs`) sets or clears
+  `data.pinned: {by, at}` on a message; `pinnedMessages {botId, threadId?}` lists them. A pin rides the
+  entry's rev, so one broadcast reaches every client; there is no pins table.
+- `by` is `{kind: "person", device?}` for a person's pin (the device's name, or none at the computer
+  itself) and `{kind: "agent", botId}` for the `pin_message` tool. The tool names the message by a quote
+  because the agent doesn't see message ids, and it cannot take back a person's pin.
+- Only messages are pinnable, 50 per chat or thread (the 51st drops the oldest), and a pin of a thread
+  message carries the thread's title. The list is newest first across the bot's chats, 200 at most, and
+  it answers `{entry, pin}` where `pin` reads `messageId`, `threadId`, `threadTitle`, `text` (first
+  1 000 chars), `author`, `pinnedBy` and `pinnedAt`.
+- Every client's message menu has Pin/Unpin, the chat header a pin button, and a
+  client that shows the chat and its threads shows both sheets: the pin opens its message, a thread at
+  that message and a button back to the latest one. The terminal uses `B` for the list and `p` to
+  pin/unpin the picked message, and marks a pinned row with `· Pinned`.
+- The agent is told about pins only through its tool; a pin by a person reaches the agent's prompt on
+  the next turn as the message text it already reads.
+
 ## Bot reactions
 
 - The `chat` server's `react {emoji, to?}` (`host/src/chat/reactions.rs`) goes through the bot's actor,

@@ -1,0 +1,28 @@
+A bot can make a picture or a short clip for you, paid with the subscription its agent is already signed in with: ChatGPT for GPT Image on a Codex bot, Grok for Grok Imagine on a Grok bot. There is nothing to connect and no key to paste, and the file stays in the chat like any other file the bot sends.
+
+Only an agent with an image tool can do it. If a bot's agent has none, ask a bot on Codex or Grok instead; ComfyUI is the other way to make pictures on your computer.
+
+## Ask for one
+
+In the message box, type `/image` or `/video` (or pick it from the menu that opens) and press Enter. A sheet opens listing what that bot can make:
+
+- **Image | Video** switches between the two when the bot can make both.
+- The model list names the subscription that pays for each file.
+- **Aspect ratio** picks the frame, **Length** and **Resolution** set a video, **Voice** gives a video a spoken voice, and **Transparent background** cuts a picture out.
+- Describe what you want in the box first if you like; the sheet keeps your words.
+
+Press the checkmark to put the request in the box, then send it. The bot makes the file, sends it in the chat, and says in one line what it made.
+
+A transparent background works best on Codex's GPT Image, which makes clear pixels. Grok's tools cannot, so they put the subject on one flat green or magenta background instead, which you key out in an editor.
+
+## In a routine
+
+On the computer app and on Android, a routine's flow can hold a **picture step** or a **clip step**: choose **Add a picture step** or **Add a clip step** in the routine panel, describe it, and the step makes the file each time the routine runs. A step can hand its file to the next step, and a bot's reply can be handed to a step. Connect a step from the canvas as you connect bots.
+
+The iPhone has no flow canvas yet, so media steps there are set up from the computer or Android app.
+
+## Where the request goes
+
+`/image` and `/video` only work at the start of a message. On the phone and the computer the sheet builds the request; in the terminal app, the same commands put their flags in the box and you type the description after them.
+
+The file is limited by your subscription, and the model's own limits are the ones the sheet shows.

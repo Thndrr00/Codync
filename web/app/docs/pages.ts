@@ -85,6 +85,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Run an n8n instance on your computer: set up the install folder and port in the n8n settings, then build flows in its editor.",
       },
       {
+        slug: "images-and-video",
+        title: "Images and video",
+        description:
+          "Make a picture or a short clip with the bot's own agent subscription, GPT Image or Grok Imagine, from the message box or as a step of a routine.",
+      },
+      {
         slug: "comfyui",
         title: "ComfyUI",
         description:

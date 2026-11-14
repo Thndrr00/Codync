@@ -31,7 +31,9 @@ Each chat keeps its own draft on each device, and the draft comes back when you 
 - **Send now** (the turning arrow) hands it to the bot right away. Claude, Codex and omp bots take it into the reply they're working on, which then answers it too; with other agents, that reply stops and the bot starts on your message. While the bot is busy with something else, such as a routine, a group or another bot's request, the message goes first in line.
 - **Remove** (the trash can) takes it back: neither it nor its files reach the bot.
 
-In the terminal, the waiting messages show above the input; press `esc`, then `S` to send the oldest one now or `D` to take back the newest.
+**Sending** (on the computer, in **Settings → Sending** on the desktop and in the computer's settings on the phones) makes a message you send to a working bot a **Send now** by itself, so it joins the reply in progress instead of waiting. It's on unless you turn it off. A message to a group, or work coming from a routine or a channel, keeps its own turn either way.
+
+In the terminal, the waiting messages show above the input; press `esc`, then `S` to send the oldest one now or `D` to take back the newest. The palette's **Steer the bot while it works** switches the same setting.
 
 **When the computer is offline**, the iPhone can still take a text message: it shows **Waiting for the computer to come online** and goes out when the computer is back. It waits in the Codync relay, encrypted for your computer, for up to 24 hours; after that it shows **Failed to send**. With no relay (a computer in no account), it waits on the phone instead and goes when the phone reaches the computer again. Tap the cancel button beside it to take it back. A message with files can't wait; its send button stays off until the computer is online.
 
@@ -115,6 +117,18 @@ You can reply to any of your messages or any message from the bot. The reply goe
 
 While you reply, the box shows the quote above it and reads "Reply…". The bot gets the quoted text with your reply, so it knows what you mean even when that message is from an earlier session.
 
+## Pinned messages
+
+Pin a message that must stay at hand, such as a decision or a checklist. A pin lives on the message itself, so everyone in the chat sees it on every device.
+
+- **iPhone:** touch and hold a message, then **Pin**. The pin button in the chat header lists the pins of the chat, newest first.
+- **Desktop:** hover a message and choose **More message actions**, then **Pin**, or right-click it. The pin button in the chat header lists the pins.
+- **Terminal UI:** pick a message (`v`), then `p` to pin or unpin it, and `B` to open the list.
+
+A pin shows the chat or thread it's in and who pinned it. Open one to go straight to the message, even an old one or one in a thread; a thread opens at the message and a button takes you back to the newest one. A chat keeps up to 50 pins; pinning a 51st drops the oldest.
+
+Anybody who reads the chat can unpin a message: tap the pin button on the pin, or touch and hold the message and choose **Unpin**. A bot can pin a message too, for example one it just wrote with a path in it, and it can unpin its own pins, but not yours.
+
 ## Reactions
 
 - **iPhone:** touch and hold a message; the reactions are at the top of the menu.
@@ -162,7 +176,7 @@ Your iPhone gets a notification when a bot:
 You don't get one when:
 
 - the Codync app on your iPhone is open and connected to the computer,
-- the bot's **Notifications** switch is off, or the bot is hidden,
+- the bot's **Notifications** switch is off, or the bot is hidden, saved for **Response needed**: a hidden bot still reaches you when it needs an answer,
 - you stopped the turn yourself.
 
 Routine runs notify you too. A group chat sends one "done" once its bots have finished answering your message.

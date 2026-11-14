@@ -59,6 +59,9 @@ than the bot working directory. Generated files are separate from input uploads;
 `attachments` and `readUpload` retain their existing meaning. Older clients show
 the entry's filename/size text fallback. No version or compatibility floor changes.
 
+A picture or clip is usually asked for with `/image` or `/video`, which runs the bot's own agent
+media tool and shares the file the same way: [media](media.md).
+
 The authenticated `readFile {entryId, fileId, offset}` API requires a nonnegative
 integer offset within the saved size and a file belonging to that final agent entry
 in an undeleted bot's own chat. Existing caller permissions apply: paired

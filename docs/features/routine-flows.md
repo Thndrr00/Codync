@@ -17,7 +17,8 @@ from the graphical canvas of the desktop and phone apps, or in the terminal UI (
 | **Link** | `id`, `routineId`, `fromBotId`, `toBotId`, `instruction` (≤ 8000 bytes, may be empty), `model` (`null` = the target bot's own), `modelOptions` (that model's settings, e.g. `effort`), `createdAt` (ms) |
 | **Step** | `id`, `runId`, `botId`, `deliveryId` (the bot request that carried the input; `null` for the routine's own bot), `input`, `output` (`null` until it replies), `status`, `error`, `createdAt`, `updatedAt` |
 | **Step status** | `running`, `succeeded`, `failed`, `skipped`, `cancelled` |
-| **Position** | `nodeKey` (`routine:<id>` or `bot:<id>`), `x`, `y` (numbers, at most ±1 000 000) |
+| **Media step** | `id`, `routineId`, `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
+| **Position** | `nodeKey` (`routine:<id>`, `bot:<id>` or `media:<id>`), `x`, `y` (numbers, at most ±1 000 000) |
 
 A **canvas** belongs to a bot and holds every routine it owns or that passes through it, the links of
 those routines, where the nodes sit, and the bots **placed** on it before any link reaches them.
@@ -46,6 +47,9 @@ Rules the host enforces:
   deeper than the limit.
 - **Targets**: only a bot that takes requests like any other: not a group, not a terminal session
   (`external::is_external`), not hidden or deleted. The same check applies when connecting, when placing a bot and when running.
+- **Media steps** are link ends like bots: a picture can be handed on, and a bot's reply can be handed
+  to a step. A step's settings are checked against its model before it runs (frame, length, resolution,
+  voice, transparency, and the backend that makes the kind).
 - **Connecting rules** (`graph.rs`): not to itself, never into the routine's own bot, only from a bot the flow
   already reaches, no duplicate link between the same two bots, no loop, no deeper than the limit.
 - **A link applies to runs that began after it was made.**
@@ -74,6 +78,9 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `connectRoutineFlow` | `routineId`, `fromBotId`, `toBotId`, optional `instruction` | `{"link": Link}` |
 | `disconnectRoutineFlow` | `linkId` | `{"ok": true}` |
 | `updateRoutineFlowLink` | `linkId`, `instruction`, optional `model` and `modelOptions` (absent keeps, `null`/`{}` clears) | `{"link": Link}` |
+| `addRoutineFlowMedia` | `routineId`, `kind` (`image`/`video`) | `{"media": MediaStep}` |
+| `updateRoutineFlowMedia` | `mediaId` and any of `prompt`, `model`, `aspect`, `duration`, `resolution`, `voice`, `transparent` | `{"media": MediaStep}` |
+| `removeRoutineFlowMedia` | `mediaId` | `{"ok": true}` |
 | `testRoutineFlow` | `botId` (the routine's owner), `routineId`, optional `input` | `{"runId": "flow-test-…"}` |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
@@ -94,6 +101,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
     "steps": [ /* the steps of the routine's newest run that has any, oldest first */ ]
   }],
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
+  "mediaNodes": [ { "id": "…", "routineId": "…", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
   "positions": [ { "nodeKey": "routine:…", "x": 0.0, "y": 0.0 } ],
   "placedBotIds": ["…"]
 }
@@ -130,12 +138,12 @@ ignore the new method names and `routineFlow` events (the TUI and apps skip unkn
 
 ## Screens
 
-In each client, a bot's routines screen has a **List | Flow** selector. Flow shows the canvas of that bot: routine and bot nodes, a fixed dashed edge from each routine to its own bot, link edges, saved positions (nodes never moved sit in automatic columns by depth), and each bot's latest step status (icon and words, never colour alone). A **list** of the same flow is the keyboard and screen-reader equivalent (and the phone's default with TalkBack on or on narrow screens). Both open the same inspector: a routine (pause/resume, test, latest steps, run history), a bot (hand its reply on to…, remove if placed by hand) or a link (instruction, model and its options, disconnect). States: loading, no routines, not connected, no runs yet, error with retry, offline (read-only) and a host without the methods (the canvas says to update Codync there). The desktop rail's **Bot canvas** button opens the selected bot's flow in the same large sheet.
+In each client, a bot's routines screen has a **List | Flow** selector. Flow shows the canvas of that bot: routine, bot and media nodes, a fixed dashed edge from each routine to its own bot, link edges, saved positions (nodes never moved sit in automatic columns by depth), and each bot's latest step status (icon and words, never colour alone). A **list** of the same flow is the keyboard and screen-reader equivalent (and the phone's default with TalkBack on or on narrow screens). Both open the same inspector: a routine (pause/resume, test, add a picture or clip step, latest steps, run history), a bot (hand its reply on to…, remove if placed by hand), a media step (description, model, frame and a video's length, resolution and voice, transparency, save, remove, hand its file on to…, which also hands on to bots) or a link (instruction, model and its options, disconnect). States: loading, no routines, not connected, no runs yet, error with retry, offline (read-only) and a host without the methods (the canvas says to update Codync there). The desktop rail's **Bot canvas** button opens the selected bot's flow in the same large sheet.
 
 - **Desktop** (`apps/desktop/src/renderer/views/routines/flow/`, model `lib/routine-flow.ts`, state `store/routine-flow-store.ts`): hand-written pan/zoom/drag; connect by dragging from a bot's dot onto another bot, or from the inspector. Choosing **Flow** opens the canvas in a large sheet (the details column is too narrow for a graph); the same canvas can be reopened from its expand button. A routine card shows the next seven days as seven tick columns and its newest runs as status dots, with a play button that tests the flow (disabled until a bot is linked).
 - **Android** (`RoutineFlow*.kt`, model `core/RoutineFlow.kt`): pan, pinch and node dragging; connect from the bot's detail sheet; the same week strip, run dots and play button on a routine card.
 - **Terminal** (`f` on a routine): the chain as rows; same words (Running, Succeeded, Failed, Skipped, Cancelled).
-- **iPhone**: not built yet.
+- **iPhone**: not built yet, so routine flows and their media steps are read and edited on the other clients.
 
 The clients pre-check the connect rules (`connectProblem`, same wording as the host) and the host stays the authority.
 
