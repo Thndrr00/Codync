@@ -20,7 +20,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -96,6 +99,7 @@ import com.codync.android.design.*
         }
         SecuritySection()
         NotificationsSection()
+        AlertRulesSection(store)
         GettingStartedSection(state)
         EnterpriseSection(state, store)
         BrowserSection(state, store)
@@ -137,6 +141,38 @@ import com.codync.android.design.*
     CodyncDialog("Start over?", confirmStartOver, { confirmStartOver = false },
         "Signs out of every account and forgets every computer on this phone, then shows the welcome again. Your computers keep their bots and chats; pair again to use them.") {
         listOf(DialogAction("Start over", destructive = true, action = store::startOver))
+    }
+}
+
+/** The host's alert rules: which kinds reach the phone. Quiet hours stay in the desktop's Diagnostics for now. */
+@Composable private fun AlertRulesSection(store: AppStore) {
+    var rules by remember { mutableStateOf<NotificationRules?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        try { rules = store.notificationRules() }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { error = failure.message }
+    }
+    fun change(next: NotificationRules) {
+        rules = next
+        scope.launch {
+            try { rules = store.setNotificationRules(next); error = null }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { error = failure.message }
+        }
+    }
+    CardSection("Push alert rules", "Which of the computer's alerts reach this phone. An approval always arrives, even in quiet hours.") {
+        val current = rules
+        if (current == null) {
+            row { Text(error ?: "Loading…", style = Type.body, color = Palette.secondary) }
+        } else {
+            row { SwitchRow("Task finished", isOn = current.done, onChange = { change(current.copy(done = it)) }) }
+            row { SwitchRow("Needs you", "An approval or a question; always arrives.", isOn = current.needsInput, onChange = { change(current.copy(needsInput = it)) }) }
+            row { SwitchRow("Task failed", isOn = current.failed, onChange = { change(current.copy(failed = it)) }) }
+            row { SwitchRow("Task paused", isOn = current.paused, onChange = { change(current.copy(paused = it)) }) }
+        }
+        if (error != null && current != null) row { Text(error ?: "", style = Type.footnote, color = Palette.danger) }
     }
 }
 
