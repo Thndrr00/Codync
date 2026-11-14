@@ -66,5 +66,7 @@ steering default changed, all 29 of them.
 
 `e2e/pins.spec.ts` and the three `e2e/queue.spec.ts` tests pass against the worktree sandbox, covering
 the pin list and the sending choice. A linked WhatsApp number is not part of the run (the sandbox has
-no phone), so the switch in the WhatsApp sheet is host-test plus review only. iOS could not be built
-here (no Xcode on this machine), so the iPhone sources of pins were compiled by review.
+no phone), so the sheet's own switch cannot be drawn there; `e2e/whatsapp.spec.ts` covers the host
+path the switch calls instead — it sets the working message off and on and reads each value back. iOS
+could not be built here (no Xcode on this machine), so the iPhone sources of pins and the WhatsApp
+switch were compiled by review only.

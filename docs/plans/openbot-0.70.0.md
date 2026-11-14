@@ -69,10 +69,16 @@ Desktop: `npm run typecheck` clean; `npm test` 812 of 840 passing, its 4 failure
 assert English copy on a Spanish-locale machine. Android: `:core:test`, `:app:testDebugUnitTest`,
 `:app:assembleDebug` and `:app:lintDebug` green. Web: `npm run check:docs` and `npm run lint` clean.
 
-Desktop end to end, against the worktree sandbox and the real app: `e2e/media.spec.ts` and
-`e2e/pins.spec.ts` pass (11 s, 17 s), and so do the three `e2e/queue.spec.ts` tests that cover the
-sending choice. The picker's copy, its model and aspect choices and the command it writes into the
-composer are covered; a real generation through `/image` needs an installed Codex or Grok and is not.
+Desktop end to end, against the worktree sandbox and the real app: `e2e/media.spec.ts`, `e2e/mute.spec.ts`,
+`e2e/pins.spec.ts` and `e2e/whatsapp.spec.ts` pass together (9.6 s, 12.8 s, 10.1 s, 0.7 s; 4 passed,
+35 s), and so do the three `e2e/queue.spec.ts` tests that cover the sending choice. The picker's copy,
+its model and aspect choices and the command it writes into the composer are covered; so are the row's
+mute item and the notification switch behind it, by what the host stored.
+
+A real generation was run too, once, on the installed Codex CLI (0.166.0, signed in) through a bot of
+the sandbox: `/image --model gpt-image --aspect 1:1 a red fox in the snow, watercolour` produced
+`red-fox-watercolour.png`, 3 387 080 bytes, attached to the agent's message. The turn took about two
+minutes, most of it the agent's own start; `/video` was not run.
 
 Getting that run green on Windows took three fixes, all on the test side. The scripted agent fixtures
 were quoted with single quotes, which only quote in `sh`, so on Windows the path split at its first
@@ -82,7 +88,10 @@ the pin and media specs do, and its 40-message test has a timeout of its own. Th
 radios, not buttons. Sandbox memory sat above the host's 85 % refusal threshold, which the run raises
 for itself.
 
+The first spec of a run also has the onboarding between the window and the roster, and on this
+memory-tight machine it once ran past the 30 s default; the spec files that walk the roster now set a
+timeout of 90 s, as the queue one already did.
+
 iOS could not be built here (this machine has no Xcode), so the iPhone sources of media and pins were
-only compiled by review. The mute switch has no e2e of its own either: its copy and state live in the
-bot menu, whose rows the menu specs already open.
+only compiled by review.
 
