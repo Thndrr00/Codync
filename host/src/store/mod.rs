@@ -26,6 +26,7 @@ mod roster;
 mod saved_searches;
 mod search;
 pub use saved_searches::{SearchScope, search_terms};
+pub use search::{Author, Filters};
 pub mod runtime;
 mod schema;
 mod setup;

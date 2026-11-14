@@ -84,6 +84,9 @@ impl Store {
             params![format!("turn.sources.{id}"), format!("turn.inflight.{id}")],
         )?;
         c.execute("DELETE FROM entries WHERE bot_id = ?1", [id])?;
+        c.execute("DELETE FROM search_fts WHERE bot_id = ?1", [id])?;
+        // What search would still find in a chat nobody can open anymore.
+        c.execute("DELETE FROM search_fts WHERE bot_id = ?1", [id])?;
         c.execute("DELETE FROM computer_activity WHERE bot_id = ?1", [id])?;
         c.execute("DELETE FROM pending_tool_calls WHERE bot_id = ?1", [id])?;
         c.execute("DELETE FROM document_reviews WHERE bot_id = ?1", [id])?;

@@ -11,6 +11,7 @@ use crate::LockExt;
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 
 /// The most hits one search returns.
 const MAX_HITS: u32 = 50;
@@ -20,6 +21,13 @@ const SNIPPET_TOKENS: i64 = 12;
 const BACKFILLED: &str = "search.backfilled.v1";
 /// Entries indexed per backfill pass.
 const BACKFILL_ROWS: i64 = 2_000;
+/// How many candidates the rank returns per hit asked for, before recency reorders them.
+const RANKED_FACTOR: i64 = 4;
+/// Rank points a hit loses per day of age. BM25 differences between two decent matches are around one, so a
+/// few days apart settles a tie and a month buries a match that is otherwise as good.
+const AGE_PER_DAY: f64 = 0.12;
+/// The most the age can cost, so an old exact match still beats a vague recent one.
+const AGE_CAP: f64 = 3.0;
 
 pub(super) fn open(c: &Connection) -> Result<()> {
     c.execute_batch(
@@ -102,6 +110,13 @@ pub(super) fn forget(c: &Connection, kind: &str, source: &str) -> Result<()> {
     Ok(())
 }
 
+/// What a hit's age costs it in the ranking: capped, so an old exact match still beats a vague recent one.
+fn age_penalty(at: i64, now: i64) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let days = (now - at).max(0) as f64 / 86_400_000.0;
+    (days * AGE_PER_DAY).min(AGE_CAP)
+}
+
 /// What a person typed, as an FTS5 query: every word, quoted and as a prefix, all of them required. A stray
 /// quote or `AND` becomes a word instead of a syntax error; a word with no letter or digit has nothing to
 /// index and is dropped.
@@ -113,44 +128,109 @@ fn terms(text: &str) -> String {
         .join(" ")
 }
 
+/// Whose side of a chat a search keeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Author {
+    User,
+    Agent,
+}
+
+impl Author {
+    /// The entry kinds the author writes. A page belongs to nobody, so an author keeps messages only.
+    fn kinds(self) -> &'static str {
+        match self {
+            Self::User => "'user'",
+            Self::Agent => "'agent', 'plan'",
+        }
+    }
+
+    /// The wire value (`author` in a request), if it names a side.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "user" => Some(Self::User),
+            "agent" => Some(Self::Agent),
+            _ => None,
+        }
+    }
+}
+
+/// How a search narrows: everything worth reading, anywhere in time, by default.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Filters {
+    /// Tool traces, thoughts, permission prompts and notices too.
+    pub tools: bool,
+    /// Only what this side said.
+    pub author: Option<Author>,
+    /// Only hits from this moment on (epoch milliseconds).
+    pub since: Option<i64>,
+    /// Only hits up to this moment (epoch milliseconds).
+    pub until: Option<i64>,
+}
+
 impl Store {
     /// What this bot knows about `query`, best match first: the source, its kind and a snippet. Only what was
     /// said is searched: tool traces and notices are the agent's working noise, `search_with_tools` keeps them.
     pub fn search(&self, bot: &str, query: &str, limit: u32) -> Result<Vec<Value>> {
-        self.search_with(bot, query, limit, false)
+        self.search_filtered(bot, query, limit, &Filters::default())
     }
 
     /// The same search, tool traces and notices included: a person looking for what a tool printed.
     pub fn search_with_tools(&self, bot: &str, query: &str, limit: u32) -> Result<Vec<Value>> {
-        self.search_with(bot, query, limit, true)
+        self.search_filtered(bot, query, limit, &Filters { tools: true, ..Filters::default() })
     }
 
-    fn search_with(&self, bot: &str, query: &str, limit: u32, tools: bool) -> Result<Vec<Value>> {
+    /// The search narrowed by `filters`, best match first with the newest of equally good matches before the
+    /// oldest: last week's answer is usually the one somebody means.
+    pub fn search_filtered(&self, bot: &str, query: &str, limit: u32, filters: &Filters) -> Result<Vec<Value>> {
         let terms = terms(query);
         if terms.is_empty() {
             return Ok(Vec::new());
         }
         let limit = i64::from(limit.clamp(1, MAX_HITS));
         self.backfill_search()?;
-        let c = self.db.locked();
+        let mut args: Vec<Box<dyn rusqlite::ToSql>> =
+            vec![Box::new(terms), Box::new(bot.to_owned()), Box::new(SNIPPET_TOKENS)];
         // The limit applies after the kinds are picked, so a page of traces doesn't fill the answer.
-        let wanted = if tools { "" } else { " AND (f.kind = 'document' OR e.kind IN ('user', 'agent', 'plan'))" };
-        let mut statement = c.prepare(&format!(
+        let mut wanted = String::new();
+        if !filters.tools {
+            wanted.push_str(" AND (f.kind = 'document' OR e.kind IN ('user', 'agent', 'plan'))");
+        }
+        if let Some(author) = filters.author {
+            // The kinds are literal SQL already (`Author::kinds`), not bound values.
+            let _ = write!(wanted, " AND f.kind = 'message' AND e.kind IN ({})", author.kinds());
+        }
+        if let Some(since) = filters.since {
+            args.push(Box::new(since));
+            let _ = write!(wanted, " AND f.at >= ?{}", args.len());
+        }
+        if let Some(until) = filters.until {
+            args.push(Box::new(until));
+            let _ = write!(wanted, " AND f.at <= ?{}", args.len());
+        }
+        let c = self.db.locked();
+        // More candidates than the limit: recency reorders what the rank found, so the cut has to wait.
+        args.push(Box::new(limit * RANKED_FACTOR));
+        let now = super::now_ms();
+        let sql = format!(
             "SELECT f.kind, f.source_id, f.at, snippet(search_fts, 0, '[', ']', '...', ?3),
-                    e.kind, e.data, d.title
+                    e.kind, e.data, d.title, bm25(search_fts), e.thread_id
              FROM search_fts f
              LEFT JOIN entries e ON f.kind = 'message' AND e.id = f.source_id
              LEFT JOIN documents d ON f.kind = 'document' AND d.id = f.source_id
              WHERE search_fts MATCH ?1 AND f.bot_id = ?2{wanted}
-             ORDER BY rank LIMIT ?4"
-        ))?;
-        let hits = statement
-            .query_map(params![terms, bot, SNIPPET_TOKENS, limit], |row| {
+             ORDER BY rank LIMIT ?{}",
+            args.len()
+        );
+        let mut statement = c.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> = args.iter().map(AsRef::as_ref).collect();
+        let mut ranked = statement
+            .query_map(params.as_slice(), |row| {
                 let kind: String = row.get(0)?;
+                let at: i64 = row.get(2)?;
                 let mut hit = json!({
                     "kind": kind,
                     "id": row.get::<_, String>(1)?,
-                    "at": row.get::<_, i64>(2)?,
+                    "at": at,
                     "snippet": row.get::<_, String>(3)?,
                 });
                 if kind == "message" {
@@ -160,13 +240,16 @@ impl Store {
                         .and_then(|data| serde_json::from_str::<Value>(&data).ok())
                         .and_then(|data| data["author"].as_str().map(str::to_owned))
                         .into();
+                    hit["threadId"] = row.get::<_, Option<String>>(8)?.into();
                 } else {
                     hit["title"] = row.get::<_, Option<String>>(6)?.into();
                 }
-                Ok(hit)
+                Ok((row.get::<_, f64>(7)? + age_penalty(at, now), hit))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(hits)
+        ranked.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+        ranked.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+        Ok(ranked.into_iter().map(|(_, hit)| hit).collect())
     }
 
     /// Fills the index from what a database already had, resumable: each pass takes the entries past the
@@ -260,6 +343,12 @@ mod tests {
 
     fn said(store: &Store, bot: &str, text: &str) {
         store.insert_entry(&Lane::main(bot), EntryKind::User, 1, &json!({"text": text})).expect("an entry");
+    }
+
+    /// Puts a message at a moment in both its row and the index, so a test needn't race the clock.
+    fn at(store: &Store, id: &str, ms: i64) {
+        store.backdate_entry(id, ms);
+        store.db.locked().execute("UPDATE search_fts SET at = ?1 WHERE source_id = ?2", params![ms, id]).unwrap();
     }
 
     fn page(store: &Store, bot: &str, title: &str, body: &str) -> String {
@@ -369,6 +458,72 @@ mod tests {
     }
 
     #[test]
+    fn a_newer_hit_of_the_same_words_comes_first() {
+        let store = temp_store();
+        store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
+        let old = store
+            .insert_entry(&Lane::main("b1"), EntryKind::User, 1, &json!({"text": "ship the deploy on friday"}))
+            .unwrap();
+        let new = store
+            .insert_entry(&Lane::main("b1"), EntryKind::User, 2, &json!({"text": "ship the deploy on friday"}))
+            .unwrap();
+        // Two months of age, in the row and the index alike, so the backfill agrees with it.
+        let now = super::super::now_ms();
+        at(&store, &old.id, now - 60 * 86_400_000);
+        at(&store, &new.id, now);
+
+        let hits = store.search("b1", "ship deploy", 10).unwrap();
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0]["id"], new.id, "the recent one is first");
+    }
+
+    #[test]
+    fn an_author_keeps_only_that_side_of_the_chat() {
+        let store = temp_store();
+        store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
+        said(&store, "b1", "the deploy is blocked");
+        store
+            .insert_entry(&Lane::main("b1"), EntryKind::Agent, 2, &json!({"text": "the deploy is unblocked"}))
+            .unwrap();
+        page(&store, "b1", "Deploy notes", "the deploy is a script");
+
+        let mine = store
+            .search_filtered("b1", "deploy", 10, &Filters { author: Some(Author::User), ..Filters::default() })
+            .unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0]["entryKind"], "user");
+        let theirs = store
+            .search_filtered("b1", "deploy", 10, &Filters { author: Some(Author::Agent), ..Filters::default() })
+            .unwrap();
+        assert_eq!(theirs.len(), 1);
+        assert_eq!(theirs[0]["entryKind"], "agent");
+    }
+
+    #[test]
+    fn a_date_window_keeps_only_what_it_covers() {
+        let store = temp_store();
+        store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
+        let old = store.insert_entry(&Lane::main("b1"), EntryKind::User, 1, &json!({"text": "deploy monday"})).unwrap();
+        let new =
+            store.insert_entry(&Lane::main("b1"), EntryKind::User, 2, &json!({"text": "deploy tuesday"})).unwrap();
+        // Pinned, so two inserts can't land in the same millisecond the boundary is taken from.
+        let boundary = super::super::now_ms();
+        at(&store, &old.id, boundary - 1_000);
+        at(&store, &new.id, boundary + 1_000);
+
+        let since = store
+            .search_filtered("b1", "deploy", 10, &Filters { since: Some(boundary), ..Filters::default() })
+            .unwrap();
+        assert_eq!(since.len(), 1, "only the later one");
+        assert_eq!(since[0]["id"], new.id);
+        let until = store
+            .search_filtered("b1", "deploy", 10, &Filters { until: Some(boundary), ..Filters::default() })
+            .unwrap();
+        assert_eq!(until.len(), 1, "only the earlier one");
+        assert_eq!(until[0]["id"], old.id);
+    }
+
+    #[test]
     fn the_backfill_resumes_from_where_it_stopped() {
         let store = temp_store();
         store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
@@ -385,5 +540,17 @@ mod tests {
         let hits = store.search("b1", "deploy", 50).unwrap();
         assert_eq!(hits.len(), 2, "only the entries past the marker: {}", hits.len());
         assert_eq!(store.reindex_search().unwrap(), 5, "a reindex takes all of it");
+    }
+
+    #[test]
+    fn deleting_a_chat_takes_its_hits_with_it() {
+        let store = temp_store();
+        store.save_bot(&serde_json::from_value(json!({"id": "b1", "name": "B"})).unwrap()).unwrap();
+        said(&store, "b1", "deploy monday");
+        page(&store, "b1", "Deploy notes", "the deploy is a script");
+
+        store.delete_bot("b1").unwrap();
+
+        assert_eq!(store.search("b1", "deploy", 10).unwrap(), [] as [Value; 0]);
     }
 }

@@ -193,17 +193,19 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return crate::chat::library::versions(hub, &b);
     }
     // What a chat said about some words: the message, its snippet and when. Tool traces and notices stay
-    // out unless asked for: what a person searches for is what was said.
+    // out unless asked for: what a person searches for is what was said. `author`, `since` and `until`
+    // narrow it further; a value that isn't one leaves that filter off, never an error.
     if method == "search" {
         let bot = str_arg(&b, "botId")?;
         let query = b["query"].as_str().unwrap_or_default();
         let limit = u32::try_from(b["limit"].as_u64().unwrap_or(20)).unwrap_or(20);
-        let hits = if b["tools"] == true {
-            hub.store.search_with_tools(bot, query, limit)?
-        } else {
-            hub.store.search(bot, query, limit)?
+        let filters = crate::store::Filters {
+            tools: b["tools"] == true,
+            author: b["author"].as_str().and_then(crate::store::Author::parse),
+            since: b["since"].as_i64(),
+            until: b["until"].as_i64(),
         };
-        return Ok(serde_json::json!({"hits": hits}));
+        return Ok(serde_json::json!({"hits": hub.store.search_filtered(bot, query, limit, &filters)?}));
     }
     // Rebuilds the search index from the store: what a repair after a bad migration needs.
     if method == "searchReindex" {
