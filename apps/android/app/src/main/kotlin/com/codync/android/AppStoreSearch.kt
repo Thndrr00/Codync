@@ -38,7 +38,7 @@ suspend fun AppStore.searchChat(botId: String, query: String, side: ChatSearchSi
         put("limit", limit)
         put("tools", tools)
         side.wire?.let { put("author", it) }
-        scope.channel?.let { put("channel", it) }
+        if (scope != MessageSearchScope.All) put("channel", scope.wire)
     }
     val response = hostQuery("search", payload)
     return response.jsonObject.getValue("hits").jsonArray.map { element ->

@@ -11,10 +11,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Where the words are looked for: everywhere, the chat itself, or its threads. `wire` names a saved search,
- * `channel` is what the host reads; `All` sends neither. */
-internal enum class MessageSearchScope(val wire: String, val channel: String?, val title: String) {
-    All("all", null, "Everything"), Main("main", "main", "This chat"), Threads("threads", "threads", "Threads")
+/** Where the words are looked for: everywhere, the chat itself, or its threads. `wire` also names a saved
+ * search; everywhere sends no channel. */
+internal enum class MessageSearchScope(val wire: String, val title: String) {
+    All("all", "Everything"), Main("main", "This chat"), Threads("threads", "Threads")
 }
 internal enum class SearchPhase { Idle, Searching, Ready, Failed }
 internal enum class ShortcutPhase { Loading, Ready, Unavailable }
