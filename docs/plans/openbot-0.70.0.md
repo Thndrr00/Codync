@@ -13,14 +13,14 @@ either server-side (Codync has no joined servers) or already here.
 
 | 0.70.0 item | Codync shape | Files |
 | --- | --- | --- |
-| Image and Video workflow steps, made with the agent's own subscription tool | Chat commands `/image` and `/video` (`host/src/media/`) and picture/clip steps of a routine flow (`host/src/store/flow_media.rs`, `host/src/routines/flow/`) | Host media module, flow store and API, desktop and Android canvas |
+| Image and Video workflow steps, made with the agent's own subscription tool | Chat commands `/image` and `/video` (`host/src/media/`) and picture/clip steps of a routine flow (`host/src/store/flow_media.rs`, `host/src/routines/flow/`). Analytics: `media_made` (`kind`, `agent`) per made file | Host media module, flow store and API, desktop and Android canvas |
 | Transparent background, in each provider's own words | `--transparent` for a picture; Codex asks for clear pixels, Grok gets a flat `#00FF00`/`#FF00FF` | `host/src/media/command.rs` |
 | Model menu shows only signed-in providers and the subscription that pays | `mediaModels` lists only the bot's own backend and names its subscription; a group is refused | `host/src/api/media.rs`, pickers in all clients |
 | Aspect, length and resolution on the step | Same three on the command and on a media step; each model offers only what it makes | `command.rs`, `MediaSheet` (desktop, Android, iPhone), `MediaPanel` (desktop, Android) |
 | Image step used as a reference; pictures into frames and references | `--ref`, `--first`, `--last`; a media step's file is handed on like a bot reply | `command.rs`, `flow::engine` |
 | A picture or clip can be a link end | `media:<id>` node keys are interchangeable with bots: same rules, layout and edges | `lib/routine-flow.ts`, `core/RoutineFlow.kt`, both tests |
 | Prepare a step from its panel (add a picture/clip step) | **Add a picture step** / **Add a clip step** in the routine panel | `FlowInspector.tsx`, `RoutineFlowDetail.kt` |
-| Mute an agent from its menu | The bot's notification switch: `notify: false` mutes it, `null` gives it the computer's choice again; a hidden bot still reaches the phone when it needs you | `notify` store and API, the mute item in the desktop, iPhone and Android menus, the terminal's **Notify** field, `host/src/remote/push.rs` (`alert_allowed`) |
+| Mute an agent from its menu | The bot's notification switch: `notify: false` mutes it, `null` gives it the computer's choice again; a hidden bot still reaches the phone when it needs you. Analytics: `bot_updated` lists `notify` among its `fields` | `notify` store and API, the mute item in the desktop, iPhone and Android menus, the terminal's **Notify** field, `host/src/remote/push.rs` (`alert_allowed`) |
 | A message to a working agent steers the running turn by default | The computer's **Sending** setting (on unless turned off): a user message to a working agent calls `steer`; groups, routines and channel work keep their own turn | `host/src/chat/steer.rs`, `host/src/api/bots.rs`, the **Sending** setting of the desktop and the phones' computer settings, the terminal's palette action |
 
 The picker is in every client's composer (desktop, iPhone, Android); the terminal fills `/image ` or
@@ -60,19 +60,17 @@ Feature behavior is documented in [media](../features/media.md) and in the user 
 
 ## Checks
 
-Host: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` — 1 531 passed, 2
+Host: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` — 1 535 passed, 2
 failed on this Windows machine only (a symlink privilege, `ERROR_PRIVILEGE_NOT_HELD` 1314, and an
-unpacked-folder cleanup), both unrelated to this work.
+unpacked-folder cleanup), both unrelated to this work. The new host tests were run on their own too
+(`push::alert_allowed`, `steer`, `whatsapp::settings`).
 
 Desktop: `npm run typecheck` clean; `npm test` 812 of 840 passing, its 4 failures being tests that
 assert English copy on a Spanish-locale machine. Android: `:core:test`, `:app:testDebugUnitTest`,
 `:app:assembleDebug` and `:app:lintDebug` green. Web: `npm run check:docs` and `npm run lint` clean.
 
 iOS could not be built here (this machine has no Xcode), so the iPhone sources of media and pins were
-only compiled by review. The desktop end-to-end run against the worktree sandbox and one real
-generation through `/image` are recorded in the change summary.
-
-The mute, steer and WhatsApp switch work was written after those checks and has not been compiled yet
-(only the catalogs' own test ran, plus review): its host tests (`push::alert_allowed`, `steer`,
-`whatsapp::settings`), the API methods and the three clients' rows still need a real run before they
-ship. The terminal's steer palette entry and `Notify` field are likewise review-only.
+only compiled by review. The desktop end-to-end run against the worktree sandbox covers the picker's
+settings and command (`e2e/media.spec.ts`); one real generation through `/image` needs an installed
+Codex or Grok and is not part of it. The mute switch has no e2e of its own: its copy and state are in
+the bot menu, whose rows the menu specs already open.

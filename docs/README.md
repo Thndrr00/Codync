@@ -68,6 +68,8 @@ Source review, a passing build, local integration tests and production acceptanc
 ## Plans
 
 - [Optional sign-in](plans/optional-sign-in.md) (signed-out phones, computers in no account, the relay only within an account; built, the rollout steps remain)
+- [OpenBot 0.70.0 on Codync](plans/openbot-0.70.0.md) (media from the agent's own tool, mute; what was taken and what was not)
+- [OpenBot 0.69.0 on Codync](plans/openbot-0.69.0.md) (pins, steering, the WhatsApp acknowledgement; what was taken and what was not)
 - [Windows remote screen](plans/windows-remote-screen.md) (a screen helper for Windows; planned)
 - [Android parity and acceptance](plans/android-app.md)
 - [Viabilidad de compilación Android en la nube (expo.dev)](viabilidad-compilacion-android-expo.md) (estudio de viabilidad técnica y alternativas para reducir recursos locales)

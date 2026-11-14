@@ -19,6 +19,7 @@ maps to Codync's own shape was taken; the rest is listed below with the reason.
 | A Grok agent makes pictures and clips in the chat | Taken with 0.70.0's media work: the `/image` and `/video` commands, the Grok tool names and their named inputs | `host/src/media/command.rs`, `host/src/media/flow.rs` |
 | Electron 45.3.0 (Chromium 156) | `apps/desktop/package.json`; some sites refused the older browser, and the media viewers want the newer one | `apps/desktop/package.json`, `apps/desktop/package-lock.json` |
 | A WhatsApp number can answer with only the answer | Every request gets a 👀 reaction; the "Trabajando en ello…" line is a per-number switch, on by default | `host/src/whatsapp/settings.rs`, `incoming.rs` (`acknowledge`), `transport.rs`, the bridge's `react`, the switch in the WhatsApp sheet of the desktop, iPhone and Android apps (the terminal has no WhatsApp sheet) |
+| Product analytics for all of it | `message_pinned` (`pinned`) for a pin and an unpin, and `setting_changed` with `whatsapp_working_message` for the switch; the media of 0.70.0 sends `media_made` (`kind`, `agent`) | `host/src/analytics/observe.rs`, `host/src/agent/bot/files.rs`, [analytics events](../reference/analytics-events.md) |
 
 The pins surface, its keys and its reasonings are documented in
 [chat messages](../features/chat-messages.md#pins) and in the user manual page
@@ -58,14 +59,15 @@ message, not a section, so `withMoves` keeps returning its band.
 ## Checks
 
 `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` on the host:
-1531 passed, 2 failed on this Windows machine only (a symlink privilege, `ERROR_PRIVILEGE_NOT_HELD`
-1314, and an unpacked-folder cleanup), both unrelated to this work. Desktop `npm run typecheck` is
-clean; `npm test` has 812 of 840 passing, its 4 failures being tests that assert English copy on a
-Spanish-locale machine. Android `:core:test`, `:app:testDebugUnitTest`, `:app:assembleDebug` and
-`:app:lintDebug` are green. iOS could not be built here (no Xcode on this machine), so the iPhone
-sources of pins and media were only compiled by review.
+1 535 passed, 2 failed on this Windows machine only (a symlink privilege, `ERROR_PRIVILEGE_NOT_HELD`
+1314, and an unpacked-folder cleanup), both unrelated to this work. The pins, steer and WhatsApp
+settings tests ran on their own too, as did the team tests the steering default changed (29 of 29).
+Desktop `npm run typecheck` is clean; `npm test` has 812 of 840 passing, its 4 failures being tests
+that assert English copy on a Spanish-locale machine. Android `:core:test`, `:app:testDebugUnitTest`,
+`:app:assembleDebug` and `:app:lintDebug` are green. Web `npm run check:docs` and `npm run lint` are
+clean. iOS could not be built here (no Xcode on this machine), so the iPhone sources of pins were only
+compiled by review.
 
-The later mute, steer and WhatsApp switch work of 0.70.0/0.69.0 was written after those checks and is
-review-only so far: the host's new unit tests (`push::alert_allowed`, `steer`), the catalogs and the
-client wiring have not been compiled or run on any machine. The iPhone and Android sheets and the
-desktop settings row still need a real device or simulator pass before this ships.
+The desktop end-to-end run against the worktree sandbox covers the pin list and the sending choice
+(`e2e/pins.spec.ts`, `e2e/queue.spec.ts`). A linked WhatsApp number is not part of it (the sandbox has
+no phone), so the switch in the WhatsApp sheet is host-test plus review only.

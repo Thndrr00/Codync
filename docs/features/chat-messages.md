@@ -85,6 +85,8 @@ it has no pointer tooltip or link-opening action.
   pin/unpin the picked message, and marks a pinned row with `· Pinned`.
 - The agent is told about pins only through its tool; a pin by a person reaches the agent's prompt on
   the next turn as the message text it already reads.
+- A pin or an unpin counts in analytics as `message_pinned` (`pinned`: which way it went), never which
+  message or its text ([analytics events](../reference/analytics-events.md)).
 
 ## Bot reactions
 
