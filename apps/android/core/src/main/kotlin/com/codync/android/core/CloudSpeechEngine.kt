@@ -12,11 +12,11 @@ import kotlinx.coroutines.flow.update
  */
 class CloudSpeechEngine(parent: CoroutineScope, provider: VoiceProvider, settings: VoiceSettings,
     private val mic: MicSource, private val player: ClipPlayer, private val speech: Speech,
-    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val clipCharacters: Int = provider.speechChunk,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ProviderEngine(parent, provider, settings, "${provider.title} speech") {
     class Speech(val transcribe: suspend (ByteArray) -> String, val synthesize: suspend (String) -> Pair<ByteArray, String>,
-        val send: (String) -> Unit, val stream: (suspend (String) -> Stream)? = null)
+        val stream: (suspend (String) -> Stream)? = null, val send: (String) -> Unit)
     interface Stream { suspend fun next(): Pair<ByteArray,String>?; suspend fun close() }
 
     private val detector = UtteranceDetector()

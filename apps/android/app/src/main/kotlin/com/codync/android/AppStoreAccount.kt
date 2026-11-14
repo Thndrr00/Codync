@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.app.Application
 import android.os.Build
@@ -15,7 +15,7 @@ import kotlinx.serialization.json.*
 internal fun AppStore.signIn(provider: SignInProvider) = sessionAction {
     Analytics.capture(AnalyticsEvent.SignInStarted(provider))
     try {
-        if (provider == SignInProvider.Hosted) NativeAccounts.hostedSignIn() else NativeAccounts.signIn(apple = provider == SignInProvider.Apple)
+        NativeAccounts.signIn(provider)
     } catch (error: CancellationException) { throw error }
     catch (error: Exception) {
         Analytics.capture(AnalyticsEvent.SignInFailed(provider, (error as? SignInError)?.reason ?: SignInFailure.Error))
@@ -150,3 +150,52 @@ fun AppStore.startOver() = sessionAction {
         }
     }
 }
+/** Go on without signing in (iOS `withoutAccount`): only over Wi-Fi or Tailscale. */
+fun AppStore.continueWithoutAccount() {
+    Analytics.capture(AnalyticsEvent.ContinuedWithoutAccount)
+    withoutAccountChosen = true
+    mutableState.update { it.copy(withoutAccount = true) }
+}
+
+/** Back on the welcome screen, signing in is on offer again. */
+fun AppStore.backToWelcome() {
+    withoutAccountChosen = false
+    mutableState.update { it.copy(withoutAccount = false, loading = false) }
+}
+
+internal var AppStore.withoutAccountChosen: Boolean
+    get() = getApplication<Application>().getSharedPreferences(ACCOUNT_PREFS, android.content.Context.MODE_PRIVATE).getBoolean(WITHOUT_ACCOUNT, false)
+    set(value) { getApplication<Application>().getSharedPreferences(ACCOUNT_PREFS, android.content.Context.MODE_PRIVATE).edit().putBoolean(WITHOUT_ACCOUNT, value).apply() }
+
+/**
+ * Deletes the signed-in account (App Store and Google Play require it in the app). Clerk goes first, so a failure changes
+ * nothing; the cloud cleans up on Clerk's `user.deleted`. The context switch waits for the computer to drop this phone.
+ */
+fun AppStore.deleteAccount() = sessionAction {
+    val old = state.value.account.userId ?: return@sessionAction
+    transitions.withLock {
+        try { NativeAccounts.deleteUser() }
+        catch (error: CancellationException) { throw error }
+        catch (error: Exception) { throw IOException("Couldn't delete your account. Check your connection and try again.", error) }
+        forgetDevice()
+        cloud?.let { client ->
+            withTimeoutOrNull(5_000) {
+                try { client.revokeThisDevice() }
+                catch (error: CancellationException) { throw error }
+                catch (error: Exception) { android.util.Log.i("Codync", "Couldn't revoke this device in the account: ${error.message}") }
+            }
+        }
+        // The SDK updates its session synchronously; its observer may be queued behind us.
+        val next = com.clerk.api.Clerk.activeSession?.user?.id?.takeIf { it != old }
+        retireContext()
+        loadContext(next)
+        val remaining = com.clerk.api.Clerk.auth.sessions.any { it.user?.id == old && it.status == com.clerk.api.session.Session.SessionStatus.ACTIVE }
+        if (!remaining) withContext(Dispatchers.IO) {
+            LocalStore(getApplication(), old).erase()
+            AccountImages.cacheDir(getApplication(), LocalStore.referenceId(old)).deleteRecursively()
+        }
+    }
+}
+
+private const val ACCOUNT_PREFS = "codync-account"
+private const val WITHOUT_ACCOUNT = "without_account"

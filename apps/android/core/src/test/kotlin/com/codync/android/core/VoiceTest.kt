@@ -58,7 +58,7 @@ class VoiceTest {
     }
     @Test fun aRecognizerErrorSendsWhatWasHeardAndOnlyRepeatedQuickOnesEndTheCall() = runTest {
         val audio = Audio(); val sent = mutableListOf<String>()
-        val session = VoiceSession(backgroundScope, audio, VoiceSettings(), { testScheduler.currentTime }, sent::add)
+        val session = VoiceSession(backgroundScope, audio, VoiceSettings(), clock = { testScheduler.currentTime }, send = sent::add)
         fun failed() { audio.failed(); runCurrent() }
         runCurrent()
         audio.text("turn on the lights"); runCurrent(); failed(); failed()

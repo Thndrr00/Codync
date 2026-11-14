@@ -67,15 +67,22 @@ class MirrorDatabase(context: Context, directory: File, computerId: String) :
 
     @Synchronized fun snapshot(): MirrorSnapshot {
         val db = readableDatabase
+        val icons = icons()
         return MirrorSnapshot(
-            rows(db, "bots", "SELECT payload FROM bots WHERE deleted=0") { WireJson.decodeFromString<Bot>(it) },
-            rows(db, "entries", "SELECT payload FROM entries ORDER BY seq") { WireJson.decodeFromString<Entry>(it) },
-            rows(db, "pending", "SELECT payload FROM pending ORDER BY created") { WireJson.decodeFromString<PendingSend>(it) },
+            rows(db, "payload", "SELECT payload FROM bots WHERE deleted=0") { WireJson.decodeFromString<Bot>(it) }
+                .map { it.copy(customIcon = icons["bot:${it.id}"]) },
+            rows(db, "payload", "SELECT payload FROM entries ORDER BY seq") { WireJson.decodeFromString<Entry>(it) },
+            rows(db, "payload", "SELECT payload FROM pending ORDER BY created") { WireJson.decodeFromString<PendingSend>(it) },
             meta(db, "rev")?.toLong() ?: 0,
             meta(db, "usage")?.let { WireJson.parseToJsonElement(it).jsonObject } ?: JsonObject(emptyMap()),
             meta(db, "screen")?.let { WireJson.parseToJsonElement(it).jsonObject },
+            icons,
         )
     }
+
+    /** The bots' own images, from the cache the `icons` event filled. */
+    @Synchronized fun icons(): Map<String, com.codync.android.core.CustomIcon> =
+        meta(readableDatabase, "icons")?.let { com.codync.android.core.decodeCustomIcons(WireJson.parseToJsonElement(it)) }.orEmpty()
 
     /** Pagination keeps the raw cursor even when a whole page contains host-internal entries. */
     @Synchronized fun oldestEntrySeq(botId: String): Long? = readableDatabase.rawQuery(
@@ -189,7 +196,7 @@ class MirrorDatabase(context: Context, directory: File, computerId: String) :
     private fun reset(db: SQLiteDatabase) {
         db.delete("bots", null, null)
         dropConversation(db)
-        db.delete("meta", "k IN ('usage','screen')", null)
+        db.delete("meta", "k IN ('usage','screen','icons')", null)
     }
     private fun dropConversation(db: SQLiteDatabase) {
         listOf("entries", "history").forEach { db.delete(it, null, null) }

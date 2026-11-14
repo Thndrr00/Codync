@@ -60,6 +60,12 @@ class VoiceChoices(private val read: (String) -> String?, private val write: (St
     var wakePhrase: Boolean
         get() = read("callWakePhrase") == "true"
         set(value) = write("callWakePhrase", if (value) "true" else null)
+
+    /** What the message box's dictation uses: on-device speech (null) or a provider on the user's key (iOS `dictationEngine`). */
+    var dictation: VoiceProvider?
+        get() = VoiceProvider.of(read("dictationEngine"))
+        set(value) = write("dictationEngine", value?.id)
+
     enum class Model(val prefix: String) { Realtime("callModel"), Transcribe("callSpeechToText"), Speech("callSpeechModel") }
 
     var provider: VoiceProvider?

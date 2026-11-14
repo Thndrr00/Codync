@@ -178,10 +178,12 @@ class MainActivity : FragmentActivity() {
 /** One active loader: switching accounts closes old requests before their cache can be erased. */
 internal object AccountImages {
     private var current: ImageLoader? = null
+    /** Where [id]'s downloaded images live, under the cache; erased with the account's local data. */
+    fun cacheDir(context: android.content.Context, id: String): File = File(context.cacheDir, "codync-images-$id")
     @Synchronized fun open(context: android.content.Context, id: String): ImageLoader {
         retire()
         val images = ImageLoader.Builder(context).diskCache {
-            DiskCache.Builder().directory(File(context.cacheDir, "codync-images-$id").toOkioPath()).maxSizeBytes(64L * 1024 * 1024).build()
+            DiskCache.Builder().directory(cacheDir(context, id).toOkioPath()).maxSizeBytes(64L * 1024 * 1024).build()
         }.components { add(coil3.svg.SvgDecoder.Factory()) }.build()
         current = images
         return images

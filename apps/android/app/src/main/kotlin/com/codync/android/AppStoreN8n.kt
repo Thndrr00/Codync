@@ -78,9 +78,6 @@ internal fun decodeN8nRuns(json: JsonObject): List<N8nRun> = (json["executions"]
         e.text("startedAt")?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() })
 }
 
-/** A string field, or null when it is missing, null or not text. */
-private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-
 internal suspend fun AppStore.n8nStatus(): N8nStatus = N8nStatus.decode(hostQuery("n8nStatus", buildJsonObject {}).jsonObject)
 
 internal suspend fun AppStore.n8nStart(): N8nStatus = N8nStatus.decode(hostQuery("n8nStart", buildJsonObject {}).jsonObject)
@@ -96,3 +93,4 @@ internal suspend fun AppStore.n8nSetWorkflowActive(id: String, active: Boolean) 
 
 internal suspend fun AppStore.n8nRuns(limit: Int = 5): List<N8nRun> =
     decodeN8nRuns(hostQuery("n8nExecutions", buildJsonObject { put("limit", limit) }).jsonObject)
+

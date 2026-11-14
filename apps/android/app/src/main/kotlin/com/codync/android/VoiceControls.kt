@@ -71,6 +71,7 @@ internal fun openAppSettings(context: android.content.Context) =
     val bot = state.bots.firstOrNull { it.id == call.botId }
     var settings by remember { mutableStateOf(false) }
     val speaking = voice.phase == VoicePhase.Speaking
+    val color = bot?.chatColor?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() } ?: Palette.accent
     Column(Modifier.padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth().glass(Capsule()).padding(start = 14.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -84,8 +85,6 @@ internal fun openAppSettings(context: android.content.Context) =
             }
             CallLevelDots(voice.level, speaking, bot?.status == "working", voice.phase.connecting, color,
                 Modifier.weight(1f).height(20.dp).semantics { contentDescription = callStatusText(voice, bot?.status == "working") })
-            LevelDots(voice.level, speaking, bot?.status == "working", voice.phase.connecting,
-                Modifier.weight(1f).height(20.dp).semantics { contentDescription = statusText(voice, bot?.status == "working") })
             // Audio leaves the phone: say where.
             voice.provider?.let { provider ->
                 Text(provider.title, Modifier.semantics { contentDescription = "Voice by ${provider.title}" },
@@ -141,11 +140,17 @@ private const val CONNECTING_PERIOD = 2.4f
  * resting at the left with reduced motion), and fades back to the dots.
  */
 @Composable internal fun CallLevelDots(level: Float, speaking: Boolean, working: Boolean, connecting: Boolean, color: Color, modifier: Modifier) {
+    dots(level, speaking, working, connecting, color, modifier)
+}
+
 @Composable internal fun LevelDots(level: Float, speaking: Boolean, working: Boolean, connecting: Boolean, modifier: Modifier) {
+    dots(level, speaking, working, connecting, Palette.accent, modifier)
+}
+
+@Composable private fun dots(level: Float, speaking: Boolean, working: Boolean, connecting: Boolean, accent: Color, modifier: Modifier) {
     val still = reduceMotion()
     var time by remember { mutableFloatStateOf(0f) }
     if (!still) LaunchedEffect(Unit) { while (true) withFrameNanos { time = it / 1e9f } }
-    val accent = Palette.accent
     val mix by animateFloatAsState(if (connecting) 1f else 0f, if (still) snap() else Motion.fade(), label = "Connecting")
     Canvas(modifier) {
         if (mix > 0.01f) connectingLine(accent, mix, time, still)

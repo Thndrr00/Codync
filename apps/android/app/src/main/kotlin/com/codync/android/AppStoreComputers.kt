@@ -1,6 +1,7 @@
 package com.codync.android
 
 import androidx.lifecycle.viewModelScope
+import com.codync.android.core.BotDestination
 import com.codync.android.core.Computer
 import com.codync.android.core.HostConnector
 import com.codync.android.core.LinkState
@@ -33,6 +34,14 @@ private suspend fun AppStore.changeComputers(change: (List<Computer>) -> List<Co
 /** Saves a new copy of a computer still on this phone (a removed one stays removed), in its place. */
 internal suspend fun AppStore.saveComputer(computer: Computer) {
     changeComputers { saved -> saved.map { if (it.id == computer.id) computer else it } }
+}
+
+/** The store of account computer [id], when it's the one this app shows. */
+fun AppStore.store(id: String?): AppStore? = takeIf { id != null && state.value.computer?.id == id }
+
+/** The host's own name for the shown computer (a cloud computer renamed from here). */
+internal fun AppStore.setHostName(name: String) {
+    if (state.value.computer?.name != name) mutableState.update { it.copy(computers = it.computers.map { computer -> if (computer.name == name) computer else computer.copy(name = name) }) }
 }
 
 /** Shows another paired computer: its bots, chats and widgets, through its own link. */

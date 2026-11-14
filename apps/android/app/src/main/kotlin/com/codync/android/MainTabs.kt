@@ -268,7 +268,7 @@ private const val REMOVED = "computer/removed"
             AccessBanner(
                 ticket,
                 state.cloudComputers.firstOrNull { it.computerId == ticket.computerId }?.name ?: "Your computer",
-                store::cancelAccess,
+                cancel = store::cancelAccess,
             )
         }
     }

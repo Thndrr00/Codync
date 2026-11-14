@@ -77,8 +77,17 @@ class MenuItem(
     val divider: Boolean = false,
     val enabled: Boolean = true,
     val children: List<MenuItem>? = null,
+    /** Shows [title] as it is, never translated: a name the user gave (a section's). */
+    val verbatim: Boolean = false,
+    /** A caption under the title: what the action does. */
+    val detail: String? = null,
+    /** Picking it leaves the menu open, for choices made several at a time (iOS `.menuActionDismissBehavior(.disabled)`). */
+    val keepsOpen: Boolean = false,
     val action: () -> Unit = {},
-)
+) {
+    /** [title] as the row shows it: through [translate], unless [verbatim]. */
+    fun shownTitle(translate: (String) -> String): String = if (verbatim) title else translate(title)
+}
 
 /** A row of emoji above a message's menu (Slack's quick reactions). */
 class ReactionPick(val emoji: List<String>, val chosen: List<String>, val toggle: (String) -> Unit)
@@ -96,7 +105,7 @@ class ReactionPick(val emoji: List<String>, val chosen: List<String>, val toggle
 }
 
 /** Long-press then move: the row leaves its menu and follows the finger, as iOS list rows reorder. */
-class ContextDrag(val start: () -> Unit, val move: (Float) -> Unit, val end: () -> Unit)
+class ContextDrag(val start: () -> Unit, val move: (Float) -> Unit, val end: () -> Unit, val cancel: (() -> Unit)? = null)
 
 /**
  * Long-press opens the menu under a lifted copy of the content; `reactions` adds the emoji row.
@@ -225,7 +234,7 @@ private val MenuShape = RoundedRectangle(26.dp)
                 for ((index, item) in (open?.children ?: items).withIndex()) {
                     if (item.divider && index > 0) MenuDivider()
                     MenuRow(item) {
-                        if (item.children != null) submenu = item else { close(); item.action() }
+                        if (item.children != null) submenu = item else { if (!item.keepsOpen) close(); item.action() }
                     }
                 }
             }
@@ -259,7 +268,11 @@ private val MenuShape = RoundedRectangle(26.dp)
         Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
             if (leading != null) Symbol(leading, size = 21.dp, tint = ink)
         }
-        Text(tr(item.title), Modifier.weight(1f), style = if (bold) Type.body.semibold else Type.body, color = ink)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(item.shownTitle(translator()), style = if (bold) Type.body.semibold else Type.body, color = ink)
+            item.detail?.let { Text(tr(it), style = Type.caption, color = Palette.secondary) }
+        }
+        if (item.icon != null && item.selected == true) Symbol("checkmark", size = 16.dp, tint = ink)
         if (item.children != null) Symbol("chevron.right", size = 16.dp, tint = Palette.secondary)
     }
 }

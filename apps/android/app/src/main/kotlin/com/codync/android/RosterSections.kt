@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -358,3 +358,11 @@ import kotlinx.coroutines.delay
         SecondaryButton("Clear filters", action = onClear)
     }
 }
+/**
+ * A section change shown before the computer answered it (iOS `SectionMove`): bot [bot] into [to]
+ * (null: none). Told apart by identity.
+ */
+internal class SectionMove(val bot: String, val to: String?)
+
+/** [bots] as they show while [pending] (oldest first) waits for the computer; sections aren't on this client's bots yet, so it is the mirror's order. */
+internal fun withMoves(bots: List<Bot>, pending: List<SectionMove>): List<Bot> = bots

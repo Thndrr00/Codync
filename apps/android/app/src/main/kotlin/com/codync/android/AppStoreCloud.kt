@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.withLock
 // Codync Cloud: the computers Codync runs for this account (Computers → Codync Cloud, docs/plans/codync-cloud.md).
 
 /** The account's cloud computers and whether it may have them; while one is being prepared, until it joins the account. */
-fun AccountStore.refreshCloudMachines() = action("cloudMachines") {
+fun AppStore.refreshCloudMachines() = action("cloudMachines") {
     val client = cloud ?: return@action
     try { mutableState.update { it.copy(cloudOffer = client.cloudComputers()) } }
     catch (error: IOException) {
@@ -21,13 +21,13 @@ fun AccountStore.refreshCloudMachines() = action("cloudMachines") {
 
 /** A Codync Cloud sheet (New cloud computer, a provider's key) opened or closed. Open, it shows the account's error itself
  * (iOS too), so the app's error dialog waits; closed, that error was seen and goes. */
-internal fun AccountStore.cloudSheetShown(open: Boolean) = mutableState.update {
+internal fun AppStore.cloudSheetShown(open: Boolean) = mutableState.update {
     it.copy(cloudSheets = (it.cloudSheets + if (open) 1 else -1).coerceAtLeast(0), error = if (open) it.error else null)
 }
 
 /** The Codync Cloud card came on screen or left it. On screen, it shows its cloud computers' errors itself, so the app's
  * error dialog leaves those to it; gone, such an error was seen and goes. */
-internal fun AccountStore.cloudCardShown(shown: Boolean) {
+internal fun AppStore.cloudCardShown(shown: Boolean) {
     mutableState.update { it.copy(cloudCardShown = shown) }
     if (!shown) clearCloudError(CloudErrorPlace.Card)
 }
@@ -51,7 +51,7 @@ internal sealed interface CloudErrorPlace {
     data object Card : CloudErrorPlace
 
     companion object {
-        /** Where the error of the [AccountStore.action] keyed [action] shows; null: not one of Codync Cloud's (the app's dialog). */
+        /** Where the error of the [AppStore.action] keyed [action] shows; null: not one of Codync Cloud's (the app's dialog). */
         fun of(action: String?): CloudErrorPlace? = when {
             action == null -> null
             action.startsWith(CLOUD_KEY) -> Key(action.removePrefix(CLOUD_KEY))
@@ -84,13 +84,13 @@ internal fun AccountContext.cloudErrorAt(place: CloudErrorPlace): String? = erro
 internal fun AccountContext.cloudKeyError(): String? = error.takeIf { CloudErrorPlace.of(failedAction) is CloudErrorPlace.Key }
 
 /** Forgets an error shown at [place] once it's out of view. */
-internal fun AccountStore.clearCloudError(place: CloudErrorPlace) = mutableState.update {
+internal fun AppStore.clearCloudError(place: CloudErrorPlace) = mutableState.update {
     if (CloudErrorPlace.of(it.failedAction) == place) it.copy(error = null, failedAction = null) else it
 }
 
 /** Gives the cloud the key to the user's own account with [provider]; a refusal shows the cloud's words for what to fix.
  * [saved] runs once it's kept. */
-fun AccountStore.saveCloudKey(provider: String, key: String, saved: () -> Unit) = action(cloudKeyAction(provider)) {
+fun AppStore.saveCloudKey(provider: String, key: String, saved: () -> Unit) = action(cloudKeyAction(provider)) {
     val credential = tracked(AnalyticsEvent.CloudKeySaved(CloudKeyOutcome.Saved, provider), { AnalyticsEvent.CloudKeySaved(CloudKeyOutcome.of(it), provider) }) {
         it.saveCloudKey(provider, key)
     }
@@ -99,7 +99,7 @@ fun AccountStore.saveCloudKey(provider: String, key: String, saved: () -> Unit) 
 }
 
 /** `409` while a cloud computer runs on [provider] shows the cloud's own words. */
-fun AccountStore.removeCloudKey(provider: String) = action(cloudKeyAction(provider)) {
+fun AppStore.removeCloudKey(provider: String) = action(cloudKeyAction(provider)) {
     tracked(AnalyticsEvent.CloudKeyRemoved(CloudRemoveOutcome.Removed, provider), { AnalyticsEvent.CloudKeyRemoved(CloudRemoveOutcome.of(it), provider) }) {
         it.deleteCloudKey(provider)
     }
@@ -108,7 +108,7 @@ fun AccountStore.removeCloudKey(provider: String) = action(cloudKeyAction(provid
 
 /** Another cloud computer called [name] on [provider], one whose key works; the cloud's refusal (the limit, the key)
  * shows its own words. [created] runs once it's made. */
-fun AccountStore.createCloudComputer(provider: String, name: String, created: () -> Unit) = action(CLOUD_CREATE) {
+fun AppStore.createCloudComputer(provider: String, name: String, created: () -> Unit) = action(CLOUD_CREATE) {
     val machine = tracked(AnalyticsEvent.CloudComputerCreated(CloudCreateOutcome.Created, provider), { AnalyticsEvent.CloudComputerCreated(CloudCreateOutcome.of(it), provider) }) {
         it.createCloudComputer(provider, name)
     }
@@ -117,7 +117,7 @@ fun AccountStore.createCloudComputer(provider: String, name: String, created: ()
 }
 
 /** Its new [name] (the cloud refuses an empty one); a computer this phone uses shows it before its host says so. */
-fun AccountStore.renameCloudComputer(id: String, name: String) = action(CloudMachineAction.Rename.key(id)) {
+fun AppStore.renameCloudComputer(id: String, name: String) = action(CloudMachineAction.Rename.key(id)) {
     val machine = tracked(AnalyticsEvent.CloudComputerRenamed(CloudRenameOutcome.Renamed), { AnalyticsEvent.CloudComputerRenamed(CloudRenameOutcome.Failed) }) {
         it.renameCloudComputer(id, name)
     }
@@ -128,7 +128,7 @@ fun AccountStore.renameCloudComputer(id: String, name: String) = action(CloudMac
 
 /** `409` while it sleeps shows the cloud's own words. [id] is a listed computer (its row asked); one gone from the list
  * meanwhile has nothing left to act on (iOS too). */
-fun AccountStore.deleteCloudSnapshots(id: String) = action(CloudMachineAction.DeleteSnapshots.key(id)) {
+fun AppStore.deleteCloudSnapshots(id: String) = action(CloudMachineAction.DeleteSnapshots.key(id)) {
     val provider = state.value.cloudOffer?.machines?.firstOrNull { it.cloudComputerId == id }?.provider ?: return@action
     tracked(AnalyticsEvent.CloudSnapshotsDeleted(CloudDeleteOutcome.Deleted, provider), { AnalyticsEvent.CloudSnapshotsDeleted(CloudDeleteOutcome.of(it), provider) }) {
         it.deleteCloudSnapshots(id)
@@ -137,20 +137,20 @@ fun AccountStore.deleteCloudSnapshots(id: String) = action(CloudMachineAction.De
 
 /** Deletes it with everything on it; this phone forgets it too when it uses it (iOS `onAccountChanged`). [id] is a listed
  * computer, as for [deleteCloudSnapshots]. */
-fun AccountStore.deleteCloudComputer(id: String) = action(CloudMachineAction.Delete.key(id)) {
+fun AppStore.deleteCloudComputer(id: String) = action(CloudMachineAction.Delete.key(id)) {
     val machine = state.value.cloudOffer?.machines?.firstOrNull { it.cloudComputerId == id } ?: return@action
     tracked(AnalyticsEvent.CloudComputerDeleted(CloudDeleteOutcome.Deleted, machine.provider), { AnalyticsEvent.CloudComputerDeleted(CloudDeleteOutcome.of(it), machine.provider) }) {
         it.deleteCloudComputer(id)
     }
     changeMachines { list -> list.filter { it.cloudComputerId != id } }
     val computerId = machine.computerId
-    if (computerId != null && store(computerId) != null) transitions.withLock { close(computerId) }
+    if (computerId != null && state.value.computers.any { it.id == computerId }) forgetComputer(computerId)
     refreshCloud()
 }
 
 /** [call] on the account's cloud, reporting what came of it: [ok] once the cloud answered, [failed] for its error. A
  * cancelled call came to nothing and reports nothing (iOS too). */
-private inline fun <T> AccountStore.tracked(ok: AnalyticsEvent, failed: (Exception) -> AnalyticsEvent, call: (CloudClient) -> T): T {
+private inline fun <T> AppStore.tracked(ok: AnalyticsEvent, failed: (Exception) -> AnalyticsEvent, call: (CloudClient) -> T): T {
     val result = try { call(requireNotNull(cloud) { "Sign in to reach your account." }) }
     catch (error: Exception) {
         if (error !is CancellationException) Analytics.capture(failed(error))
@@ -162,7 +162,7 @@ private inline fun <T> AccountStore.tracked(ok: AnalyticsEvent, failed: (Excepti
 
 /** Changes the listed cloud computers. A look in flight would bring back the list from before, so it stops; the watch for
  * claims starts over (with its timeout) on the new list. */
-private suspend fun AccountStore.changeMachines(change: (List<CloudMachine>) -> List<CloudMachine>) {
+private suspend fun AppStore.changeMachines(change: (List<CloudMachine>) -> List<CloudMachine>) {
     actions["cloudClaim"]?.cancelAndJoin()
     mutableState.update {
         it.copy(cloudOffer = (it.cloudOffer ?: CloudOffer(available = true)).let { offer -> offer.copy(machines = change(offer.machines)) })
@@ -174,7 +174,7 @@ private suspend fun AccountStore.changeMachines(change: (List<CloudMachine>) -> 
  * Polls while a new cloud computer hasn't claimed itself into the account yet; each one that has gets listed with the
  * account's computers (where [askCloudComputers] picks it up).
  */
-private fun AccountStore.awaitClaim() {
+private fun AppStore.awaitClaim() {
     if (state.value.preparingCloud.isEmpty()) return
     action("cloudClaim") {
         val client = cloud ?: return@action
@@ -201,15 +201,14 @@ internal val AccountContext.preparingCloud: Set<String>
  * Codync Cloud computers approve this phone by themselves: each one it can't use yet is asked once per app session,
  * through the same request and code exchange as a tap on "Ask for access" (iOS `askCloudComputers`).
  */
-internal fun AccountStore.askCloudComputers(computers: List<CloudComputer>) {
+internal fun AppStore.askCloudComputers(computers: List<CloudComputer>) {
     for (computer in computers) {
-        if (computer.cloud == null || computer.access != "none" || store(computer.computerId) != null) continue
-        if (askedCloud.add(computer.computerId)) requestAccess(computer)
+        if (computer.cloud == null || computer.access != "none" || state.value.computers.any { it.id == computer.computerId }) continue
+        if (asked.add(computer.computerId)) requestAccess(computer)
     }
 }
 
-/** Every computer's store learns what the account says about it: Codync Cloud runs it, and the cloud's floor for this app. */
-internal fun AccountStore.shareAccountView() {
-    val context = state.value
-    for (store in stores.value) store.setAccountView(context.cloudOf(store.id), context.appFloor)
+/** The app's word for this computer: Codync Cloud runs it, and the cloud's floor for this app version. */
+internal fun AppStore.setAccountView(cloud: CloudPlacement?, floor: String?) {
+    mutableState.update { it.copy(cloudHosting = cloud, appFloor = floor) }
 }

@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import com.codync.android.core.*
 import kotlinx.coroutines.*
@@ -8,17 +8,23 @@ import kotlinx.serialization.json.*
 
 // Bots and groups, their routines, usage, and the host queries the screens make.
 
-fun AppStore.command(method: String, body: JsonObject = JsonObject(emptyMap()), key: String = method, onSuccess: () -> Unit = {}) = action(key) {
-    val active = ready()
-    val response = active.call(method, body)
-    response.jsonObject["bot"]?.let { value ->
-        withContext(Dispatchers.IO) { requireNotNull(database).receive(HostClient.decode(value.jsonObject)) }
+/** [onFailure] runs when the computer didn't take it (unreachable or refused, before the error shows) or it never went (still loading, or [key] under way). */
+fun AppStore.command(method: String, body: JsonObject = JsonObject(emptyMap()), key: String = method, onFailure: () -> Unit = {},
+    onSuccess: () -> Unit = {}) {
+    val started = action(key) {
+        val response = try { ready().call(method, body) }
+            catch (error: CancellationException) { throw error }
+            catch (error: Exception) { onFailure(); throw error }
+        response.jsonObject["bot"]?.let { value ->
+            withContext(Dispatchers.IO) { requireNotNull(database).receive(HostClient.decode(value.jsonObject)) }
+        }
+        response.jsonObject["entry"]?.let { value ->
+            withContext(Dispatchers.IO) { requireNotNull(database).receive(listOf(Entry.decode(value.jsonObject))) }
+        }
+        refresh()
+        onSuccess()
     }
-    response.jsonObject["entry"]?.let { value ->
-        withContext(Dispatchers.IO) { requireNotNull(database).receive(listOf(Entry.decode(value.jsonObject))) }
-    }
-    refresh()
-    onSuccess()
+    if (!started) onFailure()
 }
 
 fun AppStore.saveBot(draft: BotDraft, onSaved: () -> Unit) = action("editor") {
@@ -110,7 +116,7 @@ fun AppStore.saveRoutine(botId: String, draft: RoutineDraft, originalOutputs: Li
     val active = ready()
     val outputsChanged = draft.outputs != originalOutputs
     val request = buildJsonObject {
-        putAll(draft.body(botId, includeOutputs = outputsChanged))
+        for ((key, value) in draft.body(botId, includeOutputs = outputsChanged)) put(key, value)
         if (outputsChanged) put("ifOutputs", WireJson.encodeToJsonElement(originalOutputs))
     }
     val response = active.call(if (outputsChanged) "saveRoutineWithOutputs" else "saveRoutine", request)
@@ -309,3 +315,4 @@ internal suspend fun AppStore.agentEnv(backend: String, botId: String): Pair<Lis
 /** Saves one of the bot's own agent keys; an empty value removes it. */
 internal suspend fun AppStore.setBotAgentKey(backend: String, botId: String, key: String, value: String) =
     hostQuery("setAgentEnv", buildJsonObject { put("backend", backend); put("botId", botId); put("vars", buildJsonObject { put(key, value) }) })
+

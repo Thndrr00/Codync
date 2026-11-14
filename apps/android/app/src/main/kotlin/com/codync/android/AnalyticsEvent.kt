@@ -2,6 +2,7 @@ package com.codync.android
 
 import android.content.Context
 import android.os.Build
+import com.codync.android.core.CloudError
 import com.codync.android.core.HostError
 import com.codync.android.core.PairingProblem
 import java.io.IOException
@@ -42,6 +43,47 @@ internal sealed class AnalyticsEvent(val name: String) {
         override val properties get() = mapOf("provider" to provider.json)
     }
     data object SignedOut : AnalyticsEvent("signed_out")
+    data object ContinuedWithoutAccount : AnalyticsEvent("continued_without_account")
+    data object ComputerFoundOnNetwork : AnalyticsEvent("computer_found_on_network")
+    data object AddToAccountAsked : AnalyticsEvent("add_to_account_asked")
+    data object AddToAccountCompleted : AnalyticsEvent("add_to_account_completed")
+    data class AddToAccountFailed(val reason: AddToAccountFailure) : AnalyticsEvent("add_to_account_failed") {
+        override val properties get() = mapOf("reason" to reason.json)
+    }
+    /** The user gave Codync Cloud the key to their own account with a cloud provider ([provider]: the cloud's id for it,
+     * such as `boat`; iOS `cloudKeySaved`); never the key or its hint. */
+    data class CloudKeySaved(val outcome: CloudKeyOutcome, val provider: String) : AnalyticsEvent("cloud_key_saved") {
+        override val properties get() = mapOf("outcome" to outcome.json, "provider" to JsonPrimitive(provider))
+    }
+    /** The user opened a provider's free plan from its key sheet ([provider]: the cloud's id for it; iOS `cloudOfferOpened`). */
+    data class CloudOfferOpened(val provider: String) : AnalyticsEvent("cloud_offer_opened") {
+        override val properties get() = mapOf("provider" to JsonPrimitive(provider))
+    }
+    /** The user made a Codync Cloud computer on a provider ([provider]: the cloud's id for it; iOS `cloudComputerCreated`). */
+    data class CloudComputerCreated(val outcome: CloudCreateOutcome, val provider: String) : AnalyticsEvent("cloud_computer_created") {
+        override val properties get() = mapOf("outcome" to outcome.json, "provider" to JsonPrimitive(provider))
+    }
+    /** The user renamed one of their Codync Cloud computers; never the name (iOS `cloudComputerRenamed`). */
+    data class CloudComputerRenamed(val outcome: CloudRenameOutcome) : AnalyticsEvent("cloud_computer_renamed") {
+        override val properties get() = mapOf("outcome" to outcome.json)
+    }
+    /** The user deleted one of their Codync Cloud computers ([provider]: the cloud's id for the one it ran on). */
+    data class CloudComputerDeleted(val outcome: CloudDeleteOutcome, val provider: String) : AnalyticsEvent("cloud_computer_deleted") {
+        override val properties get() = mapOf("outcome" to outcome.json, "provider" to JsonPrimitive(provider))
+    }
+    /** The user deleted a Codync Cloud computer's snapshots ([provider]: the cloud's id for the one it runs on). */
+    data class CloudSnapshotsDeleted(val outcome: CloudDeleteOutcome, val provider: String) : AnalyticsEvent("cloud_snapshots_deleted") {
+        override val properties get() = mapOf("outcome" to outcome.json, "provider" to JsonPrimitive(provider))
+    }
+    /** The user removed the key to their own account with [provider] (the cloud's id for it). */
+    data class CloudKeyRemoved(val outcome: CloudRemoveOutcome, val provider: String) : AnalyticsEvent("cloud_key_removed") {
+        override val properties get() = mapOf("outcome" to outcome.json, "provider" to JsonPrimitive(provider))
+    }
+    /** Signing in took the signed-out pairings ([MovedKeys]). */
+    data class SignedOutPairingsMoved(val computers: Int, val keys: MovedKeys) : AnalyticsEvent("signed_out_pairings_moved") {
+        override val properties get() = mapOf("computers" to JsonPrimitive(computers), "keys" to keys.json)
+    }
+    data object WhatsNewShown : AnalyticsEvent("whats_new_shown")
     data class PairingFailed(val reason: PairingFailure) : AnalyticsEvent("pairing_failed") {
         override val properties get() = mapOf("reason" to reason.json)
     }
@@ -77,6 +119,10 @@ internal sealed class AnalyticsEvent(val name: String) {
     data class ScreenViewed(val screen: AnalyticsScreen) : AnalyticsEvent("screen_viewed") {
         override val properties get() = mapOf("screen" to screen.json)
     }
+    /** A dev server opened, or its address copied; the host reports what it does itself. */
+    data class DevServerAction(val use: DevServerUse) : AnalyticsEvent("dev_server_action") {
+        override val properties get() = mapOf("action" to use.json)
+    }
 }
 
 /** One of a property's catalog values, as sent. */
@@ -101,7 +147,65 @@ internal enum class OnboardingStep(override val wire: String) : CatalogValue { W
 
 internal enum class OnboardingVia(override val wire: String) : CatalogValue { Paired("paired"), Account("account"), Skipped("skipped") }
 
-internal enum class SignInProvider(override val wire: String) : CatalogValue { Apple("apple"), Google("google"), Hosted("hosted") }
+internal enum class SignInProvider(override val wire: String) : CatalogValue { Apple("apple"), Google("google"), GitHub("github"), Hosted("hosted") }
+
+/** The signed-out pairings' keys at sign-in: [Moved] with them, or listed to be scanned again ([Rescan]). */
+internal enum class MovedKeys(override val wire: String) : CatalogValue { Moved("moved"), Rescan("rescan") }
+
+/** [Saved]; [Refused]: the cloud or the provider turned the key down (what to fix was shown); [Failed]: anything else. */
+internal enum class CloudKeyOutcome(override val wire: String) : CatalogValue {
+    Saved("saved"), Refused("refused"), Failed("failed");
+
+    companion object {
+        fun of(error: Throwable): CloudKeyOutcome = if (error is CloudError && error.code == "keyRefused") Refused else Failed
+    }
+}
+
+/** [Created]; [Refused]: the cloud said what to fix (`409`: the limit, no key, no provider chosen; or `keyRefused`); [Failed]: anything else. */
+internal enum class CloudCreateOutcome(override val wire: String) : CatalogValue {
+    Created("created"), Refused("refused"), Failed("failed");
+
+    companion object {
+        fun of(error: Throwable): CloudCreateOutcome =
+            if (error is CloudError && (error.status == 409 || error.code == "keyRefused")) Refused else Failed
+    }
+}
+
+internal enum class CloudRenameOutcome(override val wire: String) : CatalogValue { Renamed("renamed"), Failed("failed") }
+
+/** `deleted`; `refused`: the cloud said no (`409`: its snapshots while it sleeps); `failed`: anything else. */
+internal enum class CloudDeleteOutcome(override val wire: String) : CatalogValue {
+    Deleted("deleted"), Refused("refused"), Failed("failed");
+
+    companion object {
+        fun of(error: Throwable): CloudDeleteOutcome = if (error is CloudError && error.status == 409) Refused else Failed
+    }
+}
+
+/** `removed`; `refused`: the cloud said no (`409`: a computer still runs on that provider); `failed`: anything else. */
+internal enum class CloudRemoveOutcome(override val wire: String) : CatalogValue {
+    Removed("removed"), Refused("refused"), Failed("failed");
+
+    companion object {
+        fun of(error: Throwable): CloudRemoveOutcome = if (error is CloudError && error.status == 409) Refused else Failed
+    }
+}
+
+internal enum class AddToAccountFailure(override val wire: String) : CatalogValue {
+    Declined("declined"), Certificate("certificate"), Unreachable("unreachable"), Other("other");
+
+    companion object {
+        fun of(error: Throwable): AddToAccountFailure = when {
+            error is HostError && error.message == "The computer stayed out of this account." -> Declined
+            error is HostError && error.message.startsWith("Couldn't confirm your Codync account") -> Certificate
+            error is HostError -> Other
+            error is CloudError -> if (error.isTransient) Unreachable else Other
+            error is IOException && error.message == "Connect to the internet to pair, so Codync can confirm your account." -> Certificate
+            error is IOException -> Unreachable
+            else -> Other
+        }
+    }
+}
 
 internal enum class SignInFailure(override val wire: String) : CatalogValue {
     Cancelled("cancelled"), Timeout("timeout"), Verification("verification"), Error("error")
@@ -152,11 +256,11 @@ internal enum class PhoneSetting(override val wire: String) : CatalogValue { Pus
 
 /** What an outbound link leads to (`install_command`: an install command copied; `install_link`: the website link copied). */
 internal enum class OutboundLink(override val wire: String) : CatalogValue {
-    Github("github"), Issues("issues"), Discord("discord"), Demo("demo"), Tailscale("tailscale"), Privacy("privacy"),
-    InstallCommand("install_command"),
-    Github("github"), Issues("issues"), AppStore("app_store"), Demo("demo"), Tailscale("tailscale"), Privacy("privacy"), InstallCommand("install_command"),
-    InstallLink("install_link"),
+    Github("github"), Issues("issues"), Discord("discord"), AppStore("app_store"), Demo("demo"), Tailscale("tailscale"), Privacy("privacy"),
+    InstallCommand("install_command"), InstallLink("install_link"),
 }
+
+internal enum class DevServerUse(override val wire: String) : CatalogValue { Open("open"), Copy("copy") }
 
 internal enum class VoiceEngineKind(override val wire: String) : CatalogValue {
     OnDevice("on_device"), OpenAI("openai"), Gemini("gemini"),

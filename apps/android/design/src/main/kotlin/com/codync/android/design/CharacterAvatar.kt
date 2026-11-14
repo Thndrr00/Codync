@@ -32,7 +32,9 @@ object AvatarPalette {
     fun tint(id: String): Color = Color(colors[id] ?: colors.getValue("blue"))
 }
 
-data class AvatarFace(val shape: String, val color: String, val status: String = "idle")
+/** A face in a group's avatar: its character, or the bot's own image ([customImage], data URL; [customTinted] draws it in the bot's color). */
+data class AvatarFace(val shape: String, val color: String, val status: String = "idle", val customImage: String? = null,
+    val customTinted: Boolean = false)
 
 /**
  * Static system-widget drawing uses the same mask, palette and eyes as the app; [cells] is its grid
@@ -69,10 +71,13 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
 /**
  * Port of CodyncKit's dotted character; the accompanying name/status supplies accessibility text.
  * Resting faces stay calm (half-lidded); only a working or needs-you face moves. [flat] draws even,
- * unshaded dots instead (the Flat avatar style).
+ * unshaded dots instead (the Flat avatar style). A bot's own [customImage] replaces the character
+ * when it decodes; [customTinted] draws it in the bot's color.
  */
 @Composable fun CharacterAvatar(shape: String, color: String, size: Dp = 40.dp, status: String = "idle", monochrome: Color? = null,
-    highlight: Color? = null, blink: Boolean = false, flat: Boolean = LocalAvatarStyle.current == AvatarStyle.Flat) {
+    highlight: Color? = null, blink: Boolean = false, flat: Boolean = LocalAvatarStyle.current == AvatarStyle.Flat,
+    customImage: String? = null, customTinted: Boolean = false) {
+    if (StaticCustomIcon(customImage, customTinted, size, monochrome ?: AvatarPalette.tint(color))) return
     val owner = LocalLifecycleOwner.current
     var active by remember(owner) { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     DisposableEffect(owner) {
@@ -135,7 +140,10 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
         @Composable fun place(index: Int, fraction: Float, align: Alignment) {
             val face = faces[index]
             val drift = float?.let { (sin(it.value / 2.4 + index * 1.9) * size.value * .02).dp } ?: 0.dp
-            Box(Modifier.align(align).offset(y = drift)) { CharacterAvatar(face.shape, face.color, side(fraction), face.status) }
+            Box(Modifier.align(align).offset(y = drift)) {
+                CharacterAvatar(face.shape, face.color, side(fraction), face.status, customImage = face.customImage,
+                    customTinted = face.customTinted)
+            }
         }
         when (faces.size) {
             0 -> Symbol("person.2", Modifier.align(Alignment.Center), size = size * 0.4f, tint = Palette.secondary)

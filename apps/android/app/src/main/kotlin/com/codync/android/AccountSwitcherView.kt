@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -69,14 +69,14 @@ import com.kyant.shapes.RoundedRectangle
                     Box(Modifier.size(76.dp).clip(Capsule()).background(Palette.bubbleAgent).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
                         Symbol("person.fill", size = 34.dp, tint = Palette.tertiary)
                     }
-                    if (account.configured) SignInButtons(state, store)
+                    if (account.configured) SignInButtons(state, store::signIn)
                     else IconLabel("QR pairing only in this build", "qrcode", Palette.secondary)
                 }
             }
             if (current != null && (account.multiple || account.accounts.size > 1)) {
                 Switcher(state, store, busy) { addingAccount = !addingAccount }
                 AnimatedVisibility(addingAccount, enter = fadeIn(Motion.fade()) + expandVertically(Motion.layoutSize),
-                    exit = fadeOut(Motion.fade()) + shrinkVertically(Motion.layoutSize)) { SignInButtons(state, store) }
+                    exit = fadeOut(Motion.fade()) + shrinkVertically(Motion.layoutSize)) { SignInButtons(state, store::signIn) }
             }
             if (current != null) CardSection {
                 row {
@@ -123,12 +123,10 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** The account face of the roster's top bar. */
-@Composable internal fun AccountAvatar(state: AppState, size: Dp) {
-    val current = state.account.accounts.firstOrNull { it.userId == state.account.userId }
-    AccountAvatar(current?.avatar, current?.email, size)
 @Composable internal fun AccountAvatar(state: AccountContext, size: Dp) {
     val current = state.account.current
     if (!state.account.ready || "session" in state.busy) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) { ThinkingOrb(size = size * 0.6f) }
     } else AccountAvatar(current?.avatar, current?.email, size)
 }
+

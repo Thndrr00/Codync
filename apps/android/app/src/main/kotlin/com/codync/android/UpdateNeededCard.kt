@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.AppVersion
+import com.codync.android.core.LinkState
 import com.codync.android.core.VersionMismatch
 import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
@@ -25,6 +26,9 @@ import kotlinx.coroutines.delay
 
 /** Which side must update before this app and the computer can work together (iOS `BotStore.mismatch`), from the host's `hello`. */
 internal val AppState.mismatch: VersionMismatch? get() {
+    // The cloud's emergency floor (`426 appUpdateRequired`): this app version is turned away for good.
+    appFloor?.let { return VersionMismatch.AppFloor(it) }
+    (connection as? LinkState.Failed)?.takeIf { it.status == 426 }?.let { return VersionMismatch.AppFloor(it.message) }
     val host = hello?.text("version")
     return VersionMismatch.check(BuildConfig.VERSION_NAME, host, hello?.text("minApp"))
         // Data this app can't read from a newer host: this app is behind, whatever `minApp` says.
@@ -51,12 +55,16 @@ internal val AppState.mismatch: VersionMismatch? get() {
         Symbol("arrow.down.circle", size = 22.dp, tint = Palette.warning)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(when (mismatch) {
-                is VersionMismatch.UpdateApp -> "Update this app"
+                is VersionMismatch.UpdateApp, is VersionMismatch.AppFloor -> "Update this app"
                 is VersionMismatch.UpdateHost -> "Update Codync on $host"
             }, style = Type.subheadline.semibold, color = Palette.text)
             when (mismatch) {
                 is VersionMismatch.UpdateApp -> Text("${state.hello?.text("version")?.let { "$host runs Codync $it and" } ?: host} needs this app to be " +
                     "${mismatch.minimum} or newer. Your chats are safe on the computer.", style = Type.footnote, color = Palette.secondary)
+                is VersionMismatch.AppFloor -> {
+                    Text(mismatch.reason, style = Type.footnote, color = Palette.secondary)
+                    PrimaryButton("Update now", Modifier.padding(top = 4.dp), action = requestUpdate)
+                }
                 is VersionMismatch.UpdateHost -> {
                     val notice = hostUpdateNotice(host, mismatch, state.hello?.text("os"), state.canUpdateHost, state.hostUpdate, now)
                     Text(notice.detail, style = Type.footnote, color = Palette.secondary)

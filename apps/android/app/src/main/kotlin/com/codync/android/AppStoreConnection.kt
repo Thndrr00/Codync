@@ -353,7 +353,26 @@ private fun AppStore.showConnection(link: LinkState) {
     }
 }
 
+/**
+ * What waited on this phone, ready to go with the same nonces, oldest first. With no relay now ([cloud] is null), what a
+ * relay held can't be asked about, so it goes too.
+ */
+internal fun readyToSend(pending: List<PendingSend>, cloud: String?): List<PendingSend> =
+    pending.filter { it.status == SendStatus.Held || (it.status == SendStatus.Waiting && cloud == null) }
+        .sortedBy { it.createdAt }.map { it.copy(status = SendStatus.Sending) }
+
+/** Delivers [ready] one at a time, leaving out what was taken back while an earlier one was on its way ([stillPending]). */
+internal suspend fun deliverInTurn(ready: List<PendingSend>, stillPending: suspend (PendingSend) -> Boolean, deliver: suspend (PendingSend) -> Unit) {
+    for (send in ready) if (stillPending(send)) deliver(send)
+}
+
 private suspend fun AppStore.reconcileMailbox(active: EncryptedChannel) {
+    // What waited on this phone goes now, with the same nonces, also when the computer has joined an account since.
+    val cloud = state.value.computer?.cloud
+    deliverInTurn(readyToSend(state.value.pending, cloud), { send ->
+        refresh() // A take-back may have reached the database and not yet the state.
+        state.value.pending.any { it.nonce == send.nonce }
+    }) { deliver(it) }
     if (active.route != HostRoute.Relay || state.value.pending.none { it.status in listOf(SendStatus.Waiting, SendStatus.Delivering) }) return
     try {
         val response = active.queued()

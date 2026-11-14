@@ -165,7 +165,7 @@ class VoiceEnginesTest {
     @Test fun cloudSpeechSendsEachUtteranceAndReadsRepliesClipByClip() = runTest {
         val mic = Mic(); val sent = mutableListOf<String>(); val heard = mutableListOf<Int>(); val made = mutableListOf<String>()
         val playing = mutableListOf<CompletableDeferred<Unit>>()
-        val speech = CloudSpeechEngine.Speech({ heard += it.size; "  hello there " }, { made += it; it.toByteArray() to "aac" }, sent::add)
+        val speech = CloudSpeechEngine.Speech({ heard += it.size; "  hello there " }, { made += it; it.toByteArray() to "aac" }, send = sent::add)
         val engine = CloudSpeechEngine(backgroundScope, VoiceProvider.Gemini, VoiceSettings(pauseMillis = 1_000), mic,
             { _, _ -> val clip = CompletableDeferred<Unit>().also { playing += it }
                 try { clip.await() } catch (cancelled: CancellationException) { clip.cancel(); throw cancelled } }, speech) { testScheduler.currentTime }
@@ -177,7 +177,7 @@ class VoiceEnginesTest {
         val reply = "First sentence here. " + "x".repeat(200) + "."
         engine.speak("**$reply**"); runCurrent()
         assertEquals(VoicePhase.Speaking, engine.state.value.phase); assertEquals(2, made.size) // The next clip is fetched while one plays.
-        mic.frames!!(frame, .9f); runCurrent(); assertEquals(0f, engine.state.value.level) // The mic doesn't count while it talks.
+        mic.frames!!(frame, .9f); runCurrent(); assertEquals(.9f, engine.state.value.level) // The mic still reads while it talks, so saying something barges in.
         playing[0].complete(Unit); runCurrent(); assertEquals(VoicePhase.Speaking, engine.state.value.phase)
         playing[1].complete(Unit); runCurrent(); assertEquals(VoicePhase.Speaking, engine.state.value.phase)
         playing[2].complete(Unit); runCurrent(); assertEquals(VoicePhase.Listening, engine.state.value.phase)

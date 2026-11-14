@@ -70,6 +70,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -349,6 +350,21 @@ val LocalCardStyle = staticCompositionLocalOf { CardStyle.Filled }
                 // A centered field centers its placeholder too.
                 if (text.isEmpty()) Text(prompt, if (style.textAlign == TextAlign.Center) Modifier.fillMaxWidth() else Modifier, style = style,
                     color = Palette.tertiary, maxLines = if (singleLine) 1 else Int.MAX_VALUE)
+                field()
+            }
+        })
+}
+
+/** [PlainTextField] over a [TextFieldValue], for a field that starts with its cursor somewhere (a name to edit: at its end). */
+@Composable fun PlainTextField(value: TextFieldValue, onChange: (TextFieldValue) -> Unit, modifier: Modifier = Modifier, prompt: String = "",
+    singleLine: Boolean = false, style: TextStyle = Type.body, imeAction: ImeAction = ImeAction.Default,
+    keyboard: KeyboardOptions = KeyboardOptions(imeAction = imeAction), actions: KeyboardActions = KeyboardActions.Default) {
+    BasicTextField(value, onChange, modifier, singleLine = singleLine, textStyle = style.copy(color = Palette.text),
+        cursorBrush = SolidColor(Palette.accent), keyboardOptions = keyboard, keyboardActions = actions,
+        decorationBox = { field ->
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.text.isEmpty()) Text(prompt, if (style.textAlign == TextAlign.Center) Modifier.fillMaxWidth() else Modifier,
+                    style = style, color = Palette.tertiary, maxLines = if (singleLine) 1 else Int.MAX_VALUE)
                 field()
             }
         })

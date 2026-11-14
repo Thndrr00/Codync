@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,12 +34,12 @@ import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 
 /**
- * Computers → Codync Cloud → "+" (iOS `NewCloudComputerSheet`): its name (empty, the suggested one), then the provider it
+ * Computers â†’ Codync Cloud â†’ "+" (iOS `NewCloudComputerSheet`): its name (empty, the suggested one), then the provider it
  * runs on. Every provider the cloud offers is listed with its logo; one without a usable key opens that provider's key
- * ([openKey]) and is picked once it has one, and one with a key opens it, or removes it, from its row's `⋯`. Create closes
+ * ([openKey]) and is picked once it has one, and one with a key opens it, or removes it, from its row's `â‹¯`. Create closes
  * the sheet once the computer is made; a refusal shows here, and at the account's limit why it's off.
  */
-@Composable internal fun NewCloudComputerSheet(offer: CloudOffer, state: AccountContext, store: AccountStore, openKey: (String) -> Unit) {
+@Composable internal fun NewCloudComputerSheet(offer: CloudOffer, state: AccountContext, store: AppStore, openKey: (String) -> Unit) {
     DisposableEffect(store) {
         store.cloudSheetShown(true)
         onDispose { store.cloudSheetShown(false) }
@@ -50,7 +50,7 @@ import com.kyant.shapes.RoundedRectangle
     val selected = offer.chosenProvider(picked)
     val suggested = offer.suggestedName(tr("Cloud computer"), tr("Cloud computer {n}"))
     val creating = CLOUD_CREATE in state.busy
-    // One action at a time, as on iOS: a key being saved or removed holds Create and the other rows' `⋯`.
+    // One action at a time, as on iOS: a key being saved or removed holds Create and the other rows' `â‹¯`.
     val busy = creating || offer.providers.any { cloudKeyAction(it.provider) in state.busy }
     val full = offer.machines.size >= offer.limit
     val create = { if (selected != null && !busy && !full) store.createCloudComputer(selected, name.trim().ifEmpty { suggested }, dismiss) }
@@ -86,7 +86,7 @@ import com.kyant.shapes.RoundedRectangle
                     }
                 }
             }
-            // The cloud's own words for a create over the limit; a key removed from a row's `⋯` fails here, where it was asked.
+            // The cloud's own words for a create over the limit; a key removed from a row's `â‹¯` fails here, where it was asked.
             val note = state.cloudErrorAt(CloudErrorPlace.Create) ?: state.cloudKeyError()
                 ?: "You can have up to ${offer.limit} cloud computers. Delete one to make another.".takeIf { full }
             note?.let { Text(tr(it), style = Type.footnote, color = Palette.danger) }
@@ -95,7 +95,7 @@ import com.kyant.shapes.RoundedRectangle
 }
 
 /** A provider on its logo tile, with its name and its key: picked (checkmark) while its key is usable, else a tap picks it
- * for once it is and opens its key ([tap]). One with a usable key has a `⋯` ([menu]): its key, and removing it while no
+ * for once it is and opens its key ([tap]). One with a usable key has a `â‹¯` ([menu]): its key, and removing it while no
  * cloud computer runs there; a spinner while it's being removed ([removing]). */
 @Composable private fun ProviderRow(provider: CloudProvider, selected: Boolean, removing: Boolean, menuEnabled: Boolean,
     menu: () -> List<MenuItem>, tap: () -> Unit) {
@@ -103,8 +103,8 @@ import com.kyant.shapes.RoundedRectangle
     val problem = credential?.problem
     val detail = when {
         problem != null -> tr(problem)
-        credential != null -> "${provider.region} · ${credential.hint}"
-        else -> "${provider.region} · ${tr(if (provider.offer != null) "Free sandbox available" else "Add a key first")}"
+        credential != null -> "${provider.region} Â· ${credential.hint}"
+        else -> "${provider.region} Â· ${tr(if (provider.offer != null) "Free sandbox available" else "Add a key first")}"
     }
     val action = if (provider.usable) Modifier.choice(selected, provider.name, choose = tap)
         else Modifier.plainButton(action = tap).semantics { contentDescription = provider.name }
@@ -128,3 +128,4 @@ import com.kyant.shapes.RoundedRectangle
         }
     }
 }
+

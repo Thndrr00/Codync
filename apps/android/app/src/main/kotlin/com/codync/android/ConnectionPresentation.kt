@@ -6,6 +6,7 @@ import com.codync.android.core.ConnectionRoute
 import com.codync.android.core.HostRoute
 import com.codync.android.core.LinkState
 import com.codync.android.core.Pairing
+import com.codync.android.core.VersionMismatch
 
 // What the roster header, Computer management and the chat header say about the computer's link
 // (iOS `ComputerStatus`, `ConnectionSummary`, `BotStore.connectionLabel`).
@@ -14,32 +15,67 @@ import com.codync.android.core.Pairing
 private val LinkState.unauthorized get() = this is LinkState.Failed && status == 403
 
 /** One short line for the computer's connection, next to its name (iOS `BotStore.statusText`). */
-internal fun statusText(state: AppState): String = if (state.computers.isEmpty()) "Not paired" else when (val link = state.connection) {
-    is LinkState.Ready -> if (state.mismatch != null) "Needs update" else "Online"
-    LinkState.Connecting -> "Connecting…"
-    is LinkState.ComputerOffline -> link.lastSeenAt?.let { "Offline · seen ${RelativeTime.day(it)}" } ?: "Offline"
-    is LinkState.Failed -> if (link.unauthorized) link.message else "Can't reach"
+internal fun statusText(state: AppState): String {
+    if (state.isUpdating) return "Updating…"
+    if (state.isAsleep) return "Sleeping · wakes when you message"
+    if (state.computers.isEmpty()) return "Not paired"
+    return when (val link = state.connection) {
+        is LinkState.Ready -> when {
+            state.cloudUpdating -> "Updating…"
+            state.mismatch != null -> "Needs update"
+            else -> "Online"
+        }
+        LinkState.Connecting -> "Connecting…"
+        is LinkState.ComputerOffline -> if (state.cloudHosting?.failed == true) "Cloud computer failed"
+            else link.lastSeenAt?.let { "Offline · seen ${RelativeTime.day(it)}" } ?: "Offline"
+        is LinkState.Failed -> when {
+            state.cloudHosting?.failed == true -> "Cloud computer failed"
+            state.mismatch != null -> "Needs update"
+            link.unauthorized -> link.message
+            else -> "Can't reach"
+        }
+    }
 }
+
+/** A requested update still under way while the computer isn't online (iOS `BotStore.isUpdating`). */
+internal val AppState.isUpdating: Boolean get() = connection !is LinkState.Ready && hostUpdate.updating(System.currentTimeMillis())
+
+/** A Codync Cloud computer older than this app's `minHost`: the cloud updates it on its own (this app's `Codync-App`
+ * header asks for it), so it reads as updating, not as something for the user to do. */
+internal val AppState.cloudUpdating: Boolean get() = mismatch is VersionMismatch.UpdateHost && cloudHosting != null
+
+/** A Codync Cloud computer that's asleep: a connection or a message wakes it, so it isn't offline. */
+internal val AppState.isAsleep: Boolean get() = connection is LinkState.ComputerOffline && cloudHosting?.asleep == true
 
 /** The status line in Computer management: one that's offline while its new identity is around says so. */
 internal fun computerStatusText(state: AppState): String =
     if (state.isStale && !state.connection.unauthorized) "Older copy of this computer · ${statusText(state)}" else statusText(state)
 
 /** A word for the link: the computer filter's rows and the chat header. */
-internal fun connectionLabel(state: AppState): String = if (state.computers.isEmpty()) "Not paired" else when (val link = state.connection) {
-    is LinkState.Ready -> if (state.mismatch != null) "Needs update" else "Connected"
-    LinkState.Connecting -> "Connecting…"
-    is LinkState.ComputerOffline -> "Offline"
-    is LinkState.Failed -> if (link.unauthorized) "No access" else "Offline"
+internal fun connectionLabel(state: AppState): String {
+    if (state.isAsleep) return "Sleeping"
+    if (state.computers.isEmpty()) return "Not paired"
+    return when (val link = state.connection) {
+        is LinkState.Ready -> when {
+            state.cloudUpdating -> "Updating."
+            state.mismatch != null -> "Needs update"
+            else -> "Connected"
+        }
+        LinkState.Connecting -> "Connecting…"
+        is LinkState.ComputerOffline -> "Offline"
+        is LinkState.Failed -> if (link.unauthorized) "No access" else "Offline"
+    }
 }
 
 /** What TalkBack says for the chat header's connection: the route too, when there is one. */
 internal fun connectionDescription(state: AppState): String {
     val link = state.connection
     return when {
+        state.isAsleep -> "Sleeping · wakes when you message"
         state.computers.isEmpty() -> "Not paired"
         link == LinkState.Connecting -> "Connecting"
         link !is LinkState.Ready -> connectionLabel(state)
+        state.cloudUpdating -> "Updating."
         state.mismatch != null -> "Needs update"
         link.route == HostRoute.Relay -> connectedThrough(state.computers.firstOrNull()?.cloud)
         else -> "Connected over Wi-Fi or Tailscale"
@@ -92,9 +128,12 @@ internal fun pairingLine(cloud: String?): String {
     else "Connects on Wi-Fi, over Tailscale, or from anywhere through Private relay ($host), on its own. End-to-end encrypted."
 }
 
-/** The pairing page's line. Parsing stays here so a view only renders the sentence. */
-internal fun pairingLine(pasted: String, scheme: String): String =
-    pairingLine(runCatching { Pairing.parse(pasted, scheme).computer.cloud }.getOrNull())
+/** The pairing page's line; signed out, only a private relay is named (the Codync relay is for signed-in phones). */
+internal fun pairingLine(pasted: String, scheme: String, signedIn: Boolean): String {
+    val cloud = runCatching { Pairing.parse(pasted, scheme).computer.cloud }.getOrNull()
+    if (!signedIn && relayHost(cloud) == null) return "Connects on Wi-Fi or over Tailscale. End-to-end encrypted."
+    return pairingLine(cloud)
+}
 
 /** "1 connected", "Connecting…", "No access": the roster header's summary of its computers. */
 internal fun connectionSummary(state: AppState): String = when {

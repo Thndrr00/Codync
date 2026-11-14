@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -28,9 +24,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.codync.android.core.AppVersion
 import com.codync.android.core.Entry
 import com.codync.android.design.*
 import com.kyant.shapes.Capsule
@@ -55,7 +54,11 @@ import com.kyant.shapes.RoundedRectangle
 
 /** The messages waiting in this conversation's lane, oldest first. */
 internal fun AppState.queuedMessages(botId: String, thread: String?): List<Entry> =
-    entries.filter { it.botId == botId && it.threadId == thread && it.kind == "user" && it.status == "queued" }
+    entries.filter { it.botId == botId && it.threadId == thread && it.isQueued }
+
+/** The messages waiting in [entries], oldest first; none while the agent isn't answering, as they go at once then. */
+internal fun queuedMessages(entries: List<Entry>, working: Boolean): List<Entry> =
+    if (!working) emptyList() else entries.filter(Entry::isQueued).sortedBy(Entry::seq)
 
 /** The next waiting message over the field; a steered one leaves the queue and its own turn.
  *  `working`: the agent is answering this lane, so Steer can reach it. */
@@ -169,24 +172,7 @@ internal fun AppState.queuedMessages(botId: String, thread: String?): List<Entry
     CodyncSheet(shown, close, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded)) {
         QueueSheet(entries, working, store, close)
     }
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import com.codync.android.core.*
-import com.codync.android.design.*
-import com.kyant.shapes.RoundedRectangle
-
-/** While the bot works (anywhere: a room, a routine), the user's waiting messages show above the composer instead of in
- *  the chat (iOS `queue(working:)`), oldest first. A bot that isn't working starts them at once. */
-internal fun queuedMessages(chat: List<Entry>, working: Boolean): List<Entry> =
-    if (working) chat.filter(Entry::isQueued).sortedBy(Entry::seq) else emptyList()
+}
 
 /** The first host version that takes a queued message now (`steer`) or back (`unqueue`). */
 private const val STEER_HOST = "2.39.0"

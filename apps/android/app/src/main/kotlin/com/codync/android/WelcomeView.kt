@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
@@ -57,7 +57,7 @@ import kotlin.math.sin
 @Composable internal fun WelcomeView(state: AppState, store: AppStore, start: () -> Unit) {
     AnalyticsOnAppear(AnalyticsEvent.OnboardingStepViewed(OnboardingStep.Welcome))
     val still = reduceMotion()
-    // 0 = nothing yet … 4 = everything shown. Each beat enters in turn.
+    // 0 = nothing yet â€¦ 4 = everything shown. Each beat enters in turn.
     var beat by remember { mutableIntStateOf(if (still) 4 else 0) }
     LaunchedEffect(Unit) {
         for (next in beat + 1..4) { delay(if (next == 1) 150 else 280); beat = next }
@@ -82,7 +82,7 @@ import kotlin.math.sin
                 Column(Modifier.padding(top = 32.dp).rise(beat >= 4), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     WideButton("Get started", action = start)
                     // Signed in, the computers on the account show up without scanning a code.
-                    if (state.account.configured) SignInButtons(state, store)
+                    if (state.account.configured) SignInButtons(state, store::signIn)
                     state.account.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
                 }
             }
@@ -137,7 +137,7 @@ private val CREW = listOf(
                     fadeOut(Motion.fade())
             }, label = "Reply") { done ->
                 if (done) Bubble("Done. It raced the session refresh; tests pass on fix/login.", Palette.bubbleAgent)
-                else Text("Working…", style = Type.subheadline, color = Palette.tertiary)
+                else Text("Workingâ€¦", style = Type.subheadline, color = Palette.tertiary)
             }
         }
     }
@@ -158,20 +158,20 @@ private val CREW = listOf(
 }
 
 /** Equal access to both account providers at every sign-in entry point (iOS `SignInButtons`). */
-@Composable internal fun SignInButtons(state: AppState, store: AppStore) {
+@Composable internal fun SignInButtons(state: AppState, signIn: (SignInProvider) -> Unit) {
     val busy = "session" in state.busy
     val enabled = state.account.ready && !busy
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        WideButton(enabled = enabled, busy = busy, action = { store.signIn(SignInProvider.Apple) }) {
+        WideButton(enabled = enabled, busy = busy, action = { signIn(SignInProvider.Apple) }) {
             Symbol("apple.logo", size = 20.dp, tint = Palette.onAccent)
             Text(tr("Continue with Apple"))
         }
-        WideButton(primary = false, enabled = enabled, busy = busy, action = { store.signIn(SignInProvider.Google) }) {
+        WideButton(primary = false, enabled = enabled, busy = busy, action = { signIn(SignInProvider.Google) }) {
             Image(painterResource(R.drawable.google_logo), null, Modifier.size(20.dp))
             Text(tr("Continue with Google"))
         }
         // Clerk's own page covers the sign-ins that need another step (email codes, verification).
-        LinkButton("Other sign-in options", enabled = enabled, color = Palette.secondary, style = Type.footnote) { store.signIn(SignInProvider.Hosted) }
+        LinkButton("Other sign-in options", enabled = enabled, color = Palette.secondary, style = Type.footnote) { signIn(SignInProvider.Hosted) }
     }
 }
 
@@ -202,3 +202,4 @@ private val WIDE_HEIGHT: Dp = 50.dp
     val lift = with(LocalDensity.current) { 14.dp.toPx() }
     return graphicsLayer { alpha = progress.coerceIn(0f, 1f); translationY = (1f - progress) * lift }
 }
+

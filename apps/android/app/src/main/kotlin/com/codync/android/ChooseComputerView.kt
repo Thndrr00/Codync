@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +37,7 @@ import com.codync.android.design.*
             }
             CardSection("In your account") {
                 for (computer in computers) row {
-                    AccountComputerRow(computer, state.access[computer.computerId]?.code, asking = computer.computerId in state.asking, ask = { ask(computer) })
+                    AccountComputerRow(computer, state.accessCodes[computer.computerId]?.code, asking = computer.computerId in state.asking, ask = { ask(computer) })
                 }
             }
             CardSection {
@@ -57,3 +57,4 @@ import com.codync.android.design.*
         Box(Modifier.padding(horizontal = 24.dp).padding(bottom = 12.dp)) { WideButton("Skip", primary = false, action = skip) }
     }
 }
+

@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 
@@ -47,6 +48,8 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     internal var draftBook: DraftBook? = null
     internal var draftWriter: Job? = null
     internal var savedDrafts: Map<String, ComposerDraft> = emptyMap()
+    /** Limits orders dropped before the host answered: only the newest waits. */
+    internal val usageOrders = Channel<List<String>>(Channel.CONFLATED)
     internal var connectionJob: Job? = null
     internal var pairingJob: Job? = null
     internal var graceJob: Job? = null
@@ -121,12 +124,16 @@ class AppStore(application: Application) : AndroidViewModel(application) {
             if (foreground) connect()
             refreshCloud()
         } catch (error: CancellationException) { throw error }
-        catch (error: Exception) { showError(error) }
+        catch (error: Exception) {
+            showError(error)
+            // No refresh follows: setup would wait on it forever.
+            mutableState.update { it.copy(cloudLoaded = true) }
+        }
     }
 
     private suspend fun configureCloud(userId: String) {
         val identity = withContext(Dispatchers.IO) { local.identity() }
-        cloud = CloudClient(BuildConfig.CLOUD_URL, identity) { NativeAccounts.token(userId) }
+        cloud = CloudClient(BuildConfig.CLOUD_URL, identity, BuildConfig.VERSION_NAME) { NativeAccounts.token(userId) }
     }
 
     /**
@@ -205,7 +212,8 @@ class AppStore(application: Application) : AndroidViewModel(application) {
             database = MirrorDatabase(getApplication(), local.directory, computer.id)
             database?.recoverInterrupted()
             val snapshot = requireNotNull(database).snapshot()
-            val restored = book.recover(snapshot)
+            val queued = snapshot.pending.map { it.nonce }.toSet() + snapshot.entries.mapNotNull { it.clientNonce }
+            val restored = book.recover(queued)
             savedDrafts = restored.associateBy { it.lane }
             mutableState.update { it.copy(drafts = restored.associateBy { draft -> draft.lane }) }
             attachments.retainPending(snapshot.pending.flatMap { it.files } + restored.flatMap { it.files })
@@ -223,11 +231,9 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         // Like iOS, a screen state this app can't read is a host without remote screen.
         val screen = snapshot.screen?.let { runCatching { ScreenState.decode(it) }.getOrNull() }
         val visible = snapshot.entries.visibleEntries()
-        mutableState.update { current -> current.copy(bots = snapshot.bots, entries = visible,
-            pending = snapshot.pending, usage = snapshot.usage, screen = screen, mirrorRevision = snapshot.rev,
-        mirrorBots = snapshot.bots
-        mutableState.update { current -> current.copy(bots = withMoves(snapshot.bots, pendingSectionMoves), entries = withRemovals(snapshot.entries, pendingRemovals),
-            pending = snapshot.pending, usage = snapshot.usage, screen = screen, mirrorRevision = snapshot.rev, icons = snapshot.icons,
+        mutableState.update { current -> current.copy(bots = withMoves(snapshot.bots, pendingSectionMoves),
+            entries = withRemovals(visible, pendingRemovals), pending = snapshot.pending, usage = snapshot.usage, screen = screen,
+            mirrorRevision = snapshot.rev, icons = snapshot.icons,
             selectedBot = current.selectedBot?.takeIf { id -> snapshot.bots.any { it.id == id } }) }
         if (voiceBinding != null && snapshot.bots.none { it.id == voiceBinding?.botId && !it.deleted }) endVoice("Voice chat ended because its bot was removed.")
         if (PushPreferences.tasks(getApplication())) {
@@ -240,8 +246,20 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The ready channel, waiting briefly for a reconnect; a timeout is an error the action shows. */
-    internal suspend fun ready(): EncryptedChannel = deadline(20_000, "Can't reach the computer. Check that it's on, then try again.") {
+    /**
+     * Deleting the account or starting over: the computer drops this device (`forgetDevice`; one older than that only stops its alerts).
+     * Best effort, three seconds at most: the key is erased right after, so a row left behind can't be used.
+     */
+    internal suspend fun forgetDevice() {
+        val ready = channel?.takeIf { it.state.value is LinkState.Ready } ?: return
+        withTimeoutOrNull(3_000) {
+            for (method in listOf("forgetDevice", "unregisterDevice")) try { ready.call(method); return@withTimeoutOrNull }
+                catch (error: CancellationException) { throw error }
+                catch (_: Exception) { }
+        }
+    }
+
+    /** The ready channel, waiting briefly for a reconnect; a timeout is an error the action shows. */    internal suspend fun ready(): EncryptedChannel = deadline(20_000, "Can't reach the computer. Check that it's on, then try again.") {
         // The demo shows sample data: nothing may reach the real computer meanwhile.
         if (DemoMode.active.value) throw IOException(com.codync.android.core.DemoScript.REFUSAL)
         while (true) {
@@ -255,20 +273,26 @@ class AppStore(application: Application) : AndroidViewModel(application) {
         @Suppress("UNREACHABLE_CODE") error("Unreachable")
     }
 
-    internal fun action(key: String, operation: suspend () -> Unit) {
-        if (state.value.loading || key in state.value.busy) return
-        mutableState.update { it.copy(busy = it.busy + key, error = null) }
+    internal fun action(key: String, operation: suspend () -> Unit): Boolean {
+        if (state.value.loading || key in state.value.busy) return false
+        mutableState.update { it.copy(busy = it.busy + key, error = null, failedAction = null) }
         val job = contextScope.launch(start = CoroutineStart.LAZY) {
             try { operation() }
             catch (error: CancellationException) { throw error }
-            catch (error: Exception) { showError(error) }
+            catch (error: Exception) { showError(error, key) }
             finally { actions.remove(key); mutableState.update { it.copy(busy = it.busy - key) } }
         }
         actions[key] = job
         job.start()
+        return true
     }
 
-    internal fun showError(error: Exception) { mutableState.update { it.copy(loading = false, error = error.message ?: "Couldn't complete the action.") } }
+    /** [action]: the [action] key [error] came from, if any. */
+    internal fun showError(error: Exception, action: String? = null) {
+        // Not an error to dismiss: the computer's "update this app" card says it and stays.
+        if (error is CloudError && error.code == "appUpdateRequired") mutableState.update { it.copy(loading = false, appFloor = error.message) }
+        else mutableState.update { it.copy(loading = false, error = error.message ?: "Couldn't complete the action.", failedAction = action) }
+    }
 
     private data class WidgetSource(val computer: Computer?, val bots: List<Bot>, val usage: JsonObject, val fresh: Boolean,
         val approvals: List<WidgetApproval>)
@@ -329,3 +353,4 @@ internal enum class Retirement {
     /** Another computer is shown instead: only this one's task updates stop; its alerts keep coming. */
     Switch,
 }
+

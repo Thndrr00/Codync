@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.content.ClipData
 import androidx.activity.compose.BackHandler
@@ -76,8 +76,6 @@ private enum class ComputerOS { Mac, Windows, Linux }
  * (iOS `PairingView`). In a sheet it has a close button and closes once paired.
  */
 @Composable internal fun PairingView(state: AppState, store: AppStore, inModal: Boolean = false, onSkip: () -> Unit = {},
-    leading: @Composable RowScope.() -> Unit = {}) {
-@Composable internal fun PairingView(state: AccountContext, store: AccountStore, inModal: Boolean = false, onSkip: () -> Unit = {},
     onContinue: () -> Unit = {}, leading: @Composable RowScope.() -> Unit = {}) {
     var step by rememberSaveable { mutableStateOf(Step.Install) }
     var os by rememberSaveable { mutableStateOf(ComputerOS.Mac) }
@@ -191,8 +189,6 @@ private enum class ComputerOS { Mac, Windows, Linux }
 /** A small label above a `CommandBlock`. */
 @Composable private fun Hint(text: String) = Text(text, style = Type.footnote, color = Palette.secondary)
 
-/** A terminal command with a copy button. */
-@Composable private fun CommandBlock(command: String) {
 /** Whether [text] was just copied, and what copies it; copying counts as opening [records]. */
 @Composable private fun rememberCopy(text: String, records: OutboundLink?): Pair<Boolean, () -> Unit> {
     val clipboard = LocalClipboard.current
@@ -217,12 +213,6 @@ private enum class ComputerOS { Mac, Windows, Linux }
             Text(command, style = Type.footnote.monospaced, color = Palette.text)
         }
         Crossfade(copied, animationSpec = Motion.morph(), label = "Copy") { done ->
-            IconButton(if (done) "Copied" else "Copy", if (done) "checkmark" else "doc.on.doc") {
-                scope.launch {
-                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Command", command)))
-                    copied = true; delay(1500); copied = false
-                }
-            }
             IconButton(if (done) "Copied" else "Copy", if (done) "checkmark" else "doc.on.doc", action = copy)
         }
     }
@@ -259,7 +249,7 @@ private enum class ComputerOS { Mac, Windows, Linux }
             Text("Scan the pairing code", style = PAGE_TITLE, color = Palette.text)
             Text(when (os) {
                 ComputerOS.Mac -> "On your Mac, click Codync in the menu bar, then Pair phone."
-                ComputerOS.Windows -> "On Windows, right-click Codync in the system tray, then choose Pair phone. You can also open Settings → Computers and click the QR code button."
+                ComputerOS.Windows -> "On Windows, right-click Codync in the system tray, then choose Pair phone. You can also open Settings â†’ Computers and click the QR code button."
                 ComputerOS.Linux -> "On your computer, run this in a terminal:"
             }, style = Type.body, color = Palette.secondary)
             if (os == ComputerOS.Linux) CommandBlock("codync-host pair")
@@ -284,15 +274,15 @@ private enum class ComputerOS { Mac, Windows, Linux }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(error.orEmpty(), style = Type.footnote, color = Palette.danger)
                 // The usual cause: the phone has no road to the computer yet.
-                IconLabel("Check that this phone and the computer are on the same Wi-Fi or both on Tailscale, or that “Reach from anywhere” is on in Codync on the computer.",
+                IconLabel("Check that this phone and the computer are on the same Wi-Fi or both on Tailscale, or that â€œReach from anywhereâ€ is on in Codync on the computer.",
                     "wifi.exclamationmark", Palette.secondary)
             }
         }
         // Signed in, account computers show up and ask for access themselves.
-        if (state.account.configured && state.account.userId == null) SignInButtons(state, store)
+        if (state.account.configured && state.account.userId == null) SignInButtons(state, store::signIn)
         // How it connects is never a choice here: every paired computer gets every route.
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconLabel(pairingLine(pasted, BuildConfig.URL_SCHEME), "lock.fill")
+            IconLabel(pairingLine(pasted, BuildConfig.URL_SCHEME, signedIn = state.account.userId != null), "lock.fill")
             if (tailscale) IconLabel("Tailscale is on: Codync connects over it directly.", "checkmark.circle.fill")
             else IconLabel("Use Tailscale? Direct and faster away from home.", "arrow.up.right",
                 modifier = Modifier.plainButton { uri.openUri("https://tailscale.com/download") })
@@ -323,3 +313,6 @@ private fun tailscaleConnected(): Boolean = try {
         }
     }
 } catch (_: Exception) { false }
+
+
+

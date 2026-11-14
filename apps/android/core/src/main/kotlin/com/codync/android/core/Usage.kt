@@ -9,7 +9,23 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-@Serializable data class UsageReport(val providers: List<UsageProvider> = emptyList()) {
+/** An agent the Usage screen can show or hide. The host keeps the choice, so every app follows it. */
+@Serializable data class UsageService(val id: String, val name: String, val shown: Boolean = false, val registry: String? = null) {
+    /** What a mascot needs of an agent that may have no reading. */
+    val provider: UsageProvider get() = UsageProvider(id, name, registry = registry)
+}
+
+/** `services` is absent from a host older than the chooser. */
+@Serializable data class UsageReport(val providers: List<UsageProvider> = emptyList(), val services: List<UsageService> = emptyList()) {
+    /** The agents in [order], a move still on its way to the host; any it doesn't name follow in the host's order. */
+    fun servicesIn(order: List<String>?): List<UsageService> {
+        if (order == null) return services
+        return order.mapNotNull { id -> services.firstOrNull { it.id == id } } + services.filter { it.id !in order }
+    }
+
+    /** On, with nothing to show: signed out, or nothing to report. */
+    fun hasNoReading(service: UsageService): Boolean = service.shown && providers.none { it.id == service.id }
+
     /**
      * The spent window that stops `backend`'s models, until its reset comes (models of the agent
      * the provider reports for: an account's provider id before its colon, or its source).
@@ -25,7 +41,9 @@ import java.util.Locale
 }
 
 @Serializable data class UsageProvider(val id: String, val name: String, val windows: List<UsageWindow> = emptyList(),
-    val source: String = "", val updatedAt: Long? = null, val status: String? = null) {
+    val source: String = "", val updatedAt: Long? = null, val status: String? = null,
+    /** The agent's ACP registry id, which its logo goes by. Absent from a host that doesn't name it. */
+    val registry: String? = null) {
     val statusLabel: String? get() = when (status) {
         "unsupported" -> "Update this agent to read its plan limits."
         null -> null

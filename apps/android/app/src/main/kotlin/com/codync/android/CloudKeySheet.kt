@@ -1,4 +1,4 @@
-package com.codync.android
+﻿package com.codync.android
 
 import android.content.ClipData
 import androidx.compose.foundation.background
@@ -37,11 +37,11 @@ import kotlinx.coroutines.launch
 @Composable internal fun keyTitle(providerName: String) = tr("{provider} API key").replace("{provider}", providerName)
 
 /**
- * One provider's key (iOS `CloudKeySheet`), from New cloud computer or a cloud computer's `⋯`: the key to the user's own
+ * One provider's key (iOS `CloudKeySheet`), from New cloud computer or a cloud computer's `â‹¯`: the key to the user's own
  * account there, pasted once, checked and kept encrypted by the cloud, and shown afterwards only by its last four; while
  * the provider turns it down, what to fix shows under it. Saving one closes the sheet.
  */
-@Composable internal fun CloudKeySheet(provider: String, offer: CloudOffer, state: AccountContext, store: AccountStore) {
+@Composable internal fun CloudKeySheet(provider: String, offer: CloudOffer, state: AccountContext, store: AppStore) {
     DisposableEffect(store) {
         store.cloudSheetShown(true)
         onDispose { store.cloudSheetShown(false) }
@@ -62,7 +62,7 @@ import kotlinx.coroutines.launch
 
 /** The provider's key: its last four with replace and remove, or a field to paste it; [error] when saving or removing
  * it failed, under the key. */
-@Composable private fun KeyRow(provider: CloudProvider, busy: Boolean, canRemove: Boolean, error: String?, store: AccountStore) {
+@Composable private fun KeyRow(provider: CloudProvider, busy: Boolean, canRemove: Boolean, error: String?, store: AppStore) {
     var replacing by remember { mutableStateOf(false) }
     val dismiss = LocalDismissModal.current
     val credential = provider.credential
@@ -146,3 +146,4 @@ import kotlinx.coroutines.launch
         }
     }
 }
+

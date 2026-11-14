@@ -1,20 +1,15 @@
 package com.codync.android
 
-import android.graphics.BitmapFactory
-import android.util.Base64
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -22,17 +17,19 @@ import androidx.compose.ui.unit.dp
 import com.codync.android.core.Bot
 import com.codync.android.design.*
 
-/** A bot's character, or a group's members. */
-@Composable internal fun BotAvatar(bot: Bot, bots: List<Bot>, size: Dp = 44.dp) {
-    val look = bot.avatarLook ?: bot.avatarShape
-    if (bot.kind == "group") GroupAvatar(bot.memberBots(bots).map { AvatarFace(it.avatarShape, it.avatarColor, it.status) }, size)
-    else if (isRobotLook(look)) RobotAvatar(look, bot.avatarColor, size, working = bot.status == "working")
-    else CharacterAvatar(bot.avatarShape, bot.avatarColor, size, bot.status)
-/** A bot's character, or a group's members; still (idle) unless [animated]. */
+/** A bot's character or custom image, or a group's members; still (idle) unless [animated]. */
 @Composable internal fun BotAvatar(bot: Bot, bots: List<Bot>, size: Dp = 44.dp, animated: Boolean = true) {
     fun status(of: Bot) = if (animated) of.status else "idle"
-    if (bot.kind == "group" && bot.customIcon == null) GroupAvatar(bot.memberBots(bots).map { AvatarFace(it.avatarShape, it.avatarColor, status(it), it.customIcon?.dataUrl, it.customIcon?.tinted == true) }, size)
-    else CharacterAvatar(bot.avatarShape, bot.avatarColor, size, status(bot), customImage = bot.customIcon?.dataUrl, customTinted = bot.customIcon?.tinted == true)
+    val icon = bot.customIcon
+    val look = bot.avatarLook ?: bot.avatarShape
+    when {
+        bot.kind == "group" && icon == null -> GroupAvatar(bot.memberBots(bots).map {
+            AvatarFace(it.avatarShape, it.avatarColor, status(it), it.customIcon?.dataUrl, it.customIcon?.tinted == true)
+        }, size)
+        icon == null && isRobotLook(look) -> RobotAvatar(look, bot.avatarColor, size, working = status(bot) == "working")
+        else -> CharacterAvatar(bot.avatarShape, bot.avatarColor, size, status(bot), customImage = icon?.dataUrl,
+            customTinted = icon?.tinted == true)
+    }
 }
 
 /** An agent's logo for an avatar's corner: its ACP registry id, and its name for TalkBack. */
@@ -60,6 +57,6 @@ internal class AgentMark(val registry: String, val name: String)
     val color = Palette.background
     return drawWithContent {
         drawContent()
-        drawCircle(color, size.minDimension / 2, style = Stroke(2.dp.toPx()))
+        drawCircle(color, this.size.minDimension / 2, style = Stroke(2.dp.toPx()))
     }
 }
