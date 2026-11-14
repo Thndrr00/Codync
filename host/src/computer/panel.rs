@@ -22,6 +22,7 @@ pub async fn call(hub: &Arc<Hub>, method: &str, body: &Value, actor_kind: &str, 
         return Ok(json!({"enabled":row.config.computer,"permissions":row.config.computer_permissions,
             "workspace":row.config.cwd,"screen":hub.screen.state(),"activity":hub.store.computer_activity(bot)?,"protectedBrowserAvailable":cfg!(windows),
             "scriptLimit":{"perHour":crate::routines::limits::saved(&hub.store),"choices":crate::routines::limits::CHOICES},
+            "localApps":crate::local_apps::status(&hub.store)?,
             "planStart":{"afterMs":crate::external::plan::saved(&hub.store),"presets":crate::external::plan::PRESETS},
             "services":{"research":crate::research::configuration_state(&hub.store),"slack":crate::slack::configuration_state(&hub.store)}}));
     }

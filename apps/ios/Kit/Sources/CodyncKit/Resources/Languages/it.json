@@ -2643,5 +2643,10 @@
   "Keep the saved key": "Mantieni la chiave salvata",
   "Remove the saved key": "Rimuovi la chiave salvata",
   "No local voice server is set. Add the URL of the server on this computer.": "Nessun server vocale locale impostato. Aggiungi l'indirizzo del server su questo computer.",
-  "No key needed": "Nessuna chiave necessaria"
+  "No key needed": "Nessuna chiave necessaria",
+  "Local apps": "App locali",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "Una protezione di questo computer, non un piano: i bot qui possono tenere insieme fino a questo numero di mini-app. Modificare un'app che un bot ha già creato non conta mai, e eliminarne una libera spazio.",
+  "Apps on this computer": "App su questo computer",
+  "Local app limit": "Limite delle app locali",
+  "{used} of {limit}": "{used} di {limit}"
 }

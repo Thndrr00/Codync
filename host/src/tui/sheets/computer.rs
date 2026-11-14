@@ -65,6 +65,11 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
             sheet.state["scriptLimit"]["perHour"].as_u64().unwrap_or_default()
         );
         let text = format!(
+            "{text}\nLocal apps: {}/{} registered; a safeguard on this computer, not a plan. < and > change it; past it a new app is refused, and an app a bot already has still updates.",
+            sheet.state["localApps"]["count"].as_u64().unwrap_or_default(),
+            sheet.state["localApps"]["limit"].as_u64().unwrap_or_default()
+        );
+        let text = format!(
             "{text}\nPlan cards: start by themselves {}; [ and ] change it.",
             plan_start_label(&sheet.state["planStart"])
         );
@@ -130,7 +135,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
             .as_deref()
             .or(sheet.busy.then_some("Waiting for host…"))
             .or(sheet.running.then_some("Command running; Status → 3 revokes shell and stops owned processes.")),
-        "Tab page · Ctrl+R refresh · ↑↓ select/scroll · Enter open/run/confirm · , . local scripts · [ ] plan cards · Esc back/close",
+        "Tab page · Ctrl+R refresh · ↑↓ select/scroll · Enter open/run/confirm · , . local scripts · < > local apps · [ ] plan cards · Esc back/close",
     );
 }
 fn plan_start_label(state: &Value) -> String {

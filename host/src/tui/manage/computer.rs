@@ -221,6 +221,25 @@ impl App {
                         );
                     }
                 }
+                KeyCode::Char(step @ ('<' | '>')) => {
+                    // The local app safeguard: a new app is refused past the limit, and nothing is deleted when it lowers.
+                    let choices = sheet.state["localApps"]["choices"].as_array().cloned().unwrap_or_default();
+                    let limit = sheet.state["localApps"]["limit"].as_u64().unwrap_or_default();
+                    let index = choices.iter().position(|choice| choice.as_u64() == Some(limit)).unwrap_or(0);
+                    let next = if step == '<' {
+                        index.saturating_sub(1)
+                    } else {
+                        (index + 1).min(choices.len().saturating_sub(1))
+                    };
+                    if let Some(value) = choices.get(next).and_then(Value::as_u64).filter(|value| *value != limit) {
+                        self.computer_request(
+                            &mut sheet,
+                            "setLocalAppsLimit",
+                            json!({"limit":value}),
+                            ComputerResult::Changed,
+                        );
+                    }
+                }
                 KeyCode::Char(step @ ('[' | ']')) => {
                     // When I press Start, then the presets: the same choices the apps offer, without a typed time.
                     let mut choices = vec![Value::Null];

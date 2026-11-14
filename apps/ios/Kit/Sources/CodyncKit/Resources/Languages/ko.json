@@ -2643,5 +2643,10 @@
   "Keep the saved key": "??? ? ??",
   "Remove the saved key": "??? ? ??",
   "No local voice server is set. Add the URL of the server on this computer.": "?? ?? ??? ???? ?????. ? ???? ?? ??? URL? ?????.",
-  "No key needed": "?? ???? ????"
+  "No key needed": "?? ???? ????",
+  "Local apps": "로컬 앱",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "이 컴퓨터의 보호 한도이며 요금제가 아닙니다. 이곳의 봇은 합쳐서 이 개수까지 미니 앱을 보관할 수 있습니다. 봇이 이미 만든 앱을 수정하는 것은 세지 않으며, 하나를 삭제하면 자리가 납니다.",
+  "Apps on this computer": "이 컴퓨터의 앱",
+  "Local app limit": "로컬 앱 한도",
+  "{used} of {limit}": "{used} / {limit}"
 }

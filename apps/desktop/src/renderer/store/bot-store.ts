@@ -975,6 +975,23 @@ export class BotStore extends BotSync {
     this.changed()
   }
 
+  /** Reads the computer-wide ceiling on local mini-apps; an older host keeps what was there (nothing). */
+  async refreshLocalApps() {
+    if (this.retired || !this.client) return
+    try {
+      this.localApps = await this.client.call<{ count: number; limit: number; choices: number[]; botsWithApps: number }>('localApps', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that ceiling; throws the host's reason when the value isn't one of the choices. */
+  async setLocalAppsLimit(limit: number) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ limit: number }>('setLocalAppsLimit', { limit })
+    if (this.localApps) this.localApps = { ...this.localApps, limit: saved.limit }
+    this.changed()
+  }
+
   /** Reads when a plan card starts the work by itself; an older host keeps what was there (nothing). */
   async refreshPlanStart() {
     if (this.retired || !this.client) return

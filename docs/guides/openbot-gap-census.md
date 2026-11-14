@@ -165,7 +165,7 @@ Nothing missing in this bullet.
 
 | Sub-part | Verdict | Evidence and behaviour |
 | --- | --- | --- |
-| The browser site limit | DEFERRED | Codync hosts no static sites, so it has no site limit or slots. Its agent-built apps are local and served by the host (`host/src/chat/apps.rs:1-3`, `host/src/api/apps_runtime.rs`) with no plan limit. F11.16 explains why this stays deferred. |
+| The browser site limit | EXISTS, adapted | Codync hosts no static sites, so it has no site slots or plans. Its agent-built apps are local and served by the host (`host/src/chat/apps.rs:1-3`, `host/src/api/apps_runtime.rs`), and a computer-wide ceiling on new apps protects the disk instead: 25 to 1000 (default 100), shared by every bot, with a refusal that names the limit and the count (`host/src/local_apps.rs`). F11.16 records the decision. |
 | A disk warning | EXISTS | `host/src/health.rs:339-343` marks the disk low at 10% free (clears at 12%), and `:484-495` posts one error notice per episode in the working bots' chats ("This computer's disk is almost full (N GB free). Free space, or saving and agent work may fail."), with an info notice when room comes back. It is a chat notice, not a sidebar card. |
 | Updating inside an LXC container | EXISTS | An update names the container from `/run/systemd/container`, `/proc/1/cgroup` or a root marker, and skips only the AppArmor profile step when the container has no `/sys/kernel/security/apparmor` (`host/src/service/unix.rs`). The unit still restarts, and a host that does not report the new version and binary hash within 30 seconds rolls back (`host/src/update/install.rs`). F11.17. |
 | Programs in `~/.local/bin` in Docker | EXISTS | `host/src/agent/backends/search_path.rs:42-60` adds `~/.local/bin` to the path it exports, and `:71-73` makes every spawned agent resolve the same way. Codync ships no Docker image, so the image-specific gap does not exist here. |
@@ -199,7 +199,7 @@ Upstream:
 ## F11 cards
 
 These were the next work after the census. On 2026-11-13 they were implemented on the same
-branch, except F11.16:
+branch:
 
 | Card | Status |
 | --- | --- |
@@ -218,7 +218,7 @@ branch, except F11.16:
 | F11.13 Usage limit chip | Shipped on every model picker |
 | F11.14 Upload ring, cancel and retry | Shipped: per-file uploads, `cancelUpload` |
 | F11.15 Fixed subagent header | Shipped: `host/src/chat/subagents.rs` |
-| F11.16 Browser site limit | Deferred (see its card) |
+| F11.16 Browser site limit | Closed as a local app limit: `host/src/local_apps.rs`. Plans and hosting stay out of scope |
 | F11.17 Updating inside an LXC container | Shipped: `host/src/service/unix.rs` |
 | F11.18 Plush in list and search empty states | Shipped on desktop, iOS and Android |
 
@@ -433,24 +433,28 @@ branch, except F11.16:
   header shows the live step and time and clicking it returns to the card; when the subagent
   ends the header goes away.
 
-### F11.16 Browser site limit — deferred
+### F11.16 Local app limit
 
-- **What.** Hosted sites with a plan limit and the slots in use, a Sites page that says "See
-  plans" at the limit, and a publish that fails with the limit and how to get more. An agent
-  tool lists the sites, the limit and the slots.
-- **Where.** A new hosting module in `host/src` (Codync has none today), the settings page
-  in `apps/desktop/src/renderer/views/settings`, and a `list_sites` tool in the `chat` or
-  `connectors` server.
-- **Clients.** The Sites page on desktop and the terminal UI; the phone apps show the count
-  and the limit read-only.
-- **Test.** Publish up to the limit, the next publish says the limit and how to raise it, and
-  `list_sites` reports the same numbers. A failed publish leaves no slot taken.
-- **Decision: deferred, not built.** Codync hosts no static sites and sells no plans, so a
-  site limit would gate nothing: the apps an agent builds are local, served by the host
-  (`host/src/chat/apps.rs`, `host/src/api/apps_runtime.rs`) with no plan, and adding a slot
-  count there would invent a limit on a feature nobody buys. Build this only if Codync ever
-  publishes hosted sites with plans; until then the card stays here as the record of that
-  reasoning.
+- **What the browser has.** A ceiling on hosted static sites tied to a plan: the slots in use, a
+  Sites page that says "See plans" at the limit, a publish that fails with the limit, and an agent
+  tool that lists the sites, the limit and the slots.
+- **What Codync built instead.** The closest feature is the bots' local mini-apps, so the host
+  keeps one computer-wide safeguard on them instead of a hosting plan: `localApps.limit` (25, 50,
+  100, 250 or 1000, default 100), saved in kv by `host/src/local_apps.rs` and enforced in
+  `save_app`. Only a new app takes a slot; an update to an app the bot already registered never
+  counts, and deleting an app makes room. The refusal names the limit and the count and says to
+  delete an unused app or raise the limit. `list_apps` reports the same numbers so an agent can
+  act on them.
+- **Where.** `host/src/local_apps.rs`, `host/src/store/apps.rs` (`app_totals`, `has_bot_app`),
+  `host/src/chat/apps.rs`, `host/src/api/host.rs` (`localApps`, `setLocalAppsLimit`) and
+  `host/src/computer/panel.rs`. The setting is on desktop (`Settings > General > Local apps`), on
+  iOS and Android (the computer's settings, beside Local scripts) and on the terminal UI's Computer
+  Status page (`count/limit`, stepped with `<` and `>`).
+- **Test.** In `host/src/local_apps.rs`: the choices and default, and the count and the bots that
+  made the apps. In `host/src/api/apps_bridge_tests.rs`: a `save_app` refused at the limit while
+  an update still saves, deleting makes room, and raising the limit allows one more.
+- **Out of scope.** Plans, hosted static sites, slots and "See plans" stay out: Codync sells no
+  hosting. The card closes as the local safeguard above, not as a hosting product.
 
 ### F11.17 Updating inside an LXC container
 
@@ -523,13 +527,13 @@ branch, except F11.16:
 
 ## How to use this
 
-The cards above shipped on this branch except F11.16, which stays deferred until Codync hosts
-sites. The "Where" lines name the files that exist today, the "Clients" line follows the
-cross-platform rule (a UI change lands in iOS, Android, desktop and the terminal UI together),
-and the "Test" line is the check that proves it. Everything still needs the compiler and the
-end-to-end walk before merge.
+The cards above shipped on this branch. F11.16 closed as the local app limit, with hosted sites
+and plans out of scope. The "Where" lines name the files that exist today, the "Clients" line
+follows the cross-platform rule (a UI change lands in iOS, Android, desktop and the terminal UI
+together), and the "Test" line is the check that proves it. Everything still needs the compiler
+and the end-to-end walk before merge.
 
 Bullets 1, 3 and 4 are the bulk of the residue; bullets 5 and 7 are done. Bullet 2 is
 half done: approvals, allowed groups and files work, but strangers, photos, SVG and durable
-people do not. Bullet 6 is missing only its server-side site hosting, which stays deferred
-(F11.16); the disk warning, the agent path and container updates exist.
+people do not. Bullet 6 keeps its site hosting and plans out of scope (F11.16); in their place
+the local app limit, the disk warning, the agent path and container updates exist.

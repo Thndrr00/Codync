@@ -2643,5 +2643,10 @@
   "Keep the saved key": "????????",
   "Remove the saved key": "????????",
   "No local voice server is set. Add the URL of the server on this computer.": "??????????????????????????",
-  "No key needed": "????"
+  "No key needed": "????",
+  "Local apps": "本機應用",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "這是本機的保護措施，不是方案：這台電腦上的機器人合計最多保留這麼多迷你應用。修改機器人已有的應用不計入，刪除一個即可騰出位置。",
+  "Apps on this computer": "本機上的應用",
+  "Local app limit": "本機應用上限",
+  "{used} of {limit}": "{used} / {limit}"
 }

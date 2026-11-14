@@ -102,6 +102,9 @@ export class BotMirror extends Observable {
   skillUsage: import('@shared/models').SkillUsage | null = null
   /** The hourly ceiling on local script requests (`scriptLimit`); null until read, or from an older host. */
   scriptLimit: { perHour: number; choices: number[] } | null = null
+  /** The computer-wide ceiling on local mini-apps, how many it holds and how many bots made them (`localApps`);
+   * null until read, or from an older host. */
+  localApps: { count: number; limit: number; choices: number[]; botsWithApps: number } | null = null
   /** When a plan card starts the work by itself (`planStart`); null until read, or from an older host. */
   planStart: { afterMs: number | null; presets: number[]; min: number; max: number } | null = null
   /** How the agents' updates read, whether Claude uses the person's setup, and who may control this computer

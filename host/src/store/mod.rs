@@ -42,7 +42,7 @@ pub(crate) mod discord;
 pub(crate) mod slack;
 pub(crate) mod whatsapp;
 
-pub use apps::{AppLink, AppLinkMode, BotApp};
+pub use apps::{AppLink, AppLinkMode, AppTotals, BotApp};
 pub use channel_activity::ChannelActivity;
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceAccount, DeviceSource, Scope};

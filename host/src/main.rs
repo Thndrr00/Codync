@@ -35,6 +35,7 @@ mod import;
 mod import_cli;
 mod keeper;
 mod local_api;
+mod local_apps;
 mod market;
 mod mcp;
 mod n8n;

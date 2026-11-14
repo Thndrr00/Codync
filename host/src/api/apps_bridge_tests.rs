@@ -47,3 +47,51 @@ async fn app_requests_serve_pages_and_data_and_reject_bad_capabilities_and_paths
     drop(hub);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[tokio::test]
+async fn save_app_refuses_a_new_app_at_the_local_limit_but_an_update_deleting_and_raising_still_work() {
+    let dir = std::env::temp_dir().join(format!("codync-app-limit-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(dir.join("apps")).unwrap();
+    let store = Store::open(&dir.join("test.db")).unwrap();
+    let bot: BotConfig = serde_json::from_value(json!({
+        "id":"bot", "name":"Bot", "backend":"claude", "cwd":dir,
+    }))
+    .unwrap();
+    store.save_bot(&bot).unwrap();
+    let hub = Hub::new(
+        store,
+        "test".into(),
+        crate::remote::identity::Identity::load_or_create(&dir).unwrap(),
+        "token".into(),
+        19224,
+    );
+    crate::local_apps::set(&hub.store, crate::local_apps::CHOICES[0]).unwrap();
+    for n in 0..crate::local_apps::CHOICES[0] {
+        let slug = format!("app-{n}");
+        std::fs::create_dir_all(dir.join("apps").join(&slug)).unwrap();
+        std::fs::write(dir.join("apps").join(&slug).join("index.html"), "<!doctype html>").unwrap();
+        crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":slug, "title":"App"})).unwrap();
+    }
+    for slug in ["extra", "another"] {
+        std::fs::create_dir_all(dir.join("apps").join(slug)).unwrap();
+        std::fs::write(dir.join("apps").join(slug).join("index.html"), "<!doctype html>").unwrap();
+    }
+    let refused = crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"extra", "title":"Extra"}))
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("limit of 25"), "{refused}");
+    assert!(refused.contains("registered apps"), "{refused}");
+    assert!(refused.contains("local safeguard, not a plan"), "{refused}");
+
+    // Updating an app the bot already has never counts.
+    crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"app-0", "title":"App again"})).unwrap();
+    // Deleting one makes room for a new app.
+    crate::chat::apps::call(&hub, "bot", "delete_app", &json!({"slug":"app-0"})).unwrap();
+    crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"extra", "title":"Extra"})).unwrap();
+    // Raising the limit makes room for one more.
+    assert!(crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"another", "title":"Another"})).is_err());
+    crate::local_apps::set(&hub.store, crate::local_apps::CHOICES[1]).unwrap();
+    crate::chat::apps::call(&hub, "bot", "save_app", &json!({"slug":"another", "title":"Another"})).unwrap();
+    drop(hub);
+    std::fs::remove_dir_all(dir).unwrap();
+}

@@ -42,6 +42,7 @@ import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 import { ArchivedGroupsSection } from './ArchivedGroupsSection'
+import { LocalAppsSection } from './LocalAppsSection'
 import { LocalScriptsSection } from './LocalScriptsSection'
 import { PlanStartSection } from './PlanStartSection'
 import { ServerSettingsSection } from './ServerSettingsSection'
@@ -285,6 +286,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <GitHubSection />
       <AgentImportSection />
       <LocalScriptsSection />
+      <LocalAppsSection />
       <PlanStartSection />
       <DemoSection />
       <HiddenBotsSection />
