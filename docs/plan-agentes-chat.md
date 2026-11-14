@@ -69,10 +69,9 @@ recuerda qué se hizo, qué falta y por qué se paró.
 **Meta:** recuperar con evidencia. Hoy el contexto del turno es lo reciente; con búsqueda es lo
 relevante, con citas.
 
-**Estado:** 2, 3 (también al editar y al borrar), 6, 8, 9, 10, 11, 16, 17, 19 y 20 hechos. El índice
-es el mismo que ya usan las cuatro apps para la búsqueda de historial; falta el boceto de resultados
-por bot en escritorio, TUI, Android e iOS (12–15), el peso por recencia (7), los filtros de 5 y el
-índice de memoria (4).
+**Estado:** 2, 3 (también al editar y al borrar), 5 (autor y fechas; falta canal), 6–17 y 19–20
+hechos, con la hoja de resultados por chat en las cuatro apps y el peso por recencia; 18 está hecho al
+borrar un bot. Falta el índice de memoria (4) y que 5 y 18 cubran también el canal.
 
 1. Leer los ADR de búsqueda y de contexto.
 2. Índice FTS5 sobre `entries` (texto del usuario, del agente y de las herramientas).
