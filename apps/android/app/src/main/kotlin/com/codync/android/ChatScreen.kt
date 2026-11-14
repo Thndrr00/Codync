@@ -42,6 +42,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import com.codync.android.core.*
@@ -275,7 +277,10 @@ private fun AppState.chatEntries(bot: Bot) = entries.filter { it.botId == bot.id
     val working = bot.isWorking(bot.id) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
     val details by ThinkingDetails.enabled.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val itemIds = rows.map { it.id }
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
+    Box(Modifier.fillMaxSize()) {
     ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
         if (more) item("earlier") {
             Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
@@ -308,5 +313,14 @@ private fun AppState.chatEntries(bot: Bot) = entries.filter { it.botId == bot.id
             }
         }
         if (working) item("working") { WorkingIndicator(bot, workingSteps(state.entries.filter { it.botId == bot.id && it.threadId == null }), details) }
+    }
+    // The subagent card's header, held under the chat header while its subagents work out of view.
+    Box(Modifier.padding(top = padding.calculateTopPadding())) {
+        SubagentDockHost(entries, isVisible = { id -> scroll.list.layoutInfo.visibleItemsInfo.any { it.key == id } }) { id ->
+            val offset = (if (more) 1 else 0) + (if (items.isEmpty() && !more) 1 else 0)
+            val at = itemIds.indexOf(id).takeIf { it >= 0 }?.plus(offset)
+            if (at != null) scope.launch { scroll.list.animateScrollToItem(at) }
+        }
+    }
     }
 }

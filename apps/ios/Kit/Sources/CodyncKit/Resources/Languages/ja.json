@@ -2594,5 +2594,13 @@
   "Stop a sub-task before giving it to another member": "他のメンバーに渡す前にサブタスクを停止してください",
   "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync は {name} のために {host} にダウンロードしたコピーを削除し、エージェントをオフにします。",
   "Its accounts, sign-ins and bots stay.": "アカウント、サインイン、ボットはそのまま残ります。",
-  "Bots using it show as not installed until it is installed again.": "これを使うボットは、再びインストールされるまで「インストールされていません」と表示します。"
+  "Bots using it show as not installed until it is installed again.": "これを使うボットは、再びインストールされるまで「インストールされていません」と表示します。",
+  "Retry": "再試行",
+  "Cancel upload": "アップロードをキャンセル",
+  "Upload failed": "アップロードに失敗しました",
+  "Upload cancelled": "アップロードをキャンセルしました",
+  "Uploading {percent}%": "{percent}% アップロード中",
+  "Subagents": "サブエージェント",
+  "{finished} of {total}": "{total} 件中 {finished} 件",
+  "Go to the subagents": "サブエージェントへ移動"
 }

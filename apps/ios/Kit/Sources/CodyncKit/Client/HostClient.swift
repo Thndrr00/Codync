@@ -354,16 +354,25 @@ public extension HostClient {
     /// Bytes per `upload` call: base64 of it stays well under the channel's 1 MiB message.
     static let uploadChunk = 384 * 1024
 
-    /// Sends one file in chunks for a later `send`; `id` names the upload there.
-    func upload(botId: String, id: String, name: String, data: Data) async throws {
+    /// Sends one file in chunks for a later `send`; `id` names the upload there. `progress` gets the
+    /// bytes the computer has so far; cancelling the task stops between chunks.
+    func upload(botId: String, id: String, name: String, data: Data, progress: (@Sendable (Int) -> Void)? = nil) async throws {
         struct Body: Encodable { var botId, uploadId, name, data: String; var offset: Int; var done: Bool }
         var offset = 0
         repeat {
+            try Task.checkCancellation()
             let end = min(offset + Self.uploadChunk, data.count)
             let chunk = data.subdata(in: offset..<end).base64EncodedString()
             let _: Empty = try await call("upload", Body(botId: botId, uploadId: id, name: name, data: chunk, offset: offset, done: end == data.count), timeout: 60)
             offset = end
+            progress?(offset)
         } while offset < data.count
+    }
+
+    /// Drops a file the user stopped uploading: the computer deletes its partial chunks.
+    func cancelUpload(botId: String, id: String) async throws {
+        struct Body: Encodable { var botId, uploadId: String }
+        let _: Empty = try await call("cancelUpload", Body(botId: botId, uploadId: id))
     }
 
     /// A sent file, fetched back in chunks.

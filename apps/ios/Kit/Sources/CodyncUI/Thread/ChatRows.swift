@@ -62,6 +62,12 @@ struct ChatRow: View {
                 }
             }
             .padding(.top, 12)
+        case "subagents":
+            VStack(alignment: .leading, spacing: 4) {
+                if chat?.isGroup == true { AuthorLabel(botId: entry.data.author) }
+                SubagentCard(entry: entry)
+            }
+            .padding(.top, groupStart ? 12 : 4)
         default:
             if let request = entry.data.connectionRequest {
                 ConnectionRequestCard(entry: entry, request: request).padding(.top, 12)

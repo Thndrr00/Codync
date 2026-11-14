@@ -22,6 +22,27 @@ pub enum Msg {
     Rewind,
     /// A setup terminal's output or exit.
     Term(String, Value),
+    /// A draft file's upload: bytes the computer has so far.
+    Upload {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+        sent: u64,
+        total: u64,
+    },
+    /// The computer has the whole file; `id` names it in `send`.
+    Uploaded {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+    },
+    /// The upload stopped: the reason states it (the user cancelled it, or the link failed).
+    UploadFailed {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+        error: String,
+    },
 }
 
 /// What to do with a command's reply.
@@ -135,6 +156,8 @@ pub enum Kind {
     Plan,
     Permission,
     Notice,
+    /// The subagents an agent started in one turn (`chat::subagents`).
+    Subagents,
     Other,
 }
 
@@ -161,6 +184,7 @@ impl Entry {
             "plan" => Kind::Plan,
             "permission" => Kind::Permission,
             "notice" => Kind::Notice,
+            "subagents" => Kind::Subagents,
             _ => Kind::Other,
         };
         // The side conversation a line belongs to, and how many of a root's replies are unread, sit on

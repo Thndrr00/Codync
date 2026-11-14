@@ -36,6 +36,7 @@ import { prefs } from '../lib/prefs'
 import { noteFirstPrompt } from '../lib/use-kofi-invite'
 import { updatePayload } from './bot-draft'
 import { FileDownloads } from './file-downloads'
+import { FileUploads } from './file-uploads'
 import { BotSections } from './bot-sections'
 import { DevServerCommands } from './dev-servers'
 import { BotSync, sleep } from './bot-sync'
@@ -90,6 +91,13 @@ export class BotStore extends BotSync {
   /** How much of a file the computer has, by the file's own id (shown in the composer while it uploads). */
   readonly uploadPercents = new Map<string, number>()
 
+  /** The files of the message box: each uploads as it is attached, and Send waits for them (see `FileUploads`). */
+  readonly uploads = new FileUploads(
+    <T>(op: (client: HostClient) => Promise<T>) => this.withLink(op),
+    () => this.changed(),
+    this.uploadPercents,
+  )
+
   /** The message sent from here last: its row in the queue scrolls into view (`QueuedMessages`). */
   lastSentNonce: string | null = null
 
@@ -116,22 +124,15 @@ export class BotStore extends BotSync {
           let ids: string[] | null = null
           const pending = this.outgoingFiles.get(nonce)
           if (pending) {
-            ids = []
-            for (const file of pending) {
-              const id = crypto.randomUUID()
-              await client.upload(botId, id, file.name, file.data, (sent) => {
-                this.uploadPercents.set(file.id, Math.min(99, Math.floor((sent * 100) / Math.max(1, file.data.length))))
-                this.changed()
-              })
-              cacheAttachment(id, file.data)
-              this.uploadPercents.delete(file.id)
-              this.changed()
-              ids.push(id)
-            }
+            // Every file uploads as it is attached; Send waits for the ones still on their way.
+            ids = await this.uploads.ids(botId, pending)
+            for (const [i, file] of pending.entries()) cacheAttachment(ids[i]!, file.data)
           }
           return client.send(botId, trimmed, nonce, ids, pasted, replyTo?.id ?? null, thread, call)
         }, true)
+        const files = this.outgoingFiles.get(nonce)
         this.outgoingFiles.delete(nonce)
+        if (files) this.uploads.release(files)
         this.upsert(e)
         this.changed()
         // Only once it arrived, so a resend counts once.
@@ -141,7 +142,6 @@ export class BotStore extends BotSync {
         }
       } catch (error) {
         if (this.outgoingFiles.has(nonce)) this.lastError = `Couldn't send the files: ${error instanceof Error ? error.message : error}`
-        for (const file of this.outgoingFiles.get(nonce) ?? []) this.uploadPercents.delete(file.id)
         this.markLocal(nonce, botId, 'failed')
       }
     })()
@@ -168,7 +168,10 @@ export class BotStore extends BotSync {
   }
 
   discard(entry: Entry) {
-    if (entry.data.clientNonce) this.outgoingFiles.delete(entry.data.clientNonce)
+    if (entry.data.clientNonce) {
+      for (const file of this.outgoingFiles.get(entry.data.clientNonce) ?? []) this.uploads.forget(file.id)
+      this.outgoingFiles.delete(entry.data.clientNonce)
+    }
     this.entries.set(entry.botId, (this.entries.get(entry.botId) ?? []).filter((e) => e.id !== entry.id))
     this.dropEntry(entry)
     this.changed()

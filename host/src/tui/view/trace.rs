@@ -124,6 +124,20 @@ pub(super) fn push_step(out: &mut Vec<Line<'static>>, app: &App, e: &Entry, widt
             Span::styled(" · ", t.dim),
             Span::styled(truncate(&e.notice_text(), width.saturating_sub(4)), t.dim),
         ])),
+        Kind::Subagents => {
+            let list = e.data["subagents"].as_array().cloned().unwrap_or_default();
+            let running = list.iter().filter(|s| s["state"].as_str().unwrap_or("running") == "running").count();
+            let current = list
+                .iter()
+                .find(|s| s["state"].as_str().unwrap_or("running") == "running")
+                .and_then(|s| s["step"].as_str().or(s["task"].as_str()))
+                .unwrap_or("Working…");
+            out.push(Line::from(vec![
+                Span::styled(" ▦ ", t.dim),
+                label("subagents"),
+                Span::styled(truncate(&format!("{running} working · {current}"), text_rest(width)), t.text),
+            ]));
+        }
         Kind::Other => {}
     }
 }

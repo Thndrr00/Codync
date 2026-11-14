@@ -166,6 +166,7 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         tools: HashMap::new(),
         watchdog: watchdog::Watchdog::default(),
         plan_entry: None,
+        subagents: crate::chat::subagents::Card::default(),
         last_text: None,
         sent: Vec::new(),
         reacted: Reacted::No,
@@ -375,6 +376,8 @@ struct Actor {
     /// Watches the running turn for tool loops and silence.
     watchdog: watchdog::Watchdog,
     plan_entry: Option<String>,
+    /// The subagents this turn started, in their own chat card (`chat::subagents`).
+    subagents: crate::chat::subagents::Card,
     /// What it wrote last this turn, since its last `send_message` or `react`.
     last_text: Option<String>,
     /// Messages the bot sent the user this turn (`send_message`); none: its last text is the reply.
@@ -534,6 +537,30 @@ impl Actor {
             data["call"] = call.clone().into();
         }
         self.hub.add_entry(&self.lane, kind, turn, &data)
+    }
+
+    /// Writes the turn's subagent card, adding it the first time one starts. The card updates in
+    /// place, as a plan does, so a turn keeps one even when a second subagent starts.
+    fn save_subagents(&mut self, turn: i64) {
+        if self.subagents.is_empty() {
+            return;
+        }
+        let data = self.subagents.data();
+        match self.subagents.entry().map(str::to_owned) {
+            Some(id) if self.hub.store.entry(&id).is_some() => self.hub.set_entry(&id, &data),
+            _ => {
+                if let Some(entry) = self.add(EntryKind::Subagents, turn, data) {
+                    self.subagents.set_entry(entry.id);
+                }
+            }
+        }
+    }
+
+    /// A turn that ended ends the subagents it started: the runtime reports nothing more of them.
+    fn stop_subagents(&mut self, turn: i64) {
+        if self.subagents.running() && self.subagents.stop_running(now_ms()) {
+            self.save_subagents(turn);
+        }
     }
 
     /// A notice in the running turn's lane (or the bot's own chat between turns).

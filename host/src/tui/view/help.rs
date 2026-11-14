@@ -53,6 +53,7 @@ const HELP: [(&str, &str, &str); 81] = [
     ("CHAT", "esc", "cancel the reply"),
     ("TYPE", "↵", "send"),
     ("TYPE", "⇧↵ alt↵ ^j", "new line"),
+    ("TYPE", "^x ^r", "cancel / retry an attached file's upload"),
     ("TYPE", "esc", "back to NAV"),
     ("TYPE", "^c", "clear the message"),
     ("TYPE", "^a ^e", "line start / end"),

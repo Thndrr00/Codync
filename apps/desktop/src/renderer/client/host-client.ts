@@ -322,14 +322,20 @@ export class HostClient {
   /** Bytes per `upload` call: base64 of it stays well under the channel's 1 MiB message. */
   static uploadChunk = 384 * 1024
 
-  async upload(botId: string, uploadId: string, name: string, data: Uint8Array, onProgress?: (sent: number) => void) {
+  async upload(botId: string, uploadId: string, name: string, data: Uint8Array, onProgress?: (sent: number) => void, shouldStop?: () => boolean) {
     let offset = 0
     do {
+      if (shouldStop?.()) throw new Error('Upload cancelled')
       const end = Math.min(offset + HostClient.uploadChunk, data.length)
       await this.call('upload', { botId, uploadId, name, data: toBase64(data.subarray(offset, end)), offset, done: end === data.length }, 60_000)
       offset = end
       onProgress?.(offset)
     } while (offset < data.length)
+  }
+
+  /** Drops a file the user stopped uploading: the computer deletes its partial chunks. */
+  async cancelUpload(botId: string, uploadId: string) {
+    return this.call<{ removed: boolean }>('cancelUpload', { botId, uploadId })
   }
 
   async readUpload(botId: string, uploadId: string) {

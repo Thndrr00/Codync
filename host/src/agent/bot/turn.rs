@@ -163,6 +163,7 @@ impl Actor {
         self.watchdog.reset();
         self.loop_guard = super::stall::LoopGuard::default();
         self.plan_entry = None;
+        self.subagents = crate::chat::subagents::Card::default();
         self.last_text = None;
         self.sent.clear();
         self.reacted = Reacted::No;
@@ -456,6 +457,8 @@ impl Actor {
         if !grouped && !delegated && !self.proactive_turn && !stopped && !failed && stop_reason == "end_turn" {
             self.offer_skill();
         }
+        // The turn's subagents end with it: this runtime reports nothing after.
+        self.stop_subagents(self.turn.unwrap_or(0));
         self.turn = None;
         self.reply_hops = None;
         // A call's opening is heard on the call: no alert.

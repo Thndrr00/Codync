@@ -99,6 +99,8 @@ pub enum EntryKind {
     Plan,
     Permission,
     Notice,
+    /// The subagents an agent started in one turn: one card per turn (see `chat::subagents`).
+    Subagents,
 }
 
 impl EntryKind {
@@ -111,6 +113,7 @@ impl EntryKind {
             Self::Plan => "plan",
             Self::Permission => "permission",
             Self::Notice => "notice",
+            Self::Subagents => "subagents",
         }
     }
 }

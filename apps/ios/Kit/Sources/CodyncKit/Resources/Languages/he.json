@@ -2594,5 +2594,13 @@
   "Stop a sub-task before giving it to another member": "עצור משימת משנה לפני שתעביר אותה לחבר אחר",
   "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync מוחק את העותק שהוריד עבור {name} ב-{host} ומכבה את הסוכן.",
   "Its accounts, sign-ins and bots stay.": "החשבונות, ההתחברויות והבוטים נשארים.",
-  "Bots using it show as not installed until it is installed again.": "בוטים שמשתמשים בו יציגו אותו כלא מותקן עד שיותקן שוב."
+  "Bots using it show as not installed until it is installed again.": "בוטים שמשתמשים בו יציגו אותו כלא מותקן עד שיותקן שוב.",
+  "Retry": "נסה שוב",
+  "Cancel upload": "בטל העלאה",
+  "Upload failed": "ההעלאה נכשלה",
+  "Upload cancelled": "ההעלאה בוטלה",
+  "Uploading {percent}%": "מעלה {percent}%",
+  "Subagents": "תת-סוכנים",
+  "{finished} of {total}": "{finished} מתוך {total}",
+  "Go to the subagents": "עבור לתת-הסוכנים"
 }

@@ -44,6 +44,7 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
         guard !isInternal else { return false }
         return switch kind {
         case "user", "permission": true
+        case "subagents": true
         case "notice": data.memory == nil && data.memoryFile == nil && data.compaction == nil && data.handoff?.status != "kept"
         case "agent": data.final == true
         default: false

@@ -29,6 +29,10 @@ struct ConversationList: View {
     var nearTop: (() -> Void)?
     /// Letting go of a full pull past the top: the force refresh, its indicator held until it returns.
     var refresh: (() async -> Void)?
+    /// The rows on screen now, by id, so a header can follow the reader (`SubagentDock`).
+    var onVisible: (([String]) -> Void)? = nil
+    /// A row to bring into view (the subagent card behind the dock), then cleared.
+    var scrollTo: Binding<String?> = .constant(nil)
     @State private var pull = PullToRefresh()
     /// The safe area (under the bars, above the composer and the keyboard) and the whole screen.
     @State private var safeFrame = CGRect.zero
@@ -43,6 +47,7 @@ struct ConversationList: View {
             // The list itself stays inside the safe area (so its rows never see one) and
             // reaches out past it.
             ConversationCollection(rows: rows, following: $following, nearTop: nearTop, refresh: refresh, pull: pull,
+                                   onVisible: onVisible, scrollTo: scrollTo,
                                    outsets: UIEdgeInsets(top: max(0, safeFrame.minY - fullFrame.minY), left: 0,
                                                          bottom: max(0, fullFrame.maxY - safeFrame.maxY), right: 0))
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { safeFrame = $0 }
@@ -62,6 +67,8 @@ private struct ConversationCollection: UIViewRepresentable {
     let nearTop: (() -> Void)?
     let refresh: (() async -> Void)?
     let pull: PullToRefresh
+    let onVisible: (([String]) -> Void)?
+    let scrollTo: Binding<String?>
     /// How far past its frame the list reaches: under the bars, the composer and the keyboard.
     let outsets: UIEdgeInsets
 
@@ -88,6 +95,8 @@ private struct ConversationCollection: UIViewRepresentable {
         private var lastId: String?
         private var lastOffset: CGFloat = 0
         private var reduceMotion = false
+        /// The rows on screen last reported to `onVisible`.
+        private var visible: Set<String> = []
 
         func makeView() -> ConversationCollectionView {
             let size = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(80))
@@ -185,6 +194,23 @@ private struct ConversationCollection: UIViewRepresentable {
                 applyKeepingPlace(snapshot)
             }
             if jump || sent { view.scrollToEnd(animated: !reduceMotion) }
+            reportVisible()
+            if let target = parent.scrollTo.wrappedValue {
+                if let path = dataSource.indexPath(for: target) {
+                    view.scrollToItem(at: path, at: .top, animated: !reduceMotion)
+                }
+                DispatchQueue.main.async { [weak self] in self?.parent?.scrollTo.wrappedValue = nil }
+            }
+        }
+
+        /// Tells the parent which rows are on screen now, so a card's header can follow the reader.
+        private func reportVisible() {
+            let ids = Set(view.indexPathsForVisibleItems.compactMap { dataSource.itemIdentifier(for: $0) })
+            guard ids != visible else { return }
+            visible = ids
+            let rows = Array(ids)
+            // Not during SwiftUI's update of this view.
+            DispatchQueue.main.async { [weak self] in self?.parent?.onVisible?(rows) }
         }
 
         /// Rows going in or out above: the first row on screen stays where it is.
@@ -227,6 +253,7 @@ private struct ConversationCollection: UIViewRepresentable {
             let y = scrollView.contentOffset.y
             defer { lastOffset = y }
             trackPull(scrollView)
+            reportVisible()
             // Only the reader's own scrolling changes following; layout never does.
             guard !view.updatingViewport, scrollView.isTracking || scrollView.isDecelerating else { return }
             setFollowing(view.followingAfterScroll(from: lastOffset))

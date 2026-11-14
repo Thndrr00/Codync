@@ -51,7 +51,9 @@ struct Composer: View {
 
     private var canSend: Bool {
         // Offline computers still take text: the relay holds it for them, or with no relay this phone does.
-        !isEmpty && (model.connection == .online || ((model.canQueue || model.holdsOnPhone) && files.isEmpty))
+        // A file still on its way (or one that failed) holds the send until it arrives or is removed.
+        let uploaded = files.allSatisfy { model.fileUploads[$0.id]?.status == .uploaded }
+        return !isEmpty && uploaded && (model.connection == .online || ((model.canQueue || model.holdsOnPhone) && files.isEmpty))
     }
 
     private var canAttach: Bool { bot != nil }
@@ -326,10 +328,15 @@ struct Composer: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(files) { file in
-                    ComposerAttachment(file: file) {
+                    ComposerAttachment(file: file, upload: model.fileUploads[file.id]) {
+                        model.forgetUpload(file.id)
                         withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
                             files.removeAll { $0.id == file.id }
                         }
+                    } cancel: {
+                        model.cancelUpload(file)
+                    } retry: {
+                        model.retryUpload(file)
                     }
                 }
             }
@@ -354,6 +361,7 @@ struct Composer: View {
                 continue
             }
             files.append(file)
+            model.startUpload(file, for: botId)
         }
     }
 

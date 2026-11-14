@@ -6,6 +6,8 @@ The chat shows your messages, the bot's messages, approval cards and short notic
 
 While the bot works, a line under the last message shows what it's doing and for how long. It reads **Typing…** while the bot writes you a message.
 
+When the bot hands work to its own subagents, the turn shows a **Subagents** card: their progress, the time they've taken, and a row for each with the task it was given, what it's doing now and how long it has taken. The card opens while a subagent works and can be folded. If you scroll the card out of view while its subagents are still working, its header stays just under the chat header with the progress, the current step and the time; select it to go back to the card. It disappears when the subagents finish. This works on the desktop, iPhone, Android and the terminal UI, where the header stays on the top line of the chat.
+
 To see more, turn on **Show thinking details** in Settings, under **Chat**. It's off by default and only changes the device you set it on. With it on, the line ends in an arrow. Tap or click it to unfold this turn's steps right in the chat: its thinking, what it said along the way, the tools and MCP tools it called and its plan. Tap a tool to see its output or diff. A long turn scrolls inside the line, which keeps showing the newest step. On the terminal UI, turn it on from `Ctrl-K` (**Show thinking details**), then press `>` or click the line. Each new turn starts folded, and the steps leave with the line when the bot finishes.
 
 Everything else the agent did (its narration, thinking, tool calls, diffs and plans) is in **Full conversation**:
@@ -59,7 +61,9 @@ Use the **+** button left of the message box.
 - **Desktop:** pick files, drop them on the box, or paste a copied image or file with Cmd+V (Ctrl+V on Windows and Linux).
 - **Terminal UI:** drag a file onto the terminal to paste its path. Backspace in an empty box removes the last file.
 
-A message can be files only. Each file can be up to 100 MB. The files are saved on the computer, in an `uploads` folder in the bot's personal workspace, or in Codync's data folder for a bot that works in a project folder. The agent gets your message with the path of each file and reads them with its own tools. While a file uploads, its card shows how much the computer has; a failed send keeps the files for **Resend**.
+A message can be files only. Each file can be up to 100 MB. The files are saved on the computer, in an `uploads` folder in the bot's personal workspace, or in Codync's data folder for a bot that works in a project folder. The agent gets your message with the path of each file and reads them with its own tools.
+
+Every file starts uploading as soon as you attach it, and its card shows a ring of how much the computer has. Click or tap the ring to cancel that file's upload; the others keep going. A file that fails stays in the box with the reason and **Retry**, which sends that file alone. A message waits until each of its files has arrived or been removed. In the terminal UI the file row shows the percentage, `ctrl+x` cancels the file that is uploading and `ctrl+r` retries a failed one. A failed send keeps the files for **Resend**.
 
 Bots can send files back when you ask, such as a report or a build. Each one shows as a card with its name and size and a download action. An image up to 20 MB also shows the picture itself in the iPhone, Android and desktop apps; SVG files preview too, and tap or click any image to see it full size. On Android, several pictures in one message show as a small stack you can swipe and open full size, and an MP4 plays in the full-size viewer. On desktop, image previews fit the whole picture inside a larger panel that adjusts to your window, and a click on a file's name opens it in its own tab over the chat: several files stay open side by side and close one by one. This also applies to images you send. To save a file:
 

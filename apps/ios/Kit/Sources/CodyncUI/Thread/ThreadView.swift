@@ -29,6 +29,10 @@ public struct ThreadView: View {
     /// The chat stays on the newest message until the reader scrolls away.
     @State var following = true
     @State var loadingEarlier = false
+    /// The rows on screen now: a subagent card's header follows the reader while the card is away.
+    @State var visibleRows: Set<String> = []
+    /// The row the docked subagent header brings back into view.
+    @State var scrollToRow: String?
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.colorScheme) var colorScheme
     /// The chat background of this theme; reading it here redraws the chat when Settings changes it.
@@ -70,9 +74,17 @@ public struct ThreadView: View {
                 }
                     .padding(.top, 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            } else if let card = dockCard, showsDock {
+                // The card's header, held under the chat header while its subagents work out of view.
+                SubagentDock(entry: card) {
+                    following = false
+                    scrollToRow = card.id
+                }
+                .transition(.opacity)
             }
         }
         .animation(Motion.reduced(Motion.layout, reduceMotion), value: calling)
+        .animation(Motion.reduced(Motion.fade, reduceMotion), value: showsDock)
     }
 
     var conversation: some View {
@@ -424,7 +436,17 @@ extension ThreadView {
         return ConversationList(rows: rows, following: $following, nearTop: { showEarlier() }, refresh: {
             model.restartStream()
             _ = try? await model.ready()
-        })
+        }, onVisible: { visibleRows = Set($0) }, scrollTo: $scrollToRow)
+    }
+
+    /// The newest turn whose subagents still work: its header hangs under the chat header while out of view.
+    private var dockCard: Entry? {
+        model.chat(botId).last { $0.kind == "subagents" && ($0.data.subagents ?? []).contains(where: \.isRunning) }
+    }
+
+    private var showsDock: Bool {
+        guard let card = dockCard else { return false }
+        return !visibleRows.contains(card.id)
     }
 
     private var moreOnComputer: Bool {

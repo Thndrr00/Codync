@@ -65,7 +65,8 @@ it has no pointer tooltip or link-opening action.
   are normal bubbles. Consecutive exchanges with the same peer in the main chat (either
   direction, trace entries ignored) collapse into one "3 messages with Owen" row ([bot collaboration](bot-collaboration.md#notice-data)).
 - Clients never stream text into a bubble: the chat shows user messages, `final` agent entries,
-  permission cards and notices (`isChat`). Nothing pops in and out while a turn runs.
+  permission cards, subagent cards and notices (`isChat`). Nothing pops in and out while a turn runs.
+  A turn's subagent card is one `subagents` entry that updates in place ([subagents](subagents.md)).
 
 ## Bot reactions
 

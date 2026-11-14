@@ -518,6 +518,8 @@ pub enum Click {
     BotChat(String),
     /// A line's thread chip (root entry id): opens that thread.
     Thread(String),
+    /// The docked subagent header (its card's entry id): scrolls the chat back to the card.
+    Subagents(String),
     /// The port in the chat's header: opens the bot's dev servers.
     DevServers,
 }

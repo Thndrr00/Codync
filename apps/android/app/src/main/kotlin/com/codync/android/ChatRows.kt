@@ -193,6 +193,10 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
                 store.respond(entry, it)
             }
         }
+        "subagents" -> Column(Modifier.padding(top = if (groupStart) topGroupGap else topSameGap), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (group) AuthorLabel(entry.data.text("author"), state)
+            SubagentCard(entry)
+        }
         else -> if (entry.data["memberQuestion"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             MemberQuestionCard(entry, state, reply)
         } else if (entry.data["takeoverRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
@@ -346,7 +350,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.chatFootnote, color = Palette.text)
         if (send.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text) }
         when (send.status) {
-            SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files · $it%" } ?: "Sending…",
+            SendStatus.Sending -> Text(if (send.files.isEmpty()) "Sending…" else "Sending files…",
                 style = Type.caption2, color = Palette.tertiary)
             SendStatus.Delivering -> Text("Delivered to the computer", style = Type.caption2, color = Palette.tertiary)
             SendStatus.Waiting, SendStatus.Held -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

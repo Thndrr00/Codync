@@ -2594,5 +2594,13 @@
   "Stop a sub-task before giving it to another member": "Остановите подзадачу, прежде чем передать её другому участнику",
   "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync удаляет копию, скачанную для {name} на {host}, и отключает агента.",
   "Its accounts, sign-ins and bots stay.": "Его аккаунты, входы и боты остаются.",
-  "Bots using it show as not installed until it is installed again.": "Боты, которые им пользуются, показывают его как неустановленный, пока он не будет установлен снова."
+  "Bots using it show as not installed until it is installed again.": "Боты, которые им пользуются, показывают его как неустановленный, пока он не будет установлен снова.",
+  "Retry": "Повторить",
+  "Cancel upload": "Отменить загрузку",
+  "Upload failed": "Не удалось загрузить",
+  "Upload cancelled": "Загрузка отменена",
+  "Uploading {percent}%": "Загрузка {percent}%",
+  "Subagents": "Субагенты",
+  "{finished} of {total}": "{finished} из {total}",
+  "Go to the subagents": "К субагентам"
 }

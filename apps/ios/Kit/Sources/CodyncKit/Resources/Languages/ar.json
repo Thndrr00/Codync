@@ -548,5 +548,13 @@
   "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "يزيل Codync النسخة التي نزّلها لـ {name} على {host} ويوقف الوكيل.",
   "Its accounts, sign-ins and bots stay.": "تبقى حساباته وعمليات تسجيل الدخول والروبوتات.",
   "Bots using it show as not installed until it is installed again.": "تظهر الروبوتات التي تستخدمه أنه غير مثبَّت حتى يُثبَّت مرة أخرى.",
-  "Deleted.": "تم الحذف."
+  "Deleted.": "تم الحذف.",
+  "Retry": "إعادة المحاولة",
+  "Cancel upload": "إلغاء الرفع",
+  "Upload failed": "فشل الرفع",
+  "Upload cancelled": "أُلغي الرفع",
+  "Uploading {percent}%": "جارٍ الرفع {percent}%",
+  "Subagents": "وكلاء فرعيون",
+  "{finished} of {total}": "{finished} من {total}",
+  "Go to the subagents": "الانتقال إلى الوكلاء الفرعيين"
 }

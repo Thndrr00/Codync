@@ -28,6 +28,7 @@ mod slash;
 mod steps;
 pub mod tasks;
 mod ui;
+pub mod uploads;
 mod usage_chooser;
 mod whats_new;
 
@@ -122,6 +123,8 @@ pub struct App {
     pub slash_pick: (String, usize),
     /// Files dropped on the composer (pasted paths), per draft like the text.
     pub files: HashMap<String, Vec<std::path::PathBuf>>,
+    /// Each draft's files on their way to the computer, in the draft's order (`net::spawn_upload`).
+    pub uploads: HashMap<String, Vec<uploads::FileUpload>>,
     /// What was pasted into each draft, sent along so memory never takes it as the user's own words.
     pub pasted: HashMap<String, Vec<String>>,
     pub download: Option<super::net::files::Download>,
@@ -130,6 +133,8 @@ pub struct App {
     sends: HashMap<String, PendingSend>,
     /// Lines scrolled up from the bottom of the chat (0 = follow new messages).
     pub chat_scroll: usize,
+    /// The subagent card to bring into view (the dock was clicked), then cleared.
+    pub scroll_to: Option<String>,
     pub trace_scroll: usize,
     pub trace: TraceMode,
     /// Turn shown in the trace; `None` follows the latest.
@@ -231,9 +236,11 @@ impl App {
             drafts: HashMap::new(),
             slash_pick: (String::new(), 0),
             files: HashMap::new(),
+            uploads: HashMap::new(),
             pasted: HashMap::new(),
             sends: HashMap::new(),
             chat_scroll: 0,
+            scroll_to: None,
             trace_scroll: 0,
             trace: TraceMode::Off,
             trace_turn: None,

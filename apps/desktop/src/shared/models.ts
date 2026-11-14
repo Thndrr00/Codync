@@ -563,6 +563,20 @@ export interface EntryData {
   from?: string
   /** notice: what was said on a realtime call, oldest first. */
   transcript?: CallLine[]
+  /** subagents: the subagents this turn started, in the order they started (`SubagentCard`). */
+  subagents?: Subagent[]
+}
+
+/** One subagent an agent started in a turn (`kind: 'subagents'`): its task, state, newest step and time. */
+export interface Subagent {
+  id: string
+  task: string
+  /** running | done | failed | stopped */
+  state: string
+  /** What it does now, as its tool call named it. */
+  step: string
+  startedAt: number
+  endedAt?: number | null
 }
 
 export interface Entry {
@@ -632,6 +646,8 @@ export function isChat(e: Entry): boolean {
   switch (e.kind) {
     case 'user':
     case 'permission':
+      return true
+    case 'subagents':
       return true
     case 'notice':
       // Only a fresh conversation gets a line: memory lives in the bot's memory settings, a summary keeps the same

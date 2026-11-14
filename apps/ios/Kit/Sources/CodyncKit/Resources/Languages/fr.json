@@ -2594,5 +2594,13 @@
   "Stop a sub-task before giving it to another member": "Arrêtez une sous-tâche avant de la confier à un autre membre",
   "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync supprime la copie qu’il a téléchargée pour {name} sur {host} et désactive l’agent.",
   "Its accounts, sign-ins and bots stay.": "Ses comptes, connexions et bots restent.",
-  "Bots using it show as not installed until it is installed again.": "Les bots qui l’utilisent l’affichent comme non installé jusqu’à sa réinstallation."
+  "Bots using it show as not installed until it is installed again.": "Les bots qui l’utilisent l’affichent comme non installé jusqu’à sa réinstallation.",
+  "Retry": "Réessayer",
+  "Cancel upload": "Annuler l’envoi",
+  "Upload failed": "L’envoi a échoué",
+  "Upload cancelled": "Envoi annulé",
+  "Uploading {percent}%": "Envoi {percent} %",
+  "Subagents": "Sous-agents",
+  "{finished} of {total}": "{finished} sur {total}",
+  "Go to the subagents": "Aller aux sous-agents"
 }

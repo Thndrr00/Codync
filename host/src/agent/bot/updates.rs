@@ -135,7 +135,28 @@ impl Actor {
                 self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
                 let working = activity(&data).to_owned();
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
-                    self.tools.insert(tool_id, e.id);
+                    self.tools.insert(tool_id.clone(), e.id);
+                }
+                // A tool that starts the agent's own subagent gets a card of its own.
+                if self.subagents.start_with_tool(&tool_id, &title, &u["rawInput"], crate::store::now_ms()) {
+                    match status.as_str() {
+                        "completed" => {
+                            self.subagents.finish(
+                                &tool_id,
+                                crate::chat::subagents::State::Done,
+                                crate::store::now_ms(),
+                            );
+                        }
+                        "failed" => {
+                            self.subagents.finish(
+                                &tool_id,
+                                crate::chat::subagents::State::Failed,
+                                crate::store::now_ms(),
+                            );
+                        }
+                        _ => {}
+                    }
+                    self.save_subagents(turn);
                 }
                 self.set_activity(&working);
             }
@@ -164,6 +185,23 @@ impl Actor {
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
                     self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());
+                }
+                // A subagent's card follows its call: the newest step, then how it ended.
+                if self.subagents.has(tool_id) {
+                    let changed = match status.as_str() {
+                        "completed" => {
+                            self.subagents.finish(tool_id, crate::chat::subagents::State::Done, crate::store::now_ms())
+                        }
+                        "failed" => self.subagents.finish(
+                            tool_id,
+                            crate::chat::subagents::State::Failed,
+                            crate::store::now_ms(),
+                        ),
+                        _ => self.subagents.step(tool_id, &title),
+                    };
+                    if changed {
+                        self.save_subagents(turn);
+                    }
                 }
                 if let Some(working) = working {
                     self.set_activity(&working);

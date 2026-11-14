@@ -24,7 +24,10 @@ impl App {
             self.focus = Focus::Chat;
             // A file dragged onto the terminal pastes its path: attach it.
             if let Some(paths) = dropped_files(&s) {
-                self.files.entry(key).or_default().extend(paths);
+                for path in paths {
+                    self.files.entry(key.clone()).or_default().push(path.clone());
+                    self.start_upload(&key, path);
+                }
             } else {
                 self.drafts.entry(key.clone()).or_default().insert(&s);
                 self.pasted.entry(key).or_default().push(s);
@@ -126,6 +129,18 @@ impl App {
                 if files.is_empty() && self.built_in_command(&text) {
                     return;
                 }
+                // Every file must have reached the computer: one on its way (or retried after a
+                // failure) holds the send, as the ring in its row says.
+                for file in &files {
+                    if !self.uploads_for(&key).iter().any(|upload| upload.path == *file) {
+                        self.start_upload(&key, file.clone());
+                    }
+                }
+                let ids = if files.is_empty() { None } else { self.uploaded_ids(&key) };
+                if !files.is_empty() && ids.is_none() {
+                    self.flash("Waiting for the upload: ctrl+x cancels a file, ctrl+r retries one.");
+                    return;
+                }
                 // A waiting message the box took over (`/edit`): this send saves it, it doesn't post another.
                 if files.is_empty()
                     && let Some((bot, entry)) = self.pending_edit.clone()
@@ -167,19 +182,30 @@ impl App {
                 if let Some(pasted) = self.pasted.get(&key).filter(|p| !p.is_empty()) {
                     body["pasted"] = json!(pasted);
                 }
-                let after = After::Sent(key);
-                if files.is_empty() {
-                    self.call("send", body, after);
-                } else {
-                    self.client.spawn_send_files(body, files, after, self.tx.clone());
+                if let Some(ids) = ids {
+                    body["attachments"] = json!(ids);
                 }
+                self.call("send", body, After::Sent(key));
                 self.flash("Sending… Your draft stays here until delivered.");
             }
             KeyCode::Backspace if draft.text.is_empty() => {
-                if let Some(files) = self.files.get_mut(&key) {
-                    files.pop();
+                self.drop_last_file(&key);
+            }
+            KeyCode::Char('x') if ctrl => {
+                let uploading = self
+                    .uploads_for(&key)
+                    .iter()
+                    .find(|upload| upload.state == super::uploads::UploadState::Uploading)
+                    .map(|upload| upload.path.clone());
+                match uploading {
+                    Some(path) => {
+                        self.cancel_upload(&key, &path);
+                        self.flash("Upload cancelled: ctrl+r retries it, ⌫ removes the file.");
+                    }
+                    None => self.flash("No file is uploading."),
                 }
             }
+            KeyCode::Char('r') if ctrl => self.retry_upload(&key),
             KeyCode::Char('c') if ctrl => {
                 if draft.text.is_empty() {
                     self.flash("esc then s stops the bot");
@@ -480,6 +506,7 @@ impl App {
                             self.open_thread(&bot, &root);
                         }
                     }
+                    Some(Click::Subagents(id)) => self.scroll_to = Some(id),
                     Some(Click::DevServers) => self.open_dev_servers(),
                     None => {
                         if self.overlays.is_empty() {

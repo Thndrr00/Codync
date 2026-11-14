@@ -91,12 +91,31 @@ public struct EntryData: Codable, Hashable, Sendable {
     /// On a thread's root line: how many replies it has, how many are unread, when the last one landed and who
     /// wrote the recent ones. Absent until the thread has a reply.
     public var thread: ThreadSummary?
+    /// subagents: the subagents this turn started, in the order they started.
+    public var subagents: [EntrySubagent]?
 
     public init(text: String? = nil, status: String? = nil, clientNonce: String? = nil) {
         self.text = text
         self.status = status
         self.clientNonce = clientNonce
     }
+}
+
+/// One subagent an agent started in a turn (`kind: "subagents"`): its task, state, newest step and time.
+public struct EntrySubagent: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var task: String
+    /// running | done | failed | stopped
+    public var state: String
+    /// What it does now, as its tool call named it.
+    public var step: String
+    public var startedAt: Int64
+    public var endedAt: Int64?
+
+    /// Whether it still works: only then does its card's header follow the reader (`SubagentDock`).
+    public var isRunning: Bool { state == "running" || state.isEmpty }
+    /// The state as the card shows it, where a host older than the card never sends one.
+    public var shownState: String { isRunning ? "running" : state }
 }
 
 /// One line of a voice call: what the user said (`from: user`) or the voice answered (`voice`), with when (ms).
