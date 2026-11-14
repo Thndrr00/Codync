@@ -11,10 +11,14 @@ async function started(page: Page, botId: string, text: string): Promise<boolean
 }
 
 test('a long queue scrolls, with its oldest message in reach', async () => {
+  test.setTimeout(180_000) // 40 messages over the API, one at a time.
   const { browser, page } = await attach()
   const name = `Long queue e2e ${Date.now()}`
   let botId: string | undefined
   try {
+    // The queue's buttons are asserted in English, whatever the computer's own language.
+    await page.evaluate(() => localStorage.setItem('appLanguage', JSON.stringify('en')))
+    await page.reload()
     // What queues is the subject, so the messages wait for their turn instead of joining one.
     await setSteering(page, false)
     const bot = await steerBot(page, name, 120)
@@ -52,6 +56,7 @@ test('a long queue scrolls, with its oldest message in reach', async () => {
       await api(page, 'deleteBot', { botId }).catch(() => {})
     }
     await setSteering(page, true)
+    await page.evaluate(() => localStorage.removeItem('appLanguage')).catch(() => {})
     await browser.close()
   }
 })
@@ -87,10 +92,14 @@ test('a message sent to a working bot joins its turn by default', async () => {
 })
 
 test('a message sent while the bot works waits above the composer, then goes out now or is taken back', async () => {
+  test.setTimeout(90_000)
   const { browser, page } = await attach()
   const name = `Queue e2e ${Date.now()}`
   let botId: string | undefined
   try {
+    // The queue's buttons are asserted in English, whatever the computer's own language.
+    await page.evaluate(() => localStorage.setItem('appLanguage', JSON.stringify('en')))
+    await page.reload()
     // Queue chosen: what waits is the subject, and *Send now* steers one by hand.
     await setSteering(page, false)
     const { version } = await api<{ version: string }>(page, 'hello', {})
@@ -126,6 +135,7 @@ test('a message sent while the bot works waits above the composer, then goes out
       await api(page, 'deleteBot', { botId }).catch(() => {})
     }
     await setSteering(page, true)
+    await page.evaluate(() => localStorage.removeItem('appLanguage')).catch(() => {})
     await browser.close()
   }
 })
