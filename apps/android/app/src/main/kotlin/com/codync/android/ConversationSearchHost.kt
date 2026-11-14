@@ -6,8 +6,10 @@ internal interface ConversationSearchHost {
     suspend fun savedSearches(): List<SearchShortcut>
     suspend fun saveSearch(query: String, searchScope: String): List<SearchShortcut>
     suspend fun deleteSavedSearch(id: String): List<SearchShortcut>
-    suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, tools: Boolean): List<ChatHit>
+    suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, scope: MessageSearchScope,
+                           tools: Boolean): List<ChatHit>
     suspend fun searchPage(id: String): Pair<String, String>
+    suspend fun searchNote(botId: String, file: String, shared: Boolean): String
     suspend fun loadMessageContext(botId: String, entryId: String)
     fun openBot(botId: String, threadId: String?)
 }
@@ -38,14 +40,20 @@ internal class AppStoreConversationSearchHost(private val store: AppStore) : Con
         return store.deleteSavedSearch(id)
     }
 
-    override suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, tools: Boolean): List<ChatHit> {
+    override suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, scope: MessageSearchScope,
+                                    tools: Boolean): List<ChatHit> {
         check(isCurrent()) { "The active account or computer changed." }
-        return store.searchChat(botId, query, side, tools)
+        return store.searchChat(botId, query, side, scope, tools)
     }
 
     override suspend fun searchPage(id: String): Pair<String, String> {
         check(isCurrent()) { "The active account or computer changed." }
         return store.searchPage(id)
+    }
+
+    override suspend fun searchNote(botId: String, file: String, shared: Boolean): String {
+        check(isCurrent()) { "The active account or computer changed." }
+        return store.searchNote(botId, file, shared)
     }
 
     override suspend fun loadMessageContext(botId: String, entryId: String) {

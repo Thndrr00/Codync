@@ -49,7 +49,7 @@ class ConversationSearchModelTest {
         rejectLateReply(this) { _, model -> model.dispose() }
     }
 
-    @Test fun `an unknown method probe leaves All search usable and scoped search disabled`() = runBlocking {
+    @Test fun `a failed probe leaves every search and scope working`() = runBlocking {
         val host = SearchHost()
         host.saved = { throw IOException("unknown method") }
         host.search = { listOf(hit("found")) }
@@ -61,8 +61,9 @@ class ConversationSearchModelTest {
             model.updateScope(MessageSearchScope.Main)
             model.updateQuery("release")
             awaitState(model) { it.phase == SearchPhase.Ready }
-            assertEquals(MessageSearchScope.All, model.state.location)
+            assertEquals(MessageSearchScope.Main, model.state.location)
             assertEquals(listOf("release"), host.requests.map { it.query })
+            assertEquals(listOf(MessageSearchScope.Main), host.requests.map { it.scope })
             assertEquals(listOf("found"), model.state.hits.map { it.id })
         } finally { model.dispose() }
     }
@@ -98,22 +99,15 @@ class ConversationSearchModelTest {
         } finally { model.dispose() }
     }
 
-    @Test fun `the scope keeps one side of the chat and leaves pages out of threads`() = runBlocking {
+    @Test fun `the scope travels to the host for every query`() = runBlocking {
         val host = SearchHost()
-        host.search = { listOf(pageHit("page"), hit("main"), hit("thread", threadId = "t1")) }
         val model = ConversationSearchModel(host, "bot", this)
         try {
-            model.loadShortcuts()
-            awaitState(model) { it.shortcutPhase == ShortcutPhase.Ready }
             model.updateQuery("release")
             awaitState(model) { it.phase == SearchPhase.Ready }
-            assertEquals(listOf("page", "main", "thread"), model.state.hits.map { it.id })
-            model.updateScope(MessageSearchScope.Main)
-            awaitState(model) { it.hits.size == 2 }
-            assertEquals(listOf("page", "main"), model.state.hits.map { it.id })
             model.updateScope(MessageSearchScope.Threads)
-            awaitState(model) { it.hits.size == 1 }
-            assertEquals(listOf("thread"), model.state.hits.map { it.id })
+            awaitState(model) { host.requests.size == 2 }
+            assertEquals(listOf(MessageSearchScope.All, MessageSearchScope.Threads), host.requests.map { it.scope })
         } finally { model.dispose() }
     }
 
@@ -130,13 +124,35 @@ class ConversationSearchModelTest {
             awaitState(model) { it.phase == SearchPhase.Ready }
             model.open(model.state.hits.first { it.isPage }) { closed++ }
             awaitState(model) { it.page != null }
-            assertEquals("Title" to "Body", model.state.page)
+            assertEquals("Title", model.state.page?.title)
+            assertEquals("Body", model.state.page?.body)
+            assertFalse(model.state.page?.note ?: true)
             assertEquals(0, closed)
             model.closePage()
             assertNull(model.state.page)
             model.open(model.state.hits.first { !it.isPage }) { closed++ }
             awaitState(model) { closed == 1 }
             assertEquals(listOf("bot" to null), opened)
+        } finally { model.dispose() }
+    }
+
+    @Test fun `a note opens from its own or the shared memory`() = runBlocking {
+        val host = SearchHost()
+        host.search = { listOf(noteHit("office.md", shared = false), noteHit("roof.md", shared = true)) }
+        host.note = { file, shared -> "body of $file shared=$shared" }
+        val model = ConversationSearchModel(host, "bot", this)
+        try {
+            model.updateQuery("key")
+            awaitState(model) { it.phase == SearchPhase.Ready }
+            model.open(model.state.hits.first()) {}
+            awaitState(model) { it.page != null }
+            assertEquals("office.md", model.state.page?.title)
+            assertEquals("body of office.md shared=false", model.state.page?.body)
+            assertTrue(model.state.page?.note == true)
+            model.closePage()
+            model.open(model.state.hits.last()) {}
+            awaitState(model) { it.page != null }
+            assertEquals(listOf("office.md" to false, "roof.md" to true), host.notes)
         } finally { model.dispose() }
     }
 
@@ -203,15 +219,18 @@ class ConversationSearchModelTest {
         }
     }
 
-    private data class Request(val bot: String, val query: String, val side: ChatSearchSide, val tools: Boolean)
+    private data class Request(val bot: String, val query: String, val side: ChatSearchSide, val scope: MessageSearchScope,
+                               val tools: Boolean)
     private class SearchHost : ConversationSearchHost {
         var current = true
         val requests = mutableListOf<Request>()
         val saves = mutableListOf<Pair<String, String>>()
+        val notes = mutableListOf<Pair<String, Boolean>>()
         var search: suspend (Request) -> List<ChatHit> = { emptyList() }
         var saved: suspend () -> List<SearchShortcut> = { emptyList() }
         var save: suspend (String, String) -> List<SearchShortcut> = { _, _ -> emptyList() }
         var page: suspend () -> Pair<String, String> = { "" to "" }
+        var note: suspend (String, Boolean) -> String = { _, _ -> "" }
         var open: (String, String?) -> Unit = { _, _ -> }
         override fun isCurrent() = current
         override suspend fun savedSearches() = saved()
@@ -220,12 +239,17 @@ class ConversationSearchModelTest {
             return save(query, searchScope)
         }
         override suspend fun deleteSavedSearch(id: String): List<SearchShortcut> = emptyList()
-        override suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, tools: Boolean): List<ChatHit> {
-            val request = Request(botId, query, side, tools)
+        override suspend fun searchChat(botId: String, query: String, side: ChatSearchSide, scope: MessageSearchScope,
+                                        tools: Boolean): List<ChatHit> {
+            val request = Request(botId, query, side, scope, tools)
             requests += request
             return search(request)
         }
         override suspend fun searchPage(id: String): Pair<String, String> = page()
+        override suspend fun searchNote(botId: String, file: String, shared: Boolean): String {
+            notes += file to shared
+            return note(file, shared)
+        }
         override suspend fun loadMessageContext(botId: String, entryId: String) = Unit
         override fun openBot(botId: String, threadId: String?) = open(botId, threadId)
     }
@@ -233,5 +257,7 @@ class ConversationSearchModelTest {
     companion object {
         private fun hit(id: String, threadId: String? = null) = ChatHit("message", id, 1L, "[$id]", "agent", null, null, threadId)
         private fun pageHit(id: String) = ChatHit("document", id, 1L, "[$id]", null, null, "Title", null)
+        private fun noteHit(name: String, shared: Boolean) =
+            ChatHit("memory", if (shared) "/$name" else "bot/$name", 1L, "[key]", null, null, name, null, shared)
     }
 }

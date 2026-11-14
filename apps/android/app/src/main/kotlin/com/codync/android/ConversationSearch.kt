@@ -46,8 +46,8 @@ import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 
 /**
- * Asks this chat what it already knows: its messages and its pages, best match first, each with its
- * snippet and date. A message opens in its context, a page opens here. The screen renders the
+ * Asks this chat what it already knows: its messages, its pages and its memory, best match first, each with
+ * its snippet and date. A message opens in its context, a page or a note opens here. The screen renders the
  * host-backed model; request and account lifetimes stay outside the view.
  */
 @Composable internal fun ConversationSearch(bot: Bot, store: AppStore, close: () -> Unit) {
@@ -63,7 +63,7 @@ import com.kyant.shapes.RoundedRectangle
     val state = model.state
     val page = state.page
     if (page != null) {
-        PageView(page.first, page.second, model::closePage)
+        PageView(page, model::closePage)
         return
     }
     Column(Modifier.fillMaxSize()) {
@@ -82,8 +82,8 @@ import com.kyant.shapes.RoundedRectangle
                             }
                         }, modifier = Modifier.semantics { selected = state.tools })
                     }
+                    SegmentedChoice(state.location, MessageSearchScope.entries.map { it to it.title }, model::updateScope)
                     if (state.shortcutPhase == ShortcutPhase.Ready) {
-                        SegmentedChoice(state.location, MessageSearchScope.entries.map { it to it.title }, model::updateScope)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             LinkButton("Saved searches (${state.shortcuts.size})", Modifier.weight(1f)
                                 .semantics { stateDescription = if (state.showShortcuts) "Expanded" else "Collapsed" }, style = Type.caption,
@@ -103,7 +103,7 @@ import com.kyant.shapes.RoundedRectangle
                     state.shortcutError?.let { message ->
                         Text(message, style = Type.caption, color = Palette.danger)
                         if (state.shortcutPhase == ShortcutPhase.Unavailable) {
-                            Text("All chats search is still available.", style = Type.caption, color = Palette.secondary)
+                            Text("Search is still available.", style = Type.caption, color = Palette.secondary)
                             SecondaryButton("Retry saved searches", action = model::loadShortcuts)
                         }
                     }
@@ -117,8 +117,8 @@ import com.kyant.shapes.RoundedRectangle
             }
             when {
                 state.phase == SearchPhase.Searching && state.hits.isEmpty() -> item { Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) } }
-                state.query.isBlank() -> item { Text("What was said here, and what its pages hold. Every word has to appear.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
-                state.phase != SearchPhase.Failed && state.hits.isEmpty() -> item { Text("Nothing in this chat matches those words.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
+                state.query.isBlank() -> item { Text("What was said here, its pages and its memory. Every word has to appear.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
+                state.phase != SearchPhase.Failed && state.hits.isEmpty() -> item { Text("Nothing here matches those words.", Modifier.padding(vertical = 12.dp), style = Type.body, color = Palette.tertiary) }
                 else -> {
                     items(state.hits, key = { "${it.kind}:${it.id}" }) { hit -> SearchHitRow(hit, bot.name) { model.open(hit, close) } }
                     if (state.opening != null) item { Text("Opening result…", style = Type.caption, color = Palette.secondary) }
@@ -145,7 +145,7 @@ import com.kyant.shapes.RoundedRectangle
         .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Symbol(if (hit.isPage) "doc.text" else if (hit.isMine) "person" else "bubble.left", size = 12.dp, tint = Palette.secondary)
+                Symbol(if (hit.isPage) "doc.text" else if (hit.isNote) "brain" else if (hit.isMine) "person" else "bubble.left", size = 12.dp, tint = Palette.secondary)
                 Text(headline(hit, botName), style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Text(RelativeTime.day(hit.at), style = Type.caption, color = Palette.tertiary, maxLines = 1)
             }
@@ -156,6 +156,7 @@ import com.kyant.shapes.RoundedRectangle
 
 private fun headline(hit: ChatHit, botName: String): String {
     if (hit.isPage) return "${hit.title ?: "Page"} · page"
+    if (hit.isNote) return "${hit.title ?: "Note"} · ${if (hit.shared) "shared memory" else "memory"}"
     val who = if (hit.isMine) "You" else botName
     return if (hit.author != null) "$who (${hit.author})" else who
 }
@@ -173,12 +174,14 @@ private fun marked(snippet: String): AnnotatedString = buildAnnotatedString {
     }
 }
 
-/** A page opens in place, before its library. */
-@Composable private fun PageView(title: String, body: String, back: () -> Unit) {
+/** A page or a memory note opens in place, before its library. */
+@Composable private fun PageView(page: SearchPage, back: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        ModalHeader(if (title.isBlank()) "Page" else title)
+        ModalHeader(if (page.title.isBlank()) if (page.note) "Note" else "Page" else page.title)
+        Text(if (page.note) "A note from its memory" else "A page of this bot", Modifier.padding(horizontal = 20.dp),
+            style = Type.caption, color = Palette.secondary)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            MarkdownText(body)
+            MarkdownText(page.body)
         }
         Row(Modifier.fillMaxWidth().padding(20.dp)) {
             SecondaryButton("Back to results", action = back)

@@ -2,18 +2,21 @@ import CodyncKit
 import Foundation
 
 extension BotStore {
-    /// What this chat knows about `query`: its messages and its pages, best match first.
-    func searchChat(_ query: String, botId: String, author: ChatSearchAuthor, tools: Bool, limit: Int = 30) async throws -> [ChatSearchHit] {
+    /// What this chat knows about `query`: its messages, its pages and its memory, best match first.
+    func searchChat(_ query: String, botId: String, author: ChatSearchAuthor, scope: ChatSearchScope, tools: Bool,
+                    limit: Int = 30) async throws -> [ChatSearchHit] {
         struct Request: Encodable {
             let botId: String
             let query: String
             let limit: Int
             let tools: Bool
             let author: String?
+            let channel: String?
         }
         let client = try await ready()
         let response: ChatSearchPage = try await client.call(
-            "search", Request(botId: botId, query: query, limit: limit, tools: tools, author: author.wire))
+            "search",
+            Request(botId: botId, query: query, limit: limit, tools: tools, author: author.wire, channel: scope.wire))
         try Task.checkCancellation()
         return response.hits
     }
@@ -35,5 +38,13 @@ extension BotStore {
         let response: Response = try await client.call("getDocument", ["id": id])
         try Task.checkCancellation()
         return (response.document.title, response.document.body ?? "")
+    }
+
+    /// A memory note a search found.
+    func searchNote(botId: String, file: String, shared: Bool) async throws -> String {
+        let client = try await ready()
+        let detail = try await client.memoryFile(botId: botId, file: file, shared: shared)
+        try Task.checkCancellation()
+        return detail.content ?? ""
     }
 }

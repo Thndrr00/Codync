@@ -1,20 +1,21 @@
 import CodyncKit
 import SwiftUI
 
-/// Asks this chat what it already knows: its messages and its pages, best match first, each with its
-/// snippet and date. A message opens in its context, a page opens here.
+/// Asks this chat what it already knows: its messages, its pages and its memory, best match first, each with its
+/// snippet and date. A message opens in its context, a page or a note opens here.
 public struct ChatSearchView: View {
     let botId: String
     @Environment(BotStore.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var side = ChatSearchAuthor.everyone
+    @State private var scope = ChatSearchScope.everything
     @State private var tools = false
     @State private var hits: [ChatSearchHit] = []
     @State private var loading = false
     @State private var error: String?
     @State private var context: (hit: ChatSearchHit, entries: [Entry])?
-    @State private var page: (title: String, body: String)?
+    @State private var page: (title: String, body: String, note: Bool)?
     @State private var search: Task<Void, Never>?
     @State private var opening: Task<Void, Never>?
 
@@ -24,6 +25,8 @@ public struct ChatSearchView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let page {
                 ModalHeader(page.title)
+                Text(page.note ? "A note from its memory" : "A page of this bot")
+                    .font(.caption).foregroundStyle(Palette.secondary).padding(.horizontal, 16)
                 ScrollView {
                     MarkdownText(page.body).padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -33,21 +36,24 @@ public struct ChatSearchView: View {
             } else {
                 ModalHeader("Search this chat")
                 SearchField("Words to look for", text: $query).padding(.horizontal, 16)
-                HStack(spacing: 10) {
-                    TabChoice(selection: $side, options: ChatSearchAuthor.allCases.map { (id: $0, label: $0.title) })
-                    Button {
-                        tools.toggle()
-                    } label: {
-                        Label("Tool traces", systemImage: "hammer")
+                VStack(alignment: .leading, spacing: 10) {
+                    TabChoice(selection: $scope, options: ChatSearchScope.allCases.map { (id: $0, label: $0.title) })
+                    HStack(spacing: 10) {
+                        TabChoice(selection: $side, options: ChatSearchAuthor.allCases.map { (id: $0, label: $0.title) })
+                        Button {
+                            tools.toggle()
+                        } label: {
+                            Label("Tool traces", systemImage: "hammer")
+                        }
+                        .buttonStyle(.secondary)
+                        .accessibilityAddTraits(tools ? .isSelected : [])
                     }
-                    .buttonStyle(.secondary)
-                    .accessibilityAddTraits(tools ? .isSelected : [])
                 }
                 .padding(16)
                 results
             }
         }
-        .task(id: "\(query)\u{1}\(side.rawValue)\u{1}\(tools)") { await run() }
+        .task(id: "\(query)\u{1}\(side.rawValue)\u{1}\(scope.rawValue)\u{1}\(tools)") { await run() }
         .onDisappear {
             search?.cancel()
             opening?.cancel()
@@ -61,8 +67,8 @@ public struct ChatSearchView: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if !loading, error == nil, hits.isEmpty {
                     Text(query.isEmpty
-                         ? "What was said here, and what its pages hold. Every word has to appear."
-                         : "Nothing in this chat matches those words.")
+                         ? "What was said here, its pages and its memory. Every word has to appear."
+                         : "Nothing here matches those words.")
                         .foregroundStyle(Palette.secondary)
                 }
                 ForEach(hits) { hit in
@@ -72,7 +78,7 @@ public struct ChatSearchView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Image(systemName: hit.isPage ? "doc.text" : hit.isMine ? "person" : "bubble.left")
+                                Image(systemName: hit.isPage ? "doc.text" : hit.isNote ? "brain" : hit.isMine ? "person" : "bubble.left")
                                 Text(headline(hit)).font(.subheadline.weight(.semibold))
                                 Spacer(minLength: 8)
                                 Text(Date(milliseconds: hit.at).formatted(date: .abbreviated, time: .shortened))
@@ -127,6 +133,7 @@ public struct ChatSearchView: View {
 
     private func headline(_ hit: ChatSearchHit) -> String {
         if hit.isPage { return "\(hit.title ?? "Page") · page" }
+        if hit.isNote { return "\(hit.title ?? "Note") · \(hit.shared == true ? "shared memory" : "memory")" }
         let who = hit.isMine ? "You" : model.bots[botId]?.name ?? "Bot"
         guard let author = hit.author else { return who }
         return "\(who) · \(author)"
@@ -150,7 +157,7 @@ public struct ChatSearchView: View {
             defer { loading = false }
             do {
                 try await Task.sleep(for: .milliseconds(250))
-                hits = try await model.searchChat(words, botId: botId, author: side, tools: tools)
+                hits = try await model.searchChat(words, botId: botId, author: side, scope: scope, tools: tools)
             } catch is CancellationError {} catch { self.error = error.localizedDescription }
         }
         await search?.value
@@ -158,8 +165,12 @@ public struct ChatSearchView: View {
 
     private func open(_ hit: ChatSearchHit) async {
         do {
-            if hit.isPage {
-                page = try await model.searchPage(hit.id)
+            if hit.kind == .document {
+                let page = try await model.searchPage(hit.id)
+                self.page = (page.title, page.body, false)
+            } else if hit.isNote {
+                let body = try await model.searchNote(botId: botId, file: hit.title ?? "", shared: hit.shared == true)
+                page = (hit.title ?? "", body, true)
             } else {
                 let entries = try await model.chatHitContext(botId: botId, entryId: hit.id)
                 context = (hit: hit, entries: entries)

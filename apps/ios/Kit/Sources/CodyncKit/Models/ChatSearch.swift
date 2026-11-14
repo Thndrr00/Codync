@@ -24,11 +24,37 @@ public enum ChatSearchAuthor: String, CaseIterable, Sendable {
     }
 }
 
-/// One match of a search inside a chat: a message with the snippet around it, or a page.
+/// Where in a chat a search keeps its words: everywhere, the chat itself, or its side conversations; `everything`
+/// sends no filter.
+public enum ChatSearchScope: String, CaseIterable, Sendable {
+    case everything
+    case thisChat
+    case threads
+
+    public var title: String {
+        switch self {
+        case .everything: "Everything"
+        case .thisChat: "This chat"
+        case .threads: "Threads"
+        }
+    }
+
+    /// What the host reads (`channel`).
+    public var wire: String? {
+        switch self {
+        case .everything: nil
+        case .thisChat: "main"
+        case .threads: "threads"
+        }
+    }
+}
+
+/// One match of a search inside a chat: a message with the snippet around it, a page, or a memory note.
 public struct ChatSearchHit: Decodable, Identifiable, Hashable, Sendable {
     public enum Kind: String, Decodable, Sendable {
         case message
         case document
+        case memory
     }
 
     public let kind: Kind
@@ -39,11 +65,14 @@ public struct ChatSearchHit: Decodable, Identifiable, Hashable, Sendable {
     public let snippet: String
     public let entryKind: String?
     public let author: String?
-    /// A page's title.
+    /// A page's title or a note's name.
     public let title: String?
     public let threadId: String?
+    /// A note of the memory every bot shares, rather than the bot's own.
+    public let shared: Bool?
 
     public var isPage: Bool { kind == .document }
+    public var isNote: Bool { kind == .memory }
     public var isMine: Bool { entryKind == "user" }
 }
 
