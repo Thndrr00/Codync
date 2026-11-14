@@ -198,7 +198,29 @@ Upstream:
 
 ## F11 cards
 
-These are the next work. They are not part of `feat/openbot-connector-experience`.
+These were the next work after the census. On 2026-11-13 they were implemented on the same
+branch, except F11.16:
+
+| Card | Status |
+| --- | --- |
+| F11.1 An agent creates and changes channels | Shipped: `host/src/chat/group/tools.rs` |
+| F11.2 The lead drops earlier work | Shipped: `host/src/chat/group/drop.rs` |
+| F11.3 Channel sub-tasks and their controls | Shipped: `host/src/chat/group/tasks.rs`, `host/src/store/group_tasks.rs` |
+| F11.4 Group editor parity | Shipped: title, archive, picture and the iOS lead picker |
+| F11.5 `send_to_channel` for agents | Shipped: `host/src/chat/group/send.rs` |
+| F11.6 "Send to a channel" on iOS | Shipped: `apps/ios/Kit/Sources/CodyncUI/Thread/ForwardSheet.swift` |
+| F11.7 Channel memory for a group | Shipped: `host/src/chat/memory/channel.rs` |
+| F11.8 WhatsApp pairing code for strangers | Shipped: `host/src/whatsapp/senders.rs` |
+| F11.9 WhatsApp photos and SVG | Shipped: `host/whatsapp-bridge/media.mjs` |
+| F11.10 Durable person data | Shipped: `host/src/whatsapp/person.rs` |
+| F11.11 Delete a provider | Shipped: `deleteAgentDownload` |
+| F11.12 Newest models first | Shipped: `host/src/agent/auth/models.rs` |
+| F11.13 Usage limit chip | Shipped on every model picker |
+| F11.14 Upload ring, cancel and retry | Shipped: per-file uploads, `cancelUpload` |
+| F11.15 Fixed subagent header | Shipped: `host/src/chat/subagents.rs` |
+| F11.16 Browser site limit | Deferred (see its card) |
+| F11.17 Updating inside an LXC container | Shipped: `host/src/service/unix.rs` |
+| F11.18 Plush in list and search empty states | Shipped on desktop, iOS and Android |
 
 ### F11.1 An agent creates and changes channels
 
@@ -476,11 +498,11 @@ These are the next work. They are not part of `feat/openbot-connector-experience
 
 ## How to use this
 
-The F11 cards are the next work, not part of this branch. Each one is self-contained: the
-"Where" lines name files that exist today, the "Clients" line follows the cross-platform
-rule (a UI change lands in iOS, Android, desktop and the terminal UI together), and the
-"Test" line is the check that proves it. Pick a card, open its own worktree and branch, and
-follow the after-change workflow before merging.
+The cards above shipped on this branch except F11.16, which stays deferred until Codync hosts
+sites. The "Where" lines name the files that exist today, the "Clients" line follows the
+cross-platform rule (a UI change lands in iOS, Android, desktop and the terminal UI together),
+and the "Test" line is the check that proves it. Everything still needs the compiler and the
+end-to-end walk before merge.
 
 Bullets 1, 3 and 4 are the bulk of the residue; bullets 5 and 7 are done. Bullet 2 is
 half done: approvals, allowed groups and files work, but strangers, photos, SVG and durable

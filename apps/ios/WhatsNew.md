@@ -28,6 +28,16 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - 可從頻道設定開始新對話或壓縮上下文。
 - 頻道會顯示「等待子任務」清單：每一列是某個成員的子任務，可以先停止；停止後能繼續、改派給其他成員，或取消整段（訊息會保留）。
 - 可以請頻道的負責人放棄先前的請求：整輪連同執行中與排隊中的子任務一併取消，頻道會註明是誰要求的。
+- 頻道會列出每個等待中的子任務，附停止、繼續、改派與取消；負責人可以丟棄已被取代的執行。
+- 代理在擁有「管理團隊」時可以建立與修改頻道，頻道也會保存成員共用的記憶。
+- 代理可以從自己的聊天把工作送進頻道。
+- iPhone 也能「傳送到頻道」。
+- WhatsApp 上，陌生人會收到一組由你核准的短代碼；照片以照片送達，個人的資料會跨新聊天保留。
+- 代理頁面可以刪除 Codync 下載的版本，帳號與 Bot 都保留；模型選單最新版本在前，並顯示已用完方案的重新設定時間。
+- 附加檔案時就開始上傳，附可取消的圓環與失敗後的重試；子代理有卡片，離開畫面時標題會跟著聊天顯示。
+- 「資料庫」可從視窗列開啟，列出這台電腦上所有圖片與檔案。
+- 空的清單與搜尋會顯示氈毛玩偶。
+- LXC 容器中的伺服器更新時，不會再因 AppArmor 設定而中斷。
 ### en-US
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
@@ -49,6 +59,15 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - Start a new conversation or compact the context from a channel's settings.
 - Channels show a "Waiting for sub-tasks" list: stop a member's sub-task, then continue it, give it to another member, or cancel it and keep the messages.
 - Ask a channel's lead to drop earlier work: it cancels that whole run, with its running and queued sub-tasks, and the channel notes who asked.
+- Channels show each waiting sub-task with Stop, Continue, Reassign and Cancel, and the lead can drop a run a newer request replaced.
+- An agent with Manage the team can create and change channels, and channels keep memories their members share.
+- An agent can send work into a channel from its own chat, and the iPhone can send a message to a channel too.
+- On WhatsApp, an unknown person gets a short code you approve or deny, photos arrive as photos, and a person’s facts survive a new chat or a restart.
+- An agent’s page deletes the build Codync downloaded while its accounts, sign-ins and bots stay; the model picker leads with the newest model and shows a spent plan’s reset time.
+- Each file uploads as you attach it, with a ring you can cancel and a Retry when one fails; subagents get a card, and a header follows the chat while their card is out of view.
+- The Library opens from the window bar with every image and file on your computer.
+- Empty lists and searches show the felt plush.
+- A server in an LXC container updates without the AppArmor profile stopping it.
 ## 2.39.0
 
 ### zh-Hant
