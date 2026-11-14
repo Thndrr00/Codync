@@ -7,6 +7,16 @@ released version's section; a version without one gets the PRs' "What's New: And
 else a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.46.0
+
+### zh-Hant
+- 歷史搜尋改為以索引比對，輸入開頭幾個字就能找到（例如用「部署」找到「部署計畫」），結果也更快。
+- Bot 回答前會想起這段對話與它頁面裡相關的舊訊息，並標上時間與來源。
+
+### en-US
+- History search now uses an index, so a word's beginning is enough (typing "deploy" finds "deployment") and results come faster.
+- Before answering, a bot recalls the relevant earlier messages and pages of the chat, each with its date and source.
+
 ## 2.39.0
 
 ### zh-Hant
