@@ -208,7 +208,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     {
         market::vault::unlock(hub.clone()).await?;
     }
-    if matches!(method, "channelNotes" | "addChannelNote" | "removeChannelNote") {
+    if matches!(method, "channelNotes" | "addChannelNote" | "removeChannelNote")
+        || crate::channels::LINK_METHODS.contains(&method)
+    {
         return crate::channels::call(hub, method, &b);
     }
     if crate::docs::METHODS.contains(&method) {

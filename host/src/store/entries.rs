@@ -194,6 +194,52 @@ impl Store {
         )?)
     }
 
+    /// Whether the person answered in this bot's chat after `seq` (an invisible check-in or a
+    /// routine's own message does not count).
+    pub fn user_replied_after(&self, bot_id: &str, seq: i64) -> Result<bool> {
+        let c = self.db.locked();
+        Ok(c.query_row(
+            "SELECT EXISTS(SELECT 1 FROM entries WHERE bot_id = ?1 AND kind = 'user' AND seq > ?2
+               AND thread_id IS NULL
+               AND COALESCE(json_extract(data, '$.internal'), 0) <> 1
+               AND COALESCE(json_extract(data, '$.from'), '') <> 'proactive')",
+            params![bot_id, seq],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// When the bot last said something visible in its chat (a final agent message, not a
+    /// check-in's internal prompt).
+    pub fn last_spoken_at(&self, bot_id: &str) -> Option<i64> {
+        let c = self.db.locked();
+        logged(
+            "last spoken",
+            c.query_row(
+                "SELECT created_at FROM entries WHERE bot_id = ?1 AND kind = 'agent'
+                   AND thread_id IS NULL AND json_extract(data, '$.final') = 1
+                 ORDER BY seq DESC LIMIT 1",
+                [bot_id],
+                |r| r.get(0),
+            )
+            .optional(),
+        )
+        .flatten()
+    }
+
+    /// Whether the person answered in this bot's chat after `at` (used by topics raised without
+    /// a notice entry, such as a proactive check-in).
+    pub fn user_replied_since(&self, bot_id: &str, at: i64) -> Result<bool> {
+        let c = self.db.locked();
+        Ok(c.query_row(
+            "SELECT EXISTS(SELECT 1 FROM entries WHERE bot_id = ?1 AND kind = 'user' AND created_at >= ?2
+               AND thread_id IS NULL
+               AND COALESCE(json_extract(data, '$.internal'), 0) <> 1
+               AND COALESCE(json_extract(data, '$.from'), '') <> 'proactive')",
+            params![bot_id, at],
+            |r| r.get(0),
+        )?)
+    }
+
     /// Entries changed after `since`. A fresh client (`since == 0`) only gets the
     /// newest `cap` entries per bot and pages older ones in with `history`.
     pub fn entries_since(&self, since: i64, cap: i64) -> Result<Vec<Entry>> {

@@ -614,7 +614,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "library" => crate::chat::library::list(hub, str_arg(&b, "botId")?)?,
         "serverLibrary" => crate::chat::library::server(hub, b["filter"].as_str())?,
-        "readArtifact" | "renameArtifact" => crate::chat::artifacts::api(hub, method, &b).await?,
+        "readArtifact" | "renameArtifact" | "saveArtifactScene" => crate::chat::artifacts::api(hub, method, &b).await?,
         "editHandoff" | "keepConversation" => crate::chat::handoff::call(hub, method, &b)?,
         "react" => {
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;

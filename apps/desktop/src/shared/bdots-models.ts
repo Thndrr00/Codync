@@ -69,6 +69,10 @@ export interface ProactiveSettings {
   timezone?: string | null
   maxPerDay: number
   appsInBackground: boolean
+  /** How long a raised topic waits for an answer before the bot may raise it again. */
+  noticeCooldownHours: number
+  /** Findings raised this close together share one notice. */
+  noticeBatchMinutes: number
 }
 
 export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
@@ -79,6 +83,8 @@ export const DEFAULT_PROACTIVE_SETTINGS: ProactiveSettings = {
   timezone: null,
   maxPerDay: 3,
   appsInBackground: true,
+  noticeCooldownHours: 6,
+  noticeBatchMinutes: 10,
 }
 
 export function defaultProactiveSettings(): ProactiveSettings {

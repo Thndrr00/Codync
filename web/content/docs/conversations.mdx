@@ -181,6 +181,16 @@ A chat's settings have three actions. They never touch the bot's setup, memories
 
 If you delete a bot's history while it's working, its running turn stops first.
 
+## One conversation across text, calls and channels
+
+A voice call you start while a side conversation is open (for example a Slack or Discord thread) joins it: what you say on the call, the bot's replies and the transcript stay in that conversation instead of starting a new one in the main chat. The desktop app passes the open thread to the call; the host keeps the link for the whole call.
+
+A channel conversation can also be linked to a Codync thread on the computer (`linkConversation`). From then on its messages and the bot's replies use that thread, so text you type in the app, a call and the channel share one context. `conversationLinks` lists the links and `unlinkConversation` removes one; messages from before the link stay where they were. See [Channels](/docs/channels#linked-conversations).
+
+## Proactive check-ins
+
+When a bot is allowed to check in on its own, it waits before repeating itself. Findings raised close together arrive as one notice, and a topic the bot already raised is not raised again until you reply or its cooldown passes. On the desktop and Android, the bot's proactive settings have **Repeat a topic after** and **Combine findings within**.
+
 ## Notifications
 
 Your iPhone gets a notification when a bot:

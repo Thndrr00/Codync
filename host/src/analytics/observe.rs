@@ -155,8 +155,9 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("change".into(), (if rewrite { "update" } else { "new" }).into());
             Event::SkillWritten
         }
-        // A bot's `publish_artifact`: a new artifact, or a new version of one (`artifact`); never its title.
-        "chatCall" if b["name"] == "publish_artifact" => {
+        // A bot's `publish_artifact` or `publish_diagram`: a new artifact, or a new version of one
+        // (`artifact`); never its title.
+        "chatCall" if matches!(b["name"].as_str(), Some("publish_artifact" | "publish_diagram")) => {
             let update = b["arguments"]["artifact"].as_str().is_some_and(|id| !id.is_empty());
             p.insert("change".into(), (if update { "update" } else { "new" }).into());
             Event::ArtifactPublished

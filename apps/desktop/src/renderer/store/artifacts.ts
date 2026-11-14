@@ -56,6 +56,16 @@ export class Artifacts {
     this.upsert((await client.renameArtifact(botId, id, title)).artifact)
   }
 
+  /** Saves a diagram's scene and keeps the newer bytes here, so reopening shows the person's edit at once. */
+  async saveScene(client: HostClient | null, botId: string, id: string, scene: unknown, sha256?: string) {
+    if (!client) throw new Error(trNow('Connect to this computer to save the diagram'))
+    const { artifact } = await client.saveArtifactScene(botId, id, scene, sha256)
+    const bytes = new TextEncoder().encode(JSON.stringify(scene))
+    this.html.set(id, { updatedAt: artifact.updatedAt, sha256: artifact.sha256, bytes })
+    this.upsert(artifact)
+    return artifact
+  }
+
   /** Saves the artifact's newest HTML where the user picks (the native Save dialog). */
   async save(client: HostClient | null, artifact: Artifact) {
     const html = await this.newest(client, artifact)

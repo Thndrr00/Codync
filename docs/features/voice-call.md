@@ -564,6 +564,21 @@ are you doing?", approve by voice, and turn Wi-Fi off for a moment mid-call: the
 to Listening and still says the replies; with no network at all, after three tries, the call falls back to on-device
 voice).
 
+### One conversation across text, a call and a channel
+
+A call normally writes its messages and its transcript into the bot's main chat. When the client starts it while a
+side conversation is open, it passes that thread as `threadId` (`startCall` also accepts
+`conversation {source, channel, thread}` for a linked message conversation). The host keeps it in `CallState.thread`:
+`send_to_bot` posts into that lane, the call's final notice (with `threadId` and the transcript) lands there, and its
+replies carry the same `thread_id`, so Slack, Discord or the app's thread shows one continuous conversation.
+
+Messaging conversations can be linked to any Codync thread with `linkConversation {botId, source, channel, thread?,
+threadId}` (`host/src/store/links.rs`, the `conversation_links` table) and unlinked with `unlinkConversation`;
+`conversationLinks {botId}` lists them. Slack ingress, Discord ingress and Telegram ingress check the link before
+falling back to their own durable root, and the Slack/Discord reply queries read the linked root, so a channel message
+and the bot's reply stay in the same conversation. Linking after messages moved later messages only; earlier entries
+keep their old thread.
+
 ### Missing dictation keys
 
 Desktop and iPhone dictation open Voice chat settings when the selected provider has no key, before opening the microphone. Connection failures still show an error. Keys can be edited through local or SSH-loopback connections; paired remote connections show instructions to add the key on that computer. Windows and Linux hide On device in both engine pickers; old dictation preferences use OpenAI, while calls keep their configured-provider fallback. macOS keeps its on-device option. Android does the same and always offers On device. The terminal UI has no microphone input, so this dictation change does not apply to it.

@@ -19,6 +19,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
     /** Its newest card in the bot's chat, what a message about the artifact replies to; null when no card was posted
      *  (a routine run, a group chat or another bot's request). */
     val entryId: String? = null,
+    /** `diagram` for an editable Excalidraw scene; a page when null. Diagrams open in the desktop app. */
+    val kind: String? = null,
 ) {
     companion object {
         const val MAX_BYTES = 5L * 1024 * 1024

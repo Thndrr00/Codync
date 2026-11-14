@@ -3,7 +3,7 @@
 use super::context::{self, RECENT};
 use crate::agent::bot::Cmd;
 use crate::hub::{Hub, Runtime};
-use crate::store::{BotConfig, Entry, EntryKind};
+use crate::store::{BotConfig, Entry, EntryKind, Lane};
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -63,7 +63,9 @@ fn relay(hub: &Arc<Hub>, cfg: &BotConfig, call: &str, text: &str) -> Result<Valu
         format!("{text}\n\n[The user's own words on the call: «{said}»]")
     };
     let data = json!({"text": text, "attachments": [], "call": call, "from": "voice"});
-    crate::chat::messages::post(hub, cfg, data)?;
+    let lane = crate::chat::calls::root(&hub.store, call)
+        .map_or_else(|| Lane::main(&cfg.id), |root| Lane::in_thread(&cfg.id, &root));
+    crate::chat::messages::post_in_lane(hub, cfg, lane, data)?;
     Ok(json!({"sent": true, "note": "The bot's reply will arrive as a separate message."}))
 }
 

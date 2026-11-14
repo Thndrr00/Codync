@@ -3,11 +3,13 @@ import type { Attachment, ReplyQuote, SharedFile } from './models'
 import { isBelow } from './compat.ts'
 import { decodeFileChunk, sha256Hex } from './files.ts'
 
-/** An HTML artifact a bot published; `readArtifact` returns its HTML. */
+/** An artifact a bot published: a self-contained page, or an editable diagram scene. */
 export interface Artifact {
   id: string
   botId: string
   title: string
+  /** Missing on an older host: a page. */
+  kind?: 'html' | 'diagram'
   size: number
   sha256: string
   createdAt: number
@@ -52,6 +54,7 @@ export interface ArtifactCard {
   id: string
   title: string
   updatedAt: number
+  kind?: 'html' | 'diagram'
 }
 
 /** One `readArtifact` answer. */

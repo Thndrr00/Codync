@@ -87,6 +87,13 @@ internal data class OpenArtifact(val botId: String, val id: String, val title: S
             val failure = artifacts.failures[open.id]
             when {
                 gone -> ArtifactFailure(null)
+                artifact?.kind == "diagram" -> Text(
+                    "Diagrams open on Codync for desktop to edit them.",
+                    style = Type.callout,
+                    color = Palette.secondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(40.dp),
+                )
                 // A newer version that couldn't be read leaves the one shown.
                 html != null -> ArtifactWebView(open.id, html, interactive = true, gone = { gone = true }, Modifier.fillMaxSize())
                 failure != null -> ArtifactFailure(failure)

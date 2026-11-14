@@ -275,6 +275,11 @@ export class HostClient {
     return this.call('renameArtifact', { botId, artifactId, title })
   }
 
+  /** Replaces a diagram's scene; `sha256` is the version the editor started from. */
+  saveArtifactScene(botId: string, artifactId: string, scene: unknown, sha256?: string): Promise<{ artifact: Artifact }> {
+    return this.call('saveArtifactScene', { botId, artifactId, scene, ...(sha256 ? { sha256 } : {}) })
+  }
+
   constructor(readonly transport: HostTransport) {}
 
   call<T>(method: string, body: unknown = {}, timeoutMs = 20_000): Promise<T> {

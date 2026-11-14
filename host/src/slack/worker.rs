@@ -144,7 +144,13 @@ fn deliver(hub: &Hub, event: &SlackIncoming) -> Result<()> {
         hub.store.reject_slack(&event.event)?;
         return Ok(());
     };
-    let root = ingress::stable_id(&[&c.generation, &event.channel, &event.thread, "root"]);
+    // A conversation the person linked writes into its shared thread; otherwise the Slack
+    // thread's own root keeps the history it already has.
+    let root = hub
+        .store
+        .conversation_root(&event.bot, "slack", &event.channel, &event.thread)?
+        .or(hub.store.slack_root(&c.generation, &event.channel, &event.thread)?)
+        .unwrap_or_else(|| ingress::stable_id(&[&c.generation, &event.channel, &event.thread, "root"]));
     hub.add_entry_once(
         &root,
         &Lane::main(&event.bot),

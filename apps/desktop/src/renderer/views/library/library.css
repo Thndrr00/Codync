@@ -195,3 +195,13 @@
 .server-library-group {
   padding-top: 2px;
 }
+
+.artifact-diagram-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 19px, rgba(127, 127, 127, 0.12) 19px 20px),
+    repeating-linear-gradient(90deg, transparent 0 19px, rgba(127, 127, 127, 0.12) 19px 20px);
+}

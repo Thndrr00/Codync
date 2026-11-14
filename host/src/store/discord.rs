@@ -1,7 +1,7 @@
 use super::{Store, now_ms};
 use crate::LockExt;
 use anyhow::Result;
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 
 pub(super) fn open(db: &rusqlite::Connection) -> Result<()> {
@@ -114,6 +114,17 @@ impl Store {
             |r| r.get(0),
         )?)
     }
+    pub fn discord_root(&self, generation: &str, channel: &str) -> Result<Option<String>> {
+        Ok(self
+            .db
+            .locked()
+            .query_row(
+                "SELECT root_id FROM discord_threads WHERE generation=?1 AND channel_id=?2",
+                params![generation, channel],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
     pub fn map_discord_thread(&self, event: &DiscordIncoming, root: &str) -> Result<()> {
         self.db.locked().execute(
             "INSERT INTO discord_threads VALUES(?1,?2,?3,?4,?5)
@@ -138,7 +149,9 @@ impl Store {
         let db = self.db.locked();
         let mut q = db.prepare(
             "SELECT e.id,t.channel_id,t.message_id,json_extract(e.data,'$.text'),t.bot_id,COALESCE(json_extract(e.data,'$.files'),'[]')
-            FROM entries e JOIN discord_threads t ON t.bot_id=e.bot_id AND t.root_id=e.thread_id
+            FROM entries e JOIN discord_threads t ON t.bot_id=e.bot_id
+              AND e.thread_id=COALESCE((SELECT l.root_id FROM conversation_links l
+                 WHERE l.bot_id=t.bot_id AND l.source='discord' AND l.channel=t.channel_id AND l.thread=''), t.root_id)
             WHERE t.generation=?1 AND e.kind='agent' AND json_extract(e.data,'$.final')=1
             AND (COALESCE(json_extract(e.data,'$.text'),'')<>'' OR json_extract(e.data,'$.files') IS NOT NULL)
             AND NOT EXISTS(SELECT 1 FROM discord_outbox o WHERE o.entry_id=e.id) ORDER BY e.seq LIMIT 20",

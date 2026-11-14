@@ -95,6 +95,8 @@ internal fun ProactivePolicySection(draft: BotDraft, change: (BotDraft) -> Unit)
 
 private val INTERVALS = listOf(1, 2, 4, 8, 12, 24)
 private val DAILY_LIMITS = listOf(1, 2, 3, 5, 8)
+private val COOLDOWNS = listOf(1, 3, 6, 12, 24, 72)
+private val BATCHES = listOf(1, 5, 10, 30)
 
 private fun hourOptions() = (0..23).map { it.toString() to "%02d:00".format(it) }
 
@@ -103,7 +105,7 @@ private fun hourOptions() = (0..23).map { it.toString() to "%02d:00".format(it) 
 private fun ProactiveCheckIns(draft: BotDraft, change: (BotDraft) -> Unit) {
     val settings = draft.proactive ?: ProactiveSettings()
     fun update(next: ProactiveSettings) = change(draft.copy(proactive = next))
-    CardSection("Proactive check-ins", footer = "The bot wakes up on its own to review what is open and only writes to you when it has something to say.") {
+    CardSection("Proactive check-ins", footer = "The bot wakes up on its own to review what is open and only writes to you when it has something to say. Findings raised together share one notice, and a topic waits for your reply or its cooldown before it is raised again.") {
         row { SwitchRow("Proactive check-ins", "Let this bot check in without being asked", settings.enabled, { update(settings.copy(enabled = it)) }) }
         if (settings.enabled) {
             row {
@@ -126,6 +128,20 @@ private fun ProactiveCheckIns(draft: BotDraft, change: (BotDraft) -> Unit) {
                 ValueRow("At most per day") {
                     ChoicePicker(settings.maxPerDay.toString(), DAILY_LIMITS.map { it.toString() to it.toString() },
                         { update(settings.copy(maxPerDay = it.toInt())) }, label = "Daily check-in limit")
+                }
+            }
+            row {
+                ValueRow("Repeat a topic after") {
+                    ChoicePicker(settings.noticeCooldownHours.toString(),
+                        COOLDOWNS.map { it.toString() to if (it == 1) "1 hour" else "$it hours" },
+                        { update(settings.copy(noticeCooldownHours = it.toInt())) }, label = "Topic cooldown")
+                }
+            }
+            row {
+                ValueRow("Combine findings within") {
+                    ChoicePicker(settings.noticeBatchMinutes.toString(),
+                        BATCHES.map { it.toString() to if (it == 1) "1 minute" else "$it minutes" },
+                        { update(settings.copy(noticeBatchMinutes = it.toInt())) }, label = "Finding grouping window")
                 }
             }
         }

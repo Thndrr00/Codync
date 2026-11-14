@@ -114,9 +114,37 @@ fn channel_arg(body: &Value) -> anyhow::Result<(String, String)> {
     Ok((provider.to_owned(), channel.to_owned()))
 }
 
-/// `channelNotes`, `addChannelNote` and `removeChannelNote`: small facts a channel keeps, given to the bot with
-/// its memory before every message.
+/// The conversation-link methods: one thread a channel conversation and a call can share.
+pub const LINK_METHODS: [&str; 3] = ["conversationLinks", "linkConversation", "unlinkConversation"];
+
+fn link_call(hub: &std::sync::Arc<crate::hub::Hub>, method: &str, body: &Value) -> anyhow::Result<Value> {
+    let bot = body["botId"].as_str().context("botId is required")?;
+    anyhow::ensure!(hub.store.bot(bot)?.is_some_and(|row| !row.deleted && !row.config.is_group()), "unknown bot");
+    let (provider, channel) = channel_arg(body)?;
+    let thread = body["thread"].as_str().unwrap_or_default();
+    match method {
+        "linkConversation" => {
+            let root = body["threadId"].as_str().context("threadId is required")?;
+            let entry = hub.store.entry(root).context("unknown thread")?;
+            anyhow::ensure!(entry.bot_id == bot, "that thread belongs to another bot");
+            let link = hub.store.link_conversation(bot, &provider, &channel, thread, root)?;
+            Ok(serde_json::json!({"link": link, "links": hub.store.conversation_links(bot)?}))
+        }
+        "unlinkConversation" => {
+            let removed = hub.store.unlink_conversation(bot, &provider, &channel, thread)?;
+            Ok(serde_json::json!({"removed": removed, "links": hub.store.conversation_links(bot)?}))
+        }
+        other => anyhow::bail!("Unknown conversation link method `{other}`."),
+    }
+}
+
+/// `channelNotes`, `addChannelNote`, `removeChannelNote`, and the conversation links a channel
+/// conversation can share with a call (`conversationLinks`, `linkConversation`,
+/// `unlinkConversation`).
 pub fn call(hub: &std::sync::Arc<crate::hub::Hub>, method: &str, body: &Value) -> anyhow::Result<Value> {
+    if LINK_METHODS.contains(&method) {
+        return link_call(hub, method, body);
+    }
     let (provider, channel) = channel_arg(body)?;
     let mut list = notes(&hub.store, &provider, &channel);
     match method {

@@ -6,6 +6,7 @@ pub mod artifacts;
 pub mod calls;
 pub mod context;
 pub mod decider;
+pub mod diagrams;
 pub mod fallbacks;
 pub mod files;
 pub mod forward;

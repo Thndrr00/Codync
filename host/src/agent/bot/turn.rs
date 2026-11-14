@@ -85,7 +85,7 @@ impl Actor {
             prompt.push_str("\n\n[Codync: send_file(path, name?) shares any regular file up to 100 MiB as a downloadable card. Use it instead of sending a local path.]");
         }
         if remind_artifacts && own_chat {
-            prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. To change it, edit a copy of its HTML (list_artifacts) and publish_artifact(path, artifact: its id).]");
+            prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. For a diagram or flowchart the user should edit, publish an Excalidraw scene with publish_diagram. To change an artifact, edit a copy of its content (list_artifacts) and publish it with artifact: its id.]");
         }
         Ok(prompt)
     }

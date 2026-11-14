@@ -56,8 +56,10 @@ export const OpenVoiceSettings = createContext<(() => void) | null>(null)
  * the call's messages, its final replies are read aloud, and the call ends as one titled line
  * ("Release plan · 00:16") that opens its conversation.
  */
-export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
+export function CallView({ botId, threadId, onSpeaking, interrupt, onEnd }: {
   botId: string
+  /** The thread the chat is showing (a Slack or Discord conversation): the call joins it. */
+  threadId?: string | null
   onSpeaking: (speaking: boolean) => void
   interrupt: { current: (() => void) | null }
   onEnd: () => void
@@ -85,7 +87,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
   const bot = store.bots.get(botId)
   /** The call on the computer, which runs it. */
   const link = useRef<CallLink | null>(null)
-  link.current ??= new CallLink(store, botId, crypto.randomUUID())
+  link.current ??= new CallLink(store, botId, crypto.randomUUID(), threadId)
   /** Each engine's `voice_call_quality`. */
   const quality = useRef<CallQuality | null>(null)
   quality.current ??= new CallQuality((event) => analytics.track(event))

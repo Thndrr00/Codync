@@ -203,7 +203,11 @@ fn deliver(hub: &Hub, event: &DiscordIncoming) -> Result<()> {
         hub.store.reject_discord(&event.event)?;
         return Ok(());
     };
-    let root = super::ingress::stable_id(&[&c.generation, &event.channel, "root"]);
+    let root = hub
+        .store
+        .conversation_root(&event.bot, "discord", &event.channel, "")?
+        .or(hub.store.discord_root(&c.generation, &event.channel)?)
+        .unwrap_or_else(|| super::ingress::stable_id(&[&c.generation, &event.channel, "root"]));
     hub.add_entry_once(
         &root,
         &Lane::main(&event.bot),

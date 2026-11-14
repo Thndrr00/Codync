@@ -1,7 +1,7 @@
 //! Trusted Telegram ingress shares the ordinary message poster, with a revocable actor fence.
 
 use super::{Arc, Hub, TgBot, load, worker};
-use crate::store::Entry;
+use crate::store::{Entry, Lane};
 use anyhow::{Context, Result, ensure};
 use serde_json::json;
 use sha2::{Digest as _, Sha256};
@@ -10,7 +10,15 @@ fn epoch(bot: &TgBot) -> String {
     crate::chat::files::digest_hex(&Sha256::digest(worker::fingerprint(bot).as_bytes()))
 }
 
-pub(super) fn post(hub: &Arc<Hub>, name: &str, user: i64, expected: &str, text: &str, nonce: &str) -> Result<Entry> {
+pub(super) fn post(
+    hub: &Arc<Hub>,
+    name: &str,
+    chat: i64,
+    user: i64,
+    expected: &str,
+    text: &str,
+    nonce: &str,
+) -> Result<Entry> {
     let _guard = crate::LockExt::locked(&hub.store.connector_lock);
     let bot = load(&hub.store)?
         .bots
@@ -28,9 +36,15 @@ pub(super) fn post(hub: &Arc<Hub>, name: &str, user: i64, expected: &str, text: 
     if let Some(entry) = hub.store.find_by_nonce_checked(&bot.bot_id, nonce)? {
         return Ok(entry);
     }
-    crate::chat::messages::post(
+    // A conversation the person linked to a Codync thread keeps writing there.
+    let lane = hub
+        .store
+        .conversation_root(&bot.bot_id, "telegram", &chat.to_string(), "")?
+        .map_or_else(|| Lane::main(&bot.bot_id), |root| Lane::in_thread(&bot.bot_id, &root));
+    crate::chat::messages::post_in_lane(
         hub,
         &row.config,
+        lane,
         json!({
             "text":crate::channels::with_notes(&bot.memory, &crate::channels::notes(&hub.store, "telegram", &bot.name), text),"attachments":[],"clientNonce":nonce,
             "source":"telegram","telegramFence":{"name":name,"user":user,"epoch":epoch(&bot)}

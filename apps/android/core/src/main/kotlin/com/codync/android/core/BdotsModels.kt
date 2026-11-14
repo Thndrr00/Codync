@@ -34,6 +34,10 @@ data class ProactiveSettings(
     val timezone: String? = null,
     val maxPerDay: Int = 3,
     val appsInBackground: Boolean = true,
+    /** How long a raised topic waits for an answer before the bot may raise it again. */
+    val noticeCooldownHours: Int = 6,
+    /** Findings raised this close together share one notice. */
+    val noticeBatchMinutes: Int = 10,
 )
 
 @Serializable

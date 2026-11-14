@@ -1,7 +1,7 @@
 use super::{Store, now_ms};
 use crate::LockExt;
 use anyhow::Result;
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 
 pub(super) fn open(db: &rusqlite::Connection) -> Result<()> {
@@ -114,6 +114,17 @@ impl Store {
             |r| r.get(0),
         )?)
     }
+    pub fn slack_root(&self, generation: &str, channel: &str, thread: &str) -> Result<Option<String>> {
+        Ok(self
+            .db
+            .locked()
+            .query_row(
+                "SELECT root_id FROM slack_threads WHERE generation=?1 AND channel_id=?2 AND thread_ts=?3",
+                params![generation, channel, thread],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
     pub fn map_slack_thread(&self, event: &SlackIncoming, root: &str) -> Result<()> {
         self.db.locked().execute(
             "INSERT INTO slack_threads VALUES(?1,?2,?3,?4,?5) ON CONFLICT DO NOTHING",
@@ -137,7 +148,9 @@ impl Store {
         let db = self.db.locked();
         let mut q = db.prepare(
             "SELECT e.id,t.channel_id,t.thread_ts,json_extract(e.data,'$.text'),t.bot_id
-            FROM entries e JOIN slack_threads t ON t.bot_id=e.bot_id AND t.root_id=e.thread_id
+            FROM entries e JOIN slack_threads t ON t.bot_id=e.bot_id
+              AND e.thread_id=COALESCE((SELECT l.root_id FROM conversation_links l
+                 WHERE l.bot_id=t.bot_id AND l.source='slack' AND l.channel=t.channel_id AND l.thread=t.thread_ts), t.root_id)
             WHERE t.generation=?1 AND e.kind='agent' AND json_extract(e.data,'$.final')=1
             AND COALESCE(json_extract(e.data,'$.text'),'')<>''
             AND NOT EXISTS(SELECT 1 FROM slack_outbox o WHERE o.entry_id=e.id) ORDER BY e.seq LIMIT 20",
@@ -174,6 +187,50 @@ impl Store {
         )?;
         Ok(q.query_map([], |r| Ok(SlackDelivery { id: r.get(0)?, state: r.get(1)?, timestamp: r.get(2)? }))?
             .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+}
+
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+    use crate::store::{EntryKind, Lane};
+
+    #[test]
+    fn a_linked_slack_thread_delivers_its_replies_from_the_shared_root() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let root = store
+            .insert_entry(
+                &Lane::main("bot"),
+                EntryKind::User,
+                0,
+                &serde_json::json!({"text": "Slack conversation · C1", "source": "slack"}),
+            )
+            .unwrap();
+        let incoming = SlackIncoming {
+            event: "e".into(),
+            generation: "g".into(),
+            bot: "bot".into(),
+            channel: "C1".into(),
+            thread: "1700.1".into(),
+            entry: "e".into(),
+            text: "hello".into(),
+            user: "U1".into(),
+            audio: None,
+        };
+        store.map_slack_thread(&incoming, "stable").unwrap();
+        store.link_conversation("bot", "slack", "C1", "1700.1", &root.id).unwrap();
+        // A reply the bot wrote in the linked thread is delivered back to this Slack thread.
+        store
+            .insert_entry(
+                &Lane::in_thread("bot", &root.id),
+                EntryKind::Agent,
+                1,
+                &serde_json::json!({"text": "done", "final": true}),
+            )
+            .unwrap();
+        let replies = store.pending_slack_replies("g").unwrap();
+        assert_eq!(replies.len(), 1);
+        assert_eq!((replies[0].channel.as_str(), replies[0].text.as_str()), ("C1", "done"));
     }
 }
 

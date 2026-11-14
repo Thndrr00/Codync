@@ -60,6 +60,12 @@ pub struct ProactiveSettings {
     /// Whether connected apps/MCP tools may run in background routines and proactive check-ins (Idea 44).
     #[serde(default = "yes")]
     pub apps_in_background: bool,
+    /// How long a raised topic waits for an answer before the bot may raise it again.
+    #[serde(default = "default_notice_cooldown_hours")]
+    pub notice_cooldown_hours: u32,
+    /// Findings raised this close together share one notice.
+    #[serde(default = "default_notice_batch_minutes")]
+    pub notice_batch_minutes: u32,
 }
 
 impl Default for ProactiveSettings {
@@ -72,6 +78,8 @@ impl Default for ProactiveSettings {
             timezone: None,
             max_per_day: default_max_per_day(),
             apps_in_background: true,
+            notice_cooldown_hours: default_notice_cooldown_hours(),
+            notice_batch_minutes: default_notice_batch_minutes(),
         }
     }
 }
@@ -87,6 +95,12 @@ fn default_quiet_end() -> u8 {
 }
 fn default_max_per_day() -> u32 {
     3
+}
+fn default_notice_cooldown_hours() -> u32 {
+    6
+}
+fn default_notice_batch_minutes() -> u32 {
+    10
 }
 
 /// Transcript entry kinds (the `kind` column / wire field).

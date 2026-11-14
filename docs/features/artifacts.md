@@ -6,17 +6,22 @@ the host keeps it; every app shows it as a card in the chat and opens it full si
 holds everything made or shared there: its artifacts, the files and images the bot shared, and the ones the user sent.
 Asked to change an artifact, the bot publishes it again under the same id, and every open copy shows the new one.
 
+An artifact can also be a **diagram** (`kind: "diagram"`): an editable Excalidraw scene instead of a page. The desktop
+app draws and edits it; iPhone and Android show it read-only with a pointer to the desktop. See
+[diagrams](diagrams.md) for the scene shape, validation and the `publish_diagram`/`saveArtifactScene` protocol.
+
 ## Bots
 
-The built-in `chat` MCP server has two tools (`host/src/chat/artifacts.rs`):
+The built-in `chat` MCP server has three artifact tools (`host/src/chat/artifacts.rs`):
 
 - `publish_artifact {path, title?, artifact?}`: the HTML file (absolute or relative to the bot's working directory,
   up to 5 MiB, inline CSS and JS, libraries from a CDN allowed). Without `artifact` it makes a new artifact and needs
   a title; with `artifact` (an id) it replaces that artifact's HTML, and its title when given. The answer names the
   artifact's id.
-- `list_artifacts {}`: the bot's artifacts, newest first, with each one's id, title, last publish time and the path of
-  its current HTML. To make changes the bot edits a copy and publishes that: the stored file is the live one, checked
-  against its size and SHA-256 on every read.
+- `publish_diagram {path?, scene?, title?, artifact?}`: an editable Excalidraw scene (see [diagrams](diagrams.md)).
+- `list_artifacts {}`: the bot's artifacts, newest first, with each one's id, kind, title, last publish time and the
+  path of its current content. To make changes the bot edits a copy and publishes that: the stored file is the live
+  one, checked against its size and SHA-256 on every read.
 
 When to make one is part of every bot's instructions (`chat::outbox::INSTRUCTIONS`): an artifact instead of a long
 message, one artifact per subject, updated rather than made again. A session whose frozen instructions predate
@@ -33,9 +38,10 @@ title (`replies::quote`), and the bot reads `[Codync: this is about your artifac
 
 ## Host
 
-- Storage: `~/.codync/bots/<bot>/artifacts/<id>.html` holds the newest HTML (replaced whole: written to `.partial`,
-  then renamed). The details live in kv as `artifact.<bot>.<id>`:
-  `{id, botId, title, size, sha256, createdAt, updatedAt, entryId?, rev}`, where `entryId` is the newest card and
+- Storage: `~/.codync/bots/<bot>/artifacts/<id>.html` holds the newest HTML, or `<id>.scene.json` a diagram's scene
+  (replaced whole: written to `.partial`, then renamed). The details live in kv as `artifact.<bot>.<id>`:
+  `{id, botId, title, kind, size, sha256, createdAt, updatedAt, entryId?, rev}`, where `kind` is `html` when missing,
+  `entryId` is the newest card and
   `rev` the sync rev of the last change. Deleting the bot deletes both.
 - API (Control access, like the chat):
   - `library {botId}` → `{items}`, newest first (`host/src/chat/library.rs`): the chat's artifacts

@@ -252,7 +252,7 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
             *route = Some(Route { chat, turn, live: None, cards: HashMap::new() });
         }
     }
-    match super::input::post(hub, name, user, expected, &text, &nonce) {
+    match super::input::post(hub, name, chat, user, expected, &text, &nonce) {
         Ok(entry) => {
             if let Err(error) = hub.store.record_channel_activity(&crate::store::ChannelActivity {
                 id: nonce,
@@ -348,11 +348,20 @@ async fn stream(hub: Arc<Hub>, ep: Endpoint, name: String, shared: Shared) {
         };
         let Some(bot) = current(&hub, &name) else { return };
         let entry = &event["entry"];
-        if event["type"] != "entry" || entry["botId"] != bot.bot_id.as_str() || entry.get("threadId").is_some() {
+        if event["type"] != "entry" || entry["botId"] != bot.bot_id.as_str() {
             continue;
         }
         let mut route = shared.lock().await;
         let Some(route) = route.as_mut().filter(|r| entry["turn"].as_i64().unwrap_or(0) >= r.turn) else { continue };
+        // A conversation the person linked to a Codync thread still answers here; another thread's
+        // entries (a document's, a routine's) do not.
+        if let Some(thread) = entry["threadId"].as_str() {
+            let linked =
+                hub.store.conversation_root(&bot.bot_id, "telegram", &route.chat.to_string(), "").ok().flatten();
+            if linked.as_deref() != Some(thread) {
+                continue;
+            }
+        }
         let result = match entry["kind"].as_str() {
             Some("agent") => reply(&ep, &bot, route, entry).await.map(|finished| {
                 if finished {

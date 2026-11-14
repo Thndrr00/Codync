@@ -295,7 +295,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         </div>
         {calling ? (
           <div className="call-overlay">
-            <CallView botId={botId} onSpeaking={setCallSpeaking} interrupt={interruptCall} onEnd={() => setCalling(false)} />
+            <CallView botId={botId} threadId={threadRoot} onSpeaking={setCallSpeaking} interrupt={interruptCall} onEnd={() => setCalling(false)} />
           </div>
         ) : null}
         {activeArtifact ? (

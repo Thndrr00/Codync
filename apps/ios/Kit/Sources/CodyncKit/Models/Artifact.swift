@@ -13,6 +13,8 @@ public struct Artifact: Codable, Hashable, Sendable, Identifiable {
     /// Its newest card in the bot's chat: what a message about the artifact replies to. None when the artifact was
     /// published from a routine run or another bot's request.
     public var entryId: String?
+    /// `diagram` for an editable Excalidraw scene; a page when missing. Diagrams open in the desktop app.
+    public var kind: String? = nil
 
     public var date: Date { Date(milliseconds: updatedAt) }
 

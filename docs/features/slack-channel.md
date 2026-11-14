@@ -61,6 +61,10 @@ send. Unknown outcomes never resend automatically. Text over 35,000 characters
 is marked failed. One workspace, text and explicit DM channel IDs are supported;
 attachments and Slack OAuth onboarding remain pending.
 
+A thread can also be linked to a Codync thread (`linkConversation`, see [voice calls](voice-call.md#one-conversation-across-text-a-call-and-a-channel)):
+messages and replies then use the linked root, so a call started from that conversation and the Slack thread share
+one transcript.
+
 Approvals asked in a mapped thread are posted as a Block Kit card with one button
 per option and settled once anyone answers, here or in another Codync client.
 Blocks, buttons and their fallback text are described in
