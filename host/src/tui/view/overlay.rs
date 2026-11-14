@@ -44,7 +44,9 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
         Overlay::LeadAgent(scroll) => super::lead_agent::lead_agent(buf, area, *scroll),
         Overlay::Confirm(c) => {
             let t = theme();
-            let r = centered(area, 62, 8);
+            // Wide enough for what these dialogs say in one line (what a deletion keeps, and what
+            // its bots then show).
+            let r = centered(area, 70, 8);
             let inner = frame_box(buf, r, t.red, t.panel, None);
             // The title already includes a bot or device name. Translating it
             // here would also translate a name that is itself a phrase.

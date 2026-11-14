@@ -322,6 +322,10 @@ impl App {
                 self.backends = v["backends"].as_array().cloned().unwrap_or_default();
                 self.flash("Agents refreshed");
             }
+            After::AgentBuildDeleted => {
+                self.backends = v["backends"].as_array().cloned().unwrap_or_default();
+                self.flash("Deleted.");
+            }
             After::Update => match v["state"]["availableVersion"].as_str() {
                 Some(version) => self.flash(&format!("Version {version} is available: run codync-host update")),
                 None => self.flash("The host is up to date."),

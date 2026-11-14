@@ -2591,5 +2591,8 @@
   "W stops": "W 停止",
   "O goes on · A reassigns · B cancels": "O 再開 · A 担当変更 · B キャンセル",
   "enter gives it · esc": "enter で渡す · esc",
-  "Stop a sub-task before giving it to another member": "他のメンバーに渡す前にサブタスクを停止してください"
+  "Stop a sub-task before giving it to another member": "他のメンバーに渡す前にサブタスクを停止してください",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync は {name} のために {host} にダウンロードしたコピーを削除し、エージェントをオフにします。",
+  "Its accounts, sign-ins and bots stay.": "アカウント、サインイン、ボットはそのまま残ります。",
+  "Bots using it show as not installed until it is installed again.": "これを使うボットは、再びインストールされるまで「インストールされていません」と表示します。"
 }

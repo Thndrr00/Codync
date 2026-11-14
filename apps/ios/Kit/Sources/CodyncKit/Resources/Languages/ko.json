@@ -2591,5 +2591,8 @@
   "W stops": "W 중지",
   "O goes on · A reassigns · B cancels": "O 계속 · A 담당 변경 · B 취소",
   "enter gives it · esc": "enter 로 넘김 · esc",
-  "Stop a sub-task before giving it to another member": "다른 멤버에게 넘기기 전에 하위 작업을 중지하세요"
+  "Stop a sub-task before giving it to another member": "다른 멤버에게 넘기기 전에 하위 작업을 중지하세요",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync가 {host}에서 {name}용으로 내려받은 사본을 삭제하고 에이전트를 끕니다.",
+  "Its accounts, sign-ins and bots stay.": "계정, 로그인, 봇은 그대로 남습니다.",
+  "Bots using it show as not installed until it is installed again.": "이를 사용하는 봇은 다시 설치할 때까지 설치되지 않은 것으로 표시됩니다."
 }

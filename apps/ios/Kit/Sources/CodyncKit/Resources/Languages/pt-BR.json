@@ -2591,5 +2591,8 @@
   "W stops": "W interrompe",
   "O goes on · A reassigns · B cancels": "O continua · A reatribui · B cancela",
   "enter gives it · esc": "enter entrega · esc",
-  "Stop a sub-task before giving it to another member": "Interrompa uma subtarefa antes de entregá-la a outro membro"
+  "Stop a sub-task before giving it to another member": "Interrompa uma subtarefa antes de entregá-la a outro membro",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "O Codync remove a cópia que baixou para {name} em {host} e desativa o agente.",
+  "Its accounts, sign-ins and bots stay.": "As contas, os logins e os bots continuam.",
+  "Bots using it show as not installed until it is installed again.": "Os bots que o usam o mostram como não instalado até ele ser instalado de novo."
 }

@@ -208,15 +208,24 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             }
             Field::Model => {
                 text_field(buf, &f.model, "default", y);
-                let hint = match app.models.get(&super::super::manage::model_key(&f.backend, f.account.as_deref())) {
-                    Some(None) => "loading models…".to_owned(),
+                let named = match app.models.get(&super::super::manage::model_key(&f.backend, f.account.as_deref())) {
+                    Some(None) => Some("loading models…".to_owned()),
                     Some(Some(list)) if !list.is_empty() => {
                         let id = f.model.text.trim();
-                        list.iter()
-                            .find(|m| m.id == id)
-                            .map_or_else(|| format!("‹ › {} models", list.len()), |m| format!("‹ {} ›", m.name))
+                        Some(
+                            list.iter()
+                                .find(|m| m.id == id)
+                                .map_or_else(|| format!("‹ › {} models", list.len()), |m| format!("‹ {} ›", m.name)),
+                        )
                     }
-                    _ => String::new(),
+                    _ => None,
+                };
+                // A spent plan window stops every one of this agent's models, the chosen one included.
+                let limit =
+                    if f.model.text.trim().is_empty() { None } else { super::usage::spent_note(app, &f.backend) };
+                let hint = match (named, limit) {
+                    (Some(named), Some(limit)) => format!("{named} · {limit}"),
+                    (named, limit) => named.or(limit).unwrap_or_default(),
                 };
                 if !hint.is_empty() && w(&f.model.text) + w(&hint) + 2 < usize::from(vw) {
                     rput(buf, inner.right(), y, &hint, t.dim.patch(base));
@@ -271,8 +280,17 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
                 }
             }
             Field::Agent => {
-                put(buf, vx, y, vw, &format!("‹ {agent_name} ›"), t.text.patch(base));
-                if let Some(note) = app.bots.get(&f.bot_id).and_then(|b| super::fallbacks::rest_note(b, &f.backend)) {
+                let end = put(buf, vx, y, vw, &format!("‹ {agent_name} ›"), t.text.patch(base));
+                let rest = app.bots.get(&f.bot_id).and_then(|b| super::fallbacks::rest_note(b, &f.backend));
+                // A chip beside the agent's name: a spent plan window says when its models come back.
+                // An agent already resting says it on the right instead.
+                if rest.is_none()
+                    && let Some(limit) = super::usage::spent_note(app, &f.backend)
+                {
+                    let chip = format!("· {limit}");
+                    put(buf, end + 1, y, inner.right().saturating_sub(end + 1), &chip, t.dim.patch(base));
+                }
+                if let Some(note) = rest {
                     rput(buf, inner.right(), y, &note, t.amber.patch(base));
                 }
             }

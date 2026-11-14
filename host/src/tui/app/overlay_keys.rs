@@ -155,6 +155,9 @@ impl App {
                             json!({"provider": provider, "key": ""}),
                             After::Sheet(Reply::VoiceKeySaved),
                         ),
+                        ConfirmAct::DeleteAgentDownload(id) => {
+                            self.call("deleteAgentDownload", json!({"backend": id}), After::AgentBuildDeleted)
+                        }
                     }
                     None
                 }

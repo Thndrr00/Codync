@@ -81,6 +81,8 @@ pub enum After {
     /// The pair sheet's answer to a waiting phone.
     PairingDecided,
     Backends,
+    /// `deleteAgentDownload`: the agent is off until a build is installed again.
+    AgentBuildDeleted,
     Update,
     Saved,
     Connectors,

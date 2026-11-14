@@ -2591,5 +2591,8 @@
   "W stops": "W arrête",
   "O goes on · A reassigns · B cancels": "O continue · A réattribue · B annule",
   "enter gives it · esc": "entrée lui donne · échap",
-  "Stop a sub-task before giving it to another member": "Arrêtez une sous-tâche avant de la confier à un autre membre"
+  "Stop a sub-task before giving it to another member": "Arrêtez une sous-tâche avant de la confier à un autre membre",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync supprime la copie qu’il a téléchargée pour {name} sur {host} et désactive l’agent.",
+  "Its accounts, sign-ins and bots stay.": "Ses comptes, connexions et bots restent.",
+  "Bots using it show as not installed until it is installed again.": "Les bots qui l’utilisent l’affichent comme non installé jusqu’à sa réinstallation."
 }

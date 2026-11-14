@@ -2591,5 +2591,8 @@
   "W stops": "W hält an",
   "O goes on · A reassigns · B cancels": "O fährt fort · A weist neu zu · B bricht ab",
   "enter gives it · esc": "Eingabe gibt sie · Esc",
-  "Stop a sub-task before giving it to another member": "Halte eine Unteraufgabe an, bevor du sie einem anderen Mitglied gibst"
+  "Stop a sub-task before giving it to another member": "Halte eine Unteraufgabe an, bevor du sie einem anderen Mitglied gibst",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync entfernt die Kopie, die es für {name} auf {host} heruntergeladen hat, und schaltet den Agenten aus.",
+  "Its accounts, sign-ins and bots stay.": "Konten, Anmeldungen und Bots bleiben erhalten.",
+  "Bots using it show as not installed until it is installed again.": "Bots, die ihn nutzen, zeigen ihn als nicht installiert, bis er erneut installiert wird."
 }

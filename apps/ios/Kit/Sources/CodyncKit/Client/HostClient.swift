@@ -593,6 +593,15 @@ public extension HostClient {
         return try await call("setAgentEnv", Body(backend: backend, vars: vars), timeout: 300)
     }
 
+    /// Deletes the build Codync downloaded for this agent and turns it off; its accounts, sign-ins,
+    /// bots and chats stay, and a bot on it shows the agent as not installed until one is installed
+    /// again. Returns the computer's agents as they are now.
+    func deleteAgentDownload(_ backend: String) async throws -> [Backend] {
+        struct Res: Decodable { var backends: [Backend] }
+        let res: Res = try await call("deleteAgentDownload", ["backend": backend], timeout: 120)
+        return res.backends
+    }
+
     func termInput(_ term: String, _ bytes: Data) async throws {
         let _: Empty = try await call("termInput", ["term": term, "data": bytes.base64EncodedString()])
     }

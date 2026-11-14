@@ -365,6 +365,9 @@ export const market = {
     c.call<{ account: AgentAccount }>('accountAuthenticate', { backend, name: name ?? null }, s(660)),
   deleteAccount: (c: HostClient, accountId: string) =>
     c.call('deleteAccount', { accountId }, s(30)),
+  /** Deletes the build Codync downloaded for this agent; its accounts, sign-ins and bots stay. */
+  deleteAgentDownload: (c: HostClient, backend: string) =>
+    c.call('deleteAgentDownload', { backend }, s(120)),
   termInput: (c: HostClient, term: string, data: string) => c.call('termInput', { term, data }),
   termResize: (c: HostClient, term: string, cols: number, rows: number) => c.call('termResize', { term, cols, rows }),
   termClose: (c: HostClient, term: string) => c.call('termClose', { term }),

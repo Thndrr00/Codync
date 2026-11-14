@@ -247,6 +247,10 @@ public struct Backend: Codable, Hashable, Sendable, Identifiable {
     public var accounts: Bool?
     /// Whether the computer's own sign-in can be removed (a logout command or its credential files).
     public var signOut: Bool?
+    /// Codync's own build is unpacked under `~/.codync/agents`, so it can be deleted from here.
+    public var downloaded: Bool?
+    /// That build was deleted and nothing else runs this agent: its bots show it as not installed.
+    public var turnedOff: Bool?
 
     /// It can't run until Node.js is added to the computer.
     public var needsNode: Bool { node == "missing" }

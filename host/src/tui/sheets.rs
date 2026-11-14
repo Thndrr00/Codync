@@ -347,6 +347,11 @@ pub fn agent(buf: &mut Buffer, area: Rect, app: &App, a: &AgentSetup) {
                 format!("Downloads {name} on {} if it needs to, then checks its sign-in.", app.host),
             ),
             SetupRow::Check => ("↻", "Check again".to_owned(), String::new()),
+            SetupRow::Delete => (
+                "✕",
+                "Delete".to_owned(),
+                format!("Codync removes the copy it downloaded for {name} on {} and turns the agent off.", app.host),
+            ),
         };
         let title = tr(&title);
         let detail = tr(&detail);

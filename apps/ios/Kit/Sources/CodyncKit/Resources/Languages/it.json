@@ -2064,7 +2064,7 @@
   "Bot avatars": "Bot avatars",
   "Read aloud": "Read aloud",
   "The computer took too long to answer. Tap to try again.": "The computer took too long to answer. Tap to try again.",
-  "Usage limit reached": "Usage limit reached",
+  "Usage limit reached": "Limite di utilizzo raggiunto",
   "A short name: home, work…": "A short name: home, work…",
   "Nothing received yet": "Nothing received yet",
   "Thread actions": "Thread actions",
@@ -2122,7 +2122,7 @@
   "Telegram bot token": "Telegram bot token",
   "Show log": "Show log",
   "Restore": "Restore",
-  "Usage limit reached · {reset}": "Usage limit reached · {reset}",
+  "Usage limit reached · {reset}": "Limite di utilizzo raggiunto · {reset}",
   "Copy code": "Copy code",
   "The token from the Bot tab": "The token from the Bot tab",
   "Last message just now": "Last message just now",
@@ -2591,5 +2591,8 @@
   "W stops": "W ferma",
   "O goes on · A reassigns · B cancels": "O prosegue · A riassegna · B annulla",
   "enter gives it · esc": "invio la dà · esc",
-  "Stop a sub-task before giving it to another member": "Ferma una sottoattività prima di affidarla a un altro membro"
+  "Stop a sub-task before giving it to another member": "Ferma una sottoattività prima di affidarla a un altro membro",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync elimina la copia che ha scaricato per {name} su {host} e disattiva l’agente.",
+  "Its accounts, sign-ins and bots stay.": "I suoi account, gli accessi e i bot restano.",
+  "Bots using it show as not installed until it is installed again.": "I bot che lo usano lo mostrano come non installato finché non viene installato di nuovo."
 }

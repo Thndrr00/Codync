@@ -543,5 +543,10 @@
   "W stops": "W يوقف",
   "O goes on · A reassigns · B cancels": "O يتابع · A يعيد الإسناد · B يلغي",
   "enter gives it · esc": "enter يمنحها · esc",
-  "Stop a sub-task before giving it to another member": "أوقف مهمة فرعية قبل منحها لعضو آخر"
+  "Stop a sub-task before giving it to another member": "أوقف مهمة فرعية قبل منحها لعضو آخر",
+  "Delete {name}?": "حذف {name}؟",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "يزيل Codync النسخة التي نزّلها لـ {name} على {host} ويوقف الوكيل.",
+  "Its accounts, sign-ins and bots stay.": "تبقى حساباته وعمليات تسجيل الدخول والروبوتات.",
+  "Bots using it show as not installed until it is installed again.": "تظهر الروبوتات التي تستخدمه أنه غير مثبَّت حتى يُثبَّت مرة أخرى.",
+  "Deleted.": "تم الحذف."
 }

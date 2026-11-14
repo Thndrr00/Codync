@@ -364,6 +364,14 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::agent::account::delete(&hub.store, account_id).await?;
             json!({})
         }
+        "deleteAgentDownload" => {
+            let backend = str_arg(&b, "backend")?.to_owned();
+            // A build can be gigabytes: removing it must not hold an async worker.
+            let removed =
+                tokio::task::spawn_blocking(move || crate::agent::backends::remove_download(&backend)).await??;
+            let listed = tokio::task::spawn_blocking(backends::list).await?;
+            json!({"removed": removed, "backends": listed})
+        }
         "termInput" => {
             hub.terms.write(str_arg(&b, "term")?, str_arg(&b, "data")?)?;
             json!({})

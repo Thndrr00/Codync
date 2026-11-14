@@ -359,6 +359,8 @@ pub enum SetupRow {
     Login,
     Method(Value),
     Check,
+    /// Removes the build Codync downloaded for this agent; its accounts, sign-ins and bots stay.
+    Delete,
 }
 
 pub struct Input {

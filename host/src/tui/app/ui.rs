@@ -142,6 +142,8 @@ pub enum ConfirmAct {
     RemoveVoiceKey {
         provider: String,
     },
+    /// The build Codync downloaded for an agent, deleted; its accounts, sign-ins and bots stay.
+    DeleteAgentDownload(String),
 }
 
 pub struct Confirm {

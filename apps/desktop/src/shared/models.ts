@@ -734,6 +734,10 @@ export interface Backend {
   accounts?: boolean
   /** Whether the computer's own sign-in can be removed (a logout command or its credential files). */
   signOut?: boolean
+  /** Codync's own downloaded build is unpacked under `~/.codync/agents`. */
+  downloaded?: boolean
+  /** The downloaded build was deleted and nothing else runs this agent: bots show it as not installed. */
+  turnedOff?: boolean
 }
 
 export interface ScreenDisplay {

@@ -62,6 +62,19 @@ extension BotStore {
         await refreshBackends()
     }
 
+    /// Deletes Codync's own build for an agent and turns it off. Its accounts, sign-ins, bots and
+    /// chats stay; a bot on it shows the agent as not installed until one is installed again.
+    func deleteAgentDownload(backend: String) async throws {
+        let computerID = computer.id
+        let accountID = storage.id
+        let client = try await ready()
+        let host = hostId
+        try checkAgentAccountContext(computer: computerID, account: accountID, host: host)
+        let backends = try await client.deleteAgentDownload(backend)
+        try checkAgentAccountContext(computer: computerID, account: accountID, host: host)
+        hello?.backends = backends
+    }
+
     /// Signs out of the computer's own account, leaving its isolated profiles alone.
     func signOutAgent(backend: String) async throws {
         let computerID = computer.id

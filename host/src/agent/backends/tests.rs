@@ -178,3 +178,44 @@ fn hermes_uses_native_acp() {
     let h = harness("hermes").unwrap();
     assert_eq!((h.local, h.registry, h.login), (Some("{bin} acp"), None, Some("{bin} acp --setup")));
 }
+
+#[test]
+fn deleting_a_download_turns_the_agent_off_until_it_is_installed_again() {
+    let dir = TempDir::new();
+    let _path = TestSearchPath::set(dir.0.clone());
+    let id = format!("deleted-agent-{}", uuid::Uuid::new_v4());
+    let version = uuid::Uuid::new_v4().to_string();
+    let target = json!({"archive": "https://example.com/a.zip", "cmd": "./a"});
+    let binaries: serde_json::Map<String, Value> =
+        ["darwin-aarch64", "darwin-x86_64", "linux-aarch64", "linux-x86_64", "windows-aarch64", "windows-x86_64"]
+            .into_iter()
+            .map(|platform| (platform.to_owned(), target.clone()))
+            .collect();
+    registry::set_cache(Some(json!({"agents": [
+        {"id": id, "name": "Deleted", "version": version, "distribution": {"binary": binaries}}
+    ]})));
+    let backend = |id: &str| list().into_iter().find(|b| b["id"] == id).expect("listed");
+    assert_eq!(backend(&id)["available"], true, "a registry build sets itself up on first use");
+    assert_eq!(backend(&id)["downloaded"], false);
+
+    let build = crate::service::data_dir().join("agents").join(&id).join(&version);
+    std::fs::create_dir_all(&build).unwrap();
+    std::fs::write(build.join(".installed"), "").unwrap();
+    assert_eq!((backend(&id)["installed"].as_bool(), backend(&id)["downloaded"].as_bool()), (Some(true), Some(true)));
+
+    assert!(remove_download(&id).unwrap());
+    let off = backend(&id);
+    assert_eq!((off["installed"].as_bool(), off["downloaded"].as_bool()), (Some(false), Some(false)));
+    assert_eq!(off["available"], false, "its bots show as not installed");
+    assert_eq!(off["turnedOff"], true);
+
+    // Installing it again puts a build back: on again, accounts and bots untouched.
+    std::fs::create_dir_all(&build).unwrap();
+    std::fs::write(build.join(".installed"), "").unwrap();
+    let back = backend(&id);
+    assert_eq!((back["available"].as_bool(), back["turnedOff"].as_bool()), (Some(true), Some(false)));
+
+    let _ = std::fs::remove_dir_all(crate::service::data_dir().join("agents").join(&id));
+    registry::set_turned_off(&id, false).unwrap();
+    registry::set_cache(None);
+}

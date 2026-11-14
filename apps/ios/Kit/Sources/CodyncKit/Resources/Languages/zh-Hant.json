@@ -2591,5 +2591,8 @@
   "W stops": "W 停止",
   "O goes on · A reassigns · B cancels": "O 繼續 · A 改派 · B 取消",
   "enter gives it · esc": "enter 交給它 · esc",
-  "Stop a sub-task before giving it to another member": "先停止子任務，才能交給其他成員"
+  "Stop a sub-task before giving it to another member": "先停止子任務，才能交給其他成員",
+  "Codync removes the copy it downloaded for {name} on {host} and turns the agent off.": "Codync 會刪除它為 {name} 在 {host} 上下載的那份副本，並關閉該智慧體。",
+  "Its accounts, sign-ins and bots stay.": "它的賬戶、登入和機器人都會保留。",
+  "Bots using it show as not installed until it is installed again.": "使用它的機器人會顯示為未安裝，直到它重新安裝。"
 }

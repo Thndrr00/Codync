@@ -99,6 +99,8 @@ Codync also lists every other agent in the ACP registry, about 40 more. These ne
 
 Codync doesn't know these agents' own sign-in commands. If one needs an account, sign in to it on the computer first, or use a sign-in option the agent offers in its setup sheet.
 
+Codync can also remove the build it downloaded: open the agent's page and choose **Delete** at the end, then confirm. Nothing else changes on the computer: the agent's accounts, sign-ins and bots stay, and the bot keeps its settings and chats. A bot on it shows the agent as **Not installed** until you set it up again, which downloads a fresh build and carries on with the same account. The action is only there for a build Codync downloaded; an agent you installed yourself is yours to remove.
+
 ## A custom command
 
 To run an agent that isn't listed, open the bot's settings, set **Agent** to **Custom command** and type the command that starts it in ACP mode, such as `my-agent --acp`. Enter a model ID by hand if you need one.
@@ -149,6 +151,8 @@ In the bot's settings, under **Agent**:
 - **Fast mode:** a switch shown when the agent offers it for the model. Claude Code and Codex do. You can also type `/fast` in the chat.
 
 On desktop and iPhone, the collapsed Agent row summarizes the harness, model, effort and Fast mode. Expand it to access all settings. Click the harness or model to search; selecting a model closes only the search list. The refresh control is beside the search field. In the terminal, use the Agent, Model and model-option fields with the keyboard.
+
+When you've used up a plan window, the Agent row says when it comes back: a chip beside the agent's name carries the reset time, and every model that window stops is labeled **Usage limit reached**. It reads the usage Codync already shows under Usage limits, so it never asks the provider for anything.
 
 Changing the model or its options starts a new agent session; the chat history stays. Switching the bot to a different agent starts it on that agent's default model.
 
