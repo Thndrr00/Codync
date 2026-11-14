@@ -56,7 +56,7 @@ use std::io::Write as _;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::manage::{Reply, Shell, ThreadSheet, ThreadsSheet};
+use super::manage::{PinsSheet, Reply, Shell, ThreadSheet, ThreadsSheet};
 use super::net::Client;
 
 #[derive(Clone)]
@@ -177,6 +177,8 @@ pub struct App {
     pub hint: Option<(String, Instant)>,
     /// Whether this computer shares usage analytics (`None`: before the first `hello`).
     pub analytics: Option<bool>,
+    /// Whether a message to a working bot joins its turn (`None`: before the first `hello`; then on).
+    pub steer: Option<bool>,
     /// What usage analytics has reported this run (`app_opened`, `screen_viewed`).
     seen: analytics::Seen,
     kofi: kofi::Invite,
@@ -256,6 +258,7 @@ impl App {
             floors: HashMap::new(),
             hint: None,
             analytics: None,
+            steer: None,
             seen: analytics::Seen::default(),
             kofi: kofi::Invite::load(),
         }
@@ -433,6 +436,24 @@ impl App {
             json!({"botId": bot, "archived": archived}),
             Reply::Threads { bot: bot.to_owned(), archived },
         );
+    }
+
+    /// The selected chat's pinned messages, newest first.
+    pub(in crate::tui) fn open_pins(&mut self) {
+        let Some(bot) = self.selected.clone() else { return };
+        self.fetch_pins(&bot);
+        self.overlays.push(Overlay::Pins(Box::new(PinsSheet::new(&bot))));
+    }
+
+    /// Loads `bot`'s pins into the sheet on top.
+    pub(in crate::tui) fn fetch_pins(&mut self, bot: &str) {
+        self.sheet("pinnedMessages", json!({"botId": bot}), Reply::Pins(bot.to_owned()));
+    }
+
+    /// Pins a message or takes its pin back (`p` on a picked message).
+    pub(super) fn pin_message(&mut self, bot: &str, entry: &str, pinned: bool) {
+        self.call("pinMessage", json!({"botId": bot, "messageId": entry, "pinned": pinned}), After::Nothing);
+        self.flash(if pinned { "Pinned" } else { "Unpinned" });
     }
 
     /// Sends the open thread's draft.

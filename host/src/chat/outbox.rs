@@ -25,7 +25,7 @@ never to a question or a request. When a message needs no words, the reaction is
 end your turn by replying exactly \"(pass)\".";
 
 /// Longest message accepted, in bytes.
-const MAX_MESSAGE_BYTES: usize = 32 * 1024;
+pub(super) const MAX_MESSAGE_BYTES: usize = 32 * 1024;
 /// How long the bot's actor has to take the message.
 const DELIVERY_TIMEOUT: Duration = Duration::from_secs(10);
 

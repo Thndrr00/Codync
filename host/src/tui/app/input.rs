@@ -312,6 +312,7 @@ impl App {
                 self.focus = if self.trace == TraceMode::Full { Focus::Trace } else { Focus::Chat };
             }
             KeyCode::Char('T') => self.open_threads(),
+            KeyCode::Char('B') => self.open_pins(),
             KeyCode::Char('o') => {
                 let Some(id) = self.selected.clone() else { return };
                 // The newest turn in this lane that did something.

@@ -88,6 +88,7 @@ pub fn tools() -> Value {
         blocking::tool(),
         members::tool(),
         batch::tool(),
+        crate::chat::pins::tool(),
         pipeline::tool(),
     ])
 }
@@ -435,6 +436,10 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
         "ask_member" => {
             let source = visible_bot(hub, from)?;
             return members::ask(hub, &source, args["question"].as_str().unwrap_or_default()).await;
+        }
+        "pin_message" => {
+            let source = visible_bot(hub, from)?;
+            crate::chat::pins::pin(hub, &source, args)
         }
         "ask_bot" | "delegate_batch" | "run_pipeline" => {
             let source = visible_bot(hub, from)?;

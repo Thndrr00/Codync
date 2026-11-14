@@ -175,6 +175,9 @@ pub(super) fn entry_lines(out: &mut Built, app: &App, b: &Bot, e: &Entry, info: 
                 Span::styled(" you", t.secondary.add_modifier(Modifier::BOLD)),
                 Span::styled(format!(" {}", clock(e.created_at)), t.dim),
             ];
+            if e.is_pinned() {
+                head.push(Span::styled(format!(" · {}", tr("Pinned")), t.amber));
+            }
             if e.data["status"] == "cancelled" {
                 head.push(Span::styled(" · not sent", t.red));
             }
@@ -212,6 +215,11 @@ pub(super) fn entry_lines(out: &mut Built, app: &App, b: &Bot, e: &Entry, info: 
                 Span::styled(format!(" {name}"), name_style(color)),
                 Span::styled(format!(" {}", clock(e.created_at)), t.dim),
             ]));
+            if e.is_pinned()
+                && let Some(line) = out.lines.last_mut()
+            {
+                line.spans.push(Span::styled(format!(" · {}", tr("Pinned")), t.amber));
+            }
             if let Some(title) = app.artifact_title(e) {
                 out.lines.push(Line::from(Span::styled(
                     format!(" ▤ Artifact: {}", truncate(&title, width.saturating_sub(10))),

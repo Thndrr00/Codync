@@ -129,6 +129,18 @@ impl App {
                     }
                 }
             }
+            Reply::Pins(bot) => {
+                if let Some(pins) = v["pins"].as_array() {
+                    for o in &mut self.overlays {
+                        if let Overlay::Pins(p) = o
+                            && p.bot == bot
+                        {
+                            p.pins = Some(pins.clone());
+                            p.cursor = p.cursor.min(pins.len().saturating_sub(1));
+                        }
+                    }
+                }
+            }
             Reply::ThreadChanged(root) => self.thread_changed(&root),
             Reply::ThreadDeleted(root) => self.thread_deleted(&root),
             Reply::Routines(bot) => {
@@ -149,6 +161,7 @@ impl App {
                 }
             }
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
+            Reply::FlowMedia { bot, from } => self.flow_media_added(&bot, &from, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
@@ -430,6 +443,16 @@ impl App {
                 }
                 self.flash(&e);
             }
+            Reply::Pins(bot) => {
+                for o in &mut self.overlays {
+                    if let Overlay::Pins(p) = o
+                        && p.bot == *bot
+                    {
+                        p.pins.get_or_insert_with(Vec::new);
+                        p.error = Some(e.clone());
+                    }
+                }
+            }
             Reply::Memory(_) | Reply::MemorySaved(_) | Reply::MemoryFile(_) | Reply::Routines(_) => {
                 for o in &mut self.overlays {
                     match o {
@@ -516,6 +539,9 @@ impl App {
                 }
                 Overlay::Library(l) => {
                     calls.push(("library", json!({"botId": l.bot}), After::Sheet(Reply::Library(l.bot.clone()))));
+                }
+                Overlay::Pins(p) => {
+                    calls.push(("pinnedMessages", json!({"botId": p.bot}), After::Sheet(Reply::Pins(p.bot.clone()))));
                 }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));

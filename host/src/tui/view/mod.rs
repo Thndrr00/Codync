@@ -26,6 +26,7 @@ mod new_bot;
 mod overlay;
 mod pair;
 mod permission;
+mod pins;
 mod proposals;
 mod queue;
 mod roster;

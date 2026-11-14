@@ -68,6 +68,7 @@ pub enum After {
     /// `track`: fire and forget; analytics never surfaces an error.
     Tracked,
     Analytics,
+    Steer,
     History(String),
     Dirs,
     Pairing,
@@ -245,6 +246,11 @@ impl Entry {
     pub fn is_message(&self) -> bool {
         !self.is_internal()
             && (self.kind == Kind::User || self.is_final() || self.data["connectionRequest"].is_object())
+    }
+
+    /// The pin on this message (`chat::pins`): `p` takes it back or sets one.
+    pub fn is_pinned(&self) -> bool {
+        self.data["pinned"].is_object()
     }
 
     /// An artifact card's artifact id (`docs/features/artifacts.md`): `o` opens it, `f` saves it.

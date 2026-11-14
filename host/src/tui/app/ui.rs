@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use super::super::manage::{
     AgentSetup, AnalyticsSheet, BotChatSheet, DevServersSheet, DocumentSheet, Fields, FlowSheet, Library, Market,
-    MemorySheet, NetworkSheet, RoutineForm, RoutineList, SkillSheet, ThreadSheet, ThreadsSheet,
+    MemorySheet, NetworkSheet, PinsSheet, RoutineForm, RoutineList, SkillSheet, ThreadSheet, ThreadsSheet,
 };
 use super::{Editor, Mark, WhatsNew};
 
@@ -68,13 +68,14 @@ pub enum Action {
     CheckUpdate,
     Analytics,
     AboutAnalytics,
+    Steer,
     Language,
     ThinkingDetails,
     Keys,
     Appearance(super::super::appearance::Appearance),
 }
 
-pub const ACTIONS: [(&str, &str, Action); 27] = [
+pub const ACTIONS: [(&str, &str, Action); 28] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -96,6 +97,7 @@ pub const ACTIONS: [(&str, &str, Action); 27] = [
     ("Check for updates", "", Action::CheckUpdate),
     ("Share usage analytics", "", Action::Analytics),
     ("About usage analytics…", "", Action::AboutAnalytics),
+    ("Steer the bot while it works", "", Action::Steer),
     ("Appearance: System", "", Action::Appearance(super::super::appearance::Appearance::System)),
     ("Appearance: Light", "", Action::Appearance(super::super::appearance::Appearance::Light)),
     ("Appearance: Dark", "", Action::Appearance(super::super::appearance::Appearance::Dark)),
@@ -427,6 +429,8 @@ pub enum Overlay {
     Thread(Box<ThreadSheet>),
     /// The selected chat's threads.
     Threads(Box<ThreadsSheet>),
+    /// The selected chat's pinned messages.
+    Pins(Box<PinsSheet>),
     /// A bot's dev servers.
     DevServers(DevServersSheet),
     Routines(RoutineList),

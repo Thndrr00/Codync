@@ -445,7 +445,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 data["call"] = crate::chat::calls::checked(call)?.into();
                 crate::chat::calls::heard(hub, bot, call, caller.device_key())?;
             }
-            json!({"entry": crate::chat::messages::post_in_lane(hub, &row.config, lane, data)?})
+            let entry = crate::chat::messages::post_in_lane(hub, &row.config, lane, data)?;
+            // A message to a working agent joins its running turn by itself, unless the user chose Queue; a send
+            // without an actor to steer still leaves the message in the chat.
+            if !row.config.is_group()
+                && crate::chat::steer::enabled(&hub.store)
+                && hub.runtime(bot).status == crate::hub::BotStatus::Working
+            {
+                let _ = hub.send_cmd(bot, Cmd::Steer { entry_id: entry.id.clone() });
+            }
+            json!({"entry": entry})
         }
         // A waiting message rewritten before it goes out.
         "editQueued" => {
@@ -560,6 +569,23 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
             json!({"entry": e})
         }
+        // A message pinned or taken out of a chat's pin list; the person is the caller's device, or
+        // none at the computer itself.
+        "pinMessage" => {
+            let device = match caller {
+                Caller::Device { key, .. } => hub.store.device(key).map(|d| d.name),
+                _ => None,
+            };
+            let pinned = b["pinned"].as_bool().unwrap_or(true);
+            crate::chat::pins::set(
+                hub,
+                str_arg(&b, "botId")?,
+                str_arg(&b, "messageId")?,
+                pinned,
+                &json!({"kind": "person", "device": device}),
+            )?
+        }
+        "pinnedMessages" => json!({"pins": crate::chat::pins::list(hub, str_arg(&b, "botId")?)?}),
         // A paused turn's card: one tap sends the continuation (bounded, once per card).
         "continueTurn" => {
             let entry_id = str_arg(&b, "entryId")?;

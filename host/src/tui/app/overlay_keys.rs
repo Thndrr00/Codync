@@ -74,6 +74,7 @@ impl App {
             }
             Action::CheckUpdate => self.call("checkHostUpdate", json!({}), After::Update),
             Action::Analytics => self.toggle_analytics(),
+            Action::Steer => self.toggle_steer(),
             Action::AboutAnalytics => self.overlays.push(Overlay::Analytics(AnalyticsSheet::default())),
             Action::Appearance(mode) => match super::super::appearance::select(mode) {
                 Ok(()) => self.flash(&format!("Appearance: {}", mode.name())),
@@ -150,6 +151,7 @@ impl App {
             Overlay::BotChat(c) => Self::bot_chat_key(c, k),
             Overlay::Thread(sheet) => self.thread_key(*sheet, k),
             Overlay::Threads(list) => self.threads_key(*list, k),
+            Overlay::Pins(list) => self.pins_key(*list, k),
             Overlay::DevServers(sheet) => self.dev_servers_key(sheet, k),
             Overlay::Routines(l) => self.routines_key(l, k),
             Overlay::Routine(f) => self.routine_key(f, k),
