@@ -90,7 +90,7 @@ internal fun PromptLibrarySheet(draft: String, pick: (String) -> Unit) {
     Column(Modifier.fillMaxWidth()) {
         ModalHeader("Prompt library")
         CardForm {
-            row { SearchField(query, { query = it }, prompt = "Search prompts") }
+            SearchField(query, { query = it }, prompt = "Search prompts")
             CardSection(footer = "Saved on this phone. Picking a prompt fills the message box; edit it before sending.") {
                 row {
                     SecondaryButton("Save what the message box holds", enabled = draft.isNotBlank()) {

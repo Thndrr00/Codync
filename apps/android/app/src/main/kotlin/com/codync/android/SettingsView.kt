@@ -165,7 +165,7 @@ import com.codync.android.design.*
     CardSection("Push alert rules", "Which of the computer's alerts reach this phone. An approval always arrives, even in quiet hours.") {
         val current = rules
         if (current == null) {
-            row { Text(error ?: "Loadingâ€¦", style = Type.body, color = Palette.secondary) }
+            row { Text(error ?: "Loading…", style = Type.body, color = Palette.secondary) }
         } else {
             row { SwitchRow("Task finished", isOn = current.done, onChange = { change(current.copy(done = it)) }) }
             row { SwitchRow("Needs you", "An approval or a question; always arrives.", isOn = current.needsInput, onChange = { change(current.copy(needsInput = it)) }) }

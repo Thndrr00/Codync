@@ -10,24 +10,24 @@ is bigger than one release.
 | SBOM for every release | done |
 | Local models (chat, embeddings, voice) | chat via `local-agent` and embeddings done; local voice next |
 | Workspace search with citations | done (lexical + optional semantic rerank) |
-| Team meeting: minutes (`/minutes`) done; text roundtable done, voice next |
+| Team meeting: minutes (`/minutes`) and text roundtable done; voice spoken by the host and played on the phones |
 | Standup in a team chat (`/standup`) | done |
-| Task board that moves itself | done (desktop) |
+| Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
 | Extension SDK (wasm) | next |
 | A2UI (with choices and forms) and AG-UI server done |
 | Agent evaluations harness (text, tools, `--bots` comparison) | done (nightly workflow) |
 | Policies by role and tool | done (desktop) |
 | Retention (preview + delete) | done |
-| Approvals from the phone notification | next |
+| Approvals from the phone notification | Android done; iPhone opens the review |
 | Desktop global shortcut done; agent dock next |
 | Global search across chats and documents | done |
 | Workspace export (bots + documents) | done |
 | Full workspace export (routines, scheduled messages, recent chats) | done |
 | Scheduled messages | done (desktop) |
-| Notification rules (kinds and quiet hours) | done (desktop; phone settings next) |
+| Notification rules (kinds and quiet hours) | done (desktop, iPhone and Android) |
 | Tool rate limits and a read-only tool cache | done |
-| Prompt library in the composer | done (desktop; phone next) |
+| Prompt library in the composer | done (desktop, iPhone and Android) |
 | Unified calendar (routines + scheduled messages) | done (desktop) |
 | Compare models in Diagnostics | done (desktop) |
 | Density preference | done (desktop) |
@@ -35,7 +35,7 @@ is bigger than one release.
 | Bot activity timeline | done (desktop) |
 | Policies by role (group editor) | done (desktop) |
 | Share a chat as a read-only HTML file | done (desktop) |
-| Task board (four columns, bot per card) | done (desktop) |
+| Task board (four columns, bot per card) | done (desktop and phones) |
 | Connector health in the doctor | done |
 | A2A server (agent card + `message/send`) | done |
 | Notification center | done (desktop) |
@@ -49,13 +49,13 @@ is bigger than one release.
 | Document diff (revision vs now) | done (desktop) |
 | Board search, bot filter, drag between columns | done (desktop) |
 | Activity: approve or deny in place | done (desktop) |
-| Read-only links (chat and document) with revocation | done |
+| Read-only links (chat and document) with revocation | done (desktop and phones) |
 | Scheduled message editing | done (desktop) |
 | Board repeating cards | done |
 | Doctor: stale approvals | done |
 | Document presentation and Markdown export | done (desktop) |
 | Global search: board cards and scheduled messages | done (desktop) |
-| Team templates (save and install a group) | done |
+| Team templates (save and install a group) | done (desktop and phones) |
 | Board in a group's details | done (desktop) |
 | Board: run its routine, CSV export, clear done | done (desktop) |
 | Scheduled message "Send now" | done (desktop) |
@@ -64,10 +64,10 @@ is bigger than one release.
 | Database backup from Diagnostics | done |
 | Approval rules as JSON (copy/apply) | done (desktop) |
 | Share-to-bot on Android and iOS | next |
-| Real offline mode | text outbox on desktop done; encrypted full cache next |
+| Real offline mode | done: text outbox and an encrypted per-computer cache (desktop, iPhone, Android) |
 | Marketplace reputation and updates | later |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
-| Multi-user server | later |
+| Multi-user server | done: workspace members with roles, enforced on every call |
 
 ## Decisions inbox — done
 
@@ -349,18 +349,30 @@ Goal: a bot can run without an account.
 - Acceptance: a role cannot run shell outside its folder; retention previews and then deletes only what it
   showed.
 
-## Phone and desktop comfort — shortcut done; the rest next
+## Phone and desktop comfort — shortcut, prompts, meetings and offline done
 
 - Desktop: done — `CommandOrControl+Shift+Space` brings the chat back from anywhere (or hides it).
-- Phone approvals from the notification with the same card as the chat.
-- Share-to-bot extension on Android and iOS.
-- Agent dock with status.
-- Offline: encrypted cache of recent chats, queued messages sent on reconnect.
-- Acceptance: approve from the lock screen; share a link to a bot from another app; work on a plane and
-  send when back.
+- The prompt library and team meetings are on the phones: the same twelve prompts, prompts saved on
+  the phone, and a group meeting whose turns the phone reads aloud.
+- The board, saved teams, read-only links and alert rules (with quiet hours) are on both phones.
+- Offline: done — the desktop keeps each computer's bots and recent messages in a file encrypted with
+  the OS key (Keychain, DPAPI, libsecret) and reads it at launch; a plaintext cache from an older build
+  moves over once. Typed messages wait in the outbox and go out on reconnect. The phones keep their own
+  mirrors; Android also answers approvals from the notification (iOS opens the review).
+- Next: a share-to-bot extension on iOS (Android has `ShareIntake`) and inline approvals on iOS.
+
+## Workspace members — done, a team on one computer
+
+`host/src/store/members.rs` keeps one seeded owner, admins, members and viewers; an invite returns a
+one-time token stored only as a SHA-256 hash. A phone redeems it on the pairing channel
+(`pair_member`), and the device is saved with `member_id`, so the member caller's role is read from the
+member list on every connection and recheck: viewers may only read, members work with the bots,
+admins also invite, remove and re-role people, and removing a member closes their devices. The desktop
+has a Members page in Settings. A member client's invite-entry screen is next.
 
 ## Later
 
 - Marketplace reputation: verified publishers, install counts, changelog and updates.
 - Skills that improve themselves: proposals from real use, reviewed and versioned.
-- Multi-user server: members, roles and channels with one host per team; a different product shape.
+- Local voice models: the meeting speaks through a cloud provider; on-device speech is next.
+

@@ -98,9 +98,11 @@ internal fun TeamMeetingSheet(bot: Bot, store: AppStore) {
             CardSection("Topic",
                 "The group's members answer in turn, in throwaway sessions. Nothing lands in the chat; the minutes are a draft you can copy.") {
                 row {
-                    FieldBox(topic, { topic = it }, "What should the team think through?", minLines = 2, maxLines = 4)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        PrimaryButton(if (running) "Thinkingâ€¦" else "Start meeting", enabled = !running && topic.isNotBlank()) { start() }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FieldBox(topic, { topic = it }, "What should the team think through?", minLines = 2, maxLines = 4)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            PrimaryButton(if (running) "Thinking…" else "Start meeting", enabled = !running && topic.isNotBlank()) { start() }
+                        }
                     }
                 }
             }

@@ -169,7 +169,7 @@ struct WorkspaceSheet: View {
             ForEach(templates) { template in
                 CardSection(template.name, footer: template.description.isEmpty ? nil : template.description) {
                     if !template.members.isEmpty {
-                        Text(template.members.joined(separator: " Â· "))
+                        Text(template.members.joined(separator: " · "))
                             .font(.caption)
                             .foregroundStyle(Palette.secondary)
                     }

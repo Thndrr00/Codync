@@ -113,7 +113,7 @@ import com.kyant.shapes.RoundedRectangle
                 Symbol("magnifyingglass", size = 20.dp, tint = Palette.text)
             }
             DropdownMenu({ buildList {
-                add(MenuItem("$host Â· ${connectionLabel(state)}", enabled = false))
+                add(MenuItem("$host · ${connectionLabel(state)}", enabled = false))
                 add(MenuItem("Reconnect", icon = "arrow.clockwise") { store.reconnect() })
                 add(MenuItem("Details", icon = "info.circle", divider = true) { edit(bot) })
                 add(MenuItem("Full conversation", icon = "list.bullet.rectangle", action = trace))
@@ -154,7 +154,7 @@ import com.kyant.shapes.RoundedRectangle
 /** The link to the computer: route icon (or a spinner), computer name when known, and connection state. */
 @Composable private fun ConnectionSubtitle(state: AppState) {
     val host = state.computer?.name.orEmpty()
-    val statusText = if (host.isNotEmpty()) "$host Â· ${connectionLabel(state)}" else connectionLabel(state)
+    val statusText = if (host.isNotEmpty()) "$host · ${connectionLabel(state)}" else connectionLabel(state)
     Row(
         Modifier.clearAndSetSemantics { contentDescription = "${state.hostName}, ${connectionDescription(state)}" },
         verticalAlignment = Alignment.CenterVertically,

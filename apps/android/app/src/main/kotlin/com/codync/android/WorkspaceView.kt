@@ -79,20 +79,22 @@ internal fun WorkspaceSheet(store: AppStore) {
                     var more by remember { mutableStateOf(false) }
                     CardSection("Add a card", "A card can name the bot that owns it; moving it is yours to do.") {
                         row {
-                            FieldBox(title, { title = it }, "What needs doing")
-                            if (more) FieldBox(detail, { detail = it }, "Detail (optional)", minLines = 2, maxLines = 4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                LinkButton(if (more) "Fewer options" else "More options") { more = !more }
-                                Box(Modifier.weight(1f))
-                                SecondaryButton("Add", enabled = title.isNotBlank()) {
-                                    val text = title.trim()
-                                    run {
-                                        tasks = store.boardTasks()
-                                        store.saveBoardTask(text, detail.trim())
-                                        tasks = store.boardTasks()
-                                        title = ""
-                                        detail = ""
-                                        more = false
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FieldBox(title, { title = it }, "What needs doing")
+                                if (more) FieldBox(detail, { detail = it }, "Detail (optional)", minLines = 2, maxLines = 4)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    LinkButton(if (more) "Fewer options" else "More options") { more = !more }
+                                    Box(Modifier.weight(1f))
+                                    SecondaryButton("Add", enabled = title.isNotBlank()) {
+                                        val text = title.trim()
+                                        run {
+                                            tasks = store.boardTasks()
+                                            store.saveBoardTask(text, detail.trim())
+                                            tasks = store.boardTasks()
+                                            title = ""
+                                            detail = ""
+                                            more = false
+                                        }
                                     }
                                 }
                             }
@@ -124,7 +126,7 @@ internal fun WorkspaceSheet(store: AppStore) {
                     }
                     for (template in templates) CardSection(template.name, template.description.ifEmpty { null }) {
                         if (template.members.isNotEmpty()) row {
-                            Text(template.members.joinToString(" Â· "), style = Type.footnote, color = Palette.secondary)
+                            Text(template.members.joinToString(" · "), style = Type.footnote, color = Palette.secondary)
                         }
                         row {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
