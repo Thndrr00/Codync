@@ -19,7 +19,7 @@ is bigger than one release.
 | Agent evaluations harness (text, tools, `--bots` comparison) | done (nightly workflow) |
 | Policies by role and tool | done (desktop) |
 | Retention (preview + delete) | done |
-| Approvals from the phone notification | Android done; iPhone opens the review |
+| Approvals from the phone notification | done on iPhone and Android |
 | Desktop global shortcut done; agent dock next |
 | Global search across chats and documents | done |
 | Workspace export (bots + documents) | done |
@@ -63,7 +63,7 @@ is bigger than one release.
 | Save a message as a skill | done (desktop) |
 | Database backup from Diagnostics | done |
 | Approval rules as JSON (copy/apply) | done (desktop) |
-| Share-to-bot on Android and iOS | next |
+| Share-to-bot on Android and iOS | done |
 | Real offline mode | done: text outbox and an encrypted per-computer cache (desktop, iPhone, Android) |
 | Marketplace reputation and updates | later |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
@@ -358,7 +358,7 @@ Goal: a bot can run without an account.
 - Offline: done — the desktop keeps each computer's bots and recent messages in a file encrypted with
   the OS key (Keychain, DPAPI, libsecret) and reads it at launch; a plaintext cache from an older build
   moves over once. Typed messages wait in the outbox and go out on reconnect. The phones keep their own
-  mirrors; Android also answers approvals from the notification (iOS opens the review).
+  mirrors, and both phones answer approvals from the notification and take a share from another app as a draft.
 - Next: a share-to-bot extension on iOS (Android has `ShareIntake`) and inline approvals on iOS.
 
 ## Workspace members — done, a team on one computer

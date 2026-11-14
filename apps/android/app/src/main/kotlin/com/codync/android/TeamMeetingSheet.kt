@@ -110,17 +110,21 @@ internal fun TeamMeetingSheet(bot: Bot, store: AppStore) {
             if (current != null) {
                 CardSection("Minutes") {
                     row {
-                        Text(current.minutes, style = Type.body, color = Palette.text)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            SecondaryButton("Copy minutes") { clipboard.setText(AnnotatedString(current.minutes)) }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(current.minutes, style = Type.body, color = Palette.text)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                SecondaryButton("Copy minutes") { clipboard.setText(AnnotatedString(current.minutes)) }
+                            }
                         }
                     }
                 }
                 for (turn in current.turns) CardSection(turn.name) {
                     row {
-                        Text(turn.text, style = Type.body, color = Palette.text)
-                        if (turn.audio != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            SecondaryButton(if (playing == turn.botId) "Stop" else "Read aloud") { play(turn) }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(turn.text, style = Type.body, color = Palette.text)
+                            if (turn.audio != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                SecondaryButton(if (playing == turn.botId) "Stop" else "Read aloud") { play(turn) }
+                            }
                         }
                     }
                 }

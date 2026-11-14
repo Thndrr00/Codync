@@ -1,6 +1,7 @@
 import AVFoundation
 import CodyncKit
 import SwiftUI
+import UIKit
 
 /// Plays a meeting turn's spoken audio: the host returns base64 in a container AVAudioPlayer reads.
 @MainActor
