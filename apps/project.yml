@@ -161,6 +161,8 @@ targets:
         embed: true
       - target: NotificationService
         embed: true
+      - target: ShareExtension
+        embed: true
     postBuildScripts:
       - name: Codync environment
         basedOnDependencyAnalysis: false
@@ -228,6 +230,22 @@ targets:
         INFOPLIST_FILE: ios/NotificationService/Info.plist
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: ios/NotificationService/NotificationService.entitlements
+        INFOPLIST_KEY_CFBundleDisplayName: $(CODYNC_APP_NAME)
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+  # Text and links from another app's share sheet, left for the app as a draft (Android ShareIntake).
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ios/ShareExtension
+    settings:
+      base:
+        PRODUCT_NAME: CodyncShare
+        PRODUCT_BUNDLE_IDENTIFIER: $(CODYNC_IOS_BUNDLE_ID).ShareExtension
+        INFOPLIST_FILE: ios/ShareExtension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: ios/ShareExtension/ShareExtension.entitlements
         INFOPLIST_KEY_CFBundleDisplayName: $(CODYNC_APP_NAME)
         TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES

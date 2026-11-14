@@ -20,6 +20,18 @@ extension BotStore {
         persistComposerDrafts()
     }
 
+    /// Adds text or a link shared from another app after what the box already holds; it is never
+    /// sent here. The same limits as Android's share target (20k of shared text, 48 KiB of draft).
+    public func appendShared(_ text: String, to botId: String) {
+        let shared = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(20_000))
+        guard !shared.isEmpty else { return }
+        let existing = composerDraft(for: botId)
+        let merged = existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? shared
+            : existing.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + shared
+        setComposerDraft(String(merged.prefix(48 * 1024)), for: botId)
+    }
+
     /// Drafts saved before 2.20.1 were keyed `["<bot>",null]`; a thread's (`["<bot>","<root>"]`) is dropped.
     static func chatDrafts(_ saved: [String: String]) -> [String: String] {
         saved.reduce(into: [:]) { drafts, row in

@@ -86,6 +86,7 @@ struct CodyncApp: App {
                     if phase == .active {
                         Task { await app.accounts.refreshCloud() }
                         Task { await updates.refresh() }
+                        app.intakeShared()
                     }
                 }
                 #if DEBUG
@@ -135,6 +136,8 @@ final class AppStore {
     var marketplace: ComputerID?
     /// While an account is being left: its stores stay open until its computers have been told.
     var leaving = false
+    /// Text or a link shared from another app, until the person picks its bot.
+    var pendingShare: SharedIntake?
 
     private init() {
         let session = AccountSession()
@@ -269,9 +272,22 @@ final class AppStore {
             showComputers = true
         case "screen":
             currentStore?.screenRequest = ScreenRequest()
+        case "share":
+            intakeShared()
         default:
             break
         }
+    }
+
+    func intakeShared() {
+        if pendingShare == nil { pendingShare = ShareInbox.take() }
+        if pendingShare != nil { tab = .bots }
+    }
+
+    /// Opens the bot a shared item went to, after `appendShared` put it in that bot's draft.
+    func shared(_ intake: SharedIntake, to bot: Bot, on store: BotStore) {
+        tab = .bots
+        accounts.selection = BotReference(accountId: accounts.accountId, computerId: store.computer.id, botId: bot.id)
     }
 
     private static func makeAccounts(_ storage: SharedStore.Context, session: AccountSession) -> (AccountStore, CloudClient?) {
@@ -336,9 +352,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         let open = UNNotificationAction(identifier: "openConversation", title: "Open conversation", options: [.foreground])
         let review = UNNotificationAction(identifier: "reviewRequest", title: "Review request", options: [.foreground])
+        // An approval can be answered from the alert itself: the payload names its options, and the
+        // store picks an allow or a reject from them when the person taps.
+        let allow = UNNotificationAction(identifier: "approvalAllow", title: "Allow")
+        let deny = UNNotificationAction(identifier: "approvalDeny", title: "Deny", options: [.destructive])
         UNUserNotificationCenter.current().setNotificationCategories([
             UNNotificationCategory(identifier: "done", actions: [open], intentIdentifiers: []),
-            UNNotificationCategory(identifier: "needsInput", actions: [review], intentIdentifiers: []),
+            UNNotificationCategory(identifier: "needsInput", actions: [allow, deny, review], intentIdentifiers: []),
             UNNotificationCategory(identifier: "failed", actions: [open], intentIdentifiers: []),
         ])
         #if DEBUG
@@ -371,10 +391,33 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             guard let ctx, let computerId, let botId else { return }
             // Only open it in the account it was sent to, on a computer that account still has.
             let accounts = AppStore.shared.accounts
-            guard ctx == accounts.storage.id, accounts.store(for: computerId) != nil else { return }
+            guard ctx == accounts.storage.id, let store = accounts.store(for: computerId) else { return }
+            if response.actionIdentifier == "approvalAllow" || response.actionIdentifier == "approvalDeny" {
+                guard let answer = Self.approvalAnswer(info["approval"], allow: response.actionIdentifier == "approvalAllow")
+                else { return }
+                try? await store.answerPermission(entryId: answer.entryId, optionId: answer.optionId)
+                return
+            }
             AppStore.shared.tab = .bots
             accounts.selection = BotReference(accountId: accounts.accountId, computerId: computerId, botId: botId)
         }
+    }
+
+    /// The option a notification button picks: the first that allows, or the first that doesn't.
+    private static func approvalAnswer(_ payload: Any?, allow: Bool) -> (entryId: String, optionId: String)? {
+        guard let approval = payload as? [String: Any],
+              let entryId = approval["entryId"] as? String,
+              let options = approval["options"] as? [[String: Any]],
+              !options.isEmpty else { return nil }
+        let kind = { (option: [String: Any]) in option["kind"] as? String ?? "" }
+        let chosen: [String: Any]?
+        if allow {
+            chosen = options.first { kind($0).hasPrefix("allow") } ?? options.first
+        } else {
+            chosen = options.first { kind($0).hasPrefix("reject") || kind($0).hasPrefix("deny") } ?? options.last
+        }
+        guard let optionId = chosen?["optionId"] as? String else { return nil }
+        return (entryId, optionId)
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {

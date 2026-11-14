@@ -129,6 +129,13 @@ extension BotStore {
         }
     }
 
+    /// Answers a pending approval from its alert, where no card is on screen to show the spinner.
+    public func answerPermission(entryId: String, optionId: String) async throws {
+        try await withLink(replay: true) { client in
+            try await client.respondPermission(entryId: entryId, optionId: optionId)
+        }
+    }
+
     /// Views register only while visible in an active scene. Multiple windows may
     /// read the same conversation without unregistering each other.
     func setReading(_ token: UUID, botId: String, active: Bool) {

@@ -56,6 +56,7 @@ struct RootView: View {
             }
         }
         .codyncSheet(isPresented: Bindable(app).showComputers) { ComputersView() }
+        .codyncSheet(item: Bindable(app).pendingShare) { ShareBotPicker(intake: $0) }
         .codyncSheet(item: Binding(get: { app.marketplace.map(MarketplaceTarget.init) }, set: { app.marketplace = $0?.computerId })) { target in
             // Each computer has its own; it's opened from that computer's heading or row.
             if let store = accounts.store(for: target.computerId) {
