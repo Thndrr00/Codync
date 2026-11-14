@@ -135,6 +135,13 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::Reconfigure(base) => self.reconfigure(*base).await,
+            Cmd::RestartAgent => {
+                if self.turn.is_some() {
+                    self.restart_after_turn = true;
+                } else {
+                    self.restart_agent().await;
+                }
+            }
             Cmd::Shutdown => return false,
         }
         true

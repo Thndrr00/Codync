@@ -37,10 +37,12 @@ impl RunInput {
 
 /// A client's id, or a fresh one when it sent none (AG-UI requires both).
 fn id(sent: Option<&str>, prefix: &str) -> String {
-    match sent.map(str::trim).filter(|id| !id.is_empty()) {
-        Some(id) => id.to_owned(),
-        None => format!("{prefix}-{}", uuid::Uuid::new_v4()),
-    }
+    sent.map(str::trim).filter(|id| !id.is_empty()).map(str::to_owned).unwrap_or_else(|| fresh_id(prefix))
+}
+
+fn fresh_id(prefix: &str) -> String {
+    let id = uuid::Uuid::new_v4();
+    format!("{prefix}-{id}")
 }
 
 /// A message's text: a string, or the `text` parts of a content array.

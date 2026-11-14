@@ -349,7 +349,24 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 }
                 _ => {
                     let vars = b["vars"].as_object().ok_or_else(|| anyhow!("`vars` is required"))?;
-                    crate::agent::auth::set_env(&hub.store, backend, b["botId"].as_str(), vars).await?
+                    let status = crate::agent::auth::set_env(&hub.store, backend, b["botId"].as_str(), vars).await?;
+                    // The AG-UI adapter reads its endpoint from this environment, so its process starts again.
+                    if backend == crate::agui::BACKEND {
+                        let targets: Vec<String> = match b["botId"].as_str() {
+                            Some(id) => vec![id.to_owned()],
+                            None => hub
+                                .store
+                                .bots()?
+                                .into_iter()
+                                .filter(|row| !row.deleted && !row.config.is_group() && row.config.backend == backend)
+                                .map(|row| row.config.id)
+                                .collect(),
+                        };
+                        for id in targets {
+                            let _ = hub.send_cmd(&id, crate::agent::bot::Cmd::RestartAgent);
+                        }
+                    }
+                    status
                 }
             };
             // Chats that asked the user to sign in get their messages answered now.

@@ -90,30 +90,33 @@ impl Parser {
 
     /// The next complete frame, if one has arrived.
     pub fn take(&mut self) -> Result<Option<Value>> {
-        let Some((at, separator)) = self.separator() else {
-            if self.buffer.len() > MAX_FRAME {
-                bail!("The AG-UI endpoint sent a frame larger than {MAX_FRAME} bytes");
+        loop {
+            let Some((at, separator)) = self.separator() else {
+                if self.buffer.len() > MAX_FRAME {
+                    bail!("The AG-UI endpoint sent a frame larger than {MAX_FRAME} bytes");
+                }
+                return Ok(None);
+            };
+            let frame = self.buffer.drain(..at + separator).collect::<Vec<_>>();
+            let frame = String::from_utf8_lossy(&frame[..at]);
+            let mut data = Vec::new();
+            for line in frame.split('\n') {
+                let line = line.strip_suffix('\r').unwrap_or(line);
+                let Some(value) = line.strip_prefix("data:") else { continue };
+                data.push(value.strip_prefix(' ').unwrap_or(value));
             }
-            return Ok(None);
-        };
-        let frame = self.buffer.drain(..at + separator).collect::<Vec<_>>();
-        let frame = String::from_utf8_lossy(&frame[..at]);
-        let mut data = Vec::new();
-        for line in frame.split('\n') {
-            let line = line.strip_suffix('\r').unwrap_or(line);
-            let Some(value) = line.strip_prefix("data:") else { continue };
-            data.push(value.strip_prefix(' ').unwrap_or(value));
+            let data = data.join("\n");
+            if data.trim().is_empty() {
+                // A comment or keep-alive: keep looking for the next frame.
+                continue;
+            }
+            if data.trim() == "[DONE]" {
+                return Ok(Some(json!({"type": DONE})));
+            }
+            return serde_json::from_str(&data).map(Some).with_context(|| {
+                format!("The AG-UI endpoint sent a frame that isn't JSON: {}", events::payload(&data))
+            });
         }
-        let data = data.join("\n");
-        if data.trim().is_empty() {
-            return Ok(None);
-        }
-        if data.trim() == "[DONE]" {
-            return Ok(Some(json!({"type": DONE})));
-        }
-        serde_json::from_str(&data)
-            .map(Some)
-            .with_context(|| format!("The AG-UI endpoint sent a frame that isn't JSON: {}", events::payload(&data)))
     }
 
     /// The first blank line: `\n\n`, `\r\n\r\n`, or a `\n` followed by `\r\n`.

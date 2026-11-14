@@ -78,21 +78,30 @@ async fn run(hub: Arc<Hub>, cfg: BotConfig, input: RunInput, tx: mpsc::Sender<Va
         &hub,
         &cfg,
         Lane::main(&cfg.id),
-        json!({"text": input.text, "clientNonce": format!("agui-{}", input.run_id)}),
+        json!({"text": input.text, "clientNonce": input.run_id.clone()}),
     ) {
         Ok(entry) => entry,
         Err(error) => {
-            finish(&tx, &done, &hub, &cfg.id, events::run_error(&format!("{error:#}"), "send_failed")).await;
+            finish(&tx, &done, &hub, &cfg.id, events::run_error(&format!("{error:#}"), "send_failed"), false).await;
             return;
         }
     };
     let mut mapper = Mapper::new(&input.thread_id, &input.run_id);
+    // A retried run whose message already finished (the client reconnects with the same run id).
+    if let Some(result) = entry.data.get("turnResult") {
+        done.store(true, Ordering::Release);
+        for mapped in mapper.finish(result) {
+            let _ = emit(&tx, mapped).await;
+        }
+        return;
+    }
     let deadline = tokio::time::Instant::now() + RUN_TIMEOUT;
     loop {
         match tokio::time::timeout_at(deadline, events.recv()).await {
             Ok(Ok(event)) => {
                 if event["type"] == "entryDeleted" && event["id"] == entry.id.as_str() {
-                    finish(&tx, &done, &hub, &cfg.id, events::run_error("The message was deleted.", "deleted")).await;
+                    finish(&tx, &done, &hub, &cfg.id, events::run_error("The message was deleted.", "deleted"), true)
+                        .await;
                     return;
                 }
                 if !is_turn_entry(&event, &cfg.id, entry.turn) {
@@ -129,8 +138,15 @@ async fn run(hub: Arc<Hub>, cfg: BotConfig, input: RunInput, tx: mpsc::Sender<Va
                 }
             }
             Err(_) => {
-                finish(&tx, &done, &hub, &cfg.id, events::run_error("The turn didn't finish in time.", "timeout"))
-                    .await;
+                finish(
+                    &tx,
+                    &done,
+                    &hub,
+                    &cfg.id,
+                    events::run_error("The turn didn't finish in time.", "timeout"),
+                    true,
+                )
+                .await;
                 return;
             }
         }
@@ -150,12 +166,13 @@ async fn emit(tx: &mpsc::Sender<Value>, value: Value) -> bool {
     tx.send(value).await.is_ok()
 }
 
-/// Sends the ending event, then stops the bot's turn if it is still running.
-async fn finish(tx: &mpsc::Sender<Value>, done: &AtomicBool, hub: &Hub, bot: &str, event: Value) {
+/// Sends the ending event, then stops the bot's turn when `stop` says it may still be working.
+async fn finish(tx: &mpsc::Sender<Value>, done: &AtomicBool, hub: &Hub, bot: &str, event: Value, stop: bool) {
     done.store(true, Ordering::Release);
     let _ = emit(tx, event).await;
-    // A failed or timed-out run may still be working; deleting the message stops at once.
-    let _ = hub.send_cmd(bot, Cmd::Stop);
+    if stop {
+        let _ = hub.send_cmd(bot, Cmd::Stop);
+    }
 }
 
 /// Stops the turn when the client disconnects before it ended.

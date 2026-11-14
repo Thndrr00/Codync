@@ -89,7 +89,8 @@ work unchanged.
      fragment in the URL. The same rules as the local voice server.
    - **Access token** (`CODYNC_AGUI_TOKEN`, optional): sent as `Authorization: Bearer`.
 3. The values are kept in the host vault (`setAgentEnv`, slot `agent-env:agui`) and handed to the adapter's
-   process on every start; they never reach a client.
+   process on every start; they never reach a client. Saving them starts a running bot's adapter again, so a
+   change reaches the next turn.
 
 The adapter advertises those two fields as an `env_var` ACP auth method, which is why they appear in the agent's
 own settings. If no URL is saved, the first turn fails with a message naming the setting.

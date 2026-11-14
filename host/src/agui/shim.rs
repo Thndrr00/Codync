@@ -281,7 +281,7 @@ impl Peer {
                         "status": "pending",
                         "rawInput": value,
                     },
-                    "options": options,
+                    "options": options.clone(),
                 }),
             )
             .await?;
@@ -310,8 +310,9 @@ impl Peer {
     }
 
     fn notify(&self, method: &str, params: Value) -> std::result::Result<(), Rpc> {
-        self.reply(json!({"jsonrpc": "2.0", "method": method, "params": params}));
-        Ok(())
+        self.out
+            .send(json!({"jsonrpc": "2.0", "method": method, "params": params}))
+            .map_err(|_| Rpc::from(anyhow!("The host stopped listening.")))
     }
 
     async fn request(&self, method: &str, params: Value) -> std::result::Result<Value, Rpc> {

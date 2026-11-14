@@ -132,11 +132,11 @@ mod tests {
 
     #[test]
     fn chunks_split_on_character_boundaries_and_stay_bounded() {
-        let text = "ñ".repeat(MAX_DELTA);
+        let text = format!("a{}", "ñ".repeat(MAX_DELTA));
         let chunks = chunks(&text);
         assert!(chunks.iter().all(|chunk| chunk.len() <= MAX_DELTA));
         assert_eq!(chunks.concat(), text);
-        assert_eq!(chunks.len(), 2, "a two-byte character at the edge moves whole to the next chunk");
+        assert_eq!(chunks[0].len(), MAX_DELTA - 1, "the two-byte character at the edge moves whole to the next chunk");
         assert!(chunks("").is_empty());
     }
 
