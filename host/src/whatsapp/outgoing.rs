@@ -2,6 +2,13 @@
 
 use super::{Arc, Hub, Result, WhatsApp, approvals, delivery, json};
 
+/// An agent's answer as it goes out: without the empty lines it may end in, which WhatsApp shows as
+/// blank space under the message. Ported from `OpenBot` 0.71.0 ("each message from an agent no longer
+/// ends with one to three empty lines").
+fn outbound_text(text: &str) -> &str {
+    text.trim_end()
+}
+
 impl WhatsApp {
     /// Sends the bot replies of this chat back to it. A file that left the chat follows its text.
     pub(super) async fn replies(&self, hub: &Hub) -> Result<()> {
@@ -17,7 +24,8 @@ impl WhatsApp {
             }
             let mut sent = Ok(());
             if !reply.text.trim().is_empty() {
-                sent = self.send_bound_text(&hub.store, account, &binding, &reply.chat, &reply.text).await;
+                sent =
+                    self.send_bound_text(&hub.store, account, &binding, &reply.chat, outbound_text(&reply.text)).await;
             }
             if sent.is_ok() {
                 for file in &reply.files {
@@ -115,5 +123,18 @@ impl WhatsApp {
         };
         let _ = self.send_message(chat, &line, None, None, None).await;
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::outbound_text;
+
+    #[test]
+    fn an_answer_goes_out_without_the_blank_lines_it_ends_in() {
+        assert_eq!(outbound_text("Done.\n\n"), "Done.");
+        assert_eq!(outbound_text("Done.\n"), "Done.");
+        assert_eq!(outbound_text("First.\n\nSecond.\n\n\n"), "First.\n\nSecond.", "the gap between paragraphs stays");
+        assert_eq!(outbound_text("  Done.  "), "  Done.", "the text it starts with stays");
     }
 }
