@@ -6,6 +6,7 @@
 //! Idea from agentes.chat's single-use approvals (`packages/engine`, AGPL-3.0-only): read, not
 //! copied.
 
+use crate::store::Store;
 use crate::store::approvals::MAX_SUBJECT;
 use serde_json::Value;
 
@@ -22,6 +23,21 @@ pub fn fingerprint(data: &Value) -> String {
 pub fn subject(data: &Value) -> String {
     let text = data["command"].as_str().or_else(|| data["title"].as_str()).unwrap_or_default().trim();
     if text.chars().count() <= MAX_SUBJECT { text.to_owned() } else { text.chars().take(MAX_SUBJECT).collect() }
+}
+
+/// Leaves the ledger's record of a request no card asked about: an allow rule or the bot's
+/// automatic setting handed it to the agent. It is recorded as decided, naming the rule.
+pub fn record_automatic(store: &Store, bot: &str, data: &Value, actor: &str) {
+    let id = format!("auto-{}", uuid::Uuid::new_v4());
+    let kind = data["toolKind"].as_str().unwrap_or("other");
+    let asked = store.approval_asked(&id, bot, kind, &subject(data), &fingerprint(data));
+    if let Err(error) = asked {
+        tracing::warn!(error = format!("{error:#}"), "couldn't record an automatic approval");
+        return;
+    }
+    if let Err(error) = store.approval_decide(&id, bot, "allow", None, Some(actor)) {
+        tracing::warn!(error = format!("{error:#}"), "couldn't record an automatic approval decision");
+    }
 }
 
 /// The decision an answer is: `allow`, `deny`, or `cancelled` when nobody chose.
@@ -72,6 +88,17 @@ mod tests {
         other = card();
         other["diffs"] = json!([{"path": "a.rs", "newText": "x"}]);
         assert_ne!(fingerprint(&card()), fingerprint(&other));
+    }
+
+    #[test]
+    fn an_automatic_answer_leaves_a_decided_record_naming_the_rule() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        record_automatic(&store, "b", &card(), "Rule \"git push*\"");
+        let recent = store.approvals_recent("b", 10);
+        assert_eq!(recent.len(), 1, "the request it let through is on the record");
+        assert_eq!(recent[0].decision.as_deref(), Some("allow"));
+        assert_eq!(recent[0].actor.as_deref(), Some("Rule \"git push*\""));
+        assert_eq!(recent[0].subject, "git push origin dev");
     }
 
     #[test]

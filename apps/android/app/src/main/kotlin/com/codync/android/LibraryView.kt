@@ -50,7 +50,13 @@ import com.kyant.shapes.RoundedRectangle
     // The file whose versions are open, and what the host listed for it.
     var versioning by remember { mutableStateOf<SharedFile?>(null) }
     var versions by remember { mutableStateOf<List<SharedFileVersion>>(emptyList()) }
+    var versionsNext by remember { mutableStateOf<Long?>(null) }
     val scope = rememberCoroutineScope()
+    suspend fun loadVersions(name: String, beforeSeq: Long? = null) {
+        val (page, next) = store.fileVersions(bot.id, name, beforeSeq)
+        versions += page
+        versionsNext = next
+    }
     Column(Modifier.fillMaxWidth()) {
         when {
             items.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -65,7 +71,8 @@ import com.kyant.shapes.RoundedRectangle
                                 is LibraryItem.FileItem -> FileRow(item, bot.id, state, store) { file ->
                                     versioning = file
                                     versions = emptyList()
-                                    scope.launch { versions = store.fileVersions(bot.id, file.name) }
+                                    versionsNext = null
+                                    scope.launch { loadVersions(file.name) }
                                 }
                                 is LibraryItem.AttachmentItem -> AttachmentRow(item.file, bot.id, state, store) { image = item.file }
                             }
@@ -92,6 +99,9 @@ import com.kyant.shapes.RoundedRectangle
                 }) {
                     NameAndDetail(if (version == versions.first()) "Newest" else "Older", detail(version.file, state.fileDownloads[version.file.id]))
                 }
+            }
+            versionsNext?.let { next ->
+                SecondaryButton("Show older versions") { scope.launch { loadVersions(versionFile?.name.orEmpty(), next) } }
             }
         }
     }

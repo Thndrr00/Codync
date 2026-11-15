@@ -10,7 +10,7 @@ import { fillDefaults, newDraft, normalized } from '../bots/drafts'
 import { FormSheet, Field } from '../marketplace/pieces'
 import { errorText } from './parts'
 
-/** Settings → Import an agent: another agent's folder (OpenClaw, Hermes, or any with an AGENTS.md) becomes a bot. */
+/** Settings → Import an agent: another agent's folder (Claude Code, OpenClaw, Hermes, or any with an AGENTS.md) becomes a bot. */
 export function AgentImportSection() {
   const app = useApp()
   const local = useModel(app.local)
@@ -23,12 +23,12 @@ export function AgentImportSection() {
       const folder = await window.codync.agentImport.pick()
       if (!folder) return
       const found = planImport(folder.files, folder.secretPaths)
-      if (!found) { setError('No OpenClaw, Hermes or AGENTS.md folder found there.'); return }
+      if (!found) { setError('No Claude Code, OpenClaw, Hermes or AGENTS.md folder found there.'); return }
       setTruncated(folder.truncated)
       setPlan(found)
     } catch (e) { setError(errorText(e)) }
   }
-  return <CardSection title="Import an agent" footer="Brings the instructions, memory and skills of an OpenClaw or Hermes agent (or any folder with an AGENTS.md) into a new bot. Settings and secret files are never read, and anything shaped like a key is left out.">
+  return <CardSection title="Import an agent" footer="Brings the instructions, memory and skills of a Claude Code, OpenClaw or Hermes agent (or any folder with an AGENTS.md) into a new bot. Settings and secret files are never read, and anything shaped like a key is left out.">
     <Button kind="secondary" disabled={!local} onClick={() => void pick()}>Choose a folder…</Button>
     {error ? <Text size="footnote" tone="danger">{error}</Text> : null}
     <FormSheet open={plan !== null} onClose={() => setPlan(null)}>
@@ -72,7 +72,7 @@ function ImportPreview({ plan, truncated, done }: { plan: ImportPlan; truncated:
     <CardForm>
       <CardSection title="Bot">
         <Field label="Name" value={name} onChange={setName} placeholder="Name" />
-        <Text size="footnote" tone="secondary">Read as {plan.source === 'agents' ? 'an AGENTS.md folder' : plan.source === 'hermes' ? 'a Hermes agent' : 'an OpenClaw agent'}.</Text>
+        <Text size="footnote" tone="secondary">Read as {plan.source === 'agents' ? 'an AGENTS.md folder' : plan.source === 'hermes' ? 'a Hermes agent' : plan.source === 'claude' ? 'a Claude Code folder' : 'an OpenClaw agent'}.</Text>
         {truncated ? <Text size="footnote" tone="attention">Some files were too big or too many and were left out.</Text> : null}
       </CardSection>
       <Group title="Instructions" items={plan.instructions} ticks={ticks} toggle={toggle} />

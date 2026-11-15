@@ -283,11 +283,41 @@ fn the_graph_has_a_node_per_page_and_an_edge_per_resolved_link() {
     let notes = saved(store.save_document("a", draft("Notes", "see [[Roadmap]]")).unwrap());
     saved(store.save_document("a", draft("Specs", "see [[Notes]] and [[Missing]]")).unwrap());
 
-    let graph = store.document_graph("a").unwrap();
+    let graph = store.document_graph("a", None, 300).unwrap();
     assert_eq!(graph["nodes"].as_array().unwrap().len(), 3);
     let edges = graph["edges"].as_array().unwrap();
     assert_eq!(edges.len(), 2, "a link to a page that doesn't exist is not an edge");
     let pairs: Vec<(&str, &str)> =
         edges.iter().map(|e| (e["from"].as_str().unwrap(), e["to"].as_str().unwrap())).collect();
     assert!(pairs.contains(&(notes.id.as_str(), roadmap.id.as_str())));
+}
+
+#[test]
+fn the_graph_pages_its_nodes_and_the_edges_that_leave_them() {
+    let store = temp_store();
+    bot(&store, "a");
+    let two = saved(store.save_document("a", draft("Two", "see [[One]]")).unwrap());
+    let one = saved(store.save_document("a", draft("One", "see [[Two]]")).unwrap());
+    saved(store.save_document("a", draft("Three", "nothing here")).unwrap());
+
+    let mut nodes: Vec<String> = Vec::new();
+    let mut edges: Vec<(String, String)> = Vec::new();
+    let mut after: Option<String> = None;
+    loop {
+        let page = store.document_graph("a", after.as_deref(), 2).unwrap();
+        for node in page["nodes"].as_array().unwrap() {
+            nodes.push(node["id"].as_str().unwrap().into());
+        }
+        for edge in page["edges"].as_array().unwrap() {
+            edges.push((edge["from"].as_str().unwrap().into(), edge["to"].as_str().unwrap().into()));
+        }
+        match page["next"].as_str() {
+            Some(next) => after = Some(next.into()),
+            None => break,
+        }
+    }
+    assert_eq!(nodes.len(), 3, "every page once, across two pages");
+    assert!(nodes.contains(&one.id) && nodes.contains(&two.id));
+    assert_eq!(edges.len(), 2, "each edge once, hanging off its source");
+    assert!(edges.contains(&(one.id.clone(), two.id.clone())) && edges.contains(&(two.id.clone(), one.id.clone())));
 }

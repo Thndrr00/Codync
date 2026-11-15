@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encargo — traer OpenBot a Codync</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0e0f11; --panel:#17181c; --line:#2a2c33; --text:#e8e9ee; --muted:#a2a6b3; --accent:#ffb3c1; --ok:#7fd4a0; --part:#f2c879; --todo:#f08a8a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif; padding:40px 20px 80px; }
+  main { max-width:900px; margin:0 auto; }
+  header { margin-bottom:28px; }
+  h1 { font-size:30px; line-height:1.2; margin:0 0 10px; letter-spacing:-.01em; }
+  .lede { color:var(--muted); margin:0; max-width:62ch; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin-top:20px; flex-wrap:wrap; }
+  button { font:inherit; border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:10px; padding:8px 14px; cursor:pointer; }
+  button:hover { border-color:#3b3e47; }
+  #copied { color:var(--ok); font-size:14px; }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px 24px; margin:18px 0; }
+  h2 { font-size:18px; margin:0 0 10px; letter-spacing:-.01em; }
+  h3 { font-size:15px; margin:16px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 20px; padding:0; }
+  li { margin:5px 0; }
+  code { font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; background:#101115; border:1px solid var(--line); border-radius:6px; padding:1px 5px; white-space:nowrap; }
+  .state { display:inline-block; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:2px 9px; margin-right:8px; }
+  .ok { background:color-mix(in srgb,var(--ok) 18%,transparent); color:var(--ok); }
+  .part { background:color-mix(in srgb,var(--part) 18%,transparent); color:var(--part); }
+  .todo { background:color-mix(in srgb,var(--todo) 18%,transparent); color:var(--todo); }
+  .warn { border-left:3px solid var(--part); padding-left:14px; color:var(--muted); }
+  .grid { display:grid; gap:10px; }
+  @media (min-width:760px) { .grid.two { grid-template-columns:1fr 1fr; } }
+  .card { border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card h3 { margin-top:0; }
+  .small { font-size:14px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Encargo: traer OpenBot a Codync Dev</h1>
+    <p class="lede">Prompt de traspaso para otro agente. Dice qué está hecho, qué falta, dónde está cada cosa en <code>openbot-nightly</code> y qué reglas seguir para no romper lo que ya funciona.</p>
+    <div class="toolbar">
+      <button id="copy">Copiar el prompt completo</button>
+      <span id="copied" role="status" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <section id="brief">
+    <h2>1. Misión</h2>
+    <p>Reinicia los procesos de Codync Dev y continúa la integración de <strong>OpenBot</strong> en Codync Dev, con <code>C:\Users\Edwin Villeda\Documents\openbot-nightly</code> como fuente.</p>
+    <p>Objetivo: que Codync tenga los mismos flujos de trabajo que OpenBot, su marketplace y las funciones de las notas 0.58 a 0.64, adaptadas a la arquitectura de Codync (host Rust + clientes) y a su diseño.</p>
+    <div class="warn">
+      <p><strong>Solo agregar.</strong> No quites, renombres ni reescribas nada que ya exista y funcione. Antes de tocar una pantalla, un método del host o una traducción, revisa la app y el historial de la rama.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Entorno y arranque</h2>
+    <ul>
+      <li>Windows, checkout principal <code>C:\Users\Edwin Villeda\Documents\Codync</code>, rama <code>feat/openbot-marketplace</code>, versión 2.39.0. Solo Windows y Android; iOS no se compila aquí. Sin APK: compila y corre pruebas unitarias.</li>
+      <li>Antes de empezar: <code>git pull --rebase --autostash origin dev</code> y empuja lo pendiente. Una rama por función o corrección, en su worktree.</li>
+      <li>Reinicia procesos antes de instalar: <code>Stop-Process -Force</code> sobre <code>Codync Dev</code>, <code>codync-host</code> y <code>codync-dev-hostw</code>.</li>
+      <li>Compila con <code>cd apps/desktop; npm run dist:win:dev</code>, instala con <code>.\dist\codync-dev-windows-x64.exe /S</code> y arranca con <code>--remote-debugging-port=NUEVO</code> (un puerto nuevo por reinicio).</li>
+      <li>Si sale <code>old host did not exit</code>, mata los hosts y pulsa “Intentar otra vez”; si se queda en “Iniciando el host”, reinicia solo la app.</li>
+      <li>Referencias: host en <code>host/</code>, clientes en <code>apps/desktop/</code> y <code>apps/android/</code>, catálogos de idioma en <code>apps/ios/Kit/Sources/CodyncKit/Resources/Languages/</code>.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Estado real: lo hecho <span class="state ok">no romper</span></h2>
+    <ul>
+      <li>Marketplace de OpenBot importado: 28 agentes con grupos, 92 habilidades y el pack <code>pstack</code>, apps y conectores de Composio, hojas de detalle, enlaces profundos e instalación.</li>
+      <li>Pestaña <strong>CLIs</strong> con los 47 ACP, su descripción y su estado, en escritorio y Android.</li>
+      <li>Rail de páginas, lienzo del bot (nodos, enlaces arrastrables, inspector, lista, minimapa, tira semanal, “Añadir un bot” y “Nueva rutina” manual).</li>
+      <li>Uso real por agente y por cuenta, con ventanas, reinicios, resumen semanal y refresco al abrir.</li>
+      <li>Cuentas por agente: listar, agregar, borrar y desconectar, con correo visible y nombres “Codex 2”, “Codex 3”…</li>
+      <li>n8n: detección, reparación de propietario, desbloqueo del vault, sesión automática, conector MCP y arranque/parada con el host.</li>
+      <li>WhatsApp: puente Node/Baileys hijo del host, QR, elección de bot, entrada de mensajes y origen de rutina <code>whatsapp</code>; hojas en escritorio y Android; puente empaquetado.</li>
+      <li>Perfil de navegador por bot, borrar mensajes, color de chat por bot y disparadores por mención en Slack y Telegram.</li>
+      <li>Traducciones en 10 idiomas, incluidas las pantallas anteriores.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. Estado parcial <span class="state part">continuar</span></h2>
+    <p class="small">Los detalles de cada punto están en la sección 6; aquí solo el avance.</p>
+    <div class="grid two">
+      <div class="card"><h3>WhatsApp</h3><p>Enlace y entrada hechos. Falta el orquestador y todo lo de grupo, aprobaciones y archivos.</p></div>
+      <div class="card"><h3>Workflows</h3><p>Lienzo y creación manual hechos. Falta el motor de pasos y los disparadores/salidas.</p></div>
+      <div class="card"><h3>Marketplace</h3><p>Contenido importado. Falta la experiencia visual de la tienda y el material nuevo.</p></div>
+      <div class="card"><h3>Perfiles de navegador</h3><p>Perfil por bot hecho. Faltan proxys y su insignia.</p></div>
+      <div class="card"><h3>Equipos, hilos y rutinas</h3><p>Falta lo de hilos, citas, respuestas entre miembros y paralelismo.</p></div>
+      <div class="card"><h3>Empresa, interfaz y voz</h3><p>Sin SSO/SCIM/auditoría; faltan pestañas, RTL, avatares de peluche y las mejoras de voz.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>5. Marketplace: conectores, agentes y habilidades <span class="state todo">nuevo</span></h2>
+    <p>Trae de OpenBot todo lo que Codync no tenga; lo existente se suma, nunca se reemplaza.</p>
+    <h3>Conectores</h3>
+    <ul>
+      <li>Trae los que falten (GitLab, Omnisend, ElevenLabs, TickTick, Proton Pass, ClickUp, varias cuentas de Notion, pagos de Link, Coinbase, Robinhood, RevenueCat, GitHub, Discord, Linear…).</li>
+      <li>Higgsfield: MCP por HTTPS con inicio de sesión en el navegador, herramientas de imagen, vídeo y audio, créditos y biblioteca de recursos; copia su entrada de <code>marketplace/plugin-catalog/plugins/higgsfield</code>.</li>
+      <li>Reutiliza sus credenciales y flujos (client IDs, scopes, endpoints, callbacks) para que funcionen dentro de Codync en nombre de OpenBot.</li>
+      <li>Viven en el host: instalación, secretos en el vault, herramienta MCP y estado. Si un conector usa un servicio propio de OpenBot, copia su identificador y su solicitud de permisos.</li>
+    </ul>
+    <h3>Agentes y habilidades</h3>
+    <ul>
+      <li>Trae el <strong>concepto y la presentación</strong> de la tienda de OpenBot: agrupaciones, fichas, avatares, textos de estado, detalle y estados vacíos.</li>
+      <li>Adapta <strong>todos los agentes ya presentes</strong> a esa presentación, con su información: título, descripción, habilidades, rutinas y creador.</li>
+      <li>Trae <strong>todas las habilidades</strong> con su contenido y sus packs; las que ya están se conservan. Si el catálogo de OpenBot crece, añade lo nuevo y actualiza lo existente sin borrar ids.</li>
+      <li>Copia los archivos de <code>openbot-nightly/marketplace/production-catalog</code> y respeta el aviso ya incluido (<code>host/src/market/openbot/NOTICE.md</code>).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>6. Funciones por área</h2>
+
+    <h3>Workflows</h3>
+    <ul>
+      <li>Construir, editar y ejecutar desde el lienzo; los pasos aparecen mientras corren. El agente puede crear, cambiar, borrar y ejecutar workflows, con cursor visible y aprobación antes de borrar.</li>
+      <li>Disparadores de GitHub (issues, pull requests, reviews, checks fallidos, menciones), Discord (menciones, embeds), Slack y Telegram (menciones con filtro de espacio, canal o texto).</li>
+      <li>Salidas de GitHub (comentar, etiquetar, asignar, pedir review, crear issues) y de Discord (responder, publicar, reaccionar), Slack y Telegram (responder en el hilo, publicar, reaccionar).</li>
+      <li>Adjuntos: conserva los archivos del mensaje y del mensaje citado; un adjunto de Discord se copia a <code>openbot-attachments</code> y se enlaza o incrusta en GitHub.</li>
+      <li>Varios repositorios de GitHub en un solo workflow y un paso Condition con modelo y esfuerzo.</li>
+      <li>Webhooks con Standard Webhooks, secreto del emisor y filtros sobre el cuerpo completo.</li>
+    </ul>
+
+    <h3>WhatsApp</h3>
+    <ul>
+      <li>Orquestador: responde lo simple, delega al bot adecuado y devuelve el resultado al mismo chat, también en grupos; en “Mensaje a ti mismo” responde como dueño.</li>
+      <li>Con número personal, solo “Mensaje a ti mismo”, personas y grupos autorizados; con número propio, código de solicitud que se aprueba respondiendo 1 o 2.</li>
+      <li>En grupo, responder a una mención del número o a una respuesta. Archivos en ambos sentidos; el agente puede enviar imágenes y archivos; en WhatsApp las imágenes JPEG, PNG y WebP llegan como fotos.</li>
+      <li>Los mensajes van directos entre este equipo y WhatsApp: ningún servicio de OpenBot los ve. La conexión usa “Dispositivos vinculados” y no es una integración oficial.</li>
+    </ul>
+
+    <h3>Proveedores y voz</h3>
+    <ul>
+      <li>Devin y GitHub Copilot verificados de punta a punta; Kimi Code y Hermes con su instalación y su portal.</li>
+      <li>Botón Delete en la página del proveedor: lo apaga y borra el CLI descargado; cuentas, sesiones y agentes quedan.</li>
+      <li>Elegir la cuenta del proveedor al crear el agente.</li>
+      <li>Voz en vivo con Codex, opt-in, con el audio a OpenAI y elección de voz. Enviar con la caja vacía inicia y termina la conversación de voz.</li>
+      <li>Estilo “Natural”: progreso entre pasos, línea de apertura, etiquetas reales, avatar por acción y post de “Trabajando…” en los chats de mensajería; “Clásico” en Personalidad del servidor.</li>
+      <li>Muelle de agentes en macOS con estados, dictado y tarjetas de trabajo terminado; hebreo con RTL; nueva conversación y compactar por canal.</li>
+      <li>Control de escritorio remoto por política, con aviso, 30 s y detener todo.</li>
+      <li>Velocidad de las respuestas habladas (0.75× a 2×). Dos modelos de dictado local: Parakeet Unified EN (solo inglés, escribe puntuación) y Cohere Transcribe (14 idiomas, hay que fijar el idioma, ~2.9 GB y ~4 GB de memoria). Bark deja de ofrecerse pero el que ya esté descargado sigue.</li>
+      <li>El dictado usa la mitad de los procesadores lógicos, de 4 a 6 hilos, y tras un turno largo retiene menos memoria.</li>
+    </ul>
+
+    <h3>Equipos, canales y rutinas</h3>
+    <ul>
+      <li>Rutinas en hilo separado con interruptor; las antiguas siguen en el chat. Cuatro subprocesos paralelos por defecto.</li>
+      <li>Punto de no leído en pestañas e hilos, respuestas citadas y respuesta a otro miembro en canales.</li>
+      <li>Marcar un mensaje como no leído también en chats de un servidor unido (el servidor debe estar al día).</li>
+      <li>Dueños y admins del servidor añaden o cambian disparadores y salidas de Telegram y Slack desde el móvil; solo ellos tocan pasos de Slack.</li>
+      <li>“Enviar a un canal” desde el menú del mensaje; imagen e icono de canal; memoria de canal.</li>
+      <li>El agente crea y cambia canales (título, instrucciones, miembros, lead, archivar, imagen); el lead puede descartar trabajo y cada sub-tarea ofrece Stop, Continue, Reassign y Cancel.</li>
+      <li>Inicio de sesión empresarial OIDC (Entra ID, Okta, Google Workspace), SCIM y registro de auditoría con filtro y búsqueda.</li>
+      <li>Los miembros gestionan los MCP que ellos añadieron; un agente puede leer y buscar en sus otros chats e hilos.</li>
+      <li>Interruptor “Usar mi configuración de Claude Code” (apagado por defecto) y su aviso.</li>
+      <li>En Entra ID el emisor acepta la URL del inquilino, el dominio o la URL de metadatos del portal; solo se admite tras una prueba de inicio de sesión correcta y quien es dado de baja queda fuera.</li>
+    </ul>
+
+    <h3>Modelos y servidores</h3>
+    <ul>
+      <li>Selector con modelos nuevos primero, etiqueta “Nuevos” y “Anteriores” al final; apagar modelos por proveedor con buscador, “Ocultar todos” y restablecer, que no quita a los agentes los modelos que ya usan.</li>
+      <li>Chip de límite de uso junto al proveedor, alimentado por los anillos de uso, sin consultar al proveedor.</li>
+      <li>En servidores: Fast mode de Codex (el servidor debe estar al día), Computer Use, “arranca nuevos chats”, carpetas y carpetas excluidas, Publish, editar el archivo de instrucciones y compactar el contexto desde el escritorio.</li>
+      <li>Retardo configurable del plan (10 s, 30 s, 1 min, 5 min, hora propia o solo con Start) con aviso y cuenta atrás; límite de peticiones por hora de scripts locales.</li>
+    </ul>
+
+    <h3>Interfaz y archivos</h3>
+    <ul>
+      <li>Pestañas de archivos en el panel lateral; el panel del navegador pierde su fila del “+” y “Nueva pestaña” pasa al menú “+”; vista previa de SVG e imágenes grandes; progreso, cancelación y reintento de subidas, y el envío espera a reintentar o quitar el archivo.</li>
+      <li>Árabe con espejo de diseño y RTL por párrafo, con código siempre LTR.</li>
+      <li>Avatares planos o de peluche, con animación de estado e insignia de espera de fieltro; peluche en estados vacíos (imagen fija con movimiento reducido).</li>
+      <li>11 colores de chat nuevos con la misma luminosidad y más color en tema oscuro; código y tablas toman el tinte de la burbuja.</li>
+      <li>Lista de menciones con secciones, flechas y texto coincidente marcado; iconos con el mismo grosor, grises en reposo y sin relleno al apuntar.</li>
+      <li>Preguntas en una sola burbuja, de una en una, con Back, letras, “Otra cosa” y resumen; contexto bajo la pregunta y formularios con el mismo aspecto.</li>
+      <li>Tema por archivo de paleta en <code>~/.config/OpenBot/themes/</code> siguiendo los cambios en vivo.</li>
+      <li>Aviso de reseña tras dos días y diez mensajes, con cadencia de 7 y 30 días.</li>
+    </ul>
+
+    <h3>Perfiles de navegador y proxys</h3>
+    <ul>
+      <li>Proxy por perfil y “usar tu computadora” como proxy de un servidor; insignia por perfil y aviso si no responde. Direcciones válidas: <code>socks5://usuario:contraseña@host:1080</code>, <code>http://host:3128</code>, <code>usuario:contraseña@host:puerto</code> o <code>host:puerto:usuario:contraseña</code>.</li>
+      <li>Contraseña cifrada y enmascarada; sin proxy no se abre la pestaña. Aviso antes de cerrar pestañas por un cambio y conservarlas si la dirección no cambia; si dos proxies comparten host, el nombre muestra también el puerto.</li>
+      <li>El perfil y la pestaña muestran su proxy, y un fallo lo nombra, incluido el rechazo del inicio de sesión. El agente responde los diálogos que abrió su propia acción.</li>
+      <li>Relleno de logins por dominio base y desde el vault de Proton Pass; importación de su CSV.</li>
+    </ul>
+
+    <h3>Otros</h3>
+    <ul>
+      <li>La clave que pide un agente se guarda en el vault para todos por defecto, con opción “Solo este agente”; la tarjeta del vault en el móvil abre el formulario con lo que llenó el agente y solo se teclean los secretos.</li>
+      <li>Carpetas anidadas de chats, hasta tres niveles, y fijados sincronizados entre dispositivos.</li>
+      <li>Un agente puede pedir ayuda a un miembro del canal con una respuesta corta, con dos respuestas por petición.</li>
+      <li>Resumen diario de recursos con la fase del retraso más largo y el conteo de salidas de ayudantes por tipo; la traza local guarda cada retraso de 1 s o más.</li>
+      <li>Analítica de arranque (paso más lento), de la espera en cola y hasta la primera salida, y de tareas lentas y retraso de entrada; el último arranque se guarda en un archivo local.</li>
+      <li>Códigos de fallo en los reportes (sesión vencida, límite de uso, contexto demasiado largo) sin texto del error, y conteo de cierres sucios con la fase, versión y si hubo sueño o reinicio.</li>
+      <li>Imagen de canal con 20 iconos o una foto, y reinicio a las caras de los miembros; aprobación de pagos de Link con tarjeta de un solo uso.</li>
+      <li>Aviso de disco casi lleno en servidores alojados, una vez por estado, con comparación de planes.</li>
+    </ul>
+    <p class="small">Si encuentras otras mejoras de OpenBot que aporten, tráelas y explica por qué.</p>
+  </section>
+
+  <section>
+    <h2>7. Orden y preservación</h2>
+    <p>El trabajo se agrega sin desordenar lo que ya está: el orden de la app es parte de lo que hay que mantener.</p>
+    <ul>
+      <li><strong>Append-only:</strong> ids de agentes, habilidades, apps y conectores; métodos del host; rutas; claves de traducción. Lo nuevo se añade al final de su lista, nunca se renombra ni se reordena lo existente.</li>
+      <li>Campos nuevos con valor por defecto y migraciones aditivas; una pantalla existente conserva su comportamiento si el campo falta.</li>
+      <li>Una rama por área y commits pequeños; antes de empezar un área y al terminarla, corre la lista de regresión.</li>
+      <li>Lista de regresión, en cada etapa: rail y sus destinos, lienzo (abrir, añadir bot, nueva rutina, enlace, inspector), uso (lista completa, refresco, por cuenta), cuentas (listar, agregar, borrar, desconectar), n8n (abrir con sesión), WhatsApp (QR, mensaje entrante, bot elegido), perfiles por bot, borrar mensaje, color de chat, marketplace (agentes, CLIs, habilidades, grupos), traducciones.</li>
+      <li>Toda clave de traducción nueva entra en los 10 idiomas en el mismo cambio; ningún texto queda solo en inglés si ya existe la pantalla traducida.</li>
+      <li>Cada cambio de interfaz se replica en escritorio y Android; si un cliente no aplica, se documenta el motivo.</li>
+      <li>Si una función de OpenBot choca con el diseño de Codync, se adapta la interacción; no se elimina el comportamiento que ya había.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>8. Cómo trabajar</h2>
+    <ul>
+      <li>Antes de implementar, busca la función en <code>openbot-nightly</code>: copia lo que se pueda y adapta el resto.</li>
+      <li>El host manda (lógica, estado, secretos, instalación, red); los clientes dibujan y envían intenciones.</li>
+      <li>Cada cambio de interfaz se replica en escritorio y Android; el TUI solo donde aplique, diciendo qué cliente no aplica y por qué.</li>
+      <li>Diseño propio de Codync: componentes compartidos, sin controles nativos salvo las excepciones documentadas y con animación en cada apertura.</li>
+      <li>Estilo y nombres según <code>AGENTS.md</code>; sin archivos de más de ~500 líneas, sin código muerto, sin errores silenciados ni <code>unwrap()</code> fuera de pruebas.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>9. Validación obligatoria</h2>
+    <ul>
+      <li>Host: <code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code> (el test de symlinks puede fallar por permisos de Windows).</li>
+      <li>Escritorio: <code>npm run typecheck</code> y <code>npm test</code>. Android: <code>./gradlew :core:test :app:testDebugUnitTest :app:compileDebugKotlin</code>.</li>
+      <li>Punta a punta en la app instalada: flujo real, capturas y consola limpia.</li>
+      <li>Regresión de lo que ya funciona: rail, lienzo, uso, cuentas, n8n, WhatsApp (QR y mensaje entrante), perfiles.</li>
+      <li>Reporta lo que no se pudo probar y por qué.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>10. Cierre</h2>
+    <ul>
+      <li>Conventional Commits en inglés, un cambio lógico por commit, cuerpo si hace falta; sube al terminar y deja la rama en verde.</li>
+      <li>Resume en español: qué se agregó, qué se conservó, qué queda pendiente y qué se probó.</li>
+      <li>Deja la app abierta al final para que la persona lo revise.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>11. Primeros pasos</h2>
+    <ol>
+      <li>Sincroniza la rama y revisa <code>git log -15</code> y <code>git status</code>.</li>
+      <li>Lee <code>AGENTS.md</code>, <code>docs/architecture/overview.md</code> y <code>docs/guides/clean-code.md</code>.</li>
+      <li>Recorre la app instalada: rail, lienzo, uso, cuentas, n8n y WhatsApp.</li>
+      <li>Haz el inventario de OpenBot frente a Codync y empieza por workflows y conectores, que es lo que más valor aporta.</li>
+      <li>El catálogo completo de novedades, versión por versión, está en <code>changelog-catalog.html</code>.</li>
+    </ol>
+  </section>
+</main>
+
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > header, #brief, main > section')]
+      .map((section) => section.innerText.trim())
+      .filter(Boolean)
+      .join('\n\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      status.textContent = 'Copiado.'
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = text
+      document.body.append(area)
+      area.select()
+      document.execCommand('copy')
+      area.remove()
+      status.textContent = 'Copiado.'
+    }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

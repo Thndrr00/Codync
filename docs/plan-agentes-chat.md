@@ -215,6 +215,19 @@ arquitectura; no empezar sin los cuatro anteriores cerrados.
 17. Informe por patrón en `docs/features/agentes-chat.md`.
 18. Limpiar los archivos sueltos de la raíz del checkout.
 
+**Estado:** 1–18 hechos. 1–12 en el árbol (host: paginación, retención, registro automático,
+consulta lenta con 150 ms, solo SQLite documentado, export con cadena de conversión, S3 con SigV4
+probado contra los vectores publicados, toma con estado y pausa; escritorio/iOS/Android/TUI: páginas
+de versiones, grafo con sus páginas y tarjeta de toma). 13: paso propio en `development.md`
+(el PR usa sus viñetas *What's New* como respaldo). 14: `AGENTS.md` de 100 a 84 líneas, con la
+estructura y los comandos movidos a `file-structure.md` y `development.md`. 15: los 40 ADR leídos,
+las diferencias y lo adoptable en `docs/features/agentes-chat-adr-deltas.md`. 17: informe por patrón
+al día, con misiones y GitHub App ya construidos. 18: 24 archivos sueltos de la raíz a
+`docs/investigations/2026-11/`. 16 corrió como E2E de host con agentes guionizados (aprobaciones,
+rutinas, entrega firmada de la App), no en la app: sin SDK de Android, sin Xcode y sin Computer Use
+en este equipo. De paso, las corridas que un reinicio interrumpió vuelven cada una en su propio actor y
+ya no pisan el marcador `inflight` del chat, que también se reanuda.
+
 ---
 
 ## Orden y esfuerzo

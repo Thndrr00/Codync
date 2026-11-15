@@ -19,9 +19,10 @@ extension BotStore {
         }
     }
 
-    /// Every snapshot the bot published under `name`, newest first: an older one is read like the newest.
-    func fileVersions(_ botId: String, name: String) async throws -> [SharedFileVersion] {
-        try await withLink(replay: true) { try await $0.fileVersions(botId: botId, name: name) }
+    /// A page of the snapshots the bot published under `name`, newest first: an older one is read like the
+    /// newest. `before` is the previous page's `next`.
+    func fileVersions(_ botId: String, name: String, before: Int64? = nil) async throws -> (versions: [SharedFileVersion], next: Int64?) {
+        try await withLink(replay: true) { try await $0.fileVersions(botId: botId, name: name, before: before) }
     }
 
     /// A card on screen: the version it names is known now (history and the cache don't come as events), and the

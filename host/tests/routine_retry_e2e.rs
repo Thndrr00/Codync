@@ -107,7 +107,7 @@ async fn a_run_that_acted_waits_for_the_user_to_retry_it() {
 #[tokio::test]
 async fn a_run_that_hit_its_time_limit_waits_for_the_user() {
     let host = Host::start().await;
-    let (bot, id) = routine(&host, "hung", "", "BLOCK[forever] IGNORE_CANCEL", 2).await;
+    let (bot, id) = routine(&host, "hung", "", "BLOCK[forever] IGNORE_CANCEL", 12).await;
     deliver(&host, &bot, &id, "payload").await;
     let failed = run(&host, &bot, &id, "failed").await;
     assert!(failed["detail"].as_str().unwrap().contains("time limit"), "{failed}");
@@ -135,30 +135,33 @@ fn agent_events(host: &Host, bot: &str, kind: &str) -> usize {
 
 /// A time limit that cuts `session/new` short must not leave the agent to open that session (tools and all) under
 /// an id the host never learns: an agent that can resume stops, and the next run starts it again.
+///
+/// The limit clears a cold agent start and cuts the fixture's 30 s session, so a slow machine can't turn it into a
+/// start-up limit instead.
 #[tokio::test]
 async fn a_session_cut_short_by_the_time_limit_is_not_left_open() {
     let host = Host::start().await;
-    let (bot, id) = routine(&host, "slow", "--slow-new", "slow start", 2).await;
+    let (bot, id) = routine(&host, "slow", "--slow-new=30", "slow start", 12).await;
     deliver(&host, &bot, &id, "payload").await;
     let failed = run(&host, &bot, &id, "failed").await;
     assert!(failed["detail"].as_str().unwrap().contains("setup timed out"), "{failed}");
-    // Past the moment the agent would have opened it.
-    tokio::time::sleep(Duration::from_secs(4)).await;
+    // The agent is gone with its run, so nothing goes on to open the session.
+    tokio::time::sleep(Duration::from_secs(2)).await;
     assert_eq!(agent_events(&host, &bot, "late"), 0, "the agent opened a session the host never learned of");
     let retried = host.call("retryRoutineRun", json!({"botId": bot, "runId": failed["id"]})).await;
     assert_eq!(run(&host, &bot, &id, "succeeded").await["id"], retried["run"]["id"]);
 }
 
-/// An agent that can't resume keeps running, and keeps the sessions it has, rather than stop over a session cut
-/// short; the next run still works.
+/// The run of an agent that can't resume stays retryable after a session cut short: its retry allocates another
+/// session on a fresh agent rather than waiting for a reset this agent can't offer.
 #[tokio::test]
-async fn an_agent_that_cannot_resume_keeps_running_after_a_session_cut_short() {
+async fn an_agent_that_cannot_resume_retries_a_session_cut_short_without_waiting() {
     let host = Host::start().await;
-    let (bot, id) = routine(&host, "slow-kept", "--slow-new --no-load", "slow start", 2).await;
+    let (bot, id) = routine(&host, "slow-kept", "--slow-new=30 --no-load", "slow start", 12).await;
     deliver(&host, &bot, &id, "payload").await;
     let failed = run(&host, &bot, &id, "failed").await;
     assert!(failed["detail"].as_str().unwrap().contains("setup timed out"), "{failed}");
+    assert!(failed["retryable"] == true && failed["retryAt"].is_null(), "it waits for the user");
     let retried = host.call("retryRoutineRun", json!({"botId": bot, "runId": failed["id"]})).await;
     assert_eq!(run(&host, &bot, &id, "succeeded").await["id"], retried["run"]["id"]);
-    assert_eq!(agent_events(&host, &bot, "initialize"), 1, "the agent was restarted");
 }

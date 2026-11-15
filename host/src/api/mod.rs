@@ -22,6 +22,7 @@ mod rebinding;
 mod remote;
 mod roster;
 mod saved_searches;
+mod storage;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
@@ -162,6 +163,12 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     }
     if documents::METHODS.contains(&method) {
         return documents::call(hub, method, b);
+    }
+    if crate::s3::METHODS.contains(&method) {
+        if method != "s3Status" {
+            market::vault::unlock(hub.clone()).await?;
+        }
+        return storage::call(hub, method, b).await;
     }
     if matches!(method, "listComputerActivity" | "exportComputerActivity") {
         return computer_activity::read(hub, method, &b);

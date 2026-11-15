@@ -2,13 +2,7 @@
 
 ## Project Structure & Module Organization
 
-- `host/`: Rust daemon, ACP integration, SQLite storage, HTTP/SSE API, and terminal UI; unit tests live alongside modules in `src/`.
-- `apps/ios/`: iPhone app (SwiftUI); widgets live in `apps/ios/Widgets/`. `apps/ios/Kit/` is its Swift package: `CodyncKit` (models, clients, design primitives) and `CodyncUI` (screens and stores); tests in `apps/ios/Kit/Tests/CodyncKitTests/`.
-- `apps/desktop/`: desktop app for macOS, Linux and Windows (Electron, React, TypeScript): [docs/architecture/desktop-app.md](docs/architecture/desktop-app.md); how its views are styled: [docs/guides/desktop-styles.md](docs/guides/desktop-styles.md).
-- `apps/android/`: Android phone app (Kotlin, Jetpack Compose), ported from the iPhone app: `core` (models, crypto, transport), `design` (Codync's components), `app` (screens, store, widgets): [apps/android/README.md](apps/android/README.md).
-- `apps/screen-macos` and `apps/screen-linux`: Remote screen helpers.
-- `cloud/`: Cloudflare accounts, encrypted relay, Durable Objects and D1; tests live in `cloud/test/`. `private-relay/`: a single-process subset of that relay a person runs for their own computers (Node, `node:sqlite`), tests in `private-relay/test/`.
-- `relay/`: Cloudflare push worker and `test/`; `web/`: website (Next.js); `packaging/`: distribution templates; `docs/`: architecture and naming guidance.
+`host/` is the Rust daemon; `apps/` holds the four clients and the screen helpers; `cloud/`, `private-relay/`, `relay/`, `discord/`, `web/`, `packaging/` and `docs/` are the services, site, distribution and documentation. Tests sit beside the code they cover. Full map, targets and naming: [file structure](docs/architecture/file-structure.md).
 
 ## Host owns the logic
 
@@ -16,17 +10,7 @@
 
 ## Build, Test, and Development Commands
 
-Run from the repository root unless a command changes directories:
-
-- `xcodegen generate --spec apps/project.yml`: regenerate `apps/Codync.xcodeproj` after editing `apps/project.yml`; never edit `project.pbxproj` directly.
-- Use Xcode’s `iOS Dev` scheme for development and `iOS` for production; see [Dev app isolation](docs/guides/dev-app.md).
-- `cd apps/desktop && npm ci && npm run dev`: run the desktop app while developing and for its e2e check (renderer reloads on save, restart after `src/main` or preload changes; unpackaged, unsigned). In a linked worktree it runs a [sandbox](docs/guides/dev-app.md#worktree-sandboxes) beside the main checkout's Codync Dev; `--sandbox` does the same from the main checkout. In the main checkout, after a host change run `node tools/native-host.mjs dev` there first: `npm run dev` prefers that build over `host/target/debug`. Package `npm run dist:mac:dev` (about 45 s) only for what an unpackaged run lacks (bundled host install, Codync Screen / computer use, system permissions); `dist:*:main` only to check the production app. `npm run typecheck && npm test` for its CI checks.
-- `cd host && cargo build`: build the host; `cargo run -- serve` starts it in the foreground.
-- `cd host && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test`: run host CI checks.
-- `cd apps/android && ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` (JDK 21, Android SDK 37): Android checks; `adb install -r -d app/build/outputs/apk/debug/app-debug.apk` installs Codync Dev.
-- `cd apps/ios/Kit && xcodebuild test -scheme CodyncKit-Package -destination 'platform=iOS Simulator,name=<any iPhone>'`: run the iPhone package tests.
-- `cd cloud && npm ci && npm test && npm run typecheck`: validate the cloud service; see `docs/guides/cloudflare-testing.md` for integration checks.
-- `cd relay && npm ci && npm test && npm run typecheck`: install dependencies and validate the relay.
+Run from the repository root unless a command changes directories. Each component's build, run and test commands, with their requirements, are in [component checks](docs/guides/development.md#component-checks), and the apps' READMEs add their platform setup. Never hand-edit `project.pbxproj`: edit `apps/project.yml` and run `xcodegen generate --spec apps/project.yml`.
 
 ## Installing a new build: kill the old one first
 

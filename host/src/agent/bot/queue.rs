@@ -83,6 +83,7 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::SwitchBack => self.switch_back().await,
+            Cmd::ResumeQueued => self.next_in_queue(done_tx).await,
             Cmd::CallEnded { call } => {
                 if self.turn_call.as_ref() == Some(&call) {
                     self.turn_call = None;
@@ -139,12 +140,17 @@ impl Actor {
         true
     }
 
-    /// Queues `item`, and starts it right away when the bot is free.
+    /// Queues `item`, and starts it right away when the bot is free (and no takeover holds it).
     async fn enqueue(&mut self, item: Queued, done_tx: &mpsc::UnboundedSender<Done>) {
         self.queue.push_back(item);
         if self.turn.is_none() {
             self.next_in_queue(done_tx).await;
         }
+    }
+
+    /// A takeover in the person's hands (`chat::takeover`): nothing new starts until it is done.
+    fn held(&self) -> bool {
+        self.hub.runtime(&self.cfg.id).hold.is_some()
     }
 
     pub(super) async fn stop(&mut self) {
@@ -206,7 +212,7 @@ impl Actor {
             self.restart_agent().await;
         }
         let main = Lane::main(&self.cfg.id);
-        while self.turn.is_none() && self.routine_completion.is_none() && !self.queue.is_empty() {
+        while self.turn.is_none() && self.routine_completion.is_none() && !self.queue.is_empty() && !self.held() {
             match self.queue.front() {
                 Some(Queued::Routine(_)) => {
                     let Some(Queued::Routine(id)) = self.queue.pop_front() else { unreachable!("front is a routine") };
@@ -215,7 +221,12 @@ impl Actor {
                     match self.hub.routines.begin(&self.hub, &self.cfg.id, &id) {
                         Ok(Some(prepared)) => {
                             self.routine_deadline = Some(Instant::now() + prepared.timeout);
-                            let result = self.start_turn(prepared.lane, &[], &prepared.prompt, false, done_tx).await;
+                            let result = if prepared.resume {
+                                self.resume_interrupted(prepared.lane, done_tx).await;
+                                Ok(())
+                            } else {
+                                self.start_turn(prepared.lane, &[], &prepared.prompt, false, done_tx).await
+                            };
                             if let Err(error) = result {
                                 self.start_error(error, done_tx).await;
                             }
@@ -555,6 +566,11 @@ impl Actor {
 
     /// Marks a turn in the bot's own chat as running across host restarts (see [`Self::resume_interrupted`]).
     pub(super) fn set_inflight(&self, on: bool) {
+        // A routine run on a side actor recovers from its own run row instead (`Routines::restore`); the
+        // marker belongs to the chat, and would otherwise be overwritten or cleared by every run.
+        if self.side {
+            return;
+        }
         // A background check-in is retried by its scheduler, never as a recovered user request.
         let on = on && !self.proactive_turn;
         let value = match (&self.lane.thread, on) {

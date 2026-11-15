@@ -5,6 +5,7 @@ import { Sheet } from './Overlay'
 import { ShimmerText } from './ShimmerText'
 import { HStack, Spacer, VStack } from './Stack'
 import { Text } from './Text'
+import { useTr } from '../lib/use-language'
 
 export interface ComputerFrame {
   url?: string
@@ -20,14 +21,19 @@ export function ComputerCard({
   onClickPoint,
   onTypeText,
   onNavigate,
+  onTakeOver,
   onFinishTakeover,
 }: {
   frame: ComputerFrame
   onClickPoint?: (x: number, y: number) => void
   onTypeText?: (text: string) => void
   onNavigate?: (url: string) => void
+  /** The person is taking it: the agent waits from here. */
+  onTakeOver?: () => void
+  /** Done: handed back, the agent goes on. */
   onFinishTakeover?: () => void
 }) {
+  const tr = useTr()
   const [takeoverOpen, setTakeoverOpen] = useState(false)
   const [typedText, setTypedText] = useState('')
   const [urlInput, setUrlInput] = useState(frame.url ?? '')
@@ -64,9 +70,28 @@ export function ComputerCard({
                 {frame.action || 'Idle'}
               </Text>
             )}
-            <Button kind="secondary" onClick={() => setTakeoverOpen(true)}>
-              Take over
-            </Button>
+            {onTakeOver ? (
+              <Button
+                kind="secondary"
+                onClick={() => {
+                  onTakeOver()
+                  setTakeoverOpen(true)
+                }}
+              >
+                {tr('Take over')}
+              </Button>
+            ) : null}
+            {onFinishTakeover ? (
+              <Button
+                kind="primary"
+                onClick={() => {
+                  setTakeoverOpen(false)
+                  onFinishTakeover()
+                }}
+              >
+                {tr('Done, hand back')}
+              </Button>
+            ) : null}
           </HStack>
           {frame.screenshot ? (
             <img
@@ -94,7 +119,7 @@ export function ComputerCard({
           <HStack align="center" gap={10}>
             <Icon name="hand.raised.fill" size={14} color="var(--warning)" />
             <Text size="title3" weight="semibold">
-              Interactive Browser Takeover
+              {tr('Interactive Browser Takeover')}
             </Text>
             <Spacer />
             <Button
@@ -104,7 +129,7 @@ export function ComputerCard({
                 onFinishTakeover?.()
               }}
             >
-              Done — hand back to bot
+              {tr('Done, hand back')}
             </Button>
           </HStack>
 

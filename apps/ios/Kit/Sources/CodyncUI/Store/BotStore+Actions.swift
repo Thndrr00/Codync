@@ -129,6 +129,22 @@ extension BotStore {
         }
     }
 
+    /// Takes a takeover request in hand: the bot's agent waits until it is done.
+    public func takeTakeover(_ entry: Entry) {
+        answer(entry, "takeover") {
+            try await $0.takeTakeover(entryId: entry.id)
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+
+    /// Did the step a bot asked for: the card closes and the agent goes on.
+    public func resolveTakeover(_ entry: Entry, note: String? = nil) {
+        answer(entry, "done") {
+            try await $0.resolveTakeover(entryId: entry.id, note: note)
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+
     /// Views register only while visible in an active scene. Multiple windows may
     /// read the same conversation without unregistering each other.
     func setReading(_ token: UUID, botId: String, active: Bool) {

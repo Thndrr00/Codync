@@ -18,6 +18,7 @@ struct LibraryView: View {
     @State private var viewing: Attachment?
     @State private var versioning: VersioningFile?
     @State private var versions: [SharedFileVersion] = []
+    @State private var versionsNext: Int64?
 
     var body: some View {
         let items = files + model.artifacts.artifacts(of: botId).map(ChatLibraryItem.init)
@@ -65,11 +66,25 @@ struct LibraryView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    if let next = versionsNext {
+                        Button { Task { await loadVersions(target.name, before: next) } } label: {
+                            Text(L10n.tr("Show older versions")).font(.caption).foregroundStyle(Palette.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(20)
         }
         .fileExportSheet(model, botId: botId)
+    }
+
+    /// Reads the next page of a file's versions, appending it to the ones listed.
+    private func loadVersions(_ name: String, before: Int64? = nil) async {
+        guard let page = try? await model.fileVersions(botId, name: name, before: before) else { return }
+        versions += page.versions
+        versionsNext = page.next
     }
 
     @ViewBuilder private func row(_ item: ChatLibraryItem) -> some View {
@@ -94,8 +109,10 @@ struct LibraryView: View {
             .contextActions {
                 [MenuItem("Versions", icon: "clock.arrow.circlepath") {
                     Task {
-                        versions = (try? await model.fileVersions(botId, name: file.name)) ?? []
+                        versions = []
+                        versionsNext = nil
                         versioning = VersioningFile(name: file.name)
+                        await loadVersions(file.name)
                     }
                 }]
             }

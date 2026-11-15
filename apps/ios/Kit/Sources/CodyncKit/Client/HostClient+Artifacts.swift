@@ -15,11 +15,13 @@ public extension HostClient {
         return res.items.compactMap(\.item)
     }
 
-    /// Every snapshot a bot published under `name`, newest first: an older one is read like the newest.
-    func fileVersions(botId: String, name: String) async throws -> [SharedFileVersion] {
-        struct Res: Decodable { var versions: [SharedFileVersion] }
-        let res: Res = try await call("fileVersions", ["botId": botId, "name": name])
-        return res.versions
+    /// A page of the snapshots a bot published under `name`, newest first: an older one is read like the
+    /// newest. `before` is the previous page's `next`.
+    func fileVersions(botId: String, name: String, before: Int64? = nil) async throws -> (versions: [SharedFileVersion], next: Int64?) {
+        struct Body: Encodable { let botId: String; let name: String; let beforeSeq: Int64? }
+        struct Res: Decodable { var versions: [SharedFileVersion]; var next: Int64? }
+        let res: Res = try await call("fileVersions", Body(botId: botId, name: name, beforeSeq: before))
+        return (res.versions, res.next)
     }
 
     /// At most `FileDownload.chunkSize` bytes of an artifact's HTML, from `offset`.

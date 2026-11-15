@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenDesign × Codync — 67 mejoras y plan</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#ffffff; --surface:#f4f4f4; --surface-2:#fafafa; --border:#e6e6e6;
+    --text:#141414; --secondary:#6b6b6b; --tertiary:#747474;
+    --accent:#000000; --on-accent:#ffffff;
+    --amber:#8a6500; --amber-soft:rgba(184,135,0,.12); --amber-line:rgba(138,101,0,.32);
+    --danger:#c23a2b;
+    --radius-s:10px; --radius-m:12px; --radius-l:16px; --radius-xl:22px;
+    --shadow-s:0 2px 20px rgba(0,0,0,.06); --shadow-m:0 4px 32px rgba(0,0,0,.12);
+    --ease:cubic-bezier(.25,.1,.25,1);
+    --mono:ui-monospace,"SF Mono","Cascadia Code","Roboto Mono",Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0d0d0d; --surface:#171717; --surface-2:#121212; --border:#272727;
+      --text:#f2f2f2; --secondary:#9c9c9c; --tertiary:#7a7a7a;
+      --accent:#ffffff; --on-accent:#0d0d0d;
+      --amber:#f0b23c; --amber-soft:rgba(240,178,60,.10); --amber-line:rgba(240,178,60,.32);
+      --shadow-s:0 2px 20px rgba(0,0,0,.4); --shadow-m:0 4px 32px rgba(0,0,0,.5);
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  :focus-visible{outline:2px solid var(--text); outline-offset:2px; border-radius:4px}
+  .search input:focus-visible{outline:none; box-shadow:0 0 0 2px var(--text)}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    letter-spacing:-.011em;
+  }
+  ::selection{background:var(--text); color:var(--bg)}
+  .wrap{max-width:1180px; margin:0 auto; padding:56px 40px 96px}
+  @media (max-width:720px){ .wrap{padding:32px 20px 72px} }
+
+  /* ---------- header ---------- */
+  .eyebrow{display:flex; align-items:center; gap:10px; color:var(--tertiary); font-size:12px; letter-spacing:.08em; text-transform:uppercase}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--amber)}
+  h1{font-size:clamp(34px,5vw,52px); line-height:1.02; letter-spacing:-.035em; font-weight:640; margin:18px 0 0; text-wrap:balance}
+  h1 em{font-style:normal; color:var(--tertiary)}
+  .lede{max-width:64ch; color:var(--secondary); font-size:17px; line-height:1.55; margin:18px 0 0}
+  .stats{display:flex; flex-wrap:wrap; gap:0; margin-top:34px; border-top:1px solid var(--border); border-bottom:1px solid var(--border)}
+  .stat{flex:1 1 150px; padding:18px 22px 18px 0}
+  .stat + .stat{padding-left:22px; border-left:1px solid var(--border)}
+  .stat b{display:block; font-size:26px; font-weight:620; letter-spacing:-.03em; line-height:1.1}
+  .stat span{display:block; margin-top:4px; font-size:12px; color:var(--tertiary)}
+  @media (max-width:720px){ .stat{flex-basis:50%; padding:14px 12px 14px 0} .stat + .stat{padding-left:12px} }
+
+  /* ---------- callout ---------- */
+  .callout{
+    margin:40px 0 0; padding:24px 26px; border-radius:var(--radius-l);
+    background:var(--surface-2); border:1px solid var(--border);
+  }
+  .callout h3{margin:0 0 8px; font-size:13px; letter-spacing:.07em; text-transform:uppercase; color:var(--tertiary); font-weight:600}
+  .callout p{margin:0; max-width:88ch; color:var(--text); font-size:15.5px}
+  .callout p + p{margin-top:10px; color:var(--secondary); font-size:14px}
+  .callout strong{font-weight:620}
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; background:var(--amber-soft); color:var(--amber); font-size:12px; font-weight:600; white-space:nowrap}
+
+  /* ---------- section ---------- */
+  section{margin-top:64px; scroll-margin-top:120px}
+  .sec-head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:6px}
+  .sec-head h2{font-size:clamp(20px,2.4vw,26px); letter-spacing:-.025em; font-weight:620; margin:0}
+  .sec-head .count{font-size:12px; color:var(--tertiary); font-variant-numeric:tabular-nums}
+  .sec-note{margin:0 0 22px; max-width:80ch; color:var(--secondary); font-size:14.5px}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    position:sticky; top:0; z-index:20; margin:0 -40px 8px; padding:16px 40px;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:saturate(1.4) blur(14px);
+    border-bottom:1px solid var(--border);
+  }
+  @media (max-width:720px){ .toolbar{margin:0 -20px 8px; padding:14px 20px} }
+  @media (max-width:720px){
+    .chips{flex-wrap:nowrap; overflow-x:auto; width:100%; padding-bottom:2px; scrollbar-width:none}
+    .chips::-webkit-scrollbar{display:none}
+    .chip{flex:none}
+    .search{flex-basis:100%}
+  }
+  .toolbar-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .search{position:relative; flex:1 1 260px; min-width:200px}
+  .search input{
+    width:100%; padding:9px 12px 9px 34px; font:inherit; font-size:14px; color:var(--text);
+    background:var(--surface); border:1px solid transparent; border-radius:var(--radius-s); outline:none;
+    transition:border-color .16s var(--ease), background .16s var(--ease);
+  }
+  .search input:focus{border-color:var(--text); background:var(--bg)}
+  .search svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); width:14px; height:14px; color:var(--tertiary); pointer-events:none}
+  .chips{display:flex; gap:6px; flex-wrap:wrap}
+  .chip{
+    appearance:none; border:1px solid var(--border); background:transparent; color:var(--secondary);
+    padding:7px 12px; border-radius:999px; font:inherit; font-size:12.5px; font-weight:560; cursor:pointer;
+    transition:background .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease);
+  }
+  .chip:hover{color:var(--text); border-color:color-mix(in srgb, var(--text) 26%, transparent)}
+  .chip[aria-pressed="true"]{background:var(--text); color:var(--bg); border-color:var(--text)}
+  .chip.ghost[aria-pressed="true"]{background:var(--amber-soft); color:var(--amber); border-color:var(--amber-line)}
+  .spacer{flex:1}
+  .counter{font-size:12.5px; color:var(--tertiary); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .btn{
+    appearance:none; border:1px solid var(--text); background:var(--text); color:var(--bg);
+    padding:8px 14px; border-radius:999px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+    transition:opacity .16s var(--ease), transform .16s var(--ease);
+  }
+  .btn:hover{opacity:.86}
+  .btn:active{transform:scale(.98)}
+  .btn.secondary{background:transparent; color:var(--text); border-color:var(--border)}
+  .btn[disabled]{opacity:.4; cursor:default}
+
+  /* ---------- cards ---------- */
+  .grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px}
+  @media (max-width:820px){ .grid{grid-template-columns:1fr} }
+  .card{
+    position:relative; padding:18px 18px 16px; border:1px solid var(--border); border-radius:var(--radius-l);
+    background:var(--bg); transition:border-color .18s var(--ease), background .18s var(--ease), transform .18s var(--ease);
+  }
+  .card:hover{border-color:color-mix(in srgb, var(--text) 20%, transparent)}
+  .card.picked{background:var(--surface-2); border-color:color-mix(in srgb, var(--text) 30%, transparent)}
+  .card.rec::before{content:""; position:absolute; left:-1px; top:17px; bottom:17px; width:2px; border-radius:2px; background:var(--amber)}
+  .card .top{display:flex; align-items:flex-start; gap:10px}
+  .id{font:600 12px/1 var(--mono); color:var(--tertiary); letter-spacing:.02em; padding-top:2px; min-width:26px}
+  .card h3{margin:0; font-size:15px; line-height:1.35; font-weight:600; letter-spacing:-.015em; flex:1; text-wrap:pretty}
+  .check{
+    appearance:none; flex:none; width:20px; height:20px; margin:-2px -2px 0 0; border-radius:6px;
+    border:1.5px solid color-mix(in srgb, var(--text) 26%, transparent); background:transparent; cursor:pointer;
+    display:grid; place-items:center; transition:background .16s var(--ease), border-color .16s var(--ease);
+  }
+  .check:hover{border-color:var(--text)}
+  .check[aria-checked="true"]{background:var(--text); border-color:var(--text)}
+  .check svg{width:12px; height:12px; color:var(--bg); opacity:0; transition:opacity .12s var(--ease)}
+  .check[aria-checked="true"] svg{opacity:1}
+  .meta{display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 0; padding-left:36px}
+  .tag{font-size:11px; line-height:1; padding:4px 7px; border-radius:6px; background:var(--surface); color:var(--secondary); white-space:nowrap}
+  .tag.e-S{color:#2e7d32; background:rgba(46,125,50,.10)}
+  .tag.e-M{color:var(--text); background:var(--surface)}
+  .tag.e-L{color:#936000; background:rgba(147,96,0,.10)}
+  .tag.e-XL{color:var(--danger); background:rgba(194,58,43,.10)}
+  .tag.st-Parcial{background:var(--amber-soft); color:var(--amber)}
+  .tag.st-Base{border:1px dashed color-mix(in srgb, var(--text) 22%, transparent); background:transparent}
+  .tag.rec{background:var(--amber-soft); color:var(--amber); font-weight:600}
+  .body{margin:12px 0 0; padding-left:36px; display:grid; gap:8px}
+  .line{display:grid; grid-template-columns:58px 1fr; gap:8px; font-size:13px; line-height:1.5; color:var(--secondary)}
+  .line b{font-weight:600; color:var(--tertiary); font-size:11.5px; letter-spacing:.02em; padding-top:1px}
+  .line span{color:var(--text); text-wrap:pretty}
+  .line.origin span{color:var(--secondary); font-family:var(--mono); font-size:11.5px; line-height:1.5}
+  mark{background:var(--amber-soft); color:inherit; border-radius:3px; padding:0 2px}
+  .empty{padding:40px 0; color:var(--secondary); font-size:14px}
+
+  /* ---------- tables ---------- */
+  .table{width:100%; border-collapse:collapse; font-size:13.5px}
+  .table th{text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--tertiary); font-weight:600; padding:0 12px 10px 0; border-bottom:1px solid var(--border)}
+  .table td{padding:12px 12px 12px 0; border-bottom:1px solid var(--border); vertical-align:top; color:var(--secondary)}
+  .table td:first-child{color:var(--text); font-weight:600; white-space:nowrap}
+  .table td strong{color:var(--text); font-weight:600}
+  .table tr:last-child td{border-bottom:0}
+  .scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+
+  /* ---------- waves ---------- */
+  .waves{display:grid; gap:10px; margin-top:8px}
+  .wave{display:grid; grid-template-columns:150px 1fr 92px; gap:18px; align-items:start; padding:18px; border:1px solid var(--border); border-radius:var(--radius-l)}
+  .wave h3{margin:0; font-size:14px; font-weight:620; letter-spacing:-.01em}
+  .wave .ids{margin-top:5px; font:11.5px/1.5 var(--mono); color:var(--tertiary)}
+  .wave p{margin:0; font-size:13.5px; color:var(--secondary)}
+  .wave .days{text-align:right; font-size:12px; color:var(--tertiary); font-variant-numeric:tabular-nums}
+  .wave .days b{display:block; font-size:15px; color:var(--text); font-weight:600}
+  @media (max-width:760px){ .wave{grid-template-columns:1fr; gap:8px} .wave .days{text-align:left} }
+
+  /* ---------- footer ---------- */
+  .confirm{margin-top:24px; padding:22px 24px; border-radius:var(--radius-l); border:1px solid var(--amber-line); background:var(--amber-soft)}
+  .confirm h3{margin:0 0 6px; font-size:15px; font-weight:620}
+  .confirm p{margin:0; font-size:13.5px; color:var(--secondary)}
+  .confirm code{font-family:var(--mono); font-size:12px; background:var(--bg); padding:2px 6px; border-radius:5px; border:1px solid var(--border)}
+  footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--border); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; color:var(--tertiary); font-size:12px}
+  .toast{
+    position:fixed; left:50%; bottom:28px; transform:translate(-50%,16px); opacity:0; z-index:60;
+    background:var(--text); color:var(--bg); padding:10px 16px; border-radius:999px; font-size:13px; font-weight:560;
+    transition:opacity .2s var(--ease), transform .2s var(--ease); pointer-events:none;
+  }
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+  details{border-top:1px solid var(--border); padding:16px 0}
+  details summary{cursor:pointer; font-size:13px; font-weight:600; color:var(--text); list-style:none; display:flex; align-items:center; gap:8px}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"+"; font-family:var(--mono); color:var(--tertiary); width:12px}
+  details[open] summary::before{content:"–"}
+  details .detail-body{padding:12px 0 4px 20px; color:var(--secondary); font-size:13.5px}
+  details ul{margin:6px 0 0; padding-left:18px}
+  details li{margin:4px 0}
+
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+  @media print{
+    .toolbar,.toast,.check{display:none!important}
+    .wrap{max-width:none; padding:0}
+    .card{break-inside:avoid; border-color:#ccc}
+    section{margin-top:32px}
+    .pill,.tag{print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="dot"></span> Catálogo y plan · 13 nov 2026</div>
+    <h1>OpenDesign dentro de Codync<br><em>67 mejoras, cuatro niveles y cinco olas</em></h1>
+    <p class="lede">OpenDesign no es un editor de lienzo: es un espacio de trabajo de diseño para agentes. Lo que merece la pena no es su chat ni sus runtimes —Codync ya los tiene— sino sus cuatro planos portables: <strong>design systems</strong>, <strong>plantillas</strong>, <strong>skills</strong> y <strong>plugins</strong>, más el contrato que los hace coherentes.</p>
+    <div class="stats">
+      <div class="stat"><b>67</b><span>mejoras con ID</span></div>
+      <div class="stat"><b>8</b><span>bloques temáticos</span></div>
+      <div class="stat"><b>5</b><span>niveles de integración</span></div>
+      <div class="stat"><b>~2 sem</b><span>para la primera ola</span></div>
+      <div class="stat"><b>Apache-2.0</b><span>licencia del origen</span></div>
+    </div>
+  </header>
+
+  <div class="callout">
+    <h3>Recomendación</h3>
+    <p>Traer los cuatro planos al host (<strong>L1</strong>) y enriquecer los artefactos que ya existen (<strong>L2</strong>) antes de empaquetar nada. El estudio completo (<strong>L3</strong>) se decide después, como se hizo con n8n, ComfyUI y Penpot: solo escritorio, un proceso, un puerto, datos en la carpeta del usuario.</p>
+    <p><span class="pill">Si solo se confirman cinco</span> &nbsp;A1 · A5 · A8 · B8 · B3</p>
+  </div>
+
+  <!-- ================= TOOLBAR ================= -->
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-row">
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Buscar por nombre, origen o destino…" aria-label="Buscar mejoras">
+      </label>
+      <div class="chips" id="blocks" role="group" aria-label="Filtrar por bloque">
+        <button class="chip" data-block="all" aria-pressed="true">Todos</button>
+        <button class="chip" data-block="A" aria-pressed="false">A · Base</button>
+        <button class="chip" data-block="B" aria-pressed="false">B · Artefactos</button>
+        <button class="chip" data-block="C" aria-pressed="false">C · Catálogo</button>
+        <button class="chip" data-block="D" aria-pressed="false">D · Medios</button>
+        <button class="chip" data-block="E" aria-pressed="false">E · Equipo</button>
+        <button class="chip" data-block="F" aria-pressed="false">F · Handoff</button>
+        <button class="chip" data-block="G" aria-pressed="false">G · Seguridad</button>
+        <button class="chip" data-block="H" aria-pressed="false">H · Estudio</button>
+      </div>
+    </div>
+    <div class="toolbar-row" style="margin-top:10px">
+      <div class="chips" id="efforts" role="group" aria-label="Filtrar por esfuerzo">
+        <button class="chip ghost" data-eff="rec" aria-pressed="false">★ Recomendadas</button>
+        <button class="chip" data-eff="S" aria-pressed="false">S ≤ 1 día</button>
+        <button class="chip" data-eff="M" aria-pressed="false">M 2–4 d</button>
+        <button class="chip" data-eff="L" aria-pressed="false">L 1–2 sem</button>
+        <button class="chip" data-eff="XL" aria-pressed="false">XL &gt; 2 sem</button>
+      </div>
+      <div class="spacer"></div>
+      <span class="counter" id="counter">0 seleccionadas · 67 visibles</span>
+      <button class="btn secondary" id="clear" disabled>Limpiar</button>
+      <button class="btn" id="copy" disabled>Copiar selección</button>
+    </div>
+  </div>
+
+  <!-- ================= SECTIONS ================= -->
+  <div id="sections"></div>
+
+  <!-- ================= PLAN ================= -->
+  <section id="plan">
+    <div class="sec-head"><h2>Niveles de integración</h2><span class="count">la decisión de fondo</span></div>
+    <p class="sec-note">Cada nivel es acumulativo y se puede parar en cualquiera. L0 no toca código de clientes; L3 es el único que empaqueta un binario.</p>
+    <div class="scroll">
+      <table class="table">
+        <thead><tr><th>Nivel</th><th>Qué es</th><th>Coste</th><th>Clientes</th><th>Depende de OpenDesign</th><th>Riesgo</th></tr></thead>
+        <tbody>
+          <tr><td>L0</td><td>Su servidor MCP como conector instalable</td><td>1–2 d</td><td>Todos</td><td>Sí, instalado aparte</td><td>Bajo</td></tr>
+          <tr><td>L1</td><td><strong>Catálogo nativo</strong>: design systems, plantillas y skills en el host</td><td>2–3 sem</td><td>Todos</td><td>No</td><td>Bajo</td></tr>
+          <tr><td>L2</td><td><strong>Artefactos enriquecidos</strong>: decks, export, medios, versiones</td><td>3–4 sem</td><td>Todos</td><td>No</td><td>Medio</td></tr>
+          <tr><td>L3</td><td><strong>Estudio empaquetado</strong>: su daemon + web dentro de la app</td><td>4–6 sem</td><td>Escritorio</td><td>Sí, vendorizado</td><td>Alto</td></tr>
+          <tr><td>L4</td><td><strong>Colaboración</strong>: proyectos, comentarios, links públicos</td><td>6–8 sem</td><td>Todos</td><td>No</td><td>Alto</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:18px">
+      <details>
+        <summary>Encaje en el runner de motores (n8n · ComfyUI · Penpot · OpenDesign)</summary>
+        <div class="detail-body">
+          <p>La regla: un motor entra si arranca como un proceso, escucha en un puerto y guarda en su carpeta de usuario.</p>
+          <table class="table" style="margin-top:10px">
+            <thead><tr><th>Motor</th><th>Procesos</th><th>Runtime</th><th>Auth</th><th>Veredicto</th></tr></thead>
+            <tbody>
+              <tr><td>n8n</td><td>1</td><td>Node</td><td>Propietario sembrado</td><td>Dentro</td></tr>
+              <tr><td>ComfyUI</td><td>1</td><td>Python + torch</td><td>Ninguna</td><td>Dentro (Windows)</td></tr>
+              <tr><td>Penpot</td><td>4</td><td>JDK + Postgres + Redis</td><td>Propietario sembrado</td><td>Planificado aparte</td></tr>
+              <tr><td>OpenDesign</td><td>1</td><td>Node 24 + SQLite</td><td>Token local</td><td>Encaja; build Next.js</td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:10px">En forma es más simple que Penpot y parecido a n8n. Lo caro no es el proceso: es el build del frontend y que su daemon quiere lanzar sus propios agentes.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Por qué no solo L3 (y por qué no solo L1)</summary>
+        <div class="detail-body">
+          <p><strong>Solo L3</strong> mete un segundo runtime de agentes —credenciales y procesos duplicados—, no llega a iPhone ni Android, y su UI no sigue las convenciones de Codync.</p>
+          <p><strong>Solo L1</strong> deja fuera la edición libre: mover capas, comentar sobre el lienzo. Eso ya lo cubre el plan de Penpot. No compiten: Penpot es el lienzo; OpenDesign es brief → marca → artefacto.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Qué no conviene traer</summary>
+        <div class="detail-body">
+          <ul>
+            <li>Sus 26 runtimes de agentes: Codync ya tiene ACP, fallback y descubrimiento de modelos.</li>
+            <li>Su chat, sus proyectos y su SQLite como fuente de verdad: el host manda.</li>
+            <li>Su app Electron: si hay L3, se empaqueta el daemon + web.</li>
+            <li>Los 151 design systems de marcas: riesgo de marca y de licencia de fuentes.</li>
+            <li>El catálogo entero de 277 plugins: curaduría y cuarentena, no espejo.</li>
+            <li>OpenDesign Cloud y su telemetría: solo BYOK.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section id="waves">
+    <div class="sec-head"><h2>Plan por olas</h2><span class="count">10–12 semanas con un dev; 4–6 con dos</span></div>
+    <p class="sec-note">La Ola 1 son dos semanas y ya cambia cómo se ve todo lo que Codync produce. La Ola 3 solo se hace si se confirma el estudio empaquetado.</p>
+    <div class="waves">
+      <div class="wave">
+        <div><h3>0 · Prueba</h3><div class="ids">A1</div></div>
+        <p>Instalar el conector desde Extensiones; un bot lista un proyecto y lee un archivo. Sin código de clientes.</p>
+        <div class="days"><b>1–2 d</b>riesgo bajo</div>
+      </div>
+      <div class="wave">
+        <div><h3>1 · Marca y calidad</h3><div class="ids">A4 A5 A7 A8 B7 B8 B10 C4</div></div>
+        <p>Un bot con marca propia produce un artefacto validado, con marcos de dispositivo, colecciones y ocho skills de diseño.</p>
+        <div class="days"><b>10–12 d</b>todo el valor</div>
+      </div>
+      <div class="wave">
+        <div><h3>2 · Piezas y medios</h3><div class="ids">B1 B2 B3 B5 B12 C1 C2 C3 D1 D2</div></div>
+        <p>Un deck navegable con PDF e imagen generada llega al chat como adjunto en los cuatro clientes.</p>
+        <div class="days"><b>15–20 d</b>producto</div>
+      </div>
+      <div class="wave">
+        <div><h3>3 · Estudio</h3><div class="ids">H1–H8 D4–D6</div></div>
+        <p>En una máquina limpia se instala, abre el estudio, publica al chat y no deja huérfanos al cerrar.</p>
+        <div class="days"><b>20–25 d</b>solo escritorio</div>
+      </div>
+      <div class="wave">
+        <div><h3>4 · Equipo y handoff</h3><div class="ids">E1–E7 F1–F7 G1–G7</div></div>
+        <p>Un artefacto aprobado se comparte por link, se comenta y se convierte en PR.</p>
+        <div class="days"><b>continuo</b>después</div>
+      </div>
+    </div>
+
+    <div class="confirm">
+      <h3>Cómo confirmar</h3>
+      <p>Marcá las tarjetas y usá <strong>Copiar selección</strong>, o respondé con los IDs en el chat: <code>A1, A5, A8, B8, B3</code> — o directamente <code>Ola 1</code>. También podés pedir una parte: <code>A1 + C4</code>.</p>
+    </div>
+
+    <footer>
+      <span>Fuente: nexu-io/open-design · 0.13.0 · Apache-2.0 · verificado 2026-11-13</span>
+      <span>Documento completo: <code>docs/nuevo thndr/opendesign-67-mejoras-y-plan-de-integracion.md</code></span>
+    </footer>
+  </section>
+</div>
+
+<div class="toast" id="toast">Copiado</div>
+
+<script>
+const BLOCKS = [
+  {id:"A", title:"Base, catálogo y contrato de marca", note:"El cimiento: servicio del host, design systems propios y la marca resuelta por bot. A8 es el multiplicador de todo lo demás.", ids:"A1–A10"},
+  {id:"B", title:"Artefactos y visor", note:"Codync ya tiene artefactos HTML, tarjeta, visor y Library. Este bloque los extiende; ninguno los reemplaza.", ids:"B1–B12"},
+  {id:"C", title:"Plantillas, skills y plugins", note:"Lo que se instala y se reutiliza. C1 y C4 son la Ola 1: catálogo y perfiles, sin empaquetar nada.", ids:"C1–C9"},
+  {id:"D", title:"Medios: imagen, vídeo y audio", note:"Imagen sin GPU para el uso diario; vídeo solo si se asume el binario de HyperFrames.", ids:"D1–D7"},
+  {id:"E", title:"Colaboración, revisión y publicación", note:"Lo que convierte un artefacto en algo que se manda a alguien que no tiene Codync.", ids:"E1–E7"},
+  {id:"F", title:"Handoff a código", note:"El puente entre diseño aprobado y el repo que el bot ya tiene abierto.", ids:"F1–F7"},
+  {id:"G", title:"Seguridad y operación", note:"Casi todo se apoya en la política de egreso y las políticas de herramientas que ya existen.", ids:"G1–G7"},
+  {id:"H", title:"Estudio empaquetado, estilo n8n/ComfyUI", note:"Su daemon + web dentro de la app. Un proceso, un puerto, datos en la carpeta del usuario. Solo escritorio.", ids:"H1–H8"}
+];
+
+const ITEMS = [
+  // ---------- A ----------
+  {id:"A1",b:"A",t:"Conector open-design en Extensiones",w:"Catálogo de Apps; conector custom que lanza el servidor MCP de `od`, solo lectura por defecto",o:"servidor MCP stdio de od · project list / files read",e:"S",c:"Todos",s:"Nuevo",r:1},
+  {id:"A2",b:"A",t:"Proyectos OpenDesign como fuentes de contexto",w:"`designProjects` y panel Diseño en el editor de bot; el proyecto llega como carpeta de referencia",o:"GET /api/projects · /api/projects/:id/files",e:"M",c:"Todos",s:"Base"},
+  {id:"A3",b:"A",t:"Leer archivos sin exportar ZIP",w:"Herramienta `read_design_file`: paths normalizados, sin traversal, ≤ 256 KB",o:"od files list / od files read (MCP de solo lectura)",e:"S",c:"H",s:"Nuevo"},
+  {id:"A4",b:"A",t:"Servicio `design` propiedad del host",w:"`host/src/design/`: estado, catálogo, marca, export y eventos; ningún cliente guarda lógica",o:"Daemon: estado, proyectos, catálogos, SSE",e:"M",c:"H",s:"Base"},
+  {id:"A5",b:"A",t:"Catálogo propio de design systems",w:"6–10 sistemas propios empaquetados + Importar carpeta; tabla `design_system`; selector por bot",o:"design-systems/<marca>/DESIGN.md + tokens.css",e:"M",c:"Todos",s:"Nuevo",r:1},
+  {id:"A6",b:"A",t:"Importar marca desde URL o captura",w:"`extract_brand` propone tokens y DESIGN.md; el usuario confirma antes de guardar",o:"Flujo screenshot / URL → codifica DESIGN.md",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"A7",b:"A",t:"Selector de 5 direcciones visuales",w:"Cinco tarjetas con miniatura en el chat cuando el bot no tiene marca; la elegida queda fija",o:"Picker de 5 direcciones",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"A8",b:"A",t:"DESIGN.md por bot, workspace y grupo",w:"`bot.designSystem` + `workspace.designSystem`; una línea compacta en el perfil, como las skills",o:"El render lee el DESIGN.md activo",e:"S",c:"Todos",s:"Parcial",r:1},
+  {id:"A9",b:"A",t:"Formulario de preguntas estructuradas",w:"Tarjeta de preguntas con opciones sobre el sistema de aprobaciones; responde al turno en curso",o:"Question form del chat",e:"M",c:"Todos",s:"Parcial"},
+  {id:"A10",b:"A",t:"Biblioteca de referencias visuales por bot",w:"Adjuntos marcados «referencia» en la Library; el bot los recibe como contexto de diseño",o:"Capturas, fuentes y paletas acumuladas",e:"M",c:"Todos",s:"Parcial"},
+
+  // ---------- B ----------
+  {id:"B1",b:"B",t:"Artefactos tipo deck (slides)",w:"`publish_artifact {kind:\"deck\"}` con manifiesto de slides y validación; la tarjeta muestra la primera",o:"Modo deck · 15 plantillas · navegación horizontal",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"B2",b:"B",t:"Modo deck en el visor",w:"`←/→` y miniaturas en escritorio, swipe en móvil, `n/p` en TUI",o:"Miniaturas, notas del orador, swipe",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"B3",b:"B",t:"Export PDF",w:"`artifactExport {format:\"pdf\"}` → adjunto; escritorio por `printToPDF`, host con Chromium después",o:"Export PDF deck-aware por impresión",e:"M",c:"Todos",s:"Nuevo",r:1},
+  {id:"B4",b:"B",t:"Export PPTX",w:"Skill `pptx` + adjunto; el bot lo produce y lo publica",o:"Skill que conduce la exportación",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"B5",b:"B",t:"Export PNG / captura",w:"`artifactExport {format:\"png\"}` a 1x y 2x, para chats y redes",o:"Screenshot del artefacto",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"B6",b:"B",t:"Artefactos live con panel de tweaks",w:"Contrato `window.codyncTweaks`; el visor pinta sliders y selects y re-renderiza",o:"Manifiesto de tweaks, re-render sin recargar",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"B7",b:"B",t:"Marcos de dispositivo",w:"«Ver en» en el visor y miniatura acorde en la tarjeta",o:"iPhone 15 Pro, Pixel, escritorio",e:"S",c:"Todos",s:"Nuevo",r:1},
+  {id:"B8",b:"B",t:"Lint y autocrítica antes de publicar",w:"HTML, tamaño, enlaces, contraste, foco y reduced-motion; informe que el bot corrige",o:"/api/artifacts/lint + gate de 5 dimensiones",e:"M",c:"Todos",s:"Nuevo",r:1},
+  {id:"B9",b:"B",t:"Edición quirúrgica por comentario",w:"Anotación anclada por selector; el bot recibe «cambiá este nodo», no todo el HTML",o:"Comment-mode edits (parcial allí)",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"B10",b:"B",t:"Fijar, borrar y colecciones",w:"`pinArtifact`, papelera de 30 días, colecciones por bot",o:"Hueco propio (en Codync figura «not yet»)",e:"S",c:"Todos",s:"Nuevo",r:1},
+  {id:"B11",b:"B",t:"Artefactos en chats de grupo",w:"Tarjeta con autor, Library del grupo y respuesta al card",o:"Tarjetas por proyecto",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"B12",b:"B",t:"Historial de versiones con diff visual",w:"Tabla `artifact_version`, «ver esta» y diff lado a lado",o:"Cada publish reemplaza; allí se versiona el proyecto",e:"M",c:"Todos",s:"Nuevo"},
+
+  // ---------- C ----------
+  {id:"C1",b:"C",t:"Catálogo de plantillas de render",w:"Pestaña Diseño en Extensiones; instalar una la deja disponible para el bot",o:"design-templates · prototype/deck/image/video/audio/utility",e:"M",c:"Todos",s:"Parcial"},
+  {id:"C2",b:"C",t:"15 plantillas de deck × 36 temas",w:"Adaptadas a artefactos deck; los temas como variantes",o:"html-ppt-* y guizang-ppt",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"C3",b:"C",t:"Plantillas por escenario",w:"Filtros al pedir: «hacé el runbook», «el pitch», «el carrusel», «el onboarding»",o:"scenario: design, marketing, finance, hr, sale…",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"C4",b:"C",t:"Skills de diseño empaquetadas",w:"8–12 skills auditadas al catálogo; el formato `SKILL.md` ya es el mismo",o:"skills/ (100+) · critique · tweaks · handoff",e:"S",c:"Todos",s:"Parcial",r:1},
+  {id:"C5",b:"C",t:"Plugin compatible con open-design.json",w:"Aceptar el manifiesto como formato de plugin de Codync (skill, plantilla o receta)",o:"specVersion · od.kind · od.mode · capabilities · inputs",e:"M",c:"H",s:"Nuevo"},
+  {id:"C6",b:"C",t:"Instalar plugin desde carpeta, URL o registro",w:"`pluginInstall {source}` con validación, cuarentena y vista previa",o:"od plugin install ./local | https://… | registro",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"C7",b:"C",t:"Scaffold y validación de plugins",w:"`pluginScaffold`, `pluginValidate`; el bot puede escribir y validar antes de instalar",o:"od plugin scaffold / validate",e:"S",c:"H",s:"Nuevo"},
+  {id:"C8",b:"C",t:"Registro comunitario propio",w:"Registro firmado de plugins y skills con versiones y revocación (host o cloud)",o:"plugins/community · registry · skills.sh",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"C9",b:"C",t:"Plugin como receta de bot o equipo",w:"Un plugin instala instrucciones + skills + rutinas + marca (ya existen installAgent / installTeam)",o:"scenarios/ (od-default, od-figma-migration…)",e:"M",c:"Todos",s:"Parcial"},
+
+  // ---------- D ----------
+  {id:"D1",b:"D",t:"Herramienta de generación de imagen",w:"Servidor MCP `image` del host: archivo en el workspace + adjunto; proveedor por bot",o:"gpt-image-2 · ImageRouter · API propia",e:"M",c:"Todos",s:"Nuevo",r:1},
+  {id:"D2",b:"D",t:"93 prompts de imagen con preview",w:"Galería que inserta el brief en el compositor",o:"prompt-templates (modelo, aspecto, atribución)",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"D3",b:"D",t:"Router de modelos de imagen (BYOK)",w:"Extender la configuración de proveedores con modelos de imagen y prueba de conexión",o:"ImageRouter + presets OpenAI/Azure/Gemini/Ollama",e:"M",c:"H",s:"Parcial"},
+  {id:"D4",b:"D",t:"HyperFrames empaquetado",w:"Motor en el host + FFmpeg; HTML+GSAP → MP4 con Chrome headless y caché de composición",o:"design-templates/hyperframes",e:"XL",c:"D",s:"Nuevo"},
+  {id:"D5",b:"D",t:"Plantillas de vídeo con preview",w:"La misma galería que D2, categoría vídeo",o:"11 HyperFrames + 39 Seedance",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"D6",b:"D",t:"MP4 en el chat",w:"Adjunto reproducible con póster en escritorio y móvil; TUI abre con el reproductor del sistema",o:"MP4-as-chip",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"D7",b:"D",t:"Audio y TTS",w:"Pista de audio para vídeo y voz; enlaza con voice-call",o:"Suno v5 / Lyria 2 · proxy senseaudio",e:"M",c:"Todos",s:"Parcial"},
+
+  // ---------- E ----------
+  {id:"E1",b:"E",t:"Proyectos de diseño compartidos",w:"Proyecto = carpeta del workspace + artefactos + marca, compartido con el equipo de la cuenta",o:"Workspace colaborativo",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"E2",b:"E",t:"Comentarios anclados al artefacto",w:"Hilos sobre un nodo o coordenada; el bot los lee y responde",o:"Comment mode",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"E3",b:"E",t:"Aprobación antes de publicar",w:"Estado draft → in_review → approved; el link público solo sale de approved",o:"Ciclo iterar / confirmar",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"E4",b:"E",t:"Enlaces públicos firmados",w:"URL con token HMAC, caducidad y revocación, servida por el relay o el cloud",o:"«Anyone with the link» (Grok); ausente en Codync",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"E5",b:"E",t:"Feedback → turno del bot con contexto",w:"Extender la respuesta al artefacto con anotaciones y captura del área",o:"Feedback del equipo al agente",e:"S",c:"Todos",s:"Parcial"},
+  {id:"E6",b:"E",t:"Aprobación slide por slide",w:"Estado por slide, comentarios y «pedir cambios en la 4»",o:"Revisión de decks",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"E7",b:"E",t:"Bandeja de revisión",w:"Vista Revisión con lo que espera al usuario: artefactos, aprobaciones y PRs",o:"«All projects» + feedback",e:"M",c:"Todos",s:"Parcial"},
+
+  // ---------- F ----------
+  {id:"F1",b:"F",t:"«Implementar este diseño» → rama/PR",w:"Acción que crea rama en el workspace y un turno con el artefacto como spec",o:"Handoff a Cursor / Codex",e:"M",c:"Todos",s:"Nuevo",r:1},
+  {id:"F2",b:"F",t:"Export React / Next / Vue",w:"Skill que escribe componentes en el workspace",o:"od-react-export · od-nextjs-export · od-vue-export",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"F3",b:"F",t:"Migración Figma → código",w:"Importar selección o archivo y generar componentes",o:"od-figma-migration · figma-plugin",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"F4",b:"F",t:"Refrescar un codebase a DESIGN.md",w:"Turno con repo + marca que propone un PR acotado",o:"od-code-migration",e:"L",c:"Todos",s:"Nuevo"},
+  {id:"F5",b:"F",t:"Sincronizar tokens al repo",w:"Escribir `tokens.css` / Tailwind en el workspace y abrir PR",o:"tokens.css + manifest",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"F6",b:"F",t:"Handoff doc como artefacto",w:"Plantilla que el bot rellena con medidas, estados y notas",o:"Spec de componentes y estados",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"F7",b:"F",t:"Importar paquetes de diseño",w:"ZIP/SVG como referencias o artefacto base",o:"/api/import/claude-design · SVG · Penpot",e:"M",c:"Todos",s:"Nuevo"},
+
+  // ---------- G ----------
+  {id:"G1",b:"G",t:"Proxy BYOK con guardia SSRF",w:"Reutilizar la política de egreso; metadata y link-local siempre fuera",o:"/api/proxy/*/stream con SSRF en el borde",e:"M",c:"H",s:"Parcial"},
+  {id:"G2",b:"G",t:"Presets de proveedor",w:"Formulario único (URL + clave + modelo) con prueba de conexión",o:"OpenAI · Anthropic · Azure · Gemini · Ollama · vLLM",e:"S",c:"Todos",s:"Parcial"},
+  {id:"G3",b:"G",t:"Allowlist de gateways internos",w:"Lista exacta por computadora, auditable, solo para endpoints configurados",o:"OD_ALLOWED_INTERNAL_HOSTS",e:"S",c:"H",s:"Nuevo"},
+  {id:"G4",b:"G",t:"Solo lectura por defecto",w:"Aplicar las políticas de herramientas al conector de diseño y a los plugins",o:"MCP read-only · capabilities mínimas",e:"S",c:"H",s:"Parcial"},
+  {id:"G5",b:"G",t:"Cuarentena y firma de terceros",w:"Instalar en cuarentena, revisar y aprobar el dueño; firma del registro",o:"Flujo de publicación del registro",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"G6",b:"G",t:"Procedencia por artefacto",w:"Guardar marca, plantilla, plugin y commit con cada artefacto; mostrarlo en el visor",o:"Paquetes con procedencia",e:"S",c:"Todos",s:"Nuevo"},
+  {id:"G7",b:"G",t:"Cuotas y límites",w:"Límites por bot y computadora de tamaño, exports, imágenes y minutos de vídeo; visibles en Usage",o:"Artefacto ≤ 5 MiB · renders",e:"M",c:"H",s:"Parcial"},
+
+  // ---------- H ----------
+  {id:"H1",b:"H",t:"Paquete resources/opendesign",w:"Build del monorepo + Node embebido; datos en `userData/opendesign`, puerto libre, salud por una ruta `/api/*`",o:"Next.js + daemon · Node 24",e:"XL",c:"D",s:"Nuevo"},
+  {id:"H2",b:"H",t:"Ventana embebida",w:"Patrón `N8nWindow`: página de espera, origen local permitido, salto al editor, enlaces al navegador",o:"Shell de escritorio + preview",e:"M",c:"D",s:"Nuevo"},
+  {id:"H3",b:"H",t:"Auto-login local sin cuenta",w:"Token en el vault e inyección por sesión; nunca se ve un login",o:"OD_API_TOKEN · Basic Auth",e:"S",c:"D",s:"Nuevo"},
+  {id:"H4",b:"H",t:"Tarjeta Diseño en rail y Extensiones",w:"Abrir, Parar, Log, Espacio y Actualizar, igual que n8n",o:"Home y proyectos del producto",e:"S",c:"D",s:"Nuevo"},
+  {id:"H5",b:"H",t:"Ciclo de vida y respaldos",w:"Arranque con el host, parada ordenada, sin huérfanos, respaldo `.zip` antes de actualizar",o:"Daemon + SQLite",e:"M",c:"D",s:"Nuevo"},
+  {id:"H6",b:"H",t:"Puente MCP bidireccional",w:"Codync → OpenDesign (proyectos, archivos, plugins) y OpenDesign → Codync (chat, artefactos)",o:"Servidor MCP + BYOK",e:"L",c:"H",s:"Nuevo"},
+  {id:"H7",b:"H",t:"Artefactos compartidos entre ambos",w:"Publicar desde el estudio a la Library y abrir artefactos de Codync en el estudio",o:"Bloque <artifact> · proyectos",e:"M",c:"Todos",s:"Nuevo"},
+  {id:"H8",b:"H",t:"Actualización, rollback y matriz",w:"Versión fijada, reemplazo versionado, rollback, matriz Windows/macOS/Linux y tamaño medido",o:"Releases 0.x",e:"M",c:"D",s:"Nuevo"}
+];
+
+const state = { block:"all", effort:null, q:"" };
+const store = {
+  read(){
+    try { return new Set(JSON.parse(localStorage.getItem("od-picked") || "[]")); }
+    catch { return new Set(); }
+  },
+  write(ids){
+    try { localStorage.setItem("od-picked", JSON.stringify([...ids])); } catch {}
+  }
+};
+const picked = store.read();
+const CLIENT_LABEL = { H:"Host", D:"Escritorio", M:"Móvil", T:"Terminal", Todos:"4 clientes" };
+const $ = (s, r=document) => r.querySelector(s);
+
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function code(s){ return esc(s).replace(/`([^`]+)`/g, "<code style=\"font-family:var(--mono);font-size:11.5px\">$1</code>"); }
+
+function render(){
+  const host = $("#sections");
+  host.innerHTML = "";
+  let visible = 0, total = ITEMS.length;
+
+  BLOCKS.forEach(block => {
+    if (state.block !== "all" && state.block !== block.id) return;
+    const items = ITEMS.filter(it => {
+      if (it.b !== block.id) return false;
+      if (state.effort === "rec" && !it.r) return false;
+      if (state.effort && state.effort !== "rec" && it.e !== state.effort) return false;
+      if (state.q) {
+        const hay = (it.id + " " + it.t + " " + it.w + " " + it.o + " " + it.c + " " + it.s).toLowerCase();
+        if (!hay.includes(state.q.toLowerCase())) return false;
+      }
+      return true;
+    });
+    if (!items.length) return;
+    visible += items.length;
+
+    const sec = document.createElement("section");
+    sec.innerHTML = `
+      <div class="sec-head"><h2>${block.id} · ${esc(block.title)}</h2><span class="count">${items.length} de ${block.ids}</span></div>
+      <p class="sec-note">${esc(block.note)}</p>
+      <div class="grid"></div>`;
+    const grid = $(".grid", sec);
+
+    items.forEach(it => {
+      const card = document.createElement("article");
+      card.className = "card" + (it.r ? " rec" : "") + (picked.has(it.id) ? " picked" : "");
+      card.dataset.id = it.id;
+      card.innerHTML = `
+        <div class="top">
+          <span class="id">${it.id}</span>
+          <h3>${esc(it.t)}</h3>
+          <button class="check" role="checkbox" aria-checked="${picked.has(it.id)}" aria-label="Elegir ${it.id}" data-id="${it.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </button>
+        </div>
+        <div class="meta">
+          <span class="tag e-${it.e}">${it.e}</span>
+          <span class="tag">${CLIENT_LABEL[it.c]}</span>
+          <span class="tag st-${it.s}">${it.s}</span>
+          ${it.r ? '<span class="tag rec">★ recomendada</span>' : ""}
+        </div>
+        <div class="body">
+          <div class="line"><b>Codync</b><span>${code(it.w)}</span></div>
+          <div class="line origin"><b>Origen</b><span>${esc(it.o)}</span></div>
+        </div>`;
+      grid.appendChild(card);
+    });
+    host.appendChild(sec);
+  });
+
+  if (!visible) {
+    host.innerHTML = '<p class="empty">Nada coincide con este filtro. Probá con otro bloque o limpiá la búsqueda.</p>';
+  }
+  $("#counter").textContent = `${picked.size} seleccionadas · ${visible} visibles`;
+  $("#copy").disabled = picked.size === 0;
+  $("#clear").disabled = picked.size === 0;
+}
+
+function persist(){
+  store.write(picked);
+}
+
+document.addEventListener("click", e => {
+  const check = e.target.closest(".check");
+  if (check) {
+    const id = check.dataset.id;
+    if (picked.has(id)) picked.delete(id); else picked.add(id);
+    check.setAttribute("aria-checked", picked.has(id));
+    check.closest(".card").classList.toggle("picked", picked.has(id));
+    persist(); render();
+    return;
+  }
+  const chip = e.target.closest(".chip");
+  if (chip) {
+    if (chip.dataset.block) {
+      state.block = chip.dataset.block;
+      document.querySelectorAll("#blocks .chip").forEach(c => c.setAttribute("aria-pressed", c === chip));
+    }
+    if (chip.dataset.eff) {
+      const val = chip.dataset.eff;
+      state.effort = state.effort === val ? null : val;
+      document.querySelectorAll("#efforts .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.eff === state.effort));
+    }
+    render();
+  }
+});
+
+$("#q").addEventListener("input", e => { state.q = e.target.value.trim(); render(); });
+
+$("#clear").addEventListener("click", () => {
+  picked.clear(); persist(); render(); toast("Selección vacía");
+});
+
+$("#copy").addEventListener("click", async () => {
+  const ids = ITEMS.filter(i => picked.has(i.id)).map(i => i.id);
+  const text = ids.join(", ");
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }
+  toast(`${ids.length} IDs copiados`);
+});
+
+let toastTimer;
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+render();
+</script>
+</body>
+</html>

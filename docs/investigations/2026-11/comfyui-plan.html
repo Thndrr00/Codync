@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComfyUI dentro de Codync — traerlo como n8n</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f5ef; --ink:#1a1917; --soft:#5f5a51; --rule:#e0dbd0; --mark:#6b46c9; --warn:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121115; --ink:#eae7ee; --soft:#a6a1ad; --rule:#2c2933; --mark:#b79bf5; --warn:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 880px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(27px,4vw,37px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--mark); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.84em/1.5 ui-monospace,Consolas,monospace; }
+  .verdict { border-left:4px solid var(--mark); padding:4px 0 4px 16px; font-size:18px; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--warn); padding-left:14px; }
+  .fase { border:1px solid var(--rule); border-radius:3px; padding:14px 16px; margin:12px 0; }
+  .fase h3 { margin-top:0; }
+  .small { font-size:14px; color:var(--soft); }
+  table { border-collapse: collapse; width:100%; font-size:15px; }
+  td, th { border-bottom:1px solid var(--rule); padding:6px 8px; text-align:left; vertical-align: top; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">ComfyUI · integración nativa como n8n</p>
+  <h1>Traer ComfyUI entero, no un parecido</h1>
+  <p class="lede">Instalarlo, correrlo y abrirlo desde Codync como ya se hace con n8n, con su ventana, su estado y sus herramientas para los agentes.</p>
+  <div class="bar"><button id="copy">Copiar el plan</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <p class="verdict"><strong>Se replica el modelo de n8n:</strong> el host instala ComfyUI en su carpeta, lo arranca en un puerto local, lo muestra en una ventana propia y lo expone a los agentes. Nada de un conector “similar”: es ComfyUI, con su editor real.</p>
+
+  <h2>1. Qué se copia de n8n</h2>
+  <table>
+    <tr><th>Pieza de n8n</th><th>Equivalente en ComfyUI</th></tr>
+    <tr><td>Estado y ajustes (<code>n8n.rs</code>, kv de ruta, puerto y activado)</td><td><code>host/src/comfy.rs</code> con <code>comfy.path</code>, <code>comfy.port</code>, <code>comfy.enabled</code></td></tr>
+    <tr><td>Instalar y reparar la instalación</td><td>Descargar el paquete portable de ComfyUI y descomprimirlo en la carpeta de datos</td></tr>
+    <tr><td>Arrancar/parar con el host, estado <code>starting/running/error</code></td><td>Igual, con <code>main.py --listen 127.0.0.1 --port</code>; se para con el host</td></tr>
+    <tr><td>Ventana propia (<code>n8n.ts</code>) con página de inicio y editor</td><td><code>comfy.ts</code>: página de estado y luego el editor de ComfyUI</td></tr>
+    <tr><td>Botón en el rail y tarjeta en Marketplace</td><td>Entrada “ComfyUI” en el rail y app “ComfyUI” en Extensiones › Apps</td></tr>
+    <tr><td>Conector MCP para que los agentes lo usen</td><td>MCP local <code>comfyui</code> con herramientas de workflow, imagen y estado</td></tr>
+  </table>
+
+  <h2>1b. De dónde sale el código</h2>
+  <p>Igual que con n8n, <strong>no se copia el código de ComfyUI dentro de Codync</strong>. Se instala su paquete oficial en una carpeta de datos y Codync aporta solo la capa de integración. Así se actualiza ComfyUI sin recompilar la app y la licencia de cada proyecto queda clara.</p>
+  <table>
+    <tr><th>En Codync (integración)</th><th>Fuera (programa)</th></tr>
+    <tr><td><code>host/src/comfy.rs</code>: instalar, arrancar, parar, estado, puerto</td><td>Paquete portable de ComfyUI en <code>data/comfy</code></td></tr>
+    <tr><td><code>apps/desktop/src/main/comfy.ts</code>: ventana</td><td>Su editor web servido en <code>127.0.0.1:8188</code></td></tr>
+    <tr><td><code>views/comfy/ComfyWindow.tsx</code> y <code>settings/ComfySettings.tsx</code></td><td>Modelos en <code>models/</code></td></tr>
+    <tr><td><code>host/comfy-bridge/</code>: MCP para agentes</td><td>Sus nodos y workflows</td></tr>
+    <tr><td>Alta en rail, Marketplace, preload e IPC</td><td>—</td></tr>
+  </table>
+  <p>Referencia real del patrón n8n ya en la rama: <code>host/src/n8n.rs</code>, <code>apps/desktop/src/main/n8n.ts</code>, <code>views/n8n/</code>, <code>settings/N8nSettings.tsx</code> y <code>host/n8n-nodes-codync/</code>. ComfyUI no necesita un paquete de nodos: su puente MCP cubre lo mismo.</p>
+
+  <h2>2. Antes de instalar</h2>
+  <ul>
+    <li><strong>GPU:</strong> NVIDIA con driver al día es lo recomendado. AMD funciona con su build ROCm; sin GPU, ComfyUI arranca en CPU y avisa de la lentitud.</li>
+    <li><strong>Disco:</strong> el paquete y PyTorch ocupan varios GB; cada checkpoint otros 2–7 GB. Se comprueba espacio antes y se dice cuánto falta.</li>
+    <li><strong>Windows:</strong> el paquete portable trae su propio Python y torch, así no se toca el del sistema ni se pide Visual Studio.</li>
+    <li>Se escribe en la carpeta de datos del host, no en <code>Program Files</code>; sobrevive a actualizaciones de la app.</li>
+  </ul>
+
+  <h2>3. Instalación</h2>
+  <ol>
+    <li>Descarga del paquete portable oficial a una carpeta temporal, con barra de progreso y verificación de tamaño.</li>
+    <li>Descompresión en <code>data/comfy</code>, con el mismo terminal de instalación que usan los agentes.</li>
+    <li>Comprobación: <code>main.py</code> existe, hay espacio y un checkpoint mínimo; si no hay GPU, se marca modo CPU.</li>
+    <li>Al terminar: activar, arrancar y abrir la ventana. La tarjeta queda con Abrir, Actualizar, Parar y Carpeta de modelos.</li>
+  </ol>
+  <p class="note">El paquete no incluye modelos: la app deja abierta la carpeta <code>models/checkpoints</code> y explica qué falta cuando un workflow falla por un modelo ausente.</p>
+
+  <h2>4. Ejecución y ventana</h2>
+  <pre>python main.py --listen 127.0.0.1 --port 8188 --preview-method auto</pre>
+  <ul>
+    <li>Solo escucha en <code>127.0.0.1</code>; si se abre a la red, se avisa y se sugiere proxy con token.</li>
+    <li>Puerto por defecto 8188, configurable como en n8n; se comprueba libre antes de arrancar.</li>
+    <li>La ventana muestra una página propia con “Iniciando ComfyUI…”, el progreso y el error si falla; al estar listo carga el editor y ya no sale de su origen.</li>
+    <li>Cerrar la ventana no lo para; el estado vive en el rail y en Ajustes.</li>
+  </ul>
+
+  <h2>5. Herramientas para agentes</h2>
+  <ul>
+    <li>MCP local <code>comfyui</code>, registrado como conector interno: <code>list_workflows</code>, <code>run_workflow</code>, <code>job_status</code>, <code>cancel_job</code>, <code>upload_image</code>.</li>
+    <li>El host descarga el resultado a la carpeta del bot y lo adjunta al mensaje, con vista previa; nada de rutas externas.</li>
+    <li>Un trabajo a la vez por equipo, tiempo máximo y cancelación; el agente recibe el aviso al terminar.</li>
+    <li>Un workflow por defecto por bot, elegido en sus ajustes, para que “hazme una imagen de X” no dependa de adivinar.</li>
+  </ul>
+
+  <h2>6. Fases</h2>
+  <article class="fase">
+    <h3>Fase 1 · Instalar, detectar y arrancar (3–4 días)</h3>
+    <ul>
+      <li>Descarga, descompresión, comprobaciones, estado, puerto y parada con el host.</li>
+      <li>Aceptación: desde una máquina limpia, “Instalar” deja ComfyUI corriendo en 8188 y el editor carga.</li>
+    </ul>
+  </article>
+  <article class="fase">
+    <h3>Fase 2 · Ventana y rail (1 día)</h3>
+    <ul>
+      <li>Ventana con página de inicio, origen permitido, entrada en el rail y tarjeta de Marketplace.</li>
+      <li>Aceptación: el rail abre y cierra la ventana; el estado se ve en ambos sitios.</li>
+    </ul>
+  </article>
+  <article class="fase">
+    <h3>Fase 3 · MCP y adjuntos (2–3 días)</h3>
+    <ul>
+      <li>Conector, herramientas, workflow por defecto, cola, cancelación y adjuntos con vista previa.</li>
+      <li>Aceptación: un bot genera una imagen que llega como adjunto y se puede cancelar a mitad.</li>
+    </ul>
+  </article>
+  <article class="fase">
+    <h3>Fase 4 · Imágenes de entrada y lotes (2 días)</h3>
+    <ul>
+      <li>Subida para img2img e inpainting, máscaras, semilla y lotes; validación de nodos con <code>/object_info</code>.</li>
+      <li>Aceptación: una imagen adjunta viaja al nodo correcto y respeta la máscara.</li>
+    </ul>
+  </article>
+  <article class="fase">
+    <h3>Fase 5 · Actualizar y quitar (1–2 días)</h3>
+    <ul>
+      <li>Actualizar conservando modelos y workflows; quitar el programa sin borrar modelos salvo confirmación.</li>
+      <li>Aceptación: actualizar no pierde la carpeta de modelos; quitar libera el programa.</li>
+    </ul>
+  </article>
+
+  <h2>7. Riesgos</h2>
+  <ul>
+    <li><strong>VRAM:</strong> un trabajo grande bloquea la cola; el límite y la cancelación son obligatorios, y se avisa del consumo.</li>
+    <li><strong>Disco:</strong> los modelos llenan el disco; comprobación previa y aviso con la ruta.</li>
+    <li><strong>Drivers:</strong> sin CUDA al día, el modo CPU es muy lento; se detecta y se explica.</li>
+    <li><strong>Puerto ocupado:</strong> se elige otro y se informa, como n8n.</li>
+    <li><strong>Seguridad:</strong> sin auth propio, se queda en local; abrirlo fuera exige proxy con token.</li>
+    <li><strong>Actualizaciones:</strong> pueden cambiar nodos; los workflows guardados se validan antes de ejecutar.</li>
+  </ul>
+
+  <h2>8. Lo que no cambia</h2>
+  <ul>
+    <li>n8n sigue igual; ComfyUI es otra entrada con su misma mecánica.</li>
+    <li>Rail, lienzo, uso, cuentas, WhatsApp, perfiles, marketplace y traducciones quedan como están.</li>
+    <li>Sin instalar, la entrada solo muestra “Instalar”; ninguna pantalla existente cambia.</li>
+  </ul>
+
+  <h2>9. Decisión</h2>
+  <p>Se empieza por la fase 1 con el paquete portable y modo local, que es lo que demuestra que “es ComfyUI de verdad”. El resto se monta encima con el mismo patrón de n8n.</p>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

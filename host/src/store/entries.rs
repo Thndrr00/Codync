@@ -229,16 +229,21 @@ impl Store {
         Ok(rows)
     }
 
-    /// A chat's messages with files (shared by a bot, attached by the user), newest first: its Library.
+    /// A page of a chat's messages with files (shared by a bot, attached by the user), newest first
+    /// and only before `seq`: its Library. `name` keeps just the messages carrying a file of that
+    /// name, which is how a file's versions page.
     // ponytail: scans the chat's entries without an index; add one if a long chat's Library gets slow.
-    pub fn file_messages(&self, bot_id: &str, limit: i64) -> Result<Vec<Entry>> {
+    pub fn file_messages(&self, bot_id: &str, name: Option<&str>, before: i64, limit: i64) -> Result<Vec<Entry>> {
         let c = self.db.locked();
         let mut st = c.prepare(&format!(
-            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC}
+            "SELECT {ENTRY_COLS} FROM entries WHERE bot_id = ?1 AND {PUBLIC} AND seq < ?4
                AND (json_array_length(data, '$.files') > 0 OR json_array_length(data, '$.attachments') > 0)
-             ORDER BY seq DESC LIMIT ?2"
+               AND (?2 IS NULL
+                 OR EXISTS (SELECT 1 FROM json_each(data, '$.files') WHERE json_extract(value, '$.name') = ?2)
+                 OR EXISTS (SELECT 1 FROM json_each(data, '$.attachments') WHERE json_extract(value, '$.name') = ?2))
+             ORDER BY seq DESC LIMIT ?3"
         ))?;
-        Ok(st.query_map(params![bot_id, limit], row_entry)?.collect::<rusqlite::Result<_>>()?)
+        Ok(st.query_map(params![bot_id, name, limit, before], row_entry)?.collect::<rusqlite::Result<_>>()?)
     }
 
     /// Permission cards still waiting for this bot's user, newest first: its open approvals.

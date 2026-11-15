@@ -129,15 +129,20 @@ clock is injected in its tests.
 
 A human takeover request (`request_handoff`, `host/src/chat/takeover.rs`) pushes `NeedsInput` once as it is
 posted (`takeoverRequest.notified`), and a 60 second sweep turns it into `expired` after 30 minutes, with the
-chat line rewritten as "Takeover request expired". Desktop and Android show an expired card closed and keep it
-out of the pending decisions; the terminal shows the rewritten line. iOS has no takeover card. This build's
-request does not hold the bot's computer: the remote screen's own takeover (`screenTakeover`) is the person's
-choice and is not touched.
+chat line rewritten as "Takeover request expired". Every client shows an expired card closed and keeps it out
+of the pending decisions. This build's request does not hold the bot's computer: the remote screen's own
+takeover (`screenTakeover`) is the person's choice and is not touched.
 
-When the person did the step, `resolveTakeover {entryId, note}` closes the card as `resolved`, keeps the note
-(`takeoverRequest.note`, `resolvedAt`) and posts "I did it: …" to the bot, so its agent goes on with what they
-did; an empty note only closes the card. A request is done once: a second call is refused, and a resolved card
-never lapses.
+The person picks the step up with `takeTakeover {entryId}`: the card becomes `taken` and names who has it
+(`takeoverRequest.takenBy`, `takenAt`), and the bot's agent starts nothing new meanwhile, so a queued message
+or a routine cannot walk into the middle of their work. Taking it moves the deadline to 30 minutes from that
+moment; a taken request nobody finishes lapses then, the chat line says who had it, and the agent is let go.
+Only one person has it: a second `takeTakeover` on a taken card is refused.
+
+When the person did the step, `resolveTakeover {entryId, note}` lets the agent go and closes the card as
+`resolved`, keeping the note (`takeoverRequest.note`, `resolvedBy`, `resolvedAt`) and posting "I did it: …" to
+the bot, so its agent goes on with what they did; with no note it posts "I did it." A request is done once: a
+second call is refused, and a resolved card never lapses.
 
 ## Answering a card
 

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prompt: integración, compilación y prueba en vivo</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1d1d1f;--mut:#6e6e73;--card:#f5f5f7;--line:#d2d2d7;--acc:#0071e3}
+@media(prefers-color-scheme:dark){:root{--bg:#111113;--fg:#f5f5f7;--mut:#a1a1a6;--card:#1c1c1e;--line:#3a3a3c;--acc:#2997ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;z-index:1}
+h1{font-size:16px;margin:0;flex:1;min-width:200px}small{color:var(--mut)}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 16px;background:var(--acc);color:#fff;cursor:pointer}
+button.alt{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+main{max-width:980px;margin:0 auto;padding:20px}
+textarea{width:100%;height:calc(100vh - 150px);min-height:420px;resize:vertical;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);padding:16px;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+#msg{color:var(--acc);font-weight:600;min-width:90px}
+</style></head><body>
+<header><h1>Prompt para el agente de integración <small>(texto completo, listo para pegar)</small></h1>
+<span id="msg" role="status"></span>
+<button class="alt" id="sel">Seleccionar todo</button><button id="copy">Copiar prompt</button></header>
+<main><textarea id="p" readonly spellcheck="false"># Prompt: una sola integración, una sola compilación y una sola prueba en vivo
+
+Eres el agente que **integra, compila y prueba una vez** todo lo que otros agentes dejaron en ramas y worktrees separados. No añadas funciones nuevas: junta, compila, prueba, corrige lo que falle y reporta. Responde en español.
+
+Reglas del proyecto que mandan (`CLAUDE.md`): construir encima y nunca deshacer lo de otros, archivos de menos de ~500 líneas, paridad entre clientes, traducciones en los 10 catálogos, nada de código iOS/Mac (no escribas ni compiles iOS), el APK de Android solo se compila en el paso que dice abajo. **No cierres Deska ni la app de nadie. No uses `taskkill /IM cargo.exe`** (mata las compilaciones de otros agentes); mata solo los procesos que tú lanzaste.
+
+## 1. Qué hay que integrar y dónde está
+
+Proyecto principal: `C:\Users\Edwin Villeda\Documents\Codync`, rama `feat/openbot-marketplace` (punta `d9acc256` al escribir esto). En su carpeta hay cambios sin commit de **otro agente** (`docs/features/routine-flows.md` y varios `*.html`, `docs/plans/bundled-tools-production.md`, `docs/plans/design-inside-codync.md`, `pwsh.cmd`): **no los toques**. Integra en un worktree aparte y haz fast-forward al final solo si todo está verde.
+
+Todo mi trabajo vive en una cadena de ramas. **La rama que lo contiene todo es `feat/n8n-android`** (worktree `C:\Users\Edwin Villeda\Documents\Codync-n8n-android`, punta `867d5569`, base `43c59885`). Contiene a `feat/comfy-sidebar` (punta `3dcc60d6`, worktree `Codync-comfy-sidebar`) y 5 commits más. Son 24 commits que el principal no tiene y **ninguno de los dos últimos está en origin** (`bc39f467`, `867d5569`); respáldalos con push de la rama antes de integrar.
+
+| Bloque | Commits (rama `feat/n8n-android`) | Qué es |
+| --- | --- | --- |
+| ComfyUI embebido | `1f7ada84`…`3dcc60d6` (19) | Ejecutor compartido de herramientas (`host/src/tools/`), ComfyUI v0.44.0 fijado en `packaging/comfy/version.json`, descarga en el primer uso (`comfy_install.rs`), ventana/tarjeta/botón en la barra lateral del desktop, sección en Ajustes de Android, frase en el encabezado del TUI, 7-Zip empaquetado, servidor MCP `codync-comfyui` |
+| n8n en el teléfono | `fc4280e0`, `83cc9725`, `bdcdd85b` | Host: `n8nWorkflows`, `n8nSetWorkflowActive`, `n8nExecutions` (`host/src/n8n_remote.rs`); el teléfono nunca recibe la cookie de sesión de n8n. Android: `N8nSection.kt`, `AppStoreN8n.kt`, `N8nStatusTest.kt`. Doc `web/content/docs/n8n.mdx` |
+| n8n en desktop y terminal | `bc39f467` | Desktop: Ajustes → n8n lista los workflows con interruptor y las últimas ejecuciones (`views/settings/N8nWorkflows.tsx`, `shared/n8n-workflows.ts`, +3 tests, demo en `fake-host.ts`). TUI: hoja "n8n: workflows and runs…" en la paleta (`host/src/tui/manage/n8n.rs`, `sheets/n8n.rs`) |
+| Comandos `/n8n` y `/comfy` | `867d5569` | Host: `host/src/chat/tool_commands.rs` (nota antes del mensaje; una skill con el mismo id gana). Aparecen en la lista `/` de desktop (`slash-commands.ts`), Android (`SlashCommands.kt`) y TUI (`tui/app/slash.rs`). iOS **no** se tocó |
+| Traducciones | varios | 10 catálogos en `apps/ios/Kit/Sources/CodyncKit/Resources/Languages` (JSON con CRLF). Las traducciones nuevas las redacté yo; nadie nativo las revisó |
+
+Ya están en el principal y solo hay que **verlos funcionar**: la isla dinámica (paginación de uso `pageOf`, arrastrar archivos) y el nodo **Codync Bot** de n8n (`host/n8n-nodes-codync`).
+
+Ramas y worktrees ajenos con trabajo **no integrado y no probado** (otros agentes; solo anótalo en el reporte, no lo mezcles aquí): `feat/android-openbot-parity` (37 commits, ya en origin), `feat/hermes-integration` (worktree `Documents\hermes-integration`, ~122 archivos sin commit), Mercury Agent (worktree de Deska, ~108 archivos sin commit), `feat/island-restore` (contiene los commits de la isla ya integrados). `feat/comfy-bundled` (`298cad5b`) es la versión antigua de ComfyUI: sus dos commits distintos (`64a5c993`, `3d4fea6a`) están reemplazados por los de `comfy-sidebar`; no los traigas.
+
+## 2. Integración
+
+1. `git fetch`. Crea un worktree nuevo, por ejemplo `Codync-integrate-final`, con una rama nueva desde `feat/openbot-marketplace`. Enlaza `apps/desktop/node_modules` al del principal con una junction (para borrarla después usa `[System.IO.Directory]::Delete(ruta, $false)` en PowerShell o `rmdir` en cmd, nunca `Remove-Item -Recurse`).
+2. `git merge feat/n8n-android`. Puntos de conflicto probables: los 10 `Languages/*.json` (toma la versión del principal y vuelve a añadir las claves nuevas con un script idempotente en Node; escribe con CRLF), `host/src/api/host.rs`, `host/src/api/devices.rs` (lista `LOCAL_ONLY`), `host/src/api/events.rs` (`LOCAL_EVENTS`), `host/src/mcp.rs`, `host/src/tui/app/ui.rs` y `overlay_keys.rs`, `apps/android/.../SettingsView.kt`. Conserva siempre lo de ambos lados; nunca borres un cambio ajeno.
+3. Claves de traducción nuevas que deben existir en los 10 idiomas tras el merge: las del bloque n8n del teléfono (`Latest runs`, `No workflows yet.`, `{count} more in n8n`, `Start n8n to see its workflows and runs.`, `Succeeded`, `Crashed`, `Waiting`, `Unknown`, `n8n isn't set up on this computer yet. Choose its folder in the desktop app.`, `The workflows n8n runs on the computer. Turning one on publishes it there. Its editor opens in Codync on the computer.`), `Workflows`, `Turning one on publishes it in n8n.`, `n8n: workflows and runs…`, `Do it with the computer's n8n workflows`, `Make an image with ComfyUI` y las de ComfyUI de la rama. El test de auditoría de traducciones del host las revisa.
+4. No subas la versión salvo que vayas a llevar esto a `main` (regla de `CLAUDE.md`: parche/menor en `apps/project.yml`, `host/Cargo.toml` + `Cargo.lock`, `apps/desktop/package.json` + lock, sin tocar `CURRENT_PROJECT_VERSION`; Android además `WhatsNew.md`).
+
+## 3. Compilación (una sola vez)
+
+Entorno de esta máquina: `-j 1` y sin símbolos de depuración, o cargo muere por memoria; lanza lo largo desacoplado y escribe a un log (las tareas en segundo plano mueren al cerrarse la sesión):
+
+```
+Start-Process cmd -ArgumentList '/c','cd /d &lt;worktree&gt;\host &amp;&amp; set "CARGO_PROFILE_DEV_DEBUG=0" &amp;&amp; cargo clippy -j 1 --all-targets -- -D warnings &gt; %TEMP%\final-clippy.log 2&gt;&amp;1 &amp; echo FINISHED &gt;&gt; %TEMP%\final-clippy.log' -WindowStyle Hidden
+```
+
+Orden: `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test -j 1 --bin codync-host` (el paquete no tiene lib; antes de mi trabajo hay un test conocido que falla por symlinks en Windows, anótalo sin tocarlo) → desktop: `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` y `npm test` (esperado: 535 pasan, 24 omitidos, 0 fallos) → Android: compilar y pasar los tests unitarios de `apps/android` (entre ellos `SlashCommandsTest`, `N8nStatusTest` y los de ComfyUI) **solo aquí**; ese código nunca se compiló. Disco: comprueba que quedan más de 20 GB libres antes (la compilación fresca de cargo pesa varios GB; solo borra lo regenerable).
+
+## 4. Pruebas en vivo (una sola pasada, en Windows)
+
+Usa **solo** el entorno aislado de Codync Dev, nunca la app de producción. En el worktree de integración: `node tools/native-host.mjs dev` (host de desarrollo) y luego `npm run dev -- --cdp` en `apps/desktop` (sandbox propio: datos en `~/.codync-dev-&lt;carpeta&gt;`, puerto desde 19300, CDP en puerto+10000). Antes de cada paso comprueba con `/health` que el host que responde es el tuyo (`binaryPath`): otro agente puede desplazar el host compartido del puerto 19223. Maneja el desktop con CDP o Computer Use y toma capturas.
+
+1. **Isla dinámica**: la pestaña Uso pagina de dos en dos con las flechas; arrastrar un archivo sobre la isla muestra "Drop to send to {bot}" y lo envía.
+2. **ComfyUI** (descarga ~2,5 GB la primera vez; hazlo una vez, el sandbox la conserva en `~/.codync-dev-&lt;carpeta&gt;`): el botón de la barra lateral lleva la marca; "Descargar" muestra el avance y luego descomprime; el editor abre sin login; el encabezado del TUI y la sección de Ajustes en Android dicen lo mismo. Sin modelo no se genera imagen: no lo cuentes como fallo, pero registra que **no se probó una generación real**.
+3. **n8n** (requiere la carpeta de la instalación: `C:\Users\Edwin Villeda\Documents\automan`, con `packages/cli/bin/automan`, y Node suficiente): Ajustes → n8n arranca y para; con n8n corriendo aparece la lista de workflows con interruptor y las ejecuciones; publicar y despublicar un workflow cambia el estado **en n8n** (las llamadas a `/api/v1` con `X-AUTOMAN-API-KEY` nunca se probaron contra un n8n real: es lo más probable que falle). Crea un workflow mínimo con el nodo **Codync Bot** ("Send a message", esperar respuesta) y comprueba que el bot contesta.
+4. **Comandos `/n8n` y `/comfy`**: escribe `/` en un chat de desktop y de TUI (y en Android): salen después de las skills; `/n8n lista mis workflows` hace que el bot use el conector de n8n; `/comfy un zorro rojo` hace que use las herramientas de ComfyUI (o diga que no está corriendo). Con n8n parado el bot debe decirlo, no inventar.
+5. **TUI** (`codync-host tui`): paleta de comandos → "n8n: workflows and runs…": flechas, Enter publica/despublica, `s` arranca/para, `r` refresca, Esc cierra.
+6. **Seguridad**: un dispositivo remoto (Caller::Device, p. ej. el teléfono emparejado o una llamada por `/channel`) recibe `n8nStatus` **sin** `auth`/cookie de sesión y no puede llamar a las acciones que están en `LOCAL_ONLY`.
+7. **Android** (emulador con `adb`): Ajustes → ComfyUI y n8n (estado, Start/Stop, lista y ejecuciones) y los comandos `/n8n`/`/comfy` en el compositor.
+
+Los pasos de Android e iOS que necesiten dispositivo y no puedas hacer, anótalos como "no se pudo ejecutar" con el motivo.
+
+## 5. Si todo está verde
+
+1. Haz un solo commit de arreglos por área (mensajes tipo Conventional Commit; termina cada commit con `Co-Authored-By: Claude Sonnet 5.5 &lt;noreply@anthropic.com&gt;`).
+2. Fast-forward de la rama de integración a `feat/openbot-marketplace` en el checkout principal **solo si** el árbol de ese checkout no pisa los cambios sin commit del otro agente (comprueba con `git status`). Push solo si el usuario lo pide.
+3. Limpieza: detén tu `npm run dev` y tu host de desarrollo, borra la junction de `node_modules` con `rmdir`/`Directory.Delete`, y luego el worktree. Elimina artefactos regenerables que hayas creado.
+
+## 6. Reporte final (obligatorio)
+
+Una tabla por bloque con: compilado (sí/no), tests (cuántos pasan), probado en vivo (sí/no/motivo) y capturas. Lista aparte lo que **no pudiste probar** (generación real de imagen, n8n real, Android, iOS), los conflictos que resolviste y cómo, y cualquier fallo conocido que encontraste sin arreglar.
+</textarea></main>
+<script>
+const p=document.getElementById("p"),m=document.getElementById("msg");
+const say=t=>{m.textContent=t;setTimeout(()=>m.textContent="",2200)};
+document.getElementById("sel").onclick=()=>{p.focus();p.select()};
+document.getElementById("copy").onclick=async()=>{
+  try{await navigator.clipboard.writeText(p.value);say("Copiado")}
+  catch{p.focus();p.select();say(document.execCommand("copy")?"Copiado":"Selecciona y copia (Ctrl+C)")}
+};
+</script></body></html>

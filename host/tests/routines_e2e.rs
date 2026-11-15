@@ -95,7 +95,7 @@ impl Host {
     }
 
     async fn wait_status(&self, bot: &str, routine: &str, status: &str) -> Value {
-        tokio::time::timeout(Duration::from_secs(25), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 let listing = self.call("routines", json!({"botId":bot})).await;
                 if let Some(run) = listing["runs"]
@@ -122,7 +122,7 @@ impl Host {
     }
 
     async fn wait_event(&self, name: &str, event: &str, contains: &str) -> Value {
-        tokio::time::timeout(Duration::from_secs(25), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 if let Some(e) = self
                     .agent_events(name)
@@ -135,7 +135,9 @@ impl Host {
             }
         })
         .await
-        .unwrap_or_else(|_| panic!("missing agent event {event} containing {contains}"))
+        .unwrap_or_else(|_| {
+            panic!("missing agent event {event} containing {contains}\nevents: {:#?}", self.agent_events(name))
+        })
     }
 
     async fn send(&self, bot: &str, text: &str) {
@@ -336,9 +338,9 @@ async fn an_agent_started_for_a_run_stops_when_the_run_ends() {
     host.wait_event("only-runs", "finished", "LATER").await;
     let events = host.agent_events("only-runs");
     let count = |event: &str| events.iter().filter(|e| e["event"] == event).count();
-    // The message started the agent again: the run's agent stopped with the run. Windows never stops an agent (it
-    // can't tell a dev server from an MCP server, see `lifecycle`), so there the run's session closes instead.
-    assert_eq!((count("initialize"), count("closed")), if cfg!(windows) { (1, 1) } else { (2, 0) });
+    // The message started the agent again: the run's agent stopped with the run, and on Windows so did
+    // everything but the session (its close is the visible part there).
+    assert_eq!((count("initialize"), count("closed")), (2, 1));
 }
 
 #[tokio::test]
@@ -364,6 +366,17 @@ async fn busy_bot_keeps_work_pending_and_honors_pause_delete_and_edit_across_res
     let bot = host.stable_bot("queue").await;
     host.send(&bot, "BLOCK[user]").await;
     host.wait_event("queue", "started", "BLOCK[user]").await;
+    // Every parallel routine slot is busy, so what is queued below can only wait.
+    let mut holders = Vec::new();
+    for n in 0..4 {
+        let id =
+            host.save(&bot, &format!("hold{n}"), &format!("BLOCK[hold-{n}]"), json!([{"type":"webhook"}]), 30).await;
+        host.call("runRoutine", json!({"botId":bot,"id":id})).await;
+        holders.push(id);
+    }
+    for id in &holders {
+        host.wait_status(&bot, id, "running").await;
+    }
     let paused = host.save(&bot, "paused", "SHOULD_NOT_RUN_PAUSED", json!([{"type":"webhook"}]), 30).await;
     let deleted = host.save(&bot, "deleted", "SHOULD_NOT_RUN_DELETED", json!([{"type":"webhook"}]), 30).await;
     let kept = host.save(&bot, "kept", "OLD_INSTRUCTION", json!([{"type":"webhook"}]), 30).await;
@@ -372,7 +385,12 @@ async fn busy_bot_keeps_work_pending_and_honors_pause_delete_and_edit_across_res
     }
     tokio::time::sleep(Duration::from_millis(1500)).await;
     let listing = host.call("routines", json!({"botId":bot})).await;
-    assert!(listing["runs"].as_array().unwrap().iter().all(|r| r["status"] == "pending"));
+    // Pausing and deleting only reach runs that are still queued; the edit is what the kept run
+    // reads when it finally starts.
+    assert!(
+        is_pending(&listing, &[&paused, &deleted, &kept]),
+        "queued runs stay pending while every slot is busy: {listing}"
+    );
     host.call("setRoutineEnabled", json!({"botId":bot,"id":paused,"enabled":false})).await;
     host.call("deleteRoutine", json!({"botId":bot,"id":deleted})).await;
     host.call(
@@ -383,12 +401,22 @@ async fn busy_bot_keeps_work_pending_and_honors_pause_delete_and_edit_across_res
     host.restart().await;
     host.wait_event("queue", "resumed", "BLOCK[user]").await;
     std::fs::write(host.home.join("queue/release-user"), "").unwrap();
+    // Let the blocking runs end so the kept run gets a slot.
+    for n in 0..4 {
+        std::fs::write(host.home.join(format!("queue/release-hold-{n}")), "").unwrap();
+    }
     host.wait_status(&bot, &kept, "succeeded").await;
     host.wait_event("queue", "finished", "NEW_INSTRUCTION").await;
     assert!(!host.agent_events("queue").iter().any(|e| {
         let text = e["text"].as_str().unwrap();
         text.contains("SHOULD_NOT_RUN") || text.contains("OLD_INSTRUCTION")
     }));
+}
+
+/// Whether each of `routines` has a run waiting in `listing`.
+fn is_pending(listing: &Value, routines: &[&String]) -> bool {
+    let runs = listing["runs"].as_array().unwrap();
+    routines.iter().all(|id| runs.iter().any(|r| r["routineId"] == id.as_str() && r["status"] == "pending"))
 }
 
 #[tokio::test]

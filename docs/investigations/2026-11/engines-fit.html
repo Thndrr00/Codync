@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qué sistemas caben en Codync — veredicto</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f6f2; --ink:#1a1916; --soft:#5e594f; --rule:#e0dbd1; --yes:#2f6b46; --no:#9a4a1c; --maybe:#7a6218; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121110; --ink:#ece9e2; --soft:#a7a198; --rule:#2d2a26; --yes:#8fd3ab; --no:#ffab73; --maybe:#e3c56a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 900px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--soft); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 22px; max-width:64ch; }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 2px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; margin:12px 0; }
+  th, td { border-bottom:1px solid var(--rule); padding:8px; text-align:left; vertical-align:top; }
+  th { font:600 11px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+  .veredicto { border:1px solid var(--rule); border-left:3px solid var(--soft); padding:14px 16px; margin:12px 0; }
+  .si { border-left-color:var(--yes); }
+  .no { border-left-color:var(--no); }
+  .quizas { border-left-color:var(--maybe); }
+  .marca { font:700 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; }
+  .si .marca { color:var(--yes); }
+  .no .marca { color:var(--no); }
+  .quizas .marca { color:var(--maybe); }
+  .ficha dl { margin:6px 0 0; }
+  .ficha dt { font:600 10px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--soft); margin-top:8px; }
+  .ficha dd { margin:2px 0 0; }
+  .nota { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Evaluación de motores · criterio, uno por uno, recomendación</p>
+  <h1>Qué de esa lista cabe en Codync</h1>
+  <p class="lede">La pregunta no es si la herramienta es buena, sino si puede vivir dentro de una app que reparte un proceso por motor. Con ese filtro, la lista se parte en dos.</p>
+
+  <h2>El filtro que decide</h2>
+  <p>El plan de n8n y ComfyUI se apoya en un runner que arranca <strong>un proceso</strong>, escucha en <strong>un puerto local</strong> y guarda en <strong>una carpeta del usuario</strong>. Un motor entra si cumple las tres. Si necesita Postgres, Redis o varios workers, no se empaqueta: se conecta por URL.</p>
+  <p class="nota">Además, cada motor extra es otro runtime que descargar, firmar, actualizar y explicar. Seis a la vez no son seis mejoras: es seis veces el mismo soporte.</p>
+
+  <h2>Matriz</h2>
+  <table>
+    <thead>
+      <tr><th>Sistema</th><th>Procesos</th><th>Peso real</th><th>Se solapa con</th><th>Veredicto</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>n8n</td><td>1, Node</td><td>~400 MB con Node</td><td>Rutinas</td><td class="si" style="color:var(--yes)">Dentro</td></tr>
+      <tr><td>ComfyUI</td><td>1, Python</td><td>~1,5 GB + modelos</td><td>Nada</td><td class="si" style="color:var(--yes)">Dentro</td></tr>
+      <tr><td>Node-RED</td><td>1, Node</td><td>~60 MB</td><td>n8n</td><td class="quizas" style="color:var(--maybe)">Opcional</td></tr>
+      <tr><td>InvokeAI</td><td>1, Python</td><td>~8 GB + modelos</td><td>ComfyUI</td><td class="quizas" style="color:var(--maybe)">Alternativa</td></tr>
+      <tr><td>Flowise</td><td>1, Node</td><td>~300 MB</td><td>Agentes y RAG</td><td class="quizas" style="color:var(--maybe)">Opcional</td></tr>
+      <tr><td>Activepieces</td><td>2+, Node + Postgres</td><td>~700 MB con base</td><td>n8n</td><td class="no" style="color:var(--no)">Después</td></tr>
+      <tr><td>Dify</td><td>6+, Python + web + colas</td><td>~4 GB con base y vector</td><td>Agentes, RAG, canales</td><td class="no" style="color:var(--no)">Por URL</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Uno por uno</h2>
+
+  <article class="veredicto si ficha">
+    <p class="marca">Sí · ya planificado</p>
+    <h3>n8n</h3>
+    <dl>
+      <dt>Por qué</dt>
+      <dd>Un proceso, sqlite por defecto, editor web propio y ya existe la integración en Codync. Es el motor que cubre automatización e integraciones sin competir con nada de la app.</dd>
+      <dt>Cuidado</dt>
+      <dd>La cookie de sesión y el propietario sembrado, ya resueltos en el plan. Nada nuevo.</dd>
+    </dl>
+  </article>
+
+  <article class="veredicto si ficha">
+    <p class="marca">Sí · ya planificado</p>
+    <h3>ComfyUI</h3>
+    <dl>
+      <dt>Por qué</dt>
+      <dd>Un proceso, escucha local, guarda en su carpeta. Es la pieza que ningún otro cliente de agentes tiene: imagen y video generados dentro de la conversación, con el resultado como adjunto.</dd>
+      <dt>Cuidado</dt>
+      <dd>VRAM, modelos por descarga aparte y cola de uno. Ya están como fases y fallos previstos.</dd>
+    </dl>
+  </article>
+
+  <article class="veredicto quizas ficha">
+    <p class="marca">Opcional · no en la primera entrega</p>
+    <h3>Node-RED</h3>
+    <dl>
+      <dt>A favor</dt>
+      <dd>Ligerísimo, un proceso, ideal para MQTT, hardware y eventos en tiempo real. Es el único de la lista que cubre IoT de verdad.</dd>
+      <dt>En contra</dt>
+      <dd>Para el usuario medio se solapa con n8n y añade un segundo editor de nodos que explicar. Su valor aparece solo si hay dispositivos.</dd>
+      <dt>Cuándo</dt>
+      <dd>Cuando alguien pida MQTT o hardware. El runner ya lo sostiene: es una configuración más, un día de trabajo.</dd>
+    </dl>
+  </article>
+
+  <article class="veredicto quizas ficha">
+    <p class="marca">Alternativa · elige una</p>
+    <h3>InvokeAI</h3>
+    <dl>
+      <dt>A favor</dt>
+      <dd>Mejor edición manual que ComfyUI: capas, máscaras, retoque, con una interfaz pensada para personas.</dd>
+      <dt>En contra</dt>
+      <dd>Es el mismo hueco: segundo runtime de Python y torch, otra carpeta de modelos, otra descarga enorme. Tener los dos duplica el peso del instalador sin dar nada exclusivo al agente.</dd>
+      <dt>Cuándo</dt>
+      <dd>Si se prefiere edición manual sobre automatización por MCP. Si algún día entran los dos, ComfyUI para el bot e InvokeAI para editar a mano, nunca los dos por defecto.</dd>
+    </dl>
+  </article>
+
+  <article class="veredicto quizas ficha">
+    <p class="marca">Opcional · después de n8n</p>
+    <h3>Flowise</h3>
+    <dl>
+      <dt>A favor</dt>
+      <dd>Un proceso, sqlite, y sirve para armar RAG y cadenas de LLM con nodos sin escribir.</dd>
+      <dt>En contra</dt>
+      <dd>Se pisa con los agentes y el marketplace de Codync: dos formas de definir un agente en la misma app confunden.</dd>
+      <dt>Cuándo</dt>
+      <dd>Si se quiere RAG visual para alimentar a los bots. Encaja como herramienta del agente vía MCP, no como sustituto.</dd>
+    </dl>
+  </article>
+
+  <article class="veredicto no ficha">
+    <p class="marca">No ahora</p>
+    <h3>Activepieces</h3>
+    <dl>
+      <dt>A favor</dt>
+      <dd>Alternativa moderna a n8n, con mejor editor en algunos flujos.</dd>
+      <dt>En contra</dt>
+      <dd>Necesita Postgres y Redis: el runner de un proceso no basta. Empaquetarlo obliga a meter un servidor de base de datos y su ciclo de vida.</dd>
+      <dt>Cuándo</dt>
+      <dd>Si se decide cambiar n8n por Activepieces, o después, nunca en paralelo: mismo trabajo, dos veces.</dd>
+    </dl>
+  </article>
+
+  <article class="veredicto no ficha">
+    <p class="marca">No · se conecta por URL</p>
+    <h3>Dify</h3>
+    <dl>
+      <dt>A favor</dt>
+      <dd>Plataforma completa de agentes, RAG, evaluación y observabilidad.</dd>
+      <dt>En contra</dt>
+      <dd>No es una herramienta: es un competidor de Codync. Trae sus propios usuarios, canales, base, vector y colas, y su despliegue son seis servicios.</dd>
+      <dt>Cuándo</dt>
+      <dd>Como servidor externo al que se apunta por URL, con la clave en el vault. Útil para quien ya lo tiene, no como carga del instalador.</dd>
+    </dl>
+  </article>
+
+  <h2>Lo que yo haría</h2>
+  <ol>
+    <li>Terminar n8n y ComfyUI tal como están en el plan: son los dos únicos que cubren huecos reales sin duplicar la app.</li>
+    <li>Dejar Node-RED y Flowise como ranuras del mismo runner, apagadas, listas para activarse cuando se pidan.</li>
+    <li>Poner InvokeAI tras ComfyUI como alternativa, no como compañero.</li>
+    <li>Dejar Activepieces y Dify fuera del instalador; Dify, conectar por URL desde Extensiones › Apps.</li>
+  </ol>
+  <p class="nota">Resumen en una línea: dos dentro, tres opcionales con su condición, dos por URL. Meter los seis a la vez es cómo un instalador pasa de 200 MB a varios GB y de una tarde de soporte a una semana.</p>
+</main>
+</body>
+</html>

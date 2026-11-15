@@ -245,6 +245,11 @@ impl Entry {
         self.kind == Kind::Notice && self.data["retry"] == true && self.data["runId"].is_string()
     }
 
+    /// A takeover request's card: `t` picks it up and `d` says it is done (`chat::takeover`).
+    pub fn decides(&self) -> bool {
+        self.kind == Kind::Notice && self.data["takeoverRequest"].is_object()
+    }
+
     /// A notice for a bot-to-bot message or request (`chat::team`).
     pub fn is_bot_message(&self) -> bool {
         self.kind == Kind::Notice
@@ -301,6 +306,15 @@ mod tests {
             assert!(!entry.takes_reply());
             assert!(!entry.pending());
         }
+    }
+
+    #[test]
+    fn a_takeover_card_is_a_step_that_can_be_picked() {
+        let notice = |data: Value| Entry { id: "t".into(), seq: 1, turn: 1, kind: Kind::Notice, data, created_at: 0 };
+        let card = notice(json!({"takeoverRequest":{"reason":"log in","status":"waiting"}}));
+        assert!(card.decides());
+        assert!(!card.is_message(), "a card takes no reply");
+        assert!(!notice(json!({"takeoverRequest":"nope"})).decides());
     }
 
     #[test]

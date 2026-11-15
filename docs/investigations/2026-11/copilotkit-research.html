@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CopilotKit en Codync — qué se puede sacar</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f6fb; --ink:#16151c; --soft:#5b5866; --rule:#dedbe8; --mark:#4c3d8f; --ok:#2f6b46; --part:#7a6218; --no:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#111015; --ink:#eae8f2; --soft:#a5a1b3; --rule:#2a2735; --mark:#b9a9ff; --ok:#8fd3ab; --part:#e3c56a; --no:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.66 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 980px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:66ch; }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; margin:10px 0; }
+  th, td { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font:600 10px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+  .si { color:var(--ok); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .parcial { color:var(--part); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .no { color:var(--no); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .note { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--no); padding-left:14px; }
+  .tag { font:11px/1 ui-monospace,monospace; color:var(--soft); border:1px solid var(--rule); padding:1px 5px; border-radius:2px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Investigación de fondo · stack CopilotKit, AG-UI y A2UI · licencias verificadas</p>
+  <h1>Qué podemos sacar de CopilotKit</h1>
+  <p class="lede">CopilotKit no es una librería de chat: es una pila de tres capas (protocolo, SDKs y producto). Lo verdaderamente aprovechable para Codync está en el protocolo y en el renderizador declarativo, no en sus componentes de interfaz. Y hay un dato que cambia la estrategia: OpenBot es un producto construido sobre esta misma pila.</p>
+
+  <h2>1. Qué es, en una tabla</h2>
+  <table>
+    <thead><tr><th>Capa</th><th>Qué es</th><th>Licencia</th><th>Para Codync</th></tr></thead>
+    <tbody>
+      <tr><td><b>AG-UI</b> (<code>ag-ui-protocol/ag-ui</code>)</td><td>Protocolo abierto de eventos agente ↔ usuario: chat en streaming, estado bidireccional, UI generativa, herramientas de frontend, espera de aprobación. ~16 tipos de evento sobre SSE o WebSocket.</td><td>MIT</td><td class="si">Adoptar</td></tr>
+      <tr><td><b>A2UI</b> (<code>google/A2UI</code>)</td><td>UI generativa declarativa: el agente manda datos validados contra un catálogo; el cliente renderiza con sus propios componentes. Renderizadores React, SwiftUI, Flutter, Angular, Lit.</td><td>Apache 2.0</td><td class="si">Adoptar</td></tr>
+      <tr><td><b>CopilotKit</b> (core, react-core, react-ui, runtime)</td><td>SDK React de chat, estado compartido, herramientas y runtime que habla AG-UI con el backend.</td><td>MIT</td><td class="parcial">Referencia y puente</td></tr>
+      <tr><td><b>Channels</b> (<code>channels-*</code>)</td><td>JSX una vez y se renderiza como Block Kit en Slack y Adaptive Cards en Teams; adaptadores Discord y WhatsApp.</td><td>MIT</td><td class="si">Adoptar el modelo</td></tr>
+      <tr><td><b>WebMCP</b></td><td>Exponer las acciones del propio producto a agentes de navegador.</td><td>MIT</td><td class="parcial">Estudiar</td></tr>
+      <tr><td><b>Inspector</b></td><td>Superposición local para ver hilos, agentes y aprendizaje mientras se desarrolla.</td><td>MIT</td><td class="parcial">Herramienta de desarrollo</td></tr>
+      <tr><td><b>Intelligence</b> (memorias, continual learning, analítica, canales)</td><td>Capa de producción en la nube o autoalojada; el plan de desarrollador gratis.</td><td>Comercial</td><td class="no">Fuera</td></tr>
+      <tr><td><b>OpenBot</b> (<code>CopilotKit/OpenBot</code>)</td><td>Producto de CopilotKit construido sobre AG-UI + A2UI. <strong>No es el OpenBot que integramos</strong>: el nuestro es <code>nightly-labs/openbot</code>, otro proyecto que comparte nombre. Este se lee solo como implementación de referencia del protocolo.</td><td>MIT</td><td class="parcial">Referencia</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Inventario de la organización: 106 repos</h2>
+  <p>La organización tiene 106 repos públicos. No todos pesan igual para Codync; esta es la clasificación completa por utilidad, con los que estaban fuera del primer documento ya incorporados.</p>
+  <table>
+    <thead><tr><th>Nivel</th><th>Repos</th><th>Qué aportan</th></tr></thead>
+    <tbody>
+      <tr><td><b>Núcleo de protocolo</b></td><td><code>CopilotKit</code>, <code>ag-ui-protocol/ag-ui</code> (org hermana), <code>A2UI</code>, <code>channels-sdk</code></td><td>Lo que se adopta: AG-UI, A2UI y el modelo de canales</td></tr>
+      <tr><td><b>Producto y agentes de referencia</b></td><td><code>OpenBot</code> (el de CopilotKit, distinto al de nightly-labs), <code>OpenDots</code>, <code>OpenDuet</code>, <code>openmuse</code>, <code>OpenTag</code>, <code>open-multi-agent-canvas</code>, <code>OpenIntelligentUI</code></td><td>Patrones de agentes siempre activos, proactividad, voz y llamadas, canvas multiagente</td></tr>
+      <tr><td><b>UI generativa y canvas</b></td><td><code>generative-ui</code>, <code>generative-ui-playground</code>, <code>with-a2a-a2ui</code>, <code>shadify</code>, <code>excalidraw-studio</code>, <code>open-gemini-canvas</code>, <code>canvas-with-langgraph-python</code>, <code>canvas-with-mastra</code>, <code>canvas-with-llamaindex</code>, <code>canvas-with-llamaindex-composio</code>, <code>scene-creator-copilot</code></td><td>Ejemplos exactos de UI que el agente dibuja y de lienzos con estado compartido</td></tr>
+      <tr><td><b>Pruebas y herramientas</b></td><td><code>aimock</code>, <code>harness-sdk</code>, <code>skills</code>, <code>vscode-extension</code>, <code>pathfinder</code>, <code>open-mcp-client</code>, <code>mcp-client</code></td><td>Mock de LLM/MCP/AG-UI para pruebas, SDK de harness, skills para agentes de código, búsqueda de docs</td></tr>
+      <tr><td><b>Puentes de mensajería</b></td><td><code>matterbridge</code>, <code>OpenDots</code> (llamadas), <code>channels-*</code> (paquetes)</td><td>Docenas de plataformas de chat con una sola API</td></tr>
+      <tr><td><b>Integraciones y plantillas</b></td><td><code>with-langgraph-py/js</code>, <code>with-crewai</code>, <code>with-mastra</code>, <code>with-adk</code>, <code>with-pydantic-ai</code>, <code>with-agno</code>, <code>with-strands</code>, <code>with-llamaindex</code>, <code>with-microsoft-agent-framework-*</code>, <code>with-a2a-middleware</code>, <code>coagents-starter-*</code>, <code>agents-everywhere-starter-kit</code>, <code>fullstack-solution-template-for-agentcore</code>, <code>batch</code>…</td><td>Verificación de que el protocolo habla con todo; se usan como casos de prueba, no como código a portar</td></tr>
+      <tr><td><b>Demos y aplicaciones</b></td><td><code>demo-*</code>, <code>open-research-ANA</code>, <code>open-fullstack-social-media-agent</code>, <code>deep-agents-*</code>, <code>ollama-deep-researcher</code>, <code>atomic-crm</code>, <code>outpost</code>, <code>microsoft-kanban-demo</code>, <code>demo-spreadsheet</code>, <code>demo-banking</code>, <code>demo-presentation</code>, <code>demo-todo</code>, <code>demo-crm</code></td><td>Referencias de producto completo; solo se miran las que se parecen a una función de Codync</td></tr>
+      <tr><td><b>Poca o ninguna utilidad</b></td><td><code>frenchfry</code>, <code>jamcp</code>, <code>changesets-bot</code>, <code>renovate</code>, <code>.github</code>, <code>vnext_experimental</code>, <code>cpk-1.50.0-testing</code>, <code>frontend-take-home-test</code>, <code>examples/*</code> de hackathon</td><td>Infraestructura o pruebas internas</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Regla: de los repos de producto y demos se copia el patrón, nunca la aplicación. De los de protocolo y pruebas se copia código. De las plantillas de integración se usan solo como banco de pruebas del endpoint de la ficha C1.</p>
+
+  <h2>3. Aclaración necesaria: hay dos OpenBot</h2>
+  <p>Corrección importante sobre la primera versión de este documento: <code>CopilotKit/OpenBot</code> <strong>no es</strong> el OpenBot que Codync está integrando. El nuestro es <code>nightly-labs/openbot</code>, un proyecto distinto que comparte el nombre. Lo que sí comparten es la categoría: un espacio de trabajo de agentes. CopilotKit construye el suyo sobre AG-UI y A2UI, y por eso sirve como implementación de referencia; no como código de origen.</p>
+  <p>Consecuencia práctica: el valor del protocolo no depende de esa coincidencia. <strong>AG-UI y A2UI valen por sí solos</strong> porque son estándares abiertos con SDKs en muchos lenguajes y clientes reales; la alineación con nightly-labs no entra en la decisión. Lo que sí se puede aprovechar del OpenBot de CopilotKit es el patrón: cómo una app de agentes usa eventos de estado, aprobaciones y UI generativa sobre el mismo stream.</p>
+  <p class="note">Regla de puente de siempre: los nombres del protocolo se conservan (eventos, campos, semántica AG-UI/A2UI); lo único que cambia es la marca visible en Codync. Y de <code>nightly-labs/openbot</code> se sigue copiando código como hasta ahora: nada de este documento lo sustituye.</p>
+
+  <h2>4. Lo que se puede sacar, ficha por ficha</h2>
+
+  <article class="ficha">
+    <h3><span class="num">C1</span>Codync como servidor AG-UI (SSE)</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Exponer cada bot del host como endpoint AG-UI: <code>POST /agui/{bot}</code> que recibe un run input y responde un stream SSE de eventos estándar (run started, texto delta, tool call, state delta, run finished, run error, aprobación pendiente).</dd>
+      <dt>Por qué</dt>
+      <dd>Convierte a Codync en backend para cualquier frontend AG-UI: CopilotKit React, Angular, Vue, React Native, Slack y Teams. Los bots de Codync dejan de estar encerrados en sus propias apps.</dd>
+      <dt>Cómo</dt>
+      <dd>El host ya emite eventos internos por WebSocket; se añade un traductor <code>host/src/agui/</code> (serializador de eventos + SSE + mapeo de errores). No hace falta el SDK: el protocolo son ~16 tipos de evento y los publica el propio repo. El SDK Rust de la comunidad (<code>ag-ui-core</code>, <code>ag-ui-client</code>) está en estado embrionario; se usa como referencia, no como dependencia fija.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un ejemplo oficial de CopilotKit apunta a <code>localhost</code> del host, elige un bot y ve texto en streaming, una tool y una aprobación funcionando sin cambios en el host más allá del endpoint.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C2</span>Codync como cliente AG-UI (agentes externos como proveedores)</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Lo inverso: en Ajustes de proveedores, "Agente AG-UI" con URL; el host consume el stream de ese agente como si fuera un CLI más. Cubre LangGraph, CrewAI, Mastra, ADK, PydanticAI, Claude Agent SDK y los agentes de OpenBot.</dd>
+      <dt>Por qué</dt>
+      <dd>Un solo adaptador abre decenas de frameworks sin escribir un proveedor por cada uno.</dd>
+      <dt>Cómo</dt>
+      <dd>Cliente SSE + parser de eventos AG-UI en <code>host/src/agent/providers/agui.rs</code>; mapear tool calls del agente remoto a las tools y aprobaciones locales; estado compartido entra al hilo como "estado del agente".</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot con proveedor AG-UI apunta al Dojo de AG-UI y responde en Codync con streaming y aprobaciones.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C3</span>UI generativa declarativa con A2UI en el chat</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>El agente manda UI como datos (formularios, tarjetas, tablas, gráficos) y Codync la renderiza con sus componentes nativos. No hay HTML ni código ejecutable del modelo: el catálogo define qué puede pedir.</dd>
+      <dt>Por qué</dt>
+      <dd>Encaja exactamente con la regla de la casa (el host manda, los clientes dibujan) y con la promesa de estados ricos: aprobaciones con campos, formularios de claves, tarjetas de plan. Los renderizadores existen para React y SwiftUI; el de Android habría que escribirlo (o pasar por el web renderer en el WebView existente).</dd>
+      <dt>Cómo</dt>
+      <dd>Catálogo base propio con los componentes de Codync (aprobación, formulario, tabla, gráfico, imagen, selección) validado por esquema; el host emite mensajes A2UI por el mismo SSE del C1; escritorio usa <code>@a2ui/react</code> mapeado a componentes propios; iOS usa <code>A2UISwiftUI</code>; Android, en fase 2, con su adaptador Compose o con el renderer web ya existente.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot pide una clave con un formulario A2UI nativo en escritorio y en iPhone, y la aprobación se manda al host con los campos rellenados.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C4</span>Estado compartido y herramientas de frontend</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>El patrón <code>useAgent</code> + <code>setState</code>: el agente y la UI leen y escriben un mismo estado, y el agente llama funciones de la app (no del host) para actuar sobre lo que el usuario ve.</dd>
+      <dt>Por qué</dt>
+      <dd>El lienzo, las fichas de rutina y el plan son candidatos naturales: el agente puede abrir una ficha, cambiar un filtro o preparar una rutina mientras el usuario mira. Hoy eso se hace por eventos sueltos.</dd>
+      <dt>Cómo</dt>
+      <dd>Definir el esquema de estado por vista en el host (fuente de verdad) y un canal de "acciones de vista" con nombre y validación; la UI las ejecuta y devuelve resultado. No se copia el hook de React: se copia la semántica del mensaje.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El usuario dice "ponme una rutina el lunes a las 8" y la ficha aparece y queda configurada sin que el agente toque la base directamente.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C5</span>Channels: un mensaje, Block Kit y Adaptive Cards</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Escribir la tarjeta una vez (JSX) y que se renderice como Block Kit en Slack, Adaptive Cards en Teams, componentes en Discord y texto con formato en WhatsApp.</dd>
+      <dt>Por qué</dt>
+      <dd>Codync ya tiene canales en Slack, Discord, Telegram y WhatsApp. Hoy cada salida se formatea a mano; este modelo unifica y mejora la calidad de las tarjetas de aprobación y de los informes de rutina.</dd>
+      <dt>Cómo</dt>
+      <dd>El paquete es TypeScript, así que no entra al host: se porta el modelo al formateador de canales del host (<code>host/src/channels/</code>) como serializadores por plataforma, manteniendo el formato de origen (Block Kit y Adaptive Cards) para no re-autorizar nada.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Una aprobación de rutina con botones se ve como Block Kit en Slack y como Adaptive Card en Teams, y en WhatsApp como lista de opciones.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C6</span>WebMCP: exponer acciones de Codync al navegador</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Declarar acciones de la app como herramientas de navegador para que un agente web (el navegador propio de Codync, o uno externo) las invoque.</dd>
+      <dt>Por qué</dt>
+      <dd>El navegador de los bots ya vive en la app: con WebMCP, el agente puede "pedir" acciones de la interfaz de forma estándar en vez de simular clics.</dd>
+      <dt>Cómo</dt>
+      <dd>Es una propuesta joven: se estudia y se implementa solo para las acciones internas del navegador embebido; no se envía nada a terceros.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El agente abre el panel de archivos de Codync desde el navegador integrado usando una acción declarada, sin clics simulados.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C7</span>Inspector como herramienta de desarrollo</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Superposición local que muestra hilos, agentes, eventos y estado mientras se construye la integración.</dd>
+      <dt>Por qué</dt>
+      <dd>Depurar el traductor AG-UI del host a ojo es caro; el Inspector hace visible cada evento y cada estado.</dd>
+      <dt>Cómo</dt>
+      <dd>Se usa solo en builds de desarrollo, apuntando al endpoint C1; no se empaqueta en producción. Es un paquete React: se monta en una ruta de desarrollo del renderer o en una ventana aparte.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un evento mal formado se ve en el Inspector con su tipo, su secuencia y el error del cliente.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C8</span>Voz del SDK</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>El paquete <code>voice</code> de CopilotKit: micrófono, dictado y conversación sobre el mismo stream AG-UI.</dd>
+      <dt>Por qué</dt>
+      <dd>Codync ya tiene voz propia; aquí lo aprovechable es el patrón de eventos de voz dentro del protocolo (audio como parte del stream), no el componente.</dd>
+      <dt>Cómo</dt>
+      <dd>Se toma como referencia para que un bot servido por C1 pueda ser hablado y dictado desde un cliente AG-UI externo.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un cliente de ejemplo habla con un bot de Codync por AG-UI, con transcripción en el hilo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C9</span>aimock: pruebas de agentes sin claves reales</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Un servidor de mocks para todo lo que habla una app de agentes: APIs de LLM, MCP, A2A, AG-UI, bases vectoriales y búsqueda. Un paquete, un puerto, sin dependencias.</dd>
+      <dt>Por qué</dt>
+      <dd>Hoy cada prueba de extremo a extremo de bots depende de una cuenta real o de un servidor falso casero. Con aimock se prueba el bucle completo, incluidas tools, streaming y aprobaciones, sin gastar cuota ni tocar la red.</dd>
+      <dt>Cómo</dt>
+      <dd>Se usa como binario/motor del runner de pruebas (Node ya está empaquetado para n8n): un mundo falso con respuestas grabadas y fallos programados; las pruebas del host apuntan ahí.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>La suite de integración del host corre sin ninguna clave real y cubre un turno con tool, un error de proveedor y una aprobación.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C10</span>matterbridge: el mapa de plataformas de chat</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Puente con API REST entre más de veinte redes: Matrix, IRC, XMPP, Zulip, Rocket.Chat, Teams, Slack, Discord, Telegram, WhatsApp, Mumble y más.</dd>
+      <dt>Por qué</dt>
+      <dd>Codync tiene cinco canales; este repo demuestra los contratos de todos los demás. Sirve como mapa para decidir el siguiente canal sin reescribir conectores desde cero.</dd>
+      <dt>Cómo</dt>
+      <dd>No se mete como proceso: se lee su capa de adaptadores por plataforma y se portan al host solo las que se pidan (Matrix y Teams primero, por peso de uso).</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un canal nuevo de la lista se conecta desde Extensiones › Apps con su propia sesión y entrega mensajes con adjuntos.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C11</span>OpenDuet: proactividad que no interrumpe</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Plantilla de agente proactivo que trabaja por su cuenta y "te mantiene en el bucle": decide cuándo avisar, cuándo preguntar y cuándo seguir.</dd>
+      <dt>Por qué</dt>
+      <dd>Codync ya tiene check-ins proactivos y decisiones pendientes; este repo aporta el criterio de cuándo molestar y cómo agrupar avisos, que es justo lo que falta para que los check-ins no cansen.</dd>
+      <dt>Cómo</dt>
+      <dd>Se copia el patrón (no la app): política de interrupción, agrupación de avisos por hilo y estado "esperando al usuario".</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot proactivo agrupa tres hallazgos en un solo aviso y no vuelve a interrumpir hasta que haya respuesta o pase el plazo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C12</span>OpenDots: llamadas de voz y Slack en el mismo hilo</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Coworkers siempre activos que pasan de texto a llamada y a Slack conservando el hilo.</dd>
+      <dt>Por qué</dt>
+      <dd>Codync ya tiene voz y canales; lo que no tiene es continuidad de conversación entre una llamada y el chat. Este repo enseña el modelo de sesión único entre superficies.</dd>
+      <dt>Cómo</dt>
+      <dd>Se adopta el concepto: el hilo es uno y las superficies (texto, voz, Slack) son vistas del mismo run; se implementa con el bus de eventos existente.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Una llamada de voz y el chat del mismo bot comparten contexto y la transcripción aparece en el hilo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C13</span>open-multi-agent-canvas y excalidraw-studio: patrones de lienzo</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Un canvas donde varios agentes comparten una conversación y se añaden servidores MCP; y un estudio que genera, edita y exporta diagramas Excalidraw desde el chat con streaming.</dd>
+      <dt>Por qué</dt>
+      <dd>El lienzo de Codync ya tiene fichas y rutinas. Estos dos repos muestran el paso siguiente: varios agentes sobre el mismo tablero y objetos editables que el agente produce (diagramas), no solo tarjetas.</dd>
+      <dt>Cómo</dt>
+      <dd>El de Excalidraw se trae casi directo: es la respuesta a la conversación anterior sobre "un Figma ligero" — pizarra editable, sin servidores, con el archivo guardado como documento de Codync. El multiagente se toma como patrón de estado compartido sobre C4.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El bot crea un diagrama Excalidraw que se puede editar y guardar, y dos agentes colaboran en la misma ficha del lienzo.</dd>
+    </dl>
+  </article>
+
+  <h2>5. Lo que no se trae, y por qué</h2>
+  <ul class="warn">
+    <li><b>Los componentes de chat de CopilotKit</b> (sidebar, popup, chat UI): Codync tiene su propio sistema visual y sus reglas de controles. Traerlos sería un fork de interfaz que además choca con la paridad iOS/Android.</li>
+    <li><b>El runtime de CopilotKit</b> como pieza de servidor: el host ya es el runtime; meter un runtime TS obligaría a un sidecar Node y duplicaría la lógica que el host ya tiene.</li>
+    <li><b>Intelligence</b> (memorias gestionadas, continual learning, analítica): capa comercial; además ya tenemos memorias, skills y analítica propias.</li>
+    <li><b>CopilotKit Cloud / Soar</b>: fuera de alcance, producto de pago.</li>
+    <li><b>El SDK Rust</b> como dependencia: está en estado embrionario (repo comunitario con TODO); el protocolo se implementa directo y se usa el SDK solo para contrastar.</li>
+    <li><b>El renderizador A2UI de Android</b>: no existe todavía; se hace propio o se usa el web renderer en el WebView.</li>
+  </ul>
+
+  <h2>6. Orden y esfuerzo</h2>
+  <ol>
+    <li><b>C1</b> servidor AG-UI (3-4 días): el que más abre y el que menos riesgo tiene.</li>
+    <li><b>C2</b> cliente AG-UI (3-4 días): con C1 comparte el serializador y el parser.</li>
+    <li><b>C9</b> aimock para pruebas (1-2 días): sin esto, cada ficha posterior se prueba a mano.</li>
+    <li><b>C3</b> A2UI en escritorio y iOS (4-6 días): catálogo propio y dos renderizadores.</li>
+    <li><b>C4</b> estado compartido y acciones de vista (3 días).</li>
+    <li><b>C5</b> canales con serializadores por plataforma (2-3 días); <b>C10</b> para el siguiente canal que se pida.</li>
+    <li><b>C13</b> Excalidraw (2-3 días) cuando se retome el "Figma ligero".</li>
+    <li><b>C11, C12, C6, C7 y C8</b> según necesidad (1-2 días cada uno, opcionales).</li>
+  </ol>
+  <p class="note">Total realista: dos semanas y media para C1, C2, C9 y C3, que es donde está el valor. Todo MIT o Apache 2.0: se copia, se porta y se adapta sin condiciones.</p>
+
+  <h2>7. Riesgos que hay que vigilar</h2>
+  <ul>
+    <li><b>Versión del protocolo:</b> AG-UI va por 1.0 y A2UI también; fijar versión en el handshake y no perseguir la última sin plan.</li>
+    <li><b>Doble camino de eventos:</b> el host ya tiene su WebSocket; el traductor AG-UI debe ser una vista del mismo bus, no un segundo mecanismo con estado propio.</li>
+    <li><b>Duplicación:</b> no construir un proveedor AG-UI si ACP ya cubre el caso; decidir por uso real (ACP para agentes locales de terminal; AG-UI para agentes con interfaz y estado).</li>
+    <li><b>Android:</b> sin renderizador A2UI nativo, no prometer paridad hasta tener el adaptador Compose o la ruta WebView probada.</li>
+    <li><b>Seguridad:</b> A2UI valida contra catálogo y prohíbe código del modelo; nunca renderizar HTML generado. Esa es justo la razón para elegirlo.</li>
+  </ul>
+</main>
+</body>
+</html>

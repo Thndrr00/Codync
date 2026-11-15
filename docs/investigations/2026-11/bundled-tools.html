@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>n8n y ComfyUI dentro de Codync — qué cambia</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f5f6f8; --ink:#171a1e; --soft:#5a6068; --rule:#d9dde3; --mark:#245c9e; --warn:#9a4a1c; --ok:#2c6b47; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#101215; --ink:#e8eaee; --soft:#a0a6af; --rule:#292e35; --mark:#8fbcf5; --warn:#ffab73; --ok:#8fd3ab; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 860px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.13; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse: collapse; width:100%; font-size:15px; }
+  td, th { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  .warn { border-left:3px solid var(--warn); padding-left:14px; }
+  .ok { border-left:3px solid var(--ok); padding-left:14px; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .small { font-size:14px; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Decisión de empaquetado</p>
+  <h1>Traer n8n y ComfyUI dentro de Codync: qué cambia</h1>
+  <p class="lede">Hoy se instalan aparte y Codync solo los controla. Meterlos en el instalador se puede, pero cambia tamaño, compilación, actualizaciones, licencias y soporte. Esto es lo que implicaría.</p>
+  <div class="bar"><button id="copy">Copiar el análisis</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Qué significa “dentro por completo”</h2>
+  <p>No es solo mover archivos: es que el instalador de Codync traiga el programa y su runtime, y que la app los arranque desde su propio paquete. Para n8n sería el monorepo compilado más Node; para ComfyUI, su paquete portable con Python y PyTorch.</p>
+  <table>
+    <tr><th></th><th>Hoy (fuera)</th><th>Dentro del instalador</th></tr>
+    <tr><td>n8n</td><td>Se detecta en Documents/automan o se instala aparte; Codync lo arranca</td><td>Se compila en CI, viaja en resources y se arranca desde ahí</td></tr>
+    <tr><td>ComfyUI</td><td>Se descarga el portable a <code>data/comfy</code></td><td>El portable y su torch viajan en resources</td></tr>
+    <tr><td>Modelos</td><td>Fuera, en <code>models/</code></td><td>Fuera igual: pesan demasiado para el instalador</td></tr>
+    <tr><td>Datos y workflows</td><td>Fuera, persistentes</td><td>Fuera, persistentes; migración al actualizar</td></tr>
+  </table>
+
+  <h2>2. Tamaño</h2>
+  <ul>
+    <li>n8n compilado con su Node: cientos de MB (el monorepo y sus dependencias).</li>
+    <li>ComfyUI con Python y PyTorch CUDA: 2,5–4 GB; en CPU, otro build.</li>
+    <li>El instalador pasa de ~150 MB a varios GB, y el arranque de la primera vez a minutos.</li>
+    <li>Los modelos siguen aparte: un solo checkpoint ya son GB.</li>
+  </ul>
+
+  <h2>3. Compilación y firma</h2>
+  <ul>
+    <li>CI debe compilar n8n por plataforma (Windows, macOS x64/arm64, Linux) y bajar wheels de Python por arquitectura.</li>
+    <li>Hay que firmar y notarizar cada binario incluido, no solo la app; los antivirus miran distinto un paquete con Python embebido.</li>
+    <li>Un binario sin firmar rompe la instalación limpia en macOS y aumenta los falsos positivos en Windows.</li>
+    <li>El tiempo de CI crece y la caché se vuelve obligatoria.</li>
+  </ul>
+
+  <h2>4. Actualizaciones</h2>
+  <ul>
+    <li>Hoy n8n y ComfyUI se actualizan sin tocar Codync; dentro, solo se actualizan con la app.</li>
+    <li>Un fallo de una versión nueva obliga a publicar otra de Codync para volver atrás.</li>
+    <li>Hacen falta migraciones de datos y workflows, y un respaldo antes de reemplazar.</li>
+    <li>La app se vuelve más frágil: un cambio de n8n puede romper el arranque.</li>
+  </ul>
+
+  <h2>5. Licencias</h2>
+  <ul>
+    <li>El fork de n8n que usas trae <strong>Apache 2.0</strong>: se puede distribuir incluyendo aviso y licencia.</li>
+    <li>ComfyUI es <strong>GPL-3.0</strong>: al distribuir el binario hay que incluir la licencia y ofrecer el código fuente correspondiente; si se modifica, publicar los cambios.</li>
+    <li>Codync tendría que llevar un árbol de avisos de terceros y la oferta de fuente, y revisarlo en cada actualización.</li>
+  </ul>
+
+  <h2>6. Runtime y rutas</h2>
+  <ul>
+    <li>Ambos siguen siendo procesos hijos en <code>127.0.0.1</code> con puerto propio; eso no cambia.</li>
+    <li>Cambian las rutas: de una carpeta del usuario a <code>resources/</code> dentro del paquete; hay que actualizar detección, permisos y actualización.</li>
+    <li>Python y Node embebidos deben quedar excluidos de asar y con rutas largas cuidadas en Windows.</li>
+    <li>Los modelos y los datos siguen en la carpeta de datos, nunca en resources.</li>
+  </ul>
+
+  <h2>7. Ventajas reales</h2>
+  <ul class="ok">
+    <li>Un solo instalador: no hay que buscar ni descargar nada.</li>
+    <li>Versiones fijas y probadas juntas; menos “a mí no me arranca”.</li>
+    <li>Sin detección de instalaciones raras ni rutas del usuario.</li>
+    <li>Funciona sin conexión desde el primer arranque.</li>
+  </ul>
+
+  <h2>8. Costes y riesgos</h2>
+  <ul class="warn">
+    <li>Instalador de varios GB y más tiempo de CI por cada release.</li>
+    <li>Acoplamiento de versiones: actualizar uno arrastra la app.</li>
+    <li>Firma, notarización y antivirus más delicados.</li>
+    <li>GPL de ComfyUI obliga a ofrecer fuente y mantener avisos.</li>
+    <li>Más superficie de soporte: dos programas que pueden fallar por GPU, puerto o drivers.</li>
+  </ul>
+
+  <h2>9. Recomendación</h2>
+  <p class="note">Híbrido, por fases: primero dejar la integración como está (instalación desde la app con progreso y todo el control), que ya da la experiencia completa; después, si el producto lo pide, mover <strong>n8n dentro</strong> por ser pequeño y Apache, y dejar ComfyUI como descarga opcional dentro de la app —su tamaño y su licencia no justifican meterlo en cada instalador—.</p>
+  <p class="small">En ambos casos, la carpeta de datos y la de modelos quedan fuera del paquete y sobreviven a cualquier actualización.</p>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

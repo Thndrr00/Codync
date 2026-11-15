@@ -81,6 +81,7 @@ impl App {
             cursor: 0,
             versioning: None,
             versions: Vec::new(),
+            versions_next: None,
         }));
     }
 
@@ -108,11 +109,23 @@ impl App {
             }
             (KeyCode::Char('r'), Some(_)) => self.flash("Only artifacts can be renamed"),
             // A file the bot shared: the snapshots of that name, newest first.
+            // A file the bot shared: the snapshots of that name, newest first; again, the page after.
             (KeyCode::Char('v'), Some(LibraryItem::File { file, .. })) => {
                 let name = file.name.clone();
-                l.versioning = Some(name.clone());
-                l.versions.clear();
-                self.call("fileVersions", json!({"botId": &l.bot, "name": name}), After::LibraryVersions);
+                if l.versioning.as_deref() == Some(name.as_str()) {
+                    if let Some(before) = l.versions_next {
+                        self.call(
+                            "fileVersions",
+                            json!({"botId": &l.bot, "name": name, "beforeSeq": before}),
+                            After::LibraryVersions,
+                        );
+                    }
+                } else {
+                    l.versioning = Some(name.clone());
+                    l.versions.clear();
+                    l.versions_next = None;
+                    self.call("fileVersions", json!({"botId": &l.bot, "name": name}), After::LibraryVersions);
+                }
             }
             (KeyCode::Char('v'), Some(_)) => self.flash("Only files the bot shared have versions"),
             _ => {}
@@ -168,7 +181,8 @@ impl App {
     /// The host's answer to `fileVersions`: the snapshots of the name the Library is showing.
     pub(in crate::tui) fn library_versions(&mut self, v: &Value) {
         if let Some(Overlay::Library(l)) = self.overlays.last_mut() {
-            l.versions = v["versions"].as_array().cloned().unwrap_or_default();
+            l.versions.extend(v["versions"].as_array().cloned().unwrap_or_default());
+            l.versions_next = v["next"].as_i64();
         }
     }
 
@@ -276,6 +290,7 @@ mod tests {
             cursor: 0,
             versioning: None,
             versions: Vec::new(),
+            versions_next: None,
         }));
         let file = json!({"id": "x", "name": "a.csv", "size": 9, "sha256": "0".repeat(64)});
         app.library_loaded(

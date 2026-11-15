@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt independiente — solo lo que falta de OpenBot</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #f6f4ef;
+    --ink: #1b1a17;
+    --soft: #5d5a52;
+    --rule: #ddd7ca;
+    --mark: #b5451f;
+    --done: #2f6b46;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#141311; --ink:#eae6dd; --soft:#a9a396; --rule:#302d27; --mark:#ff8a5b; --done:#8fd0a8; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:48px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 860px; margin: 0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size: clamp(28px,4vw,40px); line-height:1.1; margin:12px 0 14px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:60ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:14px 0; margin-bottom:30px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--done); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:36px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; background:color-mix(in srgb,var(--ink) 2%,transparent); }
+  .ficha dl { margin:10px 0 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .ficha dd ul { margin:4px 0 0 18px; }
+  .tag { font:11px/1 ui-monospace,monospace; color:var(--soft); border:1px solid var(--rule); padding:1px 5px; border-radius:2px; }
+  .exists { color:var(--done); }
+  .note { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+  .small { font-size:14px; color:var(--soft); }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt independiente · solo carencias · fuente: openbot.run/changelog</p>
+  <h1>Lo que falta de OpenBot en Codync</h1>
+  <p class="lede">Cada ficha es una carencia, no una repetición: dice qué ya existe, qué falta exactamente y cuándo está terminada. Lo ya hecho no se reconstruye.</p>
+  <div class="bar">
+    <button id="copy">Copiar este prompt</button>
+    <span id="copied" role="status" aria-live="polite"></span>
+  </div>
+
+  <h2>Alcance</h2>
+  <p>Lista de huecos tomada del changelog 0.1–0.64 de OpenBot. Se implementa en Codync de forma nativa; la etiqueta es la versión donde apareció y sirve para localizar el código en <code>C:\Users\Edwin Villeda\Documents\openbot-nightly</code>. <strong>Copia el código y los assets que sirvan</strong> y adáptalos; reescribe solo lo que dependa de la nube de OpenBot.</p>
+  <p class="note">Ya existe y <strong>no</strong> se rehace: rail y lienzo con rutinas manuales, uso real y por cuenta, cuentas por agente con correo, n8n, WhatsApp con QR y un bot, perfiles de navegador por bot, borrar mensajes, color de chat, marketplace con 28 agentes y 92 skills, CLIs, disparadores por mención, 10 idiomas. Si una carencia toca algo existente, se extiende.</p>
+
+  <h2>Antes de empezar</h2>
+  <ul>
+    <li>Cierra <code>Codync Dev</code>, <code>codync-host</code> y <code>codync-dev-hostw</code>; compila con <code>cd apps/desktop; npm run dist:win:dev</code>, instala con <code>/S</code> y arranca con un puerto de depuración nuevo.</li>
+    <li>Origen por área: <code>src/backend/</code> (workflows, browser-profiles, messaging, agent-threads, agent-waits), <code>src/renderer/</code>, <code>packages/whatsapp/</code>, <code>apps/*-app/</code>, <code>marketplace/production-catalog/</code>.</li>
+  </ul>
+
+  <h2>Fichas</h2>
+
+  <article class="ficha">
+    <h3><span class="num">A</span>Motor de workflows</h3>
+    <p class="exists">Ya hay: lienzo, nodos, enlaces, inspector, lista y rutinas manuales.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Disparadores y salidas de GitHub: issues, comentarios, etiquetas, PR, reviews, merges, cierres, asignaciones, checks fallidos, <code>@openbotgit</code>; varios repos; cola por issue; últimos 50 eventos; salidas de comentar, etiquetar, asignar, review, cerrar, reabrir y crear issue. <span class="tag">0.58/0.60/0.61</span></li>
+        <li>Disparadores y salidas de Discord, Slack y Telegram, con filtros y reacciones; adjuntos de Discord copiados a <code>openbot-attachments</code>. <span class="tag">0.60</span></li>
+        <li>El agente crea, edita y ejecuta workflows con cursor, aprobación al borrar y diseño limpio. <span class="tag">0.61</span></li>
+        <li>Paso Condition con modelo y esfuerzo; webhooks Standard Webhooks con secreto del emisor y filtros del cuerpo. <span class="tag">0.61</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un evento de prueba produce el comentario, la etiqueta o la reacción, y el lienzo muestra la corrida.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/workflows/</code>, <code>src/renderer/</code>, <code>apps/*-app/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">B</span>Canales de equipo</h3>
+    <p class="exists">Ya hay: chats de grupo y equipos con coordinador.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>El agente crea y cambia canales (título, instrucciones, miembros, lead, archivar, imagen/icono). <span class="tag">0.61</span></li>
+        <li>El lead descarta trabajo; sub-tareas con Stop, Continue, Reassign y Cancel. <span class="tag">0.61</span></li>
+        <li>Pregunta y respuesta entre agentes y miembros, un turno y dos respuestas. <span class="tag">0.62</span></li>
+        <li><code>$</code> skills del canal, “Enviar a un canal” y memoria de canal. <span class="tag">0.60/0.61</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un pedido se reparte en el canal, se ve cada sub-tarea y el resultado vuelve al canal.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/agent-tasks/</code>, <code>agent-waits/</code>, <code>src/renderer/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">C</span>WhatsApp que trabaja solo</h3>
+    <p class="exists">Ya hay: puente, QR, elección de bot y entrada de mensajes.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Orquestador que contesta lo simple, delega y devuelve al mismo chat; en “Mensaje a ti mismo” responde como dueño. <span class="tag">0.60/0.62</span></li>
+        <li>Aprobación con 1 o 2, código para desconocidos y grupos autorizados. <span class="tag">0.60</span></li>
+        <li>Archivos en ambos sentidos; JPEG/PNG/WebP como fotos; SVG. <span class="tag">0.59/0.62</span></li>
+        <li>Enlace desde un servidor con QR o código; dato durable de la persona entre conversaciones. <span class="tag">0.61/0.62</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un desconocido pide aprobación, aprobado recibe respuesta y una imagen enviada vuelve como foto.</dd>
+      <dt>Origen</dt>
+      <dd><code>packages/whatsapp/</code>, <code>src/backend/messaging/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">D</span>Proveedores y voz</h3>
+    <p class="exists">Ya hay: Claude, Codex, Grok, Gemini, Antigravity, OpenCode y sus cuentas.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Devin, GitHub Copilot, Kimi y Hermes con instalador y Connect/Disconnect. <span class="tag">0.59–0.61</span></li>
+        <li>Elegir cuenta al crear el agente; Delete del proveedor sin borrar cuentas ni agentes. <span class="tag">0.62/0.63</span></li>
+        <li>Esfuerzos por modelo, modelos nuevos primero, apagar/restablecer sin quitar los usados y chip de límite. <span class="tag">0.60/0.62</span></li>
+        <li>Voz en vivo de Codex y GPT voice para cualquier agente. <span class="tag">0.61/0.63</span></li>
+        <li>Velocidad de respuesta, Parakeet, Cohere, servidor de voz e hilos de dictado. <span class="tag">0.55/0.60/0.62</span></li>
+        <li>Registro de errores con motivo, modelo y turno, sin secretos. <span class="tag">0.63</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un agente con dos cuentas ofrece ambas; Delete deja la cuenta intacta; la voz responde y se corta.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/acp-*.ts</code>, <code>src/backend/agent/</code>, <code>src/renderer/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">E</span>Proxy, logins y vault</h3>
+    <p class="exists">Ya hay: perfil de navegador por bot.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Proxy por perfil con insignia, contraseña cifrada, bloqueo sin proxy, aviso antes de cerrar pestañas y “usar tu computadora” como proxy. <span class="tag">0.62</span></li>
+        <li>Formatos <code>socks5://</code>, <code>http://</code>, <code>usuario:contraseña@host:puerto</code> y <code>host:puerto:usuario:contraseña</code>. <span class="tag">0.62</span></li>
+        <li>Relleno de logins por dominio base y desde Proton Pass; importación de su CSV. <span class="tag">0.62/0.63</span></li>
+        <li>El agente responde los diálogos que abrió él; clave pegada al vault con aviso y tarjeta del vault en el móvil. <span class="tag">0.57/0.60/0.61</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un perfil con proxy no abre sin él y avisa; dos perfiles del mismo sitio no comparten sesión; el login se rellena en el dominio base.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/browser-profiles/</code>, <code>src/main/</code>, <code>src/renderer/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">F</span>Archivos e hilos</h3>
+    <p class="exists">Ya hay: adjuntos, borrar mensajes y color de chat.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Subidas con anillo, progreso, cancelación y reintento; el envío espera; descargas con reintento; 100 MB al móvil. <span class="tag">0.57/0.60</span></li>
+        <li>No leído en hilos, <code>@</code> para etiquetar pestañas e hilos, cola propia con steer/borrar/reordenar/editar. <span class="tag">0.62</span></li>
+        <li>Cabecera fija de subagentes, citas en hilos y acciones de selección. <span class="tag">0.60/0.61/0.63</span></li>
+        <li>Una corrida de rutina abre en su hilo desde el historial. <span class="tag">0.63</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un archivo grande muestra progreso y se cancela; el hilo sigue su cola y responde a una cita.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/agent-threads/</code>, <code>src/renderer/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">G</span>Rutinas y arranque del plan</h3>
+    <p class="exists">Ya hay: rutinas, calendario, flow y ejecución.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Interruptor “Ejecutar en un hilo separado” y cuatro subprocesos paralelos. <span class="tag">0.62</span></li>
+        <li>Retardo del plan (10 s a 5 min, hora propia o solo Start), aviso y cuenta atrás. <span class="tag">0.63</span></li>
+        <li>Límite de peticiones por hora de scripts locales. <span class="tag">0.63</span></li>
+        <li>Saltar agentes enlazados cuando la corrida no trae texto. <span class="tag">0.62</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Solo la rutina marcada arranca en su hilo y el plan espera el tiempo elegido con aviso.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/routine-flows/</code>, <code>agent-tasks/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H</span>Conectores y tienda</h3>
+    <p class="exists">Ya hay: catálogo de agentes, skills y apps, con su detalle e instalación.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Conectores con su OAuth en nombre de OpenBot: TickTick, Proton Pass, Coinbase, Robinhood, RevenueCat, ClickUp, varias cuentas de Notion, pagos de Link, Linear, Obsidian. <span class="tag">0.58–0.63</span></li>
+        <li><strong>Higgsfield</strong>, caso completo: se instala como app de Diseño desde el catálogo de plugins (<code>marketplace/plugin-catalog/plugins/higgsfield/plugin.json</code>) y usa su MCP por HTTPS <code>https://mcp.higgsfield.ai/mcp</code> con inicio de sesión en el navegador (auth <code>kind: link</code>, sin clave). Ofrece generar imágenes, vídeos, personajes y audio (Seedance, Kling, Veo, MiniMax Hailuo), consultar créditos y recorrer la biblioteca de recursos; cada resultado queda en los recursos de esa cuenta. Cada generación gasta créditos de esa cuenta a tarifa normal, también con plan ilimitado; no hay instalación local. <span class="tag">0.63</span></li>
+        <li>GitHub App con Administration para crear repos; tokens de <code>openbotgit[bot]</code> sin ese permiso. <span class="tag">0.62</span></li>
+        <li>“Tus skills” con Update, filtro Todas/Verificadas/Públicas, página por skill con sus agentes y Remove/Undo, selección masiva. <span class="tag">0.55</span></li>
+        <li>Peluche que pesca en estados vacíos. <span class="tag">0.62</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Cada conector se instala con su sesión y una herramienta devuelve datos reales sin romper los existentes. En Higgsfield: la sesión de navegador se completa, “¿cuántos créditos tengo?” responde con el saldo y una generación devuelve un recurso.</dd>
+      <dt>Origen</dt>
+      <dd><code>marketplace/production-catalog/</code>, <code>marketplace/plugin-catalog/</code>, <code>src/backend/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">I</span>Interfaz que falta</h3>
+    <p class="exists">Ya hay: color de chat por bot, traducciones y componentes propios.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Árabe con espejo y RTL por párrafo; código LTR. <span class="tag">0.60</span></li>
+        <li>Avatares planos o de peluche, 11 colores de chat e insignia de fieltro. <span class="tag">0.61/0.63</span></li>
+        <li>Preguntas en una burbuja, de una en una, con Back, letras y resumen. <span class="tag">0.62/0.63</span></li>
+        <li>Iconos uniformes y grises en reposo; desvanecido bajo carpetas. <span class="tag">0.62/0.63</span></li>
+        <li>Tema por archivo de paleta y aviso de reseña con cadencia. <span class="tag">0.60/0.62</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>En árabe la app se espeja y el código sigue LTR; las preguntas se recorren con Back; el peluche y los colores se ven.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/renderer/</code>, <code>packages/i18n/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">J</span>Empresa y servidores</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>OIDC (Entra ID, Okta, Workspace) con formatos de emisor, prueba previa, SCIM y auditoría. <span class="tag">0.60</span></li>
+        <li>Ajustes de servidor desde escritorio: Computer Use, nuevos chats, carpetas y exclusiones, Publish, instrucciones, compactar. <span class="tag">0.60</span></li>
+        <li>Cinco servidores locales visibles desde el móvil y rotación de clave con firma doble. <span class="tag">0.55/0.57</span></li>
+        <li>Límite de sitios, aviso de disco, actualización en LXC y programas en <code>~/.local/bin</code> en Docker. <span class="tag">0.60–0.62</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un OIDC de prueba deja entrar solo al dominio permitido, la auditoría lo registra y la clave rota sin desemparejar.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/</code>, <code>remote/</code>, <code>docker/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K</span>Uso que falta</h3>
+    <p class="exists">Ya hay: uso por proveedor y por cuenta, barras y resumen semanal.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Pestaña Skill con cargas, tokens, coste y agentes. <span class="tag">0.63</span></li>
+        <li>CPU, memoria y disco del servidor para dueños y admins. <span class="tag">0.61</span></li>
+        <li>Barra mensual de OpenCode Go y ventanas de Kimi; el coste $0 de Go como no disponible. <span class="tag">0.58/0.60/0.63</span></li>
+        <li>Arranque, cola, primera salida, tareas lentas, códigos de fallo, cierres sucios y webhooks. <span class="tag">0.62/0.63</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>El desglose muestra una skill usada con su coste y el servidor muestra CPU y disco.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/telemetry*</code>, <code>src/renderer/</code>.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">L</span>0.64: lo más reciente</h3>
+    <p class="exists">Sin implementar; es la versión de hoy y la de mayor prioridad tras A.</p>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Control de escritorio remoto por política (dueño, dueños y admins o todos), “Preguntar en este equipo” con 30 s, aviso y “Detener todo el control”.</li>
+        <li>Estilo de respuesta “Natural”: mensajes de progreso entre pasos, línea de apertura, respuesta con veredicto y límites, etiquetas propias del paso, línea de actividad sin temporizador y avatar por acción; “Clásico” en Personalidad del servidor.</li>
+        <li>Post de “Trabajando…” en Slack, Discord, Telegram y WhatsApp con la última línea de progreso, sin secretos ni pensamiento.</li>
+        <li>Muelle de agentes en macOS: estados, quitar, abrir en ventana, arrastrar el borde, ajustes de pantalla, lado y ocultar; dictado y tarjetas de trabajo terminado con “+N más”.</li>
+        <li>Hebreo con espejo y RTL.</li>
+        <li>“Nueva conversación” y “Compactar contexto” por canal, conservando miembros, instrucciones y memorias.</li>
+        <li>Los miembros gestionan sus propios servidores MCP y conectan apps; cada app mantiene un solo inicio de sesión.</li>
+        <li>Un agente puede leer sus otros chats e hilos (“¿qué hicimos hoy?”) y buscarlos en un paso.</li>
+        <li>Send con la caja vacía inicia conversación de voz; otra pulsación la termina.</li>
+        <li>Interruptor “Usar mi configuración de Claude Code” (apagado por defecto) y aviso de activarlo si usan CLAUDE.md, skills o hooks.</li>
+        <li>Coste de Pi, DeepSeek, OpenRouter e Inception en Uso, calculado por Pi.</li>
+        <li>Qué puede leer cada modelo personalizado: Imágenes y PDF (OpenCode); “Buscar modelos” rellena contexto, salida e insumos desde el endpoint con su procedencia.</li>
+        <li>GitLab.com como conector y dirección MCP para GitLab propio; Omnisend y ElevenLabs; inicio de sesión de MCP con documento de metadatos.</li>
+        <li>“Cargar mensajes anteriores” en hilos de más de 100; avisos de mención en Slack, Telegram, Discord y WhatsApp.</li>
+        <li>Adjuntar cualquier tipo de archivo y abrir archivos fuera del espacio desde el móvil o la web (dueños y admins).</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>La política de escritorio remoto se respeta con aviso y corte; un turno “Natural” muestra progreso y etiquetas reales; un hilo largo carga anteriores; una mención en WhatsApp notifica; el interruptor de Claude devuelve el setup propio.</dd>
+      <dt>Origen</dt>
+      <dd><code>src/backend/</code> y <code>src/renderer/</code>; el changelog 0.64 y su sección “Action needed”.</dd>
+    </dl>
+  </article>
+
+  <h2>Orden</h2>
+  <ol>
+    <li>A, L y H.</li>
+    <li>C y F.</li>
+    <li>D, E y K.</li>
+    <li>B, G y J.</li>
+    <li>I, transversal.</li>
+  </ol>
+
+  <h2>Reglas</h2>
+  <ul>
+    <li>Append-only: ids, métodos, rutas y claves de traducción; lo nuevo al final.</li>
+    <li>El host manda; cada clave nueva en los 10 idiomas y cada cambio de interfaz en escritorio y Android.</li>
+    <li>Una ficha por rama, con su prueba de aceptación y la regresión de rail, lienzo, uso, cuentas, n8n, WhatsApp, perfiles, marketplace y traducciones.</li>
+  </ul>
+
+  <h2>Validación</h2>
+  <ul>
+    <li><code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>.</li>
+    <li><code>npm run typecheck</code>, <code>npm test</code>, <code>./gradlew :core:test :app:testDebugUnitTest :app:compileDebugKotlin</code>.</li>
+    <li>Prueba real de la ficha en la app instalada, con captura y consola limpia.</li>
+  </ul>
+
+  <h2>Reporte</h2>
+  <p>Por ficha: qué se copió, qué se adaptó, qué se probó y qué falta. Al final, resumen en español y la app abierta.</p>
+</main>
+
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > .kicker, main > h1, main > .lede, main > h2, main > p, main > ul, main > ol, main > article')]
+      .map((node) => node.innerText.trim())
+      .filter(Boolean)
+      .join('\n\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      status.textContent = 'Copiado.'
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = text
+      document.body.append(area)
+      area.select()
+      document.execCommand('copy')
+      area.remove()
+      status.textContent = 'Copiado.'
+    }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

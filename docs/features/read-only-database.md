@@ -35,7 +35,18 @@ Code: `host/src/sql.rs` (`is_read_only`, `query`, `call`, `tool`), the `botDatab
 Idea from agentes.chat's read-only database connector (`packages/engine`, AGPL-3.0-only): the
 behavior, not the code.
 
-## Not here yet
+## Why only SQLite
 
-Only SQLite files. A server database (Postgres, MySQL) needs a driver this host doesn't link, and a
-sign-in to go with it; the guard, the row cap and the deadline are the same.
+Supporting one engine whole beats supporting several half-way, and SQLite is the only one that needs
+nothing but the file: no server to run, no port, no login to store, so the tool works the moment the
+person picks a file. The two promises the feature rests on are also SQLite's own: the parser side
+(`is_read_only`, the write keywords, the single statement) and the connection side
+(`SQLITE_OPEN_READ_ONLY`, `query_only`, the progress handler that stops at the deadline) both come
+from `rusqlite` and behave identically everywhere the host runs.
+
+A server engine would need its own four pieces, and they are not interchangeable: a driver and its
+TLS, a login in the vault, a transaction opened `READ ONLY` per question, and a statement timeout
+that may or may not cancel the work server-side. Postgres would be first (a read-only role and
+`statement_timeout` make the same guarantees). Until then the per-bot setting, its methods and the
+tool stay pointed at one SQLite file, and the row cap, the column cap and the deadline already hold
+for whatever engine is added next.

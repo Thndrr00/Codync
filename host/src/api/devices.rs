@@ -60,6 +60,11 @@ const LOCAL_ONLY: &[&str] = &[
     // An export file is a path on this computer.
     "previewImport",
     "importBots",
+    "exportDocument",
+    // Storage is configured on the computer; its status is readable from a phone.
+    "setS3",
+    "disconnectS3",
+    "uploadDocument",
     "pairing",
     "computerCall",
     "computerTools",

@@ -49,6 +49,32 @@ test('a Hermes folder keeps its own skills and memory paragraphs, not the ones i
   assert.deepEqual(plan.skipped.map((s) => [s.path, s.reason]), [['skills/web-search/SKILL.md', 'builtin']])
 })
 
+test('a Claude Code folder brings its instructions, commands and subagents', () => {
+  const claude = {
+    'CLAUDE.md': 'Run the tests before every commit.',
+    '.claude/CLAUDE.md': 'Answer in Spanish.',
+    '.claude/settings.json': '{"apiKey":"x"}',
+    'AGENTS.md': 'Generic rules.',
+    '.claude/skills/release/SKILL.md': '---\nname: release\ndescription: Cut a release\n---\nBump and tag.',
+    '.claude/commands/standup.md': '---\ndescription: Draft the standup\n---\nSummarize yesterday.',
+    '.claude/agents/reviewer.md': '---\nname: reviewer\ndescription: Reviews diffs\n---\nFind bugs.',
+  }
+  const plan = planImport(claude, ['.claude/settings.json'])
+  assert.ok(plan)
+  assert.equal(plan.source, 'claude')
+  assert.equal(plan.name, 'Claude Code')
+  assert.deepEqual(plan.instructions.map((i) => i.id), ['CLAUDE.md', '.claude/CLAUDE.md'])
+  assert.deepEqual(plan.memory, [])
+  assert.deepEqual(plan.skills.map((s) => [s.name, s.description]), [
+    ['reviewer', 'Reviews diffs'],
+    ['standup', 'Draft the standup'],
+    ['release', 'Cut a release'],
+  ])
+  assert.deepEqual(plan.skipped.map((s) => [s.path, s.reason]), [['.claude/settings.json', 'secret']])
+  // A CLAUDE.md wins over the generic AGENTS.md detected next to it.
+  assert.equal(detectSource(['AGENTS.md', 'CLAUDE.md']), 'claude')
+})
+
 test('a folder with only an AGENTS.md is a plain agent document and anything else is not an agent', () => {
   assert.equal(planImport({ 'AGENTS.md': 'Rules.' })?.source, 'agents')
   assert.equal(planImport({ 'README.md': 'hello' }), null)
@@ -79,7 +105,7 @@ test('keys of the usual providers are recognised and ordinary words are not', ()
 })
 
 test('settings and secret files are named and never read', () => {
-  for (const secret of ['.env', 'config/.env.local', 'auth.json', 'openclaw.json', 'credentials', 'id_rsa.pem', 'secrets.yaml']) {
+  for (const secret of ['.env', 'config/.env.local', 'auth.json', 'openclaw.json', 'credentials', 'id_rsa.pem', 'secrets.yaml', '.claude/settings.json', '.claude/settings.local.json', '.mcp.json']) {
     assert.ok(isSecretFile(secret), secret)
     assert.ok(!isCandidate(secret), secret)
   }
@@ -89,8 +115,8 @@ test('settings and secret files are named and never read', () => {
 })
 
 test('the unrelated files of a folder are not candidates', () => {
-  for (const path of ['SOUL.md', 'memory/2026-01-02.md', 'skills/a/SKILL.md', 'skills/a/b/SKILL.md', 'memories/MEMORY.md']) assert.ok(isCandidate(path), path)
-  for (const path of ['src/index.ts', 'notes.md', 'memory/sub/x.md', 'skills/a/script.sh', 'node_modules/x/SKILL.md']) assert.ok(!isCandidate(path), path)
+  for (const path of ['SOUL.md', 'memory/2026-01-02.md', 'skills/a/SKILL.md', 'skills/a/b/SKILL.md', 'memories/MEMORY.md', 'CLAUDE.md', '.claude/CLAUDE.md', '.claude/commands/deploy.md', '.claude/skills/a/SKILL.md']) assert.ok(isCandidate(path), path)
+  for (const path of ['src/index.ts', 'notes.md', 'memory/sub/x.md', 'skills/a/script.sh', 'node_modules/x/SKILL.md', '.claude/README.md', '.claude/hooks/check.sh']) assert.ok(!isCandidate(path), path)
 })
 
 test('pieces: hermes entries, skill front matter, identity hints and memory facts', () => {

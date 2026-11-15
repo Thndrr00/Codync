@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 pub(super) const METHODS: &[&str] = &[
     "listDocuments",
     "getDocument",
+    "exportDocument",
     "documentGraph",
     "saveDocument",
     "moveDocument",
@@ -60,7 +61,20 @@ pub(super) fn call(hub: &Hub, method: &str, body: Value) -> Result<Value> {
                 "backlinks": hub.store.document_backlinks(id)?,
             })
         }
-        "documentGraph" => hub.store.document_graph(str_arg(&body, "botId")?)?,
+        "exportDocument" => crate::document_export::export(
+            hub,
+            str_arg(&body, "botId")?,
+            str_arg(&body, "id")?,
+            str_arg(&body, "format")?,
+        )?,
+        "documentGraph" => {
+            let limit = match body.get("limit") {
+                Some(value) => u32::try_from(value.as_u64().context("limit must be a positive integer")?)
+                    .context("limit is too large")?,
+                None => 300,
+            };
+            hub.store.document_graph(str_arg(&body, "botId")?, body["afterId"].as_str(), limit)?
+        }
         "saveDocument" => {
             let bot = str_arg(&body, "botId")?.to_owned();
             let nonce = body

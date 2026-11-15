@@ -8,8 +8,10 @@ use crate::store::EntryKind;
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
 
-/// Messages with files it looks through, newest first.
+/// Messages with files a Library page looks through, newest first.
 const MAX_FILE_MESSAGES: i64 = 500;
+/// Messages a page of versions carries by default, at most.
+const VERSION_PAGE: i64 = 100;
 
 /// `library {botId}` → `{items: [{kind: artifact | file | attachment, at, …}]}`.
 pub fn list(hub: &Hub, bot: &str) -> Result<Value> {
@@ -26,7 +28,7 @@ pub fn list(hub: &Hub, bot: &str) -> Result<Value> {
         })
         .map(|artifact| json!({"kind": "artifact", "at": artifact.updated_at, "artifact": artifact}))
         .collect();
-    for e in hub.store.file_messages(bot, MAX_FILE_MESSAGES)? {
+    for e in hub.store.file_messages(bot, None, i64::MAX, MAX_FILE_MESSAGES)? {
         let (kind, files) = if e.kind == EntryKind::User.as_str() {
             ("attachment", &e.data["attachments"])
         } else {
@@ -40,15 +42,22 @@ pub fn list(hub: &Hub, bot: &str) -> Result<Value> {
     Ok(json!({"items": items}))
 }
 
-/// `fileVersions {botId, name}` → `{versions: [{at, entryId, file}]}`, newest first: every snapshot a
-/// bot published under that name. Each one is immutable, so an older version is read the same way as
-/// the newest (`readFile` with its `entryId` and `fileId`).
+/// `fileVersions {botId, name, beforeSeq?, limit?}` → `{versions: [{at, entryId, file}], next}`, newest
+/// first: every snapshot a bot published under that name, a page at a time. Each one is immutable, so
+/// an older version is read the same way as the newest (`readFile` with its `entryId` and `fileId`);
+/// `next` is the `beforeSeq` of the page after it.
 pub fn versions(hub: &Hub, b: &Value) -> Result<Value> {
     let bot = b["botId"].as_str().context("`botId` is required")?;
     let name = b["name"].as_str().context("`name` is required")?;
     ensure!(hub.store.bot(bot)?.is_some_and(|row| !row.deleted), "unknown bot");
+    let limit = b["limit"].as_i64().unwrap_or(VERSION_PAGE).clamp(1, MAX_FILE_MESSAGES);
+    let before = b["beforeSeq"].as_i64().filter(|before| *before > 0).unwrap_or(i64::MAX);
+    let mut rows = hub.store.file_messages(bot, Some(name), before, limit.saturating_add(1))?;
+    let more = rows.len() > usize::try_from(limit)?;
+    rows.truncate(usize::try_from(limit)?);
+    let next = if more { rows.last().map(|e| e.seq) } else { None };
     let mut versions: Vec<Value> = Vec::new();
-    for e in hub.store.file_messages(bot, MAX_FILE_MESSAGES)? {
+    for e in rows {
         let files = if e.kind == EntryKind::User.as_str() { &e.data["attachments"] } else { &e.data["files"] };
         for file in files.as_array().into_iter().flatten() {
             if file["name"].as_str() == Some(name) {
@@ -57,7 +66,7 @@ pub fn versions(hub: &Hub, b: &Value) -> Result<Value> {
         }
     }
     versions.sort_by_key(|item| std::cmp::Reverse(item["at"].as_i64().unwrap_or_default()));
-    Ok(json!({"versions": versions}))
+    Ok(json!({"versions": versions, "next": next}))
 }
 
 #[cfg(test)]
@@ -94,6 +103,34 @@ mod tests {
         assert_eq!(versions.len(), 2, "the other name is not a version of this one");
         let ids: Vec<&str> = versions.iter().filter_map(|v| v["file"]["id"].as_str()).collect();
         assert!(ids.contains(&"f1") && ids.contains(&"f2"));
+        assert!(found["next"].is_null(), "one page holds both");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn each_page_of_versions_carries_the_next_one() {
+        let (hub, dir) = hub();
+        let config = serde_json::from_value(json!({"id": "b1", "name": "B", "backend": "claude"})).unwrap();
+        hub.store.save_bot(&config).unwrap();
+        let lane = Lane::main("b1");
+        for file_id in ["f1", "f2", "f3"] {
+            let data = json!({
+                "text": "here",
+                "final": true,
+                "files": [{"id": file_id, "name": "notes.md", "size": 3, "sha256": "abc"}],
+            });
+            hub.store.insert_entry(&lane, EntryKind::Agent, 1, &data).unwrap();
+        }
+        let first = versions(&hub, &json!({"botId": "b1", "name": "notes.md", "limit": 2})).unwrap();
+        let newest: Vec<&str> =
+            first["versions"].as_array().unwrap().iter().filter_map(|v| v["file"]["id"].as_str()).collect();
+        assert_eq!(newest, ["f3", "f2"]);
+        let next = first["next"].as_i64().expect("there is a second page");
+        let second = versions(&hub, &json!({"botId": "b1", "name": "notes.md", "beforeSeq": next})).unwrap();
+        let older: Vec<&str> =
+            second["versions"].as_array().unwrap().iter().filter_map(|v| v["file"]["id"].as_str()).collect();
+        assert_eq!(older, ["f1"], "every snapshot is listed once, newest first");
+        assert!(second["next"].is_null(), "the last page has no next");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

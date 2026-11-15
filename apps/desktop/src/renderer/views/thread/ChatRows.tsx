@@ -142,26 +142,40 @@ function BotAppNotice({ entry, openApp }: { entry: Entry; openApp?: (app: BotApp
   )
 }
 
-/** Ideas 13, 19 & 20: Human takeover request rendered with ComputerCard and TakeoverModal. */
+/** Ideas 13, 19 & 20: a human takeover request. The person takes it (the bot waits), and hands it back when done. */
 function TakeoverRequestNotice({ entry }: { entry: Entry }) {
   const store = useLiveStore()
+  const tr = useTr()
+  const [error, setError] = useState<string | null>(null)
   const req = entry.data.takeoverRequest
   if (!req) return null
   const resolved = req.status === 'resolved' || req.status === 'cancelled' || req.status === 'expired'
+  const mine = req.status === 'taken'
+  const told = async (result: Promise<string | null>) => setError(await result)
   return (
-    <ComputerCard
-      frame={{
-        url: req.url ?? undefined,
-        title: req.reason,
-        action: req.status === 'expired' ? 'Expired' : resolved ? 'Completed' : 'Action needed',
-        active: !resolved,
-      }}
-      onFinishTakeover={() =>
-        store.send('I have completed the requested step in the browser. Please continue.', entry.botId, {
-          thread: entry.threadId ?? null,
-        })
-      }
-    />
+    <VStack gap={6}>
+      <ComputerCard
+        frame={{
+          url: req.url ?? undefined,
+          title: req.reason,
+          action:
+            req.status === 'expired'
+              ? 'Expired'
+              : resolved
+                ? 'Completed'
+                : mine
+                  ? `Taken by you${req.takenBy && req.takenBy !== 'This computer' ? ` (${req.takenBy})` : ''}`
+                  : 'Action needed',
+          active: !resolved,
+        }}
+        onTakeOver={req.status === 'waiting' ? () => void told(store.takeTakeover(entry)) : undefined}
+        onFinishTakeover={!resolved ? () => void told(store.resolveTakeover(entry)) : undefined}
+      />
+      {req.status === 'taken' && req.takenBy && req.takenBy !== 'This computer' ? (
+        <Text size="caption" tone="secondary">{tr('Taken by {who}').replace('{who}', req.takenBy)}</Text>
+      ) : null}
+      {error ? <Text size="caption" tone="danger">{error}</Text> : null}
+    </VStack>
   )
 }
 

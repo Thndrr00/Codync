@@ -174,6 +174,16 @@ fun AppStore.continueTurn(entry: Entry) = action("continue:" + entry.id) {
     ready().call("continueTurn", body("entryId" to entry.id))
 }
 
+/** Takes a takeover request in hand: the bot's agent waits until it is done. */
+fun AppStore.takeTakeover(entry: Entry) = action("take:" + entry.id) {
+    ready().call("takeTakeover", body("entryId" to entry.id))
+}
+
+/** Did the step a bot asked for: the card closes and the agent goes on. */
+fun AppStore.resolveTakeover(entry: Entry) = action("done:" + entry.id) {
+    ready().call("resolveTakeover", body("entryId" to entry.id))
+}
+
 /** Sends a message on to another chat; the host copies its files and marks it forwarded. */
 internal fun AppStore.forwardEntry(entry: Entry, toBotId: String, done: () -> Unit = {}) = action("forward:" + entry.id) {
     ready().call("forward", body("entryId" to entry.id, "botId" to toBotId))

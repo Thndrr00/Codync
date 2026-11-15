@@ -255,6 +255,16 @@ fn entry_lines(out: &mut Built, app: &App, b: &Bot, e: &Entry, info: &HashMap<i6
             }
             let text = if e.data["voiceTranscriptText"].is_string() {
                 format!("{} · o shows the call transcript · v confirms decisions", e.notice_text())
+            } else if let Some(status) = e.data["takeoverRequest"]["status"].as_str() {
+                // A step only the person can do: `t` takes it (the agent waits), `d` says it is done.
+                let by = e.data["takeoverRequest"]["takenBy"].as_str().unwrap_or_default();
+                let hint = match status {
+                    "waiting" => " · t takes · d did it".to_owned(),
+                    "taken" if by.is_empty() => " · d did it".to_owned(),
+                    "taken" => format!(" · taken by {by} · d did it"),
+                    _ => String::new(),
+                };
+                format!("{}{hint}", e.notice_text())
             } else if let Some(status) = e.data["connectionRequest"]["status"].as_str() {
                 let hint = if e.data["connectionRequest"]["kind"] == "agent" { "C signs in" } else { "C connects" };
                 format!(

@@ -103,7 +103,8 @@ Unlock the phone when required. Build, install, launch, and visual inspection ar
 | Host | `cd host && cargo build` | rustup; `host/rust-toolchain.toml` pins the version CI uses (a Homebrew `rust` ahead of rustup on PATH ignores it) |
 | Host checks | `cd host && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` | Local agent credentials are unnecessary for unit tests |
 | iOS Kit | `cd apps/ios/Kit && xcodebuild test -scheme CodyncKit-Package -destination 'platform=iOS Simulator,id=<sim-id>'` | Swift 6 / Xcode; iOS-only package |
-| Desktop | `cd apps/desktop && npm ci && npm run typecheck && npm test` | Node and npm; CI uses Node 24 |
+| Desktop | `cd apps/desktop && npm ci && npm run typecheck && npm test` | Node and npm; CI uses Node 24; running it while developing: [desktop development](../architecture/desktop-app.md#development) |
+| Android | `cd apps/android && ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` | JDK 21 and Android SDK 37; install Codync Dev with `adb install -r -d` after stopping the old one ([apps/android/README.md](../../apps/android/README.md)) |
 | Cloud | `cd cloud && npm ci && npm test && npm run typecheck` | Node and npm; CI uses Node 24 |
 | Cloud integration | `cd cloud && env -u CODYNC_CLOUD npm run e2e` | Built host; see [Cloudflare testing](cloudflare-testing.md) |
 | APNs relay | `cd relay && npm ci && npm test && npm run typecheck` | Separate package from `cloud/` |
@@ -165,6 +166,12 @@ Follow [UI conventions](../design/ui-conventions.md) for native toolbar behavior
 
 Versions are defined in `apps/project.yml` (`MARKETING_VERSION`), `host/Cargo.toml` and `apps/desktop/package.json`; keep them equal (the desktop release workflow fails when the app and host differ), then regenerate the Xcode project.
 
+## Phone app release notes
+
+A change the iPhone or Android app's users can see writes its release notes in advance, in the same change that bumps the version: a `## <version>` section in `apps/ios/WhatsNew.md` (App Store "What's New") and `apps/android/WhatsNew.md` (Google Play release notes), each with a `### zh-Hant` and an `### en-US` block, one bullet per change that app's users notice, without emoji. `tools/asc-submit.py` and `tools/play-submit.py` read the released version's section (Play cuts a locale past 500 characters); delete the previous release's sections once it ships.
+
+A pull request without a section falls back to its *What's New: iPhone* / *What's New: Android* bullets (the PR template), else a generic "Bug fixes and improvements" line.
+
 ## GitHub releases
 
 Greptile reviews every PR into `dev` or `main` when it opens and on each push (`.greptile/config.json`), and posts a *Greptile Review* check beside CI. Before the release PR merges into `main`, check each finding against the code and have the agent that owns that area fix it. `@greptileai review` on the PR asks for a fresh review.
@@ -202,5 +209,5 @@ Firebase lives in the same `codync-auth` project, with the Android apps `com.pok
 
 - `node tools/host-smoke.mjs`: starts a real host on a random port with a temporary data folder (never the dev one) and checks `/health`, `hostHealth`, `diagnostics` (including that secrets are redacted), `auditLog`, `enterpriseStatus` and that the API refuses a missing token. It needs a built `host/target/debug/codync-host`.
 - `node tools/memory-budget.mjs [port] [--json]`: prints the memory level, free memory and each running agent, and exits non-zero when the level is critical. Reads the dev token from `~/.codync-dev/token` unless `CODYNC_TOKEN_FILE` says otherwise.
-- `node tools/i18n-audit.mjs [language] [--strict]`: lists the literal keys the desktop calls `tr('…')` with that the language file lacks. `--strict` fails when any is missing.
+- `node tools/i18n-audit.mjs [language] [--strict]`: lists the literal keys the desktop calls `tr('ï¿½')` with that the language file lacks. `--strict` fails when any is missing.
 - `node tools/app-smoke.mjs [port]`: with the desktop app open on a `--remote-debugging-port`, walks the read-only UI paths over CDP: the roster, Settings opening and closing, Extensions listing Channels with its four cards, and Ctrl+K opening the command palette. It changes nothing and leaves the planner where it found it.

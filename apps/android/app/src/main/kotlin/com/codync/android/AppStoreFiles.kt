@@ -5,6 +5,8 @@ import com.codync.android.core.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import androidx.lifecycle.viewModelScope
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 // Files a bot shares in a chat (iOS `FileDownloads`): one download at a time, checked against its
 // SHA-256, then handed to the system share sheet in the conversation it came from.
@@ -21,11 +23,18 @@ data class FileExport(val id: String, val path: String, val name: String, val en
 
 private fun downloadKey(fileId: String) = "file:$fileId"
 
-/** Every snapshot a bot published under [name], newest first: an older one is read like the newest. */
-suspend fun AppStore.fileVersions(botId: String, name: String): List<SharedFileVersion> = runCatching {
-    val body = hostQuery("fileVersions", buildJsonObject { put("botId", botId); put("name", name) })
-    WireJson.decodeFromJsonElement<List<SharedFileVersion>>(body.getValue("versions"))
-}.getOrDefault(emptyList())
+/** A page of the snapshots a bot published under [name], newest first: an older one is read like the
+ *  newest. [beforeSeq] is the previous page's next. */
+suspend fun AppStore.fileVersions(botId: String, name: String, beforeSeq: Long? = null): Pair<List<SharedFileVersion>, Long?> =
+    runCatching {
+        val body = hostQuery("fileVersions", buildJsonObject {
+            put("botId", botId)
+            put("name", name)
+            if (beforeSeq != null) put("beforeSeq", beforeSeq)
+        })
+        val versions = WireJson.decodeFromJsonElement<List<SharedFileVersion>>(body.getValue("versions"))
+        versions to body["next"]?.jsonPrimitive?.longOrNull
+    }.getOrDefault(emptyList<SharedFileVersion>() to null)
 
 /** Downloads `file`, then opens the share sheet in its conversation, now or when the reader comes back to it. */
 fun AppStore.saveFile(entry: Entry, file: SharedFile) {

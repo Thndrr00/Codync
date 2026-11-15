@@ -124,14 +124,21 @@ function ArtifactRow({ artifact, open, onError }: { artifact: Artifact; open: ()
 /** A file the bot shared: saved like its card in the chat. Clicking its name lists its older versions. */
 function FileRow({ botId, entryId, file }: { botId: string; entryId: string; file: SharedFile }) {
   const store = useStore()
+  const tr = useTr()
   const state = store.fileDownloads.states.get(file.id)
   const busy = state?.kind === 'downloading'
   const [versions, setVersions] = useState<SharedFileVersion[] | null>(null)
+  const [next, setNext] = useState<number | null>(null)
   const [open, setOpen] = useState(false)
+  const load = async (before?: number) => {
+    const page = await store.fileVersions(botId, file.name, before)
+    setVersions((current) => [...(current ?? []), ...page.versions])
+    setNext(page.next)
+  }
   const showVersions = async () => {
     const next = !open
     setOpen(next)
-    if (next && versions === null) setVersions(await store.fileVersions(botId, file.name))
+    if (next && versions === null) await load()
   }
   return (
     <VStack gap={4}>
@@ -152,6 +159,11 @@ function FileRow({ botId, entryId, file }: { botId: string; entryId: string; fil
                 onClick={() => void store.fileDownloads.save(store.client, version.entryId, version.file)} />
             </HStack>
           ))}
+          {next !== null && (
+            <button className="library-row-open" onClick={() => void load(next)}>
+              <Text size="caption2" tone="secondary">{tr('Show older versions')}</Text>
+            </button>
+          )}
         </VStack>
       ) : null}
     </VStack>

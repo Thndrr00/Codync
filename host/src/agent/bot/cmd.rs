@@ -78,6 +78,8 @@ pub enum Cmd {
     Reconfigure(Box<BotConfig>),
     /// The user wants the bot's own agent again (`switchBack`).
     SwitchBack,
+    /// The takeover the person had is done (`chat::takeover`): the turns that waited behind it start now.
+    ResumeQueued,
     /// A voice call ended (`chat::calls`): its replies show in the chat again, and dreaming reads it.
     CallEnded {
         call: String,

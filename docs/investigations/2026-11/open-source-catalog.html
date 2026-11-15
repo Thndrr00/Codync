@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo abierto — qué cabe dentro de Codync</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f6f2; --ink:#1a1916; --soft:#5e594f; --rule:#e0dbd1; --yes:#2f6b46; --no:#9a4a1c; --maybe:#7a6218; --mark:#3f5a86; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121110; --ink:#ece9e2; --soft:#a7a198; --rule:#2d2a26; --yes:#8fd3ab; --no:#ffab73; --maybe:#e3c56a; --mark:#8fb0e8; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 960px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 22px; max-width:64ch; }
+  h2 { font:600 13px/1.4 ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:36px 0 8px; border-bottom:1px solid var(--rule); padding-bottom:6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; margin:8px 0 14px; }
+  th, td { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font:600 10px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+  td.n { width:58px; }
+  .m { font:700 10px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+  .m-si { color:var(--yes); }
+  .m-no { color:var(--no); }
+  .m-quizas { color:var(--maybe); }
+  .nota { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--no); padding-left:14px; }
+  .top { counter-reset: t; list-style:none; margin-left:0; }
+  .top li { counter-increment: t; border-bottom:1px solid var(--rule); padding:7px 0 7px 30px; position:relative; }
+  .top li::before { content: counter(t); position:absolute; left:0; font:700 12px/1.6 ui-monospace,monospace; color:var(--mark); }
+  .small { font-size:14px; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Catálogo · abierto y source-available · filtrado por encaje real</p>
+  <h1>Qué cabe dentro de Codync</h1>
+  <p class="lede">Cualquier licencia vale: libre, copyleft o source-available con restricciones. Lo que decide es cómo se integra, cuánto pesa y si Codync ya lo cubre. Tres tandas y treinta áreas, del modo más barato al más caro.</p>
+
+  <h2>Los tres modos, y su costo</h2>
+  <table>
+    <thead><tr><th>Modo</th><th>Cómo entra</th><th>Costo</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Binario invocado</strong></td><td>El host lanza un ejecutable y lee su salida; sin puerto ni demonio</td><td>Bajo: se empaqueta el binario y se envuelve en una herramienta</td></tr>
+      <tr><td><strong>Librería enlazada</strong></td><td>Crate Rust del propio host</td><td>Bajo para el empaquetado, más trabajo de código</td></tr>
+      <tr><td><strong>Motor local</strong></td><td>Proceso con puerto, bajo el runner de <code>docs/plans/bundled-tools-production.md</code></td><td>Alto: arranque, salud, datos, actualización y espacio</td></tr>
+      <tr><td><strong>Solo por URL</strong></td><td>Se apunta a un servicio ya montado, con la clave en el vault</td><td>Casi nulo, pero requiere que el usuario lo tenga</td></tr>
+    </tbody>
+  </table>
+  <p class="nota">La licencia no cambia el modo: un proceso GPL no contamina nada, y un binario con licencia restrictiva se empaqueta igual. Copyleft solo obliga si se enlaza dentro del host.</p>
+
+  <h2>1. Modelos locales · el hueco más grande</h2>
+  <p>Hoy todo modelo pasa por una cuenta y una cuota. Esto lo rompe: bots que corren sin conexión y sin clave.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>llama.cpp</code> (MIT)</td><td>Servidor compatible OpenAI en CPU, GPU y Metal; también librería</td><td>Motor o librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Ollama</code> (MIT)</td><td>Lo mismo con descarga de modelos resuelta, pero gestor propio y un puerto</td><td>Motor</td><td class="m m-quizas">Alternativa a llama.cpp</td></tr>
+      <tr><td><code>vLLM</code>, <code>SGLang</code> (Apache)</td><td>Varios hilos y mucha concurrencia en GPU; solo NVIDIA y Linux</td><td>Motor</td><td class="m m-quizas">Solo equipo con GPU</td></tr>
+      <tr><td><code>LocalAI</code> (MIT)</td><td>Un proceso con chat, voz, imagen y embeddings compatibles</td><td>Motor</td><td class="m m-quizas">Si se quiere todo en uno</td></tr>
+      <tr><td><code>fastembed</code>, embeddings de llama.cpp (MIT/Apache)</td><td>Memoria y búsqueda semántica sin nube, sobre el mismo motor</td><td>Librería</td><td class="m m-si">Sí, con <code>codync-mem</code></td></tr>
+      <tr><td><code>LM Studio</code> (gratis, cerrado)</td><td>Interfaz de escritorio; útil de referencia, no se empaqueta</td><td>Solo URL</td><td class="m m-quizas">Opcional</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Voz local</h2>
+  <p>Hoy <code>voice.rs</code> elige modelos de OpenAI y paga por ellos. Todo esto lo hace sin red.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>whisper.cpp</code> (MIT)</td><td>Transcripción offline en CPU con modelo pequeño, medio o grande</td><td>Binario</td><td class="m m-si">Primero</td></tr>
+      <tr><td><code>faster-whisper</code>, <code>WhisperX</code> (MIT)</td><td>Transcripción rápida en GPU y con marcas de tiempo</td><td>Motor</td><td class="m m-quizas">Si hay GPU</td></tr>
+      <tr><td><code>piper</code> (MIT)</td><td>Voz sintética por frases, muy ligera, multilingüe</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Kokoro</code> (Apache)</td><td>Voces más naturales que piper, algo más pesadas</td><td>Motor</td><td class="m m-quizas">Alternativa de calidad</td></tr>
+      <tr><td><code>XTTS</code>, <code>Orpheus</code></td><td>Clonar una voz desde una muestra</td><td>Motor</td><td class="m m-quizas">Después</td></tr>
+      <tr><td><code>Silero VAD</code> (MIT)</td><td>Cortar silencios y falsos positivos del micrófono</td><td>Librería</td><td class="m m-si">Sí, barato</td></tr>
+      <tr><td><code>pyannote</code> (condiciones para el modelo)</td><td>Separar hablantes en una reunión</td><td>Motor</td><td class="m m-quizas">Solo reuniones</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Visión, audio y PDF</h2>
+  <p>La app guarda Markdown (<code>documents.rs</code>) pero no extrae PDF ni reconoce texto en imágenes. Esto lo cubre, y casi todo es un binario.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>PDFium</code>, <code>MuPDF</code></td><td>Texto y páginas de un PDF, sin subirlo a nadie</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Docling</code>, <code>markitdown</code> (MIT)</td><td>PDF, DOCX y PPTX a Markdown con tablas y orden</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>tesseract</code>, <code>ocrmypdf</code> (Apache/MPL)</td><td>Texto buscable en escaneos e imágenes</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>qpdf</code>, <code>Stirling-PDF</code> (Apache)</td><td>Unir, partir, firmar, comprimir; el segundo con interfaz</td><td>Binario o motor</td><td class="m m-quizas">El segundo, si se pide interfaz</td></tr>
+      <tr><td><code>rembg</code> (MIT)</td><td>Quitar fondo de una imagen</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Real-ESRGAN</code>, <code>Upscayl</code> (BSD/MIT)</td><td>Ampliar y recuperar detalle</td><td>Binario</td><td class="m m-quizas">Con GPU</td></tr>
+      <tr><td><code>moondream</code>, <code>SmolVLM</code> (Apache)</td><td>Describir una imagen y leerla sin nube</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>ffmpeg</code> (LGPL/GPL)</td><td>Transcodificar, recortar, audio, miniaturas, subtítulos</td><td>Binario</td><td class="m m-si">Sí, indispensable</td></tr>
+      <tr><td><code>yt-dlp</code> (Unlicense)</td><td>Bajar video o audio de una URL para analizarlo</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Documentos y búsqueda</h2>
+  <p>No hay búsqueda de archivos ni índice en el host; la base es <code>rusqlite</code>.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>ripgrep</code> (MIT)</td><td>Buscar texto en el proyecto respetando <code>.gitignore</code></td><td>Binario</td><td class="m m-si">Primero</td></tr>
+      <tr><td><code>tantivy</code> (MIT)</td><td>Índice de texto completo dentro del host</td><td>Librería</td><td class="m m-si">Sí, con la base</td></tr>
+      <tr><td><code>sqlite-vec</code> (MIT/Apache)</td><td>Vectores en la misma SQLite que ya se usa; sin servidor</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>DuckDB</code> (MIT)</td><td>Analítica sobre CSV y Parquet sin cargar un motor</td><td>Binario o librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Qdrant</code>, <code>Chroma</code> (Apache)</td><td>Vectores con servidor; solo si hace falta concurrencia</td><td>Motor</td><td class="m m-quizas">Si crece la memoria</td></tr>
+      <tr><td><code>Meilisearch</code>, <code>Typesense</code> (MIT/GPL)</td><td>Búsqueda tolerante a errores con facetas</td><td>Motor</td><td class="m m-quizas">Con muchas colecciones</td></tr>
+      <tr><td><code>pandoc</code>, <code>typst</code> (GPL/Apache)</td><td>Convertir entre formatos y componer PDF</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>LibreOffice --headless</code> (MPL)</td><td>DOCX y XLSX reales a PDF</td><td>Binario</td><td class="m m-quizas">Pesado, pero exacto</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Web e investigación</h2>
+  <p><code>research.rs</code> pide una clave de proveedor. Esto busca sin clave.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>SearXNG</code> (AGPL)</td><td>Metabuscador propio; sin clave ni cuota</td><td>Motor</td><td class="m m-si">Sí, prioritario</td></tr>
+      <tr><td><code>Crawl4AI</code>, <code>Firecrawl</code> (Apache/AGPL)</td><td>Convertir páginas en Markdown limpio a escala</td><td>Motor</td><td class="m m-quizas">Uno de los dos</td></tr>
+      <tr><td><code>readability</code>, <code>SingleFile</code></td><td>Quedarse con el texto útil o guardar la página entera</td><td>Librería o extensión</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Playwright</code> (Apache)</td><td>Control de navegador con reintentos; ya hay CDP propio, así que solo si falla</td><td>Motor</td><td class="m m-quizas">Opcional</td></tr>
+      <tr><td><code>changedetection.io</code> (Apache)</td><td>Vigilar una página y avisar del cambio</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>AdGuard Home</code>, <code>mitmproxy</code> (GPL/MIT)</td><td>Bloqueo y tráfico inspeccionable para depurar</td><td>Motor</td><td class="m m-quizas">Avanzado</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6. Código y calidad</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>ast-grep</code>, <code>semgrep</code> (MIT/LGPL)</td><td>Buscar y reescribir por estructura, no por texto</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>tree-sitter</code> (MIT)</td><td>Árbol de sintaxis para resúmenes y ediciones seguras</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>gitleaks</code>, <code>trivy</code> (MIT/Apache)</td><td>Secretos y dependencias vulnerables antes de commitear</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>shellcheck</code>, <code>biome</code> (GPL/MIT)</td><td>Revisión de scripts y de TS sin configuración</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>difftastic</code>, <code>jujutsu</code> (MIT/Apache)</td><td>Diff por sintaxis y control de versiones alternativo</td><td>Binario</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>mkcert</code>, <code>step-ca</code> (BSD/Apache)</td><td>Certificados locales de confianza para probar HTTPS</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>wasmtime</code> (Apache)</td><td>Plugins y herramientas aisladas sin proceso propio</td><td>Librería</td><td class="m m-si">Sí, para extensiones</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. Automatización y servicio</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>n8n</code> (Sustainable Use)</td><td>Automatización con editor y credenciales</td><td>Motor</td><td class="m m-si">Ya planificado</td></tr>
+      <tr><td><code>Node-RED</code> (Apache)</td><td>MQTT, hardware y eventos</td><td>Motor</td><td class="m m-quizas">Si se pide IoT</td></tr>
+      <tr><td><code>Apprise</code> (BSD)</td><td>Un aviso a cien servicios desde una llamada</td><td>Binario</td><td class="m m-si">Sí, barato</td></tr>
+      <tr><td><code>Gotenberg</code> (MIT)</td><td>Office y HTML a PDF por HTTP, con contenedor propio</td><td>Motor</td><td class="m m-quizas">Si se pide conversión</td></tr>
+      <tr><td><code>rclone</code>, <code>restic</code> (MIT/BSD)</td><td>Respaldar y mover datos a cualquier destino</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Syncthing</code> (MPL)</td><td>Sincronizar carpetas entre equipos sin nube</td><td>Motor</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>MinIO</code> (AGPL)</td><td>Almacenamiento S3 local para adjuntos grandes</td><td>Motor</td><td class="m m-quizas">Con muchos adjuntos</td></tr>
+      <tr><td><code>Windmill</code> (AGPL)</td><td>Scripts y flujos con colas</td><td>Motor + Postgres</td><td class="m m-no">No ahora</td></tr>
+    </tbody>
+  </table>
+
+  <h2>8. Servicios que se apuntan por URL</h2>
+  <p>Un binario y una base es el límite. Estos suman, pero no se empaquetan.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>Vaultwarden</code> (GPL)</td><td>Contraseñas propias; un binario, podría ir dentro</td><td class="m m-quizas">Casi sí</td></tr>
+      <tr><td><code>Gitea</code>, <code>Forgejo</code> (MIT/GPL)</td><td>Git propio con interfaz</td><td class="m m-quizas">Casi sí</td></tr>
+      <tr><td><code>Linkding</code>, <code>Karakeep</code> (MIT/AGPL)</td><td>Marcadores y archivo de páginas</td><td class="m m-si">Por URL</td></tr>
+      <tr><td><code>Uptime Kuma</code>, <code>Umami</code> (MIT)</td><td>Disponibilidad y analítica de tus sitios</td><td class="m m-si">Por URL</td></tr>
+      <tr><td><code>Immich</code>, <code>Penpot</code>, <code>Outline</code></td><td>Fotos, diseño y wiki</td><td class="m m-no">Por URL</td></tr>
+    </tbody>
+  </table>
+
+  <h2>9. Escritura, notas y tareas</h2>
+  <p>La biblioteca de documentos existe, pero el apoyo para escribir y organizarse no. Casi todo es binario.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>vale</code>, <code>markdownlint</code> (MIT)</td><td>Estilo y consistencia de prosa y Markdown</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>taskwarrior</code>, <code>timewarrior</code> (MIT)</td><td>Tareas y horas con informes; ya hay rutinas, esto es el registro</td><td>Binario</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>espanso</code> (GPL)</td><td>Atajos de texto reutilizables en todo el sistema</td><td>Proceso residente</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>SilverBullet</code>, <code>Trilium</code> (MIT/AGPL)</td><td>Wiki personal con enlaces; compite con Documentos</td><td>Motor</td><td class="m m-quizas">Si se pide wiki</td></tr>
+      <tr><td><code>marp-cli</code>, <code>Slidev</code> (MIT)</td><td>Presentaciones desde Markdown</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>mdBook</code>, <code>MkDocs</code> (MPL/MIT)</td><td>Convertir documentos en un sitio navegable</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>libmagic</code>, <code>exiftool</code>, <code>mat2</code></td><td>Identificar archivos, leer y borrar metadatos</td><td>Binario</td><td class="m m-si">Sí, privacidad</td></tr>
+      <tr><td><code>age</code>, <code>sops</code>, <code>minisign</code>, <code>gopass</code></td><td>Cifrar, firmar y guardar secretos sin nube</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>qrencode</code>, <code>zbar</code> (GPL/LGPL)</td><td>Crear y leer códigos QR y de barras</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>10. Diagramas y documentos como código</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>mermaid-cli</code>, <code>D2</code> (MIT/Apache)</td><td>Diagramas de flujo, secuencia y arquitectura desde texto</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Graphviz</code>, <code>PlantUML</code> (EPL/GPL)</td><td>Grafos y diagramas UML clásicos</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Kroki</code> (MIT)</td><td>Un solo servicio que sirve todos los anteriores por URL</td><td>Motor</td><td class="m m-quizas">En vez de siete binarios</td></tr>
+      <tr><td><code>Asciidoctor</code>, <code>Sphinx</code> (MIT/BSD)</td><td>Documentación técnica con referencias cruzadas</td><td>Binario</td><td class="m m-quizas">Si se usa AsciiDoc o Python</td></tr>
+    </tbody>
+  </table>
+
+  <h2>11. Terminal y manejo de archivos</h2>
+  <p>Ya hay terminal y PTY. Esto la vuelve usable de verdad; todo es local y barato.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>fzf</code>, <code>zoxide</code>, <code>atuin</code> (MIT)</td><td>Buscar, saltar de carpeta y recuperar historial por texto</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>bat</code>, <code>eza</code>, <code>fd</code>, <code>sd</code> (MIT/Apache)</td><td>Reemplazos legibles de <code>cat</code>, <code>ls</code>, <code>find</code> y <code>sed</code></td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>yazi</code>, <code>broot</code> (MIT)</td><td>Explorador de archivos en la terminal</td><td>Binario</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>btop</code>, <code>dust</code>, <code>duf</code> (Apache/MIT)</td><td>Ver CPU, disco y ocupación de un vistazo</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>czkawka</code>, <code>rmlint</code> (MIT/GPL)</td><td>Duplicados y basura antes de un respaldo</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>7zip</code>, <code>zstd</code>, <code>par2</code> (LGPL/BSD/GPL)</td><td>Comprimir, reparar y verificar archivos</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>testdisk</code>, <code>ddrescue</code> (GPL)</td><td>Recuperar particiones y copiar discos dañados</td><td>Binario</td><td class="m m-quizas">Cuando algo falla</td></tr>
+    </tbody>
+  </table>
+
+  <h2>12. Calidad, pruebas y rendimiento</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>lighthouse</code>, <code>axe-core</code>, <code>pa11y</code> (Apache/MIT)</td><td>Rendimiento, accesibilidad y buenas prácticas de una página</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>hyperfine</code>, <code>k6</code>, <code>vegeta</code> (MIT/Apache)</td><td>Medir tiempo de un comando y carga de un endpoint</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>act</code>, <code>dagger</code> (MIT/Apache)</td><td>Ejecutar el CI en local antes de subir</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>pre-commit</code>, <code>lefthook</code> (MIT)</td><td>Enganchar revisiones al commit</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>cargo-mutants</code>, <code>tarpaulin</code> (MIT/Apache)</td><td>Mutar el código y medir cobertura real</td><td>Binario</td><td class="m m-quizas">Solo Rust</td></tr>
+      <tr><td><code>sqlfluff</code>, <code>pgformatter</code> (MIT/Apache)</td><td>Formato y revisión de SQL</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>tokei</code>, <code>scc</code> (MIT/Apache)</td><td>Contar líneas por lenguaje para dimensionar</td><td>Binario</td><td class="m m-quizas">Opcional</td></tr>
+      <tr><td><code>repomix</code>, <code>code2prompt</code>, <code>gitingest</code> (MIT)</td><td>Empaquetar un repo en un solo texto para el modelo</td><td>Binario</td><td class="m m-si">Sí, muy útil</td></tr>
+    </tbody>
+  </table>
+
+  <h2>13. Red, seguridad y aislamiento</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>nmap</code>, <code>masscan</code> (GPL/Apache)</td><td>Ver qué responde en la red local</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>tcpdump</code>, <code>tshark</code> (BSD/GPL)</td><td>Capturar tráfico para depurar</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>nuclei</code>, <code>sqlmap</code> (MIT/GPL)</td><td>Comprobar plantillas de fallos y una web</td><td>Binario</td><td class="m m-quizas">Avanzado</td></tr>
+      <tr><td><code>osv-scanner</code>, <code>syft</code>, <code>grype</code>, <code>cosign</code> (Apache)</td><td>Dependencias, inventario y firma de artefactos</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>clamav</code>, <code>yara</code> (GPL/BSD)</td><td>Antivirus y reglas de detección propias</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>radare2</code>, <code>capa</code>, <code>ghidra</code> (LGPL/Apache)</td><td>Mirar un binario desconocido</td><td>Binario</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>podman</code>, <code>qemu</code>, <code>WSL2</code> (Apache/GPL)</td><td>Ejecutar en aislamiento, incluso otro sistema</td><td>Proceso</td><td class="m m-si">Sí, el sandbox</td></tr>
+      <tr><td><code>cloudflared</code>, <code>bore</code> (Apache/MIT)</td><td>Exponer un puerto local sin abrir router</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Headscale</code>, <code>WireGuard</code> (BSD/GPL)</td><td>Red privada entre tus equipos sin servicio de terceros</td><td>Motor</td><td class="m m-quizas">Con varios equipos</td></tr>
+      <tr><td><code>ntfy</code>, <code>Gotify</code>, <code>Mailpit</code> (Apache/MIT)</td><td>Avisos y correo de prueba local</td><td>Motor</td><td class="m m-si">Sí, ntfy primero</td></tr>
+    </tbody>
+  </table>
+
+  <h2>14. Imagen, audio, video y 3D</h2>
+  <p>Los editores con ventana no se incrustan; se usan en lote desde la línea de órdenes.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>ImageMagick</code>, <code>libvips</code> (Apache/LGPL)</td><td>Lotes de recorte, color y formato</td><td>Binario o librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>oxipng</code>, <code>cwebp</code>, <code>svgo</code>, <code>avifenc</code> (MIT/Apache)</td><td>Optimizar peso de cada formato</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>potrace</code> (GPL)</td><td>Bitmap a vector</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Inkscape</code>, <code>GIMP</code>, <code>Krita</code> (GPL)</td><td>Acciones por lote desde su consola</td><td>Binario</td><td class="m m-quizas">Lotes, no edición</td></tr>
+      <tr><td><code>Blender</code>, <code>OpenSCAD</code>, <code>FreeCAD</code> (GPL/LGPL)</td><td>Render, CAD y mallas desde script</td><td>Binario</td><td class="m m-quizas">Si hay 3D</td></tr>
+      <tr><td><code>gltf-transform</code>, <code>assimp</code> (MIT/BSD)</td><td>Convertir y comprimir modelos 3D</td><td>Binario</td><td class="m m-quizas">Con 3D</td></tr>
+      <tr><td><code>demucs</code>, <code>wham</code> (MIT)</td><td>Separar voz, música y ruido de una pista</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>MusicGen</code>, <code>Stable Audio</code> (MIT)</td><td>Generar música y efectos</td><td>Motor</td><td class="m m-quizas">Con GPU</td></tr>
+      <tr><td><code>MuseScore</code>, <code>LilyPond</code>, <code>FluidSynth</code> (GPL)</td><td>Partituras y su reproducción</td><td>Binario</td><td class="m m-quizas">Si hay música</td></tr>
+      <tr><td><code>MediaInfo</code>, <code>mkvtoolnix</code> (BSD/GPL)</td><td>Leer y remultiplexar sin recodificar</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>calibre</code>, <code>epubcheck</code> (GPL/BSD)</td><td>Convertir y validar libros</td><td>Binario</td><td class="m m-quizas">Si hay ebooks</td></tr>
+      <tr><td><code>OBS</code>, <code>vhs</code>, <code>asciinema</code> (GPL/MIT)</td><td>Grabar pantalla y demos de terminal</td><td>Proceso o binario</td><td class="m m-si">Sí, vhs y asciinema</td></tr>
+    </tbody>
+  </table>
+
+  <h2>15. Datos, ciencia y geografía</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>jq</code>, <code>yq</code>, <code>miller</code>, <code>csvkit</code>, <code>dasel</code> (MIT/BSD)</td><td>Cortar y convertir JSON, YAML, CSV y TOML</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>GDAL</code>, <code>osmium</code>, <code>tippecanoe</code> (MIT/BSD)</td><td>Raster, vectores, OpenStreetMap y teselas</td><td>Binario</td><td class="m m-quizas">Con mapas</td></tr>
+      <tr><td><code>R</code>, <code>Julia</code>, <code>Octave</code>, <code>SymPy</code> (GPL/MIT/BSD)</td><td>Cálculo y estadística real, no estimación</td><td>Binario</td><td class="m m-quizas">Según área</td></tr>
+      <tr><td><code>gnuplot</code> (MIT-like)</td><td>Gráficas desde datos en texto</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>hledger</code>, <code>beancount</code> (GPL/MIT)</td><td>Contabilidad por asientos de texto</td><td>Binario</td><td class="m m-quizas">Finanzas personales</td></tr>
+      <tr><td><code>Actual Budget</code> (MIT)</td><td>Presupuesto con interfaz; sqlite, podría ir dentro</td><td>Motor</td><td class="m m-quizas">Si se pide</td></tr>
+    </tbody>
+  </table>
+
+  <h2>16. Escritorio, móvil y hardware</h2>
+  <p>Herramientas del propio sistema; algunas son gratis y cerradas, y aun así caben.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>PowerToys</code>, <code>AutoHotkey</code>, <code>komorebi</code> (MIT/GPL)</td><td>Atajos, ventanas y disposición en Windows</td><td>Proceso residente</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>winget</code>, <code>scoop</code>, <code>choco</code> (MIT/Apache)</td><td>Instalar y actualizar programas del equipo</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Sysinternals</code>, <code>Everything</code> (gratis, cerrado)</td><td>Procesos, autoruns y búsqueda instantánea de archivos</td><td>Binario</td><td class="m m-si">Sí, Windows</td></tr>
+      <tr><td><code>ShareX</code>, <code>ksnip</code>, <code>ditto</code> (GPL/MIT)</td><td>Captura anotada y portapapeles con historial</td><td>Proceso</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>adb</code>, <code>scrcpy</code>, <code>apktool</code>, <code>jadx</code>, <code>frida</code> (Apache/GPL)</td><td>Controlar y depurar un Android desde el escritorio</td><td>Binario</td><td class="m m-si">Sí, ya hay Android</td></tr>
+      <tr><td><code>esptool</code>, <code>arduino-cli</code>, <code>PlatformIO</code> (GPL/Apache)</td><td>Flashear y compilar placas</td><td>Binario</td><td class="m m-quizas">Con hardware</td></tr>
+      <tr><td><code>ESPHome</code>, <code>Mosquitto</code>, <code>zigbee2mqtt</code> (MIT/EPL)</td><td>Dispositivos y bus MQTT; con Node-RED</td><td>Motor</td><td class="m m-quizas">Domótica</td></tr>
+      <tr><td><code>Home Assistant</code> (Apache)</td><td>Todo el hogar; varios procesos y base</td><td>Solo URL</td><td class="m m-no">Fuera</td></tr>
+    </tbody>
+  </table>
+
+  <h2>17. Modelos generativos y evaluación</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>llamafile</code>, <code>koboldcpp</code> (Apache/MIT)</td><td>Un solo archivo que ya lleva el modelo y el servidor</td><td>Binario</td><td class="m m-si">Sí, más simple que llama.cpp</td></tr>
+      <tr><td><code>YOLO</code>, <code>SAM 2</code>, <code>Depth Anything</code>, <code>InsightFace</code></td><td>Detectar, recortar, medir profundidad y reconocer caras</td><td>Motor</td><td class="m m-si">Sí, con GPU</td></tr>
+      <tr><td><code>AnimateDiff</code>, <code>Wan</code>, <code>HunyuanVideo</code></td><td>Video corto; se apoyan en ComfyUI</td><td>Dentro de ComfyUI</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>unstructured</code>, <code>Apache Tika</code>, <code>RAGAnything</code></td><td>Extraer texto y tablas de cualquier documento para RAG</td><td>Motor</td><td class="m m-quizas">Si se arma RAG</td></tr>
+      <tr><td><code>promptfoo</code>, <code>garak</code>, <code>DeepEval</code>, <code>Ragas</code></td><td>Probar prompts, ataques y calidad de respuestas</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>lm-evaluation-harness</code> (MIT)</td><td>Comparar modelos con pruebas estándar</td><td>Binario</td><td class="m m-quizas">Al elegir modelo</td></tr>
+      <tr><td><code>bge-reranker</code>, <code>ColBERT</code> (MIT/Apache)</td><td>Reordenar resultados antes de que lleguen al modelo</td><td>Motor</td><td class="m m-si">Sí, con la memoria</td></tr>
+      <tr><td><code>Open WebUI</code>, <code>LibreChat</code> (BSD/MIT)</td><td>Otra interfaz de chat; se pisa con Codync</td><td>Motor</td><td class="m m-quizas">Solo URL</td></tr>
+    </tbody>
+  </table>
+
+  <h2>18. Ofimática, correo y agenda</h2>
+  <p>Formatos, correo y calendario locales; nada de esto sube a un servidor.</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>visidata</code>, <code>sc-im</code> (GPL)</td><td>Ver y editar tablas y hojas de cálculo en la terminal</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>xlsx2csv</code>, <code>ssconvert</code> (MIT/GPL)</td><td>Sacar datos de un Excel sin abrirlo</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>pdftk</code>, <code>pdfcpu</code>, <code>mutool</code> (GPL/Apache/AGPL)</td><td>Formularios, páginas y anotaciones de PDF</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>himalaya</code>, <code>aerc</code>, <code>neomutt</code> (MIT/GPL)</td><td>Correo IMAP en la terminal, con búsqueda</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>mbsync</code>, <code>notmuch</code>, <code>mu</code> (GPL)</td><td>Sincronizar el buzón e indexarlo</td><td>Binario</td><td class="m m-si">Sí, con lo anterior</td></tr>
+      <tr><td><code>khal</code>, <code>todoman</code>, <code>vdirsyncer</code> (MIT/BSD)</td><td>Calendario y tareas CalDAV, sin app de escritorio</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>msmtp</code>, <code>notify-send</code> (GPL)</td><td>Enviar correo y avisos del sistema desde un script</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>jrnl</code>, <code>todo.txt-cli</code> (MIT/GPL)</td><td>Diario y lista de tareas en texto plano</td><td>Binario</td><td class="m m-quizas">Si se piden</td></tr>
+    </tbody>
+  </table>
+
+  <h2>19. Comunicación y notificaciones</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>ntfy</code>, <code>Gotify</code> (Apache/MIT)</td><td>Avisos push a teléfono y escritorio desde cualquier bot</td><td>Motor</td><td class="m m-si">Sí, ntfy</td></tr>
+      <tr><td><code>Apprise</code>, <code>Mailpit</code> (BSD/MIT)</td><td>Cien destinos con una llamada y un buzón de pruebas</td><td>Binario / motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>signal-cli</code> (GPL)</td><td>Leer y responder Signal sin la app</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Mumble</code>, <code>Jitsi Meet</code> (BSD/Apache)</td><td>Voz de equipo y videollamada propia; Jitsi pesa</td><td>Motor</td><td class="m m-quizas">Jitsi por URL</td></tr>
+      <tr><td><code>Mattermost</code> (MIT)</td><td>Chat de equipo; un binario, pero con base</td><td>Motor + base</td><td class="m m-quizas">Con equipo</td></tr>
+      <tr><td><code>ntfy</code> con prioridad y acciones</td><td>Botones en la notificación que ejecutan un bot</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>20. Audio con oficio</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>sox</code>, <code>lame</code>, <code>opusenc</code> (GPL/BSD)</td><td>Recortar, normalizar y codificar audio</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>rnnoise</code>, <code>DeepFilterNet</code> (BSD/MIT)</td><td>Quitar ruido de fondo a una grabación o al micrófono</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>loudgain</code>, <code>bs1770gain</code> (MIT/GPL)</td><td>Nivelar volumen entre pistas</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>rubberband</code>, <code>ffmpeg</code> (GPL/LGPL)</td><td>Cambiar tempo y tono sin deformar</td><td>Librería / binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>ccextractor</code>, <code>subtitleedit</code> (GPL)</td><td>Subtítulos desde y hacia un video</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>pyannote</code> + <code>whisper.cpp</code></td><td>Acta de reunión con hablantes separados</td><td>Motor + binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Vosk</code> (Apache)</td><td>Reconocimiento en vivo de vocabulario acotado</td><td>Librería</td><td class="m m-quizas">Solo dictado corto</td></tr>
+    </tbody>
+  </table>
+
+  <h2>21. Imagen de estudio</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>OpenCV</code> (Apache)</td><td>Recorte, enderezar, detectar y comparar</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>libheif</code>, <code>exiv2</code> (LGPL/GPL)</td><td>HEIC y metadatos EXIF de fotos</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>dcraw</code>, <code>darktable-cli</code>, <code>rawtherapee-cli</code> (GPL)</td><td>Revelar RAW por lote</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>jpegoptim</code>, <code>pngquant</code>, <code>gifski</code> (MIT/GPL)</td><td>Bajar peso y hacer GIF de calidad</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>imgproxy</code>, <code>Thumbor</code> (Apache/MIT)</td><td>Miniaturas y redimensionado bajo demanda</td><td>Motor</td><td class="m m-quizas">Con muchas imágenes</td></tr>
+      <tr><td><code>pixelmatch</code>, <code>odiff</code> (ISC/MIT)</td><td>Comparar capturas en pruebas visuales</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>gifski</code>, <code>ffmpeg</code> (GPL/LGPL)</td><td>Convertir una secuencia de imágenes en GIF o video</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>22. Seguridad defensiva y ofensiva</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>ssh-audit</code>, <code>testssl.sh</code>, <code>sslyze</code> (MIT/GPL/Apache)</td><td>Revisar SSH y TLS de un destino</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>hydra</code>, <code>john</code>, <code>hashcat</code> (GPL/MIT)</td><td>Fuerza bruta y recuperar contraseñas</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>aircrack-ng</code>, <code>bettercap</code> (GPL)</td><td>Red inalámbrica y tráfico de la red local</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>osquery</code>, <code>lynis</code>, <code>rkhunter</code> (Apache/GPL)</td><td>Inventario del equipo y revisión de endurecimiento</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Suricata</code>, <code>Zeek</code> (GPL/BSD)</td><td>Detección de intrusiones sobre el tráfico</td><td>Motor</td><td class="m m-quizas">Red grande</td></tr>
+      <tr><td><code>certbot</code>, <code>lego</code>, <code>acme.sh</code> (Apache/MIT/GPL)</td><td>Certificados reales para lo que se publique</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>fail2ban</code>, <code>nftables</code> (GPL)</td><td>Cortar intentos y escribir reglas de firewall</td><td>Binario</td><td class="m m-quizas">Con servidor propio</td></tr>
+      <tr><td><code>cve-bin-tool</code>, <code>checkov</code>, <code>kube-bench</code> (Apache)</td><td>Componentes con CVE y configuración insegura</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>23. Observabilidad</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>node_exporter</code>, <code>blackbox_exporter</code> (Apache)</td><td>Métricas del equipo y sondas de disponibilidad</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>VictoriaMetrics</code>, <code>Prometheus</code> (Apache)</td><td>Guardar series temporales</td><td>Motor</td><td class="m m-quizas">Una de las dos</td></tr>
+      <tr><td><code>Grafana</code> (AGPL)</td><td>Paneles de todo lo anterior</td><td>Motor</td><td class="m m-si">Sí, con métricas</td></tr>
+      <tr><td><code>Loki</code>, <code>Vector</code>, <code>fluent-bit</code> (AGPL/Apache)</td><td>Reunir y consultar logs de varios procesos</td><td>Motor</td><td class="m m-quizas">Con varios equipos</td></tr>
+      <tr><td><code>Gatus</code>, <code>Uptime Kuma</code> (MIT)</td><td>Avisar si algo deja de responder</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>OpenTelemetry Collector</code> (Apache)</td><td>Traza de una llamada entre servicios</td><td>Motor</td><td class="m m-quizas">Avanzado</td></tr>
+      <tr><td><code>lazydocker</code>, <code>k9s</code>, <code>dive</code> (MIT/Apache)</td><td>Ver contenedores, clústeres y capas</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>24. Bases de datos, clientes y datos</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>sqlite-utils</code>, <code>litecli</code>, <code>usql</code> (Apache/MIT)</td><td>Consultar y convertir bases desde la terminal</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>pgcli</code>, <code>mycli</code>, <code>redis-cli</code></td><td>Clientes con autocompletado para servidores</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>duckdb</code>, <code>clickhouse-local</code> (MIT/Apache)</td><td>Analítica sobre archivos sin montar un servidor</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>sqlfluff</code>, <code>atlas</code>, <code>sqitch</code> (MIT/Apache)</td><td>Formato, migraciones y control de esquema</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>dbt-core</code>, <code>great_expectations</code>, <code>soda-core</code> (Apache)</td><td>Modelar y comprobar calidad del dato</td><td>Binario</td><td class="m m-quizas">Con almacén</td></tr>
+      <tr><td><code>data-diff</code> (MIT)</td><td>Comparar dos tablas fila a fila</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>25. Contenedores e infraestructura local</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>podman</code>, <code>nerdctl</code>, <code>colima</code> (Apache)</td><td>Contenedores sin Docker Desktop</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>kind</code>, <code>k3d</code>, <code>k3s</code> (Apache)</td><td>Kubernetes local de un tirón</td><td>Binario</td><td class="m m-quizas">Si se pide K8s</td></tr>
+      <tr><td><code>kubectl</code>, <code>helm</code>, <code>kustomize</code>, <code>k9s</code></td><td>Operar el clúster</td><td>Binario</td><td class="m m-quizas">Con K8s</td></tr>
+      <tr><td><code>terraform</code>, <code>OpenTofu</code>, <code>pulumi</code> (MPL/Apache)</td><td>Describir infraestructura y aplicarla</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>ansible</code>, <code>ansible-lint</code>, <code>molecule</code> (GPL/MIT)</td><td>Configurar equipos y probar los roles</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>packer</code>, <code>vagrant</code> (MPL/BUSL)</td><td>Imágenes y máquinas reproducibles</td><td>Binario</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>Vault</code>, <code>Consul</code>, <code>Nomad</code> (BUSL/MPL)</td><td>Secretos, descubrimiento y trabajos</td><td>Motor</td><td class="m m-quizas">Un equipo</td></tr>
+      <tr><td><code>Caddy</code>, <code>Traefik</code>, <code>nginx</code>, <code>frp</code> (Apache/BSD)</td><td>Servir y publicar lo local con TLS</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>26. Empaquetado, SBOM y licencias</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>msitools</code>, <code>appimagetool</code>, <code>create-dmg</code> (GPL/MIT)</td><td>Instaladores de Windows, Linux y macOS</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>osslsigncode</code>, <code>signtool</code> (GPL/gratis)</td><td>Firmar binarios de Windows</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>nfpm</code>, <code>fpm</code> (MIT)</td><td>Paquetes deb, rpm y apk</td><td>Binario</td><td class="m m-quizas">Con Linux</td></tr>
+      <tr><td><code>syft</code>, <code>cyclonedx-cli</code>, <code>spdx-sbom-generator</code> (Apache)</td><td>Inventario de componentes del producto</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>cosign</code>, <code>minisign</code>, <code>reuse</code> (Apache/MIT/GPL)</td><td>Firmar, verificar y poner cabeceras de licencia</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>cargo-deny</code>, <code>cargo-audit</code>, <code>pip-audit</code> (MIT/Apache)</td><td>Licencias y avisos en dependencias</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>27. Pruebas y API</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>bats</code>, <code>shellspec</code>, <code>pytest</code> (MIT)</td><td>Pruebas de scripts y de código, con informe</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>hypothesis</code>, <code>fast-check</code>, <code>proptest</code> (MPL/MIT)</td><td>Datos generados para romper casos límite</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>cargo-fuzz</code>, <code>afl++</code>, <code>stryker</code> (Apache/MIT)</td><td>Fuzzing y mutación</td><td>Binario</td><td class="m m-quizas">Rust o JS</td></tr>
+      <tr><td><code>testcontainers</code>, <code>wiremock</code>, <code>mountebank</code> (MIT)</td><td>Servicios reales y falsos en la prueba</td><td>Biblioteca/motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>schemathesis</code>, <code>dredd</code>, <code>pact</code> (MIT)</td><td>Probar un contrato OpenAPI de verdad</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>httpie</code>, <code>xh</code>, <code>grpcurl</code>, <code>websocat</code></td><td>Llamar HTTP, gRPC y WebSocket desde la terminal</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>spectral</code>, <code>vacuum</code>, <code>openapi-generator</code>, <code>redoc-cli</code> (Apache/MIT)</td><td>Revisar, generar y publicar la API</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>bruno</code>, <code>hoppscotch</code> (MIT/Apache)</td><td>Colecciones de peticiones guardadas</td><td>Binario / web</td><td class="m m-quizas">Bruno</td></tr>
+    </tbody>
+  </table>
+
+  <h2>28. Tipografía e impresión</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>fonttools</code>, <code>glyphhanger</code>, <code>subfont</code> (MIT)</td><td>Subconjuntos, métricas y peso de una fuente</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>woff2</code>, <code>ttfautohint</code> (MIT/GPL)</td><td>Comprimir y mejorar el render</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>harfbuzz</code>, <code>ICU</code> (MIT/Unicode)</td><td>Medir y componer texto de cualquier idioma</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>ghostscript</code>, <code>pdfcpu</code>, <code>mutool</code> (AGPL/Apache)</td><td>Comprimir, imposponer y reparar PDF</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>CUPS</code>, <code>lp</code> (Apache/GPL)</td><td>Imprimir de verdad desde un bot</td><td>Proceso</td><td class="m m-quizas">Si hay impresora</td></tr>
+      <tr><td><code>paged.js</code>, <code>WeasyPrint</code> (MIT/BSD)</td><td>HTML a PDF paginado con estilos</td><td>Librería</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>29. Escritorio remoto y acceso</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>RustDesk</code> (AGPL)</td><td>Escritorio remoto propio, con servidor autoalojado</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>Sunshine</code> + <code>Moonlight</code> (GPL)</td><td>Juego y escritorio de baja latencia con GPU</td><td>Motor</td><td class="m m-quizas">Con GPU</td></tr>
+      <tr><td><code>TigerVNC</code>, <code>xrdp</code> (GPL/Apache)</td><td>Escritorio por VNC o RDP</td><td>Motor</td><td class="m m-si">Sí</td></tr>
+      <tr><td><code>MeshCentral</code> (Apache)</td><td>Flota de equipos con consola web; Node y sqlite</td><td>Motor</td><td class="m m-quizas">Varios equipos</td></tr>
+      <tr><td><code>Guacamole</code> (Apache)</td><td>Todo lo anterior por navegador; Java y base</td><td>Por URL</td><td class="m m-no">Fuera</td></tr>
+      <tr><td><code>LocalSend</code>, <code>croc</code>, <code>magic-wormhole</code> (MIT/Apache)</td><td>Pasar archivos entre equipos sin nube</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>30. Emulación y retro</h2>
+  <table>
+    <thead><tr><th>Pieza</th><th>Qué aporta</th><th>Modo</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><code>RetroArch</code>, <code>MAME</code> (GPL)</td><td>Consolas y arcade en un solo programa</td><td>Binario</td><td class="m m-quizas">Si se pide</td></tr>
+      <tr><td><code>DOSBox-X</code>, <code>ScummVM</code> (GPL)</td><td>Software antiguo y aventuras gráficas</td><td>Binario</td><td class="m m-quizas">Ocasional</td></tr>
+      <tr><td><code>ffmpeg</code>, <code>yt-dlp</code></td><td>Grabar y preparar material de juego</td><td>Binario</td><td class="m m-si">Sí</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Orden por valor y esfuerzo</h2>
+  <p class="small">Las tres tandas juntas, ordenadas por lo que dan y lo que cuestan.</p>
+  <ol class="top">
+    <li><strong>whisper.cpp</strong> — quita la cuota de transcripción y funciona sin red.</li>
+    <li><strong>piper</strong> — lectura en voz alta gratis con voces del sistema de archivos.</li>
+    <li><strong>PDFium + Docling + tesseract</strong> — leer PDF y escaneos, el formato que hoy no se toca.</li>
+    <li><strong>ripgrep + tantivy + sqlite-vec</strong> — buscar en archivos y memoria sin servidor.</li>
+    <li><strong>SearXNG</strong> — investigación web sin clave de proveedor.</li>
+    <li><strong>ffmpeg + yt-dlp + rembg</strong> — audio, video e imágenes de verdad.</li>
+    <li><strong>llama.cpp</strong> — modelos locales para bots sin cuenta.</li>
+    <li><strong>Apprise + rclone/restic</strong> — avisos y respaldos en una llamada.</li>
+    <li><strong>ast-grep + gitleaks + trivy</strong> — calidad y secretos antes de commitear.</li>
+    <li><strong>Vaultwarden + Gitea</strong> — los dos únicos servicios que casi caben enteros.</li>
+  </ol>
+
+  <h3>De la segunda tanda</h3>
+  <ol class="top">
+    <li><strong>jq, miller, csvkit</strong> — datos sin escribir un programa.</li>
+    <li><strong>repomix y code2prompt</strong> — el repo completo dentro del contexto cuando hace falta.</li>
+    <li><strong>mermaid-cli, D2, Graphviz</strong> — diagramas que el propio agente escribe.</li>
+    <li><strong>libmagic, exiftool, mat2</strong> — saber qué es un archivo y limpiar sus metadatos.</li>
+    <li><strong>ntfy</strong> — avisos al teléfono desde cualquier bot.</li>
+    <li><strong>lighthouse, axe, pa11y</strong> — rendimiento y accesibilidad de lo que se construye.</li>
+    <li><strong>fzf, zoxide, atuin, bat</strong> — la terminal deja de ser incómoda.</li>
+    <li><strong>osv-scanner, gitleaks, clamav</strong> — lo que no debe salir del equipo.</li>
+    <li><strong>scrcpy, adb, frida</strong> — manejar el Android desde el escritorio.</li>
+    <li><strong>promptfoo y garak</strong> — probar y atacar los propios prompts.</li>
+  </ol>
+
+  <h3>De la tercera tanda</h3>
+  <ol class="top">
+    <li><strong>sqlite-utils, litecli, data-diff</strong> — mirar y comparar datos sin un cliente gráfico.</li>
+    <li><strong>ssh-audit, testssl.sh, osv-scanner</strong> — revisar antes de exponer algo.</li>
+    <li><strong>visidata, xlsx2csv</strong> — abrir una hoja de cálculo sin Office.</li>
+    <li><strong>fonttools, glyphhanger</strong> — fuentes livianas y correctas.</li>
+    <li><strong>LocalSend, croc</strong> — pasar archivos entre equipos sin nube.</li>
+    <li><strong>bats, pytest, schemathesis</strong> — pruebas reales con contrato.</li>
+    <li><strong>sox, DeepFilterNet, ccextractor</strong> — audio y subtítulos presentables.</li>
+    <li><strong>syft, cosign, cargo-deny</strong> — inventario, firma y licencias en el paquete.</li>
+    <li><strong>himalaya, mbsync, khal</strong> — correo y agenda sin cliente web.</li>
+    <li><strong>RustDesk, TigerVNC</strong> — llegar a otro equipo sin servicio de terceros.</li>
+  </ol>
+
+  <h2>Lo que no entra, y por qué</h2>
+  <ul class="warn">
+    <li>Todos los que necesitan Postgres o Redis: Dify, Activepieces, Immich, Penpot, Outline, Windmill, Home Assistant, Firefly III. Se apuntan por URL.</li>
+    <li>Motores con GPU exclusiva y varios nodos: vLLM y SGLang solo si el equipo es NVIDIA; si no, llama.cpp o llamafile.</li>
+    <li>Suite de escritorio con interfaz propia que duplique Codync: LM Studio, Open WebUI, LibreChat, Obsidian, Logseq.</li>
+    <li>Editores gráficos completos: GIMP, Krita, Blender e Inkscape solo sirven por lotes; su ventana no se incrusta.</li>
+    <li>Servidores de contenido pesados: Jellyfin, Navidrome, Kavita, Nominatim, QGIS Server, Guacamole.</li>
+    <li>Piezas con base de datos obligatoria: Vault, Consul, Nomad y Mattermost solo con equipo y servidor propio.</li>
+    <li>Dos del mismo hueco a la vez: Ollama y llama.cpp, Qdrant y Chroma, Crawl4AI y Firecrawl, piper y Kokoro, ntfy y Gotify, mermaid y D2. Se elige uno por función.</li>
+  </ul>
+
+  <p class="nota">Regla final: si la pieza se puede invocar y devuelve texto, entra como binario; si necesita puerto, entra solo si aporta algo que ningún binario da; si necesita base de datos, se apunta por URL. Y en cada área se elige una pieza, no la colección completa: el catálogo es un menú, no la lista de compras.</p>
+</main>
+</body>
+</html>

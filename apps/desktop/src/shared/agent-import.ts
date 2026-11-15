@@ -12,7 +12,7 @@
  * like a key is shown as omitted and never chosen; and the host refuses it again if it is sent anyway.
  */
 
-export type ImportSource = 'openclaw' | 'hermes' | 'agents'
+export type ImportSource = 'openclaw' | 'hermes' | 'claude' | 'agents'
 
 export type SkippedReason = 'secret' | 'runtime' | 'builtin' | 'default' | 'empty' | 'unreadable'
 
@@ -78,7 +78,7 @@ export function looksLikeCredential(text: string): boolean {
 }
 
 /** Files that hold settings or secrets: never read, whatever they are named inside. */
-const SECRET_FILE = /(^|\/)(\.env(\..*)?|auth\.json|credentials(\.json)?|secrets?(\.json|\.ya?ml)?|openclaw\.json|config\.ya?ml|.*\.(pem|key|p12|pfx))$/i
+const SECRET_FILE = /(^|\/)(\.env(\..*)?|auth\.json|credentials(\.json)?|secrets?(\.json|\.ya?ml)?|openclaw\.json|settings(\.local)?\.json|\.mcp\.json|config\.ya?ml|.*\.(pem|key|p12|pfx))$/i
 
 export const isSecretFile = (path: string) => SECRET_FILE.test(path)
 
@@ -89,23 +89,31 @@ const OPENCLAW_MEMORY = ['MEMORY.md', 'USER.md'] as const
 const OPENCLAW_RUNTIME = ['TOOLS.md', 'HEARTBEAT.md', 'BOOTSTRAP.md', 'BOOT.md']
 const HERMES_INSTRUCTIONS = ['SOUL.md', 'AGENTS.md', 'HERMES.md', '.hermes.md'] as const
 const HERMES_MEMORY = ['memories/MEMORY.md', 'memories/USER.md'] as const
+/** Claude Code keeps its instructions in CLAUDE.md (the picked folder's and the project's `.claude/` one). */
+const CLAUDE_INSTRUCTIONS = ['CLAUDE.md', '.claude/CLAUDE.md'] as const
 const BUNDLED_MANIFEST = 'skills/.bundled_manifest'
 const DAILY_MEMORY = /^memory\/[^/]+\.md$/
 const SKILL_FILE = /^skills\/(?:[^/]+\/)*SKILL\.md$/
+/** A reusable prompt Claude Code runs: a slash command or a subagent. */
+const CLAUDE_PROMPT = /^\.claude\/(?:commands|agents)\/[^/]+\.md$/
+const CLAUDE_SKILL = /^\.claude\/skills\/(?:[^/]+\/)*SKILL\.md$/
 
 /** The paths worth reading, so the main process sends nothing else. */
 export function isCandidate(path: string): boolean {
   if (isSecretFile(path)) return false
   return (
-    [...OPENCLAW_INSTRUCTIONS, ...OPENCLAW_MEMORY, ...OPENCLAW_RUNTIME, ...HERMES_INSTRUCTIONS, ...HERMES_MEMORY, 'IDENTITY.md', BUNDLED_MANIFEST].includes(path) ||
+    [...OPENCLAW_INSTRUCTIONS, ...OPENCLAW_MEMORY, ...OPENCLAW_RUNTIME, ...HERMES_INSTRUCTIONS, ...HERMES_MEMORY, ...CLAUDE_INSTRUCTIONS, 'IDENTITY.md', BUNDLED_MANIFEST].includes(path) ||
     DAILY_MEMORY.test(path) ||
-    SKILL_FILE.test(path)
+    SKILL_FILE.test(path) ||
+    CLAUDE_PROMPT.test(path) ||
+    CLAUDE_SKILL.test(path)
   )
 }
 
-/** OpenClaw or Hermes by what only they keep; any other folder with an AGENTS.md is a plain agent document. */
+/** OpenClaw or Hermes by what only they keep; Claude Code by its CLAUDE.md or `.claude/` folder; any other folder with an AGENTS.md is a plain agent document. */
 export function detectSource(paths: readonly string[]): ImportSource | null {
   const set = new Set(paths)
+  if (paths.some((p) => (CLAUDE_INSTRUCTIONS as readonly string[]).includes(p)) || paths.some((p) => p.startsWith('.claude/'))) return 'claude'
   if (set.has('IDENTITY.md') || set.has('SOUL.md') && !set.has('HERMES.md')) {
     return paths.some((p) => p.startsWith('memories/') || p === 'HERMES.md' || p === '.hermes.md') ? 'hermes' : 'openclaw'
   }
@@ -171,7 +179,7 @@ export function planImport(files: Readonly<Record<string, string>>, secretPaths:
   const skipped: ImportPlan['skipped'] = []
   const identity = source === 'openclaw' ? parseIdentity(text('IDENTITY.md')) : { name: '', description: '' }
 
-  const instructionFiles = source === 'hermes' ? HERMES_INSTRUCTIONS : OPENCLAW_INSTRUCTIONS
+  const instructionFiles = source === 'hermes' ? HERMES_INSTRUCTIONS : source === 'claude' ? CLAUDE_INSTRUCTIONS : OPENCLAW_INSTRUCTIONS
   const instructions = instructionFiles.filter((p) => text(p).trim()).map((p) => item(p, p, text(p).trim()))
 
   const memory: ImportItem[] = []
@@ -180,7 +188,7 @@ export function planImport(files: Readonly<Record<string, string>>, secretPaths:
       const body = hermesEntries(text(p))
       if (body) memory.push(item(p, p, body.trim()))
     }
-  } else {
+  } else if (source !== 'claude') {
     for (const p of [...OPENCLAW_MEMORY, ...paths.filter((q) => DAILY_MEMORY.test(q)).sort()]) {
       if (text(p).trim()) memory.push(item(p, p, text(p).trim()))
     }
@@ -191,20 +199,24 @@ export function planImport(files: Readonly<Record<string, string>>, secretPaths:
 
   const bundled = bundledNames(text(BUNDLED_MANIFEST))
   const skills: ImportSkill[] = []
-  for (const p of paths.filter((q) => SKILL_FILE.test(q)).sort()) {
+  const promptFiles = paths.filter((q) => SKILL_FILE.test(q) || (source === 'claude' && (CLAUDE_PROMPT.test(q) || CLAUDE_SKILL.test(q))))
+  for (const p of promptFiles.sort()) {
     const { name, description, body } = parseSkill(text(p))
     const folder = p.split('/').at(-2) ?? ''
+    // A slash command or subagent is named after its file, not the folder holding it.
+    const stem = (p.split('/').at(-1) ?? '').replace(/\.md$/, '')
+    const fallbackName = CLAUDE_PROMPT.test(p) ? stem : folder
     if (!body) { skipped.push({ path: p, reason: 'empty' }); continue }
     if (source === 'hermes' && (bundled.has(name.toLowerCase()) || bundled.has(folder.toLowerCase()))) {
       skipped.push({ path: p, reason: 'builtin' })
       continue
     }
-    skills.push({ ...item(p, name || folder, body), name: name || folder, description })
+    skills.push({ ...item(p, name || fallbackName, body), name: name || fallbackName, description })
   }
   // Settings and secret files are named, never read: the main process lists them apart from the files it read.
   for (const path of secretPaths) skipped.push({ path, reason: 'secret' })
 
-  const fallback = source === 'hermes' ? 'Hermes' : source === 'openclaw' ? 'OpenClaw' : 'Imported agent'
+  const fallback = source === 'hermes' ? 'Hermes' : source === 'claude' ? 'Claude Code' : source === 'openclaw' ? 'OpenClaw' : 'Imported agent'
   return {
     source,
     name: identity.name || fallback,

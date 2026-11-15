@@ -60,6 +60,15 @@ pub struct Runtime {
     pub fast_mode: crate::agent::config::FastModeSupport,
     /// The fallback the bot is on; `None` on its own agent (see `agent::fallback`).
     pub agent_step: Option<AgentStep>,
+    /// The takeover the person has in hand (see `chat::takeover`): the agent starts nothing new meanwhile.
+    pub hold: Option<Hold>,
+}
+
+/// A takeover a person picked up.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hold {
+    /// The card's entry id; the hold ends with that card.
+    pub entry_id: String,
 }
 
 /// The bot runs on one of its fallbacks: which, since when, and why it left the agent before.
@@ -273,6 +282,11 @@ impl Hub {
             side.insert(key.to_owned(), bot::spawn_side(self.clone(), bot.clone()));
         }
         side[key].tx.send(cmd).map_err(|_| anyhow!("side actor stopped"))
+    }
+
+    /// Whether a routine run already has a side actor carrying it, so the scheduler leaves it be.
+    pub fn has_side(&self, key: &str) -> bool {
+        self.side.locked().get(key).is_some_and(|handle| !handle.tx.is_closed())
     }
 
     /// Stops and forgets a side actor once its routine is over.
@@ -530,6 +544,7 @@ impl Hub {
             || before.lane != after.lane
             || before.fast_mode != after.fast_mode
             || before.agent_step != after.agent_step
+            || before.hold != after.hold
         {
             self.emit_bot(id);
             // A group shows what its busy member is doing.

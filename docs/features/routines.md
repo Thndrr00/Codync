@@ -104,8 +104,9 @@ The host computes and displays the next occurrence. Calendar parsing uses
 
 The host checks deadlines every second, even with no client connected. Definitions,
 next deadlines and run records are saved in SQLite (`routines.v1`). Due triggers
-are coalesced into one run per routine; only one routine per bot is dispatched at a
-time. Bot actors serialize routine work with ordinary conversation work.
+are coalesced into one run per routine. Up to four of a bot's routines run at once,
+each on an actor of its own beside the bot's chat actor; a fifth waits for a free
+slot, so a busy chat never holds work up.
 
 A run talks in the bot's chat: a "Routine · <name>" notice, then the run's trace and
 its reply, which is the result, all in the turn the notice takes when the run begins (a
@@ -124,7 +125,9 @@ cancels its pending work. Missed intervals coalesce rather than replaying a back
 
 Pending runs survive a restart. The actor claims a run only when it reaches the
 front of its queue, using the latest saved instruction. Runs interrupted during
-execution become `recovering` and load their existing agent session. If the
+execution become `recovering`; on start-up the scheduler hands each to its own side
+actor, which loads its saved session. The chat's interrupted turn is resumed by the
+chat actor, and a run never touches its inflight marker, so both come back. If the
 provider cannot load it, they become `interrupted` instead of replaying the task
 in a new session (the retry rules below still apply). Session recovery cannot
 guarantee exactly-once external side effects; inspect the transcript before retrying

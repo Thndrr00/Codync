@@ -147,6 +147,7 @@ impl App {
             .filter_map(|item| match item {
                 Item::Entry(e)
                     if e.is_message()
+                        || e.decides()
                         || e.is_bot_message()
                         || e.unfolds()
                         || e.retries()
@@ -207,6 +208,20 @@ impl App {
             }
             KeyCode::Enter if picked.as_ref().is_some_and(|e| e.data["connectionRequest"]["status"] == "pending") => {
                 self.open_connection();
+            }
+            KeyCode::Char('t') if picked.as_ref().is_some_and(|e| e.data["takeoverRequest"]["status"] == "waiting") => {
+                if let Some(e) = picked {
+                    self.call("takeTakeover", json!({"entryId": e.id}), After::Answered(e.id.clone()));
+                }
+            }
+            KeyCode::Char('d')
+                if picked.as_ref().is_some_and(|e| {
+                    matches!(e.data["takeoverRequest"]["status"].as_str(), Some("waiting" | "taken"))
+                }) =>
+            {
+                if let Some(e) = picked {
+                    self.call("resolveTakeover", json!({"entryId": e.id}), After::Answered(e.id.clone()));
+                }
             }
             KeyCode::Char('o') if picked.as_ref().is_some_and(|e| e.artifact().is_some()) => {
                 if let Some(artifact) = picked.as_ref().and_then(super::Entry::artifact) {

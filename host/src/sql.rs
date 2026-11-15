@@ -3,6 +3,11 @@
 //! the check is what tells the bot which statements are allowed, the connection is what keeps the
 //! promise. The row cap and the deadline bound the work a question may do.
 //!
+//! SQLite only, on purpose: it is the one engine that needs nothing but the file (no server, port
+//! or login), and both guards come from it. Another engine would bring a driver, a vault login, a
+//! `READ ONLY` transaction and a server-side statement timeout of its own; the caps stay as they
+//! are. `docs/features/read-only-database.md` says the same for readers.
+//!
 //! Idea from agentes.chat's read-only database connector (`packages/engine`, AGPL-3.0-only): the
 //! behavior, not the code.
 
@@ -55,13 +60,18 @@ pub fn is_read_only(sql: &str) -> bool {
 
 /// Runs one read-only statement against the SQLite file at `path`: `{columns, rows, truncated}`.
 pub fn query(path: &Path, sql: &str) -> Result<Value> {
+    query_within(path, sql, TIMEOUT)
+}
+
+/// `query` with its own deadline, for a caller that cannot wait the whole one (or a test).
+fn query_within(path: &Path, sql: &str, timeout: Duration) -> Result<Value> {
     if !is_read_only(sql) {
         bail!("only one read-only statement is allowed (SELECT or WITH)");
     }
     let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .with_context(|| format!("opening {}", path.display()))?;
     connection.pragma_update(None, "query_only", true)?;
-    let deadline = Instant::now() + TIMEOUT;
+    let deadline = Instant::now() + timeout;
     connection.progress_handler(10_000, Some(move || Instant::now() > deadline))?;
     let mut statement = connection.prepare(sql).context("preparing the statement")?;
     if statement.column_count() > MAX_COLUMNS {
@@ -233,6 +243,25 @@ mod tests {
         assert_eq!(answer["rows"], json!([["Ana", 30], ["Luis", 41]]));
         assert_eq!(answer["truncated"], false);
         assert!(query(&path, "INSERT INTO people VALUES('Eve', 1)").is_err(), "a write never runs");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_slow_question_stops_at_its_deadline() {
+        let path = std::env::temp_dir().join(format!("codync-sql-{}.db", uuid::Uuid::new_v4()));
+        Connection::open(&path).unwrap();
+        let started = Instant::now();
+        // A recursive CTE that never settles on its own: only the deadline stops it.
+        let answer = query_within(
+            &path,
+            "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n
+     UNION ALL SELECT x + 2 FROM n)
+     SELECT count(*) FROM n",
+            Duration::from_millis(150),
+        );
+        let error = answer.expect_err("the question is cut off");
+        assert!(format!("{error:#}").to_ascii_lowercase().contains("interrupt"), "{error:#}");
+        assert!(started.elapsed() < Duration::from_secs(5), "it stopped at its own deadline");
         let _ = std::fs::remove_file(&path);
     }
 

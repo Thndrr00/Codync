@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentes.chat — qué se puede sacar para Codync</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f7f9; --ink:#17161a; --soft:#5c5a63; --rule:#e0dee6; --mark:#5a3d7a; --ok:#2f6b46; --part:#7a6218; --no:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#111013; --ink:#eae8ee; --soft:#a5a2ad; --rule:#2b2830; --mark:#c3a8e8; --ok:#8fd3ab; --part:#e3c56a; --no:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.66 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 980px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:66ch; }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; margin:10px 0; }
+  th, td { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font:600 10px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+  .si { color:var(--ok); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .parcial { color:var(--part); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .no { color:var(--no); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .note { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--no); padding-left:14px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Investigación del repositorio · 7.581 commits · AGPL-3.0 · código leído en disco</p>
+  <h1>Qué sacamos de agentes.chat</h1>
+  <p class="lede">Un Slack autoalojado donde personas y agentes trabajan en los mismos canales. Su valor para Codync está en once patrones de producto que ya funcionan con clientes reales, no en su código: la licencia obliga a reimplementarlos, no a copiarlos.</p>
+
+  <h2>1. Antes de nada: la licencia condiciona el método</h2>
+  <p><b>AGPL-3.0-only</b> con un NOTICE que añade permiso para distribuir por tiendas y una atribución obligatoria ("Based on agentes.chat by Codari Global, LLC" en el About). Solo <code>packages/setup</code> es MIT.</p>
+  <p class="warn">Consecuencia: <b>no se copia código al host de Codync</b>. Copiar y enlazar AGPL dentro de un binario Apache-2.0 obligaría a liberar el conjunto bajo AGPL. Aquí se practica ingeniería limpia: se lee el comportamiento, se documenta el patrón y se reimplementa. Se copian únicamente ideas, esquemas y nombres de concepto, que no son copyright.</p>
+  <p class="note">Si algún día se quisiera su código literal, la única vía sería ejecutarlo como servicio separado por HTTP (no es lo que buscamos) o relicenciar Codync. Ninguna de las dos entra en este encargo.</p>
+
+  <h2>2. Qué es y cómo está hecho</h2>
+  <table>
+    <thead><tr><th>Parte</th><th>Contenido</th><th>Interés</th></tr></thead>
+    <tbody>
+      <tr><td><code>apps/server</code></td><td>Bun + Hono + Drizzle + PostgreSQL; rutas HTTP, realtime, operador</td><td>Bajo: Codync ya tiene host</td></tr>
+      <tr><td><code>apps/web</code></td><td>React + Vite + TanStack</td><td>Bajo: interfaz propia</td></tr>
+      <tr><td><code>apps/mobile</code></td><td>Expo (iPhone y Android)</td><td>Bajo: Codync ya tiene apps</td></tr>
+      <tr><td><code>apps/desktop</code></td><td>Tauri</td><td>Nulo: Codync usa Electron</td></tr>
+      <tr><td><code>packages/engine/src</code></td><td>Más de 200 módulos: router, aprobaciones, rutinas, memoria, wiki, tareas, correo, máquinas, importadores</td><td><b>Alto: aquí está el producto</b></td></tr>
+      <tr><td><code>packages/modules</code></td><td>Punto de extensión por módulos con adaptadores</td><td>Medio: patrón de extensiones</td></tr>
+      <tr><td><code>packages/adapters</code></td><td>Almacenamiento (disco, Postgres, S3), correo, push, vault, sandbox</td><td>Medio: interfaces claras</td></tr>
+      <tr><td><code>docs/adr</code></td><td><b>170 decisiones de arquitectura</b> documentadas</td><td><b>Alto: lectura obligatoria</b></td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Qué ya tiene Codync (no se toca)</h2>
+  <ul>
+    <li>Canales, hilos, DMs, adjuntos, reacciones, cola de mensajes, push y apps nativas.</li>
+    <li>Aprobaciones humanas, miniapps, check-ins proactivos y decisiones pendientes.</li>
+    <li>MCP, conectores, Composio, vault, skills, rutinas, memoria, marketplace, importación de agentes de OpenBot.</li>
+    <li>Computadora y navegador del agente, CLIs de Claude y Codex, uso por agente y presupuesto básico.</li>
+    <li>Documentos Markdown por bot y biblioteca de archivos.</li>
+  </ul>
+
+  <h2>4. Los once patrones que sí valen</h2>
+
+  <article class="ficha">
+    <h3><span class="num">A1</span>Router: quién responde en un canal</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Un mensaje sin mención va a un router. El código propone candidatos y un modelo pequeño (Jev) o reglas simples elige; hasta cuatro agentes responden o ninguno, y el mensaje dice quién eligió. Nunca concede permisos.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Hoy un canal con varios agentes necesita mención o regla fija. Esto lo vuelve natural y evita el "¿a quién le hablo?".</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>En el host: candidatos por rol y disponibilidad → puntuación con un modelo barato o reglas → máximo cuatro respuestas → campo <code>chosenBy</code> visible en el mensaje. El router solo enruta, jamás aprueba ni ejecuta.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>En un canal con tres agentes, un mensaje sin mención lo contesta el correcto y el hilo muestra por qué.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A2</span>Aprobaciones que ejecutan una sola vez</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Merge, deploy y rollback esperan al dueño o a un admin. La aprobación "cubre" la acción exacta y se ejecuta una vez, tal como se aprobó; si cambia, se vuelve a pedir.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Ya hay aprobaciones, pero falta la garantía de "exactamente lo aprobado, una sola vez" y la cobertura por acción concreta.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Huella de la acción aprobada (comando, diff, destino), caducidad, idempotencia por nonce y registro de quién aprobó qué. Rechazo también se aprende.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un deploy aprobado se ejecuta una vez; repetirlo sin aprobar de nuevo falla y deja constancia.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A3</span>Rutinas por evento, no solo por horario</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Disparadores de GitHub (PR, review), Sentry (issue), tareas nuevas y correo entrante; la rutina entrega a canal, DM o Drive.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Las rutinas ya existen, pero casi todas son de tiempo. Los eventos son los que convierten al bot en compañero de equipo.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Fuentes de evento en el host con firma y deduplicación (webhook GitHub/Sentry, correo, cola de tareas) y destino configurable por rutina; cada corrida queda en su hilo.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un PR nuevo dispara la rutina y su resultado aparece en el canal y en el hilo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A4</span>Wiki con enlaces, grafo y export</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Páginas con historial, enlaces <code>[[…]]</code> desde mensajes y tareas, backlinks, grafo e importación de Obsidian; export a Word y PDF.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>La biblioteca de documentos existe, pero es plana: sin enlaces ni historial navegable, y sin export.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Extender el almacén de documentos: enlaces y backlinks indexados, historial de revisiones ya existente, vista de grafo, importador Markdown/Obsidian y export con la cadena de conversión que ya se planea.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un documento enlaza a otro, los backlinks aparecen y se exporta a PDF con sus enlaces.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A5</span>Drive con versiones y almacenamiento elegible</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Archivos y documentos versionados, guardados en disco, en Postgres o en un bucket S3 propio; export a Word y PDF.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Los adjuntos existen, pero sin versiones ni elección de almacenamiento; el trabajo del agente se pierde si sube otra versión.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Almacén de adjuntos con versiones por archivo y adaptador de destino (disco por defecto, S3 opcional); el enlace de descarga siempre apunta a la última y permite ver anteriores.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Subir dos veces el mismo nombre conserva ambas versiones y se puede volver a la primera.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A6</span>Tablero que se mueve solo</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Tareas con columnas propias; cuando un agente las toma, se mueven solas y muestran el paso actual; al abrir un PR, avanzan otra vez.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>El lienzo tiene fichas, pero no un tablero de trabajo con estado que el agente mantenga sin que el usuario lo arrastre.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Estado de tarea ligado al run del agente (asignada, en curso con paso, esperando aprobación, hecha) y transiciones desde el host; las columnas son vistas, no datos.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Al pedir una tarea a un bot, la tarjeta avanza sola y muestra el paso actual.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A7</span>Buzones de correo para agentes</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Gmail y Outlook por Composio, cualquier otro por IMAP/SMTP; el agente lee, redacta y envía, con aprobación al enviar por defecto.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>No hay correo. Es el canal que falta para que un bot gestione bandejas, y encaja con las aprobaciones existentes.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Conector de correo en el host: credenciales en el vault, IMAP/SMTP propio, lectura con límites, borradores que pasan por aprobación, envío idempotente.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot resume la bandeja y prepara una respuesta que el dueño aprueba y se envía una sola vez.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A8</span>Conector de base de datos de solo lectura</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Una sola sentencia SQL en transacción de solo lectura, con límite de tiempo y de filas.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Hoy la analítica vive en archivos. Poder preguntar a una base propia, sin riesgo de escritura, es una capacidad de producto clara.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Adaptador de lectura con conexión de usuario restringido, una sentencia por llamada, timeout y tope de filas; se rechaza todo lo que no sea <code>SELECT</code>/<code>WITH</code>; resultados como tabla adjunta.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot responde "¿cuántas altas hubo ayer?" contra una base de prueba y no puede escribir.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A9</span>Computadoras conectadas y toma del navegador</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>El agente trabaja en la máquina del servidor o en un portátil conectado; el navegador se puede ver en vivo, tomar para un login o captcha y devolver con una nota.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Ya existe pantalla remota y navegador por perfil, pero falta el "tomar y devolver" con nota y la cola de computadoras.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Estado de toma (quién la tiene, desde cuándo, por qué), pausa del agente mientras dura y reanudación con la nota del humano; cola por computadora.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El usuario toma el navegador para resolver un captcha, lo devuelve con una nota y el agente continúa con ese contexto.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A10</span>Importador de espacios completos</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Importan agentes con sus skills, canales, rutinas y memoria desde Grok Bot, ChatGPT dots, OpenBot.run, OpenMausBot, Hermes, OpenClaw, Paperclip u otro espacio, con vista previa: skills activas, rutinas activas, claves nunca.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Ya se importan agentes de OpenBot; generalizar el importador convierte la app en destino de migración, no solo en herramienta.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Formato de exportación propio y lectores por origen; siempre con simulación previa, sin secretos y con informe de lo que entra y lo que se descarta.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un paquete de otro agente se previsualiza y se importa con sus skills y rutinas, sin ninguna clave.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A11</span>Memoria que aprende del rechazo</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Guardan decisiones, hechos, preferencias y lecciones; aprenden de correcciones y de aprobaciones rechazadas, y proponen cambios a sus propias instrucciones para que una persona los acepte.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>La memoria ya existe, pero no aprende del "no". Esa señal es la más valiosa y la que hoy se pierde.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Al rechazar una aprobación, generar una lección candidata con su motivo; el agente la propone y el usuario acepta; las instrucciones nunca cambian solas.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Tras dos rechazos del mismo tipo, el bot propone una regla nueva y la aplica solo si se acepta.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">A12</span>Presupuesto por agente antes de cada llamada</h3>
+    <dl>
+      <dt>Qué hacen ellos</dt>
+      <dd>Cada agente tiene presupuesto mensual comprobado antes de cada llamada, y el dueño recibe avisos de gasto.</dd>
+      <dt>Por qué en Codync</dt>
+      <dd>Ya se mide el uso, pero el límite no siempre bloquea antes de gastar; el dueño tampoco recibe el aviso.</dd>
+      <dt>Cómo se reimplementa</dt>
+      <dd>Reserva de presupuesto en el host antes del turno, liberación si falla, y aviso al 80 % y al 100 %; el bloqueo es un estado visible, no un error genérico.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Al llegar al límite, el bot se detiene con un mensaje claro y el dueño recibe el aviso.</dd>
+    </dl>
+  </article>
+
+  <h2>5. Los ADR que hay que leer (40 de 170)</h2>
+  <p>Los primeros cuarenta cubren lo que este documento propone y varias decisiones que Codync ya tomó por otro camino; leerlos evita repetir errores: ediciones y módulos, outbox de Postgres, runs de agente, particionado de mensajes, realtime, presupuesto, router, aprobaciones, conectores, búsqueda y contexto, skills, sandbox, wiki, computadoras conectadas, secretos hacia computadoras, misiones, aislamiento del runner, computer use, cerebros, GitHub App, consultas entre agentes, apps móvil y de escritorio, investigación previa, buzones, conector Postgres y navegador del agente.</p>
+
+  <h2>6. Lo que no se toma</h2>
+  <ul class="warn">
+    <li><b>Su código</b>: AGPL-3.0. Solo patrones, con ingeniería limpia.</li>
+    <li><b>Su arquitectura de despliegue</b>: Docker + Postgres + Bun/Hono. Codync es un host único en Rust; nada de eso aplica.</li>
+    <li><b>Sus apps</b>: Tauri, Expo y React propios; Codync ya tiene Electron, Swift y Kotlin.</li>
+    <li><b>Su nube</b>: el modo cloud es código separado; no entra.</li>
+    <li><b>El router como concesión de permisos</b>: ellos ya lo prohíben y aquí también.</li>
+  </ul>
+
+  <h2>7. Orden y esfuerzo</h2>
+  <ol>
+    <li><b>A2 y A1</b> (4-5 días): la garantía de aprobación única y el router de canal; máximo valor con riesgo bajo.</li>
+    <li><b>A11 y A12</b> (3 días): memoria del rechazo y presupuesto que bloquea.</li>
+    <li><b>A3 y A6</b> (4 días): rutinas por evento y tablero que avanza solo.</li>
+    <li><b>A7 y A8</b> (5-6 días): correo y base de datos de solo lectura.</li>
+    <li><b>A4 y A5</b> (4-5 días): wiki con enlaces, export y versiones de archivos.</li>
+    <li><b>A9 y A10</b> (4-6 días): toma del navegador y importador general.</li>
+  </ol>
+  <p class="note">Total: unas cuatro semanas para los once patrones. Los dos primeros son los que más cambian la sensación de producto y los que menos dependen de infraestructura nueva.</p>
+
+  <h2>8. Validación</h2>
+  <ul>
+    <li>Pruebas del host con el runner de siempre; cada patrón con su caso de regresión en canales, aprobaciones, rutinas y adjuntos.</li>
+    <li>Prueba real en Codync Dev, con un canal de tres agentes, un correo aprobado una sola vez y una rutina disparada por un PR de prueba.</li>
+    <li>Informe en español: patrón, qué se tomó del repo, qué se reimplementó y qué no se pudo probar.</li>
+  </ul>
+</main>
+</body>
+</html>

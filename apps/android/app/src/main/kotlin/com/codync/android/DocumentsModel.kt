@@ -40,6 +40,9 @@ import java.util.UUID
     val id: Long, val action: String, val actorKind: String, val actorId: String,
     val result: String, val createdAt: Long,
 )
+/** A page in the graph, and a link between two of them (`documentGraph`). */
+@Serializable internal data class DocumentNode(val id: String, val title: String)
+@Serializable internal data class DocumentEdge(val from: String, val to: String)
 
 /** Host owns documents and decisions; this model owns unsaved editor state. */
 internal class DocumentsModel(
@@ -49,6 +52,9 @@ internal class DocumentsModel(
     var items by mutableStateOf<List<BotDocument>>(emptyList()); private set
     var reviews by mutableStateOf<List<DocumentReview>>(emptyList()); private set
     var activity by mutableStateOf<List<BotComputerActivity>>(emptyList()); private set
+    var graphNodes by mutableStateOf<List<DocumentNode>>(emptyList()); private set
+    var graphEdges by mutableStateOf<List<DocumentEdge>>(emptyList()); private set
+    var graphLoading by mutableStateOf(false); private set
     var query by mutableStateOf(""); private set
     var next by mutableStateOf<String?>(null); private set
     var loading by mutableStateOf(false); private set
@@ -207,6 +213,26 @@ internal class DocumentsModel(
     private suspend fun loadActivity() {
         val response = call("listComputerActivity", buildJsonObject { put("botId", botId) })
         activity = WireJson.decodeFromJsonElement(response.getValue("items"))
+    }
+
+    /** Every page of this bot and the links between them, page by page, for the graph. */
+    fun loadGraph() = task {
+        if (graphLoading) return@task
+        graphLoading = true
+        try {
+            val nodes = mutableListOf<DocumentNode>()
+            val edges = mutableListOf<DocumentEdge>()
+            var cursor: String? = null
+            do {
+                val response = call("documentGraph", buildJsonObject {
+                    put("botId", botId); cursor?.let { put("afterId", it) }
+                })
+                nodes += WireJson.decodeFromJsonElement<List<DocumentNode>>(response.getValue("nodes"))
+                edges += WireJson.decodeFromJsonElement<List<DocumentEdge>>(response.getValue("edges"))
+                cursor = (response["next"] as? JsonPrimitive)?.contentOrNull
+            } while (cursor != null)
+            graphNodes = nodes; graphEdges = edges
+        } finally { graphLoading = false }
     }
 
     fun export(copy: (String) -> Unit) = task {

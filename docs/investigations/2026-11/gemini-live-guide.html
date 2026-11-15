@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía — Gemini Live con API y Google Cloud en Codync</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f6f4ef; --ink:#1b1a17; --soft:#5d5a52; --rule:#ddd7ca; --mark:#1a5fb4; --warn:#a3401c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121315; --ink:#e8e9ee; --soft:#a2a6b3; --rule:#2a2c33; --mark:#8ab4f8; --warn:#ff8a5b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 880px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(28px,4vw,38px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:28px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--mark); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.85em/1.5 ui-monospace,Consolas,monospace; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--warn); padding-left:14px; }
+  .step { border:1px solid var(--rule); border-radius:3px; padding:14px 16px; margin:12px 0; }
+  .step h3 { margin-top:0; }
+  .small { font-size:14px; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Guía de uso y plan de producto</p>
+  <h1>Gemini Live en Codync: con API key hoy, con Google Cloud después</h1>
+  <p class="lede">Cómo activar la voz en vivo con Gemini en la app actual, qué no cubre todavía y qué habría que construir para usar Vertex AI de Google Cloud sin fricción.</p>
+  <div class="bar"><button id="copy">Copiar la guía</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>0. Tus créditos: qué son y cómo se usan</h2>
+  <p>Lo que ves en Billing no es del plan Gemini Pro: son <strong>créditos mensuales del programa Google Developer Program (nivel Premium)</strong>. Van a la cuenta de facturación y se gastan solos en la API de Gemini antes que la tarjeta.</p>
+  <ul>
+    <li>Los siete vales de $10 son de tipo <code>CREDIT_TYPE_MONTHLY</code>: se emiten cada mes y <strong>no se acumulan de un mes a otro</strong>; úsalos o se pierden.</li>
+    <li>El saldo de $10 es un <strong>prepago</strong> del 14 de mayo: no se reembolsa y caduca al año. Ese sí queda hasta que se gaste o caduque.</li>
+    <li>La cuenta está en <strong>Paid 1</strong> con tope de $250: al agotar créditos, el consumo pasa a la tarjeta hasta ese tope.</li>
+  </ul>
+  <p class="warn">Una suscripción Google AI Pro o Ultra sirve para la app Gemini, no da créditos de API. Si querías créditos por el plan, los que tienes son los del Developer Program; no hay más por ser Pro.</p>
+  <p>Para Codync: usa la clave del proyecto <code>gen-lang-client-0461577026</code>, que ya está en esa cuenta de facturación. Los créditos se descuentan igual que con cualquier otra clave y el tope de $250 evita sorpresas. Si un mes se acaban, la voz sigue con la tarjeta o cambias de clave; no hace falta Vertex para gastarlos.</p>
+
+  <h2>1. Lo que ya existe</h2>
+  <p>Codync ya trae <strong>Gemini Live</strong> en la app de escritorio: motor de voz en tiempo real, WebSocket, audio 16 kHz de subida y 24 kHz de bajada, cancelación de eco, herramientas del agente durante la llamada y reanudación si la sesión cae. El host pide un token efímero de un solo uso por sesión y guarda la clave en el equipo; no pasa por ningún servidor de Codync.</p>
+  <p class="note">Hoy solo funciona con una clave de <strong>Google AI Studio</strong> (<code>AIza…</code>) contra <code>generativelanguage.googleapis.com</code>. Para Google Cloud (Vertex AI) hay que añadir un proveedor nuevo; el motor de audio sirve tal cual.</p>
+
+  <h2>2. Activarlo hoy, paso a paso</h2>
+  <div class="step">
+    <h3>Paso 1 · Clave</h3>
+    <p>Entra en <code>https://aistudio.google.com/apikey</code> con la cuenta de Google que pagará el consumo, crea una clave y cópiala. La factura va a esa cuenta.</p>
+  </div>
+  <div class="step">
+    <h3>Paso 2 · Motor</h3>
+    <p>En Codync: <strong>Ajustes → Conversación de voz → Motor → Gemini</strong>. Pega la clave en el campo y pulsa <strong>Probar</strong>; el host la valida antes de guardarla y la deja solo en ese equipo.</p>
+  </div>
+  <div class="step">
+    <h3>Paso 3 · Modo y voz</h3>
+    <p>Elige <strong>Modo → Tiempo real</strong> (conversación con interrupciones) o <strong>Habla</strong> (turnos al pausar). Escoge modelo y una de las voces (Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr).</p>
+  </div>
+  <div class="step">
+    <h3>Paso 4 · Llamar</h3>
+    <p>Abre el bot que hablará y entra en su panel de <strong>Voz</strong>. Habla con naturalidad; el agente puede usar sus herramientas mientras la llamada sigue. Cerrar la pestaña de voz corta la sesión.</p>
+  </div>
+  <p class="small">El modo Habla y el dictado usan el mismo modelo de transcripción del proveedor; el servicio en vivo y la transcripción se facturan por separado.</p>
+
+  <h2>3. Qué falta para Google Cloud</h2>
+  <ul>
+    <li>Un proveedor <strong>Vertex AI</strong> con proyecto, región y credenciales de servicio (o ADC), en vez de una clave de AI Studio.</li>
+    <li>El endpoint correcto de Live en Vertex: <code>wss://{region}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent</code>, autenticado con el token de acceso.</li>
+    <li>Listado de modelos y de regiones desde Vertex, con los modelos Live disponibles por región.</li>
+    <li>Tokens efímeros de Vertex (o el token de la cuenta de servicio) con caducidad corta y renovación.</li>
+    <li>Presupuesto, cuota y alerta de gasto por proyecto, visibles en la app.</li>
+    <li>Botón de borrado del proveedor y de la credencial, y un aviso de que la clave/JSON no sale del equipo.</li>
+  </ul>
+
+  <h2>4. Preparar Google Cloud</h2>
+  <ol>
+    <li>Crea o elige un proyecto y <strong>habilita la API de Vertex AI</strong>.</li>
+    <li>Crea una <strong>cuenta de servicio</strong> con el rol mínimo <code>roles/aiplatform.user</code>; no uses el rol de propietario.</li>
+    <li>Descarga el JSON o, en el equipo, usa <strong>ADC</strong>: <code>gcloud auth application-default login</code>.</li>
+    <li>Fija la región (por ejemplo <code>us-central1</code>) y confirma que el modelo Live existe allí.</li>
+    <li>Pon un <strong>presupuesto con alerta</strong> al proyecto; Live consume por minuto de audio.</li>
+  </ol>
+  <p class="warn">Seguridad: el JSON de la cuenta de servicio es una credencial de larga duración. Guárdalo cifrado en el vault del host, con permiso de lectura solo para su usuario, y permite revocarlo desde la app.</p>
+
+  <h2>5. Plan de implementación</h2>
+  <h3>Fase 1 · Proveedor Vertex en el host</h3>
+  <ul>
+    <li>Nuevo <code>Provider::Vertex</code> en <code>host/src/voice.rs</code> con proyecto, región y credencial; el mismo contrato que Gemini cambia solo en el endpoint y el encabezado (<code>Authorization: Bearer</code>).</li>
+    <li>Métodos <code>setVoiceCredential</code>, <code>clearVoiceCredential</code>, <code>voiceProject</code>, <code>voiceRegions</code> y <code>voiceModels</code>, con validación previa.</li>
+    <li>Token efímero de Vertex con caducidad de minutos, o el token de ADC renovado por el host.</li>
+    <li>Errores distintos para cuota, región sin modelo, credencial vencida y permiso insuficiente.</li>
+  </ul>
+  <h3>Fase 2 · Ajustes guiados</h3>
+  <ul>
+    <li>Motor “Google Cloud (Vertex AI)” con pasos: proyecto → región → credencial (JSON o ADC) → probar → modelo y voz.</li>
+    <li>Enlace a la consola de Google Cloud en cada paso, y estado de la credencial con fecha y botón de revocar.</li>
+    <li>El modo Habla y el dictado siguen usando el modelo de transcripción del proveedor.</li>
+  </ul>
+  <h3>Fase 3 · Coste y control</h3>
+  <ul>
+    <li>Minutos del mes por proveedor y proyecto, con el mismo contador que ya existe.</li>
+    <li>Aviso al 80 % del presupuesto y corte opcional al 100 %.</li>
+    <li>Elección por bot: proveedor de voz, modelo y voz se guardan por bot, no solo por equipo.</li>
+  </ul>
+  <h3>Fase 4 · Paridad</h3>
+  <ul>
+    <li>Android: misma elección de motor y clave, con el JSON validado en el host.</li>
+    <li>Reanudación, cancelación y cambio de motor en mitad de llamada, igual que hoy.</li>
+  </ul>
+
+  <h2>6. Criterios de aceptación</h2>
+  <ul>
+    <li>Con ADC o JSON válidos, “Probar” crea una sesión Live real y el agente responde en voz.</li>
+    <li>Con una región sin modelo, la app lo dice antes de llamar.</li>
+    <li>Al revocar la credencial, la siguiente llamada falla con un mensaje que explica qué hacer.</li>
+    <li>El contador de minutos y el aviso de presupuesto reflejan el consumo del proyecto.</li>
+    <li>Ninguna credencial aparece en el renderer ni en los registros.</li>
+  </ul>
+
+  <h2>7. Atajos que ayudan sin esperar al producto</h2>
+  <ul>
+    <li>Si ya tienes Vertex, hoy puedes poner la clave de AI Studio y dejar Vertex para las herramientas de texto; la voz funciona igual.</li>
+    <li>Un bot dedicado a voz, con instrucciones cortas y sus herramientas limitadas, da mejores llamadas que uno general.</li>
+    <li>Usa un proyecto de Google Cloud separado para la voz y así el gasto se lee aparte.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((node) => node.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const area = document.createElement('textarea'); area.value = text; document.body.append(area); area.select(); document.execCommand('copy'); area.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

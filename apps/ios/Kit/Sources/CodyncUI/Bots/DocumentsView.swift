@@ -21,6 +21,7 @@ struct DocumentsView: View {
                 }
                 documents(library)
                 reviews(library)
+                graph(library)
                 activity(library)
             } else { Text("Loading documents…").foregroundStyle(Palette.secondary) }
         }
@@ -28,6 +29,7 @@ struct DocumentsView: View {
             let model = DocumentsStore(botId: botId, accountContext: host.storage.id, computerId: host.computer.id) { try await host.ready() }
             library = model
             await model.load()
+            await model.loadGraph()
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
                 if !model.loading && !model.saving {
@@ -125,6 +127,28 @@ struct DocumentsView: View {
                         Image(systemName: "chevron.right").foregroundStyle(Palette.secondary)
                     }.frame(minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func graph(_ library: DocumentsStore) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Links between pages").font(.headline)
+                Spacer()
+                IconButton("Refresh graph", systemImage: "arrow.clockwise") {
+                    Task { await library.loadGraph() }
+                }.disabled(library.graphLoading)
+            }
+            if library.graphLoading { Spinner() }
+            if library.graphNodes.isEmpty && !library.graphLoading {
+                Text("No pages yet.").foregroundStyle(Palette.secondary)
+            }
+            if !library.graphNodes.isEmpty {
+                LinksGraph(nodes: library.graphNodes, edges: library.graphEdges) { id in
+                    withAnimation(Motion.layout) { editor = true }
+                    Task { await library.open(id) }
+                }
             }
         }
     }
@@ -307,5 +331,46 @@ private struct DocumentReviewView: View {
                 }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             }
         }.background(Palette.background)
+    }
+}
+
+/// Every page on a circle, with a line for each link that resolves to another page. Tapping one opens it.
+private struct LinksGraph: View {
+    let nodes: [LibraryGraphNode]
+    let edges: [LibraryGraphEdge]
+    let open: (String) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            let side = min(geometry.size.width, 420)
+            let radius = side / 2 - 56
+            let center = CGPoint(x: geometry.size.width / 2, y: side / 2)
+            let points = Dictionary(uniqueKeysWithValues: nodes.enumerated().map { index, node in
+                let angle = 2 * Double.pi * Double(index) / Double(nodes.count)
+                return (node.id, CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle)))
+            })
+            ZStack {
+                Canvas { context, _ in
+                    for edge in edges {
+                        guard let from = points[edge.from], let to = points[edge.to] else { continue }
+                        var path = Path()
+                        path.move(to: from)
+                        path.addLine(to: to)
+                        context.stroke(path, with: .color(Palette.border), lineWidth: 1)
+                    }
+                }
+                ForEach(nodes) { node in
+                    if let point = points[node.id] {
+                        Button { open(node.id) } label: {
+                            VStack(spacing: 2) {
+                                Circle().fill(Palette.accent).frame(width: 10, height: 10)
+                                Text(node.title).font(.caption).foregroundStyle(Palette.text)
+                                    .lineLimit(2).multilineTextAlignment(.center)
+                            }.frame(width: 120)
+                        }.buttonStyle(.plain).position(x: point.x, y: point.y)
+                    }
+                }
+            }
+        }.frame(height: 360)
     }
 }

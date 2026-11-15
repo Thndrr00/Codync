@@ -42,6 +42,17 @@ struct DocumentActivity: Decodable, Identifiable {
     let createdAt: Int64
 }
 
+/// A page in the graph, and a link between two of them (`documentGraph`).
+struct LibraryGraphNode: Decodable, Identifiable {
+    let id: String
+    let title: String
+}
+
+struct LibraryGraphEdge: Decodable {
+    let from: String
+    let to: String
+}
+
 /// The host owns persistence, revisions and review decisions. Drafts survive failed writes.
 @MainActor @Observable
 final class DocumentsStore {
@@ -51,6 +62,9 @@ final class DocumentsStore {
     var documents: [LibraryDocument] = []
     var reviews: [DocumentReview] = []
     var activity: [DocumentActivity] = []
+    var graphNodes: [LibraryGraphNode] = []
+    var graphEdges: [LibraryGraphEdge] = []
+    var graphLoading = false
     var query = ""
     var draft: DocumentDraft?
     var conflict: LibraryDocument?
@@ -105,6 +119,8 @@ final class DocumentsStore {
     private struct WriteResult: Decodable { let status: String; let document: LibraryDocument? }
     private struct ID: Encodable { let id: String }
     private struct Bot: Encodable { let botId: String }
+    private struct GraphPage: Decodable { let nodes: [LibraryGraphNode]; let edges: [LibraryGraphEdge]; let next: String? }
+    private struct GraphQuery: Encodable { let botId: String; let afterId: String? }
 
     func load(more: Bool = false) async {
         loadRequest += 1
@@ -131,6 +147,27 @@ final class DocumentsStore {
             reviews = response.items
             let history: Activities = try await client().call("listComputerActivity", Bot(botId: botId))
             activity = history.items
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+
+    /// Every page of this bot and the links between them, page by page, for the graph.
+    func loadGraph() async {
+        guard !graphLoading else { return }
+        graphLoading = true
+        defer { graphLoading = false }
+        do {
+            var nodes: [LibraryGraphNode] = []
+            var edges: [LibraryGraphEdge] = []
+            var after: String?
+            repeat {
+                let page: GraphPage = try await client().call("documentGraph", GraphQuery(botId: botId, afterId: after))
+                nodes += page.nodes
+                edges += page.edges
+                after = page.next
+            } while after != nil
+            graphNodes = nodes
+            graphEdges = edges
+            error = nil
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 

@@ -8,7 +8,7 @@ use super::types::DocumentSummary;
 use crate::LockExt;
 use crate::store::Store;
 use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -117,26 +117,45 @@ impl Store {
         Ok(backlinks)
     }
 
-    /// Every page of `bot` and every link between two of them, for a graph view: nodes are pages,
-    /// edges are links that resolve to another page of the same bot.
-    pub fn document_graph(&self, bot: &str) -> Result<Value> {
+    /// A page of `bot`'s pages and the links that leave it, for a graph view: nodes are pages, edges
+    /// are links that resolve to another page of the same bot. Nodes come by id after `after` (the
+    /// previous page's last node), and `next` is this page's last one while more remain. Every edge
+    /// hangs off its source node, so reading every page lists each edge exactly once.
+    pub fn document_graph(&self, bot: &str, after: Option<&str>, limit: u32) -> Result<Value> {
+        let limit = usize::try_from(limit.clamp(1, 1000))?;
         let db = self.db.locked();
-        let mut pages =
-            db.prepare("SELECT id, title FROM documents WHERE bot_id = ?1 AND deleted = 0 ORDER BY title")?;
-        let nodes: Vec<Value> = pages
-            .query_map([bot], |r| Ok(json!({"id": r.get::<_, String>(0)?, "title": r.get::<_, String>(1)?})))?
+        let mut pages = db.prepare(
+            "SELECT id, title FROM documents WHERE bot_id = ?1 AND deleted = 0 AND id > ?2
+             ORDER BY id LIMIT ?3",
+        )?;
+        let mut nodes: Vec<Value> = pages
+            .query_map(params![bot, after.unwrap_or_default(), i64::try_from(limit)? + 1], |r| {
+                Ok(json!({"id": r.get::<_, String>(0)?, "title": r.get::<_, String>(1)?}))
+            })?
             .collect::<rusqlite::Result<_>>()?;
         drop(pages);
-        let mut links = db.prepare(
-            "SELECT l.from_id, d.id FROM document_links l
-             JOIN documents d ON d.bot_id = l.bot_id AND d.deleted = 0
-                              AND codync_lower(d.title) = codync_lower(l.target)
-             WHERE l.bot_id = ?1 AND d.id != l.from_id",
-        )?;
-        let edges: Vec<Value> = links
-            .query_map([bot], |r| Ok(json!({"from": r.get::<_, String>(0)?, "to": r.get::<_, String>(1)?})))?
-            .collect::<rusqlite::Result<_>>()?;
-        Ok(json!({"nodes": nodes, "edges": edges}))
+        let more = nodes.len() > limit;
+        nodes.truncate(limit);
+        let ids: Vec<&str> = nodes.iter().filter_map(|node| node["id"].as_str()).collect();
+        let mut edges: Vec<Value> = Vec::new();
+        if !ids.is_empty() {
+            let marks: Vec<String> = (2..2 + ids.len()).map(|at| format!("?{at}")).collect();
+            let mut links = db.prepare(&format!(
+                "SELECT l.from_id, d.id FROM document_links l
+                 JOIN documents d ON d.bot_id = l.bot_id AND d.deleted = 0
+                                  AND codync_lower(d.title) = codync_lower(l.target)
+                 WHERE l.bot_id = ?1 AND d.id != l.from_id AND l.from_id IN ({})
+                 ORDER BY l.from_id, d.id",
+                marks.join(", ")
+            ))?;
+            edges = links
+                .query_map(params_from_iter(std::iter::once(bot).chain(ids.iter().copied())), |r| {
+                    Ok(json!({"from": r.get::<_, String>(0)?, "to": r.get::<_, String>(1)?}))
+                })?
+                .collect::<rusqlite::Result<_>>()?;
+        }
+        let next = if more { nodes.last().and_then(|node| node["id"].as_str()) } else { None };
+        Ok(json!({"nodes": nodes, "edges": edges, "next": next}))
     }
 }
 

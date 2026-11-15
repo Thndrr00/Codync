@@ -194,7 +194,7 @@ impl App {
                     | After::RulesExtras
                     | After::LibraryVersions => {}
                     After::Channels | After::ChannelsSlack | After::ChannelsGitHub => {
-                        self.flash(&format!("Channels: {e}"))
+                        self.flash(&format!("Channels: {e}"));
                     }
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),

@@ -6,10 +6,10 @@ use super::*;
 async fn a_hung_routine_times_out_and_the_next_task_still_runs() {
     let host = Host::start().await;
     let bot = host.stable_bot("timeout").await;
-    // Exercise a hung prompt, not cold process startup (which can exceed 2 s on Windows).
+    // Exercise a hung prompt, not cold process startup (which can take seconds on Windows under load).
     host.send(&bot, "WARMUP").await;
     host.wait_event("timeout", "finished", "WARMUP").await;
-    let hung = host.save(&bot, "hung", "BLOCK[forever] IGNORE_CANCEL", json!([{"type":"webhook"}]), 2).await;
+    let hung = host.save(&bot, "hung", "BLOCK[forever] IGNORE_CANCEL", json!([{"type":"webhook"}]), 15).await;
     let next = host.save(&bot, "next", "AFTER_TIMEOUT", json!([{"type":"webhook"}]), 30).await;
     host.call("runRoutine", json!({"botId":bot,"id":hung})).await;
     host.wait_event("timeout", "started", "BLOCK[forever]").await;

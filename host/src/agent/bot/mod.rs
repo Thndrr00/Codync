@@ -110,6 +110,7 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         hub,
         base,
         cfg,
+        side: !resume,
         conn: None,
         session_id,
         run_sessions: HashMap::new(),
@@ -267,6 +268,8 @@ struct Actor {
     base: BotConfig,
     /// The bot as the agent it runs on now sees it: `base`, or one of its fallbacks (`agent::fallback::effective`).
     cfg: BotConfig,
+    /// A routine run's own actor (`spawn_side`), not the bot's chat one.
+    side: bool,
     conn: Option<Conn>,
     /// The main session: the bot's own chat and its group turns.
     session_id: Option<String>,
@@ -375,11 +378,9 @@ impl Actor {
     async fn run(mut self, mut rx: mpsc::UnboundedReceiver<Cmd>, interrupted: Option<Lane>) {
         let (done_tx, mut done_rx) = mpsc::unbounded_channel::<Done>();
         let mut flush_tick = tokio::time::interval(Duration::from_millis(300));
-        if let Some(run) = self.hub.routines.recovery(&self.cfg.id) {
-            self.active_routine = Some(run.id.clone());
-            self.routine_deadline = Some(Instant::now() + self.hub.routines.timeout(&run.id));
-            self.resume_interrupted(Lane::main(&self.cfg.id), &done_tx).await;
-        } else if let Some(lane) = interrupted {
+        // After a restart the chat's interrupted turn resumes here; routine runs recover on their own
+        // side actors, sent by the scheduler like any other work.
+        if let Some(lane) = interrupted {
             self.resume_interrupted(lane, &done_tx).await;
         }
         loop {

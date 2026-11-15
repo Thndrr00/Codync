@@ -1,0 +1,273 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt directo — traer, reutilizar e integrar Hermes Agent</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f8f6f3; --ink:#1b1a17; --soft:#5f594f; --rule:#e2dcd2; --mark:#6b4a1f; --ok:#2f6b46; --warn:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#131110; --ink:#edeae4; --soft:#a8a197; --rule:#2e2a25; --mark:#e0b978; --ok:#8fd3ab; --warn:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.66 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 960px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:66ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.84em/1.5 ui-monospace,Consolas,monospace; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--warn); padding-left:14px; }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; margin:10px 0; }
+  th, td { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font:600 10px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt de ejecución directo · Hermes Agent en Codync · checkout compartido con otros agentes</p>
+  <h1>Todo lo que traemos, reutilizamos e integramos de Hermes Agent</h1>
+  <p class="lede">Encargo cerrado y detallado: examinar <code>NousResearch/hermes-agent</code> (MIT, clon listo en disco), agotar su inventario pieza por pieza y traer cada componente que aporte algo a Codync, con su puente en el host. No se portea dos veces lo que ya existe; no se rompe nada de lo que ya funciona.</p>
+  <div class="bar"><button id="copy">Copiar el prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Reglas: igual que todos los encargos de integración</h2>
+  <ul>
+    <li><strong>Checkout del que parte:</strong> <code>C:\Users\Edwin Villeda\Documents\Codync</code>, rama de integración <code>feat/openbot-marketplace</code>; otros agentes están agregando cosas ahí. Todo el código se escribe en un worktree propio: <code>git worktree add ..\hermes-integration -b feat/hermes-integration feat/openbot-marketplace</code>. App de prueba: <strong>Codync Dev</strong>, instalada con <code>npm run dist:win:dev</code> y <code>apps\desktop\dist\codync-dev-windows-x64.exe /S</code>; host de dev <code>codync-dev-hostw</code>. Producción prohibida.</li>
+    <li>Antes de tocar un archivo compartido (<code>package.json</code>, <code>electron-builder.yml</code>, <code>host\Cargo.toml</code>) revisa <code>git status</code> en el worktree y en el checkout principal; si hay hunks de otro agente, pregunta antes.</li>
+    <li>Sin <code>git stash</code>, <code>reset</code>, cambio de rama ni limpieza en el principal. Commits Conventional en inglés y cortos; push a <code>origin/feat/hermes-integration</code>. Nada a la rama de integración hasta que el usuario diga "llévalo a dev".</li>
+    <li><strong>Regla de puente:</strong> si la pieza trae autorizaciones o identidades precisas, el puente conserva los nombres y permisos de Hermes y solo la UI de Codync lo renombra; si no trae ninguna, se porta el código y se adapta.</li>
+    <li>Licencia de Hermes: <strong>MIT</strong>. Copiar y adaptar sin fricción; un comentario de dos líneas con el archivo de origen y un diff resumen en <code>docs/</code> por cada pedazo copiado.</li>
+    <li>El host manda; los clientes dibujan. Nada de lógica de negocio en renderers.</li>
+  </ul>
+
+  <h2>2. Fuente: qué es Hermes y dónde vive</h2>
+  <p>Repositorio clonado para trabajo: <code>C:\Users\Edwin Villeda\Documents\ref-repos\hermes-agent</code>, commit <code>10d25f8a</code> (2026-11-03; mantenlo fijado, no lo muevas a mitad del encargo; actualiza solo con permiso). Python 3.11–3.14, MIT, agente auto-mejorante: memoria con nudges, skills que se crean y mejoran solas, búsqueda FTS de sesiones, gateway de mensajería (Telegram, Discord, Slack, WhatsApp, Signal, Email, Home Assistant), cron con entrega a plataforma, subagentes con proveedor, modelo y límites propios, seis backends de entorno (local, Docker, SSH, Modal, Daytona, Vercel Sandbox), TTS local (NeuTTS/edge) con wake words, MCP, ACP, importadores de otros agentes, escritorio Electron y catálogo de más de 60 servidores MCP opcionales.</p>
+  <table>
+    <thead><tr><th>Directorio</th><th>Qué contiene</th><th>Interés para Codync</th></tr></thead>
+    <tbody>
+      <tr><td><code>agent/</code> (359 .py)</td><td>Loop del agente, memoria (<code>memory_manager*.py</code>), sesiones (<code>runtime_session_*.py</code>), skills (<code>skill_*.py</code>), tools (<code>tool_*.py</code>), proveedores auxiliares con rotación y fallback de clave</td><td>Alto: es la referencia del bucle para el host</td></tr>
+      <tr><td><code>gateway/</code></td><td>Plataformas (Telegram, Discord, Slack, WhatsApp, Signal, Email, Home Assistant), webhook con filtros y coalescing, TTS en streaming, servidor OpenAI-compat (<code>api_server_openai_routes.py</code>), emparejamiento DM y aprobación</td><td>Alto: canales nuevos y puerta OpenAI-compatible</td></tr>
+      <tr><td><code>tools/environments/</code></td><td>Seis backends: <code>local.py</code>, <code>docker*.py</code>, <code>ssh.py</code>, <code>modal.py</code>, <code>daytona.py</code>, <code>vercel_sandbox.py</code>, más sync de archivos y espera de procesos</td><td>Alto: ejecución remota del agente</td></tr>
+      <tr><td><code>cron/</code></td><td>Scheduler con plantillas (blueprint catalog), cola de entrega, destino por plataforma, cancelación e idempotencia por corrida</td><td>Alto: rutinas con destino</td></tr>
+      <tr><td><code>skills/</code> + <code>optional-skills/</code></td><td>Habilidades <code>SKILL.md</code> con índice, bundles, comandos, mejora en uso, Hub <code>agentskills.io</code></td><td>Alto: sistema de skills nativo</td></tr>
+      <tr><td><code>acp_adapter/</code></td><td>Servidor ACP completo: auth, catálogo, permisos, aprobación de ediciones, elicitation, sesión, herramientas</td><td>Alto: correr Hermes como proveedor de agente de Codync</td></tr>
+      <tr><td><code>hermes_platform/</code></td><td><code>browser</code>, <code>computer_use</code>, <code>context_engine</code>, <code>delegation</code>, <code>kanban</code>, <code>google_meet</code>, <code>memory</code>, <code>image_gen</code>, <code>model-providers</code>, <code>platforms</code></td><td>Medio y alto: comparar pieza por pieza con Codync</td></tr>
+      <tr><td><code>tools/computer_use/</code></td><td>Control de escritorio, con los mismos enfoques que Codync ya usa por su cuenta</td><td>Medio</td></tr>
+      <tr><td><code>optional-mcps/</code></td><td>Catálogo de cerca de 60 MCP (figma, n8n-official, stripe, supabase, sentry y más)</td><td>Medio: datos del marketplace</td></tr>
+      <tr><td><code>apps/desktop</code>, <code>ui-tui</code>, <code>web</code></td><td>Shell Electron, TUI y página web</td><td>Bajo: Codync ya tiene los suyos</td></tr>
+      <tr><td><code>evals/</code>, <code>batch_runner.py</code></td><td>Generación de trayectorias y compresión para entrenar modelos futuros</td><td>Bajo: investigativo</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Fichas de trabajo</h2>
+
+  <article class="ficha">
+    <h3><span class="num">H1</span>Hermes como proveedor de agente vía ACP</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Estudiar <code>acp_adapter/</code> (auth, catalog, permissions, session, tools, elicitation) y conectar el cliente ACP que Codync ya tiene en el host contra él.</li>
+        <li>Empaquetado: si Hermes va en recursos, su Python es sidecar (CLI <code>hermes</code> + venv); el host lo lanza igual que n8n y ComfyUI y comprueba salud.</li>
+        <li>Registro del proveedor ACP en ajustes de proveedores con instalación en un clic y estado de salud.</li>
+        <li>Configuración del sub-servidor: puerto, origen, arranques en frío y respuesta asíncrona.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot de Codync arranca con el proveedor "Hermes (local)" y conversa, ejecuta tools y respeta aprobaciones; cancelar un turno cancela también en Hermes.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H2</span>Skills con ciclo de mejora (el loop de Hermes)</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Leer <code>skill_*.py</code> (índice, deltas, bundles, preprocessing, comandos) y portear al host: índice de skills, alta, refresco incremental y bundle por bot.</li>
+        <li>Formato <code>SKILL.md</code> de agentskills.io ya compatible con lo que Codync use; importar habilidades del Hub vía catálogo.</li>
+        <li>Mejora en uso: tras una tarea, el agente puede editar la habilidad que usó, con aviso de cambio igual al de "agente editó instrucciones" que ya existe.</li>
+        <li>Creación automática de skill desde tareas complejas: extraer pasos, borrador, alta con revisión del usuario.</li>
+        <li>Semillas: <code>skills/</code> y <code>optional-skills/</code> (apple, devops, email, media, note-taking, productivity, research, software-development, web, social, blockchain, dogfood) importadas al catálogo con sus textos y licencias.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot usa una skill importada, la mejora tras la tarea y la mejora queda registrada con deshacer, como Codync ya lo hace con sus instrucciones.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H3</span>Memoria con nudges y búsqueda FTS</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Portar <code>memory_manager*.py</code> a <code>crates/memory</code>: memoria persistente por bot, perfil de usuario y directrices de uso de Hermes.</li>
+        <li>Nudges: el host invita al agente a persistir conocimiento en momentos marcados (fin de tarea, cierre de sesión); un turno de guardado real.</li>
+        <li>Búsqueda de sesiones: FTS5 de SQLite ya está disponible; índice de hilos y mensajes con resumen LLM (<code>session_persistence.py</code>, <code>runtime_session_store.py</code>).</li>
+        <li>"¿Qué hicimos hoy?" y parecidos: búsqueda en un paso con resumen LLM sobre los resultados FTS.</li>
+        <li>Honcho opcional (modelado dialéctico del usuario): respeta <code>memory_provider.py</code>; es un plugin externo y se puentea, no se mete en el vault.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot recuerda datos entre sesiones y responde "¿qué hicimos esta semana?" con búsqueda FTS y resumen; el nudge produce memoria guardada sin pedir nada al usuario.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H4</span>Canales nuevos: Signal, Email y Home Assistant</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Plataforma Signal de <code>gateway/platforms</code>: enlace, configuración del bot, emparejamiento DM, aprobación de comandos, envío de archivos y respuestas con cita.</li>
+        <li>Email: recepción con webhook del proveedor y envío con adjuntos; reglas de remitente.</li>
+        <li>Home Assistant como plataforma de eventos del hogar en texto.</li>
+        <li>Transcripción de notas de voz en mensajería (memo del gateway) para todos los canales.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Se instalan Signal y Email desde Extensiones › Apps con su propia sesión, y un bot atiende una nota de voz en cualquiera de las plataformas.</dd>
+      <dt>Origen</dt>
+      <dd><code>gateway/platforms</code> (bot, base y helpers) y las guías de seguridad (DM pairing).</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H5</span>Cron con destino por plataforma</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Blueprints de cron: portar <code>cron/blueprint_catalog.py</code> como plantillas de rutina de Codync, con periodo y destino.</li>
+        <li>Entrega a plataforma: la rutina termina y su informe llega al chat, a un canal, a WhatsApp o Telegram de destino, con cola y reintento (<code>delivery_queue.py</code>, <code>delivery_outcome.py</code>).</li>
+        <li>Idempotencia por corrida y cancelación viva (<code>cancellation.py</code>, idempotencia en <code>api_server_runs.py</code>).</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Una rutina diaria entrega su informe a un WhatsApp y no duplica si el destinatario estaba fuera.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H6</span>Backends de entorno: SSH, Docker y serverless</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Portar la selección de backend (<code>tools/environments/base.py</code>, <code>local.py</code>, <code>docker*.py</code>, <code>ssh.py</code>) a <code>environment.rs</code>: local, Docker y SSH primero.</li>
+        <li>Sync de archivos en ambos sentidos y espera de resultados (<code>file_sync.py</code>, <code>fd_wait.py</code>, <code>streams.py</code>); políticas del entorno local (<code>local_env_policy.py</code>).</li>
+        <li>Modal, Daytona y Vercel Sandbox como respaldo serverless: hibernación entre sesiones con coste casi nulo entre turnos; segunda fase.</li>
+        <li>Interfaz: elegir entorno por bot en Ajustes del bot; salud del backend en la tarjeta.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot corre con SSH y el mismo toolset, con archivos sincronizados; parar no deja procesos remotos y el trabajo queda en su hilo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H7</span>Subagentes con proveedor, modelo y límites propios, más scripts RPC</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li><code>hermes_platform/delegation</code>: el bot lanza tareas periféricas con proveedor, modelo y límites por tarea, y la ruta completa se aplica con un Apply (UI en Ajustes del bot).</li>
+        <li>Scripts que llaman tools por RPC: un script del agente usa las tools del host en turnos de coste casi nulo (portar el patrón de <code>batch_runner.py</code> y el tool RPC del agent a una CLI de Codync).</li>
+        <li>Cola por tarea y límite global de subagentes por bot.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot delega una investigación a un subagente barato y solo el resumen entra a su hilo; el script RPC reduce tres pasos a un turno.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H8</span>Voz: NeuTTS, wake words y TTS en streaming</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>TTS local con <code>tools/neutts_samples</code> y streaming (<code>base_streaming_tts.py</code>) como respaldo sin nube para la voz del bot.</li>
+        <li>Wake words (<code>tools/wakewords</code>) como activación del micrófono en móvil, con opt-in.</li>
+        <li>Conversación de voz interrumpida al hablar de nuevo, con el mismo esquema del gateway.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot responde con TTS local instalado y la respuesta se interrumpe al hablar otra vez.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H9</span>Servidor OpenAI-compatible</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Portar <code>gateway/platforms/api_server_openai_routes.py</code> al host: exponer bots de Codync como endpoint OpenAI-compat local, con autenticación por clave del vault.</li>
+        <li>Permitir que herramientas de terceros (IDE, scripts del usuario) llamen a un bot de Codync como modelo.</li>
+        <li>Endpoint de salud, precios y modelos que liste el catálogo de proveedores activos del bot.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un cliente OpenAI local apunta al localhost del host, elige un bot y tiene una conversación con sus tools y aprobaciones.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">H10</span>Catálogo opcional de MCP y conectores del gateway</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Importar <code>optional-mcps/</code> (unas 60 entradas: figma, n8n-official, airtable, asana, atlassian, calendly, canva, circleci, clickup, cloudflare, dropbox, gitlab, grafana, hugging_face, intercom, linear, microsoft-learn, miro, mixpanel, monday, neon, netlify, notion, paypal, plaid, postman, prisma-postgres, railway, rentahuman, robinhood, semgrep, sentry, square, strava, stripe, supabase, todoist, twilio, vercel, webflow, wolfram, wordpress) al marketplace con origen y estado de MCP.</li>
+        <li><code>tools/connectors/</code> (gateway y portal): revisar el flujo de conexión y portar al host lo que falte (OAuth por conexión hacia el vault).</li>
+        <li>Respetar los servidores MCP propios del usuario; no duplicar lo que ya se trajo de OpenBot.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>El marketplace lista estas entradas, cada una se conecta con su flujo y aparece con estado, sin duplicar con lo de OpenBot.</dd>
+    </dl>
+  </article>
+
+  <h2>4. Puentes con nombres de Hermes</h2>
+  <ul>
+    <li>Hermes como proveedor ACP: el protocolo conserva los nombres de Hermes (métodos, catálogo, permisos); en la UI se ve "Hermes". Su proveedor ya configurado (Nous Portal, OpenRouter, OpenAI, endpoint propio) sigue funcionando sin re-autorizar.</li>
+    <li>Skills y memoria: formato SKILL.md y memoria importada de Hermes con sus nombres internos; plugins externos como Honcho se puentean, no se reescriben.</li>
+    <li>Voz y wake words: motores nuevos con sus nombres de origen, con la marca visual de Codync.</li>
+    <li>Cron a rutina: blueprint de Hermes = plantilla de rutina de Codync; los campos corresponden uno a uno con el scheduler de rutinas.</li>
+  </ul>
+
+  <h2>5. Orden</h2>
+  <ol>
+    <li>H1, el puente de agente: desde ahí todo lo demás tiene sitio.</li>
+    <li>H2 y H3: skills y memoria con nudges y FTS.</li>
+    <li>H4 y H5: canales nuevos y cron con destino.</li>
+    <li>H6 y H7: backends de entorno y subagentes con scripts RPC.</li>
+    <li>H8, H9 y H10: voz, servidor OpenAI-compat y catálogo MCP.</li>
+  </ol>
+
+  <h2>6. Validación y trampas</h2>
+  <ul>
+    <li><code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>, <code>npm run typecheck</code>, <code>npm test</code>; Gradle solo si tocaste Android.</li>
+    <li><code>hermes doctor</code> del sidecar si el host lo lanza; log adjunto al reporte.</li>
+    <li>Probar desde Codync Dev instalada, no desde <code>npm run dev</code>.</li>
+  </ul>
+  <ul class="warn">
+    <li>Python solo 3.11–3.14 con dependencias exact-pinned (<code>uv.lock</code>); los extras (firecrawl, exa, fal, edge-tts, parallel-web) se preparan bajo demanda por PM, no al inicio.</li>
+    <li><code>uv.exe</code> suele marcarlo el antivirus: falso positivo conocido; excluir la carpeta, no el hash.</li>
+    <li>En Windows, Hermes instala en <code>%LOCALAPPDATA%\hermes</code>; en WSL2, en <code>~/.hermes</code>.</li>
+    <li>No mover el commit del repositorio de Hermes a mitad del encargo.</li>
+    <li>El sidecar es un proceso del runner: parar por árbol, como n8n y ComfyUI.</li>
+  </ul>
+
+  <h2>7. Entrega</h2>
+  <ul>
+    <li>Un commit por ficha con qué y por qué; reporte final en español con fichas hechas, piezas copiadas de Hermes con origen exacto, puentes creados, límites y lo que no corrió.</li>
+    <li>Deja el build de prueba abierto en Codync Dev, Hermes disponible como proveedor y una skill de ejemplo importada.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

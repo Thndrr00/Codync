@@ -62,7 +62,8 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, l: &Library) {
                     format!("{} · {}", if index == 0 { "newest" } else { "older" }, file_size(size))
                 })
                 .collect();
-            format!("{name}: {}", parts.join(" · "))
+            let more = if l.versions_next.is_some() { " · v again for older" } else { "" };
+            format!("{name}: {}{more}", parts.join(" · "))
         };
         put(
             buf,

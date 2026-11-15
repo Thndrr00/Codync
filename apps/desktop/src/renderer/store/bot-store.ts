@@ -410,13 +410,14 @@ export class BotStore extends BotSync {
     }
   }
 
-  /** Every snapshot a bot published under `name`, newest first: an older one is read like the newest. */
-  async fileVersions(botId: string, name: string): Promise<SharedFileVersion[]> {
+  /** A page of the snapshots a bot published under `name`, newest first: an older one is read like
+   *  the newest. `before` is the previous page's `next`. */
+  async fileVersions(botId: string, name: string, before?: number): Promise<{ versions: SharedFileVersion[]; next: number | null }> {
     try {
-      const { versions } = await (await this.ready()).call<{ versions: SharedFileVersion[] }>('fileVersions', { botId, name })
-      return versions ?? []
+      const page = await (await this.ready()).call<{ versions: SharedFileVersion[]; next: number | null }>('fileVersions', { botId, name, beforeSeq: before })
+      return { versions: page.versions ?? [], next: page.next ?? null }
     } catch {
-      return []
+      return { versions: [], next: null }
     }
   }
 
@@ -424,6 +425,26 @@ export class BotStore extends BotSync {
   async continueTurn(entry: Entry): Promise<string | null> {
     try {
       await (await this.ready()).call('continueTurn', { entryId: entry.id })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  /** Takes a takeover request in hand: the bot's agent waits until it is done. */
+  async takeTakeover(entry: Entry): Promise<string | null> {
+    try {
+      await (await this.ready()).call('takeTakeover', { entryId: entry.id })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  /** Did the step a bot asked for: the card closes and the agent goes on with `note`. */
+  async resolveTakeover(entry: Entry, note?: string): Promise<string | null> {
+    try {
+      await (await this.ready()).call('resolveTakeover', { entryId: entry.id, note })
       return null
     } catch (error) {
       return error instanceof Error ? error.message : String(error)

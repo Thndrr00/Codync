@@ -74,6 +74,8 @@ Codync/
 
 `build/`, `apps/ios/Kit/.build/`, `apps/desktop/out/`, `apps/desktop/dist/`, Cargo `target/`, `node_modules/` and Wrangler local state are generated working data. They are not source modules and should not become documentation locations. Edit `apps/project.yml` and run `xcodegen generate --spec apps/project.yml`; never hand-edit `project.pbxproj`.
 
+Unit tests live beside the code they cover: inline `#[cfg(test)]` modules in `host/src/`, integration tests in `host/tests/`, `apps/ios/Kit/Tests/` (CodyncKitTests, CodyncUITests), `*.test.ts` in `apps/desktop/src/`, `apps/android/{core,app}/src/test/`, and `cloud/test/`, `private-relay/test/`, `relay/test/`, `discord/test/`.
+
 ## Targets
 
 - `apps/desktop/` — desktop app for macOS, Linux and Windows (Electron; `npm run dev`, packaged by `.github/workflows/release-desktop.yml`)

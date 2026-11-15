@@ -51,29 +51,45 @@ import kotlinx.serialization.json.jsonPrimitive
     if (open) CodyncSheet(app, { open = false }) { BotAppSheet(botId = entry.botId, app = it, store = store) }
 }
 
-/** Ideas 13, 19 & 20: Human takeover request card with action bar in chat. */
+/** Ideas 13, 19 & 20: a human takeover request. The person takes it (the bot waits), and hands it back when done. */
 @Composable internal fun TakeoverRequestCard(entry: Entry, state: AppState, store: AppStore) {
     val req = entry.data["takeoverRequest"] as? JsonObject ?: return
     val reason = req.text("reason").orEmpty()
     val url = req.text("url").orEmpty()
     val status = req.text("status")
+    val by = req.text("takenBy").orEmpty()
     val resolved = status == "resolved" || status == "cancelled" || status == "expired"
+    val working = state.busy.any { it == "take:" + entry.id || it == "done:" + entry.id }
     Column(Modifier.fillMaxWidth().clip(RoundedRectangle(18.dp)).background(Palette.bubbleAgent).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Symbol("hand.raised.fill", size = 16.dp, tint = Palette.warning)
-            Text("Human Takeover Requested", style = Type.chatSubheadline.semibold, color = Palette.warning)
+            Text(tr(if (status == "taken") "Takeover taken" else "Human Takeover Requested"), style = Type.chatSubheadline.semibold, color = Palette.warning)
         }
-        Text(if (url.isNotBlank()) "$reason · $url" else reason, style = Type.chatFootnote, color = Palette.secondary)
-        if (!resolved) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Done — hand back") {
-                    store.sendDraft(entry.botId, entry.threadId, "I have completed the requested step in the browser. Please continue.") {}
+        Text(if (url.isNotBlank()) "$reason �� $url" else reason, style = Type.chatFootnote, color = Palette.secondary)
+        when {
+            status == "waiting" -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton(tr("Take over"), enabled = !working) { store.takeTakeover(entry) }
+                    SecondaryButton(tr("Cancel")) { state.bots.firstOrNull { it.id == entry.botId }?.let { store.stopBot(it) } }
                 }
-                SecondaryButton("Cancel") { state.bots.firstOrNull { it.id == entry.botId }?.let { store.stopBot(it) } }
             }
-        } else {
-            Text(when (status) { "resolved" -> "Completed"; "expired" -> "Expired"; else -> "Cancelled" }, style = Type.caption, color = Palette.tertiary)
+            status == "taken" -> {
+                Text(
+                    if (by.isBlank()) tr("The agent waits until you hand it back.") else tr("Taken by {who}").replace("{who}", by),
+                    style = Type.caption,
+                    color = Palette.tertiary,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton(tr("Done, hand back"), enabled = !working) { store.resolveTakeover(entry) }
+                    SecondaryButton(tr("Cancel")) { state.bots.firstOrNull { it.id == entry.botId }?.let { store.stopBot(it) } }
+                }
+            }
+            else -> Text(
+                when (status) { "resolved" -> tr("Completed"); "expired" -> tr("Expired"); else -> tr("Cancelled") },
+                style = Type.caption,
+                color = Palette.tertiary,
+            )
         }
     }
 }

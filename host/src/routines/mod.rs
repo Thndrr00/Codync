@@ -229,7 +229,6 @@ impl Routines {
                 Status::Running | Status::Recovering => {
                     run.status = Status::Recovering;
                     run.finished_at = None;
-                    *active.entry(run.bot_id.clone()).or_default() += 1;
                 }
                 _ => {}
             }

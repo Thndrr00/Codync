@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt — ComfyUI v2: plantillas, modelos y resultados</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f7f4; --ink:#191917; --soft:#5d5c55; --rule:#e1e0d8; --mark:#46623a; --ok:#2f6b46; --warn:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121210; --ink:#eceae3; --soft:#a6a49b; --rule:#2d2c27; --mark:#b6d69a; --ok:#8fd3ab; --warn:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.66 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 940px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:66ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.84em/1.5 ui-monospace,Consolas,monospace; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--warn); padding-left:14px; }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; margin:10px 0; }
+  th, td { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font:600 10px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt v2 · sobre lo que ya está · plantillas, modelos y resultados</p>
+  <h1>ComfyUI completo: de motor a estudio</h1>
+  <p class="lede">Segundo encargo, no un reemplazo. El primero deja ComfyUI empaquetado, con login, modelos, cola y puente. Este añade lo que hoy falta para que sea un estudio de verdad: plantillas con nombre, gestor de modelos, resultados de vídeo y audio, y la evaluación del MCP y la CLI oficiales. Todo se construye sobre lo que ya existe.</p>
+  <div class="bar"><button id="copy">Copiar el prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Qué existe ya y no se rehace</h2>
+  <ul>
+    <li>Runner compartido en <code>host/src/tools/</code> (arranque, salud, puerto libre, parada por árbol) y ventana con página de espera.</li>
+    <li>ComfyUI empaquetado en <code>build/native/comfy</code> con su Python embebido, escuchando solo en <code>127.0.0.1</code>.</li>
+    <li>Usuario sembrado y sesión automática antes de cargar el editor, como n8n; sin pantalla de login.</li>
+    <li>Modelos, <code>custom_nodes</code> y ajustes en <code>userData/comfy</code>; <code>extra_model_paths.yaml</code> generado.</li>
+    <li>Cola de un trabajo con <code>/prompt</code>, <code>/queue</code> y <code>/interrupt</code>; puente MCP <code>comfyui</code> con resultado como adjunto.</li>
+    <li>Adjuntos e imágenes ya se muestran en el chat de escritorio, iPhone y Android: el canal de salida no se toca, se reutiliza.</li>
+  </ul>
+  <p class="note">Si algo de esta lista no está en el árbol, se toma del prompt anterior (<code>comfyui-inside-prompt.html</code>) antes de empezar. Este documento asume que existen y los usa; no los repite.</p>
+
+  <h2>2. Lo que falta, y por qué importa</h2>
+  <table>
+    <thead><tr><th>Falta</th><th>Qué se nota hoy</th><th>Qué agrega este encargo</th></tr></thead>
+    <tbody>
+      <tr><td>Plantillas con nombre</td><td>El bot tiene que mandar un grafo JSON entero y saber qué nodos lleva</td><td>Catálogo de plantillas con formulario, modelos y estimación</td></tr>
+      <tr><td>Gestor de modelos</td><td>Si falta un checkpoint, el trabajo falla tarde</td><td>Lista, descarga con reanudación, borrado y espacio</td></tr>
+      <tr><td>Preflight</td><td>El fallo se descubre a mitad de la cola</td><td>Comprobación previa de modelos, VRAM y disco con acción concreta</td></tr>
+      <tr><td>Resultados que no son imagen</td><td>Vídeo, audio y 3D se guardan como archivo raro</td><td>Visor y miniatura por tipo, adjunto con el tipo correcto</td></tr>
+      <tr><td>MCP y CLI oficiales</td><td>Riesgo de mantener un puente propio que se queda atrás</td><td>Evaluación y, si cubre, uso del oficial conservando nombres</td></tr>
+      <tr><td>Plantillas del desafío Higgsfield</td><td>Quince workflows excelentes sin forma de entrar</td><td>Manifiestos de ejemplo con sus modelos y su coste</td></tr>
+      <tr><td>Formulario de ejecución</td><td>El usuario escribe parámetros como puede</td><td>Formulario generado desde el esquema de la plantilla</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Fichas</h2>
+
+  <article class="ficha">
+    <h3><span class="num">T1</span>Capa de plantillas (el corazón del encargo)</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Un manifiesto por plantilla en <code>userData/comfy/templates/&lt;id&gt;/template.json</code> con: <code>id</code>, <code>name</code>, <code>version</code>, <code>description</code>, <code>workflow</code> (grafo JSON), <code>inputs</code> (esquema con tipo, rango y por defecto), <code>models</code> (archivo, carpeta, tamaño, hash y URL), <code>output</code> (<code>image</code>, <code>video</code>, <code>audio</code> o <code>mesh</code>), <code>estimate</code> (segundos y VRAM por GPU), <code>tags</code> y <code>license</code>.</dd>
+      <dt>Por qué</dt>
+      <dd>Es lo que convierte ComfyUI en una función de producto y no en una consola. El bot pide "panorama 360 de esta foto", no un grafo de veinte nodos.</dd>
+      <dt>Cómo</dt>
+      <dd>Módulo <code>host/src/tools/comfy/templates.rs</code>: cargar, validar contra los nodos que el servidor expone en <code>/object_info</code>, comprobar que cada marcador <code>{{input}}</code> del grafo existe en el esquema, y versionar. Plantillas en el repo base (<code>assets/comfy-templates/</code>) copiadas a <code>userData</code> al instalar; se actualizan sin pisar las del usuario.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Se listan cinco plantillas, una se ejecuta por nombre y el grafo se arma solo con los valores del formulario.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T2</span>Preflight: modelos, VRAM y disco</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Antes de encolar: comprobar que cada modelo del manifiesto existe con su hash, que hay VRAM para la estimación, que hay disco para la salida, y que los nodos de la plantilla están instalados.</dd>
+      <dt>Por qué</dt>
+      <dd>El 80 % de los fallos reales de ComfyUI son modelo ausente o VRAM insuficiente, y hoy se descubren a mitad.</dd>
+      <dt>Cómo</dt>
+      <dd><code>preflight.rs</code> devuelve una lista de problemas con acción: <b>Abrir Modelos</b>, <b>Descargar</b>, <b>Bajar resolución</b> o <b>Usar CPU</b>. Nunca lanza el trabajo con un problema sin resolver.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Sin el modelo, el botón Ejecutar se convierte en Descargar y el trabajo no entra a la cola.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T3</span>Ejecución con progreso real</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Ejecutar la plantilla, seguir el progreso real por WebSocket (<code>/ws</code>: nodo actual, paso, porcentaje) y reflejarlo en la tarjeta y en el chat; cancelación con <code>/interrupt</code>.</dd>
+      <dt>Por qué</dt>
+      <dd>Un vídeo de dos minutos sin barra de progreso parece colgado; y la cancelación ya existe a nivel de motor, pero no se ve.</dd>
+      <dt>Cómo</dt>
+      <dd>Extender el runner con un canal de eventos por trabajo; el estado del trabajo (<code>queued/running/progress/done/failed/cancelled</code>) se guarda en el host para que el móvil lo vea aunque cierre el escritorio.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un trabajo de vídeo muestra nodo y porcentaje, se cancela a mitad desde el móvil y el estado queda en el historial.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T4</span>Gestor de modelos</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Pestaña Modelos en la tarjeta: lista por carpeta (checkpoints, loras, vae, clip, upscale), tamaño, uso y origen; descarga con reanudación, pausa y borrado con confirmación; espacio total y libre.</dd>
+      <dt>Por qué</dt>
+      <dd>Los modelos pesan entre 2 y 20 GB: sin gestor, el usuario no sabe qué ocupa ni cómo bajarlo.</dd>
+      <dt>Cómo</dt>
+      <dd>Descarga con <code>reqwest</code> por rangos y verificación de hash; las URL vienen del manifiesto y de una lista curada, nunca de texto libre del agente. Borrar exige confirmación si el modelo lo usa una plantilla.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Se descarga un checkpoint de 4 GB con pausa y reanudación, y borrarlo avisa si una plantilla lo necesita.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T5</span>Resultados de vídeo, audio y 3D</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Salida tipada: imagen (png/webp), vídeo (mp4/webm), audio (wav/mp3) y malla (glb/splat). Miniatura generada con <code>ffmpeg</code> (ya previsto en el catálogo) y adjunto con su tipo correcto en el chat.</dd>
+      <dt>Por qué</dt>
+      <dd>Las plantillas del desafío Higgsfield son casi todas vídeo, audio o 3D; guardarlas como <code>PNG</code> raro las vuelve inservibles.</dd>
+      <dt>Cómo</dt>
+      <dd>El host copia la salida de <code>userData/comfy/output</code> al almacén de adjuntos con su MIME y su miniatura; los clientes ya tienen visor de imagen y vídeo, se extiende con audio (reproductor) y 3D (visor WebGL en escritorio; en móvil, abrir en el navegador si no hay visor nativo).</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un vídeo de cinco segundos llega al chat con miniatura y se reproduce en escritorio y en Android; un audio se escucha en el reproductor propio.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T6</span>MCP y CLI oficiales de Comfy</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Evaluar el MCP oficial de Comfy, su CLI y su Agent antes de mantener un puente propio. Si el MCP cubre listar plantillas, ejecutar, consultar estado y cancelar, se usa el oficial y el host solo lo registra.</dd>
+      <dt>Por qué</dt>
+      <dd>Regla de puentes: lo que trae autorizaciones y nombres propios se conserva. Y el oficial se actualiza con el motor.</dd>
+      <dt>Cómo</dt>
+      <dd>Prueba de humo contra el MCP oficial en la versión fijada; tabla de cobertura (listar, describir, ejecutar, estado, cancelar, subir imagen, recuperar salida). Lo que cubra se retira del puente propio; lo que no, se queda como extensión con nombre propio.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot ejecuta una plantilla por el MCP oficial sin que el host tenga su propio cliente HTTP para esa ruta.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T7</span>Plantillas del desafío Higgsfield</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Manifiestos de las quince familias del desafío, con sus modelos y su coste, listos para instalar por separado: Panorama Stickers, Paint a Plate, H3 Motion, OneShot MV, H3 AudioRetake, Genobi, Splat Edit Engine, Sonder, Max Editor, Blocksfield, Creativefield, ComfyArt, Reshoot 4D, Freefield y Henge.</dd>
+      <dt>Por qué</dt>
+      <dd>Son casos reales, ya validados por la comunidad, y cubren imagen, vídeo, VFX, audio y 3D: el banco de pruebas perfecto para T1–T5.</dd>
+      <dt>Cómo</dt>
+      <dd>Cada una entra como plantilla de la lista curada, no como dependencia: se copia el grafo del repo del autor con su licencia anotada, se le añaden marcadores de entrada, se declaran sus modelos y se marca si requiere GPU alta. Se importan cinco primero (Panorama, Paint a Plate, H3 Motion, OneShot MV y Genobi) y el resto cuando se pidan.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Las cinco primeras se ejecutan desde la galería con modelos descargados y producen su resultado del tipo correcto.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T8</span>Formulario y galería</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Galería de plantillas con muestra, tiempo estimado y requisitos; al elegir una, un formulario generado desde su esquema (texto, número, selección, imagen de entrada, semilla aleatoria) con Ejecutar, y el resultado en la misma tarjeta y en el chat.</dd>
+      <dt>Por qué</dt>
+      <dd>Sin esto, la capa de plantillas solo la usa el bot; con esto, la usa una persona sin saber qué es un nodo.</dd>
+      <dt>Cómo</dt>
+      <dd>Componentes propios de Codync (nada de formularios nativos), animación al abrir, y los mismos campos expuestos como parámetros de la tool del bot. Una plantilla sin formulario válido no se publica.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un usuario elige "Panorama Stickers", sube una foto, ajusta el número de stickers y obtiene el resultado sin salir del chat.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T9</span>Herramientas del bot</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd><code>comfy_list_templates</code>, <code>comfy_describe_template</code>, <code>comfy_run_template</code>, <code>comfy_job_status</code>, <code>comfy_cancel_job</code>, <code>comfy_upload_input</code> y <code>comfy_result</code> (adjunto).</dd>
+      <dt>Por qué</dt>
+      <dd>El bot debe poder descubrir qué puede hacer sin que el prompt lo sepa de memoria, y pedir la plantilla correcta con sus parámetros.</dd>
+      <dt>Cómo</dt>
+      <dd>MCP del host con esquemas derivados de los manifiestos; <code>comfy_run_template</code> devuelve un id de trabajo y el resultado llega como adjunto cuando termina, no bloquea el turno. Si falta un modelo, la respuesta trae la acción de descarga.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot pide "hazme un vídeo corto de esta imagen" y elige la plantilla, la ejecuta y adjunta el mp4.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">T10</span>Pruebas y matriz</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Servidor falso que responde <code>/object_info</code>, <code>/prompt</code>, <code>/ws</code> y <code>/history</code>; pruebas de manifiesto inválido, modelo ausente, cancelación, vídeo y audio; y una prueba real por plantilla de la lista corta.</dd>
+      <dt>Cómo</dt>
+      <dd>Todos los casos automáticos contra el falso; la real solo con la GPU del equipo de pruebas, documentando VRAM y tiempo medidos en el manifiesto.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>La suite pasa sin GPU y las cinco plantillas reales quedan con su estimación medida, no inventada.</dd>
+    </dl>
+  </article>
+
+  <h2>4. Cómo se monta sobre lo que ya hay</h2>
+  <ul>
+    <li><b>Runner y tarjeta:</b> se amplían, no se sustituyen. El trabajo pasa de "uno en curso" a una cola con estados, y la tarjeta gana pestañas Plantillas, Modelos, Trabajos y Ajustes.</li>
+    <li><b>Puente MCP:</b> las tools nuevas viven al lado del puente actual; si T6 decide usar el MCP oficial, el puente propio se adelgaza a lo que falte.</li>
+    <li><b>Adjuntos:</b> se reutiliza el almacén y el visor existentes; solo se añade el tipo y la miniatura.</li>
+    <li><b>Chat:</b> el resultado se adjunta con el mismo mecanismo que una imagen subida por el usuario; nada de rutas.</li>
+    <li><b>Móvil:</b> el estado del trabajo y el resultado viven en el host, así que Android e iOS lo ven sin tocar su lógica; en Android solo se añade el visor de audio y el enlace al navegador para 3D.</li>
+  </ul>
+
+  <h2>5. Orden y aceptación</h2>
+  <ol>
+    <li><b>T1 + T2 + T9 mínimas</b> (4 días): plantilla, preflight y ejecución por nombre desde el bot.</li>
+    <li><b>T4</b> (2-3 días): gestor de modelos con reanudación.</li>
+    <li><b>T3</b> (2 días): progreso real por WebSocket y cancelación visible.</li>
+    <li><b>T5</b> (3 días): vídeo, audio y 3D en el chat.</li>
+    <li><b>T6</b> (1-2 días): evaluación del MCP oficial y limpieza del puente.</li>
+    <li><b>T7 + T8</b> (4-5 días): cinco plantillas reales y formulario/galería.</li>
+    <li><b>T10</b> (2 días): falso servidor y matriz final.</li>
+  </ol>
+  <p class="note">Total: unos 18 días sobre lo ya hecho. La primera entrega útil para el usuario son las tres primeras fases: una plantilla con nombre que se ejecuta desde el chat y devuelve su resultado tipado.</p>
+
+  <h2>6. Trampas y límites</h2>
+  <ul class="warn">
+    <li>Un grafo de plantilla no es código de confianza: se valida contra <code>/object_info</code> y solo se aceptan nodos instalados; nada de ejecutar Python del manifiesto.</li>
+    <li>Los modelos del desafío tienen licencias propias y algunas restringen uso comercial: se anota en el manifiesto y se muestra antes de descargar.</li>
+    <li>VRAM: la estimación es orientativa; si el trabajo falla por memoria, la plantilla ofrece la variante reducida en vez de reintentar igual.</li>
+    <li>Un vídeo grande puede tardar minutos: la cola no bloquea el chat y el botón Cancelar siempre responde.</li>
+    <li>Nada sale de <code>127.0.0.1</code>: ni el editor ni los archivos de salida se exponen a la red.</li>
+  </ul>
+
+  <h2>7. Entrega</h2>
+  <ul>
+    <li>Un commit por ficha, en inglés, con qué y por qué; push a la rama del worktree.</li>
+    <li>Reporte en español con plantillas incluidas, modelos requeridos por plantilla, tiempos y VRAM medidos, cobertura del MCP oficial y lo que quedó fuera.</li>
+    <li>App abierta en Codync Dev con la galería visible, una plantilla ejecutada de principio a fin y su resultado en el chat.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

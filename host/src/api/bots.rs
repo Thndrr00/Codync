@@ -464,6 +464,57 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
             json!({"entry": e})
         }
+        // What the bot would do with a command: the same decision a real request gets, so a rule editor tests rules
+        // without copying their logic. `rules` tests an unsaved list; without it the bot's saved rules. The quick rules
+        // come from `actionRules`/`actionRulesOn` when sent, else from the bot.
+        "testApprovalRule" => {
+            let row =
+                hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            let rules: Vec<crate::agent::approval_rules::ApprovalRule> = match b.get("rules") {
+                Some(list) if !list.is_null() => serde_json::from_value(list.clone())?,
+                _ => row.config.approval_rules.clone(),
+            };
+            crate::agent::approval_rules::validate(&rules)?;
+            // An unsaved quick setting is tried as sent; `actionRulesOn` false keeps it off. Without it, the bot's own.
+            let sent_quick = b.get("actionRules").is_some_and(Value::is_object);
+            let quick: Vec<crate::agent::approval_rules::ApprovalRule> = if sent_quick {
+                if b.get("actionRulesOn").and_then(Value::as_bool).unwrap_or(true) {
+                    crate::agent::approval_rules::quick_rules(&serde_json::from_value(b["actionRules"].clone())?)
+                } else {
+                    Vec::new()
+                }
+            } else if row.config.action_rules_on {
+                crate::agent::approval_rules::quick_rules(&row.config.action_rules)
+            } else {
+                Vec::new()
+            };
+            let command = str_arg(&b, "command")?;
+            let kind = b["kind"].as_str().unwrap_or("execute");
+            let evaluation = crate::agent::approval_rules::evaluate(
+                &rules,
+                &quick,
+                row.config.permission,
+                kind,
+                Some(command),
+                command,
+            );
+            let quick_not_enforced: Vec<Value> = crate::agent::approval_rules::QUICK_UNENFORCED
+                .iter()
+                .map(|(class, reason)| json!({"class": class, "reason": reason}))
+                .collect();
+            json!({"evaluation": evaluation, "quickNotEnforced": quick_not_enforced})
+        }
+        // The rule an "always allow" answer to this card means, to show (and let the person edit) before it is saved.
+        "proposeRule" => {
+            let e = hub.store.entry(str_arg(&b, "entryId")?).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.kind != EntryKind::Permission.as_str() {
+                bail!("That isn't an approval card");
+            }
+            match crate::agent::always_rule::propose(&e.data) {
+                Ok(rule) => json!({"rule": rule}),
+                Err(refusal) => json!({"rule": null, "refusal": refusal, "reason": refusal.reason()}),
+            }
+        }
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
@@ -481,6 +532,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 Some("answered") => bail!("This approval was already answered with another choice"),
                 _ => bail!("This approval is closed: its turn ended or was stopped"),
             }
+            // "Always allow" with a rule: check it, and keep it for the bot before the answer goes out.
+            if let Some(rule) = b.get("rule").filter(|r| r.is_object()) {
+                save_always_rule(hub, &e, option_id.as_deref(), rule)?;
+            }
             if e.data["mcpToolCallId"].is_string() {
                 crate::market::vault::unlock(hub.clone()).await?;
             }
@@ -497,21 +552,37 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id, actor })?;
             json!({})
         }
-        // The person did the step a bot asked for (a CAPTCHA, a login): the card closes and the bot
-        // goes on with what they say they did.
+        // The person picks the step up (a CAPTCHA, a login): the card names who has it and the bot's agent
+        // starts nothing new until it is done.
+        "takeTakeover" => {
+            let entry_id = str_arg(&b, "entryId")?;
+            let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
+            let actor = crate::api::devices::actor(hub, caller);
+            let taken = crate::chat::takeover::taken(&e.data, &actor, crate::store::now_ms())
+                .ok_or_else(|| anyhow!("this takeover request isn't waiting"))?;
+            let reason = e.data["takeoverRequest"]["reason"].as_str().unwrap_or("a step for you");
+            // A card in a group belongs to the bot that asked.
+            let bot = e.data["author"].as_str().unwrap_or(&e.bot_id).to_owned();
+            hub.set_entry(entry_id, &taken);
+            crate::chat::takeover::take(hub, &bot, entry_id, &actor, reason);
+            json!({"entry": hub.store.entry(entry_id)})
+        }
+        // The person did the step a bot asked for (a CAPTCHA, a login): the card closes, the agent is let go
+        // and it goes on with what they say they did.
         "resolveTakeover" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
             let note = b["note"].as_str().unwrap_or_default();
-            let done = crate::chat::takeover::resolved(&e.data, note, crate::store::now_ms())
-                .ok_or_else(|| anyhow!("this takeover request isn't waiting"))?;
+            let actor = crate::api::devices::actor(hub, caller);
+            let done = crate::chat::takeover::resolved(&e.data, note, &actor, crate::store::now_ms())
+                .ok_or_else(|| anyhow!("this takeover request isn't waiting or taken"))?;
+            let bot = e.data["author"].as_str().unwrap_or(&e.bot_id).to_owned();
+            // Let the agent go before the note lands, so the message it posts starts the turn.
+            crate::chat::takeover::release(hub, &bot, entry_id);
+            let row = hub.store.bot(&e.bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
             let note = note.trim();
-            if !note.is_empty() {
-                // The agent goes on with the note, so the card closes only once it has it.
-                let row = hub.store.bot(&e.bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
-                let text = format!("I did it: {note}");
-                crate::chat::messages::post_in_lane(hub, &row.config, Lane::main(&e.bot_id), json!({"text": text}))?;
-            }
+            let text = if note.is_empty() { "I did it.".to_owned() } else { format!("I did it: {note}") };
+            crate::chat::messages::post_in_lane(hub, &row.config, Lane::main(&e.bot_id), json!({"text": text}))?;
             hub.set_entry(entry_id, &done);
             json!({"entry": hub.store.entry(entry_id)})
         }
@@ -552,4 +623,23 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         _ => return Ok(ControlFlow::Continue(b)),
     }))
+}
+
+/// Adds the rule that goes with an "always allow" answer to the card's bot. Only `allow_always` carries one, and a rule
+/// that chains commands or allows what no bot may run is refused (`agent::always_rule`).
+fn save_always_rule(hub: &Hub, card: &crate::store::Entry, option_id: Option<&str>, rule: &Value) -> Result<()> {
+    let chosen_always = card.data["options"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|o| o["optionId"].as_str() == option_id && o["kind"] == "allow_always");
+    if !chosen_always {
+        bail!("A rule is saved only with \"always allow\"");
+    }
+    let rule: crate::agent::approval_rules::ApprovalRule = serde_json::from_value(rule.clone())?;
+    crate::agent::always_rule::check(&rule).map_err(|refusal| anyhow!(refusal.reason()))?;
+    let row = hub.store.bot(&card.bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+    let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
+    hub.update_bot(&json!({"id": card.bot_id, "approvalRules": rules}))?;
+    Ok(())
 }

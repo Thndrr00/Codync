@@ -167,8 +167,16 @@ export class DocumentsStore extends Observable {
     this.graphLoading = true
     this.changed()
     try {
-      const { nodes, edges } = await this.call<{ nodes: DocumentNode[]; edges: DocumentEdge[] }>('documentGraph', { botId: this.botId })
-      this.graph = { nodes: nodes ?? [], edges: edges ?? [] }
+      const nodes: DocumentNode[] = []
+      const edges: DocumentEdge[] = []
+      let after: string | undefined
+      do {
+        const page = await this.call<{ nodes: DocumentNode[]; edges: DocumentEdge[]; next: string | null }>('documentGraph', { botId: this.botId, afterId: after })
+        nodes.push(...(page.nodes ?? []))
+        edges.push(...(page.edges ?? []))
+        after = page.next ?? undefined
+      } while (after)
+      this.graph = { nodes, edges }
       this.error = null
     } catch (error) {
       this.error = message(error)

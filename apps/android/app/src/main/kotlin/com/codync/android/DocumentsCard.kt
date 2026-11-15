@@ -4,21 +4,38 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.codync.android.design.*
 import com.codync.android.core.ComposioApp
 import com.codync.android.core.MarketConnector
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
-private enum class DocumentsTab { Library, Reviews, Activity }
+private enum class DocumentsTab { Library, Reviews, Activity, Graph }
 
 /** A bot's host-backed library and exact-draft review queue. */
 @Composable fun DocumentsCard(botId: String, state: AppState, store: AppStore) {
@@ -33,6 +50,7 @@ private enum class DocumentsTab { Library, Reviews, Activity }
     val bot = state.bots.firstOrNull { it.id == botId }
     val context = LocalContext.current
     LaunchedEffect(model) { model.watch() }
+    LaunchedEffect(tab) { if (tab == DocumentsTab.Graph && model.graphNodes.isEmpty() && !model.graphLoading) model.loadGraph() }
     LaunchedEffect(conversation, state.generation, state.connection::class) {
         conversation?.let { store.loadDocumentConversation(botId, it) }
     }
@@ -40,7 +58,7 @@ private enum class DocumentsTab { Library, Reviews, Activity }
         IconButton("New document", "plus", enabled = !model.busy && !model.saving) { model.create() }
         IconButton("Refresh documents", "arrow.clockwise", enabled = !model.loading) { model.refresh() }
     }) {
-        row { SegmentedChoice(tab, listOf(DocumentsTab.Library to "Library", DocumentsTab.Reviews to "Reviews", DocumentsTab.Activity to "Activity"), { tab = it }) }
+        row { SegmentedChoice(tab, listOf(DocumentsTab.Library to "Library", DocumentsTab.Reviews to "Reviews", DocumentsTab.Activity to "Activity", DocumentsTab.Graph to "Graph"), { tab = it }) }
         model.error?.let { row { Text(it, style = Type.body, color = Palette.danger) } }
         if (model.loading) row { Text("Loading documents…", style = Type.body, color = Palette.secondary) }
         when (tab) {
@@ -90,6 +108,12 @@ private enum class DocumentsTab { Library, Reviews, Activity }
                         Text("${entry.actorKind}: ${entry.actorId} · ${ago(entry.createdAt)}", style = Type.caption, color = Palette.secondary)
                     }
                 }
+            }
+            DocumentsTab.Graph -> {
+                row { LinkButton("Refresh graph", enabled = !model.graphLoading) { model.loadGraph() } }
+                if (model.graphLoading) row { Text("Reading the graph…", style = Type.body, color = Palette.secondary) }
+                if (!model.graphLoading && model.graphNodes.isEmpty()) row { Text("No pages yet.", style = Type.body, color = Palette.secondary) }
+                if (model.graphNodes.isNotEmpty()) row { DocumentGraph(model.graphNodes, model.graphEdges, model::open) }
             }
         }
     }
@@ -222,6 +246,53 @@ private enum class DocumentsTab { Library, Reviews, Activity }
                 if (review.status == "pending" && draft != null) {
                     PrimaryButton("Approve and save", Modifier.fillMaxWidth(), enabled = !model.busy) { model.decide(true) }
                     SecondaryButton("Decline", Modifier.fillMaxWidth(), enabled = !model.busy) { model.decide(false) }
+                }
+            }
+        }
+    }
+}
+
+/** Every page on a circle, with a line for each link that resolves to another page. Tapping one opens it. */
+@Composable private fun DocumentGraph(nodes: List<DocumentNode>, edges: List<DocumentEdge>, open: (String) -> Unit) {
+    val density = LocalDensity.current
+    val line = Palette.border
+    val dot = Palette.accent
+    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = "Links between pages" }) {
+        val size = minOf(maxWidth, 420.dp)
+        val radius = size.value / 2 - 56
+        val center = size.value / 2
+        val points = remember(nodes, size) {
+            nodes.mapIndexed { index, node ->
+                val angle = 2 * PI * index / nodes.size
+                node.id to Offset((center + radius * cos(angle)).toFloat(), (center + radius * sin(angle)).toFloat())
+            }.toMap()
+        }
+        Box(Modifier.size(size)) {
+            Canvas(Modifier.fillMaxSize()) {
+                for (edge in edges) {
+                    val from = points[edge.from] ?: continue
+                    val to = points[edge.to] ?: continue
+                    drawLine(line, from * density.density, to * density.density, 1.dp.toPx())
+                }
+            }
+            for (node in nodes) {
+                val point = points[node.id] ?: continue
+                Column(
+                    Modifier.offset(x = (point.x - 60).dp, y = (point.y - 28).dp)
+                        .width(120.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(role = Role.Button) { open(node.id) }
+                        .semantics(mergeDescendants = true) {}
+                        .padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
+                    Text(
+                        node.title,
+                        style = Type.caption, color = Palette.text, textAlign = TextAlign.Center,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }

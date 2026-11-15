@@ -72,6 +72,8 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var transcript: [CallLine]?
     /// agent: an artifact card, the bot's artifact as published then (the newest version shows).
     public var artifact: ArtifactRef?
+    /// notice: a step only the person can do (`request_handoff`).
+    public var takeoverRequest: TakeoverRequest?
 
     public init(text: String? = nil, status: String? = nil, clientNonce: String? = nil) {
         self.text = text

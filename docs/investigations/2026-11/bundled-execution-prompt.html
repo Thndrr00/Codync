@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt de ejecución — n8n y ComfyUI empaquetados</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f6f2; --ink:#1a1916; --soft:#5e594f; --rule:#e0dbd1; --mark:#4a5d23; --ok:#2f6b46; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121110; --ink:#ece9e2; --soft:#a7a198; --rule:#2d2a26; --mark:#c2d98a; --ok:#8fd3ab; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 880px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.84em/1.5 ui-monospace,Consolas,monospace; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid #9a4a1c; padding-left:14px; }
+  .fase { border:1px solid var(--rule); border-radius:3px; padding:14px 16px; margin:12px 0; }
+  .fase h3 { margin-top:0; }
+  .small { font-size:14px; color:var(--soft); }
+  table { border-collapse: collapse; width:100%; font-size:15px; }
+  td, th { border-bottom:1px solid var(--rule); padding:6px 8px; text-align:left; vertical-align:top; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt de ejecución · entrega final</p>
+  <h1>Empaquetar n8n y ComfyUI y abrirlos directo</h1>
+  <p class="lede">Encargo para ejecutar el plan ya escrito: los dos dentro del instalador, arranque automático, editor directo, sin login ni ajustes. Este documento se entrega al agente que lo hará.</p>
+  <div class="bar"><button id="copy">Copiar el prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Lee primero</h2>
+  <ul>
+    <li><code>docs/plans/bundled-tools-production.md</code>: alcance, fases, aceptación y trampas.</li>
+    <li><code>host/src/n8n.rs</code>, <code>apps/desktop/src/main/n8n.ts</code>, <code>views/n8n/</code> y <code>settings/N8nSettings.tsx</code>: lo que se ajusta.</li>
+    <li><code>AGENTS.md</code> y <code>docs/guides/clean-code.md</code>: convenciones.</li>
+  </ul>
+  <p class="note">Resultado esperado: instalar Codync en un Windows limpio y que n8n y ComfyUI queden disponibles, arrancados y con su editor abierto, sin que el usuario configure nada.</p>
+
+  <h2>2. Reglas</h2>
+  <ul>
+    <li>Solo agregar; rail, lienzo, uso, cuentas, WhatsApp, perfiles, marketplace y traducciones no cambian.</li>
+    <li>Una rama por fase, en su worktree; commits pequeños en inglés y push al terminar cada fase.</li>
+    <li>El host manda; los clientes dibujan. Nada de lógica en el renderer.</li>
+    <li>Licencias fuera de alcance: no se documentan ni se bloquean por ellas.</li>
+    <li>Cada fase se prueba en la app instalada antes de pasar a la siguiente.</li>
+  </ul>
+
+  <h2>3. Trabajo</h2>
+
+  <article class="fase">
+    <h3>Fase 1 · Módulo compartido</h3>
+    <p>Crear <code>host/src/tools/</code> con:</p>
+    <ul>
+      <li><code>runner.rs</code>: lanza un proceso desde una ruta de <code>resources</code>, con log, puerto libre, estado y parada.</li>
+      <li><code>health.rs</code>: sonda por herramienta (n8n <code>/healthz</code>, ComfyUI <code>/system_stats</code>) con timeout y reintentos.</li>
+      <li><code>lifecycle.rs</code>: arranque con el host, parada al salir y al actualizar.</li>
+      <li><code>apps/desktop/src/main/tools-window.ts</code>: ventana con página de espera, origen permitido y salto al editor.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> una herramienta de prueba con un servidor falso arranca, reporta salud y se para sin huérfanos.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 2 · n8n empaquetado</h3>
+    <ul>
+      <li>Compilar el monorepo a <code>build/native/n8n</code> con Node en <code>build/native/node</code>.</li>
+      <li>Declarar ambos en <code>extraResources</code> de <code>electron-builder.yml</code> y del builder dev, fuera del asar.</li>
+      <li>Reescribir <code>n8n.rs</code> para usar el runner y la ruta empaquetada; conservar los ajustes actuales.</li>
+      <li>Sembrar propietario en <code>userData/n8n</code> y obtener la cookie antes de cargar, con reintento y mensaje si falla.</li>
+      <li>Puerto libre y salud antes de abrir; errores con Ver log y Reintentar.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> instalación limpia sin Node en el equipo; el editor abre directo, sin login.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 3 · Datos y ciclo de vida</h3>
+    <ul>
+      <li>Base y archivos en <code>userData/n8n</code>; respaldo <code>.zip</code> antes de actualizar y vuelta atrás si no arranca.</li>
+      <li>Desinstalar ofrece conservar datos; ningún proceso queda vivo al cerrar.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> actualizar conserva la base; cerrar la app no deja procesos; desinstalar pregunta.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 4 · ComfyUI empaquetado</h3>
+    <ul>
+      <li>Descargar el portable fijado en CI, descomprimir a <code>build/native/comfy</code>; solo Windows x64 en esta entrega.</li>
+      <li><code>host/src/comfy.rs</code> sobre el runner, puerto 8188 y <code>main.py --listen 127.0.0.1</code>.</li>
+      <li>Ventana, rail y tarjeta en Extensiones › Apps con Abrir, Parar, Modelos.</li>
+      <li>Comprobación de espacio y GPU; CPU como respaldo avisado.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> el editor de ComfyUI abre directo desde el rail y desde la tarjeta.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 5 · Modelos y trabajos</h3>
+    <ul>
+      <li><code>userData/comfy/models</code> enlazada; si falta el modelo, Abrir carpeta y enlace de descarga.</li>
+      <li>Cola de un trabajo, tiempo máximo y cancelación con <code>/interrupt</code>.</li>
+      <li>Puente MCP <code>comfyui</code> con listar, ejecutar, cancelar y subir imagen; resultados como adjuntos.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> un bot genera una imagen que llega al chat y se puede cancelar a mitad.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 6 · Matriz</h3>
+    <ul>
+      <li>Windows limpio sin Node ni Python, puertos 5678/8188 ocupados, equipo sin GPU y equipo AMD.</li>
+      <li>Cerrar con ambos corriendo y reiniciar el equipo.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> los cuatro escenarios pasan o quedan documentados con su límite.</p>
+  </article>
+
+  <h2>4. Trampas conocidas</h2>
+  <ul class="warn">
+    <li>“old host did not exit”: mata hosts antes de instalar y usa reintento.</li>
+    <li>La cookie de n8n puede no aparecer: reintenta la sesión y no cargues el login.</li>
+    <li>ComfyUI no tiene auth: escucha solo en <code>127.0.0.1</code>.</li>
+    <li>Rutas largas de Windows: acorta nombres y no metas estos binarios en el asar.</li>
+    <li>Un trabajo de ComfyUI con poca VRAM: limita y cancela, no dejes la cola crecer.</li>
+  </ul>
+
+  <h2>5. Comandos</h2>
+  <pre>cd apps/desktop
+npm run dist:win:dev
+.\dist\codync-dev-windows-x64.exe /S
+Get-Process Codync Dev, codync-host, codync-dev-hostw -EA SilentlyContinue | Stop-Process -Force</pre>
+  <p>Abre con un puerto de depuración nuevo por reinicio y prueba desde la app instalada.</p>
+
+  <h2>6. Entrega</h2>
+  <ul>
+    <li>Un commit por fase, en inglés, con qué y por qué.</li>
+    <li>Validación: <code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>, <code>npm run typecheck</code>, <code>npm test</code>, <code>./gradlew :core:test :app:testDebugUnitTest</code>.</li>
+    <li>Reporte en español: fases, pruebas, límites y lo que quedó fuera.</li>
+    <li>Deja la app abierta con ambos editores accesibles.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

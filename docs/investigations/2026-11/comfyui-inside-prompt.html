@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt directo — ComfyUI dentro del instalador</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f6f2; --ink:#1a1916; --soft:#5e594f; --rule:#e0dbd1; --mark:#4a5d23; --ok:#2f6b46; --stop:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#121110; --ink:#ece9e2; --soft:#a7a198; --rule:#2d2a26; --mark:#c2d98a; --ok:#8fd3ab; --stop:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 920px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:64ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.84em/1.5 ui-monospace,Consolas,monospace; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--stop); padding-left:14px; }
+  .fase { border:1px solid var(--rule); border-radius:3px; padding:14px 16px; margin:12px 0; }
+  .fase h3 { margin-top:0; }
+  .kaisuu { border-left:3px solid var(--stop); background:color-mix(in srgb,var(--stop) 7%,transparent); padding:14px 16px; margin:14px 0; }
+  table { border-collapse: collapse; width:100%; font-size:15px; }
+  td, th { border-bottom:1px solid var(--rule); padding:6px 8px; text-align:left; vertical-align:top; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt de ejecución directo · ComfyUI embutido · en un checkout compartido con otros agentes</p>
+  <h1>ComfyUI dentro del instalador de Codync</h1>
+  <p class="lede">Encargo directo: ComfyUI baja con Codync desde su repositorio oficial, se usa su código en cada fase con detalle de qué se toma y cuándo, y todo queda integrado a código sin tocar el checkout de trabajo compartido. No se lleva a <code>dev</code> hasta que tú lo autorices.</p>
+  <div class="bar"><button id="copy">Copiar el prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Situación del checkout: cuidado con los demás</h2>
+  <p class="warn">Nada se deduce: rutas y nombres exactos de dónde se trabaja.</p>
+  <ul>
+    <li><strong>Checkout del que parte el encargo:</strong> <code>C:\Users\Edwin Villeda\Documents\Codync</code>, rama <code>feat/openbot-marketplace</code> (ahí viven todas las integraciones ya hechas, incluida la de n8n; el remoto no tiene rama <code>dev</code>). Ahí mismo corren las integraciones que otros agentes están haciendo; por eso la prudencia de abajo.</li>
+    <li><strong>App de prueba objetivo:</strong> <strong>Codync Dev</strong> (variante de desarrollo), siempre. Se instala desde el instalador dev de ese checkout: <code>apps\desktop\dist\codync-dev-windows-x64.exe /S</code> tras <code>npm run dist:win:dev</code>. Su host es <code>codync-dev-hostw</code>; nunca apuntar al <code>host\target\debug\codync-host</code> de otro checkout ni a la app firmada de producción.</li>
+    <li><strong>El código se escribe en un worktree:</strong> se crea desde ese checkout con <code>git worktree add ..\comfy-bundled -b feat/comfy-bundled feat/openbot-marketplace</code>. En el worktree la app de prueba sigue siendo Codync Dev: el sandbox de dev corre junto al Codync Dev del checkout principal, misma variante, no otra.</li>
+    <li>Antes de editar cualquier archivo compartido (<code>package.json</code>, <code>package-lock.json</code>, <code>electron-builder.yml</code>, <code>host\Cargo.toml</code>), revisa <code>git status</code> de ese archivo tanto en el worktree como en <code>C:\Users\Edwin Villeda\Documents\Codync</code>; si hay cambios de otro agente, no los rompas: pregunta antes.</li>
+    <li>Antes de correr: mata primero <strong>Codync Dev</strong>, <strong>codync-dev-hostw</strong> y, solo si queda de tu prueba previa, <strong>codync-host</strong>; reinstala sobre Dev y usa un puerto de depuración nuevo cada vez que reinicies la app. Si el instalador pega con "old host did not exit", reintenta tras matar los procesos.</li>
+    <li>Está prohibido: hacerlo en otro checkout, apuntar a una instalación de producción (<code>dist:*:main</code>) o probar en la variante de tienda.</li>
+    <li>Fija el punto de partida el día en que empieces: rama <code>feat/comfy-bundled</code> en el worktree, desde <code>feat/openbot-marketplace</code> del día de inicio. No hagas rebase durante el trabajo.</li>
+    <li>La creación del worktree, <code>pwd</code> y <code>git branch --show-current</code> se muestran al usuario en tu primer mensaje de trabajo.</li>
+    <li>Solo se agregan archivos nuevos y, cuando sea inevitable tocar uno que ya existe, el menor cambio posible; la lista exacta está en la fase 2.</li>
+    <li>Nada de comandos de todo el árbol en el principal: sin <code>xcodegen</code>, sin <code>git stash</code>, sin <code>git reset</code>, sin limpiar, sin cambiar de rama. El worktree es independiente y tiene su propio build dentro.</li>
+    <li>Commits con Conventional Commits en inglés y cortos; stage solo tus hunks. Licencias fuera de alcance.</li>
+    <li><strong>Puerta dura:</strong> el código queda integrado en el worktree con la rama empujada a <code>origin/feat/comfy-bundled</code>; no pasa a <code>C:\Users\Edwin Villeda\Documents\Codync</code> ni a <code>feat/openbot-marketplace</code> hasta que el usuario confirme con "llévalo a dev". Solo entonces: rebase limpio sobre la rama de integración de ese checkout, merge con permiso, y prueba completa end-to-end en el Codync Dev de ese mismo checkout: mismo <code>npm run dist:win:dev</code>, misma instalación <code>/S</code>.</li>
+  </ul>
+
+  <h2>2. Fuentes: qué se baja y de dónde</h2>
+  <p>Toda pieza de ComfyUI viene de su repositorio oficial y se fija por versión, no por "última":</p>
+  <table>
+    <thead><tr><th>Pieza</th><th>Fuente</th><th>Cuándo se usa</th></tr></thead>
+    <tbody>
+      <tr><td>Portable nvidia Windows</td><td>Release <code>ComfyUI_windows_portable_nvidia.7z</code> del repo <code>Comfy-Org/ComfyUI</code>, versión fijada en un solo archivo de configuración</td><td>Fase 2: binario base en <code>build/native/comfy</code></td></tr>
+      <tr><td>Código del backend</td><td>Lo mismo del repo, <code>main.py</code>, <code>server.py</code>, <code>nodes.py</code>, <code>execution.py</code>, <code>comfy/…</code></td><td>Fase 2 (runner lee su arranque), fase 3 (modo multi usuario), fase 5 (API de cola)</td></tr>
+      <tr><td>Esquema del subclasser de modelos</td><td><code>extra_model_paths.yaml.example</code> del mismo repo</td><td>Fase 4: yaml generado en <code>userData/comfy</code> que enlaza a la carpeta del usuario</td></tr>
+      <tr><td>Flujo de ejemplo</td><td>El workflow por defecto que el repo guarda en <code>user/default/workflows</code></td><td>Fase 5: primer test de generación</td></tr>
+      <tr><td>API HTTP</td><td>Definiciones de endpoints en <code>server.py</code> (<code>/system_stats</code>, <code>/prompt</code>, <code>/queue</code>, <code>/interrupt</code>, <code>/history</code>, <code>/view</code>, usuarios)</td><td>Fase 2 salud, fase 3 siembra de usuario, fase 5 cola y adjuntos</td></tr>
+    </tbody>
+  </table>
+  <p>Cada vez que copies un archivo o un fragmento del repo a Codync, registra de dónde en un comentario de dos líneas al inicio del archivo y dif sobre el original en <code>docs/</code>. La versión de ComfyUI es un solo número en un solo lugar, para actualizarla en el futuro.</p>
+
+  <h2>3. Lee primero</h2>
+  <ul>
+    <li><code>docs/plans/bundled-tools-production.md</code> y <code>docs/plans/design-inside-codync.md</code>: patrones ya decididos.</li>
+    <li><code>host/src/tools/</code> si ya existe (n8n pudo ir primero); si no, la fase 1 lo crea tal cual está escrito ahí.</li>
+    <li><code>host/src/n8n.rs</code>, <code>apps/desktop/src/main/n8n.ts</code> y <code>apps/desktop/src/main/tools-window</code>: referencia del patrón ventana.</li>
+    <li><code>AGENTS.md</code>, <code>docs/guides/clean-code.md</code>, <code>docs/architecture/overview.md</code>.</li>
+  </ul>
+
+  <h2>4. Trabajo por fases</h2>
+
+  <article class="fase">
+    <h3>Fase 1 · Runner compartido (solo si no existe)</h3>
+    <p>Sin código de ComfyUI todavía. Crear en <code>host/src/tools/</code>:</p>
+    <ul>
+      <li><code>runner.rs</code>: proceso hijo desde <code>resources</code>, <code>current_dir</code>, entorno acotado, log rotado, puerto libre y estado <code>stopped/starting/running/error</code> por pieza.</li>
+      <li><code>health.rs</code>: sonda con timeout y reintento; para ComfyUI, <code>GET /system_stats</code>.</li>
+      <li><code>lifecycle.rs</code>: arranque con el host si estaba activo, parada ordenada al salir y al actualizar, sin huérfanos: Job Object o <code>taskkill /T</code> en Windows, no solo el PID.</li>
+      <li><code>apps/desktop/src/main/tools-window.ts</code>: ventana con página de espera, origen local, salto al editor cuando responde, Ver log y Reintentar.</li>
+      <li>Punto de registro único: <code>host/src/tools/mod.rs</code> declara motores; agrega ComfyUI como entrada nueva, sin tocar la de n8n.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> motor de prueba con un servidor falso: arranca, salud, parada sin huérfanos.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 2 · Compilación y uso de código del repo</h3>
+    <p>Aquí se baja todo lo necesario del repo oficial y se documenta pieza por pieza:</p>
+    <ul>
+      <li>En CI, clonar <code>Comfy-Org/ComfyUI</code> al commit fijado y construir el portable con su propia <code>python_embeded</code>; guardar el 7z descomprimido en <code>build/native/comfy</code>. Todo el <code>requirements.txt</code> del repo se instala con su pip embebido, tamaños y firma revisada en CI.</li>
+      <li>Del backend se usa <strong>sin tocarlo</strong>: se arranca tal cual (<code>python main.py --listen 127.0.0.1 --port &lt;libre&gt;</code>). Copiar código del repo a Codync solo si falta algo que la API no expone; en ese caso, portado el mínimo y anotado el origen.</li>
+      <li>Archivos que tocas en Codync y solo estos, con el menor cambio posible: <code>electron-builder.yml</code> (extraResources), <code>host/src/tools/{mod,runner,lifecycle}.rs</code> (entrada nueva), <code>apps/desktop/src/main</code> (ruta de la ventana) y <code>apps/desktop/src/renderer</code> (tarjeta en Extensiones › Apps e ítem del rail). Nada más si puede evitarse; si tocas algo más, dilo en el reporte.</li>
+      <li>Puerto: 8188 por defecto, siguiente libre si está tomado; dicho en log y en la tarjeta.</li>
+      <li>Salud antes de abrir la ventana; página de espera con las últimas líneas del log.</li>
+      <li>Tarjeta: Abrir, Parar, Log, Modelos, espacio usado, versión de ComfyUI embutida.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> instalar en Windows limpio sin Python ni Git y abrir el editor desde el rail, sin terminal.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 3 · Login y sesión idénticos a n8n</h3>
+    <p>El mismo patrón que ya funciona en <code>host/src/n8n.rs</code>, aplicado a ComfyUI: el usuario jamás ve un login y la sesión se consigue por código antes de abrir la ventana.</p>
+    <ul>
+      <li>Se activa el modo multi usuario de ComfyUI (confirmado contra el <code>server.py</code> de la versión fijada; si cambia, se usa lo que esa versión documente). Sin sembrar usuario, el frontend queda esperando que alguien pulse en "sign in": eso está prohibido.</li>
+      <li><strong>Siembra:</strong> en el primer arranque el host crea el usuario local automáticamente por la API de usuarios del servidor (<code>/api/users</code> en la versión fijada) con nombre fijo <code>local@codync</code>, y guarda el token en el vault como el propietario de n8n.</li>
+      <li><strong>Sesión en cada arranque:</strong> antes de que la ventana cargue el editor, el host recupera el token del vault y lo aplica a la sesión, cookie o cabecera, exactamente como n8n obtiene su cookie: se consigue antes de cargar y con reintento, jamás mostrando la pantalla de login.</li>
+      <li><strong>Reintentos:</strong> hasta cuatro intentos de sesión antes de fallar; el error muestra Ver log y Reintentar, nunca el login del editor.</li>
+      <li>El directorio de usuario de ComfyUI se apunta a <code>userData/comfy/user</code> con <code>--user-directory</code>, para que sus ajustes sobrevivan a actualizar y desinstalar.</li>
+      <li>Si el usuario tiene su propia instancia de ComfyUI aparte, no se toca: la de Codync llega con el usuario ya sembrado.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> cerrar y abrir la app tres veces: nunca aparece una pantalla de login o de alta; los ajustes guardados en el editor persisten de sesión en sesión.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 4 · Modelos y datos</h3>
+    <ul>
+      <li><code>extra_model_paths.yaml</code> generado en <code>userData/comfy</code>, a partir del <code>.yaml.example</code> del repo, que enlaza <code>userData/comfy/models</code>; se arranca con <code>--extra-model-paths-config</code>.</li>
+      <li>Modelos y <code>custom_nodes</code> en <code>userData</code>: sobreviven a actualizar y desinstalar; el motor de <code>resources</code> se reemplaza entero.</li>
+      <li>Checkpoint de un flujo ausente: mensaje con Abrir carpeta y enlace de descarga; el resto de la app sigue.</li>
+      <li>Check de espacio antes del primer arranque; GPU: <code>nvidia-smi</code>; AMD y CPU corren con aviso de lentitud, no como error.</li>
+      <li>Desinstalar ofrece conservar datos; des-marcar si el usuario quiere todo fuera.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> un modelo bajado sigue tras actualizar; sin GPU la app avisa y no se rompe.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 5 · Cola, trabajos y puente</h3>
+    <ul>
+      <li>Cola de un trabajo por vez con <code>POST /prompt</code>; seguimiento por <code>GET /queue</code> y <code>/history</code>; cancelación con <code>POST /interrupt</code>.</li>
+      <li>Estado en la tarjeta: en cola, corriendo, cancelado, error, con miniatura al terminar; resultado por <code>GET /view</code> y adjunto al host como imagen en el chat del bot.</li>
+      <li>MCP <code>comfyui</code> en el host: listar modelos y nodos, ejecutar flujo JSON, subir imagen de entrada y cancelar. Los nombres de nodos se validan contra <code>nodes.py</code> del repo para dar un buen mensaje de error.</li>
+      <li>Un bot lo usa solo si el dueño activa la herramienta en su editor; nada de generación sin pedir.</li>
+      <li>Flujo de ejemplo del repo como primer caso de prueba; su resultado llega al chat como adjunto.</li>
+      <li>El camino del móvil es gratis porque el trabajo lo hace el host: en Android no se toca ningún archivo en este encargo y el bot puede cancelar desde el chat del teléfono.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> un bot genera una imagen de ejemplo que llega como adjunto, y se cancela a mitad desde móvil o escritorio.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 6 · Matriz y cierre</h3>
+    <ul>
+      <li>Windows limpio; 8188 ocupado; sin GPU; equipo AMD; ComfyUI del usuario instalado aparte a la vez (no debe chocar).</li>
+      <li>Cerrar la app con ComfyUI vivo: nada queda de Python. Reinicio del equipo: vuelve si estaba activo.</li>
+      <li>Actualizar Codync conservando modelos; desinstalar con y sin conservar datos.</li>
+      <li>Validación: <code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>, <code>npm run typecheck</code>, <code>npm test</code>; Gradle solo si tocaste Android (no hace falta en este encargo).</li>
+    </ul>
+    <p><strong>Aceptación:</strong> todos los escenarios pasan o quedan documentados con su límite.</p>
+  </article>
+
+  <h2>5. Puerta: no avances hasta aquí</h2>
+  <div class="kaisuu">
+    <p><strong>Terminaste la integración a código: paras aquí.</strong> No hagas merge, no rebase, no muevas nada a <code>dev</code>, no hagas release ni bump de versión. Entrega al usuario:</p>
+    <ul>
+      <li>Reporte en español: qué se tomó de qué repo y commit, archivos tocados en Codync y qué exactamente tocó cada uno, fases pasadas y qué no corrió.</li>
+      <li>El build de prueba abierto en el worktree, con el editor de ComfyUI accesible desde el rail y una imagen generada que llega como adjunto al chat.</li>
+      <li>Tu rama empujada a <code>origin/feat/comfy-bundled</code> y lista para revisión.</li>
+    </ul>
+    <p>Solo cuando el usuario diga "llévalo a dev": rebase limpio sobre <code>dev</code> sin aplastar lo que otro agente dejó ahí, y ahí sí la prueba completa end-to-end en la app de dev, repitiendo las pruebas que ya corrieron en tu worktree.</p>
+  </div>
+
+  <h2>6. Trampas conocidas</h2>
+  <ul class="warn">
+    <li>ComfyUI no tiene auth: escucha solo <code>127.0.0.1</code>, jamás fuera de localhost.</li>
+    <li>Rutas largas y con espacios rompen el portable: acortar y fuera del asar.</li>
+    <li>En CPU el arranque tarda: página de espera, no abrir a medio arrancar.</li>
+    <li>El firewall puede preguntar si algo sale de localhost: si ocurre, anótalo y documéntalo en el reporte.</li>
+    <li>Matar solo el PID deja torch vivo: Job Object o <code>taskkill /T</code>.</li>
+    <li>Puerto de depuración de Electron: uno nuevo por reinicio.</li>
+    <li>Otro agente movió <code>package.json</code> a mitad de tu fase: rebase solo con permiso, nunca a ciegas.</li>
+  </ul>
+
+  <h2>7. Comandos</h2>
+  <pre>git worktree add ..\comfy-bundled -b feat/comfy-bundled origin/dev
+cd ..\comfy-bundled
+cd host; cargo build; cargo test
+cd ..\apps\desktop; npm ci; npm run dist:win:dev
+.\dist\codync-dev-windows-x64.exe /S</pre>
+  <p>Toda la prueba desde el worktree; nada de lo del checkout principal.</p>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

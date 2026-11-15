@@ -6,6 +6,18 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.51.0
+
+### zh-Hant
+- 接管機器人的請求:由你接手,機器人會等待,完成後附註交還。
+- 查看機器人發布過的檔案的每個版本。
+- 以圖譜查看機器人頁面之間的連結。
+
+### en-US
+- Take over a bot's request: you take it, the bot waits, and you hand it back with a note.
+- See every version of a file a bot has published.
+- See the links between a bot's pages as a graph.
+
 ## 2.50.0
 
 ### zh-Hant

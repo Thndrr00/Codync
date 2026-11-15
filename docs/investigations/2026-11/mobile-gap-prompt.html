@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Android — todo OpenBot Mobile en Codync</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f5f7f3; --ink:#171b16; --soft:#586156; --rule:#d8ded3; --mark:#2f6b2f; --ok:#2c6b47; --no:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#0f130f; --ink:#e8ece5; --soft:#a1aa9f; --rule:#283126; --mark:#a6d68f; --ok:#8fd3ab; --no:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 880px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.13; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .exists { color:var(--ok); }
+  .ios { border-left-color:var(--no); }
+  .ios dt { color:var(--no); }
+  .tag { font:11px/1 ui-monospace,monospace; color:var(--soft); border:1px solid var(--rule); padding:1px 5px; border-radius:2px; }
+  .note { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt Android · inventario completo · fuente: changelog móvil 1.0–1.4.7</p>
+  <h1>Todo OpenBot Mobile en la app Android de Codync</h1>
+  <p class="lede">Dos listas: lo que ya existe y hay que conservar, y lo que falta por traer. Lo que en OpenBot es solo de iOS lleva su adaptación concreta a Android; nunca se copia una solución de iPhone tal cual.</p>
+  <div class="bar"><button id="copy">Copiar este prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>0. Principios</h2>
+  <ul>
+    <li><strong>Solo Android.</strong> Nada de suponer iOS; si una función nació en iOS, se define su equivalente Android.</li>
+    <li><strong>Solo agregar.</strong> Todo lo que ya funciona se conserva; lo nuevo se suma. Ninguna ficha autoriza a reescribir una pantalla existente: se extiende.</li>
+    <li><strong>Reutilizar antes de escribir.</strong> Primero el código de Codync Android, después el de OpenBot Mobile, después el host. Ver la sección 2.</li>
+    <li>El host manda; el móvil dibuja y envía intenciones.</li>
+    <li>Componentes propios de Codync, animación en cada apertura, sin controles nativos salvo excepciones documentadas.</li>
+    <li>Fuente: <code>C:\Users\Edwin Villeda\Documents\openbot-nightly\apps\mobile</code> (repo oficial 0.64.0, móvil 1.4.7).</li>
+  </ul>
+
+  <h2>1. Ya existe en Codync Android <span class="exists">mantener</span></h2>
+  <ul>
+    <li>Chats de agente y de canal, adjuntos, reacciones, respuestas, cola de mensajes y dictado.</li>
+    <li>Voz: conversación y lectura con el motor del teléfono.</li>
+    <li>Push, notificaciones por agente, widget y acceso directo.</li>
+    <li>Marketplace con apps, agentes, habilidades y grupos; CLIs; cuentas por agente con correo.</li>
+    <li>Perfiles de navegador por bot, borrar mensajes, color de chat, WhatsApp con QR y bot.</li>
+    <li>Uso real, n8n, rail, lienzo con rutinas manuales y ajustes.</li>
+    <li>Traducciones, RTL base y estilos compartidos.</li>
+  </ul>
+  <p class="note">Antes de tocar una pantalla, se revisa esta lista: nada de aquí se reescribe ni se sustituye.</p>
+
+  <h2>2. Reutilización de código <span class="exists">aprovechar</span></h2>
+  <p>OpenBot Mobile es React Native sobre Expo y Codync Android es Kotlin con Compose, así que no se copia la interfaz; sí se copia todo lo que no depende de React. Antes de escribir una línea, se busca en este orden y se anota de dónde salió:</p>
+  <ol>
+    <li>Codync Android: si ya hay un componente, store o método del host, se usa ese.</li>
+    <li>OpenBot Mobile: se copia el código que no sea de interfaz y se adapta el paquete y las rutas.</li>
+    <li>Host de Codync: si falta un dato o una acción, se agrega ahí un método y el móvil solo lo llama.</li>
+  </ol>
+
+  <h3>Se copia y se adapta</h3>
+  <ul>
+    <li>Módulos nativos de Android, ya en Kotlin: <code>modules/android-notifications</code> (servicio FCM, <code>AgentNotificationContent.kt</code>, <code>SealedNotification.kt</code>), <code>modules/app-lock</code>, <code>modules/composer-paste</code>, <code>modules/quick-actions</code>, <code>modules/share-files</code> y <code>modules/speech/SpeechCapture.kt</code>. Se quita el envoltorio de Expo y quedan como clases y servicios del proyecto; los de <code>share-extension</code> y <code>live-activity</code> sirven de referencia aunque sean de iOS.</li>
+    <li>Recursos: <code>assets/sounds</code>, <code>assets/icons</code> y las fuentes de <code>assets/fonts/inter</code>, comparando antes con las que ya usa Codync para no duplicar pesos.</li>
+    <li>Textos y copy en español e inglés: se reutilizan palabra por palabra salvo que nombren algo propio de OpenBot.</li>
+    <li>Formas de datos del backend: los JSON de agentes, hilos, mensajes, workflows y marketplace se traducen a los tipos del host Rust sin cambiar nombres de campo.</li>
+    <li>Mapa de <code>src/features/*</code>: cada carpeta dice qué pantallas, estados y acciones necesita una función. Se usa como lista de comprobación, no como código a portar.</li>
+    <li>Consultas y esquemas de SQLite del backend: se pasan a las migraciones del host.</li>
+  </ul>
+
+  <h3>No se copia, se reescribe</h3>
+  <ul>
+    <li>Todo <code>src/app/**</code> y <code>src/features/**/*.tsx</code>: rutas de Expo Router y vistas React pasan a <code>NavHost</code> y composables.</li>
+    <li><code>src/shared/lib</code> y <code>src/shims</code> cuando llaman a APIs de Expo.</li>
+    <li><code>app.json</code>, <code>eas.json</code>, plugins de configuración y dependencias de <code>package.json</code>.</li>
+    <li>Cualquier archivo <code>*.web.tsx</code> y las variantes <code>Platform.OS</code>: la rama iOS se traduce, no se arrastra.</li>
+  </ul>
+  <p class="note">Las licencias quedan fuera: se copia sin trámite y se deja el origen en un comentario de una línea cuando el archivo venga de OpenBot.</p>
+
+  <h2>3. Falta por traer</h2>
+
+  <article class="ficha">
+    <h3><span class="num">M1</span>Workflows en el teléfono</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Editor: nombre, disparador, añadir, mover, duplicar y borrar pasos.</li>
+        <li>GitHub: repo, evento, etiquetas, filtros y acción; últimos eventos y “ejecutar con el último”. <span class="tag">1.4.6</span></li>
+        <li>Slack y Telegram para dueños y admins; ajustes de Discord. <span class="tag">1.4.7</span></li>
+        <li>Corrida por paso y suelta, Stop por paso, versiones y hacer una actual; fijar en el rail.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un workflow con disparador de GitHub se edita, ejecuta y detiene desde el móvil.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M2</span>Hilos completos</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Menú del agente con chat/hilo, nuevo hilo, todos y su info; punto de no leído por hilo.</li>
+        <li>Adjuntos, renombrar, archivar, restaurar y borrar.</li>
+        <li>“Branch from here” y “Branched from…” con salto al origen. <span class="tag">1.4.6</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Se crea, adjunta, ramifica y archiva un hilo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M3</span>Acciones de mensaje</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Borrar con permisos y marcar no leído; línea NUEVO con el color del agente. <span class="tag">1.4.7</span></li>
+        <li>Enviar a un canal desde el menú.</li>
+        <li>Leer en voz alta con velocidad; parar al cambiar de mensaje.</li>
+        <li>Pilas de imágenes con visor y mosaico; SVG como imagen; MP4.</li>
+        <li>Seleccionar texto y citar también los propios al deslizar.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Borrar, no leído, enviar a canal y lectura con velocidad funcionan sin romper reacciones ni citas.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M4</span>Voz ampliada</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Lectura local (Supertonic 3) o ElevenLabs con clave, con muestras y borrado. <span class="tag">1.4.3</span></li>
+        <li>Reconocimiento Parakeet v3 (670 MB, 25 idiomas) o Scribe, descargable.</li>
+        <li>Pausa antes de enviar (1–10 s) y velocidad. <span class="tag">1.4.7</span></li>
+        <li>Enviar con la caja vacía inicia y termina la conversación.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Se elige motor, se descarga, se ajusta la pausa y una conversación completa se interrumpe bien.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M5</span>Ajustes de agente en servidor</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Avanzado: hilos paralelos, arranca nuevos chats, perfil de navegador, respaldos, carpetas y exclusiones, plan antes de tareas largas, compactar. <span class="tag">1.4.5/1.4.6</span></li>
+        <li>Editar instrucciones con aviso de cambio del agente.</li>
+        <li>Fast mode y límite por modelo en Runtime. <span class="tag">1.4.6/1.4.7</span></li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un dueño cambia hilos paralelos, perfil y respaldos desde el móvil.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M6</span>Servidor desde el móvil</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Proveedores: cuentas múltiples, Kimi y Hermes, personalizados (Ollama, LM Studio, compatible OpenAI), registro ACP y agentes ACP propios. <span class="tag">1.4.5/1.4.6</span></li>
+        <li>Vault: logins, tarjetas, contactos, CSV y claves; la clave nunca se muestra. <span class="tag">1.4.3</span></li>
+        <li>Conectores de servidor (Bitwarden, Proton Pass, WhatsApp) y MCP propios.</li>
+        <li>Auditoría, rotación de clave con firma doble, importar agentes y transferir servidor. <span class="tag">1.4.5/1.4.6</span></li>
+        <li>Crear y borrar servidores locales; carpetas y mover chats.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Se crea un proveedor personalizado, se rota la clave y se importa un agente.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M7</span>Marketplace y conectores</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Apps: Higgsfield, TickTick, Coinbase, Robinhood, RevenueCat, ClickUp, Proton Pass, Trello, Neon, Prisma, Netlify, Railway, Atlassian, Todoist, Hugging Face. <span class="tag">1.4.3–1.4.7</span></li>
+        <li>Conectores del servidor bajo Apps con estado y MCP; “Cargar más” en listas filtradas.</li>
+        <li>Hermes con Download.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Cada app se instala con su sesión y aparece con estado; la lista filtrada pagina.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M8</span>Interfaz</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Árabe y hebreo con espejo y RTL por párrafo; código LTR. <span class="tag">1.4.7</span></li>
+        <li>Avatares planos o de peluche, colores nuevos y cambio animado. <span class="tag">1.4.6/1.4.7</span></li>
+        <li>Burbujas compactas, separador de día, acciones en hoja al mantener.</li>
+        <li>Carpetas anidadas con ruta, arrastrar y fijar sincronizados, contador de no leídos.</li>
+        <li>Ajustes de servidor en páginas cortas y Soporte con Discord y registro.</li>
+        <li>Confirmaciones con pulsación larga y enlace/opciones dentro de la tarjeta.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>En árabe se espeja con código LTR, peluches y carpetas funcionan y las confirmaciones no se envían con un toque.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">M9</span>Resistencia y arranque</h3>
+    <dl>
+      <dt>Falta</dt>
+      <dd><ul>
+        <li>Copia cifrada de agentes y chats recientes; borrar al salir. <span class="tag">1.4.6</span></li>
+        <li>Reconexión con espera aleatoria y 15 s por lista o cola. <span class="tag">1.4.5/1.4.7</span></li>
+        <li>Memoria y cierres de Android: imagen grande, giro, plegado, animaciones, teclado. <span class="tag">1.4.7</span></li>
+        <li>Batería: logo sin fotogramas entre parpadeos; caras quietas en reposo.</li>
+        <li>Borrador por chat y estado de hilos reflejado en el agente.</li>
+      </ul></dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un giro con imagen grande no cierra la app, la reconexión respeta 15 s y los borradores sobreviven.</dd>
+    </dl>
+  </article>
+
+  <h2>4. Solo iOS → cómo se hace en Android <span class="ios">adaptar</span></h2>
+
+  <article class="ficha ios">
+    <h3><span class="num">X1</span>iPad, iPhone Duo y pantallas anchas</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>Lista al lado y borde ajustable; Duo usa cada mitad del pliegue; barra lateral propia.</dd>
+      <dt>En Android</dt>
+      <dd>Tablets y plegables con <code>WindowSizeClass</code>: dos paneles a partir de 600 dp, borde arrastrable, <code>SlidingPaneLayout</code> si encaja. En plegables, lista y chat a cada lado del pliegue con <code>Jetpack WindowManager</code>. Barra lateral solo en ancho, nunca en móvil vertical.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>En tableta y plegable se ven ambos paneles y el borde se ajusta; en móvil vertical no.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha ios">
+    <h3><span class="num">X2</span>Live Activity, Dynamic Island y pantalla bloqueada</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>Actividad viva con foto del agente, texto y contador; relanzada si el sistema la corta.</dd>
+      <dt>En Android</dt>
+      <dd>Notificación viva con <code>NotificationCompat</code> progresiva e imagen del agente, promovida con <code>setShortCriticalText</code> en Android 16+ y en la pantalla bloqueada. Se relanza con <code>ForegroundService</code> si el sistema la retira y se corta a las 8 h. Contador de no leídos en la notificación.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Una respuesta en curso muestra la notificación viva con foto y texto, sobrevive a la pantalla bloqueada y se corta al terminar.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha ios">
+    <h3><span class="num">X3</span>Barra nativa y vuelta por gesto</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>Barra nativa de chat y navegador; deslizar desde cualquier punto para volver.</dd>
+      <dt>En Android</dt>
+      <dd>Encabezado Material propio con la misma jerarquía y botones que la pantalla anterior; Predictive Back en Android 14+ con <code>OnBackPressedDispatcher</code> y vista que sigue el dedo. Deslizar sobre un mensaje sigue respondiendo.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>La vuelta predictiva cierra el chat con animación y el deslizamiento sobre un mensaje responde.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha ios">
+    <h3><span class="num">X4</span>Compartir desde otras apps</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>Extensión de compartir con lista de agentes y envío directo.</dd>
+      <dt>En Android</dt>
+      <dd><code>ACTION_SEND</code> y <code>ACTION_SEND_MULTIPLE</code> con <code>ChooserTarget</code> de agentes recientes; texto, imagen y archivo; abre el chat con el adjunto cargado o envía directo si el agente está fijado. Con bloqueo activo, abre la app con el contenido pendiente.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Compartir una imagen desde otra app ofrece los agentes y llega al chat elegido.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha ios">
+    <h3><span class="num">X5</span>Accesibilidad y confirmaciones</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>VoiceOver; pulsación larga para confirmar acciones peligrosas.</dd>
+      <dt>En Android</dt>
+      <dd>TalkBack con etiquetas y orden correctos; la misma pulsación larga, y con TalkBack un toque vuelve a preguntar dentro de la tarjeta. Botones de la tarjeta con roles y estado.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Con TalkBack una acción peligrosa no se envía con un toque y todo se anuncia.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha ios">
+    <h3><span class="num">X6</span>Push y reloj</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>APNs, entorno de push, Apple Watch.</dd>
+      <dt>En Android</dt>
+      <dd>FCM con token por dispositivo y reintento si no llega el primero; imagen del agente en la notificación; en Wear OS, notificación con imagen, dos líneas y contador, sin relanzar actividades.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Llega una notificación con foto al móvil y al reloj, y el token se reintenta sin abrir la app.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha ios">
+    <h3><span class="num">X7</span>Icono y gestos de sistema</h3>
+    <dl>
+      <dt>En iOS</dt>
+      <dd>Icono con apariencia oscura; gestos de hoja.</dd>
+      <dt>En Android</dt>
+      <dd>Icono monocromo con <code>android:monochrome</code> y tema dinámico; hojas con <code>BottomSheet</code> propio y arrastre, sin menús contextuales del sistema.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El icono sigue el tema y las hojas se arrastran y cierran como en el resto de Codync.</dd>
+    </dl>
+  </article>
+
+  <h2>5. Orden</h2>
+  <ol>
+    <li>M9 y M3.</li>
+    <li>M2 y M4.</li>
+    <li>M5 y M6.</li>
+    <li>M1 y M7.</li>
+    <li>M8 y las adaptaciones X.</li>
+  </ol>
+
+  <h2>6. Validación</h2>
+  <ul>
+    <li><code>./gradlew :core:test :app:testDebugUnitTest :app:compileDebugKotlin</code> (sin APK).</li>
+    <li>Emulador de móvil, tableta y plegable; TalkBack en las fichas X.</li>
+    <li>Regresión de chat, push, canales, voz, marketplace, perfiles y ajustes.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

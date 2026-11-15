@@ -409,7 +409,10 @@ export interface EntryData {
   /** notice: a bot-built interactive mini-app card (Idea 1). */
   botApp?: BotApp
   /** notice: human takeover request card (Idea 13). */
-  takeoverRequest?: { reason: string; url?: string | null; status: string }
+  takeoverRequest?: {
+    reason: string; url?: string | null; status: string
+    takenBy?: string | null; takenAt?: number | null
+  }
   /** notice: a turn that stopped half done (out of steps, or its answer cut); one tap continues it. */
   pausedTurn?: { verdict: 'paused' | 'truncated'; status: 'waiting' | 'continued'; round: number; canContinue: boolean }
   /** Interactive Passkey / 2FA assistance card from CDP browser detector (INIC-02). */

@@ -59,10 +59,14 @@ the entry's filename/size text fallback. No version or compatibility floor chang
 
 Publishing a second file under the same name never replaces the first: each is its own
 immutable snapshot, so the history of that name is the list of snapshots that carry it.
-`fileVersions {botId, name}` returns them newest first as `{versions: [{at, entryId,
-file}]}`; the first one is what a download of that name serves, and any older one is read
-with `readFile {entryId, fileId}` exactly like the newest. Nothing is deleted when a new
+`fileVersions {botId, name, beforeSeq?, limit?}` returns them newest first as `{versions:
+[{at, entryId, file}], next}`; a page holds 100 by default (at most 500), and `beforeSeq` is the
+previous page's `next`. The first one is what a download of that name serves, and any older one is
+read with `readFile {entryId, fileId}` exactly like the newest. Nothing is deleted when a new
 version arrives, so an older file is still there after the next one is published.
+
+Clients load the first page and ask for the older ones on demand (`Show older versions`), so a name
+published hundreds of times never makes a chat load every message that carried it.
 
 The authenticated `readFile {entryId, fileId, offset}` API requires a nonnegative
 integer offset within the saved size and a file belonging to that final agent entry

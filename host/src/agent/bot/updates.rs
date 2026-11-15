@@ -237,6 +237,18 @@ impl Actor {
         );
         // Like the bot's automatic setting always did: with no allow option, its first option.
         if allowed && self.pick_option(&rpc_id, &options, &["allow_once", "allow_always"], true).await {
+            // No card was shown, but the person's rules are the audit's business too: the ledger
+            // keeps what let it through and which rule did.
+            let actor = match &rule_pattern {
+                Some(pattern) => format!("Rule \"{pattern}\""),
+                None => "Automatic".into(),
+            };
+            approval_ledger::record_automatic(
+                &self.hub.store,
+                &self.cfg.id,
+                &json!({"title": title, "toolKind": kind, "command": command.clone(), "cwd": self.cfg.cwd}),
+                &actor,
+            );
             return;
         }
         let mut detail = json!({"output": "", "diffs": []});

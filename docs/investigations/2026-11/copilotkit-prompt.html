@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt — CopilotKit: los 106 repos, qué se usa</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f6fb; --ink:#16151c; --soft:#5b5866; --rule:#dedbe8; --mark:#4c3d8f; --ok:#2f6b46; --part:#7a6218; --no:#9a4a1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#111015; --ink:#eae8f2; --soft:#a5a1b3; --rule:#2a2735; --mark:#b9a9ff; --ok:#8fd3ab; --part:#e3c56a; --no:#ffab73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.66 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 980px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:66ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:0 0 6px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse:collapse; width:100%; font-size:14.5px; margin:10px 0; }
+  th, td { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  th { font:600 10px/1.3 ui-monospace,monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--soft); }
+  .ficha { border:1px solid var(--rule); border-left:3px solid var(--mark); padding:16px 18px; margin:14px 0; }
+  .ficha dt { font:600 11px/1 ui-monospace,monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--mark); margin-top:10px; }
+  .ficha dd { margin:2px 0 0; }
+  .num { font:700 12px/1 ui-monospace,monospace; color:var(--soft); margin-right:8px; }
+  .si { color:var(--ok); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .parcial { color:var(--part); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .no { color:var(--no); font:700 11px/1 ui-monospace,monospace; letter-spacing:.06em; text-transform:uppercase; }
+  .note { border:1px dashed var(--rule); padding:12px 14px; color:var(--soft); }
+  .warn { border-left:3px solid var(--no); padding-left:14px; }
+  .tag { font:11px/1 ui-monospace,monospace; color:var(--soft); border:1px solid var(--rule); padding:1px 5px; border-radius:2px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt de ejecución · inventario completo 106 repos · corregido</p>
+  <h1>CopilotKit: qué se usa, qué se copia y qué se ignora</h1>
+  <p class="lede">Este prompt sí revisa los 106 repos de la organización. Separa lo que se adopta como código, lo que se lee como patrón y lo que solo sirve de banco de pruebas; nombra los que se descartan y por qué. Incluye la corrección de identidad: el OpenBot de CopilotKit no es el de nightly-labs.</p>
+  <div class="bar"><button id="copy">Copiar el prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Corrección de identidad (va primero)</h2>
+  <ul>
+    <li><code>CopilotKit/OpenBot</code> es un producto de CopilotKit, construido sobre AG-UI y A2UI.</li>
+    <li>El OpenBot que Codync integra es <strong><code>nightly-labs/openbot</code></strong>, otro proyecto con el mismo nombre. No se mezclan: del de CopilotKit se toma el patrón; del de nightly-labs se sigue copiando código como hasta ahora.</li>
+    <li>AG-UI y A2UI valen por sí solos: son estándares abiertos con SDKs en muchos lenguajes y clientes reales. La decisión de adoptarlos no depende de esa coincidencia de nombres.</li>
+  </ul>
+
+  <h2>2. Cómo se revisó</h2>
+  <p>A los 106 repos se les leyó ficha, lenguaje, licencia, tamaño, actividad y descripción. A los del núcleo (CopilotKit, AG-UI, A2UI, channels-sdk) se les leyó el código y la documentación; a ocho más se les leyó el README a fondo. El resto se clasificó por descripción, propósito y estado. Criterio de clasificación:</p>
+  <table>
+    <thead><tr><th>Nivel</th><th>Qué significa</th><th>Qué se hace</th></tr></thead>
+    <tbody>
+      <tr><td class="si">Adoptar código</td><td>Pieza mantenida que resuelve algo que Codync necesita y no tiene</td><td>Se copia o se integra, con licencia anotada</td></tr>
+      <tr><td class="parcial">Copiar patrón</td><td>App completa o demo con una idea buena</td><td>Se lee, se reimplementa en Codync; nunca se copia la app</td></tr>
+      <tr><td class="parcial">Banco de pruebas</td><td>Plantilla de integración de un framework</td><td>Se usa para verificar el endpoint AG-UI (ficha K1), no se porta</td></tr>
+      <tr><td class="no">Descartar</td><td>Demo genérica, interno, duplicado o de otro producto</td><td>No se toca; queda documentado el motivo</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Inventario completo, grupo por grupo</h2>
+
+  <h3>3.1 Adoptar código (8)</h3>
+  <table>
+    <thead><tr><th>Repo</th><th>Licencia</th><th>Para qué</th></tr></thead>
+    <tbody>
+      <tr><td><code>CopilotKit</code></td><td>MIT</td><td>Fuente de verdad de los SDKs y de la semántica de eventos; se lee, no se instala como dependencia</td></tr>
+      <tr><td><code>ag-ui-protocol/ag-ui</code> (org hermana)</td><td>MIT</td><td>Especificación del protocolo, ejemplos y Dojo; base de K1 y K2</td></tr>
+      <tr><td><code>A2UI</code></td><td>Apache 2.0</td><td>UI declarativa; renderizadores React y SwiftUI; base de K3</td></tr>
+      <tr><td><code>channels-sdk</code></td><td>MIT</td><td>Modelo JSX → Block Kit / Adaptive Cards; base de K5</td></tr>
+      <tr><td><code>aimock</code></td><td>MIT</td><td>Mocks de LLM, MCP, A2A, AG-UI y vectores para pruebas; base de K6</td></tr>
+      <tr><td><code>harness-sdk</code></td><td>Apache 2.0</td><td>SDK de harness en Python y TS; se evalúa como referencia para K8</td></tr>
+      <tr><td><code>pathfinder</code></td><td>NOASSERTION (verificar)</td><td>MCP de docs y búsqueda de código; base de K9</td></tr>
+      <tr><td><code>skills</code></td><td>MIT</td><td>Habilidades para agentes de código; se adaptan a las de Codync en K10</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 Copiar patrón (26)</h3>
+  <p><code>OpenBot</code> (aprobaciones y estado sobre AG-UI), <code>OpenDots</code> (continuidad texto/llamada/Slack), <code>OpenDuet</code> (proactividad que agrupa avisos), <code>openmuse</code> (agente con navegador, terminal y archivos), <code>OpenTag</code> (triage en Slack/Teams con Channels), <code>open-multi-agent-canvas</code> (varios agentes y MCP en un tablero), <code>OpenIntelligentUI</code> (marco de UI generativa), <code>generative-ui</code> y <code>generative-ui-playground</code> (los tres tipos de UI generativa), <code>shadify</code> (componentes generados en streaming), <code>excalidraw-studio</code> (diagramas editables desde el chat), <code>open-gemini-canvas</code> (canvas con estado), <code>scene-creator-copilot</code> (escenas 3D), <code>canvas-with-langgraph-python</code>, <code>canvas-with-mastra</code>, <code>canvas-with-llamaindex</code>, <code>canvas-with-llamaindex-composio</code>, <code>mastra-pm-canvas</code>, <code>with-a2a-a2ui</code> (A2A + A2UI), <code>mcp-apps-demo</code>, <code>with-mcp-apps</code>, <code>open-research-ANA</code> (investigación con HITL), <code>open-fullstack-social-media-agent</code> (HITL de publicación), <code>adk-generative-dashboard</code> (paneles generados), <code>deep-agents-job-search-assistant</code> (subagentes), <code>antigravity-slack-demo</code> (canal con tarjetas).</p>
+  <p class="note">De todos estos se copia la idea, no el código: son aplicaciones completas con stack propio. Los que se convierten en ficha están abajo (K11–K14).</p>
+
+  <h3>3.3 Banco de pruebas de K1 (24)</h3>
+  <p>Sirven para comprobar que el endpoint AG-UI de Codync habla con todos los frameworks: <code>with-langgraph-python</code>, <code>with-langgraph-js</code>, <code>with-langgraph-fastapi</code>, <code>with-crewai-flows</code>, <code>coagents-starter-langgraph</code>, <code>coagents-starter-crewai-flows</code>, <code>with-mastra</code>, <code>with-agno</code>, <code>with-adk</code>, <code>with-pydantic-ai</code>, <code>with-llamaindex</code>, <code>with-strands-python</code>, <code>with-microsoft-agent-framework-python</code>, <code>with-microsoft-agent-framework-dotnet</code>, <code>with-a2a-middleware</code>, <code>a2a-travel</code>, <code>with-agent-spec</code>, <code>agents-everywhere-starter-kit</code>, <code>fullstack-solution-template-for-agentcore</code>, <code>sample-FAST-applications</code>, <code>experimental-agui-middleware-placeholder</code>, <code>vnext-with-pydantic</code>, <code>copilotkit-jupyter-notebook</code>, <code>llamaindex-hitl-guide-example</code>.</p>
+
+  <h3>3.4 Descartar (48)</h3>
+  <ul>
+    <li><b>Demos genéricas:</b> <code>demo-todo</code>, <code>demo-banking</code>, <code>demo-crm</code>, <code>demo-presentation</code>, <code>demo-presentation-voice</code>, <code>demo-spreadsheet</code>, <code>demo-copilotkit-firebase</code>, <code>demo-campaign-manager</code>, <code>microsoft-kanban-demo</code>, <code>example-textarea</code>, <code>example-todos-app</code>, <code>react-vite-built-in-agent</code>, <code>orca-CopilotKit-demo</code>, <code>strands-file-analyzer-demo</code>, <code>pydantic-ai-todos</code>, <code>ag2-feature-viewer</code>, <code>agui-demo</code>, <code>find-the-bug</code>, <code>frenchfry</code>, <code>jamcp</code>, <code>RecursivelyAI</code>, <code>cpk-1.50.0-testing</code>, <code>frontend-take-home-test</code>, <code>fullstack-agents-generative-ui-talk</code>, <code>Generative-UI-Global-Hackathon-Starter-Kit</code>, <code>llamaindex-composio-hackathon-sample</code>.</li>
+    <li><b>Productos de otro dominio:</b> <code>atomic-crm</code>, <code>outpost</code>, <code>open-research-ANA</code> (ya contada como patrón, no se porta).</li>
+    <li><b>Copias o espejos de terceros:</b> <code>llama_index</code>, <code>agno</code>, <code>agent-framework</code>, <code>semantic-kernel-docs</code>, <code>matterbridge</code> (se usa como mapa en K7, no se integra), <code>ollama-deep-researcher</code>.</li>
+    <li><b>Interno o infraestructura:</b> <code>.github</code>, <code>renovate</code>, <code>changesets-bot</code>, <code>vnext_experimental</code>, <code>vnext_experimental_angular_demo</code>, <code>mcp-client</code>, <code>open-mcp-client</code>, <code>copilotkit-mcp-demo</code>, <code>sdk-python</code>, <code>examples</code>, <code>vscode-extension</code>.</li>
+  </ul>
+
+  <h2>4. Fichas de trabajo</h2>
+
+  <article class="ficha">
+    <h3><span class="num">K1</span>Servidor AG-UI en el host</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Endpoint <code>POST /agui/{bot}</code> con SSE y los eventos estándar (run, texto, tool call, state delta, aprobación, fin, error).</dd>
+      <dt>Cómo</dt>
+      <dd><code>host/src/agui/</code> como vista del bus de eventos existente; <code>ag-ui-core</code> de la comunidad solo como referencia (está en pañales).</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El Dojo de AG-UI y tres plantillas de la sección 3.3 hablan con un bot de Codync sin cambios.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K2</span>Cliente AG-UI como proveedor</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Proveedor "Agente AG-UI" con URL en Ajustes; el host consume su stream y mapea tools y aprobaciones.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot con proveedor AG-UI apunta a una de las plantillas 3.3 y responde con streaming.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K3</span>A2UI en el chat</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>UI declarativa validada contra catálogo propio: formularios, aprobaciones, tablas y gráficos. Escritorio con <code>@a2ui/react</code>, iPhone con <code>A2UISwiftUI</code>; Android en fase 2.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Una aprobación con formulario se ve nativa en escritorio e iPhone y vuelve al host con los campos.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K4</span>Estado compartido y acciones de vista</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Esquema de estado por vista en el host y un canal de acciones con nombre; el agente actúa sobre lo que el usuario ve (lienzo, fichas, plan).</dd>
+      <dt>Terminado cuando</dt>
+      <dd>"Ponme una rutina el lunes a las 8" crea y configura la ficha sin tocar la base desde el modelo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K5</span>Serializadores de canal</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Portar el modelo de channels-sdk al formateador del host: Block Kit para Slack, Adaptive Cards para Teams, componentes para Discord y opciones para WhatsApp.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Una aprobación con botones sale nativa en Slack y Teams desde el mismo origen.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K6</span>aimock para las pruebas de agentes</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Servidor de mocks de LLM, MCP, A2A, AG-UI y vectores; la suite de integración corre sin claves ni red.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un turno con tool, un error de proveedor y una aprobación se prueban en CI sin ninguna clave.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K7</span>Mapa de canales desde matterbridge</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Leer sus adaptadores para portear el siguiente canal (Matrix y Teams primero) sin inventar el protocolo.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Matrix se conecta desde Extensiones › Apps con su sesión y entrega adjuntos.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K8</span>harness-sdk: ¿nos ahorra algo?</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Evaluar si su capa de harness en Python/TS aporta algo que el host no tenga; si aporta, se usa como referencia de diseño, nunca como dependencia de runtime.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Nota de dos páginas con el veredicto y las piezas que valga la pena copiar.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K9</span>pathfinder como MCP local</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Servidor MCP de documentación y búsqueda de código para que los bots consulten docs sin salir del equipo. Verificar licencia antes de empaquetar.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un bot consulta los docs de un repositorio local por MCP y cita la fuente.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K10</span>Skills para el desarrollo de Codync</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Adaptar las habilidades del repo <code>skills</code> (instalar, integrar, depurar, actualizar) a las de Codync para que un agente de código sepa trabajar en este repositorio.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un agente nuevo recibe la skill de Codync y hace un cambio pequeño sin leer medio repo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K11</span>Excalidraw dentro del lienzo</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Pizarra editable que el agente genera y el usuario retoca; el archivo se guarda como documento de Codync. Es la respuesta al "Figma ligero" que se pidió antes.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>El bot crea un diagrama, el usuario lo edita y queda guardado y reabrible.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K12</span>Proactividad de OpenDuet</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Política de interrupción: agrupar hallazgos, no repetir avisos y esperar respuesta antes de volver a molestar.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Tres hallazgos llegan en un aviso y el bot no insiste hasta que haya respuesta o pase el plazo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K13</span>Continuidad de OpenDots</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Un solo hilo entre texto, llamada y Slack, con la transcripción en el mismo sitio.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>La llamada y el chat comparten contexto y la transcripción aparece en el hilo.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K14</span>Canvas multiagente y OpenIntelligentUI</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Patrón de varios agentes sobre un tablero con MCP, y el marco de UI generativa de OpenIntelligentUI como contraste con A2UI.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Dos agentes colaboran en la misma ficha del lienzo y la UI generada por ambos se ve consistente.</dd>
+    </dl>
+  </article>
+
+  <article class="ficha">
+    <h3><span class="num">K15</span>Inspector y WebMCP (opcionales)</h3>
+    <dl>
+      <dt>Qué</dt>
+      <dd>Superposición de depuración solo en desarrollo (eventos, hilos, estado) y exposición de acciones de Codync al navegador integrado.</dd>
+      <dt>Terminado cuando</dt>
+      <dd>Un evento mal formado se diagnostica en el Inspector y el agente abre un panel de Codync por acción declarada.</dd>
+    </dl>
+  </article>
+
+  <h2>4.1 Qué repos cubre cada ficha</h2>
+  <p>Las quince fichas son paquetes de trabajo, no quince repos. Cada una agrupa varios; esta tabla dice exactamente cuáles.</p>
+  <table>
+    <thead><tr><th>Ficha</th><th>Repos que usa</th></tr></thead>
+    <tbody>
+      <tr><td>K1</td><td><code>CopilotKit</code>, <code>ag-ui</code>, <code>OpenBot</code> (patrón de aprobaciones), más las 24 plantillas de la sección 3.3 como verificación</td></tr>
+      <tr><td>K2</td><td><code>CopilotKit</code>, <code>ag-ui</code>, <code>with-langgraph-python</code> y <code>with-pydantic-ai</code> como destino de prueba</td></tr>
+      <tr><td>K3</td><td><code>A2UI</code>, <code>generative-ui</code>, <code>generative-ui-playground</code>, <code>shadify</code>, <code>mcp-apps-demo</code>, <code>with-mcp-apps</code></td></tr>
+      <tr><td>K4</td><td><code>CopilotKit</code> (<code>useAgent</code>), <code>open-gemini-canvas</code>, los cuatro <code>canvas-with-*</code></td></tr>
+      <tr><td>K5</td><td><code>channels-sdk</code>, <code>OpenTag</code>, <code>antigravity-slack-demo</code></td></tr>
+      <tr><td>K6</td><td><code>aimock</code></td></tr>
+      <tr><td>K7</td><td><code>matterbridge</code></td></tr>
+      <tr><td>K8</td><td><code>harness-sdk</code></td></tr>
+      <tr><td>K9</td><td><code>pathfinder</code></td></tr>
+      <tr><td>K10</td><td><code>skills</code></td></tr>
+      <tr><td>K11</td><td><code>excalidraw-studio</code></td></tr>
+      <tr><td>K12</td><td><code>OpenDuet</code></td></tr>
+      <tr><td>K13</td><td><code>OpenDots</code></td></tr>
+      <tr><td>K14</td><td><code>open-multi-agent-canvas</code>, <code>OpenIntelligentUI</code>, <code>scene-creator-copilot</code></td></tr>
+      <tr><td>K15</td><td><code>CopilotKit</code> (Inspector), WebMCP, <code>openmuse</code> como referencia de agente con navegador</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Cuentas claras: <b>21 repos</b> impulsan trabajo real, <b>24</b> se usan solo como banco de pruebas y <b>61</b> se descartan. Las 15 fichas no son un techo: si un repo de la lista de patrones se convierte en función propia (por ejemplo <code>open-research-ANA</code> para investigación con HITL), se agrega una ficha nueva K16 sin tocar las demás.</p>
+
+  <h2>5. Reglas de trabajo</h2>
+  <ul>
+    <li>Mismo checkout de siempre: <code>C:\Users\Edwin Villeda\Documents\Codync</code>, rama de integración <code>feat/openbot-marketplace</code>, código en worktree propio (<code>feat/copilotkit-*</code>).</li>
+    <li>Antes de tocar archivos compartidos, revisar <code>git status</code> en worktree y checkout; si hay cambios de otro agente, preguntar.</li>
+    <li>Regla de puente: nombres y permisos del protocolo se conservan; solo la UI muestra la marca de Codync.</li>
+    <li>Licencias: MIT y Apache 2.0 se copian sin trámite; <code>pathfinder</code> y los NOASSERTION se verifican antes de empaquetar.</li>
+    <li>De las apps y demos no se copia código: se copia la idea y se implementa con los componentes de Codync.</li>
+    <li>Un commit por ficha, en inglés, con qué y por qué; nada a la rama de integración hasta confirmación del usuario.</li>
+  </ul>
+
+  <h2>6. Orden</h2>
+  <ol>
+    <li>K1, K2 y K6: protocolo y pruebas. Sin estas tres, lo demás no se puede verificar.</li>
+    <li>K3 y K4: UI generativa y estado compartido.</li>
+    <li>K5 y K7: canales con formato nativo.</li>
+    <li>K11, K12 y K13: lienzo, proactividad y continuidad de voz.</li>
+    <li>K8, K9, K10, K14 y K15: evaluaciones y opcionales.</li>
+  </ol>
+
+  <h2>7. Validación y entrega</h2>
+  <ul>
+    <li><code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>, <code>npm run typecheck</code>, <code>npm test</code>; Gradle solo si se toca Android.</li>
+    <li>Prueba con el Dojo de AG-UI y con tres plantillas de la sección 3.3.</li>
+    <li>Reporte en español: fichas hechas, repos usados con su licencia, qué se descartó y por qué, y lo que no corrió.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

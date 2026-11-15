@@ -22,6 +22,8 @@ These authenticated host methods require the existing control scope:
 - `moveDocument {id, parentId, ifRevision}` uses the same result contract.
 - `deleteDocument {id, ifRevision}` returns `{status: "deleted", ids, rev}` or
   the conflict result. `parentId: null` moves a page to the library root.
+- `exportDocument {botId, id, format}` writes a copy outside the library in one of
+  `html`, `docx` or `pdf` (see below). It is local-only because the file lands on this computer.
 
 Clients retain a draft on failure or conflict. Reload and overwrite are explicit
 owner choices. Creation retries reuse a stable `clientNonce`: the host returns
@@ -38,10 +40,38 @@ page never leaves a broken id behind, and a title that doesn't exist yet is a li
 page. A page shows at most 200 links; `getDocument` and `get_document` return the page's `links`
 and the `backlinks` of the pages that name it.
 
-`documentGraph {botId}` returns every page as a node (`{id, title}`) and every link that resolves to
-another page of the same bot as an edge (`{from, to}`); a link to a title nobody has yet is not an
-edge until that page exists, and a page is never its own edge. A client draws it; the host stores no
-graph.
+`documentGraph {botId, afterId?, limit?}` returns one page of the graph: nodes are pages
+(`{id, title}`, ordered and paged by id) and edges are links that resolve to another page of the
+same bot (`{from, to}`), each listed once, with the edge's source node on the same page. `next` is
+the page's last node id while more remain; a link to a title nobody has yet is not an edge until
+that page exists, and a page is never its own edge. A client draws every page it reads; the host
+stores no graph.
+
+## Exports
+
+`exportDocument` writes a copy into `<data>/bots/<bot>/exports` and names the converter that ran.
+HTML always works: through pandoc when it is installed, otherwise as a plain page with the title and
+the Markdown escaped, so the copy still opens. Word needs pandoc. PDF tries the engines pandoc can
+drive and then a Word copy handed to LibreOffice. A missing converter is named in the error, so the
+person knows what to install instead of reading a vague failure. Exports never change the page.
+
+`uploadDocument {botId, id, format, key?}` exports the page and `PUT`s the copy to an S3-compatible
+bucket, answering `{url, key, format, bytes}`. With no `key`, the configured prefix and the exported
+file's name build the object key.
+
+## Object storage
+
+`s3Status` reports `{configured, endpoint, region, bucket, prefix, hasCredentials}`; `setS3
+{endpoint, region, bucket, prefix?, accessKeyId, secretAccessKey}` checks and saves the destination;
+`disconnectS3` forgets it (the access key stays until a new one is saved). Non-secret settings live
+in the key-value store; the access key and the secret live in the vault. Only `s3Status` reaches a
+paired phone: the destination and the secret are set on the computer.
+
+Requests are path-style (`<endpoint>/<bucket>/<key>`), signed with AWS Signature Version 4: the
+canonical request covers the method, the escaped path, the headers that must not change on the way
+(`host`, `x-amz-content-sha256`, `x-amz-date`) and the body's SHA-256. The signer is checked against
+the examples AWS publishes with the algorithm, so a change in canonicalization is caught without a
+network. The secret never leaves the vault.
 
 ## Agent proposals
 

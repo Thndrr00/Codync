@@ -233,8 +233,10 @@ impl Actor {
             }
             self.hub.team.end_turn(&self.cfg.id);
             self.hub.set_runtime(&self.id(), |r| {
-                r.status = BotStatus::Idle;
-                r.activity = String::new();
+                r.status = if r.hold.is_some() { BotStatus::NeedsInput } else { BotStatus::Idle };
+                if r.hold.is_none() {
+                    r.activity = String::new();
+                }
                 r.started_at = None;
                 r.lane = None;
                 r.message = None;
@@ -469,8 +471,17 @@ impl Actor {
             let _ = self.dreamer.send(memory::DreamEvent::Turn(turn));
         }
         self.hub.set_runtime(&self.id(), |r| {
-            r.status = if failed { BotStatus::Error } else { BotStatus::Idle };
-            r.activity = String::new();
+            r.status = if failed {
+                BotStatus::Error
+            } else if r.hold.is_some() {
+                // A takeover holds the agent: the person's step is still the bot's state.
+                BotStatus::NeedsInput
+            } else {
+                BotStatus::Idle
+            };
+            if r.hold.is_none() {
+                r.activity = String::new();
+            }
             r.started_at = None;
             r.lane = None;
             r.message = None;

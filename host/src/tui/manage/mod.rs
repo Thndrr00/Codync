@@ -125,6 +125,8 @@ pub struct Library {
     /// The name whose versions are listed (`fileVersions`), and what the host said.
     pub versioning: Option<String>,
     pub versions: Vec<Value>,
+    /// The `beforeSeq` of the versions' next page, until there is none.
+    pub versions_next: Option<i64>,
 }
 
 pub struct RoutineList {

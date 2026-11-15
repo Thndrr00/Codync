@@ -27,6 +27,16 @@ def log(event, sid, text):
             output.write(json.dumps({"event": event, "session": sid, "text": text}) + "\n")
 
 
+def arg_seconds(name, default):
+    """`--name=seconds` or a bare `--name` (for `default`)."""
+    for arg in sys.argv:
+        if arg.startswith("--" + name + "="):
+            return float(arg.split("=", 1)[1])
+        if arg == "--" + name:
+            return default
+    return None
+
+
 def answer_late(answer):
     log("late", answer["result"]["sessionId"], "")
     send(answer)
@@ -102,7 +112,8 @@ def verify_routine_tools():
         assert init["serverInfo"]["name"] == "codync-routines"
         names = {t["name"] for t in rpc("tools/list", {})["tools"]}
         assert names == {"list_routines", "save_routine", "set_routine_enabled",
-                         "delete_routine", "run_routine", "routine_webhook"}, names
+                         "delete_routine", "run_routine", "routine_webhook",
+                         "link_routine_bots", "unlink_routine_bots", "list_routine_flow"}, names
         assert not call("list_routines", {})["routines"]
         invalid = rpc("tools/call", {"name": "save_routine", "arguments": {
             "name": "Invalid", "instruction": "Check", "triggers": [{"type": "interval", "seconds": 0}]}})
@@ -146,11 +157,12 @@ for line in sys.stdin:
     elif method == "session/new":
         servers = request["params"]["mcpServers"]
         answer = {"id": request["id"], "result": {"sessionId": str(uuid.uuid4())}}
-        if "--slow-new" in sys.argv and not pathlib.Path("slowed").exists():
-            # The first session ever opens 4 s late (its tools starting), and is logged as it does, unless the agent
-            # is stopped first.
+        slow = arg_seconds("slow-new", 4)
+        if slow is not None and not pathlib.Path("slowed").exists():
+            # The first session ever opens `slow` seconds late (its tools starting), and is logged as it does,
+            # unless the agent is stopped first.
             pathlib.Path("slowed").touch()
-            late = threading.Timer(4, answer_late, args=(answer,))
+            late = threading.Timer(slow, answer_late, args=(answer,))
             late.daemon = True
             late.start()
         elif "--hang-new" not in sys.argv:  # an agent stuck starting never answers

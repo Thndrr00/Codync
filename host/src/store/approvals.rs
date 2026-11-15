@@ -230,6 +230,28 @@ mod tests {
     }
 
     #[test]
+    fn records_past_the_retention_are_pruned_when_the_database_opens() {
+        let dir = std::env::temp_dir().join(format!("codync-retention-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.db");
+        {
+            let s = Store::open(&path).unwrap();
+            s.approval_asked("old", "bot", "execute", "git push", "fp").unwrap();
+            s.db.locked()
+                .execute(
+                    "UPDATE approval_decisions SET asked_at = ?2 WHERE entry_id = ?1",
+                    params!["old", now_ms() - KEEP_MS - 1],
+                )
+                .unwrap();
+            s.approval_asked("fresh", "bot", "execute", "git push", "fp").unwrap();
+        }
+        let s = Store::open(&path).unwrap();
+        assert!(s.approval("old").is_none(), "a ninety-day-old decision is gone");
+        assert!(s.approval("fresh").is_some(), "a recent one stays");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_card_from_before_the_ledger_still_leaves_a_record() {
         let s = store();
         let decided = s.approval_decide("old", "bot", "allow", Some("allow_once"), Some("This computer")).unwrap();

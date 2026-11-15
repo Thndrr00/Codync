@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Producción — ¿n8n y ComfyUI están listos?</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f7f4f4; --ink:#1b1919; --soft:#615b5b; --rule:#e1dadb; --mark:#8a3b3b; --ok:#2f6b46; --part:#8a6a1f; --no:#9c3b3b; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#131011; --ink:#ece8e8; --soft:#a8a1a2; --rule:#302a2b; --mark:#f0a3a3; --ok:#8fd3ab; --part:#f0c879; --no:#f08a8a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 880px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  table { border-collapse: collapse; width:100%; font-size:15px; }
+  td, th { border-bottom:1px solid var(--rule); padding:7px 8px; text-align:left; vertical-align:top; }
+  .state { font:700 11px/1 ui-monospace,monospace; text-transform:uppercase; letter-spacing:.08em; padding:3px 7px; border-radius:2px; white-space:nowrap; }
+  .s-ok { background:color-mix(in srgb,var(--ok) 18%,transparent); color:var(--ok); }
+  .s-part { background:color-mix(in srgb,var(--part) 20%,transparent); color:var(--part); }
+  .s-no { background:color-mix(in srgb,var(--no) 18%,transparent); color:var(--no); }
+  .verdict { border-left:4px solid var(--no); padding:4px 0 4px 16px; font-size:18px; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .small { font-size:14px; color:var(--soft); }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Evaluación de producción</p>
+  <h1>¿Se puede llevar esto a producción?</h1>
+  <p class="lede">Estado real de n8n y ComfyUI frente a un lanzamiento: lo que funciona, lo que rompe en campo y lo que falta antes de decir que sí.</p>
+  <div class="bar"><button id="copy">Copiar la evaluación</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <p class="verdict"><strong>n8n: casi, pero no todavía.</strong> Funciona en este equipo, no está listo para instalaciones ajenas. <strong>ComfyUI: no.</strong> Solo existe el plan; no hay una línea de código de su integración.</p>
+
+  <h2>1. Qué funciona hoy</h2>
+  <ul>
+    <li>n8n arranca, se detiene con el host, abre su editor con sesión automática, registra el conector MCP y publica su estado. Verificado ahora: <code>running</code>, <code>mcp: true</code>, sesión presente.</li>
+    <li>El patrón de integración es sólido: estados, puerto, ventana aislada, origen permitido y parada al salir.</li>
+    <li>De ComfyUI solo hay diseño: fases, API, riesgos y criterios; nada implementado.</li>
+  </ul>
+
+  <h2>2. n8n en campo</h2>
+  <table>
+    <tr><th>Punto</th><th>Estado</th><th>Qué rompería</th></tr>
+    <tr><td>Arranque y parada</td><td><span class="state s-ok">ok</span></td><td>—</td></tr>
+    <tr><td>Sesión automática del editor</td><td><span class="state s-part">frágil</span></td><td>Ya apareció “the n8n login set no automan-auth cookie”; sin cookie, el usuario cae en el login</td></tr>
+    <tr><td>Instalación para un usuario nuevo</td><td><span class="state s-no">falta</span></td><td>Solo se <em>detecta</em> una copia existente; no hay descarga, versión fijada ni primer arranque</td></tr>
+    <tr><td>Ruta y actualización</td><td><span class="state s-no">falta</span></td><td>Apuntó a un monorepo de desarrollo; actualizar puede romper el arranque</td></tr>
+    <tr><td>Puerto ocupado</td><td><span class="state s-part">parcial</span></td><td>Se configura, pero no se comprueba libre antes de arrancar</td></tr>
+    <tr><td>Node.js</td><td><span class="state s-part">depende</span></td><td>Exige Node en el equipo; sin él, error en vez de instalación guiada</td></tr>
+    <tr><td>Datos y respaldo</td><td><span class="state s-no">falta</span></td><td>Sin migración ni copia antes de actualizar</td></tr>
+    <tr><td>Diagnóstico</td><td><span class="state s-part">básico</span></td><td>Hay log, pero no se muestra al usuario ni se recoge al fallar</td></tr>
+    <tr><td>Desinstalar</td><td><span class="state s-no">falta</span></td><td>Queda la instalación y la base sin opción clara</td></tr>
+  </table>
+  <p class="small">Conclusión: sirve para ti en este equipo, no para un desconocido que instala Codync de cero.</p>
+
+  <h2>3. ComfyUI en campo</h2>
+  <table>
+    <tr><th>Punto</th><th>Estado</th><th>Qué falta</th></tr>
+    <tr><td>Toda la integración</td><td><span class="state s-no">no hecha</span></td><td>Host, ventana, rail, Marketplace, MCP y adjuntos</td></tr>
+    <tr><td>Instalación</td><td><span class="state s-no">no hecha</span></td><td>Descarga del portable, comprobación de disco y de GPU</td></tr>
+    <tr><td>Matriz de hardware</td><td><span class="state s-no">sin probar</span></td><td>NVIDIA, AMD, CPU, drivers viejos, equipos sin GPU</td></tr>
+    <tr><td>Modelos</td><td><span class="state s-no">sin flujo</span></td><td>No se incluyen: hace falta guiar la descarga y detectar el que falta</td></tr>
+    <tr><td>Cola y cancelación</td><td><span class="state s-no">diseñada</span></td><td>Un trabajo pesado bloquea el equipo si no se limita</td></tr>
+    <tr><td>Seguridad</td><td><span class="state s-no">diseñada</span></td><td>ComfyUI no tiene auth: local sí, fuera exige proxy con token</td></tr>
+  </table>
+
+  <h2>4. Puertas antes de producción</h2>
+  <h3>n8n (1–2 semanas)</h3>
+  <ul>
+    <li>Instalador propio: descarga de una versión fijada, progreso, verificación y carpeta gestionada.</li>
+    <li>Primer arranque guiado: propietario, correo y contraseña, con recuperación.</li>
+    <li>Arreglar la sesión automática: reintento y mensaje claro si no hay cookie.</li>
+    <li>Puerto libre comprobado, Node detectado o instalado, y aviso si falta.</li>
+    <li>Respaldo y migración antes de actualizar; desinstalar con opción de conservar datos.</li>
+    <li>Log visible desde Ajustes y captura en el reporte de errores.</li>
+    <li>Pruebas en una máquina limpia de Windows, otra sin Node y otra con el puerto ocupado.</li>
+  </ul>
+  <h3>ComfyUI (2–3 semanas tras implementarlo)</h3>
+  <ul>
+    <li>Fases 1–5 del plan, con equipo NVIDIA, uno AMD y uno sin GPU.</li>
+    <li>Verificación de drivers y espacio antes de descargar; mensaje claro si no cumple.</li>
+    <li>Cola de uno en uno, tiempo máximo, cancelación real y limpieza de temporales.</li>
+    <li>Guía de modelos y detección del que falta; sin modelos no hay nada que enseñar.</li>
+    <li>Si se abre a la red, proxy con token y prueba de rechazo sin él.</li>
+  </ul>
+
+  <h2>5. Transversal a los dos</h2>
+  <ul>
+    <li>Firma y notarización de los binarios que se distribuyan; avisos de licencia (Apache en n8n, GPL y oferta de fuente en ComfyUI).</li>
+    <li>Actualización de la app sin dejar procesos huérfanos ni puertos tomados.</li>
+    <li>Errores de cara al usuario: puerto, disco, driver, modelo, cookie. Nunca un fallo mudo.</li>
+    <li>Paridad en Android para ver estado y abrir, o declarar que es solo escritorio.</li>
+    <li>Documentación de usuario y límites conocidos.</li>
+    <li>Matriz de CI con las tres plataformas si se empaquetan; si no, Windows primero.</li>
+  </ul>
+
+  <h2>6. Veredicto</h2>
+  <ul>
+    <li><strong>Hoy:</strong> n8n funciona en un equipo preparado; ComfyUI no existe aún en la app.</li>
+    <li><strong>Producción de n8n:</strong> sí, tras las puertas de la sección 4. Sin ellas, el primer usuario sin Node o con el puerto ocupado se queda fuera.</li>
+    <li><strong>Producción de ComfyUI:</strong> sí, tras implementarlo y probar la matriz de hardware; su mayor riesgo es la GPU y los modelos, no el código de integración.</li>
+    <li><strong>Nada se lanza con “funciona en mi máquina”.</strong> La diferencia entre demo y producto son las puertas.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>

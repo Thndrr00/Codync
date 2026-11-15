@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt directo — n8n dentro del instalador</title>
+<style>
+  :root { color-scheme: light dark; --paper:#f4f7f6; --ink:#161b19; --soft:#57615c; --rule:#d6ded9; --mark:#1f6f5c; --ok:#2f6b46; }
+  @media (prefers-color-scheme: dark) { :root { --paper:#0f1412; --ink:#e6ebe8; --soft:#9fa9a3; --rule:#28322d; --mark:#8fd6bf; --ok:#8fd3ab; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:44px 22px 90px; background:var(--paper); color:var(--ink); font:16px/1.65 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  main { max-width: 900px; margin:0 auto; }
+  .kicker { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:.16em; text-transform:uppercase; color:var(--mark); }
+  h1 { font-size:clamp(26px,4vw,36px); line-height:1.12; margin:12px 0 12px; letter-spacing:-.02em; }
+  .lede { font-size:18px; color:var(--soft); margin:0 0 20px; max-width:62ch; }
+  .bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:13px 0; margin-bottom:26px; }
+  button { font:600 13px/1 ui-monospace,Consolas,monospace; border:1px solid var(--ink); background:transparent; color:var(--ink); border-radius:2px; padding:9px 13px; cursor:pointer; }
+  button:hover { background:var(--ink); color:var(--paper); }
+  #copied { font:13px/1 ui-monospace,monospace; color:var(--ok); }
+  h2 { font-size:13px; font-family:ui-monospace,Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--soft); margin:34px 0 10px; }
+  h3 { font-size:17px; margin:18px 0 4px; }
+  p { margin:8px 0; }
+  ul, ol { margin:8px 0 8px 22px; padding:0; }
+  li { margin:5px 0; }
+  code { font:.88em/1.4 ui-monospace,Consolas,monospace; background:color-mix(in srgb,var(--ink) 7%,transparent); padding:1px 4px; border-radius:2px; }
+  pre { background:color-mix(in srgb,var(--ink) 6%,transparent); border:1px solid var(--rule); padding:12px 14px; overflow-x:auto; font:.84em/1.5 ui-monospace,Consolas,monospace; }
+  .note { border-left:3px solid var(--mark); padding-left:14px; color:var(--soft); }
+  .warn { border-left:3px solid #9a4a1c; padding-left:14px; }
+  .fase { border:1px solid var(--rule); border-radius:3px; padding:14px 16px; margin:12px 0; }
+  .fase h3 { margin-top:0; }
+  table { border-collapse: collapse; width:100%; font-size:15px; }
+  td, th { border-bottom:1px solid var(--rule); padding:6px 8px; text-align:left; vertical-align:top; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Prompt de ejecución directo · n8n embutido</p>
+  <h1>n8n dentro del instalador de Codync</h1>
+  <p class="lede">Encargo directo: n8n viaja dentro del instalador, con su Node propio, arranca solo, abre el editor sin login ni ajustes y se controla desde la app. No son datos externos ni detección de instalaciones: uno que baja con Codync.</p>
+  <div class="bar"><button id="copy">Copiar el prompt</button><span id="copied" role="status" aria-live="polite"></span></div>
+
+  <h2>1. Lee primero</h2>
+  <ul>
+    <li><code>docs/plans/bundled-tools-production.md</code>: compartido, alcance y aceptación.</li>
+    <li><code>host/src/n8n.rs</code> y <code>apps/desktop/src/main/n8n.ts</code>: el integración actual; este prompt lo ajusta, no lo borra.</li>
+    <li><code>host/src/tools/</code> si ya existe (probable: ComfyUI pudo ir primero); si no, la fase 1 lo crea.</li>
+    <li><code>AGENTS.md</code>, <code>docs/guides/clean-code.md</code>, <code>docs/architecture/overview.md</code>.</li>
+  </ul>
+  <p class="note">Resultado esperado: instalar Codync en un Windows limpio, sin Node instalado, y que n8n quede disponible en el rail, arrancado y con su editor abierto, sin que el usuario ponga nada.</p>
+
+  <h2>2. Reglas</h2>
+  <ul>
+    <li>Solo agregar: nada que exista (rail, lienzo, uso, cuentas, WhatsApp, marketplace, ComfyUI si ya está) se reescribe.</li>
+    <li>Una rama propia en worktree aparte: <code>feat/n8n-bundled</code>. Conventional Commits en inglés, push a cada fase.</li>
+    <li>El host manda; los clientes dibujan. Lógica cero en el renderer o en Android más allá de intents.</li>
+    <li>Licencias fuera de alcance: se empaqueta sin trámite y sin aviso.</li>
+    <li>Cada fase se prueba en la app instalada antes de la siguiente.</li>
+  </ul>
+
+  <h2>3. Trabajo</h2>
+
+  <article class="fase">
+    <h3>Fase 1 · Runner (si no existe aún)</h3>
+    <p>Módulo compartido en <code>host/src/tools/</code>; n8n y ComfyUI quedan como dos configuraciones suyas:</p>
+    <ul>
+      <li><code>runner.rs</code>: proceso hijo desde <code>resources</code>, <code>current_dir</code>, entorno acotado, log rotado, puerto libre y estado <code>stopped/starting/running/error</code> por pieza.</li>
+      <li><code>health.rs</code>: sonda por herramienta con timeout y reintento; n8n usa <code>GET /healthz</code>.</li>
+      <li><code>lifecycle.rs</code>: arranque con el host si estaba activo, parada ordenada al salir y al actualizar, sin huérfanos (árbol de proceso en Windows, no solo el PID).</li>
+      <li><code>apps/desktop/src/main/tools-window.ts</code>: ventana con página de espera, origen local permitido, salto al editor cuando la salud responde, Ver log y Reintentar.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> un motor de prueba con un servidor falso arranca, reporta salud y se para sin dejar procesos.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 2 · n8n y su Node en el instalador</h3>
+    <ul>
+      <li>Compilar el monorepo en CI (<code>npm ci &amp;&amp; npm run build</code>) y llevar el resultado a <code>build/native/n8n</code>; Node fijado por versión a <code>build/native/node</code>.</li>
+      <li>Declarar ambos en <code>extraResources</code> de <code>electron-builder.yml</code> y del builder de desarrollo, fuera del asar, sin espacios en las rutas.</li>
+      <li>Lanzar con el Node embebido: <code>node\node.exe packages\cli\dist\index.js start</code> (o el punto que diga el paquete compilado), con <code>current_dir</code> correcto y sin ventana de consola.</li>
+      <li>Variables fijas: <code>N8N_USER_FOLDER=userData\n8n</code>, <code>N8N_PORT=&lt;libre&gt;</code>, <code>N8N_HOST=127.0.0.1</code>, <code>N8N_EDITOR_BASE_URL</code> acorde, <code>N8N_DIAGNOSTICS_ENABLED=false</code>, <code>N8N_PERSONALIZATION_ENABLED=false</code>, <code>N8N_VERSION_NOTIFICATIONS_ENABLED=false</code>, <code>N8N_SECURE_COOKIE=false</code> solo si el origen local lo pide.</li>
+      <li>Puerto: 5678 por defecto; si está tomado, el siguiente libre, dicho en el log y en la tarjeta.</li>
+      <li>Clave de cifrado: <code>N8N_ENCRYPTION_KEY</code> generada una vez y guardada en el vault del host; se rompe si se pierde, así que va al vault antes del primer arranque.</li>
+      <li>Salud antes de abrir la ventana; nunca se carga el editor a medio arrancar. Runners de tareas activados (<code>N8N_RUNNERS_ENABLED=true</code>) y sus procesos hijos en el árbol de parada.</li>
+      <li>Tarjeta en Extensiones › Apps: Abrir, Parar, Log, BASE de datos, espacio usado.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> en máquina limpia sin Node ni Python, instalar Codync y abrir el editor de n8n desde el rail sin tocar nada.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 3 · Propietario y sesión sin login</h3>
+    <ul>
+      <li>Primer arranque: si <code>userData/n8n</code> no tiene base, sembrar propietario por el alta documentada del repositorio (<code>POST /rest/owner/setup</code> con correo <code>local@codync</code> y contraseña aleatoria de 24 caracteres guardada en el vault). Si ese endpoint cambia en la versión fijada, se usa el método del repo que lo reemplace; el objetivo es uno: el alta pasa sola y sin login visible.</li>
+      <li>Sesión: obtener la cookie (<code>n8n-auth</code>) en cada arranque antes de cargar el editor, con reintento hasta 4 veces; si no aparece, error claro con Ver log y Reintentar, jamás dejar pasar la pantalla de login visible.</li>
+      <li>Registro público y telemetría fuera: cualquier aviso de "get started" o de compartir se oculta por entorno, no por CSS.</li>
+      <li>Persistencia de credenciales de workflows: la clave del vault está presente antes de cada arranque; si no, n8n no arranca y el error lo dice.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> cerrar y abrir la app tres veces: nunca aparece una pantalla de login o de alta.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 4 · Datos y ciclo de vida</h3>
+    <ul>
+      <li>Todo estado en <code>userData/n8n</code>: base sqlite, credenciales cifradas e archivos; nada en <code>resources</code>.</li>
+      <li>Respaldo <code>.zip</code> de <code>userData/n8n</code> antes de actualizar y vuelta atrás si el motor no arranca tras actualizar.</li>
+      <li>Actualizar el motor empaquetado sin actualizar usuarios: si la versión de n8n pide migraciones, se ejecutan con el arranque; errores se reportan con el log.</li>
+      <li>Desinstalar ofrece conservar datos, y por defecto los conserva; borrar los saca también del vault con confirmación.</li>
+      <li>Cerrar la app: base cerrada en orden (backend, luego los niños), sin huérfanos de Node.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> actualizar conserva workflows y credenciales; cerrar la app no deja procesos de Node vivos.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 5 · Puente e integración actual</h3>
+    <ul>
+      <li>Ajustar <code>host/src/n8n.rs</code> y <code>apps/desktop/src/main/n8n.ts</code> al motor embutido: misma lógica, ruta nueva y sin detección de instalaciones externas.</li>
+      <li>Rail: ítem n8n que abre el editor o muestra estado sin reabrir el motor.</li>
+      <li>Uso: lo que ya se medía sigue midiendo; fuente de proveedor <code>account</code> intacta.</li>
+      <li>Webhooks: solo locales; sin túnel público. Un workflow que pide webhook local apunta al puerto visible con su carpeta <code>/webhook/…</code>; se documenta en la tarjeta.</li>
+      <li>CLI de n8n disponible para el agente como binario si hace falta, con el Node embebido.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> el flujo actual de n8n (rail, uso y tarjetas) funciona sobre el motor embutido sin cambios de comportamiento para el usuario.</p>
+  </article>
+
+  <article class="fase">
+    <h3>Fase 6 · Matriz</h3>
+    <ul>
+      <li>Windows limpio sin Node; puertos 5678 ocupado; otra instancia n8n del usuario instalada aparte (no debe chocar); carpeta <code>userData</code> migrada de otra versión.</li>
+      <li>Cerrar la app con n8n corriendo; reiniciar el equipo con él activo; desinstalar con y sin conservar datos; clave del vault ausente como prueba de error.</li>
+    </ul>
+    <p><strong>Aceptación:</strong> los cinco escenarios pasan o quedan documentados con su límite.</p>
+  </article>
+
+  <h2>4. Trampas conocidas</h2>
+  <ul class="warn">
+    <li>La cookie puede no llegar en el primer arranque: reintenta la sesión antes de cargar; nunca pidas el login al usuario.</li>
+    <li>La clave de cifrado del vault es la única copia: sin ella la base de credenciales es irrecuperable; guarda y no la uses en otro perfil.</li>
+    <li>“old host did not exit” al reinstalar: mata hosts antes de instalar y usa reintento en la app.</li>
+    <li>Rutas largas y con espacios de Windows rompen el <code>node_modules</code>: acortar y fuera del asar.</li>
+    <li>Los runners de tareas crean procesos hijos: si el árbol de parada no los guarda, quedan huérfanos masticando memoria.</li>
+    <li>Puerto con depuración de Electron ya en uso tras una instalación: uno nuevo por reinicio.</li>
+  </ul>
+
+  <h2>5. Comandos</h2>
+  <pre>cd apps/desktop
+npm run dist:win:dev
+.\dist\codync-dev-windows-x64.exe /S
+Get-Process Codync Dev, codync-host, codync-dev-hostw -EA SilentlyContinue | Stop-Process -Force</pre>
+  <p>Abre con puerto de depuración nuevo por reinicio y prueba desde la app instalada, no desde <code>npm run dev</code>.</p>
+
+  <h2>6. Entrega</h2>
+  <ul>
+    <li>Un commit por fase, en inglés, con qué y por qué; push al terminar cada una.</li>
+    <li>Validación: <code>cargo fmt --check</code>, <code>cargo clippy --all-targets -- -D warnings</code>, <code>cargo test</code>, <code>npm run typecheck</code>, <code>npm test</code>; Gradle solo si tocaste Android.</li>
+    <li>Reporte en español: fases, pruebas hechas, límites y lo que quedó fuera.</li>
+    <li>Deja la app abierta con el editor accesible desde el rail y un workflow de prueba corriendo.</li>
+  </ul>
+</main>
+<script>
+  const button = document.getElementById('copy')
+  const status = document.getElementById('copied')
+  button.addEventListener('click', async () => {
+    const text = [...document.querySelectorAll('main > *')].map((n) => n.innerText.trim()).filter(Boolean).join('\n\n')
+    try { await navigator.clipboard.writeText(text); status.textContent = 'Copiado.' }
+    catch { const a = document.createElement('textarea'); a.value = text; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); status.textContent = 'Copiado.' }
+    setTimeout(() => (status.textContent = ''), 2500)
+  })
+</script>
+</body>
+</html>
