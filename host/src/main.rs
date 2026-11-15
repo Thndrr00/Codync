@@ -36,6 +36,7 @@ mod import_cli;
 mod local_api;
 mod market;
 mod mcp;
+mod modules;
 mod n8n;
 mod network;
 mod network_cli;
@@ -375,6 +376,13 @@ enum McpServer {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
         port: u16,
     },
+    /// An installed module's tools; the module is named by `CODYNC_MODULE`.
+    Module {
+        #[arg(long)]
+        bot: String,
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+    },
 }
 
 /// The database id + local API token live in the database; the token is mirrored to
@@ -612,6 +620,7 @@ async fn main() -> Result<()> {
         Sub::Mcp { server: McpServer::Memory { bot, port } } => mcp::serve(bot, port, mcp::Server::Memory).await,
         Sub::Mcp { server: McpServer::Composio { bot, port } } => mcp::serve(bot, port, mcp::Server::Composio).await,
         Sub::Mcp { server: McpServer::Network { name, port } } => mcp::serve(name, port, mcp::Server::Network).await,
+        Sub::Mcp { server: McpServer::Module { bot, port } } => mcp::serve(bot, port, mcp::Server::Module).await,
         Sub::Mcp { server: McpServer::Local { connector, port } } => mcp::serve_local(connector, port).await,
         Sub::Mcp { server: McpServer::Remote { connector, port } } => mcp::serve_remote(connector, port).await,
         Sub::Tui { url, token, port } => {

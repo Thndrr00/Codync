@@ -44,6 +44,8 @@ pub enum Server {
     Composio,
     /// For agents on this computer that aren't Codync bots; `bot` is the agent's name.
     Network,
+    /// One installed module's tools; the module is named by `CODYNC_MODULE`.
+    Module,
 }
 
 const INSTRUCTIONS: &str = "Operate this computer's apps like a person would, in the background where you can: \
@@ -57,6 +59,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
     let token = std::fs::read_to_string(crate::service::data_dir().join("token")).unwrap_or_default();
     let token: Arc<str> = token.trim().into();
     let bot: Arc<str> = bot.into();
+    // A module's MCP server is one per module, told which one by its environment.
+    let module: Arc<str> = std::env::var("CODYNC_MODULE").unwrap_or_default().into();
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let cancellation = Arc::new(cancellation::Cancellation::default());
     let mut requests = tokio::task::JoinSet::new();
@@ -107,6 +111,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         Server::Network => {
             ("codync-network", crate::chat::team::assistant::INSTRUCTIONS, crate::chat::team::assistant::tools())
         }
+        Server::Module => ("codync-module", crate::modules::api::INSTRUCTIONS, Value::Null),
     };
     // Requests still running, by id: a cancelled one stops, and its host call with it (a team change's card expires).
     let mut running = std::collections::HashMap::<String, tokio::task::AbortHandle>::new();
@@ -125,6 +130,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         let key = id.to_string();
         let (replies, token, bot, available_tools) =
             (replies.clone(), token.clone(), bot.clone(), available_tools.clone());
+        let module = module.clone();
         while requests.try_join_next().is_some() {}
         if requests.len() >= 100 {
             let _ = replies
@@ -144,6 +150,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 "ping" => Ok(json!({})),
                 "tools/list" => Ok(match server {
                     Server::Computer => computer_tools(port, &token).await,
+                    Server::Module => module_tools(port, &token, &module).await,
                     _ => json!({"tools": available_tools}),
                 }),
                 "tools/call" if matches!(server, Server::Composio) && params["name"] == "execute" => {
@@ -152,7 +159,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                         Err(error) => json!({"content":[{"type":"text","text":format!("{error:#}")}],"isError":true}),
                     })
                 }
-                "tools/call" => Ok(call(port, &token, &bot, params, server).await),
+                "tools/call" => Ok(call(port, &token, &bot, &module, params, server).await),
                 method => Err(json!({"code": -32601, "message": format!("unknown method {method}")})),
             };
             let _ = replies.send(match reply {
@@ -188,8 +195,23 @@ async fn computer_tools(port: u16, token: &str) -> Value {
     }
 }
 
+/// The tools of one module the owner approved; a module turned off offers none.
+async fn module_tools(port: u16, token: &str, module: &str) -> Value {
+    let res = crate::http()
+        .post(format!("http://127.0.0.1:{port}/api/moduleTools"))
+        .bearer_auth(token)
+        .json(&json!({"id": module}))
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await;
+    match res {
+        Ok(r) if r.status().is_success() => r.json::<Value>().await.unwrap_or_else(|_| json!({"tools": []})),
+        _ => json!({"tools": []}),
+    }
+}
+
 /// One tool call through the host. Failures are tool errors the agent can read, not protocol errors.
-async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server) -> Value {
+async fn call(port: u16, token: &str, bot: &str, module: &str, params: &Value, server: Server) -> Value {
     let body = json!({
         "botId": bot,
         "name": params["name"],
@@ -208,7 +230,13 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
         Server::Composio => ("composioCall", Duration::from_mins(2)),
         // The first listing may wait for the other computers.
         Server::Network => ("agentCall", Duration::from_secs(30)),
+        // The host stops the module itself at its own limit; this is only the outer wait.
+        Server::Module => ("moduleCall", Duration::from_mins(2)),
     };
+    let mut body = body;
+    if matches!(server, Server::Module) {
+        body["moduleId"] = module.into();
+    }
     let res = crate::http()
         .post(format!("http://127.0.0.1:{port}/api/{method}"))
         .bearer_auth(token)
@@ -224,12 +252,15 @@ async fn call(port: u16, token: &str, bot: &str, params: &Value, server: Server)
                     return match server {
                         Server::Computer if v["isError"] == true => json!({"content": v["content"], "isError": true}),
                         Server::Computer => json!({"content": v["content"]}),
+                        // A module answers in MCP's own shape, error flag included.
+                        Server::Module if v["content"].is_array() => v,
                         Server::Chat
                         | Server::Team
                         | Server::Manage
                         | Server::Memory
                         | Server::Routines
                         | Server::Network
+                        | Server::Module
                         | Server::Connectors => {
                             let text = crate::agent::loop_guard::cap_tool_output(&v.to_string());
                             json!({"content": [{"type": "text", "text": text}]})

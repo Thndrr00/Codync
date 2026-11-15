@@ -19,6 +19,7 @@ import { CatalogPanel } from './CatalogPanel'
 import { CredentialsView } from './CredentialsView'
 import { CustomConnectorSheet, InstallConnectorSheet, NewSkillSheet } from './ConnectorSheets'
 import { MarketAgentSheet } from './MarketAgentSheet'
+import { ModulesPanel } from './ModulesPanel'
 import { WhatsAppSheet } from './WhatsAppSheet'
 import { SetupTerminalView } from './SetupTerminal'
 import { McpToolsSheet } from './McpToolsSheet'
@@ -288,6 +289,8 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent }: { ini
               onAddNode={() => setAddingNode(true)}
               onAgent={setAgent}
             />
+          ) : section === 'modules' ? (
+            <ModulesPanel query={query} />
           ) : (
             <SkillsPanel
               skills={shownSkills}

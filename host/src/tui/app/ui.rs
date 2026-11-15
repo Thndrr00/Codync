@@ -131,6 +131,8 @@ pub enum ConfirmAct {
     RotateRoutineKey(String, String),
     RemoveConnector(String),
     RemoveSkill(String),
+    /// Takes a module off this computer: its files, and the bots' tools that came with it.
+    RemoveModule(String),
 }
 
 pub struct Confirm {

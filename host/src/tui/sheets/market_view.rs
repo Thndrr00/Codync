@@ -27,9 +27,59 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
         Tab::Agents => tr("Agents come from the ACP registry and install on {name}."),
         Tab::Connectors => tr("Connectors come from the official MCP Registry and install on {name}."),
         Tab::Skills => tr("Skills come from Anthropic and install on {name}."),
+        Tab::Modules => {
+            tr("Modules are folders you install on {name}: signed, in their own process, and held to what you approve.")
+        }
     };
     let source = source.replace("{name}", &app.host);
     put(buf, inner.x, inner.y + 1, inner.width, &truncate(&source, usize::from(inner.width)), t.dim.patch(t.panel));
+    let keys = match m.tab {
+        Tab::Bots | Tab::Teams => tr("tab switch · ↵ add · esc close"),
+        Tab::Agents => tr("tab switch · ↵ install / sign in · ^r refresh · esc close"),
+        Tab::Connectors => tr("tab switch · ↵ add / sign in · ^x remove · ^r refresh · esc"),
+        Tab::Skills => tr("tab switch · ↵ details · ^x remove · esc close"),
+        Tab::Modules => {
+            if m.view.is_some() {
+                tr("esc closes the screen")
+            } else {
+                tr("tab switch · ↵ on/off · ^a approve · ^v screen · ^s save · ^i install · ^x remove")
+            }
+        }
+    };
+    if let Some(view) = &m.view {
+        let mut y = inner.y + 2;
+        let title = s(view, "title");
+        if !title.is_empty() {
+            put(buf, inner.x, y, inner.width, &truncate(title, usize::from(inner.width)), t.bold.patch(t.panel));
+            y += 2;
+        }
+        let mut shown = 0usize;
+        for section in view["sections"].as_array().into_iter().flatten() {
+            if y + 2 >= inner.y + inner.height {
+                break;
+            }
+            let heading = s(section, "title");
+            put(buf, inner.x, y, inner.width, &truncate(heading, usize::from(inner.width)), t.secondary.patch(t.panel));
+            y += 1;
+            for row in section["rows"].as_array().into_iter().flatten() {
+                if y + 1 >= inner.y + inner.height {
+                    break;
+                }
+                let label = s(row, "label");
+                let nx = put(buf, inner.x + 2, y, 24, &truncate(label, 24), t.dim.patch(t.panel)) + 2;
+                let room = usize::from(inner.right().saturating_sub(nx));
+                put(buf, nx, y, u(room), &truncate(s(row, "value"), room), t.text.patch(t.panel));
+                y += 1;
+                shown += 1;
+            }
+            y += 1;
+        }
+        if shown == 0 {
+            put(buf, inner.x, inner.y + 2, inner.width, &tr("This screen has nothing to show."), t.dim.patch(t.panel));
+        }
+        footer(buf, inner, None, &keys);
+        return;
+    }
     let rows = app.market_rows(m);
     // Tabs, source line, then the list; under it the error and the keys.
     let list_h = usize::from(inner.height.saturating_sub(5));
@@ -86,6 +136,20 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
                 };
                 (if added { "V" } else { "+" }, s(v, "name").into(), s(v, "summary").into(), right)
             }
+            Row::Module(module) => {
+                let approved = module["approved"]["tools"].as_array().map_or(0, Vec::len);
+                let tools = module["tools"].as_array().map_or(0, Vec::len);
+                let state = match module["state"].as_str().unwrap_or_default() {
+                    "running" => tr("running"),
+                    "disabled" => tr("off"),
+                    "broken" => tr("broken"),
+                    _ => tr("ready"),
+                };
+                let right = format!("{state} · {approved}/{tools}");
+                let detail = module["broken"].as_str().map_or_else(|| s(module, "description").into(), str::to_owned);
+                let mark = if module["enabled"] == true { "✓" } else { "·" };
+                (mark, s(module, "name").into(), detail, right)
+            }
         };
         let ok = mark == "✓";
         put(buf, inner.x, y, 2, mark, if ok { t.green } else { t.dim }.patch(base));
@@ -99,12 +163,6 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, m: &Market) {
         let msg = if m.loading { tr("Loading…") } else { tr("Nothing matches") };
         put(buf, inner.x, y, inner.width, &msg, t.dim.patch(t.panel));
     }
-    let keys = match m.tab {
-        Tab::Bots | Tab::Teams => tr("tab switch · ↵ add · esc close"),
-        Tab::Agents => tr("tab switch · ↵ install / sign in · ^r refresh · esc close"),
-        Tab::Connectors => tr("tab switch · ↵ add / sign in · ^x remove · ^r refresh · esc"),
-        Tab::Skills => tr("tab switch · ↵ details · ^x remove · esc close"),
-    };
     let loading = m.loading && m.tab == Tab::Connectors && !rows.is_empty();
     let registry = tr("Loading the registry…");
     footer(buf, inner, m.error.as_deref().or(loading.then_some(registry.as_ref())), &keys);

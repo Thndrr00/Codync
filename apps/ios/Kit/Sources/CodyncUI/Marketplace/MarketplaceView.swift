@@ -243,12 +243,13 @@ public struct MarketplaceView: View {
 }
 
 enum ExtensionSection: String, CaseIterable, Identifiable {
-    case apps, agents, skills
+    case apps, agents, modules, skills
     var id: String { rawValue }
     var title: String {
         switch self {
         case .apps: "Apps"
         case .agents: "Agents"
+        case .modules: "Modules"
         case .skills: "Skills"
         }
     }
@@ -256,6 +257,7 @@ enum ExtensionSection: String, CaseIterable, Identifiable {
         switch self {
         case .apps: "square.grid.2x2"
         case .agents: "terminal"
+        case .modules: "puzzlepiece.extension"
         case .skills: "book.pages"
         }
     }
@@ -263,6 +265,7 @@ enum ExtensionSection: String, CaseIterable, Identifiable {
         switch self {
         case .apps: "Apps connect a service to {name} with its own sign-in or key. Custom connectors add any MCP server."
         case .agents: "Ready-made agents come with their instructions, skills and routines. Add one to {name}."
+        case .modules: "Modules add tools and a screen to {name}. Each one is signed, runs in its own process, and asks you before it does anything."
         case .skills: "Skills install on {name} and every bot can use them."
         }
     }

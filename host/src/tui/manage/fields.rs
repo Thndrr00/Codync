@@ -94,6 +94,7 @@ impl App {
                 let body = json!({"botId": bot, "artifactId": artifact, "title": values["title"]});
                 self.sheet("renameArtifact", body, Reply::FieldsSaved);
             }
+            Submit::ModuleFolder => self.sheet("installModule", json!({"folder": values["folder"]}), Reply::Modules),
             Submit::BrainName { bot, id } => {
                 let method = if id.is_some() { "renameBrain" } else { "createBrain" };
                 self.sheet(method, json!({"id": id, "name": values["value"]}), Reply::MemorySaved(bot.clone()));

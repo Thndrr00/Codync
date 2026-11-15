@@ -178,6 +178,18 @@ repositorio sin mapear y rama filtrada.
 **Meta:** el punto de extensión que hoy no existe. Es el bloque más caro y el que más cambia la
 arquitectura; no empezar sin los cuatro anteriores cerrados.
 
+**Estado:** bloque completo. Contrato en `docs/architecture/modules.md`: manifiesto firmado (Ed25519
+sobre los bytes canónicos y SHA-256 de cada archivo), permisos y aprobación del dueño, cuotas de
+tiempo, llamadas y memoria, ciclo de vida (instalar, actualizar, desinstalar, encender y apagar,
+exportar e importar como `.module.json`), contrato versionado que rechaza módulos más nuevos, proceso
+propio fuera del actor del bot con entorno limpio y grupo de procesos, eventos de entrada
+(`messageAdded`, `botStatus`) y de salida (`moduleEvent`), herramientas en el servidor MCP del bot y
+vistas declarativas en escritorio, TUI, iOS y Android. Falta la compilación en iOS y Android (sin
+Xcode ni SDK aquí), la E2E en dispositivo, y el sandbox de sistema operativo por plataforma (item
+18), que queda documentado como no construido con su razón. Los tests cubren manifiesto, firma,
+permisos, cuotas y los tres casos del item 19: un módulo que pide de más, uno que se cuelga y uno que
+no cierra.
+
 1. Leer los ADR de ediciones y módulos, y el `packages/modules` de agentes.chat.
 2. Definir el contrato: qué puede un módulo (herramientas, vistas, eventos).
 3. Definir qué no puede: permisos, aprobaciones, red sin declarar.

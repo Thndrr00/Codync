@@ -18,6 +18,35 @@ extension BotStore {
         try await ready().marketSkills()
     }
 
+    /// The modules installed on this computer (`host/src/modules/`).
+    public func modules() async throws -> [HostModule] {
+        try await ready().modules()
+    }
+
+    public func installModule(folder: String? = nil, bundle: JSONValue? = nil) async throws -> [HostModule] {
+        try await ready().installModule(folder: folder, bundle: bundle)
+    }
+
+    public func setModule(_ id: String, enabled: Bool) async throws -> [HostModule] {
+        try await ready().setModule(id, enabled: enabled)
+    }
+
+    public func approveModule(_ id: String, permissions: ModulePermissions? = nil) async throws -> [HostModule] {
+        try await ready().approveModule(id, permissions: permissions)
+    }
+
+    public func uninstallModule(_ id: String) async throws -> [HostModule] {
+        try await ready().uninstallModule(id)
+    }
+
+    public func exportModule(_ id: String) async throws -> (name: String, bundle: JSONValue) {
+        try await ready().exportModule(id)
+    }
+
+    public func moduleView(_ id: String, view: String) async throws -> ModuleScreen {
+        try await ready().moduleView(id, view: view)
+    }
+
     public func marketAgents(search: String = "", category: String = "") async throws -> [MarketAgent] {
         try await ready().marketAgents(search: search, category: category)
     }

@@ -34,7 +34,8 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 ## Not taken
 
 - **Brains** (block 3 of the plan): a third memory scope per project. Not started.
-- **Modules** (block 5): the extension point. Not started.
+- **Modules** (block 5): the extension point. Built: a signed folder the host runs in its own process, with tools,
+  views, permissions, quotas and lifecycle ([modules](../architecture/modules.md)).
 - **Embeddings**, organization permissions and the other search filters: no provider in the host and
   no organization model.
 

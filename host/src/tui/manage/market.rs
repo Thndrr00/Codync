@@ -22,6 +22,7 @@ impl App {
         self.call("refreshBackends", json!({}), After::Backends);
         self.call("connectors", json!({}), After::Connectors);
         self.call("skills", json!({}), After::Skills);
+        self.call("modules", json!({}), After::Modules);
         self.sheet("marketSkills", json!({}), Reply::Skills);
         self.sheet("marketConnectors", json!({"search": ""}), Reply::Registry { search: String::new(), cursor: None });
         self.sheet("botCatalog", json!({}), Reply::Catalog);
@@ -37,6 +38,7 @@ impl App {
             loading: true,
             cursor: 0,
             error: None,
+            view: None,
         })));
     }
 
@@ -103,6 +105,7 @@ impl App {
                 );
                 rows
             }
+            Tab::Modules => self.modules.iter().filter(|v| hit(v, &["name", "description"])).map(Row::Module).collect(),
         }
     }
 
@@ -125,6 +128,7 @@ impl App {
                     return None;
                 }
             }
+            KeyCode::Esc if m.view.is_some() => m.view = None,
             KeyCode::Esc => return None,
             KeyCode::Tab | KeyCode::BackTab => {
                 let i = TABS.iter().position(|(t, _)| *t == m.tab).unwrap_or(0);
@@ -139,7 +143,75 @@ impl App {
             KeyCode::Char('r') if ctrl(k) => {
                 self.call("connectors", json!({}), After::Connectors);
                 self.call("skills", json!({}), After::Skills);
+                self.call("modules", json!({}), After::Modules);
                 self.call("refreshBackends", json!({}), After::Backends);
+            }
+            // Modules: ↵ turns one on or off, ^a approves everything it asks for, ^v opens its screen, ^s saves it
+            // to a file, ^i installs one from a folder, ^x takes it off.
+            KeyCode::Char('a') if ctrl(k) && m.tab == Tab::Modules => {
+                if let Some(Row::Module(module)) = self.market_rows(&m).get(m.cursor) {
+                    let id = s(module, "id");
+                    self.overlays.push(Overlay::Market(m));
+                    self.call("approveModule", json!({"id": id}), After::Sheet(Reply::Modules));
+                    return None;
+                }
+            }
+            KeyCode::Char('v') if ctrl(k) && m.tab == Tab::Modules => {
+                if let Some(Row::Module(module)) = self.market_rows(&m).get(m.cursor) {
+                    let id = s(module, "id");
+                    let view = module["views"][0]["id"].as_str().unwrap_or_default().to_owned();
+                    if !view.is_empty() {
+                        self.overlays.push(Overlay::Market(m));
+                        self.call("moduleView", json!({"id": id, "view": view}), After::Sheet(Reply::ModuleView));
+                        return None;
+                    }
+                }
+            }
+            KeyCode::Char('s') if ctrl(k) && m.tab == Tab::Modules => {
+                if let Some(Row::Module(module)) = self.market_rows(&m).get(m.cursor) {
+                    let (id, name) = (s(module, "id"), s(module, "name"));
+                    self.overlays.push(Overlay::Market(m));
+                    self.call("exportModule", json!({"id": id}), After::Sheet(Reply::ModuleExported(name)));
+                    return None;
+                }
+            }
+            KeyCode::Char('i') if ctrl(k) && m.tab == Tab::Modules => {
+                self.overlays.push(Overlay::Market(m));
+                self.overlays.push(Overlay::Fields(Box::new(Fields {
+                    title: tr("Install a module").into_owned(),
+                    note: tr("A module is a folder with a signed manifest; Codync checks its signature and every file before running anything.").into_owned(),
+                    choices: vec![],
+                    choice: 0,
+                    inputs: vec![Input {
+                        name: "folder".into(),
+                        label: tr("Module folder").into_owned(),
+                        secret: false,
+                        required: true,
+                        multiline: false,
+                        placeholder: "/Users/you/Modules/weather".into(),
+                        ed: Editor::default(),
+                    }],
+                    cursor: 0,
+                    error: None,
+                    saving: false,
+                    submit: Submit::ModuleFolder,
+                })));
+                return None;
+            }
+            KeyCode::Char('x') if ctrl(k) && m.tab == Tab::Modules => {
+                if let Some(Row::Module(module)) = self.market_rows(&m).get(m.cursor) {
+                    let (id, name) = (s(module, "id"), s(module, "name"));
+                    let c = Confirm {
+                        title: tr("Remove {name}?").replace("{name}", &name),
+                        detail: tr("Its files leave this computer and the bots lose its tools. What the bots already did stays.").into_owned(),
+                        note: String::new(),
+                        button: "Remove",
+                        act: ConfirmAct::RemoveModule(id),
+                    };
+                    self.overlays.push(Overlay::Market(m));
+                    self.overlays.push(Overlay::Confirm(c));
+                    return None;
+                }
             }
             KeyCode::Enter if Self::market_stale(&m) => {
                 let search = m.query.text.trim().to_owned();
@@ -197,6 +269,19 @@ impl App {
             Skill(Value, bool),
             Catalog(Value, bool),
             None,
+        }
+        // A module is one row: ↵ turns it on or off, and its keys sit in the footer.
+        if m.tab == Tab::Modules {
+            let toggle = match self.market_rows(&m).get(m.cursor) {
+                Some(Row::Module(module)) => Some((s(module, "id"), module["enabled"] != true)),
+                _ => None,
+            };
+            if let Some((id, on)) = toggle {
+                self.overlays.push(Overlay::Market(m));
+                self.call("setModule", json!({"id": id, "enabled": on}), After::Sheet(Reply::Modules));
+                return None;
+            }
+            return Some(Overlay::Market(m));
         }
         let act = match self.market_rows(&m).get(m.cursor) {
             Some(Row::Node) => Act::Node,

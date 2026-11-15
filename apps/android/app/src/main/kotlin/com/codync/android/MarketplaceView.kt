@@ -275,8 +275,8 @@ import kotlinx.coroutines.launch
                         icon = { AgentIcon(backend.registry, 22.dp) }) { agent = backend }
                 }
             }
-            ExtensionSection.Skills -> if (loadingSkills) item { SkeletonRows() }
-            else if (shownSkills.isEmpty() && query.isNotEmpty()) item {
+            ExtensionSection.Modules -> item(key = "modules") { ModulesSection(query, store) }
+            ExtensionSection.Skills -> if (loadingSkills) item { SkeletonRows() } else if (shownSkills.isEmpty() && query.isNotEmpty()) item {
                 Text(tr("No skills match “{query}”.").replace("{query}", query), style = Type.body, color = Palette.secondary)
             } else MarketCategories.group(shownSkills.filter { it.category != null }, { it.category ?: "other" }, { it.featured == true }).forEach { (title, group) ->
                 item(key = "skill:$title") { MarketSection(title) {} }

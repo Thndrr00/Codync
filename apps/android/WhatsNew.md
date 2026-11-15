@@ -7,6 +7,16 @@ released version's section; a version without one gets the PRs' "What's New: And
 else a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.53.0
+
+### zh-Hant
+- 擴充功能新增「模組」：一個資料夾加上簽章清單，就能給 Bot 新工具和一個畫面，在自己的程序裡執行。
+- 每個模組都要你核准它要用的工具、事件和檔案，也能隨時關閉或移除，或存成檔案帶到另一台電腦。
+
+### en-US
+- Extensions gains Modules: a folder with a signed manifest gives bots new tools and a screen, and runs in its own process.
+- Approve what each module may use, turn it off or remove it, or save it to a file for another computer.
+
 ## 2.52.0
 
 ### zh-Hant

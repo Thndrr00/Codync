@@ -73,6 +73,31 @@ impl App {
                     }
                 }
             }
+            Reply::Modules => {
+                self.modules = v["modules"].as_array().cloned().unwrap_or_default();
+                for o in &mut self.overlays {
+                    if let Overlay::Market(m) = o {
+                        m.loading = false;
+                    }
+                }
+            }
+            Reply::ModuleView => {
+                let view = v["view"].clone();
+                for o in &mut self.overlays {
+                    if let Overlay::Market(m) = o {
+                        m.view = Some(view.clone());
+                    }
+                }
+            }
+            Reply::ModuleExported(name) => {
+                let dir = crate::service::data_dir().join("modules").join("exports");
+                let file = dir.join(format!("{}.module.json", crate::chat::memory::brains::file_name(&name)));
+                let text = serde_json::to_string_pretty(&v["bundle"]).unwrap_or_default();
+                match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, text)) {
+                    Ok(()) => self.flash(&tr("Saved {path}").replace("{path}", &file.to_string_lossy())),
+                    Err(error) => self.flash(&format!("Couldn't save it: {error}")),
+                }
+            }
             Reply::SkillDetails(id) => {
                 for o in &mut self.overlays {
                     if let Overlay::Skill(s) = o

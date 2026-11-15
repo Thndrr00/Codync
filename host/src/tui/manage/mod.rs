@@ -66,6 +66,12 @@ pub enum Reply {
     BrainExported(String),
     /// A bot's missions and the changes to them.
     Missions(MissionReply),
+    /// The modules on this computer, after installing, approving, turning one on or off, or removing it.
+    Modules,
+    /// One module's screen, as rows the sheet draws.
+    ModuleView,
+    /// A module saved as a file, under its name.
+    ModuleExported(String),
     /// A note the bot's memory sheet has open.
     MemoryFile(String),
     Routines(String),
@@ -169,14 +175,16 @@ pub enum Tab {
     Agents,
     Connectors,
     Skills,
+    Modules,
 }
 
-pub const TABS: [(Tab, &str); 5] = [
+pub const TABS: [(Tab, &str); 6] = [
     (Tab::Bots, "Bots"),
     (Tab::Teams, "Teams"),
     (Tab::Agents, "Agents"),
     (Tab::Connectors, "Connectors"),
     (Tab::Skills, "Skills"),
+    (Tab::Modules, "Modules"),
 ];
 
 pub struct Market {
@@ -194,6 +202,8 @@ pub struct Market {
     pub loading: bool,
     pub cursor: usize,
     pub error: Option<String>,
+    /// The screen of a module, open over its list.
+    pub view: Option<Value>,
 }
 
 pub enum Row<'a> {
@@ -209,6 +219,8 @@ pub enum Row<'a> {
     Profile(&'a Value),
     /// A catalog team: a coordinator and the bots it hands work to.
     Team(&'a Value),
+    /// A module installed on this computer.
+    Module(&'a Value),
 }
 
 pub struct AgentSetup {
@@ -266,6 +278,8 @@ pub enum Submit {
     BrainImport {
         bot: String,
     },
+    /// A module installed from the folder at the typed path.
+    ModuleFolder,
 }
 
 /// A few labeled text fields: an agent's keys, a connector's setup, a pasted MCP config.

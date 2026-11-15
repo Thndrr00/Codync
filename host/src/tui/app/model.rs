@@ -76,6 +76,8 @@ pub enum After {
     Saved,
     Connectors,
     Skills,
+    /// The modules installed on this computer (`modules`).
+    Modules,
     Installed,
     /// Memory, routines, marketplace, sign-in (`manage`).
     Sheet(Reply),

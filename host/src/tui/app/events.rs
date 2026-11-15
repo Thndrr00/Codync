@@ -348,20 +348,24 @@ impl App {
                     }
                 }
             }
-            After::Connectors | After::Skills => {
-                let connectors = matches!(after, After::Connectors);
-                let list = self.set_plugins(connectors, v["items"].as_array().cloned().unwrap_or_default());
-                if connectors {
-                    self.market.0 = list;
+            After::Connectors | After::Skills | After::Modules => {
+                if matches!(after, After::Modules) {
+                    self.modules = v["modules"].as_array().cloned().unwrap_or_default();
                 } else {
-                    self.market.1 = list;
-                }
-                for o in &mut self.overlays {
-                    if let Overlay::Form(f) = o {
-                        if connectors {
-                            merge_toggles(&mut f.connectors, &self.market.0);
-                        } else {
-                            merge_toggles(&mut f.skills, &self.market.1);
+                    let connectors = matches!(after, After::Connectors);
+                    let list = self.set_plugins(connectors, v["items"].as_array().cloned().unwrap_or_default());
+                    if connectors {
+                        self.market.0 = list;
+                    } else {
+                        self.market.1 = list;
+                    }
+                    for o in &mut self.overlays {
+                        if let Overlay::Form(f) = o {
+                            if connectors {
+                                merge_toggles(&mut f.connectors, &self.market.0);
+                            } else {
+                                merge_toggles(&mut f.skills, &self.market.1);
+                            }
                         }
                     }
                 }

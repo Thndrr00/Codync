@@ -140,6 +140,18 @@ impl Actor {
         for name in builtin.into_iter().flatten() {
             servers.push(crate::mcp::acp_server(name, &exe, &[name, "--bot", &self.cfg.id], port));
         }
+        // The modules this bot may call, one MCP server each: the host answers the list from the manifest and
+        // checks the owner's approval on every call.
+        for id in crate::modules::api::bot_servers(&self.hub.modules) {
+            let mut server = crate::mcp::acp_server("module", &exe, &["module", "--bot", &self.cfg.id], port);
+            server["name"] = json!(format!("module-{id}"));
+            server["env"] = json!([
+                {"name": "CODYNC_HOME", "value": crate::service::data_dir()},
+                {"name": "CODYNC_MODULE", "value": id},
+                {"name": "CODYNC_BOT_ID", "value": self.cfg.id},
+            ]);
+            servers.push(server);
+        }
         Ok(Value::Array(servers))
     }
 

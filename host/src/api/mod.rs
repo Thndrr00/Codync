@@ -96,6 +96,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if missions::METHODS.contains(&method) {
         return missions::call(hub, method, &b);
     }
+    if let Some(answer) = crate::modules::api::route(hub, caller, method, b.clone()).await? {
+        return Ok(answer);
+    }
     if crate::research::METHODS.contains(&method) {
         if method == "setResearchKey" && !matches!(caller, Caller::Local) {
             return Err(Forbidden.into());

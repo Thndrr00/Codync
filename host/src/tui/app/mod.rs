@@ -138,6 +138,8 @@ pub struct App {
     pub market: (Vec<Toggle>, Vec<Toggle>),
     /// Installed connectors and skills as the host lists them.
     pub plugins: (Vec<Value>, Vec<Value>),
+    /// The modules installed on this computer, as `modules` lists them.
+    pub modules: Vec<Value>,
     /// Models each agent offers (`None` while loading).
     pub models: HashMap<String, Option<Vec<AgentModel>>>,
     /// Agents whose model list came with Fast mode.
@@ -218,6 +220,7 @@ impl App {
             call_entries: HashMap::new(),
             market: (vec![], vec![]),
             plugins: (vec![], vec![]),
+            modules: vec![],
             models: HashMap::new(),
             fast_mode: HashSet::new(),
             shell: None,

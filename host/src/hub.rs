@@ -143,6 +143,8 @@ pub struct Hub {
     pub terms: Arc<crate::agent::term::Terms>,
     /// Agent sessions running in the person's own terminals (see `external`).
     pub external: crate::external::External,
+    /// The modules the person installed, and the processes they run in.
+    pub modules: Arc<crate::modules::Modules>,
 }
 
 impl Hub {
@@ -156,6 +158,7 @@ impl Hub {
         let screen = Arc::new(Screen::new(Screen::load_enabled(&store), events.clone()));
         let n8n =
             Arc::new(crate::n8n::N8n::new(&store, events.clone(), format!("http://127.0.0.1:{port}"), token.clone()));
+        let modules = Arc::new(crate::modules::Modules::load(&store, events.clone()));
         Arc::new(Self {
             computer: crate::computer::Access::default(),
             analytics: crate::analytics::Analytics::load(&store),
@@ -195,6 +198,7 @@ impl Hub {
             n8n,
             terms: Arc::default(),
             external: crate::external::External::default(),
+            modules,
         })
     }
 
@@ -257,6 +261,8 @@ impl Hub {
             tracing::warn!("some bots didn't stop within 5 s");
         }
         self.n8n.stop(&self.store).await;
+        // No module process outlives the host.
+        self.modules.stop_all();
         self.keep_awake.locked().set(false);
     }
 

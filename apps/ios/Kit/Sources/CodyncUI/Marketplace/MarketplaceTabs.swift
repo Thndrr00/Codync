@@ -35,6 +35,7 @@ extension MarketplaceView {
             switch section {
             case .apps: appsTab
             case .agents: agentsTab
+            case .modules: ModulesTab(query: query)
             case .skills: skillsTab
             }
         }

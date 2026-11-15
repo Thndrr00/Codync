@@ -31,6 +31,7 @@ internal enum class ExtensionSection(val title: String, val icon: String, val so
     Channels("Channels", "bubble.left.and.bubble.right", "WhatsApp, Telegram, Slack and Discord: talk to a bot from the places you already write, with only the people you allow."),
     Agents("Agents", "terminal", "Ready-made agents come with their instructions, skills and routines. Add one to {name}."),
     Clis("CLIs", "command", "The coding agents (ACPs) that run bots on {name}. Install one and sign in."),
+    Modules("Modules", "puzzlepiece.extension", "Modules add tools and a screen to {name}. Each one is signed, runs in its own process, and asks you before it does anything."),
     Skills("Skills", "book.pages", "Skills install on {name} and every bot can use them."),
 }
 
