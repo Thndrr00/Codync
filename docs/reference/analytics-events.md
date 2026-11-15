@@ -132,7 +132,7 @@ host answers and sends it once the host is up.
 | `connector_removed` | host | `removeConnector` | — |
 | `connector_updated` | host | `updateConnector`, whether or not the edit was saved | `outcome` (`ready`: how it runs changed and it passed its check; `saved`: name or description only; `failed`); on failure `error` (`invalid`, `refused`, `wont_start`, `conflict`, `other`). Never the connector, its fields, values or the error's message |
 | `connector_signin_started` | host | `connectorSignIn` | — |
-| `skill_installed` | host | `installSkill` | `custom` |
+| `skill_installed` | host | `installSkill`, or a bot's `install_skill` (`chatCall`, a skill from a public GitHub link) | `custom` (`false` for a link) |
 | `skill_removed` | host | `removeSkill` | — |
 | `skill_written` | host | A bot's `save_skill` (`chatCall`) | `change` (`new`/`update`) |
 | `artifact_published` | host | A bot's `publish_artifact` (`chatCall`) | `change` (`new`/`update`), `card` (whether its card went into the bot's chat), never its title |
