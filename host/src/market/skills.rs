@@ -259,13 +259,7 @@ async fn download_dir(repo_path: &str, dest: &std::path::Path, depth: u8) -> Res
 }
 
 /// The same download from any public repository, for a skill that came from a link.
-async fn download_dir_in(
-    repo: &str,
-    branch: &str,
-    repo_path: &str,
-    dest: &std::path::Path,
-    depth: u8,
-) -> Result<()> {
+async fn download_dir_in(repo: &str, branch: &str, repo_path: &str, dest: &std::path::Path, depth: u8) -> Result<()> {
     let listing = tree_entries_in(repo, branch, repo_path).await?;
     tokio::fs::create_dir_all(dest).await?;
     for entry in listing {
