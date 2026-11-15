@@ -151,7 +151,7 @@ export function MissionsCard({ botId }: { botId: string }) {
                   <Button kind="secondary" disabled={busy} onClick={() => askAbandon(mission)}>{tr('Abandon')}</Button>
                 </HStack>
               </VStack>
-            )) : <Text tone="secondary">{tr(`${finished.length} finished, hidden.`)}</Text>}
+            )) : <Text tone="secondary">{tr('Finished missions are hidden.')}</Text>}
           </CardSection>
         ) : null}
 

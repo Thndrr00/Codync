@@ -6,6 +6,16 @@ any left). tools/asc-submit.py reads the released version's section;
 a version without one gets a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.49.0
+
+### zh-Hant
+- Bot 現在有「任務」頁：一個目標會跨越多個回合，記下做過什麼、還剩什麼，以及為什麼停下來。
+- 可以開始、暫停、完成，或以理由放棄一個任務，也能逐步標記進度；完成與卡關時會收到通知。
+
+### en-US
+- Bots now have a Missions page: a goal that spans turns, recording what was done, what is left, and why it stopped.
+- Activate, pause, finish, or drop a mission with a reason, and step it along; finishing or blocking it reaches your phone.
+
 ## 2.48.0
 
 ### zh-Hant
