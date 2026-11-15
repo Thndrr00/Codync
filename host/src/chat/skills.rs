@@ -11,21 +11,29 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 pub const TOOL: &str = "save_skill";
-pub const TOOLS: [&str; 3] = [TOOL, "skill_history", "restore_skill"];
+/// A skill from a public GitHub link, turned on for this bot (ported from `OpenBot` 0.69.0's
+/// "Add skills from GitHub").
+pub const INSTALL: &str = "install_skill";
+pub const TOOLS: [&str; 4] = [TOOL, "skill_history", "restore_skill", INSTALL];
 
-pub fn tools() -> [Value; 3] {
+pub fn tools() -> [Value; 4] {
     [
         tool(),
         json!({"name":"skill_history", "description":"List the saved versions of a skill you own. With version, return its complete SKILL.md. Read this before restoring a version.",
         "inputSchema":{"type":"object","properties":{"id":{"type":"string"},"version":{"type":"integer"}},"required":["id"]},"annotations":{"readOnlyHint":true}}),
         json!({"name":"restore_skill", "description":"Only when the user asks: restore an earlier version of a skill you own. The current version must equal ifVersion from skill_history; a newer edit is never overwritten.",
         "inputSchema":{"type":"object","properties":{"id":{"type":"string"},"version":{"type":"integer"},"ifVersion":{"type":"integer"}},"required":["id","version","ifVersion"]},"annotations":{"readOnlyHint":false}}),
+        json!({"name":INSTALL, "description":"Install a skill from a public GitHub link when the user gives you one: the folder whose SKILL.md holds it, or the repository whose top holds one. It is saved in Codync with the link as its source and turned on for you. Read the skill's own instructions before you use it; the link is installed as written and nothing in it is reviewed.",
+        "inputSchema":{"type":"object","properties":{"url":{"type":"string","description":"A github.com link to the folder or to its SKILL.md."}},"required":["url"]},"annotations":{"readOnlyHint":false}}),
     ]
 }
 
 pub async fn dispatch(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
     if name == TOOL {
         return call(hub, bot, args).await;
+    }
+    if name == INSTALL {
+        return install(hub, bot, args).await;
     }
     let (hub, bot, name, args) = (hub.clone(), bot.to_owned(), name.to_owned(), args.clone());
     tokio::task::spawn_blocking(move || {
@@ -50,8 +58,32 @@ pub async fn dispatch(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Re
     .await?
 }
 
+/// `install_skill`: saves a skill from a public GitHub link and turns it on for this bot. The link is
+/// installed as written; nothing in it is reviewed. A catalog install is turned on for every bot, but a
+/// skill a bot brings is turned on for that bot only, as `save_skill` does.
+async fn install(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Value> {
+    let url = args["url"].as_str().ok_or_else(|| anyhow::anyhow!("url is required"))?;
+    let skill = market::install_from_link(&hub.store, url).await?;
+    let id = skill["id"].as_str().ok_or_else(|| anyhow::anyhow!("The skill was installed without an id"))?.to_owned();
+    let row = hub.store.bot(bot)?.filter(|b| !b.deleted).ok_or_else(|| anyhow::anyhow!("unknown bot"))?;
+    if !row.config.skills.contains(&id) {
+        let mut skills = row.config.skills.clone();
+        skills.push(id);
+        hub.update_bot(&json!({"id": bot, "skills": skills}))?;
+    }
+    let name = skill["name"].as_str().unwrap_or("a skill");
+    hub.add_entry(
+        &Lane::main(bot),
+        EntryKind::Notice,
+        hub.store.max_turn(bot),
+        &json!({"text": format!("Installed the skill {name} from its link.")}),
+    );
+    Ok(json!({"skill": skill, "enabled": true}))
+}
+
 const MAX_NAME_CHARS: usize = 64;
 const MAX_DESCRIPTION_CHARS: usize = 1024;
+
 /// At most 256 KB in UTF-8, what a skill's details sheet shows.
 const MAX_INSTRUCTIONS_CHARS: usize = 64 * 1024;
 

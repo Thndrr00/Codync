@@ -239,6 +239,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 serde_json::to_value(market::hermes::install(&hub.store, str_arg(&b, "source")?)?)?
             } else if b["source"].is_string() {
                 market::install_skill(&hub.store, str_arg(&b, "source")?).await?
+            } else if let Some(url) = b["url"].as_str() {
+                // A public GitHub link, from the person or from a bot's `install_skill` (`github_skill`).
+                market::install_from_link(&hub.store, url).await?
             } else {
                 let text = |k: &str| b[k].as_str().unwrap_or_default();
                 market::add_custom_skill(&hub.store, text("name"), text("description"), text("instructions"), None)?

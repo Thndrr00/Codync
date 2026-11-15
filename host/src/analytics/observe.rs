@@ -157,10 +157,16 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
         "updateConnector" => Event::ConnectorUpdated,
         "connectorSignIn" => Event::ConnectorSigninStarted,
         "installSkill" => {
-            p.insert("custom".into(), (!b["source"].is_string()).into());
+            // A hand-written skill has neither a catalog `source` nor a `url` (`github_skill`).
+            p.insert("custom".into(), (!b["source"].is_string() && b["url"].is_null()).into());
             Event::SkillInstalled
         }
         "removeSkill" => Event::SkillRemoved,
+        // A bot's `install_skill`: a skill from a public link.
+        "chatCall" if b["name"] == crate::chat::skills::INSTALL => {
+            p.insert("custom".into(), false.into());
+            Event::SkillInstalled
+        }
         // A bot's `save_skill`: a new skill, or new text for one (`id`).
         "chatCall" if b["name"] == crate::chat::skills::TOOL => {
             let rewrite = crate::chat::skills::rewritten_id(&b["arguments"]).is_some();

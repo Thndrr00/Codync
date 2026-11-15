@@ -23,6 +23,7 @@ pub mod bot_secrets;
 pub mod catalog;
 pub mod composio;
 pub mod connector_update;
+pub mod github_skill;
 pub mod hermes;
 pub mod hermes_apps;
 pub mod login;
@@ -56,7 +57,8 @@ pub use skill_usage::{
     written_skills,
 };
 pub use skills::{
-    MAX_WRITTEN_PER_BOT, add_custom_skill, expand_command, install_skill, list_skills, record_bundled, remove_skill,
+    MAX_WRITTEN_PER_BOT, add_custom_skill, expand_command, install_from_link, install_skill, list_skills, record_bundled,
+    remove_skill,
     reserve_bundled, skill_details, skills_brief, slash_command, turn_on_installed_once, update_custom_skill,
 };
 pub(crate) use skills::{body as skill_body, front_matter};
@@ -178,7 +180,7 @@ pub struct Skill {
     pub name: String,
     #[serde(default)]
     pub description: String,
-    /// "anthropics/skills" or "custom".
+    /// "anthropics/skills", a `github.com` link (`github_skill`), or "custom".
     #[serde(default)]
     pub source: String,
     /// The bot that saved it (`chat::skills`): it's on only for that bot until the user turns it on for others,

@@ -19,6 +19,7 @@ maps to Codync's own shape was taken; the rest is listed below with the reason.
 | A Grok agent makes pictures and clips in the chat | Taken with 0.70.0's media work: the `/image` and `/video` commands, the Grok tool names and their named inputs | `host/src/media/command.rs`, `host/src/media/flow.rs` |
 | Electron 45.3.0 (Chromium 156) | `apps/desktop/package.json`; some sites refused the older browser, and the media viewers want the newer one | `apps/desktop/package.json`, `apps/desktop/package-lock.json` |
 | A WhatsApp number can answer with only the answer | Every request gets a 👀 reaction; the "Trabajando en ello…" line is a per-number switch, on by default | `host/src/whatsapp/settings.rs`, `incoming.rs` (`acknowledge`), `transport.rs`, the bridge's `react`, the switch in the WhatsApp sheet of the desktop, iPhone and Android apps (the terminal has no WhatsApp sheet) |
+| Add skills from a GitHub link | A bot installs a skill from a public `github.com` link (the folder that holds `SKILL.md`, the file, or a repository whose top holds one) with its `install_skill` tool, which saves the folder with the link as its source and turns it on for that bot | `host/src/market/github_skill.rs`, `market::install_from_link` in `host/src/market/skills.rs`, `installSkill {url}`, `host/src/chat/skills.rs` |
 | Product analytics for all of it | `message_pinned` (`pinned`) for a pin and an unpin, and `setting_changed` with `whatsapp_working_message` for the switch; the media of 0.70.0 sends `media_made` (`kind`, `agent`) | `host/src/analytics/observe.rs`, `host/src/agent/bot/files.rs`, [analytics events](../reference/analytics-events.md) |
 
 The pins surface, its keys and its reasonings are documented in
@@ -31,8 +32,12 @@ message, not a section, so `withMoves` keeps returning its band.
 ## Not ported, and why
 
 - **Teach a task** (record the pages and clicks of the agent's browser tab, then save it as a skill):
-  Codync's agents drive the person's own browser and desktop, not an in-app tab it can record with
-  CDP. The recording layer needs a browser Codync owns; it waits for one.
+  Codync already turns a walk-through into a skill: `recorded_steps` (`host/src/chat/teach.rs`) reads
+  back the conversation's words and tool steps for the bot to save. What 0.69.0 adds is the *browser
+  recording* — which pages a person opened and which controls they clicked. Codync does own a CDP
+  browser (`host/src/screen/protected_browser.rs`, behind `host/src/browser`), so OpenBot's recorder
+  (`src/backend/browser-recorder.ts`) has a tab to watch; the composer entry that starts it and the
+  step file it writes are their own change.
 - **Mute agent from the sidebar**: Codync's bots carry their own notification switch (taken with 0.70.0's
   mute row), so the release's per-user level table has nothing left to add here.
 - **Pool provider accounts** and **disconnect the first Gemini account**: Codync tracks one account per

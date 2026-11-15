@@ -100,7 +100,16 @@ struct TreeEntry {
 /// with every other unauthenticated call from this computer, and answers 403 once that
 /// quota is spent, so the catalog never uses it.
 async fn tree_entries(repo_path: &str) -> Result<Vec<TreeEntry>> {
-    let url = format!("https://github.com/{SKILLS_REPO}/tree/main/{repo_path}");
+    tree_entries_in(SKILLS_REPO, "main", repo_path).await
+}
+
+/// The same listing for any public repository: a skill can come from a link (`github_skill`).
+async fn tree_entries_in(repo: &str, branch: &str, repo_path: &str) -> Result<Vec<TreeEntry>> {
+    let url = if repo_path.is_empty() {
+        format!("https://github.com/{repo}/tree/{branch}")
+    } else {
+        format!("https://github.com/{repo}/tree/{branch}/{repo_path}")
+    };
     // github.com sometimes answers the first handshake with a non-TLS record. One try
     // then surfaces as the red error under the list, so the catalog tries again.
     let mut last = anyhow!("listing skills on GitHub");
@@ -246,7 +255,18 @@ async fn read_limited(mut response: reqwest::Response) -> Result<Option<Vec<u8>>
 
 /// Downloads a skill folder from anthropics/skills (files up to 1 MB, two levels deep).
 async fn download_dir(repo_path: &str, dest: &std::path::Path, depth: u8) -> Result<()> {
-    let listing = tree_entries(repo_path).await?;
+    download_dir_in(SKILLS_REPO, "main", repo_path, dest, depth).await
+}
+
+/// The same download from any public repository, for a skill that came from a link.
+async fn download_dir_in(
+    repo: &str,
+    branch: &str,
+    repo_path: &str,
+    dest: &std::path::Path,
+    depth: u8,
+) -> Result<()> {
+    let listing = tree_entries_in(repo, branch, repo_path).await?;
     tokio::fs::create_dir_all(dest).await?;
     for entry in listing {
         // The page's path has to be the folder we asked for, not somewhere else.
@@ -255,11 +275,11 @@ async fn download_dir(repo_path: &str, dest: &std::path::Path, depth: u8) -> Res
         }
         if entry.dir {
             if depth > 0 {
-                Box::pin(download_dir(&entry.path, &dest.join(&entry.name), depth - 1)).await?;
+                Box::pin(download_dir_in(repo, branch, &entry.path, &dest.join(&entry.name), depth - 1)).await?;
             }
             continue;
         }
-        let url = format!("https://raw.githubusercontent.com/{SKILLS_REPO}/main/{}", entry.path);
+        let url = format!("https://raw.githubusercontent.com/{repo}/{branch}/{}", entry.path);
         if let Some(bytes) = skill_file(&url).await? {
             tokio::fs::write(dest.join(entry.name), &bytes).await?;
         }
@@ -279,10 +299,10 @@ fn update_skills<T>(store: &crate::store::Store, change: impl FnOnce(&mut Vec<Sk
 
 /// The downloaded skill already installed as `id`, or `None` once its folder is taken for the download (under the
 /// lock, so a skill written meanwhile picks another id). A written skill that has the id blocks the download.
-fn reserve_download(store: &crate::store::Store, id: &str) -> Result<Option<Value>> {
+fn reserve_download(store: &crate::store::Store, id: &str, source: &str) -> Result<Option<Value>> {
     let _guard = SKILLS_LOCK.locked();
     match skills(store).into_iter().find(|s| s.id == id) {
-        Some(s) if s.source == SKILLS_REPO => Ok(Some(s.public())),
+        Some(s) if s.source == source => Ok(Some(s.public())),
         Some(s) => bail!("The skill {} written in Codync has the id {id}: remove it to add this one", s.name),
         None => {
             std::fs::create_dir_all(skills_dir().join(id))?;
@@ -293,7 +313,7 @@ fn reserve_download(store: &crate::store::Store, id: &str) -> Result<Option<Valu
 
 pub async fn install_skill(store: &crate::store::Store, source: &str) -> Result<Value> {
     let id = slug(source);
-    if let Some(installed) = reserve_download(store, &id)? {
+    if let Some(installed) = reserve_download(store, &id, SKILLS_REPO)? {
         return Ok(installed);
     }
     let dest = skills_dir().join(&id);
@@ -318,6 +338,43 @@ pub async fn install_skill(store: &crate::store::Store, source: &str) -> Result<
 /// Skills one bot may keep. Past this it rewrites one of its own or the user clears some, so a bot can't pile up
 /// instructions without end.
 pub const MAX_WRITTEN_PER_BOT: usize = 40;
+
+/// Installs a skill from a public GitHub link (`github_skill`): the folder that holds `SKILL.md`, or the
+/// repository whose top holds it. The folder is downloaded like a catalog skill, and its `source` records
+/// the link, so installing the same link again answers the skill that is already there.
+pub async fn install_from_link(store: &crate::store::Store, url: &str) -> Result<Value> {
+    let link = super::github_skill::parse(url)?;
+    let source = link.source();
+    let id = slug(&format!("{} {} {}", link.repo, link.branch, link.path));
+    if let Some(installed) = reserve_download(store, &id, &source)? {
+        return Ok(installed);
+    }
+    let dest = skills_dir().join(&id);
+    if let Err(error) = download_dir_in(&link.repo, &link.branch, &link.path, &dest, 2).await {
+        // A half-downloaded folder would block the same link forever.
+        let _ = std::fs::remove_dir_all(&dest);
+        return Err(error).context("downloading the skill from its link");
+    }
+    let md = tokio::fs::read_to_string(dest.join("SKILL.md"))
+        .await
+        .context("the link has no SKILL.md in that folder; open the folder that holds it and copy that link")?;
+    let (name, description) = front_matter(&md);
+    let s = Skill {
+        id: id.clone(),
+        name: name.unwrap_or_else(|| link.path.clone()),
+        description: description.unwrap_or_default(),
+        source,
+        written_by: None,
+    };
+    update_skills(store, |all| {
+        if let Some(existing) = all.iter_mut().find(|x| x.id == s.id) {
+            *existing = s.clone();
+        } else {
+            all.push(s.clone());
+        }
+        Ok(s.public())
+    })
+}
 
 /// Whether `bot` can save one more skill.
 fn room_for(all: &[Skill], bot: &str) -> Result<()> {
