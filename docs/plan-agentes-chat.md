@@ -13,6 +13,10 @@ diseñar.
 
 El trabajo de los once patrones está escrito y sin verificar. Nada de lo demás debería empezar antes.
 
+**Estado:** 1–5 en verde (1215 pruebas del host pasan; la única roja es la de symlinks de Claude, sin
+privilegios en Windows), y 17–19 en este mismo cambio. 6–16 no se pudieron correr aquí: sin SDK de
+Android, sin Xcode y sin Computer Use en esta sesión; 20 es el merge y el borrado del worktree.
+
 1. `cargo check --all-targets` en `host/` y corregir lo que salga.
 2. `cargo fmt --check` y `cargo clippy --all-targets -- -D warnings`.
 3. `cargo test` completo (1136 pruebas) y revisar las que fallan por entorno.
@@ -40,6 +44,12 @@ El trabajo de los once patrones está escrito y sin verificar. Nada de lo demás
 
 **Meta:** un objetivo que sobrevive a los turnos. Hoy una rutina termina y se olvida; una misión
 recuerda qué se hizo, qué falta y por qué se paró.
+
+**Estado:** bloque completo. Modelo, tablas, API y herramientas en el host (`missions`,
+`update_mission`), transiciones y límites validados en el store, aparcado al reiniciar y push al
+completar o bloquear; hoja de misiones con las mismas acciones en escritorio, TUI, iOS y Android, y
+`docs/features/missions.md`. Falta la E2E en dispositivo iOS y emulador Android (sin Xcode ni SDK
+aquí).
 
 1. Leer los ADR de misiones y de runs de agente.
 2. Definir el modelo: misión, paso, estado, motivo de parada.
