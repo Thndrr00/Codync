@@ -64,10 +64,18 @@ and provider drivers), so this page records what applies, what Codync already do
   engine is the platform's on both phones and its own chunking on the desktop
   (`views/call/voice.ts`), so these are written against OpenBot's engine. They are candidates for a
   look of their own, not copies.
-- **The image viewer's sharper screenshot at a display scale above 100 %**, **the right side panel's
-  resize**, **dragging a canvas item by its text**, **a memory you set that the agent cannot delete**,
-  **a note path written as a link**: each is a small UI or copy fix whose Codync counterpart needs its
-  own read; none is taken here.
+- **The canvas**: dragging a step or a note by its text, the caret where a click lands, and Stop for
+  the routine in focus. Codync's flow canvas has its own pointer handling (`lib/routine-flow.ts`,
+  `core/RoutineFlow.kt`) and its run controls live in the routine's own panel; matching OpenBot's
+  pointer rules there is a change of its own, and a Stop that ends a run belongs next to Run now, which
+  is where the desktop and Android panels already keep it.
+- **A memory the person set themselves**: OpenBot tells the agent to send the person to its Memories
+  settings. Codync's `forget_memory` (`host/src/chat/memory/beliefs.rs`) does not yet tell who wrote
+  the note's current text, so the same reply needs that lookup first; it is a small change of its own.
+- **A note path from a notes app written as a file link**, **the image viewer's sharpness at a display
+  scale above 100 %**, **resizing the right panel when no pane is open**, **the empty WhatsApp lines of
+  a theme**: each is a small UI or copy fix whose Codync counterpart needs its own read; none is taken
+  here.
 
 ## Checks
 
