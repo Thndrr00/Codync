@@ -17,6 +17,7 @@ pub mod library;
 pub mod manage;
 pub mod memory;
 pub mod messages;
+pub mod missions;
 pub mod naming;
 pub mod oneshot;
 pub mod open_items;

@@ -196,6 +196,7 @@ impl Store {
         super::apps::open(&c)?;
         super::open_items::open(&c)?;
         super::approvals::open(&c)?;
+        super::missions::open(&c)?;
         super::approval_lessons::open(&c)?;
         super::flows::open(&c)?;
         super::search::open(&c)?;

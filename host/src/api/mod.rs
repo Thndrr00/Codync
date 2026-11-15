@@ -15,6 +15,7 @@ mod folders;
 mod host;
 mod http;
 mod marketplace;
+pub mod missions;
 mod network;
 mod origin;
 mod rebinding;
@@ -90,6 +91,9 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
     if matches!(method, "savedSearches" | "saveSearch" | "deleteSavedSearch") {
         return saved_searches::call(hub, caller, method, &b);
+    }
+    if missions::METHODS.contains(&method) {
+        return missions::call(hub, method, &b);
     }
     if crate::research::METHODS.contains(&method) {
         if method == "setResearchKey" && !matches!(caller, Caller::Local) {

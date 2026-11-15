@@ -197,6 +197,11 @@ impl Hub {
         crate::chat::memory::import_old_memory(self);
         self.routines.restore(&self.store)?;
         crate::routines::flow::recover(self)?;
+        // A mission whose run the restart cut was left active forever; park it, steps and all.
+        let parked = self.store.park_interrupted_missions()?;
+        if parked > 0 {
+            tracing::info!(missions = parked, "missions interrupted by a restart were parked waiting");
+        }
         crate::market::turn_on_installed_once(&self.store)?;
         for row in self.store.bots()? {
             if row.deleted {
