@@ -19,11 +19,13 @@ mod flow_view;
 mod library_view;
 mod market_view;
 mod memory_view;
+mod missions_view;
 pub use documents::draw as documents;
 pub use flow_view::draw as flow;
 pub use library_view::draw as library;
 pub use market_view::draw as market;
 pub use memory_view::draw as memory;
+pub use missions_view::draw as missions;
 
 use super::app::{App, Editor};
 use super::manage::{AgentSetup, Fields, Page, RoutineField, RoutineForm, RoutineList, SetupRow, Submit};

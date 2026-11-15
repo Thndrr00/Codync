@@ -146,6 +146,7 @@ impl App {
             Overlay::Routine(f) => self.routine_key(f, k),
             Overlay::Flow(f) => self.flow_key(f, k),
             Overlay::Library(l) => self.library_key(l, k),
+            Overlay::Missions(m) => self.missions_key(*m, k),
             Overlay::Market(m) => self.market_key(m, k),
             Overlay::Agent(a) => self.agent_key(a, k),
             Overlay::Fields(f) => self.fields_key(f, k),

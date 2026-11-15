@@ -18,6 +18,7 @@ mod library;
 mod market;
 pub(in crate::tui) mod mcp_tools;
 mod memory;
+pub(in crate::tui) mod missions;
 mod network;
 mod network_rules;
 mod network_setup;
@@ -33,6 +34,7 @@ pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields};
 pub use flow::{FlowSheet, FlowStage, Target};
 pub use library::{ArtifactTitles, LibraryItem};
 pub use memory::{MemoryMode, MemorySheet, Scroll, Section};
+pub use missions::{MissionReply, MissionSheet};
 pub use network::{NetReply, NetworkSheet, Recovery, Step};
 pub use network_rules::{RuleField, RuleForm};
 pub use network_setup::{CONNECTORS, Setup, SetupField};
@@ -58,6 +60,8 @@ pub enum Reply {
     Documents(DocumentReply),
     Memory(String),
     MemorySaved(String),
+    /// A bot's missions and the changes to them.
+    Missions(MissionReply),
     /// A note the bot's memory sheet has open.
     MemoryFile(String),
     Routines(String),

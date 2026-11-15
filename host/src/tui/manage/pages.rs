@@ -1,6 +1,6 @@
 //! A bot's pages of details, as in the desktop inspector and the iPhone's details: Details (whether it
 //! may use the computer, and its routines), Library (the artifacts it made and the files shared in its
-//! chat), Memory and Settings. Shift+←→ moves between them.
+//! chat), Missions, Memory and Settings. Shift+←→ moves between them.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -10,17 +10,19 @@ use super::super::app::App;
 pub enum Page {
     Details,
     Library,
+    Missions,
     Memory,
     Settings,
 }
 
 impl Page {
-    pub const ALL: [Self; 4] = [Self::Details, Self::Library, Self::Memory, Self::Settings];
+    pub const ALL: [Self; 5] = [Self::Details, Self::Library, Self::Missions, Self::Memory, Self::Settings];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Details => "Details",
             Self::Library => "Library",
+            Self::Missions => "Missions",
             Self::Memory => "Memory",
             Self::Settings => "Settings",
         }
@@ -47,6 +49,7 @@ impl App {
         match page {
             Page::Details => self.open_routines(),
             Page::Library => self.open_library(),
+            Page::Missions => self.open_missions(),
             Page::Memory => self.open_memory(),
             Page::Settings => self.edit_bot(),
         }
@@ -61,7 +64,7 @@ mod tests {
     fn shift_arrows_move_between_pages_and_stop_at_the_ends() {
         let key = |code| KeyEvent::new(code, KeyModifiers::SHIFT);
         assert_eq!(Page::Details.step(key(KeyCode::Right)), Some(Page::Library));
-        assert_eq!(Page::Memory.step(key(KeyCode::Left)), Some(Page::Library));
+        assert_eq!(Page::Memory.step(key(KeyCode::Left)), Some(Page::Missions));
         assert_eq!(Page::Library.step(key(KeyCode::Left)), Some(Page::Details));
         assert_eq!(Page::Settings.step(key(KeyCode::Right)), None);
         assert_eq!(Page::Details.step(key(KeyCode::Left)), None);

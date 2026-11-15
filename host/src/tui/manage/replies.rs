@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 
 use super::super::app::{After, AgentModel, App, Entry, Overlay, Toggle};
-use super::{Market, MemoryMode, Reply, Shell, open_browser, s};
+use super::{Market, MemoryMode, MissionReply, Reply, Shell, open_browser, s};
 
 impl App {
     pub(in crate::tui) fn on_sheet_reply(&mut self, r: Reply, res: Result<Value, String>) {
@@ -92,6 +92,8 @@ impl App {
             }
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::Missions(MissionReply::List(bot, finished)) => self.missions_loaded(&bot, finished, &v),
+            Reply::Missions(MissionReply::Changed(bot)) => self.mission_changed(&bot),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
                     self.overlays.truncate(i);
@@ -326,6 +328,26 @@ impl App {
                     }
                 }
             }
+            Reply::Missions(MissionReply::List(bot, _)) => {
+                for o in &mut self.overlays {
+                    if let Overlay::Missions(m) = o
+                        && m.bot == *bot
+                    {
+                        m.items.get_or_insert_with(Vec::new);
+                        m.error = Some(e.clone());
+                    }
+                }
+            }
+            Reply::Missions(MissionReply::Changed(bot)) => {
+                for o in &mut self.overlays {
+                    if let Overlay::Missions(m) = o
+                        && m.bot == *bot
+                    {
+                        m.busy = false;
+                        m.error = Some(e.clone());
+                    }
+                }
+            }
             Reply::Library(bot) => {
                 for o in &mut self.overlays {
                     if let Overlay::Library(l) = o
@@ -391,6 +413,13 @@ impl App {
                 }
                 Overlay::Library(l) => {
                     calls.push(("library", json!({"botId": l.bot}), After::Sheet(Reply::Library(l.bot.clone()))));
+                }
+                Overlay::Missions(m) => {
+                    calls.push((
+                        "missions",
+                        json!({"botId": m.bot, "open": !m.finished}),
+                        After::Sheet(Reply::Missions(MissionReply::List(m.bot.clone(), m.finished))),
+                    ));
                 }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));

@@ -407,6 +407,7 @@ pub enum Overlay {
     Flow(Box<FlowSheet>),
     Routine(Box<RoutineForm>),
     Library(Library),
+    Missions(Box<super::super::manage::MissionSheet>),
     Market(Box<Market>),
     Agent(AgentSetup),
     Fields(Box<Fields>),
