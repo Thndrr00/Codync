@@ -102,7 +102,7 @@ impl MissionStepStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mission {
     pub id: String,
@@ -125,7 +125,7 @@ pub struct Mission {
     pub steps: Vec<MissionStep>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MissionStep {
     pub id: String,

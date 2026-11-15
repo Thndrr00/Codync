@@ -46,7 +46,7 @@ pub use devices::{Device, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, DocumentWrite, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
-pub use missions::{Mission, MissionStatus, MissionStepStatus};
+pub use missions::{Mission, MissionStatus, MissionStep, MissionStepStatus};
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
