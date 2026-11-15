@@ -43,8 +43,11 @@ export async function reputation(c: Ctx) {
 export async function rate(c: Ctx, id?: string) {
   const app = appId(c, id);
   const me = await user(c);
-  const stars = Number(body(c).stars);
-  if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new ApiError("badRequest", "stars must be 1 to 5");
+  const given = body(c).stars;
+  if (typeof given !== "number" || !Number.isInteger(given) || given < 1 || given > 5) {
+    throw new ApiError("badRequest", "stars must be 1 to 5");
+  }
+  const stars: number = given;
   await c.env.DB.prepare(
     `INSERT INTO app_ratings(app_id, user_id, stars, updated_at) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT(app_id, user_id) DO UPDATE SET stars = excluded.stars, updated_at = excluded.updated_at`,

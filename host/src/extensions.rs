@@ -204,6 +204,9 @@ async fn run_tool(_hub: &Hub, id: &str, tool: &str, arguments: Value) -> Result<
     command.current_dir(&dir);
     command.env_clear();
     command.env("PATH", std::env::var_os("PATH").unwrap_or_default());
+    // Windows needs SystemRoot to start a child at all; wasm still sees only PATH and this.
+    #[cfg(windows)]
+    command.env("SystemRoot", std::env::var_os("SystemRoot").unwrap_or_default());
     let output = tokio::time::timeout(TIMEOUT, command.output())
         .await
         .map_err(|_| anyhow::anyhow!("the extension took too long"))??;

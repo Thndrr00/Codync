@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, CardSection } from '../../components/Controls'
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
@@ -68,7 +68,7 @@ export function ExtensionsSection() {
       }
     >
       {!running ? (
-        <Text size="caption" tone="secondary">Start this computerâ€™s host to see its extensions.</Text>
+        <Text size="caption" tone="secondary">Start this computer’s host to see its extensions.</Text>
       ) : (
         <VStack gap={8}>
           <Text size="caption" tone="secondary">
@@ -84,11 +84,11 @@ export function ExtensionsSection() {
               ) : (
                 <>
                   <Text size="caption" tone="secondary">
-                    {[extension.manifest?.version, extension.manifest?.description].filter(Boolean).join(' Â· ') || 'No description'}
+                    {[extension.manifest?.version, extension.manifest?.description].filter(Boolean).join(' · ') || 'No description'}
                   </Text>
                   {extension.manifest?.tools.map((tool) => (
                     <Text key={tool.name} size="caption" tone="secondary">
-                      {tool.name}{tool.description ? ` â€” ${tool.description}` : ''}
+                      {tool.name}{tool.description ? ` — ${tool.description}` : ''}
                     </Text>
                   ))}
                 </>
