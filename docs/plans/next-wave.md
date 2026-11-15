@@ -20,7 +20,7 @@ is bigger than one release.
 | Policies by role and tool | done (desktop) |
 | Retention (preview + delete) | done |
 | Approvals from the phone notification | done on iPhone and Android |
-| Desktop global shortcut done; agent dock next |
+| Desktop global shortcut and agent dock | done |
 | Global search across chats and documents | done |
 | Workspace export (bots + documents) | done |
 | Full workspace export (routines, scheduled messages, recent chats) | done |
@@ -121,7 +121,7 @@ to the signed installers.
 - Next: embeddings (fastembed or llama.cpp) behind `codync-mem` for semantic search, and a citation card
   in the chat that opens the file at the line.
 
-## Team meeting — minutes done; voice next
+## Team meeting — done (text and voice)
 
 - `/minutes` (or `/acta`) in a smart-mode team chat: the lead writes the meeting's decisions, owners
   and open items with `review_document`, then replies with a short summary.
@@ -169,7 +169,7 @@ to the signed installers.
   generated `runId` are echoed. It uses the same bearer token as the local API and accepts loopback.
 - Next: delta streaming per token instead of one content event.
 
-## Evaluations — harness done; CI next
+## Evaluations — harness and nightly CI done
 
 - `tools/eval-bots.mjs` runs cases from `evals/*.json` against a running host: final reply must contain
   the expected strings and the expected tools must have been called; exits 1 on failure.
@@ -338,7 +338,7 @@ to the signed installers.
   opens it in the browser: messages, cards and notices, styled plainly, with no scripts and no link
   back to Codync. Only the window already loaded on this device is included; tool steps stay out.
 
-## Policies, retention, budgets — retention and the user-turn gate done; policies and reservations next
+## Policies, retention, budgets — done
 
 - Retention: done — `retentionPreview` and `pruneRetention` count and delete messages older than N days,
   and Diagnostics › Message retention previews before deleting.
