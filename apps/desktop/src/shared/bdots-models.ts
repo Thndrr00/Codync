@@ -135,6 +135,33 @@ export interface OpenItem {
   status: 'open' | 'resolved' | 'dismissed'
 }
 
+export interface MissionStep {
+  id: string
+  missionId: string
+  position: number
+  text: string
+  status: 'pending' | 'active' | 'done' | 'skipped'
+  at: number
+}
+
+export type MissionStatus = 'proposed' | 'active' | 'waiting' | 'done' | 'abandoned'
+
+/** An objective that outlives a turn: what is done and what is left, and why it stopped. */
+export interface Mission {
+  id: string
+  botId: string
+  title: string
+  goal: string
+  status: MissionStatus
+  stopReason?: string
+  checkpoint: string
+  runId?: string
+  approvalId?: string
+  createdAt: number
+  updatedAt: number
+  steps: MissionStep[]
+}
+
 export interface ConnectorFailure {
   kind: 'auth' | 'unreachable' | 'tool'
   message: string

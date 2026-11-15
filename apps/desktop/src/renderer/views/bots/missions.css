@@ -1,0 +1,64 @@
+/* One mission: its status, its steps and what is left to say about it. */
+.missions-pill {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--secondary);
+  white-space: nowrap;
+  flex: none;
+}
+
+.missions-pill.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.missions-pill.waiting {
+  background: color-mix(in srgb, var(--warning, #e0a13a) 22%, transparent);
+  color: var(--warning, #b7791f);
+}
+
+.missions-pill.done {
+  background: color-mix(in srgb, var(--success, #3aa76d) 20%, transparent);
+  color: var(--success, #2f7d54);
+}
+
+.missions-pill.abandoned {
+  opacity: 0.7;
+}
+
+.missions-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.missions-row:first-of-type {
+  border-top: 0;
+}
+
+.missions-input {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius-field, 8px);
+  background: var(--field);
+  color: var(--text);
+  border: 0;
+}
+
+.missions-mark {
+  width: 12px;
+  text-align: center;
+  flex: none;
+}
+
+.missions-step.done {
+  opacity: 0.6;
+  text-decoration: line-through;
+}

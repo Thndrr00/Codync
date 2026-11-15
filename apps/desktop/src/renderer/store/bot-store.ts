@@ -14,6 +14,9 @@ import {
   type GroupDraft,
   type Hello,
   type MessageBookmark,
+  type Mission,
+  type MissionStatus,
+  type MissionStep,
   type OpenItem,
   type ReplyQuote,
   type ScreenState,
@@ -705,6 +708,38 @@ export class BotStore extends BotSync {
 
   async dismissOpenItem(botId: string, id: string): Promise<void> {
     await (await this.ready()).call('dismissOpenItem', { botId, id })
+  }
+
+  async missions(botId: string, open = false): Promise<Mission[]> {
+    const res = await (await this.ready()).call<{ missions: Mission[] }>('missions', { botId, open })
+    return res.missions ?? []
+  }
+
+  async createMission(botId: string, title: string, goal: string, steps: string[]): Promise<Mission> {
+    const res = await (await this.ready()).call<{ mission: Mission }>('createMission', { botId, title, goal, steps })
+    return res.mission
+  }
+
+  /** Moves the mission: a status with its reason, a checkpoint, or the run or approval it hangs from. */
+  async updateMission(id: string, patch: {
+    status?: MissionStatus
+    stopReason?: string
+    checkpoint?: string
+    runId?: string | null
+    approvalId?: string | null
+  }): Promise<Mission> {
+    const res = await (await this.ready()).call<{ mission: Mission }>('updateMission', { id, ...patch })
+    return res.mission
+  }
+
+  async addMissionStep(id: string, text: string): Promise<Mission> {
+    const res = await (await this.ready()).call<{ mission: Mission }>('missionStep', { id, text })
+    return res.mission
+  }
+
+  async setMissionStep(id: string, stepId: string, status: MissionStep['status']): Promise<Mission> {
+    const res = await (await this.ready()).call<{ mission: Mission }>('missionStep', { id, stepId, status })
+    return res.mission
   }
 
   async listBookmarks(botId: string): Promise<MessageBookmark[]> {
