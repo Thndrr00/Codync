@@ -36,6 +36,14 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     }
     put_line(buf, x, r.y, 2, &avatar(app, &b));
     x = put(buf, x + 3, r.y, r.width / 3, &b.name, t.bold) + 2;
+    // Ported from OpenBot 0.70.0: the agent's purpose follows its name; a narrow header keeps the name alone.
+    // The detail line under it still starts where the name ends.
+    let detail_x = x;
+    let purpose = b.description.lines().next().unwrap_or("").trim();
+    if !narrow && !b.group && !purpose.is_empty() {
+        put(buf, x, r.y, (r.width / 4).max(6), &format!("· {purpose}"), t.secondary);
+    }
+    x = detail_x;
     let (status, ss) = match b.mark() {
         Mark::Need => ("◆ needs you".to_owned(), t.amber),
         Mark::Work => (format!("{} working {}", spin(app), elapsed(b.started_at)), t.secondary),

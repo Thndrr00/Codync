@@ -207,12 +207,20 @@ import com.kyant.shapes.RoundedRectangle
         }
         val label = tr("{name}, view details").replace("{name}", bot.name)
         Box(Modifier.align(Alignment.Center).plainButton(action = openDetails).semantics { contentDescription = label }) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    BotAvatar(bot, state.bots, 22.dp)
-                    Text(bot.name, style = Type.system(13f).semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Ported from OpenBot 0.70.0: the purpose follows the name, and a narrow header drops it first.
+            BoxWithConstraints {
+                val showTitle = maxWidth > 220.dp
+                val purpose = bot.description.lineSequence().firstOrNull()?.trim().orEmpty()
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        BotAvatar(bot, state.bots, 22.dp)
+                        Text(bot.name, style = Type.system(13f).semibold, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (bot.kind != "group" && purpose.isNotEmpty() && showTitle) {
+                            Text("· $purpose", style = Type.system(13f), color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    ConnectionSubtitle(state)
                 }
-                ConnectionSubtitle(state)
             }
         }
         // The corner is the pin list, then the computer: it pulses while this bot is operating it (watch, then take over).

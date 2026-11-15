@@ -81,7 +81,18 @@
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-m);
   max-width: 60%;
+  container-type: inline-size;
   transition: opacity var(--layout), transform var(--layout);
+}
+/* The title shrinks and then hides first, so the name, the tabs and the model keep their room. */
+.title-pill-title {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+@container (max-width: 320px) {
+  .title-pill-title {
+    display: none;
+  }
 }
 .title-pill-chevron {
   display: flex;

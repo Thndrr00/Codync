@@ -244,11 +244,34 @@ public struct ThreadView: View {
                 let size: CGFloat = 22
                 if bot.isGroup { GroupAvatar(members: model.members(of: bot), size: size) } else { CharacterAvatar(bot: bot, size: size) }
             }
-            Text(bot?.name ?? "")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Palette.text)
-                .lineLimit(1)
+            // Ported from OpenBot 0.70.0: the purpose follows the name, and a narrow bar drops it first.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) {
+                    nameLabel
+                    if let purpose {
+                        Text("· \(purpose)")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                nameLabel
+            }
         }
+    }
+
+    private var nameLabel: some View {
+        Text(bot?.name ?? "")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Palette.text)
+            .lineLimit(1)
+    }
+
+    /// The agent's purpose on one line; a group has none of its own.
+    private var purpose: String? {
+        guard let bot, !bot.isGroup else { return nil }
+        let line = bot.description.split(separator: "\n").first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? ""
+        return line.isEmpty ? nil : line
     }
 
     func openRoutine(_ id: String) {

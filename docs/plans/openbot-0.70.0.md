@@ -23,6 +23,7 @@ either server-side (Codync has no joined servers) or already here.
 | Mute an agent from its menu | The bot's notification switch: `notify: false` mutes it, `null` gives it the computer's choice again; a hidden bot still reaches the phone when it needs you. Analytics: `bot_updated` lists `notify` among its `fields` | `notify` store and API, the mute item in the desktop, iPhone and Android menus, the terminal's **Notify** field, `host/src/remote/push.rs` (`alert_allowed`) |
 | A message to a working agent steers the running turn by default | The computer's **Sending** setting (on unless turned off): a user message to a working agent calls `steer`; groups, routines and channel work keep their own turn | `host/src/chat/steer.rs`, `host/src/api/bots.rs`, the **Sending** setting of the desktop and the phones' computer settings, the terminal's palette action |
 | Multiplayer mode: who else is in a chat, and who wrote a message | The chat's people are the devices paired with this computer: `presence` answers who else is there and who is typing (present 30 s, typing 4 s), a device's message carries `data.person`, and every client shows the faces and "Ana is typing…" above the message box and the author above a run of messages. Analytics: `presence_shown` (`others`, `typing`) once per chat per host run | `host/src/chat/people.rs`, `host/src/api/bots.rs`, `PresenceRow` and the user row of each client, [chat messages](../features/chat-messages.md#several-people) |
+| The chat header shows the agent's title after its name | The agent's own purpose (Codync's `description`) follows the name in the chat header, shortens, and then hides as the header narrows, so the name keeps its room | `ThreadView.tsx` and `thread.css` (desktop), `ThreadView.swift` (iPhone), `ChatScreen.kt` (Android), `host/src/tui/view/chat.rs` |
 
 The picker is in every client's composer (desktop, iPhone, Android); the terminal fills `/image ` or
 `/video ` with a new `SlashAction::Media` and the host's refusal note tells the person to describe
@@ -58,6 +59,16 @@ Feature behavior is documented in [media](../features/media.md) and in the user 
   these were outside the release's user-facing media work.
 - **TryPost and Adobe Analytics connectors, the payment page, stall profiles and the release's many
   fixes**: cloud/connector work, tracked with their own features, not copied here.
+
+### Two fixes that need nothing here
+
+- **Copy details on a turn that could not continue**: OpenBot's message hid the cause in a log. Codync's
+  failure notice carries the reason itself (`agent/bot/updates.rs` writes it), so there is no second
+  text to copy.
+- **Keep Running / Quit / Cancel when the window closes while agents work**: closing Codync's window
+  hides it to the tray and the host keeps running as an installed service (`quit-lifecycle.ts`,
+  `host-controller.ts`), so quitting the window never stops an agent. The app already asks before
+  quitting when a draft is unsent.
 
 ## Checks
 

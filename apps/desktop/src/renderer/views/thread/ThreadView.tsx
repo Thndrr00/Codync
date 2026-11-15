@@ -142,6 +142,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
     else setShowSettings((s) => !s)
   }, [wide])
   const devServers = devServerSummary(bot?.devServers ?? [])
+  /** The agent's purpose on one line: OpenBot 0.70.0's title in the chat header. A group has none of its own. */
+  const purpose = bot && !isGroup(bot) ? (bot.description.split('\n')[0] ?? '').trim() : ''
   // The title's port leads to its row, whichever page the inspector was left on.
   const openFromTitle = useCallback(() => {
     if (devServers.kind !== 'none') setDetailsTab('details')
@@ -247,6 +249,8 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
             <HStack as="span" gap={7}>
               {bot ? isGroup(bot) ? <GroupAvatar members={store.members(bot)} size={22} /> : <BotAvatar bot={bot} size={22} /> : null}
               <Text size="body" weight="medium" tone="text" truncate>{bot?.name ?? ''}</Text>
+              {/* Ported from OpenBot 0.70.0: the agent's purpose after its name — Codync's `description` — gone once the pill is narrow. */}
+              {purpose ? <Text as="span" size="body" tone="secondary" truncate className="title-pill-title">{purpose}</Text> : null}
               <DevServerTitle summary={devServers} />
               {/* Grok Bot's hint on hover: the pill opens the details. */}
               <span className="title-pill-chevron">

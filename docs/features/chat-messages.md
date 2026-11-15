@@ -88,6 +88,14 @@ it has no pointer tooltip or link-opening action.
 - A pin or an unpin counts in analytics as `message_pinned` (`pinned`: which way it went), never which
   message or its text ([analytics events](../reference/analytics-events.md)).
 
+## The chat header
+
+The header names the agent and, after the name, its purpose (`description`), so two agents that share a
+name are told apart: `Brock · Store manager`. The purpose leaves first as the header narrows — a
+container query on the desktop pill, `ViewThatFits` on the iPhone, a width check on the Android header,
+and no purpose at all in the terminal's narrow layout — so the name keeps its room. Ported from OpenBot
+0.70.0, which added the agent's title to the chat header.
+
 ## Several people
 
 - The people of a chat are the devices paired with the computer (`host/src/chat/people.rs`): each by its
