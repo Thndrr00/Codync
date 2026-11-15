@@ -24,7 +24,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /** Someone who uses this computer with their own phone or bots (docs/features/people.md). */
-internal data class PersonRow(val id: String, val name: String, val email: String)
+internal data class PersonRow(val id: String, val name: String, val email: String, val role: String)
 
 /** A paired device as the computer lists it for its owner. */
 private data class DeviceRow(val key: String, val name: String, val personId: String, val person: String)
@@ -34,9 +34,15 @@ internal suspend fun AppStore.people(): List<PersonRow> {
     return list.mapNotNull { item ->
         val row = item.jsonObject
         val id = row["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-        PersonRow(id, row["name"]?.jsonPrimitive?.content.orEmpty(), row["email"]?.jsonPrimitive?.content.orEmpty())
+        PersonRow(id, row["name"]?.jsonPrimitive?.content.orEmpty(), row["email"]?.jsonPrimitive?.content.orEmpty(),
+            row["role"]?.jsonPrimitive?.content.orEmpty().ifBlank { "member" })
     }
 }
+
+/** Whether this caller is the owner: an admin's phone sees the people but can't change a role. */
+internal suspend fun AppStore.canManageRoles(): Boolean = runCatching {
+    hostQuery("people", buildJsonObject { }).jsonObject["canManageRoles"]?.jsonPrimitive?.content?.toBoolean() ?: true
+}.getOrDefault(true)
 
 private suspend fun AppStore.authorizedDevices(): List<DeviceRow> {
     val list = hostQuery("devices", buildJsonObject { }).jsonObject["devices"]?.jsonArray ?: return emptyList()
@@ -66,10 +72,13 @@ internal fun PeopleSection(state: AppState, store: AppStore) {
     var email by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var removing by remember { mutableStateOf<PersonRow?>(null) }
+    var canManageRoles by remember { mutableStateOf(true) }
     fun load() = scope.launch {
         runCatching {
             people = store.people()
             devices = store.authorizedDevices()
+            canManageRoles = store.canManageRoles()
             error = null
         }.onFailure { error = it.message }
     }
@@ -90,16 +99,24 @@ internal fun PeopleSection(state: AppState, store: AppStore) {
                             Text(person.name, style = Type.body, color = Palette.text)
                             if (person.email.isNotBlank()) Text(person.email, style = Type.caption, color = Palette.secondary)
                         }
-                        SecondaryButton("Remove", enabled = !busy) {
-                            scope.launch {
-                                try {
-                                    store.hostQuery("removePerson", buildJsonObject { put("id", person.id) })
-                                    load()
-                                } catch (e: Exception) {
-                                    error = e.message
+                        if (canManageRoles) {
+                            ChoicePicker(person.role, listOf("member" to tr("Member"), "admin" to tr("Admin")), { role ->
+                                scope.launch {
+                                    try {
+                                        store.hostQuery("updatePerson", buildJsonObject {
+                                            put("id", person.id); put("name", person.name); put("email", person.email)
+                                            put("role", role)
+                                        })
+                                        load()
+                                    } catch (e: Exception) {
+                                        error = e.message
+                                    }
                                 }
-                            }
+                            }, label = tr("Role"))
+                        } else {
+                            Text(tr(if (person.role == "admin") "Admin" else "Member"), style = Type.caption, color = Palette.secondary)
                         }
+                        SecondaryButton("Remove", enabled = !busy) { removing = person }
                     }
                 }
                 FieldBox(name, { name = it }, "Name", 1, 1, fill = Palette.bubbleUser)
@@ -159,6 +176,31 @@ internal fun PeopleSection(state: AppState, store: AppStore) {
             }
         }
     }
+
+    CodyncDialog(
+        tr("Remove {name}?").replace("{name}", removing?.name.orEmpty()),
+        removing != null,
+        { removing = null },
+        message = "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.",
+        actions = {
+            val person = removing
+            if (person != null) {
+                listOf(DialogAction("Remove", destructive = true) {
+                    removing = null
+                    scope.launch {
+                        try {
+                            store.hostQuery("removePerson", buildJsonObject { put("id", person.id) })
+                            load()
+                        } catch (e: Exception) {
+                            error = e.message
+                        }
+                    }
+                })
+            } else {
+                emptyList()
+            }
+        },
+    )
 }
 
 private fun assignPerson(

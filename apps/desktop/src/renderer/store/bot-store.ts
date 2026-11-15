@@ -25,7 +25,7 @@ import {
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
-import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
+import { cleanRules, type ApprovalEvaluation, type ApprovalPreview, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostHealth } from '@shared/health'
 import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
@@ -398,6 +398,28 @@ export class BotStore extends BotSync {
         ...(quick ? { actionRulesOn: quick.on, actionRules: quick.policies } : {}),
       }
       return (await (await this.ready()).call<{ evaluation: ApprovalEvaluation }>('testApprovalRule', body)).evaluation
+    } catch {
+      return null
+    }
+  }
+
+  /** What would happen to a proposed call: the rules, the deciding rule or the default, without running it. */
+  async previewApproval(
+    botId: string,
+    tool: string,
+    command: string,
+    rules?: ApprovalRule[],
+    quick?: { on: boolean; policies: Record<string, string> },
+  ): Promise<ApprovalPreview | null> {
+    try {
+      const body = {
+        botId,
+        tool,
+        ...(command.trim() ? { command } : {}),
+        ...(rules ? { rules: cleanRules(rules) } : {}),
+        ...(quick ? { actionRulesOn: quick.on, actionRules: quick.policies } : {}),
+      }
+      return (await (await this.ready()).call<{ preview: ApprovalPreview }>('previewApproval', body)).preview
     } catch {
       return null
     }

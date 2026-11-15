@@ -4,7 +4,7 @@
 //! to tell the user how it went.
 use super::{
     Arc, Context, EntryKind, Hub, Lane, LockExt, Result, Routines, Run, Status, Store, Value, bail, cancel_run,
-    default_timeout, json, may_run, new_run, now_ms, retry,
+    default_timeout, failures, guardrails, json, may_run, new_run, now_ms, retry,
 };
 use super::{Trigger, watch::Check};
 use crate::remote::push::AlertKind;
@@ -160,12 +160,13 @@ impl Routines {
         let failed = matches!(status, Status::Failed | Status::Interrupted);
         // A run that hit its time limit could hold the bot that long again.
         let safe = failed && !timed_out && !retry::acted(hub, id);
-        let (bot, withdrawn, flow) = self.change(&hub.store, |s| {
+        let (bot, withdrawn, flow, paused) = self.change(&hub.store, |s| {
             let i = s.runs.iter().position(|r| r.id == id).context("routine run not found")?;
             let mut withdrawn = Vec::new();
             let mut flow = None;
+            let was_active = s.runs[i].status.active();
             let r = &mut s.runs[i];
-            if r.status.active() {
+            if was_active {
                 flow = super::flow::start_for(
                     s.routines.iter().find(|x| x.id == r.routine_id),
                     r,
@@ -190,11 +191,29 @@ impl Routines {
                     s.pending_flows.push(start.clone());
                 }
             }
-            Ok((s.runs[i].bot_id.clone(), withdrawn, flow))
+            let paused = if was_active { failures::note_outcome(s, i, status) } else { None };
+            Ok((s.runs[i].bot_id.clone(), withdrawn, flow, paused))
         })?;
         retry::withdraw(hub, &withdrawn);
         if let Some(start) = flow {
             super::flow::spawn(hub, start);
+        }
+        if let Some((bot, routine_id, name)) = paused {
+            hub.store.cancel_routine_outputs(&routine_id)?;
+            self.flows.cancel_routine(&routine_id);
+            hub.add_entry(
+                &Lane::main(&bot),
+                EntryKind::Notice,
+                0,
+                &json!({
+                    "text": format!(
+                        "Paused routine \"{name}\": its last {} runs failed. Fix what it needs, then turn it back on in its settings.",
+                        guardrails::FAILURE_LIMIT
+                    ),
+                    "routineId": routine_id,
+                    "style": "info",
+                }),
+            );
         }
         hub.drop_side(&format!("{bot}|{id}"));
         self.release(&bot);
@@ -422,6 +441,9 @@ fn tick(hub: &Arc<Hub>) -> Result<()> {
         tracing::error!(%error, "routine result publication will retry");
     }
     let now = now_ms();
+    if let Err(error) = hub.routines.enforce_limits(hub) {
+        tracing::error!(%error, "routine safeguards need attention");
+    }
     for check in hub.routines.schedule_due(&hub.store, now)? {
         tokio::spawn(super::watch::run(hub.clone(), check));
     }
@@ -471,10 +493,10 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        routines.schedule_due(&store, 61_700).unwrap();
-        routines.schedule_due(&store, 181_000).unwrap();
+        routines.schedule_due(&store, 900_100).unwrap();
+        routines.schedule_due(&store, 1_900_000).unwrap();
         let state = routines.state.locked();
-        assert_eq!(state.routines[0].next_runs[0], Some(240_000));
+        assert_eq!(state.routines[0].next_runs[0], Some(2_700_000));
         assert_eq!(state.runs.len(), 2);
         assert_eq!(state.runs.iter().filter(|r| r.status == Status::Pending).count(), 1);
     }
@@ -506,7 +528,9 @@ mod tests {
     fn a_retry_waits_for_its_time_unless_a_scheduled_fire_comes_first() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let routines = Routines::default();
-        let routine = super::super::tests::routine();
+        let mut routine = super::super::tests::routine();
+        routine.triggers = vec![Trigger::Once { at: 60_000 }];
+        routine.next_runs = vec![Some(60_000)];
         routines
             .change(&store, |s| {
                 let mut retry = new_run(&routine, json!({"source":"schedule"}), None);

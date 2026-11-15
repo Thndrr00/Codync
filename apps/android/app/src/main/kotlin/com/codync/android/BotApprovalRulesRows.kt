@@ -84,6 +84,9 @@ private fun CardRows.quickRows(draft: BotDraft, change: (BotDraft) -> Unit) {
 private fun RuleTester(store: AppStore, draft: BotDraft, rules: List<ApprovalRule>) {
     var command by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf<String?>(null) }
+    var tool by remember { mutableStateOf("shell") }
+    var proposal by remember { mutableStateOf("") }
+    var whatIf by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val cant = tr("This computer's host can't test rules.")
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -95,5 +98,17 @@ private fun RuleTester(store: AppStore, draft: BotDraft, rules: List<ApprovalRul
             }
         }
         answer?.let { Text(it, style = Type.caption, color = Palette.secondary) }
+        Text(tr("What would happen?"), style = Type.body, color = Palette.text)
+        Text(tr("Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs."),
+            style = Type.caption, color = Palette.secondary)
+        FieldBox(tool, { tool = it; whatIf = null }, tr("Tool"), 1, 1, capitalize = false)
+        FieldBox(proposal, { proposal = it; whatIf = null }, tr("Command or input"), 1, 3, capitalize = false)
+        SecondaryButton(tr("Ask"), enabled = tool.isNotBlank() && draft.id != null) {
+            scope.launch {
+                val preview = store.previewApproval(draft.id.orEmpty(), tool, proposal, ApprovalRules.clean(rules), draft.actionRulesOn?.let { it to draft.actionRules })
+                whatIf = preview?.let { "${it.decision.replaceFirstChar { c -> c.uppercase() }}. ${it.explanation}" } ?: cant
+            }
+        }
+        whatIf?.let { Text(it, style = Type.caption, color = Palette.secondary) }
     }
 }

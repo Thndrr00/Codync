@@ -13,9 +13,9 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<ControlFlow<Value, Value>> {
-    // Who is on this computer: only the owner manages it.
+    // Who is on this computer: its owner, and a person who is an admin.
     if crate::people::METHODS.contains(&method) {
-        return Ok(ControlFlow::Break(crate::people::call(hub, method, &b)?));
+        return Ok(ControlFlow::Break(crate::people::call(hub, caller, method, &b)?));
     }
     Ok(ControlFlow::Break(match method {
         "openaiKeys" | "openaiCreateKey" | "openaiRevokeKey" => super::openai_keys::call(hub, method, &b).await?,

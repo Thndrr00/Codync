@@ -958,6 +958,8 @@ export interface Person {
   name: string
   email?: string | null
   createdAt: number
+  /** `admin` manages people, connectors and bots; `member` only their own. The owner is implicit. */
+  role?: 'admin' | 'member'
 }
 
 export interface CloudOwner {

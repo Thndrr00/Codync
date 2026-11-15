@@ -2,9 +2,9 @@
 //! each person uses, and giving a device to a person or back to the owner (`docs/features/people.md`).
 //!
 //! The host answers `people`, `addPerson`, `updatePerson`, `removePerson`, `setDevicePerson` and
-//! `devices` to the owner of this computer and refuses a member's phone. Removing a person is the
-//! only destructive-looking action, and it deletes nothing: their devices, bots, chats and connectors
-//! become the owner's.
+//! `devices` to the owner of this computer (and to an admin's phone) and refuses a member's phone.
+//! Removing a person revokes their phones at once; their bots, chats and connectors become the owner's
+//! and nothing else is deleted.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::{Value, json};
@@ -235,12 +235,30 @@ impl App {
                     let name = person["name"].as_str().unwrap_or_default();
                     let confirm = Confirm {
                         title: fill(&tr("Remove {name}?"), &[("name", name)]),
-                        detail: "Their phone, bots, chats and connectors become yours. Nothing is deleted.".into(),
+                        detail: "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.".into(),
                         note: "Connectors become shared, so every bot on this computer can use them.".into(),
                         button: "Remove",
                         act: ConfirmAct::RemovePerson(id),
                     };
                     app.overlays.push(Overlay::Confirm(confirm));
+                }
+            }
+            KeyCode::Char('g') if sheet.section == PeopleSection::People => {
+                if let Some(person) = sheet.current().cloned() {
+                    let id = person["id"].as_str().unwrap_or_default().to_owned();
+                    let name = person["name"].as_str().unwrap_or_default().to_owned();
+                    let email = person["email"].as_str().unwrap_or_default().to_owned();
+                    let role = match person["role"].as_str() {
+                        Some("admin") => "member",
+                        _ => "admin",
+                    };
+                    let mut body = json!({"id": id, "name": name, "role": role});
+                    if !email.is_empty() {
+                        body["email"] = json!(email);
+                    }
+                    sheet.busy = true;
+                    sheet.error = None;
+                    app.sheet("updatePerson", body, Reply::PeopleSaved);
                 }
             }
             _ => {}

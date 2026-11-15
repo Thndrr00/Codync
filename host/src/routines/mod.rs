@@ -5,9 +5,12 @@ mod check;
 mod delivery;
 pub use check::Checked;
 mod editor;
+mod enforce;
 pub mod events;
 mod failed;
+mod failures;
 pub mod flow;
+mod guardrails;
 mod idle;
 pub mod limits;
 pub(crate) use editor::days_in_month;
@@ -81,6 +84,9 @@ pub struct Routine {
     /// Finished runs in a row that ran nothing that changes anything (`idle.rs`).
     #[serde(default)]
     pub idle_runs: u32,
+    /// Failed runs in a row; ten of them pause the routine (`guardrails`).
+    #[serde(default)]
+    pub failure_runs: u32,
     #[serde(default = "default_missed_policy")]
     pub missed_policy: String,
     #[serde(default = "default_limit_policy")]
@@ -409,6 +415,7 @@ impl Routines {
                 triggers.clone_from(&saved.triggers);
             }
         }
+        guardrails::check_interval(&triggers)?;
         let now = now_ms();
         let id = body["id"].as_str().map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
         let updated = body["id"].is_string();
@@ -437,6 +444,7 @@ impl Routines {
                 // Same triggers keep what their watches saw; new ones start a fresh baseline.
                 watch: old.as_ref().filter(|o| o.triggers == triggers).map(|o| o.watch.clone()).unwrap_or_default(),
                 idle_runs: 0,
+                failure_runs: 0,
                 triggers,
                 webhook_key: old.as_ref().map_or_else(webhook_key, |r| r.webhook_key.clone()),
                 deleted: false,
@@ -463,6 +471,9 @@ impl Routines {
             if !(1..=86_400).contains(&r.timeout_seconds) {
                 bail!("timeoutSeconds must be between 1 and 86400");
             }
+            if r.enabled {
+                guardrails::check_enabled_cap(s, Some(&id))?;
+            }
             if !r.enabled {
                 hub.store.cancel_routine_outputs(&id)?;
                 s.pending_flows.retain(|flow| flow.routine_id != id);
@@ -479,15 +490,22 @@ impl Routines {
 
     pub fn set_enabled(&self, store: &Store, bot: &str, id: &str, enabled: bool) -> Result<Value> {
         self.change(store, |s| {
-            let r = s
+            let index = s
                 .routines
-                .iter_mut()
-                .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
+                .iter()
+                .position(|r| r.id == id && r.bot_id == bot && !r.deleted)
                 .context("routine not found")?;
+            if enabled && !s.routines[index].enabled {
+                guardrails::check_interval(&s.routines[index].triggers)?;
+                guardrails::check_enabled_cap(s, Some(id))?;
+            }
+            let r = &mut s.routines[index];
             if enabled && !r.enabled {
                 r.next_runs = r.triggers.iter().map(|t| t.next(now_ms())).collect::<Result<_>>()?;
                 // A watch paused for failing checks gets its full allowance again.
                 r.watch.iter_mut().for_each(|w| w.failures = 0);
+                // Turning it back on gives it a full run of chances again.
+                r.failure_runs = 0;
             }
             r.enabled = enabled;
             r.updated_at = now_ms();

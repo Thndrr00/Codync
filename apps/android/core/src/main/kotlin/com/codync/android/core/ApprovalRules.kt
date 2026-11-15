@@ -9,6 +9,12 @@ import kotlinx.serialization.json.decodeFromJsonElement
 @Serializable data class ApprovalRule(val pattern: String, val kind: String? = null, val decision: String = "ask")
 
 /**
+ * The host's read-only answer to "what would happen?" for a proposed call (`previewApproval`): the
+ * decision, the rule or default that made it, and a sentence to show. Nothing runs.
+ */
+@Serializable data class ApprovalPreview(val decision: String, val source: String, val explanation: String)
+
+/**
  * What the host says a command would do under some rules (`testApprovalRule`). The host decides; this only words it.
  * [outcome] is `forbidden`, `rule` or `setting`.
  */
@@ -76,4 +82,9 @@ object ApprovalRules {
         rules.map { it.copy(pattern = it.pattern.trim(), kind = it.kind?.takeIf(String::isNotEmpty)) }.filter { it.pattern.isNotEmpty() }
 
     fun decodeEvaluation(response: JsonElement): ApprovalEvaluation = WireJson.decodeFromJsonElement<EvaluationEnvelope>(response).evaluation
+
+    fun decodePreview(response: JsonElement): ApprovalPreview =
+        WireJson.decodeFromJsonElement<PreviewEnvelope>(response).preview
 }
+
+@Serializable private data class PreviewEnvelope(@SerialName("preview") val preview: ApprovalPreview)

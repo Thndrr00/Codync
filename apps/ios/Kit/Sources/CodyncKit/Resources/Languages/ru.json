@@ -2778,5 +2778,15 @@
   "Microsoft Teams is not set up.": "Microsoft Teams не настроен.",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer’s credential vault.": "Общайтесь с ботом из WhatsApp, Telegram, Slack, Discord, Matrix, Signal или Microsoft Teams. Писать могут только люди, которых вы подключили или разрешили; токены остаются в хранилище учётных данных этого компьютера.",
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ выбрать  p подключить  d отключить Matrix  s отключить Signal  t отключить Teams  r обновить  esc закрыть",
-  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "Общайтесь с ботом из WhatsApp, Telegram, Slack, Discord, Matrix, Signal или Microsoft Teams. Писать могут только люди, которых вы подключили или разрешили; токены остаются в хранилище учётных данных этого компьютера."
+  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "Общайтесь с ботом из WhatsApp, Telegram, Slack, Discord, Matrix, Signal или Microsoft Teams. Писать могут только люди, которых вы подключили или разрешили; токены остаются в хранилище учётных данных этого компьютера.",
+  "Admins manage people, connectors and bots on this computer.": "Администраторы управляют людьми, коннекторами и ботами на этом компьютере.",
+  "Members see only their own bots, chats and connectors.": "Участники видят только своих ботов, чаты и коннекторы.",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "Телефон этого человека сразу теряет доступ. Его боты, чаты и коннекторы переходят к вам. Ничего не удаляется.",
+  "What would happen?": "Что произойдёт?",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "Укажите инструмент и что ему будет поручено. Хост ответит по тем же правилам; ничего не выполняется.",
+  "Command or input": "Команда или ввод",
+  "Ask": "Спросить",
+  "Asking…": "Спрашиваем…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n добавить · ↵ переименовать · g роль · x удалить · tab устройства · esc",
+  "Role": "Роль"
 }

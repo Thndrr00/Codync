@@ -245,10 +245,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 patch.remove(crate::chat::instruction_history::AUTHOR);
             }
             // A bot keeps its person: a member's device can't move a bot to the owner (or to anyone else),
-            // and the owner's choice has to name a person that exists.
+            // an admin manages any bot, and the owner's choice has to name a person that exists.
             if let Some(person) = crate::people::caller_person(hub, caller) {
-                crate::people::check_group_members(hub, &b, &person)?;
-                b["person"] = json!(person);
+                if !crate::people::is_admin(hub, &person) {
+                    crate::people::check_group_members(hub, &b, &person)?;
+                    b["person"] = json!(person);
+                } else if let Some(named) = b["person"].as_str()
+                    && hub.store.person(named).is_none()
+                {
+                    bail!("unknown person");
+                }
             } else if let Some(person) = b["person"].as_str()
                 && hub.store.person(person).is_none()
             {
@@ -716,6 +722,51 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 .collect();
             json!({"evaluation": evaluation, "quickNotEnforced": not_enforced})
         }
+        // What would happen to a proposed call: the same rules as a real request, the deciding rule (or
+        // the default), and an audit-style explanation. Nothing is sent to the bot.
+        "previewApproval" => {
+            let row =
+                hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            let policies = match b.get("actionRules") {
+                Some(map) if map.is_object() => serde_json::from_value(map.clone())?,
+                _ => row.config.action_rules.clone(),
+            };
+            let quick_on = b["actionRulesOn"].as_bool().unwrap_or(row.config.action_rules_on);
+            let quick = if quick_on { crate::agent::approval_rules::quick_rules(&policies) } else { Vec::new() };
+            // The editor's unsaved rules when it sends them; otherwise the bot's saved ones.
+            let rules: Vec<crate::agent::approval_rules::ApprovalRule> = match b.get("rules") {
+                Some(list) if !list.is_null() => serde_json::from_value(list.clone())?,
+                _ => row.config.approval_rules.clone(),
+            };
+            crate::agent::approval_rules::validate(&rules)?;
+            let initiator = b["initiator"].as_str().map(str::to_owned).unwrap_or_else(|| {
+                crate::people::caller_person(hub, caller).and_then(|id| hub.store.person(&id)).map_or_else(
+                    || "the owner".to_owned(),
+                    |person| {
+                        format!(
+                            "{} {}",
+                            if person.role == crate::store::Role::Admin { "admin" } else { "member" },
+                            person.name
+                        )
+                    },
+                )
+            });
+            let preview = crate::agent::approval_preview::preview(
+                &row.config,
+                &rules,
+                &quick,
+                str_arg(&b, "tool")?,
+                b["command"].as_str().filter(|command| !command.trim().is_empty()),
+                b.get("input"),
+                &initiator,
+                b["kind"].as_str(),
+            );
+            let not_enforced: Vec<Value> = crate::agent::approval_rules::QUICK_UNENFORCED
+                .iter()
+                .map(|(class, why)| json!({"class": class, "reason": why}))
+                .collect();
+            json!({"preview": preview, "quickNotEnforced": not_enforced})
+        }
         // The rule an "always allow" answer to this card means, to show (and let the person edit) before it is saved.
         "proposeRule" => {
             let e = hub.store.entry(str_arg(&b, "entryId")?).ok_or_else(|| anyhow!("unknown card"))?;
@@ -795,10 +846,17 @@ fn save_always_rule(hub: &Hub, card: &crate::store::Entry, option_id: Option<&st
 }
 
 /// The person a new bot belongs to: a member's device always makes its own (the body can't name another),
-/// and the owner may name one, or leave it empty for their own.
+/// an admin may name one and otherwise makes their own, and the owner may name one or leave it empty.
 fn new_bot_person(hub: &Hub, caller: &Caller, asked: Option<&str>) -> Result<Option<String>> {
     if let Some(person) = crate::people::caller_person(hub, caller) {
-        return Ok(Some(person));
+        if !crate::people::is_admin(hub, &person) {
+            return Ok(Some(person));
+        }
+        let Some(asked) = asked.filter(|p| !p.is_empty()) else { return Ok(Some(person)) };
+        if hub.store.person(asked).is_none() {
+            bail!("unknown person");
+        }
+        return Ok(Some(asked.to_owned()));
     }
     let Some(person) = asked.filter(|p| !p.is_empty()) else { return Ok(None) };
     if hub.store.person(person).is_none() {

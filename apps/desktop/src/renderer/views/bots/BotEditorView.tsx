@@ -443,6 +443,12 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
                 ? store.testApprovalRule(draft.id, command, rules, draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} })
                 : Promise.resolve(null)
             }
+            preview={
+              draft.id
+                ? (tool, command) =>
+                    store.previewApproval(draft.id!, tool, command, draft.approvalRules ?? [], draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} })
+                : undefined
+            }
             quick={draft.actionRulesOn === undefined ? undefined : { on: draft.actionRulesOn, policies: draft.actionRules ?? {} }}
             onQuick={(next) => onChange((d) => ({ ...d, actionRulesOn: next.on, actionRules: next.policies }))}
           />

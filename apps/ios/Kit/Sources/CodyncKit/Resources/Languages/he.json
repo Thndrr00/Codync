@@ -2764,5 +2764,15 @@
   "Microsoft Teams is not set up.": "Microsoft Teams אינו מוגדר.",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer’s credential vault.": "דברו עם בוט מ-WhatsApp, Telegram, Slack, Discord, Matrix, Signal או Microsoft Teams. רק אנשים שתקשרו או תאשרו יכולים לכתוב אליו; האסימונים נשארים בכספת האישורים של המחשב הזה.",
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ בחירה  p קישור  d ניתוק Matrix  s ניתוק Signal  t ניתוק Teams  r רענון  esc סגירה",
-  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "דברו עם בוט מ-WhatsApp, Telegram, Slack, Discord, Matrix, Signal או Microsoft Teams. רק אנשים שתקשרו או תאשרו יכולים לכתוב אליו; האסימונים נשארים בכספת האישורים של המחשב הזה."
+  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "דברו עם בוט מ-WhatsApp, Telegram, Slack, Discord, Matrix, Signal או Microsoft Teams. רק אנשים שתקשרו או תאשרו יכולים לכתוב אליו; האסימונים נשארים בכספת האישורים של המחשב הזה.",
+  "Admins manage people, connectors and bots on this computer.": "מנהלים מנהלים אנשים, מחברים ובוטים במחשב הזה.",
+  "Members see only their own bots, chats and connectors.": "חברים רואים רק את הבוטים, השיחות והמחברים שלהם.",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "הטלפון שלו מאבד גישה מיד. הבוטים, השיחות והמחברים שלו עוברים אליך. שום דבר לא נמחק.",
+  "What would happen?": "מה יקרה?",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "ציין כלי ומה יידרש ממנו. המארח עונה לפי אותם כללים; שום דבר לא רץ.",
+  "Command or input": "פקודה או קלט",
+  "Ask": "שאל",
+  "Asking…": "שואל…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n הוסף · ↵ שנה שם · g תפקיד · x הסר · tab התקנים · esc",
+  "Role": "תפקיד"
 }

@@ -44,6 +44,25 @@ the command, by the same `approval_rules::evaluate` a real request goes through,
 bot's `permission`), plus `chained` and `allowPassedOver` (an allow rule that matched but was skipped because the
 command runs several). `rules` tests a list that is not saved yet; without it the bot's saved rules are used.
 
+**What would happen?** `previewApproval {botId, tool, command?, input?, kind?, initiator?, rules?, actionRules?, actionRulesOn?}`
+answers the same question for a proposed tool call without acting (`host/src/agent/approval_preview.rs`). `tool` is the
+agent's tool name (or an MCP tool's), `command` its shell command when it has one, `input` any other argument, and
+`initiator` who asks (`the owner`, `member Ana`, a bot); when omitted the host names the caller. The host infers the
+tool kind from the name unless `kind` says it. It returns `{preview}` with:
+
+- `decision`: `allow`, `ask` or `deny`.
+- `source`: `rule` (one of the person's rules), `quickRule` (a quick rule by kind of action), `forbidden` (the
+  blocklist, before any rule) or `default` (no rule matched, so the bot's Approvals setting decides).
+- `rule`: the deciding rule's `index`, `decision`, `pattern`, `kind` and whether it is `quick`, or null.
+- `default`: the bot's Approvals setting, `chained`, and `allowPassedOver` as the tester returns them.
+- `explanation`: an audit-style sentence naming the bot, the tool and input, the initiator, and the rule or default
+  that decides, ending "Nothing ran." It is for people to read, not a new policy language.
+
+This preview covers the bot's approval rules and the blocklist. `rules` and `actionRules` test the editor's unsaved
+choices, as the tester does. Connector tools (MCP) are also governed by their tool
+policy (`docs/features/mcp-tool-policies.md`), which this call does not evaluate. Desktop shows the panel under a bot's
+approval rules; a phone shows the same read-only result.
+
 ## Security profiles
 
 One choice when a bot is made, or later in its settings, sets how much it may do without asking

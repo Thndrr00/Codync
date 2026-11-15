@@ -67,7 +67,9 @@ provider model will interpret an ambiguous natural-language request.
 
 A routine has an OR list of triggers:
 
-- `interval`: `seconds` (1 second through 365 days).
+- `interval`: `seconds` (15 minutes through 365 days). An interval under 15 minutes is refused
+  when a routine is saved or enabled; use a cron schedule for more frequent checks. A routine saved
+  before this floor is paused by the scheduler, with a notice saying why.
 - `once`: `at` (Unix milliseconds, in the future when created).
 - `cron`: a five-field `expression` and IANA `timeZone`, including DST.
 - `webhook`: every authenticated JSON delivery runs the routine. The public address needs the computer in an account (`needsAccount` in `routine_webhook`); otherwise only the local address works. Besides the bearer key and a GitHub signature, `routine_webhook` takes the sender's own `whsec_…` Standard Webhooks secret (`key`), which becomes the routine's key.
@@ -99,6 +101,23 @@ A routine has an OR list of triggers:
 For example, Sunday at 14:20 in Taipei is `20 14 * * 0` with `Asia/Taipei`.
 The host computes and displays the next occurrence. Calendar parsing uses
 [Croner](https://docs.rs/croner/3.0.1/croner/), with chrono-tz for named zones.
+
+## Safeguards
+
+Three limits are fixed, not settings (`routines/guardrails.rs`). They apply when a routine is
+saved or turned on, and the scheduler applies them to routines saved before they existed:
+
+- **15-minute floor.** Interval routines can't repeat more often than every 15 minutes. A shorter
+  interval is refused on save and on enable, and the scheduler pauses one it finds with a notice naming
+  the routine and how to bring it back. Cron schedules can still be more frequent.
+- **20 enabled routines per computer.** Turning on a 21st is refused; pause one first. If a
+  computer already has more on (routines enabled before the cap), the oldest 20 stay and the rest
+  are paused with a notice.
+- **10 failures in a row.** Ten consecutive failed runs pause the routine. A success starts the
+  count over, a run the person stopped is neither a success nor another failure, and saving or
+  re-enabling the routine starts the count over too. The chat notice names the routine and says
+  to fix what it needs and turn it back on. Queued runs, a waiting retry and pending outputs are
+  cancelled with it.
 
 ## Execution
 
@@ -159,6 +178,11 @@ host checks the run's turn for a tool call whose ACP kind isn't `read`, `search`
   so failed webhook payloads can't pile up; deleting the routine (or its bot) drops the
   event and the button. Retrying while the routine has an active run is refused
   (busy); a paused routine is refused until it's resumed.
+
+After ten failed runs in a row the routine pauses regardless of the retry rules above
+(`routines/guardrails.rs`): the tenth failure's notice is the last one, queued work and a waiting
+retry are cancelled, and an info notice names the routine and says how to turn it back on. A
+success, a save or re-enabling it starts the count over.
 
 Each run has a timeout (default one hour, configurable from 1 to 86400 seconds).
 A hung agent is terminated so subsequent work can proceed. When the time limit cuts
@@ -325,8 +349,9 @@ comparison.
 
 Codync retains that compact sidebar and the chat-based setup path, while providing
 a direct editor: a light Repeat choice with the time and day for the common
-schedules, and Custom for a cron typed as written. Existing duration intervals keep their cadence until
-explicitly replaced. Editing hydrates the original expression, timezone and interval
+schedules, and Custom for a cron typed as written. Existing duration intervals of at least 15
+minutes keep their cadence until explicitly replaced; a shorter one is paused by the scheduler.
+Editing hydrates the original expression, timezone and interval
 exactly; compound and provider-event triggers retain a lossless Keep existing
 triggers fallback. Expired one-shot timestamps are preserved when editing other fields.
 
@@ -352,8 +377,9 @@ validates it again. Both direct trigger API calls and Bot MCP calls use the same
 host scheduler. Run timeout text is also parsed and validated by the host.
 The built-in agent instructions also select cron for recurring clock schedules.
 
-Existing elapsed-duration intervals remain readable/editable without silently
-changing their execution times. An interval anchored to creation time cannot be
+Existing elapsed-duration intervals of at least 15 minutes remain readable/editable without silently
+changing their execution times; one under the floor is paused with a notice. An interval anchored to
+creation time cannot be
 converted to a wall-clock cron without changing its cadence. One-time schedules
 retain their absolute timestamp: five-field cron has no year or run-count guard.
 Webhook/event triggers remain event-driven. These paths are intentionally not

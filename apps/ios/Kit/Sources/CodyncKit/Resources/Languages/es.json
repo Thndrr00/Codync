@@ -2778,5 +2778,15 @@
   "Microsoft Teams is not set up.": "Microsoft Teams no está configurado.",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer’s credential vault.": "Habla con un bot desde WhatsApp, Telegram, Slack, Discord, Matrix, Signal o Microsoft Teams. Solo pueden escribir las personas que emparejes o permitas; los tokens se quedan en el almacén de credenciales de este ordenador.",
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ elegir  p emparejar  d desconectar Matrix  s desconectar Signal  t desconectar Teams  r actualizar  esc cerrar",
-  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "Habla con un bot desde WhatsApp, Telegram, Slack, Discord, Matrix, Signal o Microsoft Teams. Solo pueden escribir las personas que emparejes o permitas; los tokens se quedan en el almacén de credenciales de este ordenador."
+  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "Habla con un bot desde WhatsApp, Telegram, Slack, Discord, Matrix, Signal o Microsoft Teams. Solo pueden escribir las personas que emparejes o permitas; los tokens se quedan en el almacén de credenciales de este ordenador.",
+  "Admins manage people, connectors and bots on this computer.": "Los administradores gestionan personas, conectores y bots en este ordenador.",
+  "Members see only their own bots, chats and connectors.": "Los miembros solo ven sus propios bots, chats y conectores.",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "Su teléfono pierde el acceso al instante. Sus bots, chats y conectores pasan a ser tuyos. No se elimina nada.",
+  "What would happen?": "¿Qué pasaría?",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "Indica una herramienta y lo que se le pediría. El host responde con las mismas reglas; no se ejecuta nada.",
+  "Command or input": "Comando o entrada",
+  "Ask": "Preguntar",
+  "Asking…": "Preguntando…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n añadir · ↵ renombrar · g rol · x quitar · tab dispositivos · esc",
+  "Role": "Rol"
 }

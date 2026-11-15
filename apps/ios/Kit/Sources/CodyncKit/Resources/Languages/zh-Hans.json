@@ -2778,5 +2778,15 @@
   "Microsoft Teams is not set up.": "Microsoft Teams 尚未设置。",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer’s credential vault.": "从 WhatsApp、Telegram、Slack、Discord、Matrix、Signal 或 Microsoft Teams 与机器人对话。只有你配对或允许的人才能写入；令牌留在这台电脑的凭据保险库中。",
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ 选择  p 配对  d 断开 Matrix  s 断开 Signal  t 断开 Teams  r 刷新  esc 关闭",
-  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "从 WhatsApp、Telegram、Slack、Discord、Matrix、Signal 或 Microsoft Teams 与机器人对话。只有你配对或允许的人才能写入；令牌留在这台电脑的凭据保险库中。"
+  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "从 WhatsApp、Telegram、Slack、Discord、Matrix、Signal 或 Microsoft Teams 与机器人对话。只有你配对或允许的人才能写入；令牌留在这台电脑的凭据保险库中。",
+  "Admins manage people, connectors and bots on this computer.": "管理员可以管理这台电脑上的人员、连接器和机器人。",
+  "Members see only their own bots, chats and connectors.": "成员只能看到自己的机器人、聊天和连接器。",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "其手机将立即失去访问权限。其机器人、聊天和连接器归你所有。不会删除任何内容。",
+  "What would happen?": "会发生什么？",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "填写工具以及要它做什么。主机会用同样的规则回答；不会执行任何操作。",
+  "Command or input": "命令或输入",
+  "Ask": "询问",
+  "Asking…": "正在询问…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n 添加 · ↵ 重命名 · g 角色 · x 移除 · tab 设备 · esc",
+  "Role": "角色"
 }

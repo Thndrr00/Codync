@@ -2778,5 +2778,15 @@
   "Microsoft Teams is not set up.": "Microsoft Teams가 설정되지 않았습니다.",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer’s credential vault.": "WhatsApp, Telegram, Slack, Discord, Matrix, Signal, Microsoft Teams에서 봇과 대화하세요. 페어링하거나 허용한 사람만 글을 쓸 수 있으며, 토큰은 이 컴퓨터의 자격 증명 보관소에 남습니다.",
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ 선택  p 페어링  d Matrix 연결 해제  s Signal 연결 해제  t Teams 연결 해제  r 새로 고침  esc 닫기",
-  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "WhatsApp, Telegram, Slack, Discord, Matrix, Signal, Microsoft Teams에서 봇과 대화하세요. 페어링하거나 허용한 사람만 글을 쓸 수 있으며, 토큰은 이 컴퓨터의 자격 증명 보관소에 남습니다."
+  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "WhatsApp, Telegram, Slack, Discord, Matrix, Signal, Microsoft Teams에서 봇과 대화하세요. 페어링하거나 허용한 사람만 글을 쓸 수 있으며, 토큰은 이 컴퓨터의 자격 증명 보관소에 남습니다.",
+  "Admins manage people, connectors and bots on this computer.": "관리자는 이 컴퓨터의 사람, 커넥터, 봇을 관리할 수 있습니다.",
+  "Members see only their own bots, chats and connectors.": "멤버는 자신의 봇, 채팅, 커넥터만 볼 수 있습니다.",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "그 사람의 휴대폰은 즉시 접근 권한을 잃습니다. 봇, 채팅, 커넥터는 당신의 것이 됩니다. 아무것도 삭제되지 않습니다.",
+  "What would happen?": "어떻게 될까요?",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "도구와 그 도구에 요청할 작업을 입력하세요. 호스트가 같은 규칙으로 답하며 아무것도 실행되지 않습니다.",
+  "Command or input": "명령 또는 입력",
+  "Ask": "확인",
+  "Asking…": "확인 중…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n 추가 · ↵ 이름 변경 · g 역할 · x 제거 · tab 기기 · esc",
+  "Role": "역할"
 }

@@ -131,8 +131,8 @@ const SCREEN: &[&str] = &[
 #[derive(Debug)]
 pub struct Forbidden;
 
-/// Methods a member's device may not call, though the owner may from this computer or from their own phone:
-/// who is on the computer, and the devices it lists. A device with no person is the owner's.
+/// Methods a person's device may not call: who is on the computer, and the devices it lists. A person
+/// who is an admin is let through (only the owner changes a role, checked in `people::call`).
 pub const OWNER_ONLY: &[&str] = &[
     "people",
     "addPerson",
@@ -145,12 +145,19 @@ pub const OWNER_ONLY: &[&str] = &[
     "renameSection",
 ];
 
-/// Refuses one of [`OWNER_ONLY`] to a device assigned to a person.
+/// Refuses one of [`OWNER_ONLY`] to a device assigned to a person, unless that person is an admin and the
+/// method is one admins manage. The owner is never a person.
 pub fn permit_owner(hub: &Hub, caller: &Caller, method: &str) -> Result<(), Forbidden> {
-    if OWNER_ONLY.contains(&method) && crate::people::caller_person(hub, caller).is_some() {
-        return Err(Forbidden);
+    let Some(person) = crate::people::caller_person(hub, caller) else { return Ok(()) };
+    if !OWNER_ONLY.contains(&method) {
+        return Ok(());
     }
-    Ok(())
+    let admins_manage =
+        matches!(method, "people" | "addPerson" | "updatePerson" | "removePerson" | "setDevicePerson" | "devices");
+    if admins_manage && crate::people::is_admin(hub, &person) {
+        return Ok(());
+    }
+    Err(Forbidden)
 }
 
 impl std::fmt::Display for Forbidden {

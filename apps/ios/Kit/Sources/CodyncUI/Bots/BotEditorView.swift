@@ -305,6 +305,9 @@ struct BotSettingsForm: View {
                     .help(draft.cwd.isEmpty ? "A persistent workspace allocated for this bot" : draft.cwd)
                 }
                 ApprovalPicker(draft: $draft, reload: modelReload)
+                if let id = draft.id, part == .all {
+                    ApprovalWhatIf(botId: id)
+                }
             }
             .animation(Motion.reduced(Motion.layout, reduceMotion), value: bot?.agentStep)
 

@@ -2778,5 +2778,15 @@
   "Microsoft Teams is not set up.": "Microsoft Teams は設定されていません。",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer’s credential vault.": "WhatsApp、Telegram、Slack、Discord、Matrix、Signal、Microsoft Teams からボットと話せます。書き込めるのはペアリングまたは許可した人だけです。トークンはこのコンピューターの認証情報保管庫に残ります。",
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ 選択  p ペアリング  d Matrix を切断  s Signal を切断  t Teams を切断  r 更新  esc 閉じる",
-  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "WhatsApp、Telegram、Slack、Discord、Matrix、Signal、Microsoft Teams からボットと話せます。書き込めるのはペアリングまたは許可した人だけです。トークンはこのコンピューターの認証情報保管庫に残ります。"
+  "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "WhatsApp、Telegram、Slack、Discord、Matrix、Signal、Microsoft Teams からボットと話せます。書き込めるのはペアリングまたは許可した人だけです。トークンはこのコンピューターの認証情報保管庫に残ります。",
+  "Admins manage people, connectors and bots on this computer.": "管理者はこのコンピューターのメンバー、コネクター、ボットを管理できます。",
+  "Members see only their own bots, chats and connectors.": "メンバーには自分のボット、チャット、コネクターだけが表示されます。",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "その人のスマートフォンはすぐにアクセスできなくなります。ボット、チャット、コネクターはあなたのものになります。何も削除されません。",
+  "What would happen?": "どうなるか",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "ツールと、それを何に使うかを入力してください。ホストが同じルールで答えます。何も実行されません。",
+  "Command or input": "コマンドまたは入力",
+  "Ask": "確認",
+  "Asking…": "確認中…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n 追加 · ↵ 名前変更 · g 役割 · x 削除 · tab デバイス · esc",
+  "Role": "役割"
 }

@@ -59,6 +59,7 @@ pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
 };
+pub use people::{Person, Role};
 pub use week::Week;
 
 use crate::LockExt;

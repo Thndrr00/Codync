@@ -5,17 +5,18 @@ pub(super) fn routine() -> Routine {
         bot_id: "bot".into(),
         name: "Check".into(),
         instruction: "Check status".into(),
-        triggers: vec![Trigger::Interval { seconds: 60 }],
+        triggers: vec![Trigger::Interval { seconds: 900 }],
         enabled: true,
         created_at: 0,
         updated_at: 0,
-        next_runs: vec![Some(60_000)],
+        next_runs: vec![Some(900_000)],
         webhook_key: "secret".into(),
         deleted: false,
         timeout_seconds: default_timeout(),
         last_error: None,
         watch: vec![],
         idle_runs: 0,
+        failure_runs: 0,
         missed_policy: "skip".into(),
         limit_policy: "wait".into(),
         outputs: vec![],
@@ -112,6 +113,69 @@ fn duplicate_delivery_is_idempotent_and_cross_bot_edits_fail() {
     assert!(routines.owns("bot", "routine") && !routines.owns("other", "routine"));
     assert!(routines.enqueue(&store, "bot", "routine", Value::Null, None, false).is_err());
 }
+#[test]
+fn ten_failed_runs_in_a_row_pause_the_routine_and_say_how_to_resume() {
+    let (hub, dir) = temp_hub();
+    let mut r = routine();
+    r.failure_runs = 9;
+    let mut run = new_run(&r, Value::Null, None);
+    run.status = Status::Starting;
+    let run_id = run.id.clone();
+    hub.routines
+        .change(&hub.store, |s| {
+            s.routines.push(r);
+            s.runs.push(run);
+            Ok(())
+        })
+        .unwrap();
+    hub.routines.complete(&hub, &run_id, Status::Failed, Some("boom".into()), None, false).unwrap();
+    {
+        let state = hub.routines.state.locked();
+        assert_eq!(state.routines[0].failure_runs, guardrails::FAILURE_LIMIT);
+        assert!(!state.routines[0].enabled, "ten failures in a row pause it");
+        assert!(
+            state.runs.iter().filter(|run| run.routine_id == "routine").all(|run| run.status != Status::Pending),
+            "nothing waits on a paused routine"
+        );
+    }
+    let chat = hub.store.history("bot", i64::MAX, 20).unwrap();
+    let notice = chat.iter().find(|entry| entry.data["routineId"] == "routine").expect("a notice names the routine");
+    assert!(notice.data["text"].as_str().is_some_and(|text| text.contains("turn it back on")), "it says how to resume");
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn a_twenty_first_enabled_routine_is_refused() {
+    let (hub, dir) = temp_hub();
+    let bot: crate::store::BotConfig = serde_json::from_value(json!({
+        "id": "bot", "name": "Bot", "backend": "fixture", "command": "true", "cwd": "/tmp", "notify": false,
+    }))
+    .unwrap();
+    hub.store.save_bot(&bot).unwrap();
+    for i in 0..guardrails::MAX_ENABLED {
+        let body = json!({"name": format!("Routine {i}"), "instruction": "Check", "triggers": [{"type":"interval","seconds":900}]});
+        hub.routines.save(&hub, "bot", &body).unwrap();
+    }
+    let body = json!({"name": "One too many", "instruction": "Check", "triggers": [{"type":"interval","seconds":900}]});
+    let refused = hub.routines.save(&hub, "bot", &body).unwrap_err().to_string();
+    assert!(refused.contains("at most 20"), "{refused}");
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn a_short_interval_is_refused_when_a_routine_is_saved() {
+    let (hub, dir) = temp_hub();
+    let bot: crate::store::BotConfig = serde_json::from_value(json!({
+        "id": "bot", "name": "Bot", "backend": "fixture", "command": "true", "cwd": "/tmp", "notify": false,
+    }))
+    .unwrap();
+    hub.store.save_bot(&bot).unwrap();
+    let body = json!({"name": "Too often", "instruction": "Check", "triggers": [{"type":"interval","seconds":60}]});
+    let refused = hub.routines.save(&hub, "bot", &body).unwrap_err().to_string();
+    assert!(refused.contains("15 minutes"), "{refused}");
+    std::fs::remove_dir_all(dir).ok();
+}
+
 #[test]
 fn a_delivery_while_a_retry_waits_is_queued() {
     let store = Store::open(std::path::Path::new(":memory:")).unwrap();

@@ -737,5 +737,18 @@
   "↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close": "↑↓ اختيار  p اقتران  d فصل Matrix  s فصل Signal  t فصل Teams  r تحديث  esc إغلاق",
   "Talk to a bot from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only people you pair or allow can write to it; tokens stay in this computer's credential vault.": "تحدّث إلى بوت من WhatsApp أو Telegram أو Slack أو Discord أو Matrix أو Signal أو Microsoft Teams. لا يمكن الكتابة إليه إلا للأشخاص الذين تقرنهم أو تسمح لهم؛ تبقى الرموز في خزانة بيانات الاعتماد على هذا الحاسوب.",
   "Connecting…": "جارٍ الاتصال…",
-  "People allowed": "الأشخاص المسموح لهم"
+  "People allowed": "الأشخاص المسموح لهم",
+  "Admins manage people, connectors and bots on this computer.": "يدير المسؤولون الأشخاص والموصلات والروبوتات على هذا الكمبيوتر.",
+  "Members see only their own bots, chats and connectors.": "يرى الأعضاء روبوتاتهم ومحادثاتهم وموصلاتهم فقط.",
+  "Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.": "يفقد هاتفه الوصول فوراً. تصبح روبوتاته ومحادثاته وموصلاته ملكاً لك. لا يُحذف أي شيء.",
+  "What would happen?": "ماذا سيحدث؟",
+  "Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.": "اذكر أداة وما سيُطلب منها. يجيب المضيف بالقواعد نفسها؛ لا يُنفَّذ شيء.",
+  "Command or input": "الأمر أو الإدخال",
+  "Ask": "اسأل",
+  "Asking…": "جارٍ السؤال…",
+  "n add · ↵ rename · g role · x remove · tab devices · esc": "n إضافة · ↵ إعادة تسمية · g الدور · x إزالة · tab الأجهزة · esc",
+  "Role": "الدور",
+  "Member": "عضو",
+  "Admin": "مسؤول",
+  "Tool": "أداة"
 }

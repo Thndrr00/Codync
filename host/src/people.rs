@@ -6,16 +6,19 @@
 //! person acts as that person (`api::devices::caller_person`), and a bot's person decides which connectors
 //! it may use and whose chats it may read. Everything is checked here, never in a client.
 //!
-//! Removing a person never deletes their work: their devices, bots and connectors become the owner's, and
-//! the chat stays where it was.
+//! A person is a member (their own bots, chats and connectors) or an admin (they also manage everyone's
+//! people, connectors and bots). Only the owner changes a role. Removing a person revokes the phones
+//! assigned to them at once; their bots, connectors and chats stay and become the owner's.
 
+use crate::api::devices::Caller;
 use crate::hub::Hub;
 use crate::market;
+use crate::store::Role;
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-/// The methods this module answers (loopback only: only the owner manages who is on their computer).
+/// The methods this module answers (the owner, or a person who is an admin).
 pub const METHODS: [&str; 5] = ["people", "addPerson", "updatePerson", "removePerson", "setDevicePerson"];
 
 /// Longest a person's name may be, in characters.
@@ -23,12 +26,42 @@ const MAX_NAME_CHARS: usize = 80;
 /// Longest email a person may carry.
 const MAX_EMAIL_CHARS: usize = 200;
 
-pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
+pub fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: &Value) -> Result<Value> {
+    let actor = caller_person(hub, caller);
+    let admin = actor.as_deref().is_some_and(|person| is_admin(hub, person));
+    // `api::devices::permit_owner` already lets an admin's phone through; this keeps the module safe if
+    // another path ever reaches it.
+    if actor.is_some() && !admin {
+        bail!("This can only be done by the owner or an admin on this computer.");
+    }
+    let owner = actor.is_none();
     match method {
-        "people" => list(hub),
-        "addPerson" => add(hub, text(b, "name")?, b["email"].as_str()),
-        "updatePerson" => update(hub, required(b, "id")?, text(b, "name")?, b["email"].as_str()),
-        "removePerson" => remove(hub, required(b, "id")?),
+        "people" => list(hub, owner),
+        "addPerson" => {
+            let role = role_in(b)?;
+            if !owner && role == Role::Admin {
+                bail!("Only the owner can add an admin.");
+            }
+            add_with_role(hub, text(b, "name")?, b["email"].as_str(), role)
+        }
+        "updatePerson" => {
+            let id = required(b, "id")?;
+            let role = match b.get("role") {
+                Some(Value::String(_)) => Some(role_in(b)?),
+                _ => None,
+            };
+            if role.is_some() && !owner {
+                bail!("Only the owner can change a person's role.");
+            }
+            update_with_role(hub, id, text(b, "name")?, b["email"].as_str(), role)
+        }
+        "removePerson" => {
+            let id = required(b, "id")?;
+            if actor.as_deref() == Some(id) {
+                bail!("You can't remove yourself.");
+            }
+            remove(hub, id)
+        }
         "setDevicePerson" => {
             let person = match &b["person"] {
                 Value::String(id) if !id.is_empty() => Some(id.as_str()),
@@ -41,30 +74,47 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
     }
 }
 
-/// Everyone on this computer besides its owner.
-pub fn list(hub: &Hub) -> Result<Value> {
-    Ok(json!({"people": hub.store.people()?}))
+/// Everyone on this computer besides its owner. `canManageRoles` tells a client whether its caller is the
+/// owner: an admin's phone sees the people but can't promote or demote them.
+pub fn list(hub: &Hub, can_manage_roles: bool) -> Result<Value> {
+    Ok(json!({"people": hub.store.people()?, "canManageRoles": can_manage_roles}))
 }
 
-pub fn add(hub: &Arc<Hub>, name: &str, email: Option<&str>) -> Result<Value> {
+pub fn add_with_role(hub: &Arc<Hub>, name: &str, email: Option<&str>, role: Role) -> Result<Value> {
     let name = checked_name(name)?;
-    let person = hub.store.add_person(name, checked_email(email)?)?;
+    let email = checked_email(email)?;
+    let person = match role {
+        Role::Member => hub.store.add_person(name, email)?,
+        Role::Admin => hub.store.add_person_with_role(name, email, role)?,
+    };
     Ok(json!({"person": person}))
 }
 
-pub fn update(hub: &Arc<Hub>, id: &str, name: &str, email: Option<&str>) -> Result<Value> {
+/// Renames a person and, when `role` is given, makes them an admin or a member.
+pub fn update_with_role(
+    hub: &Arc<Hub>,
+    id: &str,
+    name: &str,
+    email: Option<&str>,
+    role: Option<Role>,
+) -> Result<Value> {
     let name = checked_name(name)?;
     let person =
         hub.store.update_person(id, name, checked_email(email)?)?.ok_or_else(|| anyhow::anyhow!("unknown person"))?;
+    let person = match role {
+        Some(role) => hub.store.set_person_role(id, role)?.unwrap_or(person),
+        None => person,
+    };
     Ok(json!({"person": person}))
 }
 
-/// Removes a person: their devices, bots and connectors are unassigned and become the owner's, and their
-/// chats stay with their bots. Nothing they set up is deleted.
+/// Removes a person: their phones lose access at once, and their bots and connectors are unassigned and
+/// become the owner's; their chats stay with their bots. Nothing they set up is deleted.
 pub fn remove(hub: &Arc<Hub>, id: &str) -> Result<Value> {
     if hub.store.person(id).is_none() {
         return Ok(json!({"removed": false}));
     }
+    // Their phones end here: the rows go and any open channel of theirs closes before its next call.
     // Bots first: their connectors stay on them, so no bot loses a tool it had.
     for row in hub.store.bots()?.into_iter().filter(|row| row.config.person.as_deref() == Some(id)) {
         let mut cfg = row.config;
@@ -78,6 +128,15 @@ pub fn remove(hub: &Arc<Hub>, id: &str) -> Result<Value> {
         }
         Ok(())
     })?;
+    // Their phones end here, last: anything above that failed leaves access as it was.
+    let devices: Vec<crate::store::Device> =
+        hub.store.devices()?.into_iter().filter(|device| device.person_id.as_deref() == Some(id)).collect();
+    for device in &devices {
+        hub.revoke_device(&device.key)?;
+        if let Some(grant) = &device.grant_id {
+            tokio::spawn(crate::remote::cloud::revoke_grant(hub.clone(), grant.clone()));
+        }
+    }
     Ok(json!({"removed": hub.store.remove_person(id)?}))
 }
 
@@ -97,6 +156,20 @@ pub fn set_device_person(hub: &Arc<Hub>, device: &str, person: Option<&str>) -> 
 
 fn required<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
     b[key].as_str().filter(|v| !v.is_empty()).ok_or_else(|| anyhow::anyhow!("`{key}` is required"))
+}
+
+/// The role a body names, `member` when it names none.
+fn role_in(b: &Value) -> Result<Role> {
+    match b.get("role") {
+        None | Some(Value::Null) => Ok(Role::Member),
+        Some(Value::String(role)) => Role::parse(role).ok_or_else(|| anyhow::anyhow!("`role` must be admin or member")),
+        Some(_) => bail!("`role` must be admin or member"),
+    }
+}
+
+/// Whether `person` is an admin on this computer (the owner is not a person and is always in charge).
+pub fn is_admin(hub: &Hub, person: &str) -> bool {
+    hub.store.person(person).is_some_and(|person| person.role == Role::Admin)
 }
 
 fn text<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
@@ -133,6 +206,9 @@ pub fn caller_person(hub: &Hub, caller: &crate::api::devices::Caller) -> Option<
 /// Refuses a call from a member's device that names a bot (or a message or thread in it) belonging to
 /// someone else. Called once, in `api::dispatch`, for every method that names one.
 pub fn check_bot(hub: &Hub, b: &Value, person: &str) -> Result<()> {
+    if is_admin(hub, person) {
+        return Ok(());
+    }
     if let Some(id) = b["botId"].as_str().or_else(|| b["bot"].as_str()) {
         return check_bot_id(hub, id, person);
     }
@@ -163,6 +239,9 @@ fn check_bot_id(hub: &Hub, id: &str, person: &str) -> Result<()> {
 /// Refuses a group whose members belong to someone else: a member can't put the owner's bot in their channel,
 /// or a bot of another person's.
 pub fn check_group_members(hub: &Hub, b: &Value, person: &str) -> Result<()> {
+    if is_admin(hub, person) {
+        return Ok(());
+    }
     let Some(members) = b["members"].as_array() else { return Ok(()) };
     for id in members.iter().filter_map(Value::as_str) {
         if let Some(row) = hub.store.bot(id)?
@@ -218,17 +297,17 @@ mod tests {
     #[test]
     fn only_the_owner_manages_people_and_their_names_are_checked() {
         let hub = hub();
-        assert!(super::add(&hub, "   ", None).is_err());
-        assert!(super::add(&hub, "Ana", Some("nonsense")).is_err());
-        let ana = super::add(&hub, " Ana ", Some("ana@example.com")).unwrap();
+        assert!(super::add_with_role(&hub, "   ", None, Role::Member).is_err());
+        assert!(super::add_with_role(&hub, "Ana", Some("nonsense"), Role::Member).is_err());
+        let ana = super::add_with_role(&hub, " Ana ", Some("ana@example.com"), Role::Member).unwrap();
         let id = ana["person"]["id"].as_str().unwrap();
-        assert_eq!(super::update(&hub, id, "Ana B", None).unwrap()["person"]["name"], "Ana B");
-        assert!(super::update(&hub, "nope", "Nobody", None).is_err());
-        assert_eq!(super::list(&hub).unwrap()["people"].as_array().unwrap().len(), 1);
+        assert_eq!(super::update_with_role(&hub, id, "Ana B", None, None).unwrap()["person"]["name"], "Ana B");
+        assert!(super::update_with_role(&hub, "nope", "Nobody", None, None).is_err());
+        assert_eq!(super::list(&hub, true).unwrap()["people"].as_array().unwrap().len(), 1);
     }
 
     #[test]
-    fn removing_a_person_gives_their_bots_and_devices_to_the_owner() {
+    fn removing_a_person_gives_their_bots_to_the_owner_and_revokes_their_devices() {
         let hub = hub();
         let person = hub.store.add_person("Ana", None).unwrap();
         device(&hub, "ana-phone", Some(&person.id));
@@ -242,9 +321,44 @@ mod tests {
         );
 
         assert_eq!(remove(&hub, &person.id).unwrap()["removed"], true);
-        assert_eq!(hub.store.device("ana-phone").unwrap().person_id, None);
+        assert!(hub.store.device("ana-phone").is_none(), "their phone can no longer open a channel");
         assert_eq!(hub.store.bot("ana-bot").unwrap().unwrap().config.person, None);
         assert!(!remove(&hub, &person.id).unwrap()["removed"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn a_person_is_a_member_unless_the_owner_makes_them_an_admin() {
+        let hub = hub();
+        let ana = add_with_role(&hub, "Ana", None, Role::Member).unwrap();
+        let id = ana["person"]["id"].as_str().unwrap();
+        assert_eq!(ana["person"]["role"], "member");
+
+        // A member's phone can't change a role, or see the people list through this module.
+        device(&hub, "ana-phone", Some(id));
+        let ana_caller = crate::api::devices::Caller::Device { key: "ana-phone".into(), scopes: vec![Scope::Control] };
+        assert!(call(&hub, &ana_caller, "updatePerson", &json!({"id": id, "name": "Ana", "role": "admin"})).is_err());
+        assert!(call(&hub, &ana_caller, "people", &json!({})).is_err());
+
+        // The owner promotes her; then she manages people, but still can't make another admin.
+        call(
+            &hub,
+            &crate::api::devices::Caller::Local,
+            "updatePerson",
+            &json!({"id": id, "name": "Ana", "role": "admin"}),
+        )
+        .unwrap();
+        assert!(is_admin(&hub, id));
+        let ben = call(&hub, &ana_caller, "addPerson", &json!({"name": "Ben"})).unwrap();
+        assert_eq!(ben["person"]["role"], "member");
+        assert!(call(&hub, &ana_caller, "addPerson", &json!({"name": "Cid", "role": "admin"})).is_err());
+        assert!(call(&hub, &ana_caller, "people", &json!({})).is_ok());
+        assert_eq!(call(&hub, &ana_caller, "people", &json!({})).unwrap()["people"].as_array().unwrap().len(), 2);
+
+        // An admin can manage anyone's bot; a member can't.
+        bot(&hub, "ana-bot", Some(id));
+        let ben_id = ben["person"]["id"].as_str().unwrap();
+        assert!(check_bot(&hub, &json!({"botId": "ana-bot"}), id).is_ok(), "an admin may name a bot");
+        assert!(check_bot(&hub, &json!({"botId": "ana-bot"}), ben_id).is_err());
     }
 
     #[test]

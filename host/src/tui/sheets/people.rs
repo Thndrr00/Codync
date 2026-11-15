@@ -1,5 +1,5 @@
-//! The People sheet: everyone who uses this computer besides its owner, the devices each person
-//! uses, and giving a device to a person or back to the owner.
+//! The People sheet: everyone who uses this computer besides its owner, each person's role, the
+//! devices each person uses, and giving a device to a person or back to the owner.
 
 use super::{Buffer, Rect, centered, footer, frame_box, hline, put, restyle, rput, theme, truncate, window};
 use crate::tui::l10n::tr;
@@ -45,7 +45,7 @@ fn list(buf: &mut Buffer, body: Rect, sheet: &PeopleSheet) -> &'static str {
     y = heading(buf, body, y, "Assign a device", "A member's phone only sees and changes what is theirs.", tall);
     let _ = devices_rows(buf, body, y, sheet, room);
     match sheet.section {
-        PeopleSection::People => "n add · ↵ rename · x remove · tab devices · esc",
+        PeopleSection::People => "n add · ↵ rename · g role · x remove · tab devices · esc",
         PeopleSection::Devices => "↵ assign · tab people · esc",
     }
 }
@@ -82,7 +82,12 @@ fn people_rows(buf: &mut Buffer, body: Rect, mut y: u16, sheet: &PeopleSheet, ro
         let email = person["email"].as_str().unwrap_or_default();
         let left = if email.is_empty() { name.to_owned() } else { format!("{name} · {email}") };
         let devices = sheet.devices_of(id);
-        let right = if devices.is_empty() { tr("No devices").into_owned() } else { devices.join(", ") };
+        let role = tr(if person["role"].as_str() == Some("admin") { "Admin" } else { "Member" }).into_owned();
+        let right = if devices.is_empty() {
+            format!("{role} · {}", tr("No devices"))
+        } else {
+            format!("{role} · {}", devices.join(", "))
+        };
         person_row(buf, body, y, &left, &right, selected);
         y += 1;
     }

@@ -49,7 +49,7 @@ If the bot set up triggers the editor doesn't offer, the editor shows them as **
 | Schedule | On a calendar schedule in a time zone you choose, daylight saving included. | Editor or bot |
 | Webhook | Each time an authenticated delivery arrives at its URL. | Editor or bot |
 | Once | One time, at a date and time in the future. | Bot (or terminal UI) |
-| Interval | Every so many seconds, minutes, hours or days, from 1 second to 365 days. | Bot (or terminal UI) |
+| Interval | Every so many seconds, minutes, hours or days, from 15 minutes to 365 days. | Bot (or terminal UI) |
 | Event | When a webhook delivery matches a source and event, such as a pull request opening on GitHub. | Editor or bot |
 
 A routine can have several triggers; it runs when any of them fires.
@@ -88,6 +88,8 @@ Codync retries a failed run only when retrying can't repeat work:
 - **It already acted, ran out of time, or the retries failed.** The failure line notifies you and has a **Try again** button (`F` in the terminal UI) that runs the same work again. Only a routine's latest failure keeps the button.
 
 A failure line also has **Cancel task** (`E` in the terminal UI). It ends the run there, keeping the messages, and cancels a retry still waiting for its time; the line then reads **Cancelled** and Try again is gone.
+
+Codync also has fixed safeguards (not settings): an interval routine can't repeat more often than every 15 minutes, one computer keeps at most 20 routines enabled, and a routine that fails 10 times in a row pauses itself. The last one posts a notice naming the routine and telling you to fix what it needs and turn it back on; its queued work and any waiting retry stop with it. A success, a save or turning it back on starts the count over.
 
 Pausing or deleting the routine cancels a waiting retry; stopping the bot doesn't. A paused routine isn't retried automatically, and Try again doesn't work on it until you resume it.
 

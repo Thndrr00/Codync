@@ -59,9 +59,11 @@ pub fn events_stream(
     caller: &Caller,
 ) -> Result<impl Stream<Item = Value> + Send + use<>> {
     let live = BroadcastStream::new(hub.events.subscribe());
-    // A member's phone sees only that person's bots, their chats and what hangs off them. The owner sees all.
+    // A member's phone sees only that person's bots, their chats and what hangs off them. An admin and
+    // the owner see all.
     let person = crate::people::caller_person(hub, caller);
-    let visible: Option<std::collections::HashSet<String>> = person.as_deref().map(|person| {
+    let admin = person.as_deref().is_some_and(|person| crate::people::is_admin(hub, person));
+    let visible: Option<std::collections::HashSet<String>> = person.as_deref().filter(|_| !admin).map(|person| {
         hub.store
             .bots()
             .unwrap_or_default()

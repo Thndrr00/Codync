@@ -203,6 +203,26 @@ suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: Lis
     }
     ApprovalRules.decodeEvaluation(hostQuery("testApprovalRule", payload))
 }.getOrNull()
+/** What would happen to a proposed tool call under the bot's rules; null when the host can't say. */
+suspend fun AppStore.previewApproval(
+    botId: String,
+    tool: String,
+    command: String,
+    rules: List<ApprovalRule>? = null,
+    quick: Pair<Boolean, Map<String, String>>? = null,
+): ApprovalPreview? = runCatching {
+    val payload = buildJsonObject {
+        put("botId", botId)
+        put("tool", tool)
+        if (command.isNotBlank()) put("command", command)
+        rules?.let { put("rules", WireJson.encodeToJsonElement(ApprovalRules.clean(it))) }
+        quick?.let { (on, policies) ->
+            put("actionRulesOn", on)
+            put("actionRules", WireJson.encodeToJsonElement(policies))
+        }
+    }
+    ApprovalRules.decodePreview(hostQuery("previewApproval", payload))
+}.getOrNull()
 /** A forced usage read that returns when it's done, for pull to refresh. */
 suspend fun AppStore.reloadUsage() { refreshUsage(true); actions["usage"]?.join() }
 fun AppStore.refreshUsage(force: Boolean = true) = action("usage") {

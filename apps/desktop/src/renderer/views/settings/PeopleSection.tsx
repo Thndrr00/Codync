@@ -17,6 +17,7 @@ export function PeopleSection() {
   const tr = useTr()
   const app = useApp()
   const [people, setPeople] = useState<Person[]>([])
+  const [canManageRoles, setCanManageRoles] = useState(true)
   const [devices, setDevices] = useState<AuthorizedDevice[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -33,10 +34,13 @@ export function PeopleSection() {
     if (!c) return
     // An older host has no people: the section simply stays empty.
     const [p, d] = await Promise.allSettled([
-      c.call<{ people: Person[] }>('people'),
+      c.call<{ people: Person[]; canManageRoles?: boolean }>('people'),
       c.call<{ devices: AuthorizedDevice[] }>('devices'),
     ])
-    if (p.status === 'fulfilled') setPeople(p.value.people ?? [])
+    if (p.status === 'fulfilled') {
+      setPeople(p.value.people ?? [])
+      setCanManageRoles(p.value.canManageRoles ?? true)
+    }
     if (d.status === 'fulfilled') setDevices(d.value.devices ?? [])
   }
   useEffect(() => {
@@ -80,10 +84,25 @@ export function PeopleSection() {
     }
     await load()
   }
+  const setRole = async (person: Person, role: 'admin' | 'member') => {
+    const c = await client()
+    if (!c) return
+    try {
+      await c.call('updatePerson', { id: person.id, name: person.name, email: person.email ?? '', role })
+      setError(null)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+    await load()
+  }
 
   const choices = [
     { id: '', label: tr("This computer's owner") },
     ...people.map((p) => ({ id: p.id, label: p.name })),
+  ]
+  const roles = [
+    { id: 'member', label: tr('Member') },
+    { id: 'admin', label: tr('Admin') },
   ]
   return (
     <>
@@ -97,7 +116,21 @@ export function PeopleSection() {
             <VStack grow className="settings-stack">
               <span>{person.name}</span>
               {person.email ? <Text size="caption" tone="tertiary">{person.email}</Text> : null}
+              <Text size="caption" tone="tertiary">
+                {person.role === 'admin'
+                  ? tr('Admins manage people, connectors and bots on this computer.')
+                  : tr('Members see only their own bots, chats and connectors.')}
+              </Text>
             </VStack>
+            {canManageRoles ? (
+              <ChoicePicker
+                selection={person.role ?? 'member'}
+                options={roles}
+                onChange={(role) => void setRole(person, role as 'admin' | 'member')}
+              />
+            ) : (
+              <Text size="caption" tone="secondary">{person.role === 'admin' ? tr('Admin') : tr('Member')}</Text>
+            )}
             <Button kind="secondary" onClick={() => setRemoving(person)}>{tr('Remove')}</Button>
           </HStack>
         ))}
@@ -130,7 +163,7 @@ export function PeopleSection() {
       <Dialog
         open={removing !== null}
         title={tr('Remove {name}?').replaceAll('{name}', removing?.name ?? tr('Person'))}
-        message={tr('Their phone, bots, chats and connectors become yours. Nothing is deleted.')}
+        message={tr('Their phone loses access at once. Their bots, chats and connectors become yours. Nothing is deleted.')}
         actions={removing ? [{ title: tr('Remove'), destructive: true, action: () => void remove(removing) }] : []}
         onClose={() => setRemoving(null)}
       />

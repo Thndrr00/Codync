@@ -3,6 +3,7 @@ import { Button, ChoicePicker, IconButton } from '../../components/Controls'
 import { Switch } from '../../components/Controls'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
+import { useTr } from '../../lib/use-language'
 import {
   CHAINING_WARNING,
   describeEvaluation,
@@ -10,6 +11,7 @@ import {
   QUICK_CLASSES,
   RULE_KINDS,
   type ApprovalEvaluation,
+  type ApprovalPreview,
   type ApprovalRule,
   type QuickPolicy,
   type RuleDecision,
@@ -28,23 +30,34 @@ const KINDS = [{ id: '', label: 'Any tool' }, ...RULE_KINDS.map((id) => ({ id: i
  * A bot's approval rules, first match first: add, edit, reorder, delete, and try a command against them. The host
  * decides what a rule does (`testApprovalRule`); nothing here copies its logic.
  */
-export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
+export function ApprovalRulesEditor({ rules, onChange, test, preview, quick, onQuick }: {
   rules: ApprovalRule[]
   onChange: (rules: ApprovalRule[]) => void
   /** Asks the host what the bot would do with `command` under `rules`; null when it can't say. */
   test: (command: string, rules: ApprovalRule[]) => Promise<ApprovalEvaluation | null>
+  /** Asks the host what would happen to a proposed tool call; null when it can't say. */
+  preview?: (tool: string, command: string) => Promise<ApprovalPreview | null>
   /** The quick rules by kind of action; absent from a host that has none. */
   quick?: { on: boolean; policies: Partial<Record<string, QuickPolicy>> }
   onQuick?: (next: { on: boolean; policies: Partial<Record<string, QuickPolicy>> }) => void
 }) {
+  const tr = useTr()
   const [command, setCommand] = useState('')
   const [answer, setAnswer] = useState<string | null>(null)
+  const [tool, setTool] = useState('shell')
+  const [proposal, setProposal] = useState('')
+  const [whatIf, setWhatIf] = useState<string | null>(null)
   const replace = (index: number, patch: Partial<ApprovalRule>) =>
     onChange(rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)))
   const run = async () => {
     if (!command.trim()) return
     const evaluation = await test(command, rules)
     setAnswer(evaluation ? describeEvaluation(evaluation) : "This computer's host can't test rules.")
+  }
+  const askWhatIf = async () => {
+    if (!preview || !tool.trim()) return
+    const result = await preview(tool.trim(), proposal)
+    setWhatIf(result ? result.explanation : "This computer's host can't preview a call.")
   }
   return (
     <Field label="Approval rules" detail={`The first rule that matches decides, before the Approvals setting. ${CHAINING_WARNING} A * matches any text.`}>
@@ -95,6 +108,21 @@ export function ApprovalRulesEditor({ rules, onChange, test, quick, onQuick }: {
           <Button kind="secondary" disabled={!command.trim()} onClick={() => void run()}>Test</Button>
         </HStack>
         {answer ? <Text size="footnote" tone="secondary">{answer}</Text> : null}
+        {preview ? (
+          <VStack gap={6} className="rule-what-if">
+            <Text weight="semibold">{tr('What would happen?')}</Text>
+            <Text size="footnote" tone="secondary">
+              {tr('Name a tool and what it would be asked to do. The host answers with the same rules; nothing runs.')}
+            </Text>
+            <HStack gap={6}>
+              <Field label={tr('Tool')} value={tool} onChange={(value) => { setTool(value); setWhatIf(null) }} />
+              <AutoTextArea className="field-box rule-pattern" value={proposal}
+                minRows={1} maxRows={2} onChange={(value) => { setProposal(value); setWhatIf(null) }} />
+              <Button kind="secondary" disabled={!tool.trim()} onClick={() => void askWhatIf()}>{tr('Ask')}</Button>
+            </HStack>
+            {whatIf ? <Text size="footnote" tone="secondary">{whatIf}</Text> : null}
+          </VStack>
+        ) : null}
       </VStack>
     </Field>
   )
