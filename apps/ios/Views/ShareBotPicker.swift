@@ -11,9 +11,9 @@ struct ShareBotPicker: View {
     @Environment(\.dismissModal) private var dismiss
 
     private var bots: [(store: BotStore, bot: Bot)] {
-        accounts.computers.flatMap { computer -> [(BotStore, Bot)] in
+        accounts.computers.flatMap { computer -> [(store: BotStore, bot: Bot)] in
             guard let store = accounts.store(for: computer.id), store.connection == .online else { return [] }
-            return store.roster.filter { !$0.deleted && $0.kind != "group" }.map { (store, $0) }
+            return store.roster.filter { !$0.deleted && $0.kind != "group" }.map { (store: store, bot: $0) }
         }
     }
 

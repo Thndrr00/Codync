@@ -4,11 +4,11 @@ import SwiftUI
 import UIKit
 
 /// Plays a meeting turn's spoken audio: the host returns base64 in a container AVAudioPlayer reads.
-@MainActor
-final class MeetingAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
+final class MeetingAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, @unchecked Sendable {
     @Published private(set) var playing: String?
     private var player: AVAudioPlayer?
 
+    @MainActor
     func play(_ turn: MeetingTurn) {
         guard let encoded = turn.audio, let data = Data(base64Encoded: encoded) else { return }
         stop()
@@ -27,6 +27,7 @@ final class MeetingAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
 
+    @MainActor
     func stop() {
         player?.stop()
         player = nil
@@ -34,7 +35,7 @@ final class MeetingAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in self.stop() }
+        Task { @MainActor [weak self] in self?.stop() }
     }
 }
 
