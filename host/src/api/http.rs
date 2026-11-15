@@ -26,6 +26,7 @@ pub fn router(hub: Arc<Hub>) -> Router {
     let main = Router::new()
         .route("/health", get(health))
         .route("/hooks/routines/{id}", post(routine_hook))
+        .route("/hooks/github", post(github_hook))
         .route("/hooks/slack", post(crate::slack::ingress::receive))
         .route("/events", get(events))
         .route("/scim/v2/Users", get(scim_users).post(scim_create))
@@ -329,6 +330,25 @@ async fn routine_hook(
     let headers =
         headers.iter().filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned()))).collect();
     hub.routines.receive(&hub, &id, &headers, &body).map(Json).map_err(|e| {
+        let status = match e {
+            Refused::Unauthorized => StatusCode::UNAUTHORIZED,
+            Refused::Paused | Refused::Busy => StatusCode::CONFLICT,
+            Refused::Invalid(_) => StatusCode::BAD_REQUEST,
+        };
+        ApiError(status, e.to_string())
+    })
+}
+
+/// `POST /hooks/github`: one delivery of this computer's GitHub App. GitHub signs it with the App's
+/// webhook secret; the host checks the same signature the public path checks.
+async fn github_hook(State(hub): State<Arc<Hub>>, headers: HeaderMap, body: Bytes) -> Result<Json<Value>, ApiError> {
+    use crate::routines::hooks::{MAX_BODY, Refused};
+    if body.len() > MAX_BODY {
+        return Err(ApiError(StatusCode::PAYLOAD_TOO_LARGE, "event too large".into()));
+    }
+    let headers =
+        headers.iter().filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned()))).collect();
+    crate::github::app::receive(&hub, &headers, &body).map(Json).map_err(|e| {
         let status = match e {
             Refused::Unauthorized => StatusCode::UNAUTHORIZED,
             Refused::Paused | Refused::Busy => StatusCode::CONFLICT,

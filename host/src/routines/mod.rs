@@ -581,12 +581,25 @@ impl Routines {
     /// trigger matches. Returns the routine ids it queued.
     #[allow(clippy::needless_pass_by_value, reason = "cloned for each queued routine")]
     pub fn receive_event(&self, store: &Store, event: &Value, delivery: Option<String>) -> Vec<String> {
+        self.receive_event_for(store, None, event, delivery)
+    }
+
+    /// The same, limited to one bot's routines: a mapped repository reaches that bot only.
+    #[allow(clippy::needless_pass_by_value, reason = "cloned for each queued routine")]
+    pub fn receive_event_for(
+        &self,
+        store: &Store,
+        bot: Option<&str>,
+        event: &Value,
+        delivery: Option<String>,
+    ) -> Vec<String> {
         let matches: Vec<(String, String)> = self
             .state
             .locked()
             .routines
             .iter()
-            .filter(|r| !r.deleted && r.enabled && r.triggers.iter().any(|t| t.matches(event)))
+            .filter(|r| !r.deleted && r.enabled && bot.is_none_or(|bot| r.bot_id == bot))
+            .filter(|r| r.triggers.iter().any(|t| t.matches(event)))
             .map(|r| (r.id.clone(), r.bot_id.clone()))
             .collect();
         let mut queued = vec![];

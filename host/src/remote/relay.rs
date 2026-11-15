@@ -335,7 +335,16 @@ impl Session {
 
     /// The whole webhook set; the relay replaces what it had.
     async fn publish_hooks(&mut self) -> Result<()> {
-        let hooks = self.hub.routines.hooks();
+        let mut hooks: Vec<Value> = self
+            .hub
+            .routines
+            .hooks()
+            .into_iter()
+            .map(|hook| json!({"id": hook.id, "key": hook.key, "enabled": hook.enabled}))
+            .collect();
+        if let Some(app) = crate::github::app::hook(&self.hub.store) {
+            hooks.push(app);
+        }
         self.send(&json!({"t": "hooks", "hooks": hooks})).await
     }
 
@@ -493,6 +502,15 @@ fn hook_item(hub: &Arc<Hub>, item: &Value) -> Value {
     let Some(body) = item["body"].as_str().and_then(|b| crypto::unb64(b).ok()) else {
         return json!({"t": "hook.ack", "seq": seq, "ok": false, "code": "invalid"});
     };
+    if hook == "github" {
+        return match crate::github::app::receive(hub, &headers, &body) {
+            Ok(_) => json!({"t": "hook.ack", "seq": seq, "ok": true}),
+            Err(e) => {
+                tracing::info!(code = e.code(), reason = %e, "refused a GitHub App delivery");
+                json!({"t": "hook.ack", "seq": seq, "ok": false, "retry": e.retry(), "code": e.code()})
+            }
+        };
+    }
     match hub.routines.receive(hub, hook, &headers, &body) {
         Ok(_) => json!({"t": "hook.ack", "seq": seq, "ok": true}),
         Err(e) => {

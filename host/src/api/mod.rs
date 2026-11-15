@@ -102,7 +102,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return crate::research::call(hub, method, &b).await;
     }
     if crate::github::METHODS.contains(&method) {
-        if !matches!(caller, Caller::Local) && method != "githubStatus" {
+        if !matches!(caller, Caller::Local) && !matches!(method, "githubStatus" | "githubAppStatus") {
             return Err(Forbidden.into());
         }
         return crate::github::call(hub, method, b).await;

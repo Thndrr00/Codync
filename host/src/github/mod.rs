@@ -12,7 +12,18 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 const SLOT: &str = "github.connection";
-pub const METHODS: &[&str] = &["githubStatus", "setGitHubToken", "disconnectGitHub"];
+pub mod app;
+pub const METHODS: &[&str] = &[
+    "githubStatus",
+    "setGitHubToken",
+    "disconnectGitHub",
+    "githubAppStatus",
+    "setGitHubApp",
+    "disconnectGitHubApp",
+    "githubInstallations",
+    "mapGitHubRepo",
+    "unmapGitHubRepo",
+];
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -79,6 +90,9 @@ async fn verify(token: &str) -> Result<(String, Vec<String>)> {
 }
 
 pub(crate) async fn call(hub: &Arc<Hub>, method: &str, body: Value) -> Result<Value> {
+    if app::METHODS.contains(&method) {
+        return app::call(hub, method, body).await;
+    }
     crate::market::vault::unlock(hub.clone()).await?;
     let token = body["token"].as_str().unwrap_or_default().trim().to_owned();
     let prepared = if method == "setGitHubToken" {

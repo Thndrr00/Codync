@@ -60,7 +60,7 @@ use std::sync::Mutex;
 
 pub struct Store {
     pub(crate) icon_lock: tokio::sync::Mutex<()>,
-    db: Mutex<Connection>,
+    pub(crate) db: Mutex<Connection>,
     pub(crate) connector_lock: Mutex<()>,
     pub(crate) secret_key: Mutex<Option<zeroize::Zeroizing<Vec<u8>>>>,
     /// Held by the one keyring read in flight (`market::vault::unlock`).
