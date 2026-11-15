@@ -17,6 +17,11 @@ impl Hub {
         if !cfg.is_group() {
             v["harnessMemoryShared"] = crate::agent::own_memory::shared(cfg).into();
             v["sharedMemory"] = crate::chat::memory::shared(cfg).into();
+            // The brain it works in, with how the layer is called; null when it works in none.
+            v["brain"] = match crate::chat::memory::layers(&self.store, cfg).brain {
+                Some(brain) => json!({"id": brain.id, "name": brain.name, "shared": brain.layer.is_none()}),
+                None => Value::Null,
+            };
             v["memoryRev"] = self.store.memory_rev().into();
         }
         let rt = if cfg.is_group() {

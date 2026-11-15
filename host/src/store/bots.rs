@@ -27,8 +27,8 @@ fn parse_bot((id, cfg, rev, deleted, session_id, read_rev): RawBot) -> Option<Bo
 }
 
 const BOT_COLS: &str = "id, config, rev, deleted, session_id, read_rev";
-const SAVE_BOT: &str = "INSERT INTO bots(id, rev, config) VALUES(?1, ?2, ?3)
-     ON CONFLICT(id) DO UPDATE SET rev = ?2, config = ?3 WHERE deleted = 0";
+const SAVE_BOT: &str = "INSERT INTO bots(id, rev, config, brain) VALUES(?1, ?2, ?3, ?4)
+     ON CONFLICT(id) DO UPDATE SET rev = ?2, config = ?3, brain = ?4 WHERE deleted = 0";
 
 impl Store {
     pub fn bots(&self) -> Result<Vec<BotRow>> {
@@ -47,7 +47,7 @@ impl Store {
     pub fn save_bot(&self, cfg: &BotConfig) -> Result<i64> {
         let c = self.db.locked();
         let rev = next_rev(&c)?;
-        c.execute(SAVE_BOT, params![cfg.id, rev, serde_json::to_string(cfg)?])?;
+        c.execute(SAVE_BOT, params![cfg.id, rev, serde_json::to_string(cfg)?, cfg.brain])?;
         Ok(rev)
     }
 
@@ -57,7 +57,7 @@ impl Store {
         let tx = c.transaction()?;
         for cfg in cfgs {
             let rev = next_rev(&tx)?;
-            tx.execute(SAVE_BOT, params![cfg.id, rev, serde_json::to_string(cfg)?])?;
+            tx.execute(SAVE_BOT, params![cfg.id, rev, serde_json::to_string(cfg)?, cfg.brain])?;
         }
         tx.commit()?;
         Ok(())
@@ -262,6 +262,7 @@ mod tests {
             created_by: None,
             catalog: None,
             shared_memory: None,
+            brain: None,
             harness_memory: false,
             auto_name: false,
             is_chief: false,

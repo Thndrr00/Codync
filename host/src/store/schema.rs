@@ -8,7 +8,9 @@ use std::sync::Mutex;
 
 /// Current schema version (kv `schema`).
 /// 7: the account a device joined with (devices.account).
-const SCHEMA: i64 = 7;
+/// 8: brains (memory several bots share), the Fleet brain over the shared memory, and the brain a bot works in
+/// (bots.brain).
+const SCHEMA: i64 = 8;
 
 /// 3: authorized devices (keys, not push tickets) with their push and Live Activity
 /// tickets. The old ticket-only `devices` table is dropped; phones re-register on connect.
@@ -33,7 +35,8 @@ fn migrate(c: &Connection) -> Result<()> {
         migrate_5(c)?;
     }
     migrate_6(c)?;
-    migrate_7(c)
+    migrate_7(c)?;
+    migrate_8(c)
 }
 
 fn migrate_3(c: &Connection) -> Result<()> {
@@ -133,6 +136,23 @@ fn migrate_7(c: &Connection) -> Result<()> {
     c.execute_batch(
         "BEGIN;
          INSERT INTO kv(k, v) VALUES('schema', '7') ON CONFLICT(k) DO UPDATE SET v = '7';
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+/// Brains: named memory several bots share. The Fleet brain stands over the shared-memory folder bots always used,
+/// so nothing moves; the shared memory a bot opted into is the Fleet brain's.
+fn migrate_8(c: &Connection) -> Result<()> {
+    // Called on every open: a table built by this version already has all of this.
+    let _ = c.execute("ALTER TABLE bots ADD COLUMN brain TEXT", []);
+    c.execute_batch(
+        "BEGIN;
+         CREATE TABLE IF NOT EXISTS brains(
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL);
+         INSERT INTO brains(id, name, created_at) VALUES('fleet', 'Fleet', 0)
+           ON CONFLICT(id) DO NOTHING;
+         INSERT INTO kv(k, v) VALUES('schema', '8') ON CONFLICT(k) DO UPDATE SET v = '8';
          COMMIT;",
     )?;
     Ok(())
@@ -243,10 +263,29 @@ mod tests {
         }
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty());
-        assert_eq!(s.kv_get("schema").as_deref(), Some("7"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("8"));
         drop(s);
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty(), "reopening keeps the new table");
+    }
+
+    #[test]
+    fn a_shared_memory_bot_keeps_it_as_the_fleet_brain() {
+        let db = temp_db();
+        {
+            Store::open(&db).unwrap();
+            let c = Connection::open(&db).unwrap();
+            c.execute_batch(
+                "UPDATE kv SET v = '7' WHERE k = 'schema';
+                 INSERT INTO bots(id, rev, config) VALUES('b', 1, '{\"id\":\"b\",\"name\":\"B\",\"sharedMemory\":true}');",
+            )
+            .unwrap();
+        }
+        let s = Store::open(&db).unwrap();
+        assert_eq!(s.fleet_brain().unwrap().map(|b| b.name), Some("Fleet".into()));
+        assert_eq!(s.bot("b").unwrap().unwrap().config.brain, None, "it works in no project brain");
+        assert!(crate::chat::memory::sees(&s, &s.bot("b").unwrap().unwrap().config), "and still shares");
+        assert_eq!(s.kv_get("schema").as_deref(), Some("8"));
     }
 
     #[test]
@@ -266,7 +305,7 @@ mod tests {
         let s = Store::open(&db).unwrap();
         let chat: Vec<String> = s.history("b", i64::MAX, 10).unwrap().into_iter().map(|e| e.id).collect();
         assert_eq!(chat, ["info"]);
-        assert_eq!(s.kv_get("schema").as_deref(), Some("7"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("8"));
     }
 
     #[test]

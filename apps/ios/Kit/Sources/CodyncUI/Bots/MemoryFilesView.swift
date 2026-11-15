@@ -11,7 +11,7 @@ struct MemoryFilesList: View {
     @Environment(\.noteLines) private var noteLines
 
     var body: some View {
-        let live = (shared ? files.yours : files.bot).files.filter { !$0.deleted }
+        let live = ((shared ? files.yours : files.bot)?.files ?? []).filter { !$0.deleted }
         Text(L10n.tr("Notes")).font(.footnote.weight(.semibold)).foregroundStyle(Palette.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 6)

@@ -10,6 +10,7 @@ pub mod approval_lessons;
 pub mod approvals;
 pub mod apps;
 mod bots;
+mod brain;
 mod computer_activity;
 mod devices;
 mod documents;
@@ -40,6 +41,7 @@ pub(crate) mod slack;
 pub(crate) mod whatsapp;
 
 pub use apps::{AppLink, AppLinkMode, BotApp};
+pub use brain::FLEET;
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};
 #[allow(unused_imports, reason = "tests reach a document write's result through the store")]

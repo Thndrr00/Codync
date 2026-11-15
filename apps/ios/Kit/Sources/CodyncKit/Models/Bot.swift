@@ -71,6 +71,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var createdBy: String?
     /// Uses the memory all the user's bots share ("About you"). Nil from an older host.
     public var sharedMemory: Bool?
+    /// The brain the bot works in: memory it shares with the bots that joined the same one. Nil when none.
+    public var brain: Brain?
     /// Keeps the harness's own memory (Claude Code's…) on beside Codync's. Nil where it has no switch.
     public var harnessMemory: Bool?
     /// The harness keeps one memory for all its sessions that Codync can't turn off (Hermes Agent, Gemini CLI):

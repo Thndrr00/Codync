@@ -265,6 +265,10 @@ pub struct BotConfig {
     /// project folder (see `chat::memory::shared`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shared_memory: Option<bool>,
+    /// The brain the bot works in: memory it shares with the bots that join the same one (see `chat::memory`).
+    /// Without one, a bot that uses the shared memory reads the Fleet brain's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brain: Option<String>,
     /// Keeps the harness's own memory (Claude Code's auto memory…) on beside Codync's. Off unless the user turns it
     /// on, and only where Codync can turn it off (see `agent::own_memory::kept`). A client sending back the bot as
     /// it got it sends `null` where there is no switch.

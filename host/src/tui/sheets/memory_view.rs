@@ -23,6 +23,10 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, memory: &MemorySheet) {
             note(buf, body, detail.as_ref(), &memory.scroll);
             "↑↓ scroll · Esc back"
         }
+        MemoryMode::Brains => {
+            brains(buf, body, memory);
+            "↑↓ move · ↵ work in it · n new · r rename · d delete · x save to a file · i import · Esc back"
+        }
         MemoryMode::Browse => match memory.section {
             Section::Notes => {
                 notes(buf, body, memory);
@@ -30,7 +34,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, memory: &MemorySheet) {
             }
             Section::Yours | Section::Bot => {
                 entries(buf, body, app, memory);
-                "←→ section · ↑↓ move · s shared · Esc close · tell the bot to change it"
+                "←→ section · ↑↓ move · b brain · Esc close · tell the bot to change it"
             }
             Section::Dreams => {
                 dreams(buf, body, memory);
@@ -56,6 +60,11 @@ fn tabs(buf: &mut Buffer, inner: Rect, memory: &MemorySheet) {
             _ => None,
         };
         if let (Some(layer), Some(view)) = (layer, &memory.view) {
+            // A project brain's name stands in for "About you"; the Fleet one keeps the label.
+            let brain = &view["brain"];
+            if brain["shared"] != true && brain["name"].is_string() {
+                s(brain, "name").clone_into(&mut label);
+            }
             label = format!("{label} {}/{}", view[layer]["used"], view[layer]["cap"]);
         }
         let style = if section == memory.section {
@@ -75,9 +84,16 @@ fn entries(buf: &mut Buffer, body: Rect, app: &App, memory: &MemorySheet) {
     let Some(view) = &memory.view else { return };
     let bot = app.bots.get(&memory.bot);
     let harness = app.harness_name(&memory.bot);
-    let note = match (memory.section, view["shared"] == true, bot.and_then(|b| b.harness_memory)) {
-        (Section::Yours, true, _) => tr("Shared by your bots · s stops this bot using it").into_owned(),
-        (Section::Yours, false, _) => tr("This bot doesn't use what your bots share · s turns it on").into_owned(),
+    let note = match (memory.section, view["brain"].is_object(), bot.and_then(|b| b.harness_memory)) {
+        (Section::Yours, true, _) => {
+            let brain = &view["brain"];
+            if brain["shared"] == true {
+                tr("Shared by your bots · b changes the brain").into_owned()
+            } else {
+                tr("Shared by the bots in {name} · b changes the brain").replace("{name}", s(brain, "name"))
+            }
+        }
+        (Section::Yours, false, _) => tr("This bot works in no brain · b picks one").into_owned(),
         (_, _, Some(OwnMemory::Switch(true))) => {
             tr("What this bot learned about you · {harness}'s own memory on · m turns it off")
                 .replace("{harness}", &harness)
@@ -96,7 +112,7 @@ fn entries(buf: &mut Buffer, body: Rect, app: &App, memory: &MemorySheet) {
     let rows = memory.rows();
     if rows.is_empty() {
         let empty = tr(if memory.section == Section::Yours {
-            "Nothing shared yet. Facts every bot should know (your name, time zone, people) go here."
+            "Nothing here yet. Facts the bots in this brain should know (your name, time zone, people) go here."
         } else {
             "Nothing yet. What this bot learns about you shows up here."
         });
@@ -117,6 +133,44 @@ fn entries(buf: &mut Buffer, body: Rect, app: &App, memory: &MemorySheet) {
             when(e["updatedAt"].as_i64().unwrap_or(0)),
             if archived { " · archived" } else { "" }
         );
+        put(buf, body.x, y + 1, body.width, &detail, palette.dim.patch(palette.panel));
+    }
+}
+
+/// The brains the bot can work in, the Fleet one first: what each shares and how many bots carry it.
+fn brains(buf: &mut Buffer, body: Rect, memory: &MemorySheet) {
+    let palette = theme();
+    let about = "A brain is memory bots share: a project's, or the Fleet one, which is the memory every bot that uses \
+                 the shared memory reads. A bot reads its brain's memory and no other project's.";
+    let top = caption(buf, body, about);
+    let rows = memory.brain_rows();
+    if rows.is_empty() {
+        put(buf, body.x, body.y + top, body.width, &tr("Loading brains…"), palette.secondary);
+        return;
+    }
+    let height = (usize::from(body.height.saturating_sub(top)) / 2).max(1);
+    for (position, (index, brain)) in
+        rows.iter().enumerate().skip(window(memory.brain_cursor, height)).take(height).enumerate()
+    {
+        let y = body.y + top + u(position * 2);
+        let base = row(buf, body, y, index == memory.brain_cursor);
+        let now = memory.view.as_ref().and_then(|v| v["brain"]["id"].as_str()) == brain["id"].as_str();
+        let name =
+            if brain["shared"] == true { tr("Fleet (your bots)").into_owned() } else { s(brain, "name").to_owned() };
+        put(
+            buf,
+            body.x,
+            y,
+            body.width,
+            &format!("{name}{}", if now { " · here" } else { "" }),
+            palette.text.patch(base),
+        );
+        let count = brain["members"].as_array().map_or(0, Vec::len);
+        let detail = if brain["shared"] == true {
+            tr("What your bots share · {n} bots").replace("{n}", &count.to_string())
+        } else {
+            tr("A project · {n} bots").replace("{n}", &count.to_string())
+        };
         put(buf, body.x, y + 1, body.width, &detail, palette.dim.patch(palette.panel));
     }
 }
@@ -272,6 +326,8 @@ mod tests {
                 section: Section::Dreams,
                 cursor: 0,
                 scroll: Scroll::default(),
+                brains: None,
+                brain_cursor: 0,
                 mode: MemoryMode::Browse,
                 error: None,
                 busy: false,
@@ -298,6 +354,8 @@ mod tests {
             section: Section::Bot,
             cursor: 0,
             scroll: Scroll::default(),
+            brains: None,
+            brain_cursor: 0,
             mode: MemoryMode::Browse,
             error: None,
             busy: false,

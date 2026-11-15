@@ -129,6 +129,9 @@ impl App {
                         ),
                         ConfirmAct::RemoveConnector(id) => self.call("removeConnector", json!({"id": id}), changed),
                         ConfirmAct::RemoveSkill(id) => self.call("removeSkill", json!({"id": id}), changed),
+                        ConfirmAct::DeleteBrain { bot, id } => {
+                            self.call("deleteBrain", json!({"id": id}), After::Sheet(Reply::MemorySaved(bot.clone())));
+                        }
                     }
                     None
                 }

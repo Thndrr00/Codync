@@ -4,6 +4,7 @@ use rusqlite::Connection;
 
 use super::{DEPTH_MAX, FILE_CAP, FOLDER_CAP, File, MAIN, layer};
 use crate::check;
+use crate::layers::{Layers, Scope};
 use crate::store::Result;
 
 /// The notes an opening lists: the live ones of each layer the bot sees. `MEMORY.md` is in the opening itself.
@@ -11,16 +12,31 @@ use crate::store::Result;
 pub struct Index {
     /// The bot the opening is for.
     pub owner: String,
-    /// `None` when the bot doesn't use the shared layer.
-    pub yours: Option<Vec<File>>,
+    /// Its brain's notes; `None` when the bot works in no brain.
+    pub brain: Option<Brain>,
     pub bot: Vec<File>,
 }
 
-pub fn index(conn: &Connection, bot: &str, shared: bool) -> Result<Index> {
-    let notes = |bot: Option<&str>| -> Result<Vec<File>> {
-        Ok(layer(conn, bot)?.into_iter().filter(|f| !f.deleted && f.name != MAIN).collect())
+/// A brain's notes in an index.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Brain {
+    pub name: String,
+    /// The key the brain's files are stored under (`None`: the shared folder, for the Fleet brain).
+    pub layer: Option<String>,
+    pub files: Vec<File>,
+}
+
+pub fn index(conn: &Connection, layers: &Layers) -> Result<Index> {
+    let notes = |scope: Scope| -> Result<Vec<File>> {
+        Ok(layer(conn, layers.layer(scope))?.into_iter().filter(|f| !f.deleted && f.name != MAIN).collect())
     };
-    Ok(Index { owner: bot.to_owned(), yours: if shared { Some(notes(None)?) } else { None }, bot: notes(Some(bot))? })
+    let brain = match layers.brain.as_ref() {
+        Some(brain) => {
+            Some(Brain { name: brain.name.clone(), layer: brain.layer.clone(), files: notes(Scope::Brain)? })
+        }
+        None => None,
+    };
+    Ok(Index { owner: layers.bot.clone(), brain, bot: notes(Scope::Personal)? })
 }
 
 impl Index {
@@ -33,12 +49,17 @@ impl Index {
              note when its topic comes up. Each starts with frontmatter whose description: line says when to read \
              it; names are lowercase-with-dashes."
         )];
-        if let Some(yours) = &self.yours {
-            lines.push(format!("Shared with the user's other bots, in {}:", folder(None)));
-            lines.extend(Self::folder_lines(yours));
-        }
         lines.push(format!("This bot's own, in {}:", folder(Some(&self.owner))));
         lines.extend(Self::folder_lines(&self.bot));
+        if let Some(brain) = &self.brain {
+            let about = if brain.layer.is_none() {
+                "Shared with the user's other bots".to_owned()
+            } else {
+                format!("The brain \"{}\", shared with the other bots working in it", brain.name)
+            };
+            lines.push(format!("{about}, in {}:", folder(brain.layer.as_deref())));
+            lines.extend(Self::folder_lines(&brain.files));
+        }
         lines.join("\n")
     }
 

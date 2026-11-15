@@ -3,7 +3,7 @@
 
 use crate::agent::acp;
 use crate::chat::memory::files;
-use crate::store::BotConfig;
+use crate::store::{BotConfig, Store};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
@@ -73,12 +73,12 @@ fn sends_message(title: &str) -> bool {
 
 /// Keeping the bot's memory: a call of the `memory` MCP server, or one that names a file in a memory folder the
 /// bot sees (in its `locations` or diffs, as `chat::memory::turns::touched` reads them).
-fn keeps_memory(cfg: &BotConfig, data: &Value) -> bool {
+fn keeps_memory(store: &Store, cfg: &BotConfig, data: &Value) -> bool {
     let title = data["title"].as_str().unwrap_or_default();
     if ["mcp__memory__", "memory."].iter().any(|server| title.starts_with(server)) {
         return true;
     }
-    let folders: Vec<PathBuf> = files::layers(cfg).iter().map(|layer| files::folder(layer.as_deref())).collect();
+    let folders: Vec<PathBuf> = files::layers(store, cfg).keys().map(|(_, layer)| files::folder(layer)).collect();
     data["locations"]
         .as_array()
         .into_iter()
@@ -91,8 +91,8 @@ fn keeps_memory(cfg: &BotConfig, data: &Value) -> bool {
 /// Flags whether a call is the bot's own bookkeeping (composing its message, keeping its memory), which the
 /// working steps a chat unfolds leave out. An update can change the title or paths, so the flag follows them.
 /// Always written, so clients tell an older host's unflagged call from one that isn't bookkeeping.
-pub(super) fn mark_bookkeeping(cfg: &BotConfig, data: &mut Value) {
-    let flag = sends_message(data["title"].as_str().unwrap_or_default()) || keeps_memory(cfg, data);
+pub(super) fn mark_bookkeeping(store: &Store, cfg: &BotConfig, data: &mut Value) {
+    let flag = sends_message(data["title"].as_str().unwrap_or_default()) || keeps_memory(store, cfg, data);
     data["bookkeeping"] = flag.into();
 }
 
@@ -114,9 +114,10 @@ mod tests {
     use super::*;
 
     fn marked(mut data: Value) -> Value {
+        let store = crate::store::tests::temp_store();
         let cfg = serde_json::from_value(json!({"id": "b", "name": "Bot", "backend": "claude", "cwd": "/tmp"}))
             .expect("a bot config");
-        mark_bookkeeping(&cfg, &mut data);
+        mark_bookkeeping(&store, &cfg, &mut data);
         data
     }
 

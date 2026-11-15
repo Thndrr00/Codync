@@ -94,6 +94,29 @@ impl App {
                 let body = json!({"botId": bot, "artifactId": artifact, "title": values["title"]});
                 self.sheet("renameArtifact", body, Reply::FieldsSaved);
             }
+            Submit::BrainName { bot, id } => {
+                let method = if id.is_some() { "renameBrain" } else { "createBrain" };
+                self.sheet(method, json!({"id": id, "name": values["value"]}), Reply::MemorySaved(bot.clone()));
+                self.sheet("brains", json!({}), Reply::Brains(bot.clone()));
+            }
+            Submit::BrainImport { bot } => {
+                match std::fs::read_to_string(values["value"].as_str().unwrap_or_default()) {
+                    Ok(text) => match serde_json::from_str::<Value>(&text) {
+                        Ok(bundle) => {
+                            self.sheet("importBrain", json!({"bundle": bundle}), Reply::MemorySaved(bot.clone()));
+                            self.sheet("brains", json!({}), Reply::Brains(bot.clone()));
+                        }
+                        Err(error) => {
+                            f.saving = false;
+                            f.error = Some(format!("That file isn't JSON: {error}"));
+                        }
+                    },
+                    Err(error) => {
+                        f.saving = false;
+                        f.error = Some(format!("Can't read that file: {error}"));
+                    }
+                }
+            }
         }
     }
 }

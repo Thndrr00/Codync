@@ -22,3 +22,7 @@
 .memory-info-icon { padding-top: 2px; }
 .switch.memory-harness-switch { flex: 1; justify-content: flex-end; }
 .memory-harness-shared { flex: 1; text-align: end; }
+/* The brain the bot works in, over its memory. */
+.memory-brain-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.memory-brain-row > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.memory-brain-name { margin: 0; font-weight: 600; overflow-wrap: anywhere; }

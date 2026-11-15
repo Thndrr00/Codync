@@ -36,8 +36,8 @@ private val NOTE_NAME = Regex("^[a-z0-9-]+\\.md$")
 @Composable internal fun MemoryNotes(memory: MemoryModel, files: MemoryFiles, shared: Boolean, state: AppState) {
     var open by remember { mutableStateOf<MemoryFileTarget?>(null) }
     val folder = if (shared) files.yours else files.bot
-    val live = folder.files.filter { !it.deleted }
-    val gone = folder.files.filter { it.deleted }
+    val live = folder?.files.orEmpty().filter { !it.deleted }
+    val gone = folder?.files.orEmpty().filter { it.deleted }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Notes", Modifier.weight(1f), style = Type.footnote.semibold, color = Palette.secondary)

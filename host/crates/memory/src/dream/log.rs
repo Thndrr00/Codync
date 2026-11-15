@@ -4,6 +4,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
 use crate::files::MAIN;
+use crate::layers::Scope;
 use crate::store;
 
 /// One logged run.
@@ -27,7 +28,8 @@ pub struct Dream {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct FileChange {
     pub name: String,
-    pub shared: bool,
+    /// The layer it is in.
+    pub scope: Scope,
     pub version: i64,
 }
 
@@ -77,12 +79,20 @@ pub fn get(conn: &Connection, id: i64) -> store::Result<Option<Dream>> {
         let (kind, change) = row?;
         if kind == "added" { dream.added.push(change) } else { dream.archived.push(change) }
     }
+    // The shared folder's key is empty, and only the Fleet brain has it: every other layer is a bot's own.
     let mut stmt = conn.prepare(
-        "SELECT v.name, v.bot = '', v.id FROM memory_dream_files d JOIN memory_file_versions v ON v.id = d.version
+        "SELECT v.name, v.bot, v.id FROM memory_dream_files d JOIN memory_file_versions v ON v.id = d.version
          WHERE d.dream = ?1 AND v.name != ?2 ORDER BY v.id",
     )?;
     for row in stmt.query_map(params![id, MAIN], |row| {
-        Ok(FileChange { name: row.get(0)?, shared: row.get(1)?, version: row.get(2)? })
+        // The layer a version was kept in: `''` (the Fleet brain) or `brain:<id>` is a brain's, a bare bot id its own.
+        let layer = row.get::<_, String>(1)?;
+        let scope = if layer.is_empty() || layer.starts_with(crate::layers::BRAIN_PREFIX) {
+            Scope::Brain
+        } else {
+            Scope::Personal
+        };
+        Ok(FileChange { name: row.get(0)?, scope, version: row.get(2)? })
     })? {
         dream.files.push(row?);
     }

@@ -10,7 +10,8 @@ export interface FileTarget { name: string; shared: boolean }
 
 /** One layer's long-form notes, as rows under its entries: name, description, size and date, marked past a cap. Read-only: the bot writes them. */
 export function fileRows(files: MemoryFiles, shared: boolean, open: (target: FileTarget) => void, tr: (text: string) => string = (text) => text): ReactElement[] {
-  const live = (shared ? files.yours : files.bot).files.filter((f) => !f.deleted)
+  const folder = shared ? files.yours : files.bot
+  const live = (folder?.files ?? []).filter((f) => !f.deleted)
   return [
     <p key="notes" className="memory-notes-header">{tr('Notes')}</p>,
     ...(live.length === 0 ? [<p key="notes-empty" className="memory-muted">{tr('Longer notes, one topic each. The bot reads one when its topic comes up.')}</p>] : []),

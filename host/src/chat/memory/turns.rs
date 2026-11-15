@@ -84,8 +84,10 @@ pub fn touched(hub: &Hub, cfg: &BotConfig, tool: &serde_json::Value) {
         .chain(tool["diffs"].as_array())
         .flatten()
         .filter_map(|item| item["path"].as_str());
-    let folders: Vec<(PathBuf, Option<String>)> =
-        files::layers(cfg).into_iter().map(|layer| (files::folder(layer.as_deref()), layer)).collect();
+    let folders: Vec<(PathBuf, Option<String>)> = files::layers(&hub.store, cfg)
+        .keys()
+        .map(|(_, layer)| (files::folder(layer), layer.map(str::to_owned)))
+        .collect();
     for path in paths {
         // The name as the folders have it (`health/allergies.md`), whichever separator the agent's path used.
         let named = folders.iter().find_map(|(dir, layer)| {
@@ -158,6 +160,6 @@ pub(super) fn turn_of(
         .into_iter()
         .filter(|turn| turn.wrote)
         .filter_map(|turn| Some((config(&turn.bot)?, turn)))
-        .filter(|(cfg, _)| files::layers(cfg).iter().any(|l| l.as_deref() == layer))
+        .filter(|(cfg, _)| files::layers(&hub.store, cfg).keys().any(|(_, l)| l == layer))
         .min_by_key(|(_, turn)| turn.message.is_some()))
 }

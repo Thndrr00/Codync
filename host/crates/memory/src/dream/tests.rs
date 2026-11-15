@@ -1,5 +1,6 @@
 use super::*;
 use crate::files::{Author, Cause, Change};
+use crate::layers::{Brain, Layers, Scope};
 
 mod notes;
 
@@ -18,11 +19,11 @@ fn bot_reply(id: &str, text: &str) -> Message {
 }
 
 fn add(text: &str, quote: &str, message: &str) -> Add {
-    Add { text: text.into(), shared: false, quote: quote.into(), message: message.into() }
+    Add { text: text.into(), scope: Scope::Personal, quote: quote.into(), message: message.into() }
 }
 
 fn remove(line: &str, quote: &str, message: &str) -> Remove {
-    Remove { line: line.into(), shared: false, quote: quote.into(), message: message.into() }
+    Remove { line: line.into(), scope: Scope::Personal, quote: quote.into(), message: message.into() }
 }
 
 /// Writes bot `a`'s MEMORY.md as `author` wrote it.
@@ -59,7 +60,7 @@ fn main_after(edits: &Edits) -> &str {
 #[test]
 fn keeps_only_changes_backed_by_the_users_own_words() {
     let conn = db();
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages =
         [user("u1", "I moved to Tainan last month"), bot_reply("b1", "Noted that you love durian"), user("u2", "yes")];
     let plan = Plan {
@@ -79,7 +80,7 @@ fn keeps_only_changes_backed_by_the_users_own_words() {
     assert_eq!(main_after(&edits), "- Lives in Tainan\n");
     assert_eq!(
         edits.added,
-        [Line { bot: Some("a".into()), text: "Lives in Tainan".into(), message: Some("u1".into()), rewrites: None }]
+        [Line { layer: Some("a".into()), text: "Lives in Tainan".into(), message: Some("u1".into()), rewrites: None }]
     );
 }
 
@@ -88,17 +89,23 @@ fn lines_written_on_the_computer_are_the_users() {
     let conn = db();
     let filler = lines((0..7).map(|i| format!("Filler {i}")));
     seed(&conn, Author::Computer, &format!("- Vegetarian since 2020\n{filler}"));
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages = [user("u1", "I eat meat again these days")];
     let plan = Plan {
         remove: vec![remove("Vegetarian since 2020", "I eat meat again", "m1")],
-        review: vec![Review { line: "Vegetarian since 2020".into(), shared: false, text: "Was vegetarian".into() }],
+        review: vec![Review {
+            line: "Vegetarian since 2020".into(),
+            scope: Scope::Personal,
+            text: "Was vegetarian".into(),
+        }],
         ..Plan::default()
     };
     let (kept, rejected) = audit(&snapshot, &messages, plan);
     assert!(kept.is_empty() && rejected.iter().all(|r| r.contains("the user wrote it")), "{rejected:?}");
     assert!(
-        prompt(&snapshot, &messages).1.contains("This bot's (\"shared\": false), written by the user:\n- Vegetarian")
+        prompt(&snapshot, &messages)
+            .1
+            .contains("This bot's (\"scope\": \"personal\"), written by the user:\n- Vegetarian")
     );
 }
 
@@ -106,7 +113,7 @@ fn lines_written_on_the_computer_are_the_users() {
 fn a_run_writes_only_what_it_changed() {
     let conn = db();
     seed(&conn, Author::Bot, "- Has two cats\n- Lives in Taipei");
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     assert_eq!(edits(&conn, &snapshot, &Plan::default(), &[]).unwrap().0, Edits::default());
 }
 
@@ -114,11 +121,11 @@ fn a_run_writes_only_what_it_changed() {
 fn a_forgotten_line_stays_out_of_notes_too() {
     let conn = db();
     store::bury(&conn, Some("a"), ["Sister Amy is pregnant"], ["u2"]).unwrap();
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages = [user("u1", "my sister Amy is pregnant again"), user("u2", "Amy's baby is due in May")];
     let append = |text: &str, quote: &str, message: &str| Append {
         file: "people.md".into(),
-        shared: false,
+        scope: Scope::Personal,
         text: text.into(),
         quote: quote.into(),
         message: message.into(),
@@ -146,7 +153,7 @@ fn never_removes_the_users_words_or_more_than_a_quarter() {
     let mut all = "- Lives in Taipei\n".to_owned();
     all.push_str(&facts);
     seed(&conn, Author::Bot, &all);
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages = [user("u1", "forget all of those old facts please")];
     let quote = "forget all of those old facts";
 
@@ -169,7 +176,7 @@ fn never_removes_the_users_words_or_more_than_a_quarter() {
 fn a_replacement_takes_the_old_line_out_and_forgotten_lines_stay_out() {
     let conn = db();
     seed(&conn, Author::Bot, "- Lives in Taipei\n- Likes tea\n- Has two cats\n- Works late\n");
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages =
         [user("u1", "We just moved to Tainan for good"), user("u2", "I quit coffee and my sister Mei visits monthly")];
     store::bury(&conn, Some("a"), ["Quit coffee"], ["u9"]).unwrap();
@@ -193,7 +200,7 @@ fn a_replacement_takes_the_old_line_out_and_forgotten_lines_stay_out() {
 fn a_line_copied_from_the_prompt_names_its_fact() {
     let conn = db();
     seed(&conn, Author::Bot, "- Lives in Hsinchu.\n");
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages = [user("u1", "please forget where I live")];
     let (_, material) = prompt(&snapshot, &messages);
     let shown = material.lines().find(|l| l.contains("Hsinchu")).expect("the line is shown");
@@ -209,8 +216,8 @@ fn reviews_rewrite_dated_lines_in_the_past_tense_once() {
     let conn = db();
     let filler = lines((0..6).map(|i| format!("Filler {i}")));
     seed(&conn, Author::Dream, &format!("- Going to Singapore in July 2026\n- Likes tea\n{filler}"));
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
-    let review = |line: &str, text: &str| Review { line: line.into(), shared: false, text: text.into() };
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
+    let review = |line: &str, text: &str| Review { line: line.into(), scope: Scope::Personal, text: text.into() };
     let plan = Plan {
         review: vec![
             review("Going to Singapore in July 2026", "Went to Singapore in July 2026"),
@@ -226,13 +233,13 @@ fn reviews_rewrite_dated_lines_in_the_past_tense_once() {
     assert!(!main_after(&first).contains("Going to"));
     let rewrite = &first.added[0];
     assert_eq!(rewrite.text, "Went to Singapore in July 2026");
-    let source = snapshot.fact(false, "Going to Singapore in July 2026").cloned();
+    let source = snapshot.fact(Scope::Personal, "Going to Singapore in July 2026").cloned();
     assert_eq!((&rewrite.message, &rewrite.rewrites), (&source.as_ref().unwrap().message, &source));
 
     // The next day's review leaves its own rewrite alone, once the caller marked it written.
     mark_reviewed(&conn, Some("a"), &rewrite.text).unwrap();
     seed(&conn, Author::Dream, main_after(&first));
-    let snapshot = super::snapshot(&conn, "a", false, "2026-10-18").unwrap();
+    let snapshot = super::snapshot(&conn, &Layers::of("a"), "2026-10-18").unwrap();
     let again = Plan { review: vec![review("Went to Singapore in July 2026", "Went to Singapore")], ..Plan::default() };
     let (kept, _) = audit(&snapshot, &[], again);
     assert_eq!(edits(&conn, &snapshot, &kept, &[]).unwrap().0.files, [] as [Edit; 0]);
@@ -241,7 +248,7 @@ fn reviews_rewrite_dated_lines_in_the_past_tense_once() {
     let conn = db();
     seed(&conn, Author::Dream, &format!("- Going to Singapore in July 2026\n{filler}"));
     store::bury(&conn, Some("a"), ["Went to Singapore in July 2026"], []).unwrap();
-    let snapshot = super::snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = super::snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let past = Plan {
         review: vec![review("Going to Singapore in July 2026", "Went to Singapore in July 2026")],
         ..Plan::default()
@@ -264,11 +271,11 @@ fn parses_the_outermost_object_and_survives_chatter() {
 fn the_prompt_numbers_messages_and_marks_the_users_lines() {
     let conn = db();
     seed(&conn, Author::User, "- Lives in Taipei\n");
-    let snapshot = snapshot(&conn, "a", true, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::with_brain("a", Brain::fleet("fleet", "Fleet")), "2026-10-17").unwrap();
     let (system, material) = prompt(&snapshot, &[user("u1", "hello there friend"), bot_reply("b1", "hi")]);
     assert!(system.contains("Today is 2026-10-17"));
     assert!(
-        material.contains("This bot's (\"shared\": false), written by the user:\n- Lives in Taipei\n"),
+        material.contains("This bot's (\"scope\": \"personal\"), written by the user:\n- Lives in Taipei\n"),
         "{material}"
     );
     assert!(material.contains("[m1] User, 2026-10-17:\nhello there friend"));

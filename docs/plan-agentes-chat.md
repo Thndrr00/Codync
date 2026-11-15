@@ -112,6 +112,15 @@ chat en las cuatro apps, el peso por recencia y el canal resuelto en el host (la
 **Meta:** un tercer ámbito de memoria. Hoy hay `MEMORY.md` por bot y memoria compartida; falta el
 ámbito de proyecto, que varios bots comparten sin mezclarse con lo personal.
 
+**Estado:** bloque completo. Ámbitos `personal`, `brain` y `fleet` en la crate de memoria (55 pruebas),
+tabla `brains` con migración 8, API `brains`/`createBrain`/`renameBrain`/`joinBrain`/`leaveBrain`/
+`deleteBrain`/`exportBrain`/`importBrain`, resolución y aislamiento por bot, compactación y sueño por
+ámbito, búsqueda dentro del cerebro, export/import como `<nombre>.brain.json`, fila de cerebro y hoja
+en escritorio, TUI, iOS y Android, y `docs/features/brains.md`. El `shared_memory` de antes es el
+cerebro Flota, sin migrar datos. Falta la compilación en iOS y Android (sin Xcode ni SDK aquí) y la E2E
+en dispositivo. Los tests cubren la resolución de ámbito, el aislamiento entre proyectos, el borrado
+que devuelve los bots a Flota y las vueltas de export/import.
+
 1. Leer los ADR de cerebros y de memoria.
 2. Definir ámbitos: personal (bot), compartido (flota), proyecto (elegido).
 3. Modelo: `brains` con id, nombre y miembros.

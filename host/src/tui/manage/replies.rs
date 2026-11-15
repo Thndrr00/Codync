@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 
 use super::super::app::{After, AgentModel, App, Entry, Overlay, Toggle};
+use super::super::l10n::tr;
 use super::{Market, MemoryMode, MissionReply, Reply, Shell, open_browser, s};
 
 impl App {
@@ -38,6 +39,28 @@ impl App {
                     }
                 }
                 self.refresh_sheets();
+            }
+            Reply::Brains(bot) => {
+                let brains = v["brains"].as_array().cloned().unwrap_or_default();
+                for o in &mut self.overlays {
+                    if let Overlay::Memory(m) = o
+                        && m.bot == bot
+                    {
+                        m.brains = Some(brains.clone());
+                        m.brain_cursor = m.brain_cursor.min(brains.len().saturating_sub(1));
+                        m.busy = false;
+                        m.error = None;
+                    }
+                }
+            }
+            Reply::BrainExported(name) => {
+                let text = serde_json::to_string_pretty(&v).unwrap_or_default();
+                let dir = crate::service::data_dir().join("brains");
+                let path = dir.join(format!("{}.brain.json", crate::chat::memory::brains::file_name(&name)));
+                match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, text)) {
+                    Ok(()) => self.flash(&tr("Saved {}").replace("{}", &path.display().to_string())),
+                    Err(error) => self.flash(&format!("{error}")),
+                }
             }
             Reply::MemoryFile(bot) => {
                 for o in &mut self.overlays {
@@ -149,7 +172,7 @@ impl App {
                 {
                     m.added.push(id);
                 }
-                self.flash(&super::super::l10n::tr("Added"));
+                self.flash(&tr("Added"));
             }
             Reply::Auth(backend) => {
                 for o in &mut self.overlays {
@@ -358,7 +381,12 @@ impl App {
                 }
                 self.flash(&e);
             }
-            Reply::Memory(_) | Reply::MemorySaved(_) | Reply::MemoryFile(_) | Reply::Routines(_) => {
+            Reply::Memory(_)
+            | Reply::MemorySaved(_)
+            | Reply::MemoryFile(_)
+            | Reply::Brains(_)
+            | Reply::BrainExported(_)
+            | Reply::Routines(_) => {
                 for o in &mut self.overlays {
                     match o {
                         Overlay::Memory(m) => {
@@ -397,6 +425,9 @@ impl App {
             match o {
                 Overlay::Memory(m) => {
                     calls.push(("memory", m.body(), After::Sheet(Reply::Memory(m.bot.clone()))));
+                    if let MemoryMode::Brains = m.mode {
+                        calls.push(("brains", json!({}), After::Sheet(Reply::Brains(m.bot.clone()))));
+                    }
                     if let Some(body) = m.file_body() {
                         calls.push(("memoryFile", body, After::Sheet(Reply::MemoryFile(m.bot.clone()))));
                     }

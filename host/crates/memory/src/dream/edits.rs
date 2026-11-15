@@ -10,8 +10,8 @@ use crate::store::{self, fingerprint};
 /// A file a run writes: its new content over what the run saw.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edit {
-    /// The bot whose folder holds it; `None` for the shared one.
-    pub bot: Option<String>,
+    /// The key of the layer whose folder holds it; `None` for the shared one.
+    pub layer: Option<String>,
     pub name: String,
     /// `None`: there was no file.
     pub before: Option<String>,
@@ -21,7 +21,8 @@ pub struct Edit {
 /// A line a run adds to or takes out of a layer's `MEMORY.md`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Line {
-    pub bot: Option<String>,
+    /// The key of the layer whose folder holds it; `None` for the shared one.
+    pub layer: Option<String>,
     pub text: String,
     /// An added line: the transcript id it was learned from.
     pub message: Option<String>,
@@ -48,22 +49,22 @@ pub fn edits(
 ) -> store::Result<(Edits, Vec<String>)> {
     let mut notes = notes::edits(conn, snapshot, plan, messages)?;
     let (mut main, mut rejected, mut stuck) = (Edits::default(), Vec::new(), Vec::new());
-    for layer in &snapshot.layers {
-        let moved: Vec<&MoveOut> = notes.moved.iter().filter(|m| m.shared == layer.shared).collect();
+    for layer in &snapshot.memory {
+        let moved: Vec<&MoveOut> = notes.moved.iter().filter(|m| m.scope == layer.scope).collect();
         match main_edit(conn, snapshot, layer, plan, &moved, messages, &mut rejected)? {
             Some(edits) => {
                 main.files.extend(edits.files);
                 main.added.extend(edits.added);
                 main.removed.extend(edits.removed);
             }
-            None if !moved.is_empty() => stuck.push(layer.shared),
+            None if !moved.is_empty() => stuck.push(layer.scope),
             None => {}
         }
     }
     if !stuck.is_empty() {
         // A line its MEMORY.md keeps doesn't go into a note as well.
         let (stay, go): (Vec<MoveOut>, Vec<MoveOut>) =
-            plan.move_out.iter().cloned().partition(|m| stuck.contains(&m.shared));
+            plan.move_out.iter().cloned().partition(|m| stuck.contains(&m.scope));
         rejected.extend(stay.iter().map(|m| format!("move \"{}\": {MAIN} wasn't changed", m.line)));
         notes = notes::edits(conn, snapshot, &Plan { move_out: go, ..plan.clone() }, messages)?;
     }
@@ -84,9 +85,9 @@ fn main_edit(
     messages: &[Message],
     rejected: &mut Vec<String>,
 ) -> store::Result<Option<Edits>> {
-    let bot = snapshot.layer_bot(layer.shared);
+    let bot = snapshot.layer_key(layer.scope);
     let line = |text: &str, message: Option<String>, rewrites: Option<Fact>| Line {
-        bot: bot.map(str::to_owned),
+        layer: bot.map(str::to_owned),
         text: text.to_owned(),
         message,
         rewrites,
@@ -94,7 +95,7 @@ fn main_edit(
     let before = layer.content.as_deref();
     let mut lines: Vec<String> = before.unwrap_or_default().lines().map(str::to_owned).collect();
     let mut removed = Vec::new();
-    for remove in plan.remove.iter().filter(|r| r.shared == layer.shared) {
+    for remove in plan.remove.iter().filter(|r| r.scope == layer.scope) {
         removed.extend(take_out(&mut lines, &remove.line));
     }
     for moved in moved {
@@ -103,8 +104,8 @@ fn main_edit(
     let (replaced, pointers) = notes::point(conn, snapshot, layer, moved, &mut lines)?;
     removed.extend(replaced);
     let mut added: Vec<Line> = pointers.iter().map(|text| line(text, None, None)).collect();
-    for review in plan.review.iter().filter(|r| r.shared == layer.shared) {
-        let Some(fact) = snapshot.fact(layer.shared, &review.line) else { continue };
+    for review in plan.review.iter().filter(|r| r.scope == layer.scope) {
+        let Some(fact) = snapshot.fact(layer.scope, &review.line) else { continue };
         // A review's own rewrite is already in the past tense: rewriting it again each day would only churn.
         if store::marked(conn, bot, &reviewed_mark(&review.line))? {
             continue;
@@ -120,7 +121,7 @@ fn main_edit(
             added.push(line(text, fact.message.clone(), Some(fact.clone())));
         }
     }
-    for add in plan.add.iter().filter(|a| a.shared == layer.shared) {
+    for add in plan.add.iter().filter(|a| a.scope == layer.scope) {
         let text = add.text.trim();
         let source = message(messages, &add.message);
         let why = if find(&lines, text).is_some() {
@@ -151,15 +152,20 @@ fn main_edit(
         return Ok(None);
     }
     Ok(Some(Edits {
-        files: vec![Edit { bot: bot.map(str::to_owned), name: MAIN.to_owned(), before: layer.content.clone(), after }],
+        files: vec![Edit {
+            layer: bot.map(str::to_owned),
+            name: MAIN.to_owned(),
+            before: layer.content.clone(),
+            after,
+        }],
         added,
         removed: removed.iter().map(|l| line(store::unmarked(l), None, None)).collect(),
     }))
 }
 
 /// A review's rewrite (`line`) was written: later reviews leave it alone.
-pub fn mark_reviewed(conn: &Connection, bot: Option<&str>, line: &str) -> store::Result<()> {
-    store::mark(conn, bot, std::iter::once(reviewed_mark(line)))
+pub fn mark_reviewed(conn: &Connection, layer: Option<&str>, line: &str) -> store::Result<()> {
+    store::mark(conn, layer, std::iter::once(reviewed_mark(line)))
 }
 
 /// Whether the user had `text` forgotten in a layer, or the memory learned from the message it cites (`source`).
@@ -171,7 +177,7 @@ pub(super) fn forgotten(
     source: Option<&Message>,
 ) -> store::Result<bool> {
     if let Some(message) = source
-        && store::spent(conn, &snapshot.bot, &message.id)?
+        && store::spent(conn, &snapshot.layers, &message.id)?
     {
         return Ok(true);
     }

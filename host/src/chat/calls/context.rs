@@ -7,6 +7,7 @@ use crate::hub::{BotStatus, Hub};
 use crate::store::{BotConfig, Entry, EntryKind, Lane};
 use crate::voice::Provider;
 use codync_mem::files::{self as mf, MAIN};
+use codync_mem::layers::Scope;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -159,10 +160,17 @@ fn now(language: Option<&str>) -> String {
 }
 
 /// A layer's `MEMORY.md` and its notes' names and descriptions (a description the checks refuse stays out).
-fn layer(hub: &Hub, bot: Option<&str>, owner: &str, shared: bool) -> String {
+fn layer(hub: &Hub, cfg: &BotConfig, scope: Scope) -> String {
+    let layers = crate::chat::memory::layers(&hub.store, cfg);
+    let bot = layers.layer(scope);
     let main = hub.store.memory_read(|c| mf::current(c, bot, MAIN)).ok().flatten().unwrap_or_default();
-    let index = hub.store.memory_read(|c| mf::index(c, owner, shared)).ok();
-    let notes = index.map(|i| if bot.is_some() { i.bot } else { i.yours.unwrap_or_default() }).unwrap_or_default();
+    let index = hub.store.memory_read(|c| mf::index(c, &layers)).ok();
+    let notes = index
+        .map(|i| match scope {
+            Scope::Personal => i.bot,
+            Scope::Brain => i.brain.map(|b| b.files).unwrap_or_default(),
+        })
+        .unwrap_or_default();
     let mut out = main.trim().to_owned();
     let listed: Vec<String> = notes
         .iter()
@@ -178,17 +186,17 @@ fn layer(hub: &Hub, bot: Option<&str>, owner: &str, shared: bool) -> String {
 }
 
 fn user(hub: &Hub, cfg: &BotConfig) -> String {
-    if cfg.is_group() || !crate::chat::memory::shared(cfg) {
+    if cfg.is_group() || !crate::chat::memory::sees(&hub.store, cfg) {
         return String::new();
     }
-    layer(hub, None, &cfg.id, true)
+    layer(hub, cfg, Scope::Brain)
 }
 
 fn remembers(hub: &Hub, cfg: &BotConfig) -> String {
     if cfg.is_group() {
         return String::new();
     }
-    layer(hub, Some(&cfg.id), &cfg.id, false)
+    layer(hub, cfg, Scope::Personal)
 }
 
 fn bot(hub: &Hub, cfg: &BotConfig) -> String {

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.BotMemory
+import com.codync.android.core.Brain
 import com.codync.android.core.DreamRun
 import com.codync.android.core.MemoryEditTarget
 import com.codync.android.core.MemoryEntry
@@ -50,8 +51,9 @@ private enum class Tab { Yours, Bot, Beliefs, Dreams, Harness }
     var editor by remember { mutableStateOf<MemoryEditTarget?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var aboutHarness by remember { mutableStateOf(false) }
+    var brainOpen by remember { mutableStateOf(false) }
     // Memory changes anywhere move the bot's `memoryRev`: fetch again.
-    LaunchedEffect(botId, bot?.memoryRev, bot?.sharedMemory, bot?.harnessMemory) { memory.load() }
+    LaunchedEffect(botId, bot?.memoryRev, bot?.sharedMemory, bot?.brain?.id, bot?.harnessMemory) { memory.load() }
     // The harness's section goes when its memory is turned off (on another device too).
     LaunchedEffect(view != null && view.projectMemory == null) { if (view != null && view.projectMemory == null && tab == Tab.Harness) tab = Tab.Bot }
     val shared = tab == Tab.Yours
@@ -60,7 +62,7 @@ private enum class Tab { Yours, Bot, Beliefs, Dreams, Harness }
         IconButton("Refresh", "arrow.clockwise", enabled = !memory.busy) { memory.refresh() }
     }) {
         row {
-            val options = listOf(Tab.Yours to "About you", Tab.Bot to "This bot", Tab.Beliefs to "What I know", Tab.Dreams to "Dreams") +
+            val options = listOf(Tab.Yours to (view?.brain?.takeIf { !it.shared }?.name ?: "About you"), Tab.Bot to "This bot", Tab.Beliefs to "What I know", Tab.Dreams to "Dreams") +
                 (if (view?.projectMemory != null) listOf(Tab.Harness to harness) else emptyList())
             SegmentedChoice(tab, options, { tab = it; if (it == Tab.Harness) memory.refresh() })
         }
@@ -68,7 +70,7 @@ private enum class Tab { Yours, Bot, Beliefs, Dreams, Harness }
         if (view == null) {
             if (memory.error == null) row { Text("Loading memory…", style = Type.body, color = Palette.secondary) }
         } else when (tab) {
-            Tab.Yours, Tab.Bot -> layer(memory, view, bot, state, store, shared, harness, { editor = it }, { aboutHarness = true })
+            Tab.Yours, Tab.Bot -> layer(memory, view, bot, state, store, shared, harness, { editor = it }, { aboutHarness = true }, { brainOpen = true })
             Tab.Beliefs -> beliefsRows(botId, store, bot?.memoryRev)
             Tab.Dreams -> dreams(memory, view.dreams)
             Tab.Harness -> harnessNotes(view.projectMemory, harness)
@@ -76,6 +78,7 @@ private enum class Tab { Yours, Bot, Beliefs, Dreams, Harness }
     }
     CodyncSheet(editor, { editor = null }) { MemoryEditor(memory, it) }
     CodyncSheet(aboutHarness, { aboutHarness = false }) { HarnessMemorySheet(harness, bot?.backend == "claude") }
+    CodyncSheet(brainOpen, { brainOpen = false }) { BrainSheet(memory) }
     CodyncDialog(if (shared) "Forget everything your bots share about you?" else "Forget everything this bot remembers?", confirmClear,
         { confirmClear = false }) {
         listOf(DialogAction("Forget everything", destructive = true) { memory.mutate("clearMemory", shared = shared) })
@@ -83,13 +86,11 @@ private enum class Tab { Yours, Bot, Beliefs, Dreams, Harness }
 }
 
 private fun CardRows.layer(memory: MemoryModel, view: BotMemory, bot: com.codync.android.core.Bot?, state: AppState, store: AppStore,
-    shared: Boolean, harness: String, edit: (MemoryEditTarget) -> Unit, about: () -> Unit) {
+    shared: Boolean, harness: String, edit: (MemoryEditTarget) -> Unit, about: () -> Unit, pickBrain: () -> Unit) {
     val layer = if (shared) view.yours else view.bot
-    if (shared && bot != null) row {
-        SwitchRow("Use what your bots share", null, bot.sharedMemory ?: view.shared, {
-            store.command("updateBot", buildJsonObject { put("id", bot.id); put("sharedMemory", it) }, "memory:" + bot.id)
-        })
-    }
+    // Without a brain the bot keeps its own memory only, and can be given one.
+    if (shared && layer == null) row { BrainRow(null, view.total, pickBrain) }
+    if (shared && layer != null && view.brain != null) row { BrainRow(view.brain, view.total, pickBrain) }
     val harnessOn = bot?.harnessMemory
     if (!shared && bot != null && harnessOn != null) row {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -100,8 +101,9 @@ private fun CardRows.layer(memory: MemoryModel, view: BotMemory, bot: com.codync
             }, Modifier.width(34.dp), !memory.busy) {}
         }
     }
+    if (layer == null) return
     row {
-        Text((if (shared) "Your name, time zone, people and lasting preferences, shared by your bots." else "What this bot learned about you.") +
+        Text((if (shared) "Your name, time zone, people and lasting preferences, shared with the bots in this brain." else "What this bot learned about you.") +
             " ${layer.used} of ${layer.cap} in use (${when {
                 layer.used.toFloat() / maxOf(1, layer.cap) >= 0.9f -> "🔴 Near capacity — auto-rotates"
                 layer.used.toFloat() / maxOf(1, layer.cap) >= 0.7f -> "🟡 Moderate usage"
@@ -109,10 +111,24 @@ private fun CardRows.layer(memory: MemoryModel, view: BotMemory, bot: com.codync
             }}).", style = Type.footnote, color = Palette.secondary)
     }
     if (layer.entries.isEmpty()) row {
-        MemoryEmpty("brain", if (shared) "Nothing shared yet." else "Nothing yet. What this bot learns about you shows up here, and you can change any of it.")
+        MemoryEmpty("brain", if (shared) "Nothing here yet." else "Nothing yet. What this bot learns about you shows up here, and you can change any of it.")
     }
     for (entry in layer.entries) row { EntryRow(memory, entry, shared, state) { edit(MemoryEditTarget(entry.id, shared, entry.text)) } }
     view.files?.let { files -> row { MemoryNotes(memory, files, shared, state) } }
+}
+
+/** The brain the bot works in, over its memory (`null`: none yet), and the way to another one. */
+@Composable private fun BrainRow(brain: Brain?, total: BotMemory.Total, pick: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(brain?.name ?: "No brain", style = Type.body.semibold, color = Palette.text)
+            Text(brain?.let { if (it.shared) "Shared by your bots." else "Shared by the bots in this brain." }
+                ?: "Only this bot reads it. Pick a brain to share what it knows with other bots.",
+                style = Type.footnote, color = Palette.secondary)
+            Text("${total.used} of ${total.cap} tokens in all.", style = Type.footnote, color = Palette.secondary)
+        }
+        SecondaryButton(if (brain == null) "Pick a brain" else "Change brain", enabled = true, action = pick)
+    }
 }
 
 @Composable private fun EntryRow(memory: MemoryModel, entry: MemoryEntry, shared: Boolean, state: AppState, open: () -> Unit) {

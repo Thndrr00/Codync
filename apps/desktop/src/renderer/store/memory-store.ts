@@ -1,6 +1,7 @@
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable'
 import type { Belief } from '../../shared/beliefs'
+import type { Brain } from '../../shared/models'
 
 /** One memory entry (the host's `codync_mem::store::Entry`). */
 export interface MemoryEntry {
@@ -42,7 +43,7 @@ export interface MemoryFile {
 }
 
 export interface MemoryFiles {
-  yours: { files: MemoryFile[]; folder: string }
+  yours: { files: MemoryFile[]; folder: string } | null
   bot: { files: MemoryFile[]; folder: string }
   /** Tokens one file may hold, and files one folder may hold. */
   cap: number
@@ -58,10 +59,15 @@ export interface MemoryFileDetail {
 }
 
 export interface MemoryView {
-  /** Whether this bot uses what all bots share. */
+  /** Whether this bot uses a brain to share memory (the Fleet one included). */
   shared: boolean
-  yours: MemoryLayer
+  /** The brain it works in; null when it works in none. */
+  brain: Brain | null
+  /** The brain's memory ("About you" in the Fleet brain, the project's otherwise); null without a brain. */
+  yours: MemoryLayer | null
   bot: MemoryLayer
+  /** Tokens used against the two caps together. */
+  total: { used: number; cap: number }
   dreams: DreamRun[]
   /** Claude Code's own notes for the bot's project folder, read-only. */
   projectMemory: { path: string; text: string } | null
@@ -76,6 +82,8 @@ const OLDER_HOST = "Update Codync on your computer to see this bot's memory."
 export class MemoryStore extends Observable {
   view: MemoryView | null = null
   error: string | null = null
+  /** Every brain with the bots in it; null until read. */
+  brains: Brain[] | null = null
   /** The notes as beliefs (`beliefs`); null until read. */
   beliefs: Belief[] | null = null
   beliefError: string | null = null
@@ -98,6 +106,85 @@ export class MemoryStore extends Observable {
       if (request === this.request) this.error = message(error)
     }
     this.changed()
+  }
+
+  /** Every brain, and the one the bot is in after a change to it. */
+  async loadBrains() {
+    try {
+      const reply = await (await this.client()).call<{ brains: Brain[] }>('brains', {})
+      this.brains = reply.brains
+      this.error = null
+    } catch (error) {
+      this.error = message(error)
+    }
+    this.changed()
+  }
+
+  /** Makes a brain; with `id`, renames that one. */
+  async saveBrain(name: string, id?: string) {
+    try {
+      const reply = await (await this.client()).call<{ brains: Brain[] }>(id ? 'renameBrain' : 'createBrain', { id, name })
+      this.brains = reply.brains
+      this.error = null
+      await this.load()
+    } catch (error) {
+      this.error = message(error)
+    }
+    this.changed()
+  }
+
+  /** Moves the bot into `brain` (the Fleet one is the shared memory). */
+  async joinBrain(brain: Brain) {
+    try {
+      const reply = await (await this.client()).call<{ brains: Brain[] }>('joinBrain', { botId: this.botId, brainId: brain.id })
+      this.brains = reply.brains
+      this.error = null
+      await this.load()
+    } catch (error) {
+      this.error = message(error)
+    }
+    this.changed()
+  }
+
+  /** Takes the bot out of its brain; it keeps only its own memory (picking one again brings sharing back). */
+  async leaveBrain() {
+    try {
+      const reply = await (await this.client()).call<{ brains: Brain[] }>('leaveBrain', { botId: this.botId })
+      this.brains = reply.brains
+      this.error = null
+      await this.load()
+    } catch (error) {
+      this.error = message(error)
+    }
+    this.changed()
+  }
+
+  /** Deletes a brain; its bots go back to the Fleet brain and what it held is gone. */
+  async deleteBrain(brain: Brain) {
+    try {
+      const reply = await (await this.client()).call<{ brains: Brain[] }>('deleteBrain', { id: brain.id })
+      this.brains = reply.brains
+      this.error = null
+      await this.load()
+    } catch (error) {
+      this.error = message(error)
+    }
+    this.changed()
+  }
+
+  /** A brain as one JSON file, or the brain made from such a file. */
+  async exportBrain(brain: Brain): Promise<string> {
+    return JSON.stringify(await (await this.client()).call('exportBrain', { id: brain.id }), null, 2)
+  }
+
+  async importBrain(bundle: string, name?: string): Promise<number> {
+    const reply = await (await this.client()).call<{ brains: Brain[]; skipped: unknown[] }>('importBrain', {
+      bundle: JSON.parse(bundle), name,
+    })
+    this.brains = reply.brains
+    await this.load()
+    this.changed()
+    return reply.skipped.length
   }
 
   /** The bot's notes as beliefs, or with `forgotten` the ones that were forgotten. */

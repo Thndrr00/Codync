@@ -2,10 +2,10 @@
 //! its notes, its dream log, and Claude Code's own memory where the user kept it on. The user changes memory by
 //! telling the bot.
 
-use super::super::app::{App, Confirm, ConfirmAct, Overlay, OwnMemory};
+use super::super::app::{App, Confirm, ConfirmAct, Editor, Overlay, OwnMemory};
 use super::super::l10n::tr;
 use super::s;
-use super::{Page, Reply, ctrl};
+use super::{Fields, Input, Page, Reply, Submit, ctrl};
 use crossterm::event::{KeyCode, KeyEvent};
 use serde_json::{Value, json};
 use std::cell::Cell;
@@ -44,6 +44,10 @@ pub struct MemorySheet {
     pub cursor: usize,
     /// The open note's, or Claude Code's memory's, scroll.
     pub scroll: Scroll,
+    /// The host's `brains` reply, once the brain list is open.
+    pub brains: Option<Vec<Value>>,
+    /// The brain the picker is on.
+    pub brain_cursor: usize,
     pub mode: MemoryMode,
     pub error: Option<String>,
     pub busy: bool,
@@ -51,6 +55,9 @@ pub struct MemorySheet {
 
 pub enum MemoryMode {
     Browse,
+    /// The brains the bot can work in: pick one (Enter), make one (`n`), rename (`r`), delete (`d`), export
+    /// (`x`) or import (`i`).
+    Brains,
     /// One note: what it holds (`detail`, once fetched).
     File {
         name: String,
@@ -96,8 +103,18 @@ impl MemorySheet {
     pub fn file_body(&self) -> Option<Value> {
         match &self.mode {
             MemoryMode::File { name, shared, .. } => Some(json!({"botId": self.bot, "file": name, "shared": shared})),
-            MemoryMode::Browse => None,
+            MemoryMode::Browse | MemoryMode::Brains => None,
         }
+    }
+
+    /// The brains the picker lists, the Fleet one first.
+    pub fn brain_rows(&self) -> Vec<Value> {
+        self.brains.clone().unwrap_or_default()
+    }
+
+    /// The brain the picker is on.
+    pub fn picked_brain(&self) -> Option<Value> {
+        self.brain_rows().get(self.brain_cursor).cloned()
     }
 
     /// The current section's rows: entries, notes (deleted ones left out), or dream runs.
@@ -139,6 +156,12 @@ impl MemorySheet {
         self.cursor = was
             .and_then(|k| rows.iter().position(|row| key(row) == k))
             .unwrap_or_else(|| self.cursor.min(rows.len().saturating_sub(1)));
+        // The picker opens on the brain the bot works in.
+        let current = self.view.as_ref().and_then(|v| v["brain"]["id"].as_str()).map(str::to_owned);
+        let brains = self.brain_rows();
+        self.brain_cursor = current
+            .and_then(|id| brains.iter().position(|b| b["id"] == id.as_str()))
+            .unwrap_or_else(|| self.brain_cursor.min(brains.len().saturating_sub(1)));
     }
 
     /// Sections worth showing: Claude Code's memory only when it is kept on.
@@ -168,6 +191,8 @@ impl App {
             section: Section::Bot,
             cursor: 0,
             scroll: Scroll::default(),
+            brains: None,
+            brain_cursor: 0,
             mode: MemoryMode::Browse,
             error: None,
             busy: true,
@@ -206,6 +231,9 @@ impl App {
             }
             return Some(Overlay::Memory(m));
         }
+        if let MemoryMode::Brains = m.mode {
+            return self.brain_key(m, k);
+        }
         if let Some(page) = Page::Memory.step(k) {
             self.open_page(page);
             return None;
@@ -225,6 +253,10 @@ impl App {
                 m.busy = true;
                 self.sheet("memory", m.body(), Reply::Memory(m.bot.clone()));
             }
+            KeyCode::Char('b') if !m.busy => {
+                m.mode = MemoryMode::Brains;
+                self.sheet("brains", json!({}), Reply::Brains(m.bot.clone()));
+            }
             KeyCode::Enter if m.section == Section::Notes => {
                 if let Some(file) = rows.get(m.cursor) {
                     m.mode = MemoryMode::File { name: s(file, "name"), shared: file["shared"] == true, detail: None };
@@ -234,19 +266,114 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('s') if !m.busy => {
-                let shared = m.view.as_ref().is_some_and(|v| v["shared"] == true);
-                m.busy = true;
-                self.sheet(
-                    "updateBot",
-                    json!({"id": m.bot, "sharedMemory": !shared}),
-                    Reply::MemorySaved(m.bot.clone()),
-                );
-            }
             KeyCode::Char('m') if !m.busy => return self.harness_memory_key(m),
             _ => {}
         }
         Some(Overlay::Memory(m))
+    }
+
+    /// The brain picker: Enter gives the bot the highlighted brain, `n` makes one, `r` renames it, `d` deletes it,
+    /// `x` saves it to a file and `i` brings one in from a file.
+    fn brain_key(&mut self, mut m: MemorySheet, k: KeyEvent) -> Option<Overlay> {
+        let rows = m.brain_rows();
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => m.mode = MemoryMode::Browse,
+            KeyCode::Down | KeyCode::Char('j') => {
+                m.brain_cursor = (m.brain_cursor + 1).min(rows.len().saturating_sub(1));
+            }
+            KeyCode::Up | KeyCode::Char('k') => m.brain_cursor = m.brain_cursor.saturating_sub(1),
+            KeyCode::Enter if !m.busy => {
+                if let Some(brain) = m.picked_brain() {
+                    let current = m.view.as_ref().and_then(|v| v["brain"]["id"].as_str()) == brain["id"].as_str();
+                    if !current {
+                        self.sheet(
+                            "joinBrain",
+                            json!({"botId": m.bot, "brainId": s(&brain, "id")}),
+                            Reply::MemorySaved(m.bot.clone()),
+                        );
+                    }
+                }
+            }
+            KeyCode::Char('n') if !m.busy => {
+                let submit = Submit::BrainName { bot: m.bot.clone(), id: None };
+                return self.push_all(Self::brain_fields(m, submit, ""));
+            }
+            KeyCode::Char('r') if !m.busy => {
+                if let Some(brain) = m.picked_brain().filter(|b| b["shared"] != true) {
+                    let submit = Submit::BrainName { bot: m.bot.clone(), id: Some(s(&brain, "id")) };
+                    return self.push_all(Self::brain_fields(m, submit, &s(&brain, "name")));
+                }
+            }
+            KeyCode::Char('d') if !m.busy => {
+                if let Some(brain) = m.picked_brain().filter(|b| b["shared"] != true) {
+                    let name = s(&brain, "name");
+                    let c = Confirm {
+                        title: tr("Delete the brain {name}?").replace("{name}", &name),
+                        detail: "Its bots go back to the Fleet brain and keep their own memory.".into(),
+                        note: "What the brain holds is gone.".into(),
+                        button: "Delete",
+                        act: ConfirmAct::DeleteBrain { bot: m.bot.clone(), id: s(&brain, "id") },
+                    };
+                    self.overlays.push(Overlay::Memory(m));
+                    self.overlays.push(Overlay::Confirm(c));
+                    return None;
+                }
+            }
+            KeyCode::Char('x') if !m.busy => {
+                if let Some(brain) = m.picked_brain() {
+                    self.sheet("exportBrain", json!({"id": s(&brain, "id")}), Reply::BrainExported(s(&brain, "name")));
+                }
+            }
+            KeyCode::Char('i') if !m.busy => {
+                let submit = Submit::BrainImport { bot: m.bot.clone() };
+                return self.push_all(Self::brain_fields(m, submit, ""));
+            }
+            _ => {}
+        }
+        Some(Overlay::Memory(m))
+    }
+
+    /// Pushes `overlays` and keeps none on the stack: the picker holds its state in its own overlay.
+    fn push_all(&mut self, overlays: Vec<Overlay>) -> Option<Overlay> {
+        self.overlays.extend(overlays);
+        None
+    }
+
+    /// A text field over the picker: a brain's name, or the file to import one from.
+    fn brain_fields(m: MemorySheet, submit: Submit, value: &str) -> Vec<Overlay> {
+        let (title, label, note) = match &submit {
+            Submit::BrainImport { .. } => (
+                "Import a brain",
+                "File",
+                "The path of a brain file this app saved. Its files go through the same checks as the bot's.",
+            ),
+            Submit::BrainName { id: Some(_), .. } => ("Rename the brain", "Name", "What the bots in it share."),
+            _ => (
+                "New brain",
+                "Name",
+                "What the bots in it share. The Fleet brain is the memory every bot that uses the shared memory reads.",
+            ),
+        };
+        let fields = Fields {
+            title: title.into(),
+            note: note.into(),
+            choices: vec![],
+            choice: 0,
+            inputs: vec![Input {
+                name: "value".into(),
+                label: label.into(),
+                secret: false,
+                required: true,
+                multiline: false,
+                placeholder: String::new(),
+                ed: Editor::with(value),
+            }],
+            cursor: 0,
+            error: None,
+            saving: false,
+            submit,
+        };
+        vec![Overlay::Memory(m), Overlay::Fields(Box::new(fields))]
     }
 
     /// Moves to another section. Claude Code writes its notes outside Codync, so nothing moves `memoryRev`: its
@@ -302,6 +429,8 @@ mod tests {
             section: Section::Bot,
             cursor: 2,
             scroll: Scroll::default(),
+            brains: None,
+            brain_cursor: 0,
             mode: MemoryMode::Browse,
             error: None,
             busy: false,
@@ -321,6 +450,8 @@ mod tests {
             section: Section::Notes,
             cursor: 1,
             scroll: Scroll { pos: 10, ..Scroll::default() },
+            brains: None,
+            brain_cursor: 0,
             mode: MemoryMode::File { name: "n".into(), shared: false, detail: None },
             error: None,
             busy: false,
@@ -354,6 +485,8 @@ mod tests {
             section: Section::Harness,
             cursor: 0,
             scroll: Scroll { pos: 3, ..Scroll::default() },
+            brains: None,
+            brain_cursor: 0,
             mode: MemoryMode::Browse,
             error: None,
             busy: false,

@@ -128,7 +128,9 @@ database, embeddings, and harness instructions is in [bot memory research](bot-m
 Cross-scope bleed is the most common complaint everywhere. A 738-point r/ChatGPT thread: "memory is great until
 it quietly carries an assumption from three chats ago into something unrelated. a per-chat toggle would fix most
 of it". Codync's shape follows Claude Projects: per-bot memory plus a shared "yours" layer that each bot can switch
-off. The user, dreaming and bots in `Auto` write "yours", and each entry names who wrote it.
+off. Since 2.52.0 that shared layer is a **brain** ([brains](../features/brains.md)): the Fleet brain is the old
+"yours" folder, kept byte for byte, and a project brain is the same layer kept for the bots that joined it. A bot
+reads its own memory and its brain's, never another project's, and without a brain it reads only its own.
 
 ### Consensus we design to
 
@@ -190,14 +192,15 @@ per CJK character, one per four Latin characters.
 | | `MEMORY.md` | Notes |
 |---|---|---|
 | Holds | One short fact per line: name, time zone, people, "don't …", commitments | One topic's detail: people, health, plans, trips |
-| Cap | 400 tokens for "yours", 1,200 per bot; 150 a line | 2,000 tokens a note, 20 notes a layer |
+| Cap | 400 tokens in the Fleet brain, 1,200 per bot and per project brain; 150 a line | 2,000 tokens a note, 20 notes a layer |
 | In the opening | In full | An index: path, description, size |
 | Names | `MEMORY.md` | `lowercase-with-dashes.md` in up to three topic folders (`health/allergies.md`), frontmatter `description:` first |
 
 | Layer | Folder | Default | Scope |
 |---|---|---|---|
-| **Yours** | `<data>/shared-memory/` | On for personal bots, off for project bots | Shared by all bots |
-| **This bot** | `<data>/bots/<id>/bot-memory/` | Always on | One bot; wins over "yours" when they conflict |
+| **Brain** (a project's) | `<data>/brains/<id>/` | Off | The bots that joined it |
+| **Fleet** (the old "yours") | `<data>/shared-memory/` | On for personal bots, off otherwise | Every bot that joined the Fleet brain |
+| **This bot** | `<data>/bots/<id>/bot-memory/` | Always on | One bot; wins over the brain when they conflict |
 
 Active total: 1,600 tokens per opening within the caps, up to twice that after the user's own turns until dreaming
 tidies it (Hermes about 800 + 500, Claude Code's `MEMORY.md` index 200 lines, Letta blocks 5,000 characters). A file past a cap is marked in the opening and the apps, never cut.
@@ -526,8 +529,11 @@ build.
 
 ### UI (all three clients)
 
-- **Two sections**, "About you" and the bot's own: each `MEMORY.md` as facts with who wrote them, read-only.
-- **A per-bot switch** for "yours".
+- **Two sections**, "About you" (named after the bot's brain, a project's name instead of "About you") and the
+  bot's own: each `MEMORY.md` as facts with who wrote them, read-only.
+- **A brain row** over "About you": the brain and the total used against both caps, and a sheet to pick another,
+  make one, rename, delete, or save and import one as a file. No switch: turning the old shared memory off became
+  leaving every brain, so a bot without one reads only its own memory.
 - **Bot writes:** nothing in the chat (changed 2026-10-18 at the owner's request: memory lines and cards cluttered the
   chat). Every bot writes at once whatever its permission; the user reviews it in the memory settings, which are
   read-only since 2.21.0 (the owner's call: the user changes memory by telling the bot).
@@ -546,7 +552,7 @@ Each of these has a trigger for adding it later.
 |---|---|
 | Vectors | Keyword search and the bot's own rephrasing miss real cases; then a local model only, and a model change rebuilds the index |
 | Knowledge graph | — |
-| Project or team tiers | — |
+| Project or team tiers | Team, when a project brain isn't enough |
 | Multi-computer sync | — |
 | Our own compaction summaries | Harness summaries prove insufficient |
 | Per-reply memory citations | — |

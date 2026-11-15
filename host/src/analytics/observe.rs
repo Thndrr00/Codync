@@ -82,6 +82,11 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             Event::BotCreated
         }
         "updateBot" => Event::BotUpdated,
+        // Which memory a bot shares, never a brain's name.
+        "createBrain" | "renameBrain" | "joinBrain" | "leaveBrain" | "deleteBrain" => {
+            p.insert("setting".into(), "brain".into());
+            Event::SettingChanged
+        }
         "reorderBots" => Event::BotsReordered,
         "deleteBot" => Event::BotDeleted,
         "send" => {

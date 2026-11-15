@@ -87,6 +87,8 @@ data class Bot(
     val deleted: Boolean = false,
     /** Uses the memory all the user's bots share ("About you"). Null from an older host. */
     val sharedMemory: Boolean? = null,
+    /** The brain the bot works in: memory it shares with the bots that joined the same one. Null when none. */
+    val brain: Brain? = null,
     /** Keeps the harness's own memory (Claude Code's…) on beside Codync's. Null where it has no switch. */
     val harnessMemory: Boolean? = null,
     /** Moves whenever memory changes, so an open memory screen fetches it again. */

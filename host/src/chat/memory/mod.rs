@@ -6,6 +6,7 @@
 mod agent_import;
 mod api;
 mod beliefs;
+pub mod brains;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod budget;
 mod dates;
@@ -27,6 +28,7 @@ pub use tools::{INSTRUCTIONS, call as tool_call, tools};
 
 use crate::hub::Hub;
 use crate::store::{BotConfig, Store};
+use codync_mem::layers::{BRAIN_PREFIX, Layers, Scope};
 
 /// Whether a bot uses the memory all bots share. Unless the user chose, a bot in its own workspace does and one
 /// working in a project folder doesn't.
@@ -34,9 +36,34 @@ pub fn shared(cfg: &BotConfig) -> bool {
     cfg.shared_memory.unwrap_or_else(|| crate::agent::workspace::is_managed(cfg))
 }
 
+/// The memory layers a bot sees: its own, then its brain's (the one it works in, else the Fleet brain when it uses
+/// the shared memory).
+pub fn layers(store: &Store, cfg: &BotConfig) -> Layers {
+    let brain = match cfg.brain.as_deref() {
+        Some(id) => store.brain(id).ok().flatten(),
+        None if shared(cfg) => store.fleet_brain().ok().flatten(),
+        None => None,
+    };
+    match brain {
+        Some(brain) => Layers::with_brain(&cfg.id, brain),
+        None => Layers::of(&cfg.id),
+    }
+}
+
+/// Whether a bot sees the shared memory at all (its brain's, or the Fleet brain's).
+pub fn sees(store: &Store, cfg: &BotConfig) -> bool {
+    layers(store, cfg).sees(Scope::Brain)
+}
+
+/// The layer key the agent's `shared`/`scope` argument names (`None`: the shared folder, for the Fleet brain).
+pub fn scope_key(store: &Store, cfg: &BotConfig, scope: Scope) -> Option<String> {
+    layers(store, cfg).layer(scope).map(str::to_owned)
+}
+
 /// The memory section of a bot's instructions: each `MEMORY.md` it sees, then the index of its notes.
 pub fn opening(store: &Store, cfg: &BotConfig) -> String {
-    let memory = match store.memory_read(|c| codync_mem::opening::load(c, &cfg.id, shared(cfg))) {
+    let layers = layers(store, cfg);
+    let memory = match store.memory_read(|c| codync_mem::opening::load(c, &layers)) {
         Ok(opening) => opening.render(|bot| files::folder(bot).display().to_string()),
         Err(error) => {
             tracing::warn!(bot = %cfg.id, error = format!("{error:#}"), "couldn't read memory");
@@ -46,25 +73,31 @@ pub fn opening(store: &Store, cfg: &BotConfig) -> String {
     format!("{memory}\n\n{}", files::index(store, cfg))
 }
 
-/// After memory changed in `bot`'s own layer, or in the shared one (`None`): the apps fetch it again, and every
-/// session of a bot that sees the layer hears it on its next message (see [`change_notice`]). The opening itself
-/// stays as it is, so the prompt cache does too.
-pub fn changed(hub: &Hub, bot: Option<&str>) {
-    let bots: Vec<(String, bool)> = match bot {
-        Some(bot) => vec![(bot.to_owned(), true)],
-        None => hub
-            .store
-            .bots()
-            .map(|rows| {
-                rows.into_iter()
-                    .filter(|r| !r.deleted && !r.config.is_group())
-                    .map(|r| {
-                        let sees = shared(&r.config);
-                        (r.config.id, sees)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+/// After memory changed in one layer, by its key: `bot`'s own, a brain's (`brain:<id>`), or the shared folder
+/// (`None`): the apps fetch it again, and every session of a bot that sees the layer hears it on its next message
+/// (see [`change_notice`]). The opening itself stays as it is, so the prompt cache does too.
+pub fn changed(hub: &Hub, layer: Option<&str>) {
+    let bots: Vec<(String, bool)> = match layer {
+        Some(bot) if !bot.starts_with(BRAIN_PREFIX) => vec![(bot.to_owned(), true)],
+        brain => {
+            let id = brain.map(|key| key.trim_start_matches(BRAIN_PREFIX));
+            hub.store
+                .bots()
+                .map(|rows| {
+                    rows.into_iter()
+                        .filter(|r| !r.deleted && !r.config.is_group())
+                        .map(|r| {
+                            let sees = match id {
+                                Some(id) => sees(&hub.store, &r.config) && r.config.brain.as_deref() == Some(id),
+                                // The shared folder is the Fleet brain's, which a bot sees when it works in no brain.
+                                None => sees(&hub.store, &r.config) && r.config.brain.is_none(),
+                            };
+                            (r.config.id, sees)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
     };
     let revision = hub.store.memory_rev().to_string();
     for (id, sees) in &bots {
@@ -183,6 +216,36 @@ pub fn current_revision(store: &Store, bot: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_bot_sees_its_own_layer_then_its_brains_and_projects_stay_apart() {
+        let store =
+            Store::open(&std::env::temp_dir().join(format!("codync-memory-{}.db", uuid::Uuid::new_v4()))).unwrap();
+        let cfg = |id: &str, brain: Option<&str>, shared: bool| -> BotConfig {
+            serde_json::from_value(serde_json::json!({
+                "id": id, "name": id, "backend": "claude", "cwd": "/tmp",
+                "brain": brain, "sharedMemory": shared,
+            }))
+            .unwrap()
+        };
+        let weather = store.save_brain(None, "Weather").unwrap();
+        let harbor = store.save_brain(None, "Harbor").unwrap();
+        let (a, b, c) =
+            (cfg("a", Some(&weather), false), cfg("b", Some(&weather), false), cfg("c", Some(&harbor), false));
+        assert_eq!(layers(&store, &a).keys().count(), 2, "its own and its brain's");
+        assert_eq!(layers(&store, &a).layer(Scope::Brain), Some(format!("brain:{weather}").as_str()));
+        assert_eq!(
+            layers(&store, &a).layer(Scope::Brain),
+            layers(&store, &b).layer(Scope::Brain),
+            "bots in one brain see the same brain layer"
+        );
+        assert_ne!(layers(&store, &a).layer(Scope::Brain), layers(&store, &c).layer(Scope::Brain));
+        // Without a brain, the shared memory is the Fleet brain's; without either, only its own.
+        let fleet = cfg("d", None, true);
+        assert_eq!(layers(&store, &fleet).layer(Scope::Brain), None);
+        assert!(sees(&store, &fleet) && !sees(&store, &cfg("e", None, false)));
+        assert_eq!(layers(&store, &cfg("e", None, false)).keys().count(), 1);
+    }
 
     #[test]
     fn a_session_hears_each_change_once_and_again_after_a_compaction() {

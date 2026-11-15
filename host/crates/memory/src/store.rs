@@ -4,6 +4,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::check::Refusal;
+use crate::layers::Layers;
 
 #[derive(Debug)]
 pub enum Error {
@@ -72,10 +73,15 @@ pub fn forgotten(conn: &Connection, bot: Option<&str>, line: &str) -> Result<boo
     marked(conn, bot, &fingerprint(line))
 }
 
-/// Whether memory learned from `message` was forgotten in a layer `bot` uses: the message is spent for both, so a
-/// fact forgotten in one layer doesn't come back in the other.
-pub fn spent(conn: &Connection, bot: &str, message: &str) -> Result<bool> {
-    Ok(marked(conn, None, &cited(message))? || marked(conn, Some(bot), &cited(message))?)
+/// Whether memory learned from `message` was forgotten in a layer `bot` sees: the message is spent for all of them,
+/// so a fact forgotten in one layer doesn't come back in another.
+pub fn spent(conn: &Connection, layers: &Layers, message: &str) -> Result<bool> {
+    for (_, layer) in layers.keys() {
+        if marked(conn, layer, &cited(message))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Leaves marks in a layer: tombstones, or notes dreaming keeps for itself.
@@ -119,7 +125,11 @@ fn cited(message: &str) -> String {
 }
 
 fn scope(bot: Option<&str>) -> String {
-    bot.map_or_else(|| "yours".to_owned(), |bot| format!("bot:{bot}"))
+    match bot {
+        None => "yours".to_owned(),
+        Some(brain) if brain.starts_with(crate::layers::BRAIN_PREFIX) => brain.to_owned(),
+        Some(bot) => format!("bot:{bot}"),
+    }
 }
 
 /// A line without its list marker (`- `, `* `, `+ `).
@@ -139,6 +149,7 @@ pub(crate) fn fingerprint(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layers::Layers;
 
     fn db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -152,8 +163,8 @@ mod tests {
         bury(&conn, Some("a"), ["- Lives in Taipei"], ["m1"]).unwrap();
         assert!(forgotten(&conn, Some("a"), "lives in  taipei.").unwrap(), "marker, case and spacing don't matter");
         assert!(!forgotten(&conn, None, "Lives in Taipei").unwrap(), "per layer");
-        assert!(spent(&conn, "a", "m1").unwrap());
-        assert!(!spent(&conn, "b", "m1").unwrap());
+        assert!(spent(&conn, &Layers::of("a"), "m1").unwrap());
+        assert!(!spent(&conn, &Layers::of("b"), "m1").unwrap());
         unbury(&conn, Some("a"), "Lives in Taipei").unwrap();
         assert!(!forgotten(&conn, Some("a"), "Lives in Taipei").unwrap());
     }

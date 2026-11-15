@@ -6,7 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MemoryTest {
-    private val view = """{"shared":true,
+    private val view = """{"shared":true,"brain":{"id":"fleet","name":"Fleet","shared":true},"total":{"used":13,"cap":1500},
         "yours":{"entries":[{"id":1,"state":"active","text":"Lives in Taipei","author":"user","pinned":true,"updatedAt":5}],"used":10,"cap":400},
         "bot":{"entries":[{"id":2,"bot":"b","state":"archived","text":"Likes tea","author":"bot","authorBot":"b","pinned":false,"updatedAt":6,"future":1}],"used":3,"cap":800},
         "dreams":[{"id":9,"at":7,"undone":false,"added":[{"id":3,"text":"x"}],"archived":[{"id":2,"text":"y"}],"files":[{"name":"people.md","shared":false,"version":4}]}],
@@ -16,12 +16,30 @@ class MemoryTest {
     @Test fun `a bot's memory decodes its layers dreams notes and the harness notes`() {
         val memory = WireJson.decodeFromString<BotMemory>(view)
         assertTrue(memory.shared)
-        assertEquals("Lives in Taipei", memory.yours.entries.single().text)
+        assertEquals("Lives in Taipei", memory.yours?.entries?.single()?.text)
+        assertEquals("Fleet", memory.brain?.name)
+        assertEquals(1500, memory.total.cap)
         assertTrue(memory.bot.entries.single().archived)
         assertEquals("people.md", memory.dreams.single().files.orEmpty().single().name)
         assertEquals("notes", memory.projectMemory?.text)
         assertEquals(20, memory.files?.folderCap)
         assertEquals("a.md", memory.files?.bot?.files?.single()?.name)
+    }
+
+    @Test fun `a bot in a project brain has a brain layer and one in no brain has none`() {
+        val project = WireJson.decodeFromString<BotMemory>(
+            """{"shared":false,"brain":{"id":"w","name":"Weather","shared":false},"yours":null,"bot":{"entries":[]}}""")
+        assertEquals(false, project.brain?.shared)
+        assertNull(project.yours)
+        assertNull(WireJson.decodeFromString<BotMemory>("""{"bot":{"entries":[]}}""").brain)
+    }
+
+    @Test fun `brain requests name only what they need`() {
+        assertEquals("createBrain", BrainCalls.saveMethod(null))
+        assertEquals("renameBrain", BrainCalls.saveMethod("w"))
+        assertEquals(setOf("name"), BrainCalls.name(null, "Weather").keys)
+        assertEquals(setOf("id", "name"), BrainCalls.name("w", "Harbor").keys)
+        assertEquals(setOf("botId", "brainId"), BrainCalls.join("b", "w").keys)
     }
 
     @Test fun `an older host's flat listing is not a memory`() {

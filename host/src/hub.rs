@@ -410,7 +410,7 @@ impl Hub {
         }
         crate::network::publish(self);
         if !cfg.is_group() {
-            if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&before) {
+            if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&before) || cfg.brain != before.brain {
                 crate::chat::memory::changed(self, Some(&id));
             }
             // A terminal session has no actor to reconfigure: its settings are read on the next event.

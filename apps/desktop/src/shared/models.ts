@@ -18,6 +18,16 @@ import {
 
 export type BotStatus = 'idle' | 'working' | 'needsInput' | 'error'
 
+/** Memory several bots share: a project's, or the Fleet one, which stands over the memory every bot used to share. */
+export interface Brain {
+  id: string
+  name: string
+  /** The Fleet brain: its layer is the old shared-memory folder. */
+  shared: boolean
+  /** What a bot carries in it; only on the brains list. */
+  members?: string[]
+}
+
 /** Three layers of a bot's character (see the host's `agent::personality`). */
 export interface Personality {
   soul: string
@@ -109,6 +119,8 @@ export interface Bot {
   computerPermissions?: { browser: boolean; files: boolean; shell: boolean }
   /** Uses the memory all the user's bots share ("About you"). */
   sharedMemory: boolean
+  /** The brain the bot works in (memory it shares with the bots that joined the same one); null when none. */
+  brain: Brain | null
   /** Keeps the harness's own memory (Claude Code'sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦) on beside Codync's; null where it has no switch. */
   harnessMemory: boolean | null
   /** The harness keeps one memory for all its sessions that Codync can't turn off (Hermes Agent, Gemini CLI): every bot on it shares it. */
@@ -183,6 +195,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     createdBy: raw.createdBy ?? null,
     computerPermissions: raw.computerPermissions ?? { browser: false, files: false, shell: false },
     sharedMemory: raw.sharedMemory ?? raw.managedWorkspace ?? false,
+    brain: raw.brain ?? null,
     harnessMemory: raw.harnessMemory ?? null,
     harnessMemoryShared: raw.harnessMemoryShared ?? false,
     memoryRev: raw.memoryRev ?? 0,
@@ -826,6 +839,7 @@ export interface BotDraft {
   offeredToNetwork?: boolean
   reachableByAssistants?: boolean
   sharedMemory?: boolean
+  brain?: string | null
   harnessMemory?: boolean
   isChief?: boolean
   chiefBotId?: string | null

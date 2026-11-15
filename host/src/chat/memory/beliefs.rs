@@ -8,10 +8,11 @@
 
 use super::files::{self, Writer};
 use crate::hub::Hub;
-use crate::store::{BotConfig, EntryKind, Lane};
+use crate::store::{BotConfig, EntryKind, Lane, Store};
 use anyhow::{Result, anyhow, bail};
 use codync_mem::files::belief::{self, Belief, Confidence, Kind};
 use codync_mem::files::{self as mf, Author, Cause, MAIN};
+use codync_mem::layers::Scope;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -39,14 +40,22 @@ fn dispatch(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
     }
 }
 
-fn layer_of(cfg: &BotConfig, b: &Value) -> Result<Option<String>> {
-    if b["shared"] != true {
-        return Ok(Some(cfg.id.clone()));
-    }
-    if !super::shared(cfg) {
-        bail!("This bot doesn't use the shared memory.");
-    }
-    Ok(None)
+/// The layer a change goes to: its own, or the brain's (`None` is the Fleet brain's shared folder).
+fn scope_of(layer: Option<&String>) -> Scope {
+    layer.map_or(Scope::Brain, |_| Scope::Personal)
+}
+
+/// The layer the agent's `shared`/`scope` argument names, `None` for the shared folder (the Fleet brain's).
+fn layer_of(store: &Store, cfg: &BotConfig, b: &Value) -> Result<Option<String>> {
+    let scope = if b["scope"].as_str() == Some(Scope::Brain.name()) || b["shared"] == true {
+        if !super::sees(store, cfg) {
+            bail!("This bot works in no brain, so it has no shared memory.");
+        }
+        Scope::Brain
+    } else {
+        Scope::Personal
+    };
+    Ok(super::layers(store, cfg).layer(scope).map(str::to_owned))
 }
 
 /// Every note of the bot's layers with its belief header, filtered by `kind` and `confidence` when asked. With
@@ -57,21 +66,22 @@ fn list(hub: &Hub, cfg: &BotConfig, b: &Value) -> Result<Value> {
     let want_confidence = b["confidence"].as_str().and_then(Confidence::parse);
     let forgotten = b["forgotten"] == true;
     let mut beliefs = Vec::new();
-    for layer in files::layers(cfg) {
-        let notes = hub.store.memory_read(|c| mf::layer(c, layer.as_deref()))?;
+    for (scope, layer) in files::layers(&hub.store, cfg).keys() {
+        let notes = hub.store.memory_read(|c| mf::layer(c, layer))?;
         for note in notes.into_iter().filter(|n| n.name != MAIN && n.deleted == forgotten) {
-            let versions = hub.store.memory_read(|c| mf::versions(c, layer.as_deref(), &note.name, VERSIONS_SHOWN))?;
+            let versions = hub.store.memory_read(|c| mf::versions(c, layer, &note.name, VERSIONS_SHOWN))?;
             let content = if forgotten {
                 versions.iter().find_map(|v| v.content.clone()).unwrap_or_default()
             } else {
-                files::read(layer.as_deref(), &note.name)?.unwrap_or_default()
+                files::read(layer, &note.name)?.unwrap_or_default()
             };
             let belief = belief::read(&content);
             if want_kind.is_some_and(|k| k != belief.kind) || want_confidence.is_some_and(|c| c != belief.confidence) {
                 continue;
             }
             beliefs.push(json!({
-                "file": note.name, "shared": layer.is_none(), "description": note.description,
+                "file": note.name, "scope": scope.name(), "shared": scope == Scope::Brain, "layer": layer,
+                "description": note.description,
                 "kind": belief.kind, "confidence": belief.confidence, "confirmed": belief.confirmed,
                 "updatedAt": note.updated_at, "tokens": note.tokens, "versions": versions,
             }));
@@ -117,7 +127,7 @@ pub fn confirmed(content: &str) -> String {
 }
 
 fn act(hub: &Hub, cfg: &BotConfig, b: &Value) -> Result<Value> {
-    let layer = layer_of(cfg, b)?;
+    let layer = layer_of(&hub.store, cfg, b)?;
     let name = b["file"].as_str().ok_or_else(|| anyhow!("file required"))?;
     files::scan(hub, cfg);
     let version = match b["action"].as_str() {
@@ -147,7 +157,7 @@ fn act(hub: &Hub, cfg: &BotConfig, b: &Value) -> Result<Value> {
 /// What the bot's tools do: confirm a note, correct it, or forget it. Each is a change of the person's memory that the
 /// bot makes only in a turn the person started (the rule every bot write passes).
 pub fn tool(hub: &Hub, cfg: &BotConfig, name: &str, args: &Value) -> Result<Value> {
-    let layer = layer_of(cfg, args)?;
+    let layer = layer_of(&hub.store, cfg, args)?;
     let file = args["file"].as_str().ok_or_else(|| anyhow!("file required"))?;
     files::scan(hub, cfg);
     let before = files::read(layer.as_deref(), file)?;
@@ -166,7 +176,7 @@ pub fn tool(hub: &Hub, cfg: &BotConfig, name: &str, args: &Value) -> Result<Valu
                 belief::stamp(content, &Belief { confidence: Confidence::High, confirmed: Some(today()), ..kept });
             let version = write(hub, cfg, layer.as_deref(), file, Some(&fixed), By::Bot, Cause::Edit)?;
             let summary = args["summary"].as_str().unwrap_or("something about you changed");
-            announce(hub, cfg, summary, file, layer.is_none(), earlier, version.id);
+            announce(hub, cfg, summary, file, scope_of(layer.as_ref()), earlier, version.id);
             let question = args["question"].as_str().map(|q| ask(hub, cfg, q)).transpose()?;
             Ok(
                 json!({"status": "corrected", "file": file, "question": question.map(|asked| if asked { "asked" } else { "skipped: a question was asked in the last 24 hours" })}),
@@ -176,18 +186,19 @@ pub fn tool(hub: &Hub, cfg: &BotConfig, name: &str, args: &Value) -> Result<Valu
             before.ok_or_else(|| anyhow!("There's no note {file}."))?;
             let version = write(hub, cfg, layer.as_deref(), file, None, By::Bot, Cause::Delete)?;
             let summary = args["summary"].as_str().unwrap_or("you asked me to forget something");
-            announce(hub, cfg, summary, file, layer.is_none(), earlier, version.id);
+            announce(hub, cfg, summary, file, scope_of(layer.as_ref()), earlier, version.id);
             Ok(json!({"status": "forgotten", "file": file}))
         }
         _ => bail!("unknown memory tool: {name}"),
     }
 }
 
-/// "I learned …" in the chat, with what Undo needs: the version the note had before this change (none: it was new).
-fn announce(hub: &Hub, cfg: &BotConfig, summary: &str, file: &str, shared: bool, before: Option<i64>, change: i64) {
+/// "I learned …" in the chat, with what Undo needs: the layer, and the version the note had before this change (none:
+/// it was new).
+fn announce(hub: &Hub, cfg: &BotConfig, summary: &str, file: &str, scope: Scope, before: Option<i64>, change: i64) {
     let text = format!("I learned: {}", crate::agent::acp::truncate(summary.trim(), 200));
     let data = json!({"text": text, "style": "info",
-        "memoryUndo": {"file": file, "shared": shared, "before": before, "change": change, "undone": false}});
+        "memoryUndo": {"file": file, "scope": scope.name(), "shared": scope == Scope::Brain, "before": before, "change": change, "undone": false}});
     hub.add_entry(&Lane::main(&cfg.id), EntryKind::Notice, hub.store.max_turn(&cfg.id), &data);
 }
 
@@ -221,7 +232,7 @@ fn undo(hub: &Hub, cfg: &BotConfig, b: &Value) -> Result<Value> {
         return Ok(json!({"entry": entry}));
     }
     let file = undo["file"].as_str().ok_or_else(|| anyhow!("bad undo"))?;
-    let layer = layer_of(cfg, &json!({"shared": undo["shared"]}))?;
+    let layer = layer_of(&hub.store, cfg, &json!({"shared": undo["shared"], "scope": undo["scope"]}))?;
     files::scan(hub, cfg);
     match undo["before"].as_i64() {
         Some(version) => {
@@ -246,18 +257,19 @@ fn undo(hub: &Hub, cfg: &BotConfig, b: &Value) -> Result<Value> {
 
 pub fn definitions() -> Vec<Value> {
     let file = json!({"type": "string", "description": "A note's name like people.md or health/allergies.md."});
-    let shared = json!({"type": "boolean", "description": "True for the memory all the user's bots share."});
+    let scope = json!({"type": "string", "enum": ["personal", "brain"], "description": "personal: this bot's own memory; brain: its brain's, shared with the other bots in it."});
+    let shared = json!({"type": "boolean", "description": "True for the brain's memory, shared with the other bots working in it (the Fleet brain: with all the user's bots)."});
     vec![
         json!({
             "name": "confirm_memory",
             "description": "The user just said a note of yours still holds: record that you are sure of it (high confidence, confirmed today).",
-            "inputSchema": {"type": "object", "properties": {"file": file, "shared": shared}, "required": ["file"]},
+            "inputSchema": {"type": "object", "properties": {"file": file, "shared": shared, "scope": scope}, "required": ["file"]},
         }),
         json!({
             "name": "correct_memory",
             "description": "The user corrected something you believed. Give the whole corrected note (frontmatter first, with its description:). The change is shown to the user as one line starting \"I learned\" with an Undo; summary is that line. If the correction contradicts something else you believe, give question: one short question to settle it (asked at most once a day). Works only in a turn the user started in your own chat.",
             "inputSchema": {"type": "object", "properties": {
-                "file": file, "shared": shared,
+                "file": file, "shared": shared, "scope": scope,
                 "content": {"type": "string", "description": "The whole corrected note."},
                 "summary": {"type": "string", "description": "What you learned, in a few words, like \"you now live in Porto\"."},
                 "question": {"type": "string", "description": "Optional: a question about a contradiction."},
@@ -266,7 +278,7 @@ pub fn definitions() -> Vec<Value> {
         json!({
             "name": "forget_memory",
             "description": "The user asked you to forget a note. It is taken out of your memory, not destroyed: its history keeps it and the user can bring it back. Shown to the user as one line starting \"I learned\" with an Undo. Works only in a turn the user started in your own chat.",
-            "inputSchema": {"type": "object", "properties": {"file": file, "shared": shared, "summary": {"type": "string"}}, "required": ["file"]},
+            "inputSchema": {"type": "object", "properties": {"file": file, "shared": shared, "scope": scope, "summary": {"type": "string"}}, "required": ["file"]},
         }),
     ]
 }

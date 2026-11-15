@@ -7,6 +7,7 @@ use crate::hub::Hub;
 use crate::store::BotConfig;
 use anyhow::{Result, anyhow, bail};
 use codync_mem::files::{self as mf, MAIN};
+use codync_mem::layers::Scope;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,7 +21,8 @@ pub const INSTRUCTIONS: &str = "Your memory holds what you know about the user, 
 It is Markdown files you keep yourself: MEMORY.md, one short fact about the user per line, in every session in \
 full; and notes, one topic each, for detail too long for MEMORY.md (lists, itineraries, histories), listed in your \
 instructions. When the user tells you something lasting about themselves, or asks you to remember, change or \
-forget something, change the files with edit_memory (or remember_for_all_bots for facts every bot should know). \
+forget something, change the files with edit_memory (or remember_for_all_bots for facts the bots you share a brain \
+with should know). \
 The user reads memory in the app but can't edit it: they ask you. Project and code knowledge worth \
 keeping goes in a note on that project, not MEMORY.md; don't make the project's CLAUDE.md or AGENTS.md your memory \
 unless the user asks. Only in a turn the user started in your own chat can memory lose or change a line; at other \
@@ -67,7 +69,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "remember_for_all_bots",
-            "description": "Save a lasting fact about the user into the shared MEMORY.md so all of the user's bots know it.",
+            "description": "Save a lasting fact about the user into your brain's shared MEMORY.md, so the other bots working in it (with the Fleet brain: all of the user's bots) know it.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -119,15 +121,15 @@ async fn search_memory(hub: &Arc<Hub>, cfg: &BotConfig, query: &str) -> Result<V
     let (hub, cfg, query) = (hub.clone(), cfg.clone(), query.to_owned());
     let results = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
         super::files::scan(&hub, &cfg);
-        let shared = super::shared(&cfg);
+        let layers = super::files::layers(&hub.store, &cfg);
         let (hits, mut sources) = hub.store.memory_read(|c| {
-            let hits = mf::search(c, &cfg.id, shared, &query, 20)?;
+            let hits = mf::search(c, &layers, &query, 20)?;
             // Where each MEMORY.md fact was learned, by layer and line.
             let mut sources = HashMap::new();
-            for layer in super::files::layers(&cfg) {
-                for fact in mf::facts_of(c, layer.as_deref())? {
+            for (_, layer) in layers.keys() {
+                for fact in mf::facts_of(c, layer)? {
                     if let Some(message) = fact.message {
-                        sources.insert((layer.clone(), mf::fact_id(&fact.text)), message);
+                        sources.insert((layer.map(str::to_owned), mf::fact_id(&fact.text)), message);
                     }
                 }
             }
@@ -144,7 +146,8 @@ async fn search_memory(hub: &Arc<Hub>, cfg: &BotConfig, query: &str) -> Result<V
                     (hit.name == MAIN).then(|| sources.get(&(hit.bot.clone(), mf::fact_id(&hit.text)))).flatten();
                 json!({
                     "file": hit.name,
-                    "shared": hit.bot.is_none(),
+                    "scope": hit.scope.name(),
+                    "shared": hit.scope == Scope::Brain,
                     "line": hit.line,
                     "text": acp::truncate(&hit.text, 300),
                     "source": source,

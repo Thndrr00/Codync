@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use super::{Edit, Layer, Message, Plan, Snapshot, cite};
 use crate::files;
+use crate::layers::Scope;
 use crate::store::{self, unmarked};
 use crate::{check, tokens};
 
@@ -19,7 +20,7 @@ pub const NOTE_CAP: usize = 300;
 pub struct Append {
     pub file: String,
     #[serde(default)]
-    pub shared: bool,
+    pub scope: Scope,
     pub text: String,
     #[serde(default)]
     pub quote: String,
@@ -35,7 +36,7 @@ pub struct Append {
 pub struct MoveOut {
     pub line: String,
     #[serde(default)]
-    pub shared: bool,
+    pub scope: Scope,
     pub file: String,
     #[serde(default)]
     pub description: String,
@@ -70,7 +71,7 @@ pub(super) fn point(
     moved: &[&MoveOut],
     lines: &mut Vec<String>,
 ) -> store::Result<(Vec<String>, Vec<String>)> {
-    let bot = snapshot.layer_bot(layer.shared);
+    let bot = snapshot.layer_key(layer.scope);
     let passes = |lines: &[String]| {
         files::check_change(bot, files::MAIN, layer.content.as_deref(), &super::edits::joined(lines), false).is_ok()
     };
@@ -99,7 +100,7 @@ pub(super) fn point(
         };
         let Some(text) = summary.map(|s| pointer(s, note)) else { continue };
         let old = unmarked(&lines[at]);
-        if old == text || snapshot.fact(layer.shared, old).is_some_and(|f| f.author.is_users()) || forgotten(&text)? {
+        if old == text || snapshot.fact(layer.scope, old).is_some_and(|f| f.author.is_users()) || forgotten(&text)? {
             continue;
         }
         let was = std::mem::replace(&mut lines[at], format!("- {text}"));
@@ -116,7 +117,7 @@ pub(super) fn point(
 /// What a note is about, best first: the move's description (a new note's), the note's own, its name.
 fn about(snapshot: &Snapshot, m: &MoveOut) -> Vec<String> {
     let given = Some(m.description.trim().to_owned()).filter(|d| !d.is_empty());
-    let known = snapshot.note(m.shared, &m.file).and_then(|f| f.description.clone());
+    let known = snapshot.note(m.scope, &m.file).and_then(|f| f.description.clone());
     let name = m.file.trim_end_matches(".md").rsplit('/').next().map(str::to_owned);
     [given, known, name].into_iter().flatten().collect()
 }
@@ -131,24 +132,24 @@ pub(super) fn audit(
     rejected: &mut Vec<String>,
 ) {
     // A plan may describe a new note once: every line it sends there shares that description.
-    let mut described: BTreeMap<(bool, String), String> = BTreeMap::new();
-    let named = appends.iter().map(|a| (a.shared, &a.file, &a.description));
-    for (shared, file, description) in named.chain(moves.iter().map(|m| (m.shared, &m.file, &m.description))) {
+    let mut described: BTreeMap<(Scope, String), String> = BTreeMap::new();
+    let named = appends.iter().map(|a| (a.scope, &a.file, &a.description));
+    for (scope, file, description) in named.chain(moves.iter().map(|m| (m.scope, &m.file, &m.description))) {
         if !description.trim().is_empty() {
-            described.entry((shared && snapshot.shared, file.clone())).or_insert_with(|| description.trim().to_owned());
+            described.entry((snapshot.scope(scope), file.clone())).or_insert_with(|| description.trim().to_owned());
         }
     }
-    let describe = |shared: bool, file: &str, description: &mut String| {
+    let describe = |scope: Scope, file: &str, description: &mut String| {
         if description.trim().is_empty()
-            && let Some(known) = described.get(&(shared, file.to_owned()))
+            && let Some(known) = described.get(&(scope, file.to_owned()))
         {
             description.clone_from(known);
         }
     };
     for mut append in appends {
-        append.shared &= snapshot.shared;
-        describe(append.shared, &append.file, &mut append.description);
-        let verdict = target(snapshot, append.shared, &append.file, &append.description)
+        append.scope = snapshot.scope(append.scope);
+        describe(append.scope, &append.file, &mut append.description);
+        let verdict = target(snapshot, append.scope, &append.file, &append.description)
             .and_then(|()| text(&append.text))
             .and_then(|()| cite(messages, &append.quote, &append.message).map(drop));
         match verdict {
@@ -157,19 +158,19 @@ pub(super) fn audit(
         }
     }
     for mut moved in moves {
-        moved.shared &= snapshot.shared;
-        describe(moved.shared, &moved.file, &mut moved.description);
+        moved.scope = snapshot.scope(moved.scope);
+        describe(moved.scope, &moved.file, &mut moved.description);
         let verdict = (|| {
             // Only the layer that is nearly full gets tidied: the other keeps its lines, the user's above all.
-            if !snapshot.layer_full(moved.shared) {
+            if !snapshot.layer_full(moved.scope) {
                 return Err("MEMORY.md isn't full");
             }
             // Even a line the user wrote moves: word for word, into a note of the same layer.
-            snapshot.fact(moved.shared, &moved.line).ok_or("no such line in MEMORY.md")?;
+            snapshot.fact(moved.scope, &moved.line).ok_or("no such line in MEMORY.md")?;
             if points_to(&moved.line).is_some() {
                 return Err("it points to a note");
             }
-            target(snapshot, moved.shared, &moved.file, &moved.description)?;
+            target(snapshot, moved.scope, &moved.file, &moved.description)?;
             if moved.summary.trim().is_empty() {
                 return Ok(());
             }
@@ -183,12 +184,11 @@ pub(super) fn audit(
 }
 
 /// A note name the folders take; a new note also needs a description that passes the checks.
-fn target(snapshot: &Snapshot, shared: bool, file: &str, description: &str) -> Result<(), &'static str> {
+fn target(snapshot: &Snapshot, scope: Scope, file: &str, description: &str) -> Result<(), &'static str> {
     if !files::valid_name(file) || file == files::MAIN {
         return Err("the file name isn't lowercase-with-dashes.md, in up to three topic folders");
     }
-    if snapshot.note(shared, file).is_none() && (description.trim().is_empty() || check::content(description).is_err())
-    {
+    if snapshot.note(scope, file).is_none() && (description.trim().is_empty() || check::content(description).is_err()) {
         return Err("a new note needs a description");
     }
     Ok(())
@@ -219,7 +219,7 @@ pub(super) fn edits(conn: &Connection, snapshot: &Snapshot, plan: &Plan, message
     // (layer, file) → (description, lines), in a stable order.
     let mut notes: BTreeMap<(Option<String>, String), (String, Vec<String>)> = BTreeMap::new();
     for append in &plan.append {
-        let layer = snapshot.layer_bot(append.shared);
+        let layer = snapshot.layer_key(append.scope);
         let text = append.text.trim();
         if super::edits::forgotten(conn, snapshot, layer, text, super::message(messages, &append.message))? {
             out.rejected.push(format!("append to {}: the user had it forgotten", append.file));
@@ -230,7 +230,7 @@ pub(super) fn edits(conn: &Connection, snapshot: &Snapshot, plan: &Plan, message
         note.1.push(text.to_owned());
     }
     for moved in &plan.move_out {
-        let key = (snapshot.layer_bot(moved.shared).map(str::to_owned), moved.file.clone());
+        let key = (snapshot.layer_key(moved.scope).map(str::to_owned), moved.file.clone());
         let note = notes.entry(key).or_insert_with(|| (moved.description.trim().to_owned(), Vec::new()));
         note.1.push(unmarked(&moved.line).to_owned());
     }
@@ -247,9 +247,9 @@ pub(super) fn edits(conn: &Connection, snapshot: &Snapshot, plan: &Plan, message
         }
         match files::check_change(bot.as_deref(), &name, before.as_deref(), &after, false) {
             Ok(()) => {
-                let into = |m: &&MoveOut| snapshot.layer_bot(m.shared) == bot.as_deref() && m.file == name;
+                let into = |m: &&MoveOut| snapshot.layer_key(m.scope) == bot.as_deref() && m.file == name;
                 out.moved.extend(plan.move_out.iter().filter(into).cloned());
-                out.files.push(Edit { bot, name, before, after });
+                out.files.push(Edit { layer: bot, name, before, after });
             }
             Err(refusal) => out.rejected.push(format!("note {name}: {refusal}")),
         }

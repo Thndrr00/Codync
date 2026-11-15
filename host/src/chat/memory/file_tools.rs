@@ -3,21 +3,23 @@
 
 use super::files::{self, Writer};
 use crate::hub::Hub;
-use crate::store::BotConfig;
+use crate::store::{BotConfig, Store};
 use anyhow::{Result, anyhow, bail};
 use codync_mem::files::{self as mf, Author, Cause, MAIN};
+use codync_mem::layers::Scope;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 pub fn definitions() -> [Value; 2] {
     let file =
         json!({"type": "string", "description": "MEMORY.md, or a note's name like people.md or health/allergies.md."});
-    let shared = json!({"type": "boolean", "description": "True for the memory all the user's bots share."});
+    let shared = json!({"type": "boolean", "description": "True for the brain's memory, shared with the other bots working in it (the Fleet brain: with all the user's bots)."});
+    let scope = json!({"type": "string", "enum": ["personal", "brain"], "description": "personal: your own memory; brain: your brain's, shared with the other bots in it."});
     [
         json!({
             "name": "read_memory",
             "description": "Read one of your memory files, or without a file, list them with their descriptions and sizes.",
-            "inputSchema": {"type": "object", "properties": {"file": file, "shared": shared}},
+            "inputSchema": {"type": "object", "properties": {"file": file, "shared": shared, "scope": scope}},
             "annotations": {"readOnlyHint": true},
         }),
         json!({
@@ -28,6 +30,7 @@ pub fn definitions() -> [Value; 2] {
                 "properties": {
                     "file": file,
                     "shared": shared,
+                    "scope": scope,
                     "append": {"type": "string", "description": "A line to add at the end, like \"- Has two cats\"."},
                     "old": {"type": "string", "description": "Text the file has exactly once."},
                     "new": {"type": "string", "description": "What replaces old."},
@@ -50,29 +53,35 @@ pub async fn call(hub: &Arc<Hub>, cfg: &BotConfig, name: &str, args: &Value) -> 
     .await?
 }
 
-fn layer(cfg: &BotConfig, args: &Value) -> Result<Option<String>> {
-    if args["shared"] != true {
-        return Ok(Some(cfg.id.clone()));
+/// The layer an argument names: its own, or its brain's (`None` is the Fleet brain's shared folder).
+fn layer(store: &Store, cfg: &BotConfig, args: &Value) -> Result<Option<String>> {
+    let scope = if args["scope"].as_str() == Some(Scope::Brain.name()) || args["shared"] == true {
+        Scope::Brain
+    } else {
+        Scope::Personal
+    };
+    let layers = super::layers(store, cfg);
+    if !layers.sees(scope) {
+        bail!("This bot works in no brain, so it has no shared memory.");
     }
-    if !super::shared(cfg) {
-        bail!("This bot doesn't use the shared memory.");
-    }
-    Ok(None)
+    Ok(layers.layer(scope).map(str::to_owned))
 }
 
 fn read(hub: &Hub, cfg: &BotConfig, args: &Value) -> Result<Value> {
     files::scan(hub, cfg);
     let Some(name) = args["file"].as_str() else {
         let mut files = Vec::new();
-        for layer in files::layers(cfg) {
-            let live = hub.store.memory_read(|c| mf::layer(c, layer.as_deref()))?.into_iter().filter(|f| !f.deleted);
+        let layers = files::layers(&hub.store, cfg);
+        for (scope, layer) in layers.keys() {
+            let live = hub.store.memory_read(|c| mf::layer(c, layer))?.into_iter().filter(|f| !f.deleted);
             files.extend(live.map(|f| {
-                json!({"file": f.name, "shared": f.bot.is_none(), "description": f.description, "tokens": f.tokens})
+                json!({"file": f.name, "scope": scope.name(), "shared": scope == Scope::Brain,
+                    "description": f.description, "tokens": f.tokens})
             }));
         }
         return Ok(json!({"files": files}));
     };
-    let layer = layer(cfg, args)?;
+    let layer = layer(&hub.store, cfg, args)?;
     let content = files::read(layer.as_deref(), name)?;
     let content = match content {
         Some(content) => content,
@@ -84,7 +93,7 @@ fn read(hub: &Hub, cfg: &BotConfig, args: &Value) -> Result<Value> {
 
 fn edit(hub: &Hub, cfg: &BotConfig, args: &Value) -> Result<Value> {
     let name = args["file"].as_str().ok_or_else(|| anyhow!("file required"))?;
-    let layer = layer(cfg, args)?;
+    let layer = layer(&hub.store, cfg, args)?;
     files::scan(hub, cfg);
     let before = files::read(layer.as_deref(), name)?;
     let after = if args["delete"] == true {

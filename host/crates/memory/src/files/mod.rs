@@ -1,5 +1,5 @@
-//! Memory is Markdown files, in a folder per layer (the shared one, and each bot's own): `MEMORY.md`, one short
-//! fact per line, which every session opens with in full, and notes on one topic each, read when it comes up.
+//! Memory is Markdown files, in a folder per layer (the shared one, each bot's own, and each brain's): `MEMORY.md`, one
+//! short fact per line, which every session opens with in full, and notes on one topic each, read when it comes up.
 //!
 //! The file on disk is the live copy, read and edited by the bot with its own tools or the memory tools. The crate
 //! keeps each file's versions (full content, author, cause), who wrote each fact of `MEMORY.md` ([`facts`]), decides
@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
 use crate::check::{self, Refusal};
+use crate::layers::{Layers, Scope};
 use crate::store::{self, Result};
 use crate::tokens;
 
@@ -341,6 +342,9 @@ pub fn prune(conn: &Connection, before: i64) -> Result<()> {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hit {
+    /// The layer of the bot the line was found in.
+    pub scope: Scope,
+    /// The layer key of that layer (`None`: the shared one).
     pub bot: Option<String>,
     pub name: String,
     /// 1-based.
@@ -348,26 +352,28 @@ pub struct Hit {
     pub text: String,
 }
 
-/// Lines of the live files a bot sees (its own, and the shared ones when it uses them) that contain `query`,
-/// ignoring case.
-pub fn search(conn: &Connection, bot: &str, shared: bool, query: &str, limit: usize) -> Result<Vec<Hit>> {
+/// Lines of the live files a bot sees that contain `query`, ignoring case.
+pub fn search(conn: &Connection, layers: &Layers, query: &str, limit: usize) -> Result<Vec<Hit>> {
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
         return Ok(Vec::new());
     }
+    let brain = layers.layer(Scope::Brain).map(str::to_owned);
     let mut stmt = conn.prepare(
         "SELECT f.bot, f.name, v.content FROM memory_files f JOIN memory_file_versions v ON v.id = f.version
-         WHERE f.hash != '' AND (f.bot = ?1 OR (?2 AND f.bot = '')) ORDER BY f.bot = '', f.name",
+         WHERE f.hash != '' AND (f.bot = ?1 OR (?2 IS NOT NULL AND f.bot = ?2)) ORDER BY f.bot = ?2, f.name",
     )?;
-    let rows = stmt.query_map(params![bot, shared], |row| {
+    let rows = stmt.query_map(params![layers.bot, brain], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?))
     })?;
     let mut hits = Vec::new();
     for row in rows {
         let (owner, name, content) = row?;
+        let key = layer_of(owner);
+        let Some(scope) = layers.scope_of(key.as_deref()) else { continue };
         for (i, line) in content.unwrap_or_default().lines().enumerate() {
             if line.to_lowercase().contains(&needle) {
-                hits.push(Hit { bot: layer_of(owner.clone()), name: name.clone(), line: i + 1, text: line.to_owned() });
+                hits.push(Hit { scope, bot: key.clone(), name: name.clone(), line: i + 1, text: line.to_owned() });
                 if hits.len() == limit {
                     return Ok(hits);
                 }

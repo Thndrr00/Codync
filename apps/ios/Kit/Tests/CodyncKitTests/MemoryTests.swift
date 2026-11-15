@@ -12,7 +12,8 @@ import Testing
 
 @Test func theMemoryScreenDecodesTheHostsView() throws {
     let json = """
-    {"shared": true,
+    {"shared": true, "brain": {"id": "fleet", "name": "Fleet", "shared": true},
+     "total": {"used": 4, "cap": 1600},
      "yours": {"entries": [{"id": 1, "bot": null, "state": "active", "text": "Lives in Taipei", "author": "user",
         "authorBot": null, "pinned": false, "supersededBy": null, "room": null, "evidence": [], "createdAt": 1,
         "updatedAt": 2, "rev": 3}], "used": 4, "cap": 400},
@@ -21,9 +22,22 @@ import Testing
      "projectMemory": null, "memoryRev": 9}
     """
     let view = try JSONDecoder().decode(MemoryView.self, from: Data(json.utf8))
-    #expect(view.yours.entries.first?.text == "Lives in Taipei")
+    #expect(view.yours?.entries.first?.text == "Lives in Taipei")
+    #expect(view.brain?.shared == true)
+    #expect(view.total.cap == 1600)
     #expect(view.dreams.first?.added.count == 1)
     #expect(view.projectMemory == nil)
+}
+
+@Test func aProjectBrainAndABotInNoBrainBothDecode() throws {
+    let project = """
+    {"shared": false, "brain": {"id": "weather", "name": "Weather", "shared": false},
+     "total": {"used": 10, "cap": 1600}, "yours": null, "bot": {"entries": [], "used": 10, "cap": 1200},
+     "dreams": [], "projectMemory": null}
+    """
+    let view = try JSONDecoder().decode(MemoryView.self, from: Data(project.utf8))
+    #expect(view.brain?.name == "Weather")
+    #expect(view.yours == nil, "no brain, no brain layer")
 }
 
 @Test func memoryLinesAndKeptHandoffsStayOutOfTheChat() throws {
@@ -50,7 +64,8 @@ import Testing
 
 @Test func memoryFilesDecode() throws {
     let json = """
-    {"shared": false, "yours": {"entries": [], "used": 0, "cap": 400}, "bot": {"entries": [], "used": 0, "cap": 1200},
+    {"shared": false, "brain": {"id": "fleet", "name": "Fleet", "shared": true}, "total": {"used": 0, "cap": 1600},
+     "yours": {"entries": [], "used": 0, "cap": 400}, "bot": {"entries": [], "used": 0, "cap": 1200},
      "dreams": [{"id": 1, "bot": "b", "at": 5, "undone": false, "added": [], "archived": [],
         "files": [{"name": "people.md", "shared": false, "version": 3}]}],
      "projectMemory": null,

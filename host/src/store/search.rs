@@ -268,9 +268,22 @@ impl Store {
         }
         let limit = i64::from(limit.clamp(1, MAX_HITS));
         self.backfill_search()?;
-        let shares = self.bot(bot)?.is_some_and(|row| crate::chat::memory::shared(&row.config));
         let mut args: Vec<Box<dyn rusqlite::ToSql>> =
             vec![Box::new(terms), Box::new(bot.to_owned()), Box::new(SNIPPET_TOKENS)];
+        // Its own memory, and its brain's: both are kept under the layer's key (`''` for the Fleet brain).
+        let layers: Vec<String> = match self.bot(bot)? {
+            Some(row) => crate::chat::memory::layers(self, &row.config)
+                .keys()
+                .map(|(_, layer)| layer.unwrap_or("").to_owned())
+                .collect(),
+            None => vec![bot.to_owned()],
+        };
+        let mut mine = "f.bot_id IN (?2".to_owned();
+        for layer in layers.iter().skip(1) {
+            args.push(Box::new(layer.clone()));
+            let _ = write!(mine, ", ?{}", args.len());
+        }
+        mine.push(')');
         // The limit applies after the kinds are picked, so a page of traces doesn't fill the answer.
         let mut wanted = String::new();
         if !filters.tools {
@@ -300,8 +313,6 @@ impl Store {
             let _ = write!(wanted, " AND f.at <= ?{}", args.len());
         }
         let c = self.db.locked();
-        // Shared memory belongs to no bot and is kept under an empty id: a bot that uses it reads it too.
-        let mine = if shares { "(f.bot_id = ?2 OR (f.bot_id = '' AND f.kind = 'memory'))" } else { "f.bot_id = ?2" };
         sync_memory(&c)?;
         // More candidates than the limit: recency reorders what the rank found, so the cut has to wait.
         args.push(Box::new(limit * RANKED_FACTOR));
@@ -338,10 +349,16 @@ impl Store {
                         .into();
                     hit["threadId"] = row.get::<_, Option<String>>(8)?.into();
                 } else if kind == "memory" {
-                    // `layer/name`, an empty layer for the memory every bot shares.
+                    // `layer/name`: an empty layer for the Fleet brain's shared folder, `brain:<id>` for another.
                     let (layer, name) = source.split_once('/').unwrap_or(("", source.as_str()));
                     hit["title"] = name.into();
-                    hit["shared"] = layer.is_empty().into();
+                    hit["layer"] = layer.into();
+                    hit["scope"] = if layer.is_empty() || layer.starts_with("brain:") {
+                        "brain".into()
+                    } else {
+                        "personal".into()
+                    };
+                    hit["shared"] = (layer.is_empty() || layer.starts_with("brain:")).into();
                 } else {
                     hit["title"] = row.get::<_, Option<String>>(6)?.into();
                 }
@@ -748,6 +765,38 @@ mod tests {
         store.db.locked().execute("UPDATE memory_files SET hash = '' WHERE name = 'MEMORY.md'", []).unwrap();
         assert_eq!(store.search("b1", "office key", 10).unwrap(), Vec::<Value>::new());
         assert_eq!(store.search("b2", "office key", 10).unwrap().len(), 0, "no other bot's memory");
+    }
+
+    #[test]
+    fn a_project_brain_is_found_by_its_bots_and_by_no_others() {
+        let store = temp_store();
+        let weather = store.save_brain(None, "Weather").unwrap();
+        let harbor = store.save_brain(None, "Harbor").unwrap();
+        for (id, brain) in [("w1", &weather), ("h1", &harbor), ("lone", &String::new())] {
+            let brain = (!brain.is_empty()).then_some(brain.as_str());
+            store
+                .save_bot(
+                    &serde_json::from_value(
+                        json!({"id": id, "name": id, "brain": brain, "sharedMemory": brain.is_none()}),
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+        let now = super::super::now_ms();
+        memory(&store, Some(&format!("brain:{weather}")), "forecast.md", "the glass falls before a gale", now);
+        memory(&store, Some(&format!("brain:{harbor}")), "mooring.md", "the east mooring is ours", now + 1);
+
+        let hits = store.search("w1", "gale", 10).unwrap();
+        assert_eq!(hits.len(), 1, "its brain's memory");
+        assert_eq!(hits[0]["scope"], "brain");
+        assert_eq!(hits[0]["layer"], format!("brain:{weather}"));
+        assert!(store.search("h1", "gale", 10).unwrap().is_empty(), "another project's brain stays apart");
+        assert_eq!(store.search("h1", "mooring", 10).unwrap().len(), 1);
+        assert!(
+            store.search("lone", "gale", 10).unwrap().is_empty(),
+            "a bot in the Fleet brain doesn't read a project's"
+        );
     }
 
     #[test]

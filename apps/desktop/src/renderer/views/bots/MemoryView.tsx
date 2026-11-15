@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CardSection, IconButton, Switch, TabChoice } from '../../components/Controls'
+import { CardSection, Button, IconButton, Switch, TabChoice } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Sheet } from '../../components/Overlay'
 import { HStack } from '../../components/Stack'
@@ -12,6 +12,7 @@ import { MemoryStore, authorLabel, type MemoryEntry } from '../../store/memory-s
 import { FormSheet } from '../marketplace/pieces'
 import { relativeTime } from '../thread/chat-items'
 import { BeliefsSection } from './BeliefsSection'
+import { MemoryBrainSheet } from './MemoryBrains'
 import { MemoryInfoSheet, dreamsInfo, harnessInfo } from './MemoryInfoSheet'
 import { type FileTarget, MemoryFileSheet, fileRows } from './MemoryFiles'
 import './memory.css'
@@ -30,8 +31,9 @@ export function MemoryCard({ botId }: { botId: string }) {
   const [section, setSection] = useState<Section>('bot')
   const [file, setFile] = useState<FileTarget | null>(null)
   const [info, setInfo] = useState<Info | null>(null)
+  const [brainOpen, setBrainOpen] = useState(false)
   // Memory changes anywhere move the bot's `memoryRev`: fetch again.
-  useEffect(() => { void memory.load() }, [memory, bot?.memoryRev, bot?.sharedMemory, bot?.harnessMemory])
+  useEffect(() => { void memory.load() }, [memory, bot?.memoryRev, bot?.sharedMemory, bot?.brain?.id, bot?.harnessMemory])
 
   const view = memory.view
   // Claude Code's section goes when its memory is turned off (on another device too).
@@ -39,10 +41,12 @@ export function MemoryCard({ botId }: { botId: string }) {
   const harness = host.backendName(bot?.backend ?? 'claude')
   const own = tr("{name}'s own memory").replaceAll('{name}', harness)
   const sections: { id: Section; label: string }[] = [
-    { id: 'yours', label: 'About you' }, { id: 'bot', label: 'This bot' }, { id: 'beliefs', label: 'What I know' }, { id: 'dreams', label: 'Dreams' },
+    // The brain the bot works in names its section; the Fleet one is what all bots share.
+    { id: 'yours', label: view?.brain && !view.brain.shared ? view.brain.name : 'About you' },
+    { id: 'bot', label: 'This bot' }, { id: 'beliefs', label: 'What I know' }, { id: 'dreams', label: 'Dreams' },
     ...(view?.projectMemory ? [{ id: 'harness' as const, label: harness }] : []),
   ]
-  const layer = section === 'yours' ? view?.yours : section === 'bot' ? view?.bot : undefined
+  const layer = section === 'yours' ? view?.yours ?? undefined : section === 'bot' ? view?.bot : undefined
 
   return <>
     <div className="memory-panel">
@@ -54,9 +58,20 @@ export function MemoryCard({ botId }: { botId: string }) {
       <CardSection>
         {memory.error && <p role="alert" className="memory-error">{memory.error}</p>}
         {!view && !memory.error && <p className="memory-muted">Loading memory…</p>}
-        {view && bot && section === 'yours' && <Switch on={bot.sharedMemory} onChange={(on) => host.setSharedMemory(bot, on)}>
-          Use what your bots share
-        </Switch>}
+        {view && bot && section === 'yours' && <div className="memory-brain-row">
+          <div>
+            <p className="memory-brain-name">{view.brain ? view.brain.name : tr('No brain')}</p>
+            <p className="memory-muted">{view.brain?.shared
+              ? tr('Shared by your bots.')
+              : view.brain
+                ? tr('Shared by the bots in this brain.')
+                : tr('Only this bot reads it.')}</p>
+            <p className="memory-muted">{tr('{used} of {cap} tokens in all.').replace('{used}', String(view.total.used)).replace('{cap}', String(view.total.cap))}</p>
+          </div>
+          <Button kind="secondary" onClick={() => { setBrainOpen(true); void memory.loadBrains() }}>
+            {view.brain ? tr('Change brain') : tr('Pick a brain')}
+          </Button>
+        </div>}
         {/* The harness's own memory: a switch where Codync can turn it off, "Shared" where every bot on it shares it. */}
         {view && bot && section === 'bot' && (bot.harnessMemory !== null || bot.harnessMemoryShared) && <HStack gap={4}>
           <span>{own}</span>
@@ -67,12 +82,12 @@ export function MemoryCard({ botId }: { botId: string }) {
         </HStack>}
         {layer && [
           <p key="note" className="memory-muted">{tr(section === 'yours'
-            ? 'Your name, time zone, people and lasting preferences, shared by your bots. {used} of {cap} in use. To change it, tell the bot.'
+            ? 'Your name, time zone, people and lasting preferences, shared with the bots in this brain. {used} of {cap} in use. To change it, tell the bot.'
             : 'What this bot learned about you. {used} of {cap} in use. To change it, tell the bot.')
             .replace('{used}', String(layer.used)).replace('{cap}', String(layer.cap))}</p>,
           ...(layer.entries.length ? [] : [<div key="empty" className="memory-empty">
             <Icon name="brain" size={20} color="var(--tertiary)" />
-            <span>{tr(section === 'yours' ? 'Nothing shared yet.' : 'Nothing yet. What this bot learns about you shows up here.')}</span>
+            <span>{tr(section === 'yours' ? 'Nothing here yet.' : 'Nothing yet. What this bot learns about you shows up here.')}</span>
           </div>]),
           ...layer.entries.map((entry) => <EntryRow key={entry.id} entry={entry} />),
           ...(view?.files ? fileRows(view.files, section === 'yours', setFile, tr) : []),
@@ -103,6 +118,7 @@ export function MemoryCard({ botId }: { botId: string }) {
     <Sheet open={file !== null} onClose={() => setFile(null)} width={640}>
       {file && <MemoryFileSheet memory={memory} target={file} />}
     </Sheet>
+    <MemoryBrainSheet memory={memory} open={brainOpen} onClose={() => setBrainOpen(false)} />
     <FormSheet open={info !== null} onClose={() => setInfo(null)} height={560}>
       {info === 'harness' && <MemoryInfoSheet icon="brain" title={own}
         points={harnessInfo(harness, bot?.harnessMemoryShared ? 'shared' : bot?.backend === 'claude' ? 'readable' : 'hidden', tr)} />}

@@ -108,7 +108,7 @@ impl Actor {
                     "locations": u["locations"].clone(),
                 });
                 merge_tool_content(&mut data, &u["content"]);
-                mark_bookkeeping(&self.cfg, &mut data);
+                mark_bookkeeping(&self.hub.store, &self.cfg, &mut data);
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
@@ -133,7 +133,7 @@ impl Actor {
                     e.data["locations"] = u["locations"].clone();
                 }
                 merge_tool_content(&mut e.data, &u["content"]);
-                mark_bookkeeping(&self.cfg, &mut e.data);
+                mark_bookkeeping(&self.hub.store, &self.cfg, &mut e.data);
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &e.data);
                 let working = (e.data["status"] == "in_progress").then(|| activity(&e.data).to_owned());
                 let status = e.data["status"].as_str().unwrap_or_default().to_owned();

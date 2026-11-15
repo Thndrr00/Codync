@@ -53,7 +53,13 @@ import kotlinx.serialization.json.put
 @Serializable data class MemoryFolder(val files: List<MemoryFile> = emptyList(), val folder: String = "")
 
 /** Both layers' files, with the caps the host marks. */
-@Serializable data class MemoryFiles(val yours: MemoryFolder, val bot: MemoryFolder, val cap: Int = 0, val folderCap: Int = 0)
+@Serializable data class MemoryFiles(
+    /** The brain's folder; null when the bot works in no brain. */
+    val yours: MemoryFolder? = null,
+    val bot: MemoryFolder,
+    val cap: Int = 0,
+    val folderCap: Int = 0,
+)
 
 /** One version of a note: who made it, why, and what it held then. */
 @Serializable data class MemoryFileVersion(
@@ -81,16 +87,22 @@ import kotlinx.serialization.json.put
 
 /** A bot's memory as its screen shows it (CodyncKit `MemoryView`); an older host's reply has no layers and fails to decode. */
 @Serializable data class BotMemory(
-    /** Whether this bot uses what all bots share. */
+    /** Whether this bot uses a brain to share memory (the Fleet one included). */
     val shared: Boolean = false,
-    val yours: MemoryLayer,
+    /** The brain it works in; null when it works in none. */
+    val brain: Brain? = null,
+    /** The brain's memory ("About you" in the Fleet brain, the project's otherwise); null without a brain. */
+    val yours: MemoryLayer? = null,
     val bot: MemoryLayer,
+    /** Tokens used against the two caps together. */
+    val total: Total = Total(),
     val dreams: List<DreamRun> = emptyList(),
     /** Claude Code's own notes for the bot's project folder, read-only. */
     val projectMemory: Project? = null,
     val files: MemoryFiles? = null,
 ) {
     @Serializable data class Project(val path: String, val text: String)
+    @Serializable data class Total(val used: Int = 0, val cap: Int = 0)
 }
 
 /** What the memory editor opens on: an entry, or (`entry` null) a new one in a layer. */

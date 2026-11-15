@@ -18,6 +18,7 @@ pub use notes::{Append, MoveOut, NOTE_CAP};
 use crate::check;
 use crate::evidence;
 use crate::files::{self, FILE_CAP, FOLDER_CAP, Fact, MAIN};
+use crate::layers::{Layers, Scope};
 use crate::store::{self, fingerprint};
 use rusqlite::Connection;
 use serde::Deserialize;
@@ -40,7 +41,7 @@ pub struct Message {
 /// One layer's `MEMORY.md` as a run saw it.
 #[derive(Clone, Debug)]
 pub struct Layer {
-    pub shared: bool,
+    pub scope: Scope,
     /// `None`: there is no file yet.
     pub content: Option<String>,
     pub facts: Vec<Fact>,
@@ -49,11 +50,10 @@ pub struct Layer {
 /// Memory as a run saw it.
 #[derive(Clone, Debug)]
 pub struct Snapshot {
-    pub bot: String,
-    /// Whether this bot uses the shared "yours" layer.
-    pub shared: bool,
-    /// The bot's own `MEMORY.md`, then the shared one when it uses it.
-    pub layers: Vec<Layer>,
+    /// The bot the run is for and the brain it works in.
+    pub layers: Layers,
+    /// Each layer the bot sees, most specific first.
+    pub memory: Vec<Layer>,
     /// The notes the bot sees.
     pub files: Vec<files::File>,
     /// A `MEMORY.md` the bot sees is nine-tenths full, so its lines may move out to notes.
@@ -63,50 +63,53 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    fn layer(&self, shared: bool) -> Option<&Layer> {
-        self.layers.iter().find(|l| l.shared == shared)
+    fn layer(&self, scope: Scope) -> Option<&Layer> {
+        self.memory.iter().find(|l| l.scope == scope)
     }
 
     /// The fact of a layer a change names by its line.
-    fn fact(&self, shared: bool, line: &str) -> Option<&Fact> {
+    fn fact(&self, scope: Scope, line: &str) -> Option<&Fact> {
         let wanted = fingerprint(line);
-        self.layer(shared)?.facts.iter().find(|f| fingerprint(&f.text) == wanted)
+        self.layer(scope)?.facts.iter().find(|f| fingerprint(&f.text) == wanted)
     }
 
     /// A note of a layer, by name.
-    fn note(&self, shared: bool, name: &str) -> Option<&files::File> {
-        let layer = self.layer_bot(shared);
+    fn note(&self, scope: Scope, name: &str) -> Option<&files::File> {
+        let layer = self.layer_key(scope);
         self.files.iter().find(|f| f.name == name && f.bot.as_deref() == layer)
     }
 
-    /// The bot whose folder holds a layer; `None` for the shared one.
-    pub fn layer_bot(&self, shared: bool) -> Option<&str> {
-        (!shared).then_some(self.bot.as_str())
+    /// The key of a layer's folder (`None`: the shared folder, or a scope the bot doesn't see).
+    pub fn layer_key(&self, scope: Scope) -> Option<&str> {
+        self.layers.layer(scope)
+    }
+
+    /// The scope a change goes to: the one it names when the bot sees it, else the bot's own.
+    fn scope(&self, scope: Scope) -> Scope {
+        if self.layers.sees(scope) { scope } else { Scope::Personal }
     }
 
     /// Whether a layer's `MEMORY.md` is nearly full ([`full`]): only then do its lines move out to notes.
-    fn layer_full(&self, shared: bool) -> bool {
-        let content = self.layer(shared).and_then(|l| l.content.as_deref()).unwrap_or_default();
-        full(content, self.layer_bot(shared))
+    fn layer_full(&self, scope: Scope) -> bool {
+        let content = self.layer(scope).and_then(|l| l.content.as_deref()).unwrap_or_default();
+        full(content, self.layer_key(scope))
     }
 }
 
-pub fn snapshot(conn: &Connection, bot: &str, shared: bool, today: &str) -> store::Result<Snapshot> {
-    let mut layers = Vec::new();
-    for (layer, is_shared) in std::iter::once((Some(bot), false)).chain(shared.then_some((None, true))) {
-        let content = files::current(conn, layer, MAIN)?;
-        layers.push(Layer { shared: is_shared, content, facts: files::facts_of(conn, layer)? });
+pub fn snapshot(conn: &Connection, layers: &Layers, today: &str) -> store::Result<Snapshot> {
+    let mut memory = Vec::new();
+    for (scope, layer) in layers.keys() {
+        memory.push(Layer { scope, content: files::current(conn, layer, MAIN)?, facts: files::facts_of(conn, layer)? });
     }
-    let index = files::index(conn, bot, shared)?;
+    let index = files::index(conn, layers)?;
     let mut snapshot = Snapshot {
-        bot: bot.to_owned(),
-        shared,
-        layers,
-        files: index.yours.unwrap_or_default().into_iter().chain(index.bot).collect(),
+        layers: layers.clone(),
+        memory,
+        files: index.bot.into_iter().chain(index.brain.map(|b| b.files).unwrap_or_default()).collect(),
         full: false,
         today: today.to_owned(),
     };
-    snapshot.full = snapshot.layers.iter().any(|l| snapshot.layer_full(l.shared));
+    snapshot.full = snapshot.memory.iter().any(|l| snapshot.layer_full(l.scope));
     Ok(snapshot)
 }
 
@@ -126,18 +129,29 @@ topic and points into its docs: \"moveOut\" moves a topic's detail lines word fo
 is the one short line MEMORY.md keeps for the topic instead, saying what every reply still needs, in the user's \
 language. The host adds \" → \" and the note's path. A line already ending in \"→ path\" points to a note: don't \
 move it; give a new summary for its note when the moved lines change what it should say.",
-    ", \"moveOut\": [{\"line\": \"...\", \"shared\": false, \"file\": \"health/allergies.md\", \"description\": \"...\", \"summary\": \"...\"}]",
+    ", \"moveOut\": [{\"line\": \"...\", \"scope\": \"personal\", \"file\": \"health/allergies.md\", \"description\": \"...\", \"summary\": \"...\"}]",
 ];
+
+/// What the prompt says about `scope`, which picks the layer a change goes to.
+fn scopes(snapshot: &Snapshot) -> String {
+    match &snapshot.layers.brain {
+        Some(brain) if brain.layer.is_none() => "\"scope\": \"personal\" is this bot's own memory (how to work \
+             with the user here, commitments made to this bot); \"brain\" is the brain's, the memory every bot \
+             shares (name, time zone, language, important people, lasting preferences)."
+            .to_owned(),
+        Some(brain) => format!(
+            "\"scope\": \"personal\" is this bot's own memory (how to work with the user here, commitments made \
+             to this bot); \"brain\" is the brain's, \"{}\", shared with the other bots working in it (the \
+             project, its people, decisions, how it is built and shipped).",
+            brain.name
+        ),
+        None => "Always set \"scope\": \"personal\".".to_owned(),
+    }
+}
 
 /// The model's job: a system prompt and the material.
 pub fn prompt(snapshot: &Snapshot, messages: &[Message]) -> (String, String) {
-    let shared = if snapshot.shared {
-        "\"shared\": true is the memory all the user's bots share (name, time zone, language, important people, \
-         lasting preferences); false is this bot's own (how to work with the user here, commitments made to this \
-         bot)."
-    } else {
-        "Always set \"shared\": false."
-    };
+    let scopes = scopes(snapshot);
     let [user_moves, move_out, move_shape] = if snapshot.full { TIDY } else { [""; 3] };
     let system = format!(
         "You keep the memory a personal assistant bot has of its user. Read the latest conversations and decide \
@@ -160,7 +174,7 @@ relative dates into absolute ones.
 - Never remove lines written by the user.{user_moves}
 - If a line describes something in the future whose date has passed, put it in \"review\" with the line rewritten \
 in the past tense.
-- {shared}
+- {scopes}
 - Detail that matters only when its topic comes up (a person's story, a health history, a trip's plan) goes in \
 \"append\": one line for a note, cited like an add. Name notes by topic, lowercase-with-dashes.md, in a topic \
 folder when one fits (health/allergies.md); a new one needs a \"description\" saying when to read it. Prefer a \
@@ -169,23 +183,27 @@ takes no more lines, so start another in its topic folder.{move_out}
 - At most {MAX_CHANGES} changes. If nothing should change, output empty lists.
 
 Output only one JSON object:
-{{\"add\": [{{\"text\": \"...\", \"shared\": false, \"quote\": \"...\", \"message\": \"m3\"}}], \
-\"remove\": [{{\"line\": \"...\", \"shared\": false, \"quote\": \"...\", \"message\": \"m4\"}}], \
-\"review\": [{{\"line\": \"...\", \"shared\": false, \"text\": \"...\"}}], \
-\"append\": [{{\"file\": \"people.md\", \"shared\": false, \"text\": \"...\", \"quote\": \"...\", \"message\": \"m5\", \"description\": \"...\"}}]{move_shape}}}",
+{{\"add\": [{{\"text\": \"...\", \"scope\": \"personal\", \"quote\": \"...\", \"message\": \"m3\"}}], \
+\"remove\": [{{\"line\": \"...\", \"scope\": \"personal\", \"quote\": \"...\", \"message\": \"m4\"}}], \
+\"review\": [{{\"line\": \"...\", \"scope\": \"personal\", \"text\": \"...\"}}], \
+\"append\": [{{\"file\": \"people.md\", \"scope\": \"personal\", \"text\": \"...\", \"quote\": \"...\", \"message\": \"m5\", \"description\": \"...\"}}]{move_shape}}}",
         today = snapshot.today,
     );
     // Each line as the file has it, grouped under labels: a change names a line by its text, so a label on the line
     // would come back in the model's copy and match nothing.
     let memory: Vec<String> = snapshot
-        .layers
+        .memory
         .iter()
         .flat_map(|layer| {
-            let nearly = if snapshot.layer_full(layer.shared) { ", nearly full" } else { "" };
-            let where_ = if layer.shared {
-                format!("Shared (\"shared\": true{nearly})")
-            } else {
-                format!("This bot's (\"shared\": false{nearly})")
+            let nearly = if snapshot.layer_full(layer.scope) { ", nearly full" } else { "" };
+            let where_ = match (&layer.scope, &snapshot.layers.brain) {
+                (Scope::Brain, Some(brain)) if brain.layer.is_none() => {
+                    format!("Shared with the user's other bots (\"scope\": \"brain\"{nearly})")
+                }
+                (Scope::Brain, Some(brain)) => {
+                    format!("The brain \"{}\" (\"scope\": \"brain\"{nearly})", brain.name)
+                }
+                _ => format!("This bot's (\"scope\": \"personal\"{nearly})"),
             };
             [(true, "written by the user"), (false, "the rest")].into_iter().filter_map(move |(users, who)| {
                 let lines: Vec<String> = layer
@@ -206,7 +224,7 @@ Output only one JSON object:
             .files
             .iter()
             .map(|f| {
-                let layer = if f.bot.is_none() { "shared" } else { "this bot" };
+                let layer = snapshot.layers.scope_of(f.bot.as_deref()).map_or("this bot", |scope| scope.name());
                 let about = f.description.as_deref().unwrap_or("no description");
                 format!("- {} ({layer}, {} tokens): {about}", f.name, f.tokens)
             })
@@ -249,7 +267,7 @@ pub struct Plan {
 pub struct Add {
     pub text: String,
     #[serde(default)]
-    pub shared: bool,
+    pub scope: Scope,
     #[serde(default)]
     pub quote: String,
     #[serde(default)]
@@ -261,7 +279,7 @@ pub struct Add {
 pub struct Remove {
     pub line: String,
     #[serde(default)]
-    pub shared: bool,
+    pub scope: Scope,
     #[serde(default)]
     pub quote: String,
     #[serde(default)]
@@ -273,7 +291,7 @@ pub struct Remove {
 pub struct Review {
     pub line: String,
     #[serde(default)]
-    pub shared: bool,
+    pub scope: Scope,
     pub text: String,
 }
 
@@ -298,8 +316,8 @@ pub fn parse(raw: &str) -> Option<Plan> {
 pub fn audit(snapshot: &Snapshot, messages: &[Message], plan: Plan) -> (Plan, Vec<String>) {
     let mut rejected = Vec::new();
     let cited = |quote: &str, label: &str| cite(messages, quote, label);
-    let changeable = |shared: bool, line: &str| -> Result<&Fact, &'static str> {
-        let fact = snapshot.fact(shared && snapshot.shared, line).ok_or("no such line in MEMORY.md")?;
+    let changeable = |scope: Scope, line: &str| -> Result<&Fact, &'static str> {
+        let fact = snapshot.fact(scope, line).ok_or("no such line in MEMORY.md")?;
         if fact.author.is_users() {
             return Err("the user wrote it");
         }
@@ -312,23 +330,23 @@ pub fn audit(snapshot: &Snapshot, messages: &[Message], plan: Plan) -> (Plan, Ve
             check::text(&add.text).map_err(check::Refusal::message).and_then(|()| cited(&add.quote, &add.message));
         match verdict {
             Ok(_) => {
-                add.shared &= snapshot.shared;
+                add.scope = snapshot.scope(add.scope);
                 kept.add.push(add);
             }
             Err(why) => rejected.push(format!("add \"{}\": {why}", add.text)),
         }
     }
     for mut remove in plan.remove {
-        match changeable(remove.shared, &remove.line).and_then(|_| cited(&remove.quote, &remove.message)) {
+        match changeable(remove.scope, &remove.line).and_then(|_| cited(&remove.quote, &remove.message)) {
             Ok(_) => {
-                remove.shared &= snapshot.shared;
+                remove.scope = snapshot.scope(remove.scope);
                 kept.remove.push(remove);
             }
             Err(why) => rejected.push(format!("remove \"{}\": {why}", remove.line)),
         }
     }
     for mut review in plan.review {
-        let verdict = changeable(review.shared, &review.line).and_then(|fact| {
+        let verdict = changeable(review.scope, &review.line).and_then(|fact| {
             if !fact.text.chars().any(|c| c.is_ascii_digit() || "年月日號号週周".contains(c)) {
                 return Err("the line holds no date");
             }
@@ -336,7 +354,7 @@ pub fn audit(snapshot: &Snapshot, messages: &[Message], plan: Plan) -> (Plan, Ve
         });
         match verdict {
             Ok(()) => {
-                review.shared &= snapshot.shared;
+                review.scope = snapshot.scope(review.scope);
                 kept.review.push(review);
             }
             Err(why) => rejected.push(format!("review \"{}\": {why}", review.line)),
@@ -357,7 +375,7 @@ pub fn audit(snapshot: &Snapshot, messages: &[Message], plan: Plan) -> (Plan, Ve
     kept.move_out.truncate(take(kept.move_out.len()));
 
     // A move keeps the line, in its note, so only removals and rewrites count.
-    let facts: usize = snapshot.layers.iter().map(|l| l.facts.len()).sum();
+    let facts: usize = snapshot.memory.iter().map(|l| l.facts.len()).sum();
     let removing = kept.remove.len() + kept.review.len();
     if removing > (facts / 4).max(1) {
         rejected.push(format!("the run would take out {removing} of {facts} lines, more than a quarter"));

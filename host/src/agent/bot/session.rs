@@ -104,7 +104,7 @@ impl Actor {
             params["sessionId"] = sid.into();
         }
         if self.conn.as_ref().is_some_and(|c| c.sessions.additional_directories) {
-            params["additionalDirectories"] = json!(memory::files::folders(&self.cfg));
+            params["additionalDirectories"] = json!(memory::files::folders(&self.hub.store, &self.cfg));
         }
         params
     }

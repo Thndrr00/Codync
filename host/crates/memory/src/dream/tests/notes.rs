@@ -2,6 +2,7 @@
 //! pointing to its note.
 
 use super::*;
+use crate::layers::{Brain, Layers, Scope};
 
 /// A long line, so nine of them nearly fill bot `a`'s MEMORY.md.
 fn filler(i: usize) -> String {
@@ -12,7 +13,7 @@ fn filler(i: usize) -> String {
 fn move_out(line: &str, file: &str, description: &str, summary: &str) -> MoveOut {
     MoveOut {
         line: line.into(),
-        shared: false,
+        scope: Scope::Personal,
         file: file.into(),
         description: description.into(),
         summary: summary.into(),
@@ -26,13 +27,13 @@ fn notes_cite_the_user_and_lines_move_out_only_when_full() {
     let messages = [user("u1", "Mei started piano lessons on Tuesdays")];
     let append = |file: &str, description: &str| Append {
         file: file.into(),
-        shared: true,
+        scope: Scope::Brain,
         text: "Mei has piano lessons on Tuesdays".into(),
         quote: "Mei started piano lessons".into(),
         message: "m1".into(),
         description: description.into(),
     };
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let plan = Plan {
         append: vec![
             append("people.md", "The user's family"),
@@ -45,7 +46,7 @@ fn notes_cite_the_user_and_lines_move_out_only_when_full() {
     };
     let (kept, rejected) = audit(&snapshot, &messages, plan);
     assert_eq!(kept.append.len(), 1);
-    assert!(!kept.append[0].shared, "a bot without the shared layer keeps notes to itself");
+    assert_eq!(kept.append[0].scope, Scope::Personal, "a bot without a brain keeps notes to itself");
     assert_eq!(rejected.iter().filter(|r| r.contains("lowercase")).count(), 2, "{rejected:?}");
     assert!(rejected.iter().any(|r| r.contains("description")) && rejected.iter().any(|r| r.contains("isn't full")));
 
@@ -53,7 +54,7 @@ fn notes_cite_the_user_and_lines_move_out_only_when_full() {
     assert_eq!(
         edits.files,
         [Edit {
-            bot: Some("a".into()),
+            layer: Some("a".into()),
             name: "people.md".into(),
             before: None,
             after: "---\ndescription: The user's family\n---\n- Mei has piano lessons on Tuesdays\n".into(),
@@ -70,7 +71,7 @@ fn a_full_memory_moves_detail_out_and_the_log_keeps_the_run() {
         content.push_str(&next);
     }
     seed(&conn, Author::Bot, &content);
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     assert!(snapshot.full);
     let line = "Filler fact number 0 about the user's week";
     let plan = Plan { move_out: vec![move_out(line, "week.md", "The user's week", "")], ..Plan::default() };
@@ -86,7 +87,7 @@ fn a_full_memory_moves_detail_out_and_the_log_keeps_the_run() {
     // A note that can't take the line leaves it in MEMORY.md.
     let crowded = format!("---\ndescription: The user's week\n---\n{}", "字".repeat(FILE_CAP - 10));
     write(&conn, Some("a"), Author::Bot, "week.md", &crowded);
-    let crowded_snapshot = super::snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let crowded_snapshot = super::snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let (kept, _) = audit(&crowded_snapshot, &[], kept);
     let (stuck, rejected) = super::edits(&conn, &crowded_snapshot, &kept, &[]).unwrap();
     assert!(stuck.files.is_empty() && stuck.removed.is_empty(), "{stuck:?}");
@@ -115,7 +116,7 @@ fn a_full_memory_moves_detail_out_and_the_log_keeps_the_run() {
     assert_eq!(logged.archived[0].text, line);
     assert_eq!(
         logged.files,
-        [FileChange { name: "week.md".into(), shared: false, version: note.id }],
+        [FileChange { name: "week.md".into(), scope: Scope::Personal, version: note.id }],
         "MEMORY.md shows as lines"
     );
     assert_eq!(recent(&conn, "a", 5).unwrap(), [logged]);
@@ -130,8 +131,8 @@ fn a_full_memory_tidies_into_topic_folders_even_the_users_lines() {
     let conn = db();
     seed(&conn, Author::User, &lines([filler(0)]));
     seed(&conn, Author::Bot, &lines((0..9).map(filler)));
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
-    assert!(snapshot.full && snapshot.layer_full(false));
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
+    assert!(snapshot.full && snapshot.layer_full(Scope::Personal));
     assert!(prompt(&snapshot, &[]).0.contains("their lines move too"), "a move isn't a removal to the model");
     // The new note is described once, on the first line sent there.
     let into = |i, summary: &str| {
@@ -160,7 +161,7 @@ fn a_topic_keeps_one_line_pointing_to_its_note() {
     let content = lines(std::iter::once(pointing.to_owned()).chain((0..9).map(filler)));
     let conn = db();
     seed(&conn, Author::Bot, &content);
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let into = |line: &str, summary: &str| Plan {
         move_out: vec![move_out(line, "health/allergies.md", "The user's allergies", summary)],
         ..Plan::default()
@@ -188,7 +189,7 @@ fn a_topic_keeps_one_line_pointing_to_its_note() {
     let conn = db();
     seed(&conn, Author::User, &lines([pointing.to_owned()]));
     seed(&conn, Author::Bot, &content);
-    let snapshot = super::snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = super::snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let (kept, _) = audit(&snapshot, &[], renewed);
     let (theirs, _) = edits(&conn, &snapshot, &kept, &[]).unwrap();
     assert!(main_after(&theirs).starts_with(&format!("- {pointing}\n")) && theirs.added.is_empty(), "{theirs:?}");
@@ -199,7 +200,7 @@ fn a_topic_keeps_one_line_pointing_to_its_note() {
     seed(&conn, Author::Bot, &lines((0..10).map(filler)));
     store::bury(&conn, Some("a"), [pointing], []).unwrap();
     for run in 0..2 {
-        let snapshot = super::snapshot(&conn, "a", false, "2026-10-17").unwrap();
+        let snapshot = super::snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
         let (kept, _) = audit(&snapshot, &[], into(&filler(run), "Allergic to peanuts"));
         let (tidied, _) = edits(&conn, &snapshot, &kept, &[]).unwrap();
         let main = main_after(&tidied);
@@ -219,7 +220,7 @@ fn without_a_summary_a_pointer_says_what_its_note_is_about() {
         "health/allergies.md",
         "---\ndescription: The user's allergies\n---\n- Peanuts\n",
     );
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let pointer_to = |file: &str, description: &str| {
         let plan = Plan { move_out: vec![move_out(&filler(0), file, description, "")], ..Plan::default() };
         let (kept, rejected) = audit(&snapshot, &[], plan);
@@ -242,7 +243,7 @@ fn a_pointer_memory_md_has_no_room_for_costs_the_run_nothing_else() {
         (0..cap).map(|n| format!("{base}- {}\n", "字".repeat(n))).find(|c| crate::tokens::estimate(c) >= cap).unwrap();
     assert_eq!(crate::tokens::estimate(&content), cap, "MEMORY.md is exactly full");
     seed(&conn, Author::Bot, &content);
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let messages = [user("u1", "I have a cat now")];
     let plan = Plan {
         add: vec![add("Has a cat", "I have a cat", "m1")],
@@ -271,13 +272,13 @@ fn a_line_memory_md_keeps_doesnt_go_into_a_note_too() {
         content.push_str(&lines([format!("Filler fact number {} about the user's week", content.lines().count())]));
     }
     seed(&conn, Author::Bot, &content);
-    let snapshot = snapshot(&conn, "a", false, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::of("a"), "2026-10-17").unwrap();
     let line = "Filler fact number 1 about the user's week";
     let plan = Plan {
         // The rewrite grows the file, already over its cap, by more than the move takes out of it.
         review: vec![Review {
             line: "Trip on 2026-10-01".into(),
-            shared: false,
+            scope: Scope::Personal,
             text: "Went on a long trip on 2026-10-01 with the whole family, to the mountains and the sea and back"
                 .into(),
         }],
@@ -296,16 +297,20 @@ fn only_the_layer_that_is_nearly_full_gets_tidied() {
     let conn = db();
     seed(&conn, Author::Bot, &lines((0..9).map(filler)));
     write(&conn, None, Author::User, MAIN, "- Lives in Taipei\n");
-    let snapshot = snapshot(&conn, "a", true, "2026-10-17").unwrap();
+    let snapshot = snapshot(&conn, &Layers::with_brain("a", Brain::fleet("fleet", "Fleet")), "2026-10-17").unwrap();
     assert!(snapshot.full, "this bot's own MEMORY.md is nearly full");
     let (system, material) = prompt(&snapshot, &[]);
     assert!(system.contains("Tidy each MEMORY.md shown as nearly full"), "{system}");
-    assert!(material.contains("This bot's (\"shared\": false, nearly full)"), "{material}");
-    assert!(material.contains("Shared (\"shared\": true)"), "only the full layer is marked: {material}");
-    let from_shared = MoveOut { shared: true, ..move_out("Lives in Taipei", "home.md", "Where the user lives", "") };
+    assert!(material.contains("This bot's (\"scope\": \"personal\", nearly full)"), "{material}");
+    assert!(
+        material.contains("Shared with the user's other bots (\"scope\": \"brain\")"),
+        "only the full layer is marked: {material}"
+    );
+    let from_shared =
+        MoveOut { scope: Scope::Brain, ..move_out("Lives in Taipei", "home.md", "Where the user lives", "") };
     let own = move_out(&filler(0), "week.md", "The user's week", "");
     let (kept, rejected) = audit(&snapshot, &[], Plan { move_out: vec![from_shared, own], ..Plan::default() });
     assert_eq!(kept.move_out.len(), 1, "{rejected:?}");
-    assert!(!kept.move_out[0].shared, "the bot's own full layer is tidied");
+    assert_eq!(kept.move_out[0].scope, Scope::Personal, "the bot's own full layer is tidied");
     assert!(rejected[0].contains("Lives in Taipei") && rejected[0].contains("isn't full"), "{rejected:?}");
 }

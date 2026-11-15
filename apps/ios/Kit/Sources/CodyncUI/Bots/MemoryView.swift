@@ -10,6 +10,7 @@ struct MemoryCard: View {
     @State private var memory: MemoryStore?
     @State private var section: Section = .bot
     @State private var info: Info?
+    @State private var brainOpen = false
     /// Entries and dreams showing all their lines.
     @State private var unfolded: Set<Fold> = []
 
@@ -44,7 +45,7 @@ struct MemoryCard: View {
         }
         .tracked(.screenViewed(.memory))
         // Memory changes anywhere move the bot's `memoryRev`: fetch again.
-        .task(id: "\(botId)-\(bot?.memoryRev ?? 0)-\(bot?.sharedMemory ?? false)-\(bot?.harnessMemory ?? false)") {
+        .task(id: "\(botId)-\(bot?.memoryRev ?? 0)-\(bot?.sharedMemory ?? false)-\(bot?.brain?.id ?? "")-\(bot?.harnessMemory ?? false)") {
             let store = memory ?? MemoryStore(botId: botId) { try await host.ready() }
             memory = store
             await store.load()
@@ -63,6 +64,9 @@ struct MemoryCard: View {
             case .dreams: MemoryInfoSheet.dreams
             }
         }
+        .codyncSheet(isPresented: $brainOpen) {
+            if let memory { BrainSheet(memory: memory) }
+        }
     }
 
     @ViewBuilder private func contents(_ memory: MemoryStore) -> some View {
@@ -79,21 +83,88 @@ struct MemoryCard: View {
     }
 
     private func sections(_ view: MemoryView?) -> [(id: Section, label: String)] {
-        [(Section.yours, "About you"), (.bot, "This bot"), (.dreams, "Dreams")]
+        // The brain the bot works in names its section; the Fleet one is what all bots share.
+        [((.yours), view?.brain.map { $0.shared ? "About you" : $0.name } ?? "About you"),
+         (.bot, "This bot"), (.dreams, "Dreams")]
             + (view?.projectMemory != nil ? [(.harness, host.backendName(bot?.backend ?? "claude"))] : [])
     }
 
     @ViewBuilder private func layer(_ memory: MemoryStore, view: MemoryView) -> some View {
         let shared = section == .yours
-        let layer = shared ? view.yours : view.bot
-        if shared, let bot {
-            Toggle(isOn: Binding(get: { bot.sharedMemory ?? view.shared }, set: { host.setSharedMemory(bot, $0) })) {
-                Text(L10n.tr("Use what your bots share"))
+        // Without a brain the bot keeps its own memory only, and can be given one.
+        if shared, view.yours == nil { noBrain() }
+        if let layer = shared ? view.yours : view.bot {
+            if shared, let brain = view.brain {
+                brainRow(brain, total: view.total)
             }
-                .toggleStyle(.codync)
+            if shared {
+                Text(L10n.tr("Your name, time zone, people and lasting preferences, shared with the bots in this brain. {used} of {cap} in use. To change it, tell the bot.")
+                    .replacingOccurrences(of: "{used}", with: "\(layer.used)")
+                    .replacingOccurrences(of: "{cap}", with: "\(layer.cap)"))
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                harnessSwitch(bot)
+                Text(L10n.tr("What this bot learned about you. {used} of {cap} in use. To change it, tell the bot.")
+                    .replacingOccurrences(of: "{used}", with: "\(layer.used)")
+                    .replacingOccurrences(of: "{cap}", with: "\(layer.cap)"))
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if layer.entries.isEmpty {
+                empty("brain", shared ? "Nothing here yet." : "Nothing yet. What this bot learns about you shows up here.")
+            }
+            ForEach(layer.entries) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if entry.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Palette.secondary) }
+                        Text(entry.text).foregroundStyle(entry.archived ? Palette.tertiary : Palette.text).lineLimit(lines(.entry(entry.id)))
+                    }
+                    Text("\(author(entry)) · \(Date(milliseconds: entry.updatedAt).formatted(.relative(presentation: .named)))\(entry.archived ? " · archived" : "")")
+                        .font(.caption).foregroundStyle(Palette.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { unfold(.entry(entry.id)) }
+                .padding(.vertical, 6)
+            }
+            if let files = view.files { MemoryFilesList(memory: memory, files: files, shared: shared) }
         }
-        // The harness's own memory: a switch where Codync can turn it off, "Shared" where every bot on it shares it.
-        if !shared, let bot, bot.harnessMemory != nil || bot.harnessMemoryShared == true {
+    }
+
+    /// The brain the bot works in, over its memory.
+    private func brainRow(_ brain: Brain, total: MemoryView.Total) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(brain.name).fontWeight(.semibold)
+                Text(L10n.tr(brain.shared ? "Shared by your bots." : "Shared by the bots in this brain."))
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+                Text(L10n.tr("{used} of {cap} tokens in all.")
+                    .replacingOccurrences(of: "{used}", with: "\(total.used)")
+                    .replacingOccurrences(of: "{cap}", with: "\(total.cap)"))
+                    .font(.footnote).foregroundStyle(Palette.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Change brain") { withAnimation(Motion.layout) { brainOpen = true } }
+                .buttonStyle(.secondary)
+        }
+        .padding(.bottom, 4)
+    }
+
+    /// No brain at all: the bot only holds its own memory, and can be given one.
+    @ViewBuilder private func noBrain() -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(L10n.tr("Only this bot reads it. Pick a brain to share what it knows with other bots."))
+                .font(.footnote).foregroundStyle(Palette.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Pick a brain") { withAnimation(Motion.layout) { brainOpen = true } }
+                .buttonStyle(.secondary)
+        }
+    }
+
+    /// The harness's own memory: a switch where Codync can turn it off, "Shared" where every bot on it shares it.
+    @ViewBuilder private func harnessSwitch(_ bot: Bot?) -> some View {
+        if let bot, bot.harnessMemory != nil || bot.harnessMemoryShared == true {
             let name = host.backendName(bot.backend)
             let own = L10n.tr("{name}'s own memory").replacingOccurrences(of: "{name}", with: name)
             HStack(spacing: 4) {
@@ -111,31 +182,6 @@ struct MemoryCard: View {
                 }
             }
         }
-        Text(L10n.tr(shared
-                     ? "Your name, time zone, people and lasting preferences, shared by your bots. {used} of {cap} in use. To change it, tell the bot."
-                     : "What this bot learned about you. {used} of {cap} in use. To change it, tell the bot.")
-            .replacingOccurrences(of: "{used}", with: "\(layer.used)")
-            .replacingOccurrences(of: "{cap}", with: "\(layer.cap)"))
-            .font(.footnote).foregroundStyle(Palette.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        if layer.entries.isEmpty {
-            empty("brain", shared ? "Nothing shared yet." : "Nothing yet. What this bot learns about you shows up here.")
-        }
-        ForEach(layer.entries) { entry in
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if entry.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(Palette.secondary) }
-                    Text(entry.text).foregroundStyle(entry.archived ? Palette.tertiary : Palette.text).lineLimit(lines(.entry(entry.id)))
-                }
-                Text("\(author(entry)) · \(Date(milliseconds: entry.updatedAt).formatted(.relative(presentation: .named)))\(entry.archived ? " · archived" : "")")
-                    .font(.caption).foregroundStyle(Palette.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture { unfold(.entry(entry.id)) }
-            .padding(.vertical, 6)
-        }
-        if let files = view.files { MemoryFilesList(memory: memory, files: files, shared: shared) }
     }
 
     /// What dreaming did.

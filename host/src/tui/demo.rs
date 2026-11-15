@@ -97,6 +97,10 @@ pub fn answer(method: &str, now: i64) -> Result<Value, String> {
             "triggers": [], "enabled": true, "createdAt": now - 86_400_000, "updatedAt": now - 3_600_000,
             "triggerDescriptions": ["Every weekday at 9:00"], "nextRunAt": now + 12 * 3_600_000, "timeoutSeconds": 600, "lastError": null,
         }], "runs": []})),
+        "brains" => Ok(json!({"brains": [
+            {"id": "fleet", "name": "Fleet", "shared": true, "members": ["scout"]},
+            {"id": "demo-brain", "name": "Demo project", "shared": false, "members": []},
+        ]})),
         "usage" | "weekSummary" | "markRead" | "track" | "securityProfiles" | "hostHealth" | "telegramStatus"
         | "slackStatus" | "githubAppStatus" | "skillProposals" | "beliefs" | "memory" => Ok(json!({})),
         _ => Err("Demo mode: nothing is sent or changed. Leave it to use your bots.".to_owned()),

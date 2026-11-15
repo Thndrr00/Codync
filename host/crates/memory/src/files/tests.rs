@@ -1,4 +1,5 @@
 use super::*;
+use crate::layers::{Layers, Scope};
 use crate::store;
 
 const PEOPLE: &str = "---\ndescription: The user's family and friends\n---\n# People\n- Mei: daughter, 6\n";
@@ -131,18 +132,22 @@ fn records_versions_and_indexes_live_notes() {
     );
     assert_eq!(versions(&conn, Some("a"), "trips.md", 10).unwrap().len(), 2);
 
-    let text = index(&conn, "a", true).unwrap().render(|bot| bot.map_or("/s".into(), |b| format!("/b/{b}")));
-    assert!(text.contains("Shared with the user's other bots, in /s:\n- home.md: (no description)"), "{text}");
+    let layers = Layers::with_brain("a", crate::layers::Brain::fleet("fleet", "Fleet"));
+    let text = index(&conn, &layers).unwrap().render(|bot| bot.map_or("/s".into(), |b| format!("/b/{b}")));
     assert!(text.contains("This bot's own, in /b/a:\n- people.md: The user's family and friends ("), "{text}");
+    assert!(text.contains("Shared with the user's other bots, in /s:\n- home.md: (no description)"), "{text}");
     assert!(
         !text.contains("trips.md") && !text.contains("- MEMORY.md"),
         "deleted notes and MEMORY.md aren't listed: {text}"
     );
-    assert!(!index(&conn, "a", false).unwrap().render(|_| String::new()).contains("home.md"));
+    assert!(!index(&conn, &Layers::of("a")).unwrap().render(|_| String::new()).contains("home.md"));
 
-    let hits = search(&conn, "a", true, "TEA", 10).unwrap();
-    assert_eq!(hits, [Hit { bot: Some("a".into()), name: MAIN.into(), line: 1, text: "- Likes tea".into() }]);
-    assert!(search(&conn, "b", false, "mei", 10).unwrap().is_empty(), "another bot's files stay its own");
+    let hits = search(&conn, &layers, "TEA", 10).unwrap();
+    assert_eq!(
+        hits,
+        [Hit { scope: Scope::Personal, bot: Some("a".into()), name: MAIN.into(), line: 1, text: "- Likes tea".into() }]
+    );
+    assert!(search(&conn, &Layers::of("b"), "mei", 10).unwrap().is_empty(), "another bot's files stay its own");
 
     assert_eq!(forget_layer(&conn, Some("a")).unwrap(), [MAIN, "people.md"]);
     assert_eq!(layer(&conn, Some("a")).unwrap(), [] as [File; 0]);
@@ -211,7 +216,7 @@ fn what_the_user_has_a_bot_take_out_is_forgotten_unless_it_moved() {
     let (before, after) = ("- Likes tea\n- Has a dog named Mochi\n", "");
     settle(&conn, Some("a"), MAIN, Some(before), Some(after), true).unwrap();
     assert!(store::forgotten(&conn, Some("a"), "Likes tea").unwrap());
-    assert!(store::spent(&conn, "a", "m1").unwrap(), "and so is the message it was learned from");
+    assert!(store::spent(&conn, &Layers::of("a"), "m1").unwrap(), "and so is the message it was learned from");
     assert!(!store::forgotten(&conn, Some("a"), "Has a dog named Mochi").unwrap(), "it lives on in dog.md");
 
     // Asked for again, it may come back.

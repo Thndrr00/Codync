@@ -22,7 +22,8 @@ public struct MemoryFolder: Decodable, Hashable, Sendable {
 
 /// Both layers' files, with the caps the host marks.
 public struct MemoryFiles: Decodable, Hashable, Sendable {
-    public var yours: MemoryFolder
+    /// The brain's folder; nil when the bot works in no brain.
+    public var yours: MemoryFolder?
     public var bot: MemoryFolder
     /// Tokens one file may hold.
     public var cap: Int

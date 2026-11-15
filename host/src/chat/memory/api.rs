@@ -5,6 +5,7 @@ use crate::hub::Hub;
 use crate::store::BotConfig;
 use anyhow::{Result, anyhow, bail};
 use codync_mem::files::{self as mf, Author, Fact, MAIN};
+use codync_mem::layers::Scope;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -24,14 +25,23 @@ fn dispatch(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
     match method {
         "memory" => view(hub, &bot(hub, str_arg(b, "botId")?)?),
         "memoryFile" => super::file_api::detail(hub, &bot(hub, str_arg(b, "botId")?)?, b),
+        "brains" => super::brains::list(hub),
+        "createBrain" => super::brains::create(hub, b),
+        "renameBrain" => super::brains::rename(hub, b),
+        "joinBrain" => super::brains::join(hub, b),
+        "leaveBrain" => super::brains::leave(hub, b),
+        "deleteBrain" => super::brains::delete(hub, b),
+        "exportBrain" => super::brains::export_file(hub, b),
+        "importBrain" => super::brains::import_file(hub, b),
         _ => bail!("unknown method: {method}"),
     }
 }
 
 fn view(hub: &Hub, cfg: &BotConfig) -> Result<Value> {
     super::files::scan(hub, cfg);
-    let bot = cfg.id.as_str();
-    let layer = |layer: Option<&str>| -> Result<Value> {
+    let layers = super::layers(&hub.store, cfg);
+    let scope = |scope: Scope| -> Result<Value> {
+        let layer = layers.layer(scope);
         let (facts, content) = hub
             .store
             .memory_read(|c| Ok((mf::facts_of(c, layer)?, mf::current(c, layer, MAIN)?.unwrap_or_default())))?;
@@ -41,12 +51,23 @@ fn view(hub: &Hub, cfg: &BotConfig) -> Result<Value> {
             facts.iter().filter(|fact| seen.insert(mf::fact_id(&fact.text))).map(|fact| entry(layer, fact)).collect();
         Ok(json!({"entries": entries, "used": codync_mem::tokens::estimate(&content), "cap": mf::cap(layer)}))
     };
+    let brain =
+        layers.brain.as_ref().map(|brain| json!({"id": brain.id, "name": brain.name, "shared": brain.layer.is_none()}));
+    let yours = if layers.sees(Scope::Brain) { Some(scope(Scope::Brain)?) } else { None };
+    let bot = scope(Scope::Personal)?;
+    let total = json!({
+        "used": bot["used"].as_u64().unwrap_or(0) + yours.as_ref().and_then(|y| y["used"].as_u64()).unwrap_or(0),
+        "cap": mf::cap(layers.layer(Scope::Personal))
+            + if layers.sees(Scope::Brain) { mf::cap(layers.layer(Scope::Brain)) } else { 0 },
+    });
     Ok(json!({
-        "shared": super::shared(cfg),
-        "yours": layer(None)?,
-        "bot": layer(Some(bot))?,
+        "shared": layers.sees(Scope::Brain),
+        "brain": brain,
+        "yours": yours,
+        "bot": bot,
+        "total": total,
         "files": super::file_api::listing(hub, cfg)?,
-        "dreams": hub.store.memory_read(|c| codync_mem::dream::recent(c, bot, DREAMS_SHOWN))?,
+        "dreams": hub.store.memory_read(|c| codync_mem::dream::recent(c, cfg.id.as_str(), DREAMS_SHOWN))?,
         "projectMemory": project_memory(cfg),
         "memoryRev": hub.store.memory_rev(),
     }))

@@ -123,6 +123,11 @@ pub enum ConfirmAct {
     /// Keeps a bot's harness's own memory on beside Codync's.
     KeepHarnessMemory(String),
     DeleteRoutine(String, String),
+    /// Deletes the brain `id` from the memory sheet of `bot`: its bots go back to the Fleet brain.
+    DeleteBrain {
+        bot: String,
+        id: String,
+    },
     RotateRoutineKey(String, String),
     RemoveConnector(String),
     RemoveSkill(String),

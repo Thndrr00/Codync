@@ -7,6 +7,16 @@ released version's section; a version without one gets the PRs' "What's New: And
 else a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.52.0
+
+### zh-Hant
+- Bot 現在能在一個「大腦」裡工作：同一個專案的 Bot 共享的記憶，不會混到別的專案。
+- 在記憶頁最上方選大腦、建立、改名、刪除，或把一個大腦存成檔案帶到另一台電腦。
+
+### en-US
+- A bot can now work in a brain: memory a project's bots share, kept apart from every other project.
+- Pick a brain over the memory screen, create, rename or delete one, or save one to a file for another computer.
+
 ## 2.51.0
 
 ### zh-Hant

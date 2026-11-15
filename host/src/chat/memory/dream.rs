@@ -7,6 +7,7 @@ use crate::store::{BotConfig, Entry, EntryKind, Store};
 use anyhow::{Result, anyhow};
 use codync_mem::dream::{self, Edits, Message};
 use codync_mem::files::{self as mf, Author, Cause, Fact, MAIN};
+use codync_mem::layers::Scope;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -170,8 +171,8 @@ fn review_due(store: &Store, bot: &str) -> bool {
 /// When a MEMORY.md the bot sees is nearly full, and changed since a run last saw it so.
 fn tidy_due(store: &Store, bot: &str) -> bool {
     let Some(cfg) = store.bot(bot).ok().flatten().filter(|b| !b.deleted).map(|b| b.config) else { return false };
-    super::files::layers(&cfg).iter().any(|layer| {
-        let layer = layer.as_deref();
+    let layers = super::files::layers(store, &cfg);
+    layers.keys().any(|(_, layer)| {
         let content = store.memory_read(|c| mf::current(c, layer, MAIN)).ok().flatten().unwrap_or_default();
         untidied(store, layer, &content)
     })
@@ -202,8 +203,8 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
     if crate::usage::near_limit(hub, &cfg.backend) {
         return Ok(Ran::Later);
     }
-    let shared = super::shared(&cfg);
-    let _turn = if shared { Some(SHARED.lock().await) } else { None };
+    let layers = super::layers(&hub.store, &cfg);
+    let _turn = if layers.sees(Scope::Brain) { Some(SHARED.lock().await) } else { None };
     let after = bookmark(&hub.store, bot_id);
     let entries = hub.store.conversation_since(bot_id, after, READ_LIMIT)?;
     let read = within_batch(&entries);
@@ -221,7 +222,7 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
 
     let (h, c) = (hub.clone(), cfg.clone());
     tokio::task::spawn_blocking(move || super::files::scan(&h, &c)).await?;
-    let snapshot = hub.store.memory_read(|c| dream::snapshot(c, bot_id, shared, &today))?;
+    let snapshot = hub.store.memory_read(|c| dream::snapshot(c, &layers, &today))?;
     let (system, material) = dream::prompt(&snapshot, &messages);
     let raw = oneshot::one_shot(hub, &cfg, &system, &material).await?;
     let plan = dream::parse(&raw).ok_or_else(|| anyhow!("dreaming answered without a plan"))?;
@@ -242,8 +243,8 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
         hub.store.kv_set(&reviewed_key(bot_id), &today)?;
     }
     // A run that moved lines out changed MEMORY.md, so the next one tidies on; one that moved none waits for a change.
-    for layer in &snapshot.layers {
-        mark_tidied(&hub.store, snapshot.layer_bot(layer.shared), layer.content.as_deref().unwrap_or_default())?;
+    for layer in &snapshot.memory {
+        mark_tidied(&hub.store, snapshot.layer_key(layer.scope), layer.content.as_deref().unwrap_or_default())?;
     }
     Ok(Ran::Done { more })
 }
@@ -255,7 +256,7 @@ fn write(hub: &Hub, cfg: &BotConfig, edits: &Edits) -> Result<bool> {
     let writer = super::files::Writer { author: Author::Dream, bot: Some(cfg), cause: Cause::Dream, message: None };
     let mut whole = true;
     for edit in &edits.files {
-        let layer = edit.bot.as_deref();
+        let layer = edit.layer.as_deref();
         let expected = edit.before.as_deref().map(mf::hash);
         let version = match super::files::write(hub, layer, &edit.name, Some(&edit.after), expected.as_deref(), writer)
         {
@@ -271,10 +272,10 @@ fn write(hub: &Hub, cfg: &BotConfig, edits: &Edits) -> Result<bool> {
             if edit.name != MAIN {
                 return Ok(());
             }
-            for line in edits.removed.iter().filter(|l| l.bot == edit.bot) {
+            for line in edits.removed.iter().filter(|l| l.layer == edit.layer) {
                 dream::record_line(c, dream, false, &line.text)?;
             }
-            for line in edits.added.iter().filter(|l| l.bot == edit.bot) {
+            for line in edits.added.iter().filter(|l| l.layer == edit.layer) {
                 dream::record_line(c, dream, true, &line.text)?;
                 // A review's rewrite stays its writer's, and isn't reviewed again; a new line is dreaming's.
                 let (author, author_bot) = match &line.rewrites {

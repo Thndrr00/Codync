@@ -60,6 +60,10 @@ pub enum Reply {
     Documents(DocumentReply),
     Memory(String),
     MemorySaved(String),
+    /// The brains a bot can work in, for its memory screen's picker.
+    Brains(String),
+    /// A brain saved as a file, under its name.
+    BrainExported(String),
     /// A bot's missions and the changes to them.
     Missions(MissionReply),
     /// A note the bot's memory sheet has open.
@@ -252,6 +256,15 @@ pub enum Submit {
     RenameArtifact {
         bot: String,
         artifact: String,
+    },
+    /// A brain made or, with `id`, renamed.
+    BrainName {
+        bot: String,
+        id: Option<String>,
+    },
+    /// A brain brought in from the file at the typed path.
+    BrainImport {
+        bot: String,
     },
 }
 
