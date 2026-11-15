@@ -524,6 +524,8 @@ textarea.market-field {
 }
 .market-facts dt { color: var(--secondary); }
 .market-facts dd { margin: 0; }
+/* Stars from the marketplace cloud: filled to the average, one button each to rate. */
+.market-stars { display: inline-flex; align-items: center; gap: 2px; color: var(--warning, #f0a030); }
 /* Numbered setup steps of an app that runs on this computer. */
 .market-steps {
   margin: 0;

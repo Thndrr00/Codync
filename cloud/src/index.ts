@@ -87,6 +87,9 @@ const routes: [string, RegExp, Handler][] = [
   // Any segment reaches the handler so a malformed computerId gets its 400 (§7.1).
   ["GET", /^\/v1\/relay\/device\/([^/]+)$/, api.relayDevice],
   ["POST", /^\/v1\/webhooks\/clerk$/, api.clerkWebhook],
+  ["GET", /^\/v1\/marketplace\/reputation$/, api.reputation],
+  ["PUT", new RegExp(`^/v1/marketplace/apps/([^/]+)/rating$`), api.rate],
+  ["POST", new RegExp(`^/v1/marketplace/apps/([^/]+)/install$`), api.installed],
   ["POST", new RegExp(`^/v1/hooks/${ID}/${ID}$`), api.routineHook],
   // The cloud assistant's MCP connector (mcp.codync.dev, §7.9).
   ["POST", /^\/mcp$/, api.mcp],

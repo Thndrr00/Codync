@@ -8,13 +8,13 @@ is bigger than one release.
 | Decisions inbox (approvals, unread threads, failed runs) | done (desktop) |
 | Team templates with seeded roles and hierarchy | done |
 | SBOM for every release | done |
-| Local models (chat, embeddings, voice) | chat via `local-agent` and embeddings done; local voice next |
+| Local models (chat, embeddings, voice) | done: chat via `local-agent`, embeddings, and the system voice |
 | Workspace search with citations | done (lexical + optional semantic rerank) |
 | Team meeting: minutes (`/minutes`) and text roundtable done; voice spoken by the host and played on the phones |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
-| Extension SDK (wasm) | next |
+| Extension SDK (wasm) | done: a manifest and `.wasm` per folder, run by wasmtime or wasmer |
 | A2UI (with choices and forms) and AG-UI server done |
 | Agent evaluations harness (text, tools, `--bots` comparison) | done (nightly workflow) |
 | Policies by role and tool | done (desktop) |
@@ -65,7 +65,7 @@ is bigger than one release.
 | Approval rules as JSON (copy/apply) | done (desktop) |
 | Share-to-bot on Android and iOS | done |
 | Real offline mode | done: text outbox and an encrypted per-computer cache (desktop, iPhone, Android) |
-| Marketplace reputation and updates | later |
+| Marketplace reputation | done: per-account stars and install counts in the app page; changelog later |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
 | Multi-user server | done: workspace members with roles, enforced on every call |
 
@@ -102,20 +102,15 @@ to the signed installers.
 - Desktop: the command palette gains an "Everything" mode: two characters and a short pause, results
   with the bot's face, the kind (message or document) and a snippet; picking one opens that bot.
 
-## Local models — next
+## Local models — chat, embeddings and voice done
 
-Goal: a bot can run without an account.
-
-- Host: a new backend kind `local` that speaks the OpenAI chat-completions API against
-  `http://127.0.0.1:11434` (Ollama) or a configurable base URL, in `host/src/agent/local.rs`. It reuses
-  the existing turn loop and tool calls; no ACP.
-- Settings: provider row "Local model" with base URL, model and context size; detected models listed from
-  `/api/tags`.
-- Memory and search: `fastembed` (or llama.cpp embeddings) behind `codync-mem`, with vectors in
-  `sqlite-vec`.
-- Voice: `whisper.cpp` for dictation and `piper` for reading, run as tools of the runner.
-- Acceptance: a bot answers and uses a tool with no network, and memory search returns results without a
-  provider key.
+- Chat: the `local-agent` ACP shim over Ollama, with tools; Settings offers `createLocalBot`.
+- Embeddings: optional Ollama embeddings rerank workspace search; lexical results stand alone.
+- Voice: `host/src/voice/local.rs` reads text aloud with macOS `say` (converted to WAV with
+  `afconvert`), Windows System.Speech, or `espeak-ng`/`espeak` on Linux. A keyed cloud provider still
+  wins when one is configured; a meeting without either keeps its text.
+- Still later: dictation with `whisper.cpp` and a dedicated neural voice (piper), which need models
+  installed rather than the OS engine.
 
 ## Workspace search — done (lexical)
 
@@ -148,12 +143,17 @@ Goal: a bot can run without an account.
   so the recipient starts from the sender's result instead of repeating it.
 - Acceptance: a bot hands a failing test to the debugger and the debugger starts with the failing output.
 
-## Extension SDK — next
+## Extension SDK — wasm runtime done, panels next
 
-- `wasmtime` host with a manifest (`id`, `name`, `version`, `permissions`, `tools`, `panels`) and a
-  capability-based API to the host (read state, ask the user, call an MCP tool).
-- Extensions install from a `.codync-ext` file and appear in Extensions › Apps; no network by default.
-- Acceptance: a sample extension adds one tool and one panel, and cannot read files without permission.
+- Each extension is a folder under `<data dir>/extensions/<id>` with `extension.json` (`name`,
+  `version`, `description`, `entry`, optional `runtime`, `dirs`, `tools` with JSON schemas) and its
+  `.wasm` module. `host/src/extensions.rs` lists them and runs a tool with `wasmtime run` or
+  `wasmer run` (whichever is on PATH), as `<tool> <arguments JSON>`; stdout is the result, 60 s and
+  1 MiB at most, with no environment or filesystem access beyond the manifest's `dirs`.
+- Settings › Extensions lists the installed ones, their tools and the runtime in use, and where the
+  folder is. Nothing installs a runtime: a missing one is shown, not bundled.
+- Next: a `.codync-ext` installer, permission prompts, panels and a tool bridge so bots call these
+  tools from a turn (today the host API exposes `extensions` and `extensionCall`).
 
 ## A2UI and AG-UI — done
 
@@ -359,7 +359,7 @@ Goal: a bot can run without an account.
   the OS key (Keychain, DPAPI, libsecret) and reads it at launch; a plaintext cache from an older build
   moves over once. Typed messages wait in the outbox and go out on reconnect. The phones keep their own
   mirrors, and both phones answer approvals from the notification and take a share from another app as a draft.
-- Next: a share-to-bot extension on iOS (Android has `ShareIntake`) and inline approvals on iOS.
+- Next: a member sign-in that needs no pairing link (today the invite token travels with the pair code).
 
 ## Workspace members — done, a team on one computer
 
@@ -368,13 +368,13 @@ one-time token stored only as a SHA-256 hash. A phone redeems it on the pairing 
 (`pair_member`), and the device is saved with `member_id`, so the member caller's role is read from the
 member list on every connection and recheck: viewers may only read, members work with the bots,
 admins also invite, remove and re-role people, and removing a member closes their devices. The desktop
-has a Members page in Settings. A member client's invite-entry screen is next. A phone paired the
+has a Members page in Settings, and both phones take the invite token on their pairing screen. A phone paired the
 usual way can be tied to a person from that page (Devices), which applies the role without pairing
 again.
 
 ## Later
 
-- Marketplace reputation: verified publishers, install counts, changelog and updates.
+- Marketplace changelogs and verified publishers (ratings and install counts shipped).
 - Skills that improve themselves: proposals from real use, reviewed and versioned.
 - Local voice models: the meeting speaks through a cloud provider; on-device speech is next.
 

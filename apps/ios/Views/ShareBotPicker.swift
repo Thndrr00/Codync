@@ -22,7 +22,14 @@ struct ShareBotPicker: View {
             ModalHeader("Send to a bot")
             CardForm {
                 CardSection(footer: "It becomes a draft; nothing is sent until you tap Send.") {
-                    Text(intake.text).font(.callout).foregroundStyle(Palette.secondary).lineLimit(4)
+                    if !intake.text.isEmpty {
+                        Text(intake.text).font(.callout).foregroundStyle(Palette.secondary).lineLimit(4)
+                    }
+                    if !intake.files.isEmpty {
+                        Text(intake.files.map(\.name).joined(separator: ", "))
+                            .font(.footnote)
+                            .foregroundStyle(Palette.secondary)
+                    }
                 }
                 if bots.isEmpty {
                     CardSection {
@@ -33,6 +40,8 @@ struct ShareBotPicker: View {
                         ForEach(bots, id: \.bot.id) { pair in
                             Button {
                                 pair.store.appendShared(intake.text, to: pair.bot.id)
+                                pair.store.addSharedFiles(intake.files.map { OutgoingFile(name: $0.name, data: $0.data) },
+                                                          to: pair.bot.id)
                                 app.shared(intake, to: pair.bot, on: pair.store)
                                 dismiss()
                             } label: {

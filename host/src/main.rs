@@ -25,6 +25,7 @@ mod documents;
 mod egress;
 mod enterprise;
 mod environment;
+mod extensions;
 mod external;
 mod github;
 mod health;

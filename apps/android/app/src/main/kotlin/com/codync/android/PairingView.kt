@@ -195,6 +195,8 @@ private enum class ComputerOS { Mac, Windows, Linux }
 @Composable private fun ScanPage(state: AppState, store: AppStore, os: ComputerOS, paired: () -> Unit) {
     val uri = LocalUriHandler.current
     var pasted by remember { mutableStateOf("") }
+    // A workspace invite from the computer's Members page; empty pairs this phone as its owner.
+    var memberToken by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     // Bumped after a failed pair so the scanner starts looking again.
     var attempt by remember { mutableIntStateOf(0) }
@@ -203,7 +205,7 @@ private enum class ComputerOS { Mac, Windows, Linux }
     fun pair(text: String) {
         if (state.pairing || text.isBlank()) return
         error = null; started = true
-        store.pair(text.trim())
+        store.pair(text.trim(), memberToken = memberToken.trim().ifEmpty { null })
     }
     // The store pairs in the background: its finish (and its error) belong to this page.
     LaunchedEffect(state.pairing, state.error) {
@@ -211,7 +213,7 @@ private enum class ComputerOS { Mac, Windows, Linux }
         started = false
         val failure = state.error
         if (failure == null) {
-            pasted = ""; paired()
+            pasted = ""; memberToken = ""; paired()
         }
         else { error = failure; attempt++; store.clearError() }
     }
@@ -242,6 +244,9 @@ private enum class ComputerOS { Mac, Windows, Linux }
                     imeAction = ImeAction.Go), actions = KeyboardActions(onGo = { pair(pasted) }))
             IconButton("Pair", "arrow.right", enabled = pasted.isNotEmpty() && !state.pairing) { pair(pasted) }
         }
+        PlainTextField(memberToken, { memberToken = it }, Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp)).background(Palette.surface).padding(14.dp),
+            "Workspace invite token (optional)", singleLine = true, style = Type.callout.monospaced,
+            keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false))
         AnimatedVisibility(error != null, enter = fadeIn(Motion.fade()), exit = fadeOut(Motion.fade())) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(error.orEmpty(), style = Type.footnote, color = Palette.danger)

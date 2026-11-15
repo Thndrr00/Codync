@@ -57,8 +57,9 @@ fun AppStore.setForeground(active: Boolean) {
     }
 }
 
-/** Pairs with the computer in a `codync://pair` link: scanned or pasted ([PairedVia.Qr]) or opened from outside ([PairedVia.Link]). */
-internal fun AppStore.pair(text: String, via: PairedVia = PairedVia.Qr) {
+/** Pairs with the computer in a `codync://pair` link: scanned or pasted ([PairedVia.Qr]) or opened from outside ([PairedVia.Link]).
+ *  `memberToken` is a workspace invite from the computer's Members page; without one this phone pairs as its owner. */
+internal fun AppStore.pair(text: String, via: PairedVia = PairedVia.Qr, memberToken: String? = null) {
     if (pairingJob?.isActive == true) return
     pairingJob = contextScope.launch {
         state.first { !it.loading }
@@ -69,7 +70,7 @@ internal fun AppStore.pair(text: String, via: PairedVia = PairedVia.Qr) {
             val old = state.value.computers.firstOrNull { it.id == pairing.computer.id }
             require(old == null || old.signKey == pairing.computer.signKey) { "This computer's identity changed. Remove it in Computer management, then pair it again." }
             val identity = withContext(Dispatchers.IO) { local.identity() }
-            val computer = HostConnector.pair(pairing, identity, Build.MODEL.take(100)).keepingDevicePicks(old)
+            val computer = HostConnector.pair(pairing, identity, Build.MODEL.take(100), memberToken).keepingDevicePicks(old)
             // Tagged here: the page that asked only learns that pairing ended, maybe before the switch to this computer.
             Analytics.capture(AnalyticsEvent.ComputerPaired(via, computer.id))
             withContext(Dispatchers.IO) { local.completeSetup() }

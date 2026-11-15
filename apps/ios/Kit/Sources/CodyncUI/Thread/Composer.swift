@@ -28,8 +28,7 @@ struct Composer: View {
         nonmutating set { input.replace(with: newValue) }
     }
     /// Files going out with the next message.
-    @State private var files: [OutgoingFile] = []
-    @State private var pickingFiles = false
+    @State private var files: [OutgoingFile] = []    @State private var pickingFiles = false
     @State private var pickingPhotos = false
     @State private var photoItems: [PhotosPickerItem] = []
     @FocusState private var focused: Bool
@@ -287,6 +286,8 @@ struct Composer: View {
         }
         // Another chat in the same view never inherits the reply.
         .onChange(of: botId) { replyingTo = nil }
+        .onAppear { files.append(contentsOf: model.takeSharedFiles(for: botId)) }
+        .onChange(of: botId) { _, new in files.append(contentsOf: model.takeSharedFiles(for: new)) }
         .onChange(of: replyingTo?.id) { if replyingTo != nil { focused = true } }
         .onDisappear { dictation.stop() }
         .onChange(of: draft) { _, value in

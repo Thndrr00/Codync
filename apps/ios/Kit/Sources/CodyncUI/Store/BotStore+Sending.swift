@@ -32,6 +32,19 @@ extension BotStore {
         setComposerDraft(String(merged.prefix(48 * 1024)), for: botId)
     }
 
+    /// Files shared from another app, for the composer to show as the next message's attachments.
+    public func addSharedFiles(_ files: [OutgoingFile], to botId: String) {
+        let accepted = files.filter { $0.data.count <= OutgoingFile.maxSize }.prefix(10)
+        guard !accepted.isEmpty else { return }
+        sharedFiles[botId, default: []].append(contentsOf: accepted)
+    }
+
+    /// Hands the composer the files shared for this bot, once.
+    public func takeSharedFiles(for botId: String) -> [OutgoingFile] {
+        guard let files = sharedFiles.removeValue(forKey: botId) else { return [] }
+        return files
+    }
+
     /// Drafts saved before 2.20.1 were keyed `["<bot>",null]`; a thread's (`["<bot>","<root>"]`) is dropped.
     static func chatDrafts(_ saved: [String: String]) -> [String: String] {
         saved.reduce(into: [:]) { drafts, row in

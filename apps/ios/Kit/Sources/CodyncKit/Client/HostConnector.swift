@@ -20,13 +20,13 @@ public enum HostConnector {
     /// the host then authorizes this device and closes with `4100 paired`. A computer in no account asks its
     /// user first, then signs `claim` and returns it (as JSON) for the phone to complete with the cloud.
     public static func pair(_ pairing: Pairing, identity: DeviceIdentity, deviceName: String, platform: String,
-                            certificate: DeviceCertificate, claim: CloudClaim?) async throws -> (computer: Computer, claim: Data?) {
+                            certificate: DeviceCertificate, claim: CloudClaim?, memberToken: String? = nil) async throws -> (computer: Computer, claim: Data?) {
         try await pair(pairing, identity: identity, deviceName: deviceName, platform: platform,
-                       certificate: certificate, claim: claim, dial: URLSessionSocket.dial)
+                       certificate: certificate, claim: claim, memberToken: memberToken, dial: URLSessionSocket.dial)
     }
 
     static func pair(_ pairing: Pairing, identity: DeviceIdentity, deviceName: String, platform: String,
-                     certificate: DeviceCertificate, claim: CloudClaim?, dial: @escaping Dialer) async throws -> (computer: Computer, claim: Data?) {
+                     certificate: DeviceCertificate, claim: CloudClaim?, memberToken: String? = nil, dial: @escaping Dialer) async throws -> (computer: Computer, claim: Data?) {
         let transport = ChannelTransport(computer: pairing.computer, identity: identity, pairingCode: pairing.code, dial: dial)
         await transport.start()
         do {
@@ -36,9 +36,11 @@ public enum HostConnector {
                 var platform: String
                 var certificate: DeviceCertificate
                 var claim: CloudClaim?
+                /// A workspace invite: the computer lets this phone in as that member, without the account check.
+                var memberToken: String?
             }
             struct Res: Decodable { var computerId: ComputerID; var name: String? }
-            let body = try JSONEncoder().encode(Body(code: pairing.code, name: deviceName, platform: platform, certificate: certificate, claim: claim))
+            let body = try JSONEncoder().encode(Body(code: pairing.code, name: deviceName, platform: platform, certificate: certificate, claim: claim, memberToken: memberToken))
             try await transport.ready(within: 30)
             // The computer may be waiting for its user to let this phone in (up to 90 seconds).
             let data = try await transport.call("pair", body: body, timeout: 150)

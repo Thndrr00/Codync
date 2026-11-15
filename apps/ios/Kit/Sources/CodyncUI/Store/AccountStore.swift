@@ -106,7 +106,7 @@ public final class AccountStore {
 
     /// QR pairing (§4.1) with this account's certificate: a computer in another account turns the phone away,
     /// one in none asks its user, then joins this account. The computer is saved in this context and connected.
-    public func pair(_ pairing: Pairing, deviceName: String, platform: String) async throws -> Computer {
+    public func pair(_ pairing: Pairing, deviceName: String, platform: String, memberToken: String? = nil) async throws -> Computer {
         let identity = try DeviceIdentity.load(context: storage)
         guard let cloud else { throw Self.noCertificate }
         let certificate = try await pairingCertificate(cloud, deviceName: deviceName, platform: platform)
@@ -119,7 +119,7 @@ public final class AccountStore {
         pairingCheck = pairing.checkCode(for: identity)
         defer { pairingCheck = nil }
         let paired = try await HostConnector.pair(pairing, identity: identity, deviceName: deviceName, platform: platform,
-                                                  certificate: certificate, claim: claim)
+                                                  certificate: certificate, claim: claim, memberToken: memberToken)
         guard !retired else { throw CancellationError() }
         var computer = paired.computer
         if let previous = saved.first(where: { $0.id == computer.id }) { computer.keepDevicePicks(from: previous) }

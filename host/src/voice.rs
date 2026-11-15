@@ -5,6 +5,7 @@
 
 pub(crate) mod decisions;
 mod endpoint;
+mod local;
 pub(crate) mod neutts;
 pub(crate) mod receipts;
 mod streaming;
@@ -228,7 +229,19 @@ pub fn status(store: &Store) -> Result<Value> {
             json!({"provider": p.id(), "configured": !keys.get(p).is_empty(), "defaults": defaults})
         })
         .collect();
-    Ok(json!({"providers": providers}))
+    Ok(json!({"providers": providers, "localVoice": local::available()}))
+}
+
+/// Text to speech with whatever this computer has: a keyed provider, else its own voice. `None`
+/// when neither can speak, so a meeting simply keeps its text.
+pub async fn speak_here(store: &Store, text: &str) -> Option<Value> {
+    if let Some((provider, model, voice)) = speech_defaults(store) {
+        if let Ok(answer) = speak(store, provider, &model, &voice, text).await {
+            return Some(answer);
+        }
+    }
+    let audio = local::speak(text).await.ok()?;
+    Some(json!({"audio": STANDARD.encode(audio.bytes), "format": audio.format}))
 }
 
 /// Checks the key with the provider (one credential mint), then keeps it. An empty key removes it.

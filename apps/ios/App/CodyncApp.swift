@@ -225,9 +225,9 @@ final class AppStore {
     }
 
     /// `via`: `qr` scanned or pasted here, `link` opened from the Camera app.
-    func pair(_ pairing: Pairing, via: AnalyticsEvent.PairVia) async throws -> Computer {
+    func pair(_ pairing: Pairing, via: AnalyticsEvent.PairVia, memberToken: String? = nil) async throws -> Computer {
         do {
-            let computer = try await accounts.pair(pairing, deviceName: UIDevice.current.name, platform: "ios")
+            let computer = try await accounts.pair(pairing, deviceName: UIDevice.current.name, platform: "ios", memberToken: memberToken)
             Analytics.shared.capture(.computerPaired(via: via, computer: computer.id))
             return computer
         } catch {

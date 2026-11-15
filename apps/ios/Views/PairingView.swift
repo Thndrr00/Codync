@@ -214,6 +214,8 @@ private struct ScanPage: View {
     @Environment(\.openURL) private var openURL
     @State private var pairing = false
     @State private var pasted = ""
+    /// A workspace invite from the computer's Members page; empty pairs this phone as its owner.
+    @State private var memberToken = ""
     @State private var error: String?
     /// The phone couldn't reach the computer (not a refusal from it or the cloud): the network hint helps.
     @State private var unreachable = false
@@ -257,6 +259,15 @@ private struct ScanPage: View {
                 .padding(.trailing, 4)
                 .padding(.vertical, 4)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+
+                // Optional: the token from this computer's Members page makes this phone work as that person.
+                TextField(L10n.tr("Workspace invite token (optional)"), text: $memberToken)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.callout.monospaced())
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
 
                 if let error {
                     VStack(alignment: .leading, spacing: 6) {
@@ -356,8 +367,10 @@ private struct ScanPage: View {
             defer { pairing = false }
             do {
                 let p = try await app.pairing(from: text.trimmingCharacters(in: .whitespacesAndNewlines))
-                _ = try await app.pair(p, via: .qr)
+                let token = memberToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                _ = try await app.pair(p, via: .qr, memberToken: token.isEmpty ? nil : token)
                 pasted = ""
+                memberToken = ""
                 paired()
             } catch {
                 show(error)

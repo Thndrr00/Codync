@@ -14,13 +14,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
 object HostConnector {
-    suspend fun pair(pairing: Pairing, identity: DeviceIdentity, deviceName: String): Computer {
+    suspend fun pair(pairing: Pairing, identity: DeviceIdentity, deviceName: String, memberToken: String? = null): Computer {
         require(deviceName.isNotBlank() && deviceName.codePointCount(0, deviceName.length) <= 100)
         val channel = connect(pairing.computer, identity, pairing)
         try {
             val response = try {
                 channel.call("pair", buildJsonObject {
                     put("code", pairing.code); put("name", deviceName); put("platform", "android")
+                    if (!memberToken.isNullOrBlank()) put("memberToken", memberToken)
                 }, timeoutMillis = 30_000)
             } catch (error: HostError) {
                 // Hosts from before Android support turn the platform down: say what to do, not the wire error.

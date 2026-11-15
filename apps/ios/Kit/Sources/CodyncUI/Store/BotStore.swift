@@ -113,6 +113,8 @@ public final class BotStore {
     var retired = false
     /// Files of messages not delivered yet (by client nonce), kept for a retry.
     @ObservationIgnored var outgoingFiles: [String: [OutgoingFile]] = [:]
+    /// Files shared from another app, waiting for the bot's composer to take them.
+    @ObservationIgnored var sharedFiles: [String: [OutgoingFile]] = [:]
     /// Section moves shown but not answered yet, oldest first.
     @ObservationIgnored var pendingSectionMoves: [SectionMove] = []
 
