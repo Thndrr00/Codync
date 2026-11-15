@@ -13,6 +13,29 @@ use tokio::sync::mpsc;
 /// How long the agent may take to say whether a steered message joined its turn.
 const STEER_ANSWER: Duration = Duration::from_secs(15);
 
+/// Ported from `OpenBot` 0.69.0 (`src/backend/agent/developer-instructions.ts`, `steerNote`): a provider
+/// that gets the message as plain user text has no sign that the turn was in progress, and the model can
+/// then drop its work for the new message.
+const STEER_NOTE: &str = "<openbot_steer>\nThe user sent the next message while you work on this turn. It adds to your current work and does not cancel it. If it asks a question, answer the question first in a short line. If it changes or corrects the work, apply the change from this point. Then continue the unfinished work; do not start it again. Stop the current work only when the message tells you to stop or to do different work.\n</openbot_steer>";
+
+/// Claude Code and Grok Build tell their model that a message arrived while it worked, and Grok reads
+/// only the first text block of a steer: their steers carry no note (`OpenBot`'s `PROVIDERS_THAT_FRAME_STEERS`).
+fn frames_steers(backend: &str) -> bool {
+    matches!(backend, "claude" | "grok")
+}
+
+/// The steer's prompts: the note as a block of its own when the backend writes none, then the user's text
+/// (which stays the last block, so a provider that reads one block reads the message). A slash command
+/// already says what it does.
+fn steer_prompts(backend: &str, text: &str) -> Vec<Value> {
+    let mut prompts = Vec::with_capacity(2);
+    if !frames_steers(backend) && !text.starts_with('/') {
+        prompts.push(json!({"type": "text", "text": STEER_NOTE}));
+    }
+    prompts.push(json!({"type": "text", "text": text}));
+    prompts
+}
+
 /// A queued message handed to the agent to join its running turn, until the agent answers.
 pub(super) struct InFlight {
     /// The user took it back meanwhile (`unqueue`): it goes unless the agent took it.
@@ -77,7 +100,7 @@ impl Actor {
         let (acp, hub, bot) = (conn.acp.clone(), self.hub.clone(), self.cfg.id.clone());
         let params = json!({
             "sessionId": sid,
-            "prompt": [{"type": "text", "text": text}],
+            "prompt": steer_prompts(&self.cfg.backend, text),
             // A turn that just ended doesn't take it: it stays queued for the next one.
             "_meta": {"steering": {"idleBehavior": "promptRequired"}},
         });
@@ -235,5 +258,25 @@ mod tests {
         assert_eq!(steer_outcome(&Ok(json!({"outcome": "somethingNew"}))), Steer::Failed);
         assert_eq!(steer_outcome(&Err(anyhow!("gone"))), Steer::Failed);
         assert_eq!(json!(Steer::MovedUp), "moved_up", "as the event reports it");
+    }
+
+    #[test]
+    fn a_steer_tells_a_backend_without_its_own_note_that_the_work_continues() {
+        let prompts = steer_prompts("codex", "also update the README");
+        assert_eq!(prompts.len(), 2);
+        assert!(prompts[0]["text"].as_str().unwrap().contains("adds to your current work"));
+        assert_eq!(prompts[1]["text"], "also update the README", "the person's text stays last");
+        for backend in ["claude", "grok"] {
+            assert_eq!(
+                *steer_prompts(backend, "also update the README"),
+                vec![json!({"type": "text", "text": "also update the README"})],
+                "{backend} writes its own note"
+            );
+        }
+        assert_eq!(
+            *steer_prompts("codex", "/compact"),
+            vec![json!({"type": "text", "text": "/compact"})],
+            "a slash command needs none"
+        );
     }
 }

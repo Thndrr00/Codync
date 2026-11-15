@@ -206,7 +206,10 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   `_session/steering` (Claude, Codex, omp)
   takes it into the running turn of the user's own chat, and the message joins that turn (its `turn`, its reply,
   memory, a fallback's retry). The turn's end waits for the agent's answer, at most 15 seconds, so a late `injected`
-  still counts as joined and the bot stays working until then. Another agent's turn in the user's chat stops for it,
+  still counts as joined and the bot stays working until then. The steer's first text block tells a backend that writes
+  no note of its own (Codex, Antigravity, OpenCode) that the message adds to the work in progress and does not cancel it
+  — Claude and Grok write that themselves, and a slash command gets none (`host/src/agent/bot/steer.rs`, ported from
+  `OpenBot` 0.69.0). Another agent's turn in the user's chat stops for it,
   and behind a routine, a room or another bot's request it goes first in line. A group's message and channel work keep
   their own turn either way. *Remove* (`unqueue`) takes a queued one back:
   never goes out, its files are deleted and the chat hides it (`removed`).
