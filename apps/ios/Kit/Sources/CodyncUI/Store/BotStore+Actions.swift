@@ -385,6 +385,12 @@ extension BotStore {
         if let view = try? await client.networkView(), !Task.isCancelled { network = view }
     }
 
+    /// Reads the computer's GitHub App again (read-only here).
+    public func refreshGitHubApp() async {
+        guard !retired, let client else { return }
+        if let app = try? await client.githubAppStatus(), !Task.isCancelled { githubApp = app }
+    }
+
     public func loadOlder(_ botId: String) async {
         guard let client, !historyComplete.contains(botId) else { return }
         let first = (entries[botId] ?? []).first { $0.seq > 0 && $0.seq != Int64.max }?.seq ?? Int64.max

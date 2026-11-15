@@ -74,6 +74,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Have a bot do work on a schedule or when a webhook arrives: set it up in the routine editor or by asking the bot.",
       },
       {
+        slug: "github-app",
+        title: "GitHub App",
+        description:
+          "Run routines from pull requests, reviews, checks and issues with a GitHub App of your own, installed only on the repositories you pick.",
+      },
+      {
         slug: "n8n",
         title: "n8n",
         description:

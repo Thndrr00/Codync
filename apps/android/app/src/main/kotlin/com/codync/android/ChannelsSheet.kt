@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.Channels
 import com.codync.android.core.DiscordStatus
+import com.codync.android.core.GitHubAppStatus
 import com.codync.android.core.GitHubStatus
 import com.codync.android.core.SlackStatus
 import com.codync.android.core.TelegramBot
@@ -42,6 +43,7 @@ import kotlinx.coroutines.launch
     var slack by remember { mutableStateOf<SlackStatus?>(null) }
     var discord by remember { mutableStateOf<DiscordStatus?>(null) }
     var github by remember { mutableStateOf<GitHubStatus?>(null) }
+    var githubApp by remember { mutableStateOf<GitHubAppStatus?>(null) }
     var pairing by remember { mutableStateOf<Pair<String, String>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -153,6 +155,40 @@ import kotlinx.coroutines.launch
                             }
                             SecondaryButton("Disconnect GitHub", enabled = !busy) {
                                 act { github = store.disconnectGitHub() }
+                            }
+                        }
+                    }
+                }
+            }
+            CardSection(
+                "GitHub App",
+                footer = "An App of your own signs its deliveries, so a routine runs on pull requests, reviews, checks and issues without a person's token. Required permissions: contents and pull requests read, checks read. Events: pull request, pull request review, check run, issues. The key and the webhook secret stay in this computer's credential vault.",
+            ) {
+                row {
+                    val app = githubApp
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            when {
+                                app == null -> tr("Loading…")
+                                !app.configured -> tr("No GitHub App yet. Connect it in the desktop app.")
+                                else -> "${tr("App")} ${app.appId.orEmpty()}"
+                            },
+                            style = Type.body, color = Palette.secondary,
+                        )
+                        if (app?.configured == true) {
+                            Text(
+                                "${app.installations.size} ${tr("installations")} · ${app.repos.size} ${tr("repositories mapped")}",
+                                style = Type.caption, color = Palette.tertiary,
+                            )
+                            if (app.installations.isEmpty()) {
+                                Text(tr("Not installed anywhere yet."), style = Type.caption, color = Palette.tertiary)
+                            }
+                            for (installation in app.installations) {
+                                Text(installation.account, style = Type.caption, color = Palette.secondary)
+                            }
+                            for (map in app.repos) {
+                                val branches = if (map.branches.isEmpty()) "" else " · ${map.branches.joinToString(", ")}"
+                                Text(map.repo + branches, style = Type.caption, color = Palette.secondary)
                             }
                         }
                     }

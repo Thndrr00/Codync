@@ -35,6 +35,7 @@ import { DiagnosticsView } from './DiagnosticsView'
 import { AgentImportSection } from './AgentImportSection'
 import { ChannelsSection } from './ChannelsSection'
 import { GitHubSection } from './GitHubSection'
+import { GitHubAppSection } from './GitHubAppSection'
 import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
@@ -255,6 +256,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       {window.codync.platform === 'win32' ? <ResearchSettingsSection /> : null}
       <ChannelsSection onExtensions={onExtensions} />
       <GitHubSection />
+      <GitHubAppSection />
       <AgentImportSection />
       <DemoSection />
       <HiddenBotsSection />

@@ -138,6 +138,13 @@ chat en las cuatro apps, el peso por recencia y el canal resuelto en el host (la
 **Meta:** webhooks por repositorio sin el token de una persona, para que A3 dispare rutinas de
 verdad.
 
+**Estado:** bloque completo. App en el vault con verificación SMTP del cuerpo, ventana anti-replay
+de diez minutos, tokens de instalación en caché con renovación, mapeo repositorio→bots y ramas,
+filtros por evento, UI de conexión en escritorio y estado de solo lectura en TUI, iOS y Android,
+`docs/features/github-app.md` y guía del manifiesto. Falta la compilación en iOS y Android (sin Xcode
+ni SDK aquí) y la E2E en dispositivo. Los tests cubren firma inválida, replay, evento sin bot,
+repositorio sin mapear y rama filtrada.
+
 1. Leer el ADR de GitHub App y el módulo `host/src/github`.
 2. Registrar la App y documentar el manifiesto.
 3. Instalación por repositorio y por organización.

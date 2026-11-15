@@ -1,0 +1,28 @@
+Let a routine start from GitHub: when a pull request, a review, a check or an issue arrives, the
+bots you mapped to that repository run it. A GitHub App of your own signs each delivery, so no one's
+personal token is used, and it is installed only on the repositories you choose.
+
+## Creating the App
+
+1. Open [github.com/settings/apps/new](https://github.com/settings/apps/new), or your organization's
+   **Settings → Developer settings → GitHub Apps → New GitHub App**.
+2. Give it a name and a homepage URL.
+3. Set **Webhook URL** to the relay's public hook of the computer, `https://<relay host>/hooks/github`,
+   and a **Webhook secret** of at least 16 characters. Keep the secret for the next step.
+4. Under **Repository permissions**, set **Contents**, **Pull requests** and **Checks** to **Read**.
+5. Under **Subscribe to events**, tick **Pull request**, **Pull request review**, **Check run** and
+   **Issue**.
+6. Create the App, then generate and download a **private key**.
+
+## Connecting it
+
+On the computer, open **Settings → GitHub App** and paste the App id, the key file's text and the
+webhook secret. Then open **Install on repositories**, choose the repositories, and press
+**Refresh installations** in Codync.
+
+Pick the bots a repository reaches with **Map bots**, limiting it to branches if you want. Only those
+bots' routines with a GitHub event trigger run, and only for that repository. **Unmap** stops them;
+**Disconnect the App** removes it and its secret from the computer.
+
+The key and the secret stay in the computer's credential vault. The iPhone and Android apps show the
+App, its installations and its mappings; changes are made on the computer.

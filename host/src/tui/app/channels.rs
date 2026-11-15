@@ -11,6 +11,8 @@ use super::{After, App, Overlay};
 pub struct ChannelsSheet {
     pub bots: Vec<Value>,
     pub slack: Option<Value>,
+    /// The GitHub App of this host, read-only here.
+    pub github: Option<Value>,
     pub sel: usize,
     /// The Telegram bot a pairing code was just asked for.
     pub pairing_for: Option<String>,
@@ -58,6 +60,21 @@ pub fn slack_text(slack: Option<&Value>) -> String {
     }
 }
 
+/// What the sheet says about the GitHub App: where it is installed and which repositories reach bots.
+pub fn github_text(app: Option<&Value>) -> String {
+    match app {
+        None => "Loading…".into(),
+        Some(s) if s["configured"] != true => "No GitHub App yet. Connect it in the desktop app.".into(),
+        Some(s) => {
+            let installations = s["installations"].as_array().map_or(0, Vec::len);
+            let repos = s["repos"].as_array().map_or(0, Vec::len);
+            let repos_text =
+                if repos == 1 { "1 repository mapped".into() } else { format!("{repos} repositories mapped") };
+            format!("App {} · {installations} installations · {repos_text}", s["appId"].as_str().unwrap_or_default())
+        }
+    }
+}
+
 /// One Telegram bot as the list shows it, on two lines.
 pub fn bot_lines(bot: &Value, now: i64) -> [String; 2] {
     let username = bot["username"].as_str().unwrap_or_default();
@@ -81,6 +98,7 @@ impl App {
         self.overlays.push(Overlay::Channels(Box::default()));
         self.call("telegramStatus", json!({}), After::Channels);
         self.call("slackStatus", json!({}), After::ChannelsSlack);
+        self.call("githubAppStatus", json!({}), After::ChannelsGitHub);
     }
 
     pub(super) fn channels_key(&mut self, mut s: Box<ChannelsSheet>, k: KeyEvent) -> Option<Overlay> {
@@ -91,6 +109,7 @@ impl App {
             KeyCode::Char('r') => {
                 self.call("telegramStatus", json!({}), After::Channels);
                 self.call("slackStatus", json!({}), After::ChannelsSlack);
+                self.call("githubAppStatus", json!({}), After::ChannelsGitHub);
             }
             KeyCode::Char('p') => {
                 if let Some(name) = s.bots.get(s.sel).and_then(|b| b["name"].as_str()).map(str::to_owned) {
@@ -117,6 +136,12 @@ impl App {
     pub(super) fn channels_slack_loaded(&mut self, v: Value) {
         if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
             s.slack = Some(v);
+        }
+    }
+
+    pub(super) fn channels_github_loaded(&mut self, v: Value) {
+        if let Some(Overlay::Channels(s)) = self.overlays.last_mut() {
+            s.github = Some(v);
         }
     }
 }
@@ -151,6 +176,15 @@ mod tests {
         assert!(pairing_instruction("X", "").contains("your Telegram bot"));
         assert_eq!(slack_text(None), "Loading…");
         assert_eq!(slack_text(Some(&json!({"configured": false}))), "Slack is not connected.");
+        assert_eq!(github_text(None), "Loading…");
+        assert_eq!(
+            github_text(Some(&json!({"configured": false}))),
+            "No GitHub App yet. Connect it in the desktop app."
+        );
+        assert_eq!(
+            github_text(Some(&json!({"configured": true, "appId": "12", "installations": [{"id": "1"}], "repos": []}))),
+            "App 12 · 1 installations · 0 repositories mapped"
+        );
         assert_eq!(
             slack_text(Some(&json!({"configured": true, "socketMode": true, "workspaceId": "T1"}))),
             "Connected through Socket Mode · T1"

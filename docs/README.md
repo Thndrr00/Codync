@@ -22,6 +22,7 @@ Source review, a passing build, local integration tests and production acceptanc
 | Run the host on a Linux server or cloud VM | [Linux servers](guides/linux-servers.md) |
 | Reproduce or check something on Windows (UTM VM) | [Windows testing](guides/windows-testing.md) |
 | Set up accounts, approvals or desktop SSH | [Accounts and SSH](guides/accounts-and-ssh.md) |
+| Set up a GitHub App so routines run on repository events | [GitHub App setup](guides/github-app-manifest.md) |
 | Check connectors against live services | [Connector verification](guides/connector-verification.md) |
 | Change transport or cryptography | [Remote protocol](reference/remote-relay.md) and [shared vectors](reference/fixtures/README.md) |
 | Review an issue or pull request | [Issue and PR review](guides/issue-pr-review.md) (the `review-issue-pr` workflow) and its [security check](guides/security-check.md) |
@@ -45,6 +46,7 @@ Source review, a passing build, local integration tests and production acceptanc
 - [Agent fallbacks](features/agent-fallback.md) (the next agent carries a turn on when the bot's own runs out of usage)
 - [Routines](features/routines.md)
 - [Missions](features/missions.md) (a goal that outlives a turn: steps, checkpoint, pause, finish, drop)
+- [GitHub App](features/github-app.md) (routines run on pull requests, reviews, checks and issues with an App of its own)
 - [Voice calls](features/voice-call.md)
 - [iOS Shortcuts](features/ios-shortcuts.md)
 - [File attachments](features/file-attachments.md)

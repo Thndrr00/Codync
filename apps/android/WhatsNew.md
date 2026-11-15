@@ -7,6 +7,16 @@ released version's section; a version without one gets the PRs' "What's New: And
 else a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.50.0
+
+### zh-Hant
+- 設定 › GitHub App 讓你用 App 自己的金鑰，在拉取請求、審查、檢查與議題抵達時執行例行工作，不必用人的權杖。
+- 選擇哪些儲存庫可觸達哪些 Bot；App 的狀態在Android上以唯讀顯示。
+
+### en-US
+- Set up a GitHub App so routines run on pull requests, reviews, checks and issues without a person's token.
+- Map each repository to the bots it reaches; the App's status is read-only on Android.
+
 ## 2.49.0
 
 ### zh-Hant

@@ -155,6 +155,9 @@ public extension HostClient {
 
     /// The computer's network, read-only (hosts before it: "unknown method").
     func networkView() async throws -> NetworkView { try await call("networkView") }
+    /// The computer's GitHub App: whether it is connected, where it is installed and which
+    /// repositories reach which bots.
+    func githubAppStatus() async throws -> GitHubAppStatus { try await call("githubAppStatus") }
 
     /// Updates a computer that's behind this app to the latest release (`Hello.canUpdate`).
     func installHostUpdate() async throws {
