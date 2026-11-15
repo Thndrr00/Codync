@@ -114,6 +114,10 @@ const LOCAL_ONLY: &[&str] = &[
     "networkRecover",
     // Who may write to this computer's bots is decided at the computer, like who is in.
     "setNetworkRules",
+    // Installing an extension or granting its permissions is decided at the computer.
+    "installExtension",
+    "removeExtension",
+    "approveExtension",
 ];
 const SCREEN: &[&str] =
     &["screenPrepare", "screenOffer", "screenClose", "screenTakeover", "screenCandidate", "screenCandidates"];

@@ -273,9 +273,16 @@ export function wav(chunks: Int16Array[]): Uint8Array {
   return out
 }
 
-/** Speech to text for one recording (a 16 kHz WAV) on the host, which holds the provider's key. */
+/** Speech to text for one recording (a 16 kHz WAV) on the host, which holds the provider's key.
+ *  Without a usable provider it falls back to whisper.cpp on that computer. */
 export async function transcribeOnHost(client: HostClient, provider: VoiceProvider, model: string, audio: Uint8Array) {
-  return (await client.call<{ text: string }>('voiceTranscribe', { provider, model, audio: toBase64(audio) }, 60_000)).text
+  try {
+    return (await client.call<{ text: string }>('voiceTranscribe', { provider, model, audio: toBase64(audio) }, 60_000)).text
+  } catch (error) {
+    const local = await client.call<{ text: string }>('voiceTranscribeLocal', { audio: toBase64(audio) }, 120_000).catch(() => null)
+    if (local) return local.text
+    throw error
+  }
 }
 
 export function toBase64(bytes: Uint8Array) {

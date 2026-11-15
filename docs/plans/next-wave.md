@@ -65,7 +65,7 @@ is bigger than one release.
 | Approval rules as JSON (copy/apply) | done (desktop) |
 | Share-to-bot on Android and iOS | done |
 | Real offline mode | done: text outbox and an encrypted per-computer cache (desktop, iPhone, Android) |
-| Marketplace reputation | done: per-account stars and install counts in the app page; changelog later |
+| Marketplace reputation | done: stars, install counts, changelog and verified creators in the app page |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
 | Multi-user server | done: workspace members with roles, enforced on every call |
 
@@ -106,11 +106,12 @@ to the signed installers.
 
 - Chat: the `local-agent` ACP shim over Ollama, with tools; Settings offers `createLocalBot`.
 - Embeddings: optional Ollama embeddings rerank workspace search; lexical results stand alone.
-- Voice: `host/src/voice/local.rs` reads text aloud with macOS `say` (converted to WAV with
+- Voice: `host/src/voice/local.rs` reads text aloud with a Piper model when one is installed
+  (`CODYNC_PIPER_MODEL` or `<data>/voice/piper.onnx`), else macOS `say` (converted to WAV with
   `afconvert`), Windows System.Speech, or `espeak-ng`/`espeak` on Linux. A keyed cloud provider still
   wins when one is configured; a meeting without either keeps its text.
-- Still later: dictation with `whisper.cpp` and a dedicated neural voice (piper), which need models
-  installed rather than the OS engine.
+- Dictation falls back to `whisper.cpp` (`whisper-cli`/`whisper` with a ggml model under
+  `CODYNC_WHISPER_MODEL` or `<data>/voice/ggml-base.bin`) when the chosen provider has no key or fails.
 
 ## Workspace search — done (lexical)
 
@@ -150,10 +151,12 @@ to the signed installers.
   `.wasm` module. `host/src/extensions.rs` lists them and runs a tool with `wasmtime run` or
   `wasmer run` (whichever is on PATH), as `<tool> <arguments JSON>`; stdout is the result, 60 s and
   1 MiB at most, with no environment or filesystem access beyond the manifest's `dirs`.
-- Settings › Extensions lists the installed ones, their tools and the runtime in use, and where the
-  folder is. Nothing installs a runtime: a missing one is shown, not bundled.
-- Next: a `.codync-ext` installer, permission prompts, panels and a tool bridge so bots call these
-  tools from a turn (today the host API exposes `extensions` and `extensionCall`).
+- Settings › Extensions lists the installed ones, their tools, permissions and the runtime in use, and
+  where the folder is. Nothing installs a runtime: a missing one is shown, not bundled.
+- Install from a folder or a `.codync-ext` (tar.gz). The manifest's `permissions` are approved once per
+  extension on this computer (`approveExtension`), and nothing runs before that. Each tool is exposed to
+  bots as `ext_<folder>_<tool>` through the chat tools, so a turn can call it.
+- Next: panels and a per-tool permission list (today permissions cover the whole extension).
 
 ## A2UI and AG-UI — done
 
@@ -374,7 +377,7 @@ again.
 
 ## Later
 
-- Marketplace changelogs and verified publishers (ratings and install counts shipped).
+- Marketplace: none of the flagged items remain; the editor endpoints need `MARKETPLACE_ADMIN`.
 - Skills that improve themselves: proposals from real use, reviewed and versioned.
 - Local voice models: the meeting speaks through a cloud provider; on-device speech is next.
 

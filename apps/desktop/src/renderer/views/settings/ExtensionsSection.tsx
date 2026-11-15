@@ -14,11 +14,14 @@ interface ExtensionTool {
 interface Extension {
   id: string
   error: string | null
+  approved: boolean
   manifest: {
     name: string
     version: string
     description: string
     runtime: string | null
+    permissions: string[]
+    dirs: string[]
     tools: ExtensionTool[]
   } | null
 }
@@ -57,6 +60,16 @@ export function ExtensionsSection() {
     if (running) void load()
   }, [running, load])
 
+  const approve = async (id: string) => {
+    if (!local) return
+    try {
+      await (await local.ready()).call('approveExtension', { id })
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return (
     <CardSection
       title="Extensions"
@@ -91,6 +104,18 @@ export function ExtensionsSection() {
                       {tool.name}{tool.description ? ` — ${tool.description}` : ''}
                     </Text>
                   ))}
+                  {extension.manifest?.permissions.length ? (
+                    <Text size="caption" tone={extension.approved ? 'secondary' : 'danger'}>
+                      {extension.approved
+                        ? `Approved: ${extension.manifest.permissions.join(', ')}`
+                        : `Asks for: ${extension.manifest.permissions.join(', ')}`}
+                    </Text>
+                  ) : null}
+                  {!extension.approved ? (
+                    <Button kind="secondary" onClick={() => void approve(extension.id)}>
+                      Approve
+                    </Button>
+                  ) : null}
                 </>
               )}
             </VStack>

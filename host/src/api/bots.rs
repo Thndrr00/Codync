@@ -122,6 +122,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::fallbacks::call(hub, bot, name, arguments).await?
             } else if crate::chat::artifacts::TOOLS.contains(&name) {
                 crate::chat::artifacts::call(hub, bot, name, arguments).await?
+            } else if crate::extensions::resolve(name).is_some() {
+                crate::extensions::call_tool(hub, name, arguments).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, arguments).await?
             };

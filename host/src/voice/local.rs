@@ -6,7 +6,6 @@ use anyhow::{Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::Command;
-
 const TIMEOUT: Duration = Duration::from_secs(60);
 
 pub(super) struct Audio {
@@ -16,10 +15,11 @@ pub(super) struct Audio {
 
 /// Whether this computer can speak on its own.
 pub fn available() -> bool {
-    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
-        return true;
-    }
-    which("espeak-ng") || which("espeak")
+    piper_model().is_some()
+        || cfg!(target_os = "macos")
+        || cfg!(target_os = "windows")
+        || which("espeak-ng")
+        || which("espeak")
 }
 
 fn which(program: &str) -> bool {
@@ -41,7 +41,9 @@ pub(super) async fn speak(text: &str) -> Result<Audio> {
         return Err(anyhow!("nothing to say"));
     }
     let wav = scratch("out.wav");
-    let result = if cfg!(target_os = "macos") {
+    let result = if piper_model().is_some() && which("piper") {
+        piper(text, &wav).await
+    } else if cfg!(target_os = "macos") {
         macos(text, &wav).await
     } else if cfg!(target_os = "windows") {
         windows(text, &wav).await
@@ -52,6 +54,81 @@ pub(super) async fn speak(text: &str) -> Result<Audio> {
     let _ = tokio::fs::remove_file(&wav).await;
     result?;
     Ok(Audio { bytes: bytes.map_err(|e| anyhow!("the voice engine left no audio: {e}"))?, format: "wav" })
+}
+
+/// The Piper voice this computer was given: `CODYNC_PIPER_MODEL` or `<data>/voice/piper.onnx`.
+fn piper_model() -> Option<PathBuf> {
+    let configured = std::env::var_os("CODYNC_PIPER_MODEL").map(PathBuf::from);
+    let default = crate::service::data_dir().join("voice").join("piper.onnx");
+    configured.filter(|path| path.is_file()).or_else(|| default.is_file().then_some(default))
+}
+
+/// A neural voice when a Piper model and binary are installed; it reads the text on stdin.
+async fn piper(text: &str, wav: &Path) -> Result<()> {
+    let model = piper_model().ok_or_else(|| anyhow!("no Piper model"))?;
+    let mut child = Command::new("piper")
+        .args(["--model"])
+        .arg(&model)
+        .args(["--output_file"])
+        .arg(wav)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use tokio::io::AsyncWriteExt as _;
+        stdin.write_all(text.as_bytes()).await?;
+        stdin.shutdown().await?;
+    }
+    let output = tokio::time::timeout(TIMEOUT, child.wait_with_output())
+        .await
+        .map_err(|_| anyhow!("the voice took too long"))??;
+    if !output.status.success() {
+        return Err(anyhow!("piper failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    Ok(())
+}
+
+/// Speech to text with whisper.cpp when a model is installed: `CODYNC_WHISPER_MODEL` or
+/// `<data>/voice/ggml-base.bin`. Returns the transcript.
+pub(super) async fn transcribe(wav: &[u8]) -> Result<String> {
+    let model = std::env::var_os("CODYNC_WHISPER_MODEL")
+        .map(PathBuf::from)
+        .filter(|path| path.is_file())
+        .or_else(|| {
+            let default = crate::service::data_dir().join("voice").join("ggml-base.bin");
+            default.is_file().then_some(default)
+        })
+        .ok_or_else(|| anyhow!("no whisper model: set CODYNC_WHISPER_MODEL or add voice/ggml-base.bin"))?;
+    let binary = if which("whisper-cli") { "whisper-cli" } else { "whisper" };
+    ensure_whisper(binary)?;
+    let input = scratch("in.wav");
+    let prefix = scratch("out");
+    tokio::fs::write(&input, wav).await?;
+    let output = tokio::time::timeout(
+        Duration::from_mins(2),
+        Command::new(binary)
+            .args(["-m"])
+            .arg(&model)
+            .args(["-f"])
+            .arg(&input)
+            .args(["-otxt", "-of"])
+            .arg(&prefix)
+            .output(),
+    )
+    .await
+    .map_err(|_| anyhow!("the transcription took too long"))??;
+    let text = tokio::fs::read_to_string(prefix.with_extension("txt")).await;
+    let _ = tokio::fs::remove_file(&input).await;
+    let _ = tokio::fs::remove_file(prefix.with_extension("txt")).await;
+    if !output.status.success() {
+        return Err(anyhow!("{binary} failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
+    }
+    Ok(text?.trim().to_owned())
+}
+
+fn ensure_whisper(binary: &str) -> Result<()> {
+    if which(binary) { Ok(()) } else { Err(anyhow!("no whisper.cpp binary on PATH (whisper-cli or whisper)")) }
 }
 
 async fn macos(text: &str, wav: &Path) -> Result<()> {

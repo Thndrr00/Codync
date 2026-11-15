@@ -38,6 +38,8 @@ export interface Env {
   DEVICE_CERT_KEY?: string;
   /** GitHub token (Actions: write) that wakes the release gate; unset outside production. */
   RELEASE_GATE_TOKEN?: string;
+  /** Bearer token that lets the maintainers publish changelog notes and verified publishers. */
+  MARKETPLACE_ADMIN?: string;
 }
 
 type Handler = (c: Ctx, params: string[]) => Promise<unknown>;
@@ -90,6 +92,10 @@ const routes: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/marketplace\/reputation$/, api.reputation],
   ["PUT", new RegExp(`^/v1/marketplace/apps/([^/]+)/rating$`), api.rate],
   ["POST", new RegExp(`^/v1/marketplace/apps/([^/]+)/install$`), api.installed],
+  ["GET", /^\/v1\/marketplace\/changelog$/, api.changelog],
+  ["PUT", new RegExp(`^/v1/marketplace/apps/([^/]+)/changelog$`), api.publishChangelog],
+  ["GET", /^\/v1\/marketplace\/publishers$/, api.publishers],
+  ["PUT", new RegExp(`^/v1/marketplace/publishers/([^/]+)$`), api.verifyPublisher],
   ["POST", new RegExp(`^/v1/hooks/${ID}/${ID}$`), api.routineHook],
   // The cloud assistant's MCP connector (mcp.codync.dev, §7.9).
   ["POST", /^\/mcp$/, api.mcp],

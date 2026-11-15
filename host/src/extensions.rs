@@ -10,10 +10,12 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub const METHODS: &[&str] = &["extensions", "extensionCall"];
+pub const METHODS: &[&str] =
+    &["extensions", "extensionCall", "installExtension", "removeExtension", "approveExtension"];
 const TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_OUTPUT: usize = 1 << 20;
 const MAX_TOOLS: usize = 64;
+const APPROVALS: &str = "extension-approvals.v1";
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +29,10 @@ struct Manifest {
     /// `wasmtime` (default) or `wasmer`.
     #[serde(default)]
     runtime: Option<String>,
+    /// What the extension asks for: `files` (its `dirs`), `network`, `env`. Nothing is granted
+    /// before the person approves the list on this computer.
+    #[serde(default)]
+    permissions: Vec<String>,
     /// Directories the module may read and write, relative to its folder.
     #[serde(default)]
     dirs: Vec<String>,
@@ -146,6 +152,8 @@ fn manifest_json(manifest: &Manifest) -> Value {
         "version": manifest.version,
         "description": manifest.description,
         "runtime": manifest.runtime,
+        "permissions": manifest.permissions,
+        "dirs": manifest.dirs,
         "tools": manifest.tools.iter().map(|tool| json!({
             "name": tool.name,
             "description": tool.description,
@@ -161,8 +169,16 @@ pub async fn call(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
             let extensions: Vec<Value> = installed()
                 .into_iter()
                 .map(|(id, manifest)| match manifest {
-                    Ok(manifest) => json!({"id": id, "error": null, "manifest": manifest_json(&manifest)}),
-                    Err(error) => json!({"id": id, "error": format!("{error:#}"), "manifest": null}),
+                    Ok(manifest) => {
+                        let granted = approved(&hub.store, &id);
+                        json!({
+                            "id": id,
+                            "error": null,
+                            "approved": manifest.permissions.iter().all(|p| granted.contains(p)),
+                            "manifest": manifest_json(&manifest),
+                        })
+                    }
+                    Err(error) => json!({"id": id, "error": format!("{error:#}"), "approved": false, "manifest": null}),
                 })
                 .collect();
             Ok(json!({
@@ -170,6 +186,31 @@ pub async fn call(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
                 "folder": root().to_string_lossy(),
                 "extensions": extensions,
             }))
+        }
+        "approveExtension" => {
+            let id = str_arg(b, "id")?;
+            let manifest = manifest(id)?;
+            let mut granted = approved(&hub.store, id);
+            for permission in &manifest.permissions {
+                if !granted.iter().any(|g| g == permission) {
+                    granted.push(permission.clone());
+                }
+            }
+            save_approved(&hub.store, id, &granted)?;
+            Ok(json!({"approved": granted}))
+        }
+        "installExtension" => {
+            let path = str_arg(b, "path")?;
+            let id = install(Path::new(path))?;
+            Ok(json!({"id": id}))
+        }
+        "removeExtension" => {
+            let id = str_arg(b, "id")?;
+            let dir = extension_dir(id)?;
+            ensure!(dir.is_dir(), "no such extension");
+            std::fs::remove_dir_all(&dir)?;
+            let _ = save_approved(&hub.store, id, &[]);
+            Ok(json!({"removed": true}))
         }
         "extensionCall" => {
             let id = b["id"].as_str().ok_or_else(|| anyhow::anyhow!("`id` is required"))?;
@@ -182,9 +223,151 @@ pub async fn call(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
     }
 }
 
-async fn run_tool(_hub: &Hub, id: &str, tool: &str, arguments: Value) -> Result<Value> {
+/// The permissions the person approved for an extension.
+fn approved(store: &crate::store::Store, id: &str) -> Vec<String> {
+    store
+        .kv_read(APPROVALS)
+        .ok()
+        .flatten()
+        .and_then(|text| serde_json::from_str::<serde_json::Map<String, Value>>(&text).ok())
+        .and_then(|map| {
+            map.get(id)
+                .and_then(Value::as_array)
+                .map(|list| list.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+        })
+        .unwrap_or_default()
+}
+
+fn save_approved(store: &crate::store::Store, id: &str, permissions: &[String]) -> Result<()> {
+    let mut map: serde_json::Map<String, Value> =
+        store.kv_read(APPROVALS)?.and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default();
+    map.insert(id.to_owned(), json!(permissions));
+    store.kv_set(APPROVALS, &Value::Object(map).to_string())
+}
+
+fn str_arg<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
+    b[key].as_str().filter(|s| !s.trim().is_empty()).ok_or_else(|| anyhow::anyhow!("`{key}` is required"))
+}
+
+/// Installs a folder, or a `.codync-ext` (a tar.gz holding one), under `<data>/extensions/<id>`.
+fn install(path: &Path) -> Result<String> {
+    ensure!(path.exists(), "that path doesn't exist");
+    let staging = std::env::temp_dir().join(format!("codync-ext-install-{}", uuid::Uuid::new_v4().simple()));
+    let source = if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        std::fs::create_dir_all(&staging)?;
+        let file = std::fs::File::open(path)?;
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(file));
+        archive.unpack(&staging)?;
+        // The manifest may sit at the archive's top or inside one folder.
+        std::fs::read_dir(&staging)?
+            .flatten()
+            .map(|entry| entry.path())
+            .find(|candidate| candidate.join("extension.json").is_file())
+            .or_else(|| Some(staging.clone()).filter(|dir| dir.join("extension.json").is_file()))
+            .ok_or_else(|| anyhow::anyhow!("the archive has no extension.json"))?
+    };
+    let text = std::fs::read_to_string(source.join("extension.json"))?;
+    let manifest: Manifest = serde_json::from_str(&text).context("invalid extension.json")?;
+    ensure!(!manifest.name.trim().is_empty(), "an extension needs a name");
+    ensure!(manifest.tools.len() <= MAX_TOOLS, "an extension offers at most {MAX_TOOLS} tools");
+    let entry = source.join(&manifest.entry);
+    ensure!(
+        !manifest.entry.contains("..") && !Path::new(&manifest.entry).is_absolute(),
+        "an extension entry stays inside its folder"
+    );
+    ensure!(entry.is_file(), "the extension's entry module is missing");
+    let folder = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty() && !name.starts_with("codync-ext-install-"))
+        .map(str::to_owned);
+    let id = folder
+        .filter(|name| name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .unwrap_or_else(|| {
+            manifest
+                .name
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+                .collect::<String>()
+                .trim_matches('-')
+                .to_owned()
+        });
+    ensure!(!id.is_empty(), "the extension needs a folder-safe name");
+    let target = root().join(&id);
+    ensure!(!target.exists(), "an extension named `{id}` is already installed");
+    std::fs::create_dir_all(root())?;
+    copy_dir(&source, &target)?;
+    let _ = std::fs::remove_dir_all(&staging);
+    Ok(id)
+}
+
+fn copy_dir(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)?.flatten() {
+        let path = entry.path();
+        let target = to.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir(&path, &target)?;
+        } else {
+            std::fs::copy(&path, &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Every installed tool, named `ext_<id>_<tool>` so it cannot shadow a built-in.
+pub fn tools() -> Vec<Value> {
+    let mut list = Vec::new();
+    for (id, manifest) in installed() {
+        let Ok(manifest) = manifest else { continue };
+        for tool in &manifest.tools {
+            list.push(json!({
+                "name": tool_name(&id, &tool.name),
+                "description": if tool.description.is_empty() {
+                    format!("{}. {}", manifest.name, tool.name)
+                } else {
+                    format!("{}. {}", manifest.name, tool.description)
+                },
+                "inputSchema": if tool.input_schema.is_null() { json!({"type": "object"}) } else { tool.input_schema.clone() },
+            }));
+        }
+    }
+    list
+}
+
+fn tool_name(id: &str, tool: &str) -> String {
+    format!("ext_{id}_{tool}")
+}
+
+/// Whether a tool belongs to an installed extension; the pair is its folder and its own name.
+pub fn resolve(name: &str) -> Option<(String, String)> {
+    for (id, manifest) in installed() {
+        let Ok(manifest) = manifest else { continue };
+        for tool in &manifest.tools {
+            if tool_name(&id, &tool.name) == name {
+                return Some((id, tool.name.clone()));
+            }
+        }
+    }
+    None
+}
+
+/// Runs an extension tool a bot asked for, after checking the permissions its manifest names.
+pub async fn call_tool(hub: &Hub, name: &str, arguments: &Value) -> Result<Value> {
+    let (id, tool) = resolve(name).ok_or_else(|| anyhow::anyhow!("unknown extension tool `{name}`"))?;
+    run_tool(hub, &id, &tool, arguments.clone()).await
+}
+
+async fn run_tool(hub: &Hub, id: &str, tool: &str, arguments: Value) -> Result<Value> {
     let manifest = manifest(id)?;
     ensure!(manifest.tools.iter().any(|t| t.name == tool), "this extension has no tool `{tool}`");
+    // A manifest's permissions are asked once, on this computer; until then nothing runs.
+    let granted = approved(&hub.store, id);
+    let missing: Vec<&str> =
+        manifest.permissions.iter().map(String::as_str).filter(|p| !granted.iter().any(|g| g == p)).collect();
+    ensure!(missing.is_empty(), "approve this extension in Settings › Extensions first: {}", missing.join(", "));
     let runtime = Runtime::detect(manifest.runtime.as_deref())?;
     let dir = extension_dir(id)?;
     let entry = dir.join(&manifest.entry);
@@ -261,5 +444,16 @@ mod tests {
         assert!(manifest_in(&base, &id).is_ok());
         assert!(extension_dir_in(&base, "../evil").is_err());
         assert!(extension_dir_in(&base, "bad id").is_err());
+    }
+
+    #[test]
+    fn permissions_are_approved_per_extension() {
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).unwrap();
+        assert!(approved(&store, "demo").is_empty());
+        save_approved(&store, "demo", &["network".into(), "files".into()]).unwrap();
+        assert_eq!(approved(&store, "demo"), vec!["network".to_string(), "files".to_string()]);
+        assert!(approved(&store, "other").is_empty());
+        save_approved(&store, "demo", &[]).unwrap();
+        assert!(approved(&store, "demo").is_empty());
     }
 }

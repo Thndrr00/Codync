@@ -123,6 +123,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let provider = crate::voice::Provider::parse(str_arg(&b, "provider")?)?;
             crate::voice::transcribe(&hub.store, provider, str_arg(&b, "model")?, str_arg(&b, "audio")?).await?
         }
+        // The computer's own whisper.cpp, when the chosen provider can't take the recording.
+        "voiceTranscribeLocal" => crate::voice::transcribe_here(str_arg(&b, "audio")?).await?,
         "voiceSpeak" => {
             if b["provider"] == "neutts" {
                 return Ok(ControlFlow::Break(

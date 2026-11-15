@@ -5,7 +5,6 @@ import { ApiError, body, user, type Ctx } from "./common";
 
 /** The catalog's id for an app; it may carry a namespace (`openbot/<id>`, `skills/<name>`). */
 const APP_ID = /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,119}$/;
-
 function appId(c: Ctx, given?: string): string {
   const id = given ?? c.url.pathname.split("/")[4] ?? "";
   if (!APP_ID.test(id)) throw new ApiError("badRequest", "Invalid app id");
@@ -68,4 +67,67 @@ export async function installed(c: Ctx, id?: string) {
     .bind(app)
     .run();
   return { appId: app };
+}
+
+// ---- changelog and verified publishers ----
+
+/** Only the maintainers may write these: a bearer token from the worker's own secret. */
+function maintainer(c: Ctx): void {
+  const configured = c.env.MARKETPLACE_ADMIN;
+  if (!configured) throw new ApiError("notConfigured", "No marketplace editor is configured");
+  const given = c.req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
+  if (given !== configured) throw new ApiError("unauthenticated", "Not a marketplace editor");
+}
+
+/** Every app's latest published versions, newest first, so a catalog draws them in one request. */
+export async function changelog(c: Ctx) {
+  const rows = await c.env.DB.prepare(
+    "SELECT app_id, version, notes, published_at FROM app_changelog ORDER BY published_at DESC LIMIT 500",
+  ).all<{ app_id: string; version: string; notes: string; published_at: number }>();
+  return {
+    apps: (rows.results ?? []).map((row) => ({
+      appId: row.app_id,
+      version: row.version,
+      notes: row.notes,
+      publishedAt: row.published_at,
+    })),
+  };
+}
+
+/** Publishes one version's notes (the maintainers only); the same version replaces its notes. */
+export async function publishChangelog(c: Ctx, id?: string) {
+  maintainer(c);
+  const app = appId(c, id);
+  const body_ = body(c);
+  const version = typeof body_.version === "string" ? body_.version.trim() : "";
+  const notes = typeof body_.notes === "string" ? body_.notes.trim() : "";
+  if (!version || version.length > 40 || !notes || notes.length > 4_000) {
+    throw new ApiError("badRequest", "version and notes are required");
+  }
+  await c.env.DB.prepare(
+    `INSERT INTO app_changelog(app_id, version, notes, published_at) VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(app_id, version) DO UPDATE SET notes = excluded.notes, published_at = excluded.published_at`,
+  )
+    .bind(app, version, notes, c.now)
+    .run();
+  return { appId: app, version };
+}
+
+/** The creators vouched for by the maintainers. */
+export async function publishers(c: Ctx) {
+  const rows = await c.env.DB.prepare("SELECT name FROM verified_publishers ORDER BY name").all<{ name: string }>();
+  return { publishers: (rows.results ?? []).map((row) => row.name) };
+}
+
+/** Marks a creator as verified (the maintainers only). */
+export async function verifyPublisher(c: Ctx, name?: string) {
+  maintainer(c);
+  const given = (name ?? c.url.pathname.split("/")[4] ?? "").trim();
+  if (!given || given.length > 120) throw new ApiError("badRequest", "Invalid publisher");
+  await c.env.DB.prepare(
+    "INSERT INTO verified_publishers(name, verified_at) VALUES (?1, ?2) ON CONFLICT(name) DO NOTHING",
+  )
+    .bind(given, c.now)
+    .run();
+  return { name: given };
 }

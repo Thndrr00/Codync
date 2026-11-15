@@ -5,7 +5,7 @@ import { ModalHeader, SheetPage } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
-import { fetchReputation, rateApp, recordInstall, type AppReputation } from '../../lib/reputation'
+import { fetchMarketplaceMeta, fetchReputation, rateApp, recordInstall, type AppReputation } from '../../lib/reputation'
 import { errorText, type MarketApp } from './market-models'
 import { ErrorText, Field, ItemRow, MarketSection, ServiceLogo, WebLink } from './pieces'
 import { usePlugins } from './plugins'
@@ -23,6 +23,8 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reputation, setReputation] = useState<AppReputation | null>(null)
+  const [changelog, setChangelog] = useState<{ version: string; notes: string } | null>(null)
+  const [verified, setVerified] = useState(false)
   const [rating, setRating] = useState(false)
   const installed = added || app.installed
   const missing = app.fields.some((f) => (f.required || f.url) && !(values[f.id] ?? '').trim())
@@ -32,10 +34,15 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
     void fetchReputation().then((all) => {
       if (alive) setReputation(all.get(app.id) ?? { appId: app.id, stars: 0, count: 0, installs: 0 })
     })
+    void fetchMarketplaceMeta().then((meta) => {
+      if (!alive) return
+      setChangelog(meta.changelog.get(app.id) ?? null)
+      setVerified(meta.publishers.has(app.creator))
+    })
     return () => {
       alive = false
     }
-  }, [app.id])
+  }, [app.id, app.creator])
 
   const rate = async (stars: number) => {
     setRating(true)
@@ -84,7 +91,11 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
             <Text tone="secondary">{app.description}</Text>
             {app.website ? <WebLink title={app.website} url={app.website} className="small truncate" /> : null}
             <dl className="market-facts">
-              <dt>{tr('Creator')}</dt><dd>{app.creator}</dd>
+              <dt>{tr('Creator')}</dt>
+              <dd>
+                {app.creator}
+                {verified ? <> · <span title={tr('Verified by Codync')}>✓ {tr('Verified')}</span></> : null}
+              </dd>
               <dt>{tr('Origin')}</dt><dd>{app.origin ? <WebLink title={app.creator} url={app.origin} className="small" /> : tr('Reviewed by OpenBot')}</dd>
               <dt>{tr('Category')}</dt><dd>{tr(app.category)}</dd>
               <dt>{tr('Version')}</dt><dd>{app.version}</dd>
@@ -114,6 +125,11 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
             </HStack>
           </VStack>
         </CardSection>
+        {changelog ? (
+          <CardSection title={tr("What's new")} footer={`${tr('Version')} ${changelog.version}`}>
+            <Text tone="secondary">{changelog.notes}</Text>
+          </CardSection>
+        ) : null}
         {app.setup === 'local' && app.steps.length ? (
           <CardSection title={tr('Setup')} footer={tr('Runs on {name}.').replaceAll('{name}', store.hostName)}>
             <ol className="market-steps">

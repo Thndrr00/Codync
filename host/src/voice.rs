@@ -244,6 +244,15 @@ pub async fn speak_here(store: &Store, text: &str) -> Option<Value> {
     Some(json!({"audio": STANDARD.encode(audio.bytes), "format": audio.format}))
 }
 
+/// Speech to text with whisper.cpp on this computer, for a dictation whose provider has no key
+/// or when the person chose the computer's own engine.
+pub async fn transcribe_here(audio: &str) -> Result<Value> {
+    let wav = STANDARD.decode(audio).map_err(|_| anyhow!("audio must be base64"))?;
+    anyhow::ensure!(!wav.is_empty() && wav.len() <= 20 * 1024 * 1024, "Audio must contain 1 byte to 20 MiB");
+    let text = local::transcribe(&wav).await?;
+    Ok(json!({"text": text}))
+}
+
 /// Checks the key with the provider (one credential mint), then keeps it. An empty key removes it.
 pub async fn set_key(store: &Store, p: Provider, key: &str) -> Result<Value> {
     let key = key.trim();

@@ -37,3 +37,35 @@ export async function rateApp(appId: string, stars: number): Promise<void> {
 export async function recordInstall(appId: string): Promise<void> {
   await request('POST', `v1/marketplace/apps/${encodeURIComponent(appId)}/install`, {}, true).catch(() => {})
 }
+
+export interface ChangelogEntry {
+  appId: string
+  version: string
+  notes: string
+  publishedAt: number
+}
+
+export interface MarketplaceMeta {
+  /** The newest published entry per app. */
+  changelog: Map<string, ChangelogEntry>
+  /** Creators the maintainers vouched for. */
+  publishers: Set<string>
+}
+
+/** What's new per app and the verified creators; empty when the cloud has neither yet. */
+export async function fetchMarketplaceMeta(): Promise<MarketplaceMeta> {
+  const [notes, publishers] = await Promise.allSettled([
+    request('GET', 'v1/marketplace/changelog', null, false),
+    request('GET', 'v1/marketplace/publishers', null, false),
+  ])
+  const changelog = new Map<string, ChangelogEntry>()
+  if (notes.status === 'fulfilled') {
+    for (const entry of ((notes.value as { apps?: ChangelogEntry[] }).apps ?? [])) {
+      if (!changelog.has(entry.appId)) changelog.set(entry.appId, entry)
+    }
+  }
+  const verified = new Set<string>(
+    publishers.status === 'fulfilled' ? ((publishers.value as { publishers?: string[] }).publishers ?? []) : [],
+  )
+  return { changelog, publishers: verified }
+}

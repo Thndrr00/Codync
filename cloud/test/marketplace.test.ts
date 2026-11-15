@@ -1,7 +1,7 @@
 // Marketplace reputation: public totals, one rating per person, installs counted per account.
 
 import { describe, expect, it } from "vitest";
-import { call, clerkToken, type Json } from "./helpers";
+import { call, clerkToken, env, type Json } from "./helpers";
 
 const app = (name: string) =>
   `openbot/${name}-${Math.random().toString(36).slice(2, 8)}`;
@@ -42,5 +42,31 @@ describe("marketplace reputation", () => {
       expect((await call("PUT", `/v1/marketplace/apps/${id}/rating`, { token, body: { stars } })).status).toBe(400);
     }
     expect((await call("PUT", "/v1/marketplace/apps/bad%20id/rating", { token, body: { stars: 5 } })).status).toBe(400);
+  });
+
+  it("publishes changelog notes and verified publishers for maintainers only", async () => {
+    const admin = "test-marketplace-editor";
+    (env as unknown as { MARKETPLACE_ADMIN?: string }).MARKETPLACE_ADMIN = admin;
+    const id = app("notes");
+    const editor = { Authorization: `Bearer ${admin}` };
+
+    expect((await call("PUT", `/v1/marketplace/apps/${id}/changelog`, { body: { version: "1.1.0", notes: "Faster." } })).status)
+      .toBe(401);
+    expect((await call("PUT", `/v1/marketplace/apps/${id}/changelog`, { headers: editor, body: { version: "", notes: "" } })).status)
+      .toBe(400);
+    expect((await call("PUT", `/v1/marketplace/apps/${id}/changelog`, { headers: editor, body: { version: "1.1.0", notes: "Faster." } })).status)
+      .toBe(200);
+
+    const notes = await call("GET", "/v1/marketplace/changelog");
+    expect(((notes.body as Json).apps as Json[]).find((row) => row.appId === id)).toMatchObject({
+      appId: id,
+      version: "1.1.0",
+      notes: "Faster.",
+    });
+
+    expect((await call("PUT", "/v1/marketplace/publishers/Nous%20Research", { body: {} })).status).toBe(401);
+    expect((await call("PUT", "/v1/marketplace/publishers/Nous%20Research", { headers: editor })).status).toBe(200);
+    const list = await call("GET", "/v1/marketplace/publishers");
+    expect((list.body as Json).publishers).toContain("Nous Research");
   });
 });
