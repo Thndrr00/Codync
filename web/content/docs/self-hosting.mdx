@@ -1,0 +1,83 @@
+Codync's host, the program that runs your bots, also runs in a container. One container is one computer: every bot lives in it, with its chats, memory and workspaces on a volume you keep. It suits a server where you already run Docker, or trying the host without installing anything.
+
+## Before you start
+
+| You need | Why |
+| --- | --- |
+| Docker with Compose | The compose file starts the host and its volume |
+| An agent inside the image | The image carries the host only: no Claude Code, Codex or Node.js, so a bot has nothing to answer with until you add one |
+| The iPhone or Android app, or a terminal | There is no web page to open; the host serves the apps, not a browser UI |
+
+## Start it
+
+From a checkout of the repository:
+
+```sh
+docker compose up -d --build
+curl http://127.0.0.1:19222/health
+```
+
+The answer is a small JSON line with `"ok": true` and the host's version. `docker compose logs -f codync` follows the log, and `docker compose ps` shows the container as healthy once the host answers.
+
+To run the same thing without Compose, publish the port and mount the volume by hand:
+
+```sh
+docker run -d --name codync -p 19222:19222 -v codync-data:/data codync-host:local
+```
+
+The container runs as an unprivileged user. Its data directory is `/data`; that is the volume, and everything the host owns is in it.
+
+## Use it from a terminal
+
+The terminal UI and the command line live in the container:
+
+```sh
+docker compose exec codync codync-host status
+docker compose exec codync codync-host tui
+```
+
+To use the desktop app on your own computer instead, add the server as an SSH computer, or forward the port as the [Linux servers](/docs/linux-servers) page describes.
+
+## Pair your phone
+
+The pairing code lists the addresses the host can see. In a container that is the container's own private address, which your phone cannot reach, so pick one of these:
+
+- **Your Codync account.** Put the host in the account and sign the phone in to it: the container connects out to the relay, so the phone reaches it from anywhere. Run `docker compose exec codync codync-host pair` and answer the question it asks in that terminal.
+- **Host networking on Linux.** Start the service with `network_mode: host` in the compose file so the host sees the machine's real network and Tailscale addresses. Delete the port mapping when you do; the host listens on the machine's port directly.
+- **Your own HTTPS address.** Put a proxy in front that forwards only `/channel`, set `CODYNC_EXTERNAL_URL` to the address it serves, and pair with that address. The compose file has a `proxy` profile that does this with Caddy.
+
+Pairing rules are the same as on any computer: the code works once, expires after ten minutes, and the computer asks before it trusts a phone.
+
+## Keep it private
+
+The published port answers `/health` to anyone who can reach it, and `/channel` only to phones holding your pairing keys. The API, its events and the terminals need a caller on the computer itself plus a secret token, so they are not reachable through the published port. Still, keep the port closed in the firewall unless you pair over a VPN or a private network, exactly as with a host on a Linux server.
+
+If you put a proxy in front, forward only `/channel`. A proxy on the same machine makes every request look like it comes from the computer itself, so forwarding the API would hand your host to anyone who reaches the proxy. The compose `proxy` profile forwards only the channel for that reason.
+
+## Your data and upgrades
+
+The volume holds the database, the pairing keys, bot workspaces and the token. Back it up by copying it while the host is stopped:
+
+```sh
+docker compose stop codync
+docker run --rm -v codync_codync-data:/data -v "$PWD":/backup alpine tar czf /backup/codync-data.tgz -C /data .
+docker compose start codync
+```
+
+To upgrade, get the new files and rebuild; the volume keeps its data:
+
+```sh
+git pull
+docker compose up -d --build
+```
+
+Don't update the host from inside the container: a new binary there disappears with the next rebuild. The image is the version.
+
+## What it does not give you
+
+- **One container for all your bots.** Bots are separate conversations, not separate machines, and they share the container's agents and data.
+- **No per-bot sandbox.** The container is the boundary; Codync's approvals and per-bot settings are what limit a bot, not a hypervisor.
+- **No browser UI.** The clients are the iPhone and Android apps, the desktop app and the terminal UI.
+- **No stored connectors without a credential store.** A container has no desktop keyring, so connectors, Composio and saved API keys are unavailable until an agent's own sign-in provides what it needs.
+- **No computer use or remote screen**, which need a desktop session.
+- **No installed agents.** Add Node.js and the agents you use to the image, or sign in to an agent each time you start a fresh container.

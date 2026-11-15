@@ -154,6 +154,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Run the Codync host on a headless Linux server or cloud VM, pair your phone with it, and reach it from anywhere.",
       },
       {
+        slug: "self-hosting",
+        title: "Self-hosting with Docker",
+        description:
+          "Run the Codync host in a container: build it, keep its data on a volume, pair your phone, upgrade it, and what a container does not isolate.",
+      },
+      {
         slug: "updates",
         title: "Updates",
         description:

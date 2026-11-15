@@ -45,6 +45,7 @@ Key facts:
 - [Remote access](https://www.codync.dev/docs/remote-access): relay, direct connection, pairing, SSH computers
 - [Codync Cloud](https://www.codync.dev/docs/codync-cloud): a cloud computer on your own Boat or InstaBox account
 - [Linux servers](https://www.codync.dev/docs/linux-servers)
+- [Self-hosting with Docker](https://www.codync.dev/docs/self-hosting)
 - [Privacy](https://www.codync.dev/docs/privacy): what stays on your computer and what Codync's services see
 
 ## Optional

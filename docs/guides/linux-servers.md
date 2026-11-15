@@ -30,6 +30,8 @@ The script puts `codync-host` in `~/.local/bin` (`/usr/local/bin` as root; overr
 
 Other commands work the same as on a desktop: `codync-host pair`, `codync-host tui`, `codync-host uninstall` (keeps data in `~/.codync`). Logs go to the journal: `journalctl --user -u codync-host -f`.
 
+To run the same host in a container instead, with its data on a volume: [Docker](docker.md).
+
 ## Reaching it from the phone
 
 The phone connects over the encrypted device channel. The pairing link lists only **Tailscale** and **private (LAN/VPC)** addresses, plus any you set in `CODYNC_EXTERNAL_URL`; the host never advertises a public IP on its own.

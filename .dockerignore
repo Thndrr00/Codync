@@ -1,0 +1,34 @@
+# Build context for the host image: host/ plus the trees its build reads through
+# `include_str!`/`include_bytes!` — packaging/{n8n,comfy,updates} and the language catalogs in
+# apps/ios/Kit/Sources/CodyncKit/Resources. Everything here is left out to keep the context
+# small; see Dockerfile.
+.git
+.github
+.githooks
+.greptile
+.agents
+.claude
+.impeccable
+.env
+.env.*
+
+# Build output and dependencies
+**/node_modules
+**/target
+**/.build
+build
+
+# Other products and the site: not part of this image
+apps/android
+apps/desktop
+apps/screen-linux
+apps/screen-macos
+cloud
+discord
+docs
+marketing
+metadata
+private-relay
+relay
+tools
+web
