@@ -70,6 +70,12 @@ export function IslandWindow({ model }: { model: IslandModel }) {
       }}
       onDragLeave={() => setDropping(false)}
       onDrop={drop}
+      // Ported from OpenBot 0.68.0: the island goes away with a right-click, and Settings' own switch
+      // shows it again. The island is a separate window, so the click never reaches the app behind it.
+      onContextMenu={(event) => {
+        event.preventDefault()
+        void window.codync.island.setEnabled(false)
+      }}
     >
       <span className="island-ear left" />
       <span className="island-ear right" />

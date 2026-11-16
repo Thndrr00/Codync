@@ -14,6 +14,7 @@ small and is listed here.
 | Release | Item | Codync shape | Files |
 | --- | --- | --- | --- |
 | 0.68.0 | A scheduled, script or webhook routine that answers only `[SILENT]` stays quiet, as one that answers `[[no-update]]` does; routines imported from Hermes often use these words | The silence check also reads `[SILENT]`, `[[SILENT]]` and `[[NO-UPDATE]]`, any case, beside the empty answer, `NO_UPDATE` and `(pass)`; anything else is still an answer | `host/src/agent/bot/proactive.rs` (`is_silent`) |
+| 0.68.0 | Right-click the island to hide it; the Settings switch shows it again | A right-click anywhere on the island turns it off through the same `island:setEnabled` the Settings switch uses, and Settings › Island keeps the control | `apps/desktop/src/renderer/views/island/IslandWindow.tsx` |
 
 ## Already here, verified in the code
 
@@ -26,9 +27,9 @@ small and is listed here.
 
 ## Not ported, and why
 
-- **The agent dock and the island's menus** (floating dock on Linux, channels on the dock, dock size,
-  dragging agents in it, right-clicking the island to hide it): Codync has no dock; its island has its
-  own settings and no per-item menu, and the roster already keeps the person's drag order.
+- **The agent dock and its menus** (floating dock on Linux, channels on the dock, dock size, dragging
+  agents in it): Codync has no dock; its island hides with a right-click (above) and has no per-item
+  menu, and the roster already keeps the person's drag order.
 - **The Tasks page** (its composer, agent search, resizable panel, microphone): Codync has no
   separate tasks page; a task is a message in a chat, which already has all of that.
 - **Vault two-step codes and the secure sign-in card**: Codync has no Vault.
