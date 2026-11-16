@@ -418,6 +418,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
         }
         entry.data.text("style") == "error" -> ErrorNotice(entry, state, store)
         "memoryUndo" in entry.data -> LearnedNotice(entry, store)
+        "routineUndo" in entry.data -> RoutineNotice(entry, store)
         // A fresh conversation starts at the left, as on the iPhone.
         "handoff" in entry.data -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {

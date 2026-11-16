@@ -34,6 +34,10 @@ suspend fun AppStore.beliefAction(botId: String, belief: Belief, action: String,
 suspend fun AppStore.undoMemoryChange(botId: String, entryId: String): JsonElement =
     hostQuery("undoMemoryChange", body("botId" to botId, "entryId" to entryId))
 
+/** Takes back a routine the bot created, changed or deleted: the notice's Undo. */
+suspend fun AppStore.undoRoutineChange(entryId: String): JsonElement =
+    hostQuery("undoRoutineChange", body("entryId" to entryId))
+
 /** "What I know about you": the notes as beliefs with how sure the bot is, filters, and confirm, forget and bring back. */
 internal fun CardRows.beliefsRows(botId: String, store: AppStore, rev: Long?) {
     row { BeliefsPanel(botId, store, rev) }
@@ -89,6 +93,21 @@ internal fun CardRows.beliefsRows(botId: String, store: AppStore, rev: Long?) {
 }
 
 /** The "I learned …" line of a bot's chat: what it learned, with an Undo until it is taken back. */
+/** A routine the bot created, changed or deleted, with the Undo that puts it back. */
+@Composable internal fun RoutineNotice(entry: com.codync.android.core.Entry, store: AppStore) {
+    val undo = entry.data["routineUndo"] as? kotlinx.serialization.json.JsonObject
+    val undone = (undo?.get("undone") as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+    val scope = rememberCoroutineScope()
+    var busy by remember(entry.id) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(entry.text, style = Type.chatFootnote, color = Palette.secondary)
+        if (!undone) SecondaryButton("Undo", enabled = !busy) {
+            busy = true
+            scope.launch { try { store.undoRoutineChange(entry.id) } finally { busy = false } }
+        }
+    }
+}
+
 @Composable internal fun LearnedNotice(entry: com.codync.android.core.Entry, store: AppStore) {
     val undo = entry.data["memoryUndo"] as? kotlinx.serialization.json.JsonObject
     val undone = (undo?.get("undone") as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
