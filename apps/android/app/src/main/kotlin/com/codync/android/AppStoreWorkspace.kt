@@ -204,6 +204,55 @@ internal suspend fun AppStore.deleteMeetingNote(id: String): Boolean =
     hostCall("deleteMeetingNote", buildJsonObject { put("id", id) })
         .jsonObject["deleted"]?.jsonPrimitive?.booleanOrNull == true
 
+/** One encrypted backup already in the person's WebDAV folder. */
+internal data class CloudBackupFile(val name: String, val at: Long)
+
+/** Where the computer puts its encrypted backups and how the last one went. */
+internal data class CloudBackupStatus(
+    val url: String,
+    val username: String,
+    val enabled: Boolean,
+    val keep: Int,
+    val lastAt: Long?,
+    val lastError: String?,
+    val configured: Boolean,
+    val hasPassword: Boolean,
+    val files: List<CloudBackupFile>,
+)
+
+internal data class CloudBackupUpload(val name: String, val bytes: Long)
+
+private fun backupStatusOf(json: JsonObject): CloudBackupStatus = CloudBackupStatus(
+    url = json.str("url") ?: "",
+    username = json.str("username") ?: "",
+    enabled = json.bool("enabled") ?: false,
+    keep = (json.num("keep") ?: 14).toInt(),
+    lastAt = json.num("lastAt"),
+    lastError = json.str("lastError"),
+    configured = json.bool("configured") ?: false,
+    hasPassword = json.bool("hasPassword") ?: false,
+    files = (json["files"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.let { file ->
+        CloudBackupFile(file.str("name") ?: "", file.num("at") ?: 0)
+    } } ?: emptyList(),
+)
+
+internal suspend fun AppStore.cloudBackupStatus(): CloudBackupStatus =
+    backupStatusOf(hostCall("cloudBackupStatus", buildJsonObject {}).jsonObject)
+
+internal suspend fun AppStore.saveCloudBackup(url: String, username: String, password: String, enabled: Boolean, keep: Int): CloudBackupStatus =
+    backupStatusOf(hostCall("saveCloudBackup", buildJsonObject {
+        put("url", url)
+        put("username", username)
+        put("password", password)
+        put("enabled", enabled)
+        put("keep", keep)
+    }, 120_000).jsonObject)
+
+internal suspend fun AppStore.runCloudBackup(): CloudBackupUpload {
+    val json = hostCall("runCloudBackup", buildJsonObject {}, 300_000).jsonObject
+    return CloudBackupUpload(json.str("name") ?: "", json.num("bytes") ?: 0)
+}
+
 internal suspend fun AppStore.teamTemplates(): List<TeamTemplate> =
     (hostCall("teamTemplates", buildJsonObject {}).jsonObject["templates"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::templateOf) } ?: emptyList()

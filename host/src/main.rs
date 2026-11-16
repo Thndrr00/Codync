@@ -18,6 +18,7 @@ mod calendar_feeds;
 mod channels;
 mod chat;
 mod cli;
+mod cloud_backup;
 mod cloud_cli;
 mod compat;
 mod computer;

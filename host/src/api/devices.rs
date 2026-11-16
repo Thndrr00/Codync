@@ -139,6 +139,7 @@ const VIEWER: &[&str] = &[
     "waitingItems",
     "meetingNotes",
     "meetingNote",
+    "cloudBackupStatus",
     "teamTemplates",
     "routines",
     "routineCalendar",

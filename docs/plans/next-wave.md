@@ -19,6 +19,7 @@ is bigger than one release.
 | Email accounts (IMAP/SMTP via the local Python bridge) | done (host; screens on desktop, iPhone and Android) |
 | Waiting-on tracker that feeds the daily digest | done (host; board section on desktop, iPhone and Android) |
 | Meeting notes (microphone recording, transcript and minutes) | done (host; recorder and notes on desktop, iPhone and Android) |
+| Encrypted cloud backup to WebDAV (daily or now) | done (host; settings on desktop, iPhone and Android) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
@@ -158,6 +159,20 @@ to the signed installers.
   `waiting.v1`. API: `waitingItems`, `saveWaitingItem`, `setWaitingDone`, `deleteWaitingItem`. The
   daily digest adds them, and bots can list them with the read-only `waiting_on` tool. The board on
   desktop and both phones gains a Waiting on section with an add row, a done action and delete.
+
+## Encrypted cloud backup — done
+
+- `host/src/cloud_backup.rs`: `cloudBackupStatus`, `saveCloudBackup` and `runCloudBackup`. The host
+  takes a consistent `VACUUM INTO` copy, seals it with the vault key (`vault::seal`, XChaCha20-Poly1305)
+  and uploads it with a WebDAV `PUT` to the person's own folder. Settings live in `cloud-backup.v1` and
+  the password in the vault; the server only sees ciphertext. Old uploads are deleted after `keep`
+  (1–100, default 14). A six-hour ticker uploads once a day while the schedule is on; **Back up now**
+  always works.
+- Desktop Settings › Backups and the Backups sheet in each phone's computer settings configure the
+  folder, username, password and retention, show the last result and the uploaded files.
+- Restoring is a manual copy of the `.codync` file back into place, after the key is available on that
+  computer; a restore screen is a later step. Only WebDAV is supported for now (Nextcloud, ownCloud,
+  Box, pCloud and similar).
 
 ## Meeting notes — done (microphone; system audio is next)
 

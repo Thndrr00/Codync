@@ -95,6 +95,20 @@ pub fn write(store: &Store, slot: &str, value: &str) -> Result<()> {
     store.kv_set(slot, &format!("{PREFIX}{}", STANDARD.encode(bytes)))
 }
 
+/// Seals arbitrary bytes (a backup) with this computer's vault key. The result is a 24-byte nonce
+/// followed by the ciphertext; `aad` binds it to its purpose.
+pub fn seal(store: &Store, aad: &str, bytes: &[u8]) -> Result<Vec<u8>> {
+    let key = store.secret_key.locked();
+    let key = key.as_ref().ok_or_else(unavailable)?;
+    let cipher = XChaCha20Poly1305::new_from_slice(key).map_err(|_| unavailable())?;
+    let mut nonce = [0; 24];
+    getrandom::fill(&mut nonce).map_err(|_| anyhow!("Could not generate a backup nonce"))?;
+    let sealed = cipher
+        .encrypt(&nonce.into(), Payload { msg: bytes, aad: aad.as_bytes() })
+        .map_err(|_| anyhow!("Could not encrypt the backup"))?;
+    Ok(nonce.into_iter().chain(sealed).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
