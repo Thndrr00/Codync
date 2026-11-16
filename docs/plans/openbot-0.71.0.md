@@ -67,9 +67,9 @@ and provider drivers), so this page records what applies, what Codync already do
   look of their own, not copies.
 - **The canvas**: dragging a step or a note by its text, the caret where a click lands, and Stop for
   the routine in focus. Codync's flow canvas has its own pointer handling (`lib/routine-flow.ts`,
-  `core/RoutineFlow.kt`) and its run controls live in the routine's own panel; matching OpenBot's
-  pointer rules there is a change of its own, and a Stop that ends a run belongs next to Run now, which
-  is where the desktop and Android panels already keep it.
+  `core/RoutineFlow.kt`), and it has no run controls: a run is started from the routine's own editor
+  and stopped from its notice in the chat (**Cancel task**, `store.cancelRoutineRun`). A canvas Stop
+  is a canvas feature of its own, not a copy of this one.
 - **A note path from a notes app written as a file link**, **the image viewer's sharpness at a display
   scale above 100 %**, **resizing the right panel when no pane is open**, **the empty WhatsApp lines of
   a theme**: each is a small UI or copy fix whose Codync counterpart needs its own read; none is taken
