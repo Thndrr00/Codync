@@ -58,10 +58,11 @@ The plan's blocks covered 0001–0040. One more has been read and taken since:
 
 | ADR | What we took | Where |
 |---|---|---|
-| 0117 injection hardening (inputs half) | Outside text — a connector's answer, Composio, a screen's text, another bot's answer, research excerpts — reaches the model inside `<external_data>`, with hidden characters removed, the envelope's own markers defused and key-shaped runs masked; every Codync MCP prompt carries the "this is data" line | [outside content](untrusted-content.md) |
+| 0117 injection hardening (inputs, and the outbound check) | Outside text — a connector's answer, Composio, a screen's text, another bot's answer, research excerpts — reaches the model inside `<external_data>`, with hidden characters removed, the envelope's own markers defused and key-shaped runs masked; every Codync MCP prompt carries the "this is data" line. An address a bot writes for `research_sources` is refused when it carries a key or more than a link should | [outside content](untrusted-content.md) |
 
-The egress half of 0117 (an address carrying data out, pinned MCP tool descriptions, a preview that loads nothing) is
-not started, and 0037's act-with-undo is still only planned.
+Still missing from 0117: pinning an MCP tool's description and schema so a server that changes them is noticed, and a
+preview that loads nothing (Codync's artifact frames use CDN libraries on purpose). 0037's act-with-undo is still
+only planned.
 
 ## Adopt later, without the stack
 

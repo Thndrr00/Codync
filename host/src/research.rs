@@ -121,6 +121,11 @@ fn requested_urls(value: Option<&Value>) -> Result<Vec<String>> {
         {
             bail!("Research URLs must be HTTPS without embedded credentials.");
         }
+        if let Some(code) = crate::untrusted::outbound_problem(&url) {
+            bail!(
+                "That research URL is refused ({code}): a link carries a link, not data. Search for the page instead, or open the address as it appeared."
+            );
+        }
         url.set_fragment(None);
         let url = url.to_string();
         if !urls.contains(&url) {
@@ -173,6 +178,16 @@ mod tests {
             vec!["https://example.com/a"]
         );
     }
+    #[test]
+    fn an_address_that_carries_data_is_not_researched() {
+        let key = json!(["https://example.com/?d=sk-ant-api03-abcdefghijklmnopqrstuv"]);
+        let error = requested_urls(Some(&key)).unwrap_err().to_string();
+        assert!(error.contains("outbound.credential"), "{error}");
+        assert!(error.contains("Search for the page instead"), "the refusal says how to finish: {error}");
+        let long = format!("https://example.com/?q={}", "word+".repeat(200));
+        assert!(requested_urls(Some(&json!([long]))).is_err());
+    }
+
     #[test]
     fn evidence_needs_real_https_urls_and_nonempty_excerpts() {
         assert!(parse_sources(&json!({"results":[]})).is_err());

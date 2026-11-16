@@ -62,12 +62,29 @@ space, and `</ｅｘｔｅｒｎａｌ＿ｄａｔａ>` all read as text.
 `[credential hidden]`. Every outside result is masked before it is wrapped, so a page or a connector that prints a
 key cannot make a bot repeat it.
 
+## Addresses that carry data
+
+A bot writes the addresses it researches. `crate::untrusted::outbound_problem` refuses one that carries a key or more
+than a link should, before anything is fetched:
+
+| Code | When |
+|---|---|
+| `outbound.credential` | a key shape in the query, the fragment or a path segment, percent-decoded |
+| `outbound.long` | query plus fragment over 512 characters, or a path segment over 200 |
+
+The refusal says how to finish the job — search for the page, or open the address as it appeared. It applies to
+`research_sources`, the one place where the host fetches an address a bot wrote; a harness's own `WebFetch` or `curl`
+never reaches the host, so there the prompt line is the whole influence. An address a person, a search result or a
+page gave is not checked: it carries what it carries.
+
 ## What is not here
 
 - Wrapping a harness's own tool results: those never reach the host. The prompt line is the host's whole influence
   there.
-- The egress half of ADR 0117 (an address carrying data out, pinned MCP tool descriptions, a preview that loads
-  nothing): each is its own change, and none is started.
+- Pinning an MCP tool's description and input schema, so a server that changes them is noticed (the other half of
+  ADR 0117's egress): not started.
+- A preview that loads nothing from the network: Codync's artifact frames are built on CDN libraries on purpose
+  ([artifacts](artifacts.md)), so this one is decided differently.
 - Masking a credential inside a normal chat reply: a reply is the bot's own text, and the bot is told not to repeat
   what a page printed. A key a person asked the bot to fetch is masked too, as in ADR 0117.
 

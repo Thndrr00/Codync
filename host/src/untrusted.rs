@@ -161,6 +161,55 @@ fn credential_len(rest: &str) -> usize {
     rest.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')).count()
 }
 
+/// What a server reads in a `%20`-style part of an address, and in a `+` (a space in a query).
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let hex = |b: u8| (b as char).to_digit(16);
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' if i + 2 < bytes.len() => {
+                if let (Some(high), Some(low)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                    let byte = high * 16 + low;
+                    out.push(u8::try_from(byte).unwrap_or(b'%'));
+                    i += 3;
+                } else {
+                    out.push(b'%');
+                    i += 1;
+                }
+            }
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            other => {
+                out.push(other);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Why an address must not be fetched: it carries a key, or it carries more than a link should. A link a person,
+/// a search result or a page gave carries what it carries; this is for addresses a bot wrote itself.
+pub fn outbound_problem(url: &reqwest::Url) -> Option<&'static str> {
+    let query = percent_decode(url.query().unwrap_or_default());
+    let fragment = percent_decode(url.fragment().unwrap_or_default());
+    let path = percent_decode(url.path());
+    if has_credential(&query) || has_credential(&fragment) || has_credential(&path) {
+        return Some("outbound.credential");
+    }
+    if query.chars().count() + fragment.chars().count() > 512 {
+        return Some("outbound.long");
+    }
+    if url.path_segments().into_iter().flatten().any(|part| percent_decode(part).chars().count() > 200) {
+        return Some("outbound.long");
+    }
+    None
+}
+
 /// Whether a text carries something that looks like a key, a token or a private key.
 pub fn has_credential(text: &str) -> bool {
     if text.contains("PRIVATE KEY-----") {
@@ -267,5 +316,37 @@ mod tests {
         let text = "A normal page about prices and opening hours.";
         assert_eq!(neutralize(text), text);
         assert_eq!(envelope(EXTERNAL, text), format!("<external_data>\n{text}\n</external_data>"));
+    }
+
+    fn url(text: &str) -> reqwest::Url {
+        reqwest::Url::parse(text).unwrap()
+    }
+
+    #[test]
+    fn an_address_that_carries_a_key_is_refused() {
+        assert_eq!(outbound_problem(&url("https://example.com/article")), None);
+        assert_eq!(
+            outbound_problem(&url("https://x.io/?d=sk-ant-api03-abcdefghijklmnopqrstuv")),
+            Some("outbound.credential")
+        );
+        assert_eq!(
+            outbound_problem(&url("https://x.io/?d=sk%2Dant%2Dapi03%2Dabcdefghijklmnopqrstuv")),
+            Some("outbound.credential"),
+            "a percent-encoded key is still a key"
+        );
+        assert_eq!(
+            outbound_problem(&url("https://x.io/a/ghp_0123456789abcdefghij")),
+            Some("outbound.credential"),
+            "a key in the path is refused too"
+        );
+    }
+
+    #[test]
+    fn an_address_that_carries_more_than_a_link_is_refused() {
+        let long = "q=".to_owned() + &"word ".repeat(120);
+        assert_eq!(outbound_problem(&url(&format!("https://x.io/search?{long}"))), Some("outbound.long"));
+        assert_eq!(outbound_problem(&url(&format!("https://x.io/{}", "a".repeat(240)))), Some("outbound.long"));
+        let ordinary = format!("https://x.io/search?q={}", "word+".repeat(60));
+        assert_eq!(outbound_problem(&url(&ordinary)), None, "a search a person could have typed passes");
     }
 }
