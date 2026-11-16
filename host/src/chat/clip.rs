@@ -88,6 +88,16 @@ fn without_blocks(html: &str, open: &str, close: &str) -> String {
 }
 
 /// Tags become spaces, entities are decoded, and runs of whitespace collapse.
+pub(crate) fn plain_text(html: &str) -> String {
+    text_of(html)
+}
+
+/// Tags become spaces, entities are decoded, and runs of whitespace collapse.
+pub(crate) fn plain_text(html: &str) -> String {
+    // Feed descriptions are often HTML escaped once more: decode, then strip what that reveals.
+    text_of(&decode_entities(html))
+}
+
 fn text_of(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut in_tag = false;

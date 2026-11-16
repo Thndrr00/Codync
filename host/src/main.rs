@@ -30,6 +30,7 @@ mod enterprise;
 mod environment;
 mod extensions;
 mod external;
+mod feeds;
 mod github;
 mod health;
 mod hub;

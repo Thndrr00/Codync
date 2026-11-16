@@ -128,6 +128,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::calendar_feeds::tool_call(hub, name, arguments).await?
             } else if crate::chat::clip::TOOLS.contains(&name) {
                 crate::chat::clip::call(hub, name, arguments).await?
+            } else if name == "news_feed" {
+                crate::feeds::tool_call(hub, name, arguments).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, arguments).await?
             };

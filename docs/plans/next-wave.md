@@ -12,6 +12,7 @@ is bigger than one release.
 | Workspace search with citations | done (lexical + optional semantic rerank) |
 | Team meeting: minutes (`/minutes`) and text roundtable done; voice spoken by the host and played on the phones |
 | Calendar feeds (`.ics`) and a read-only agenda tool for bots | done (host) |
+| RSS/Atom subscriptions and a `news_feed` tool for bots | done (host) |
 | Web page clipper for bots (`clip_page`) | done (host) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
@@ -123,7 +124,7 @@ to the signed installers.
 - Next: embeddings (fastembed or llama.cpp) behind `codync-mem` for semantic search, and a citation card
   in the chat that opens the file at the line.
 
-## Calendar feeds and web clipping — done (host)
+## Calendar feeds, news and web clipping — done (host)
 
 - `host/src/calendar_feeds.rs`: read-only `.ics` subscriptions (Google, Apple, Outlook, any `CalDAV`
   export) with `calendarFeeds`, `addCalendarFeed`, `removeCalendarFeed` and `calendarAgenda`. It parses
@@ -131,6 +132,10 @@ to the signed installers.
   and keeps at most twenty feeds. Bots get `calendar_agenda` as a read-only chat tool.
 - `host/src/chat/clip.rs`: `clip_page` fetches one page (http/https, 5 MiB, 20 s) and returns its
   title and readable text, dropping scripts, styles, navigation, header, footer and forms.
+- `host/src/feeds.rs`: RSS 2.0 and Atom subscriptions with `feedSubscriptions`, `addFeed`,
+  `removeFeed` and `feedItems`; parses titles, links, dates (RFC 3339, RFC 2822, bare dates) and
+  summaries, caches each feed for ten minutes and keeps at most thirty. Bots get `news_feed`, which
+  lists the newest headlines with links the bot can read with `clip_page`.
 - Next: showing subscribed events beside routines in each client's calendar, and a feed editor page.
 - Acceptance: a Google Calendar export URL answers "what's on my calendar this week", and a link in a
   chat is explained from its text.
