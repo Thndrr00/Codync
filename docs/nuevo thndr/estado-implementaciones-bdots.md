@@ -40,3 +40,13 @@ normalización del historial CDP, geometría de la pastilla y decodificación de
 - Grabador DOM (ideas 38–39): `start_teaching` inyecta `RECORDER` en el panel del navegador con
   `Page.addScriptToEvaluateOnNewDocument` y `Runtime.evaluate` (solo Windows, donde existe el
   panel). Devuelve `recorderInstalled` para que el agente sepa si los eventos DOM estarán disponibles.
+
+## Verificación
+
+- Desktop: `npm run typecheck` limpio; `npm test` → 562 tests, 538 pasan, 0 fallan, 24 omitidos.
+- Android: `:design:test :core:test` → BUILD SUCCESSFUL; `TabPillGeometryTest` 2/2.
+- Host: `cargo fmt --check` limpio. `cargo test` no pudo completarse en este equipo: `aws-lc-sys`
+  necesita NASM (se usó `AWS_LC_SYS_PREBUILT_NASM=1`) y el equipo tenía 0,45 GB libres por builds
+  simultáneos de otros agentes, así que la compilación se interrumpió sin mensaje de error. Queda
+  pendiente ejecutar `cargo test` en un entorno con memoria suficiente.
+- iOS: `xcodebuild` no está disponible en Windows; los tests de CodyncKit no se ejecutaron aquí.

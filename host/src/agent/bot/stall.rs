@@ -35,7 +35,7 @@ impl LoopGuard {
             self.strikes = 0;
             return None;
         };
-        let signature = format!("{title}\n{}\n{}", stable_args(args), normalize(output));
+        let signature = format!("{title}\n{}\n{}", stable_args(*args), normalize(output));
         if self.last.as_deref() == Some(signature.as_str()) {
             self.strikes += 1;
         } else {
