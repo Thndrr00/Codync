@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -55,9 +57,12 @@ private val THUMBNAIL = 112.dp
         loaded = true
     }
     val shown = image
+    // Ported from OpenBot 0.66.0: tap an image you attached to see it full size before you send it.
+    var preview by remember(file.path) { mutableStateOf(false) }
     if (shown != null || expectsImage && !loaded) Box(Modifier.size(THUMBNAIL)) {
         Box(Modifier.fillMaxSize().clip(RoundedRectangle(16.dp)).background(Palette.surface)
-            .semantics { contentDescription = "Image attachment: ${file.name}" }, contentAlignment = Alignment.Center) {
+            .then(if (shown != null) Modifier.clickable { preview = true } else Modifier)
+            .semantics { contentDescription = if (shown != null) "Image attachment: ${file.name}, view" else "Image attachment: ${file.name}" }, contentAlignment = Alignment.Center) {
             if (shown != null) Image(shown, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             else Symbol("photo", size = 20.dp, tint = Palette.secondary)
         }
@@ -67,6 +72,11 @@ private val THUMBNAIL = 112.dp
         Symbol(AttachmentIcon.symbol(file.name), size = 18.dp, tint = Palette.secondary)
         Text(file.name, Modifier.widthIn(max = 160.dp), style = Type.footnote, color = Palette.text, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
         RemoveButton(file.name, Palette.secondary, action = remove)
+    }
+    if (preview && shown != null) {
+        CodyncSheet(preview, { preview = false }) {
+            Image(shown, file.name, Modifier.fillMaxWidth().heightIn(max = 520.dp), contentScale = ContentScale.Fit)
+        }
     }
 }
 

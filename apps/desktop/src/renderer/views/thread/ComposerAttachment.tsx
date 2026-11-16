@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { isImageName } from '@shared/models'
 import { Icon } from '../../components/Icon'
+import { ModalHeader, Sheet } from '../../components/Overlay'
 import { Text } from '../../components/Text'
 import type { OutgoingFile } from '../../store/outgoing-files'
 import { useStore } from '../../store/context'
@@ -18,6 +19,8 @@ export function ComposerAttachment({ file, remove }: { file: OutgoingFile; remov
   const tr = useTr()
   const [url, setUrl] = useState<string | null>(null)
   const [broken, setBroken] = useState(false)
+  // Ported from OpenBot 0.66.0: click an image you attached to see it full size before you send it.
+  const [preview, setPreview] = useState(false)
 
   useEffect(() => {
     if (!isImageName(file.name)) return
@@ -28,13 +31,19 @@ export function ComposerAttachment({ file, remove }: { file: OutgoingFile; remov
 
   if (url && !broken) {
     return (
-      <span className="attachment-tile" aria-label={tr('Image attachment: {name}').replaceAll('{name}', () => file.name)} title={file.name}>
-        <img src={url} alt="" onError={() => setBroken(true)} />
-        {percent !== undefined ? <span className="attachment-progress" style={{ width: `${percent}%` }} /> : null}
-        <button className="press attachment-remove" aria-label={`Remove ${file.name}`} title="Remove" onClick={remove}>
-          <Icon name="xmark" size={11} weight="bold" color="#fff" />
-        </button>
-      </span>
+      <>
+        <span className="attachment-tile" aria-label={tr('Image attachment: {name}').replaceAll('{name}', () => file.name)} title={file.name}>
+          <img src={url} alt="" onClick={() => setPreview(true)} onError={() => setBroken(true)} />
+          {percent !== undefined ? <span className="attachment-progress" style={{ width: `${percent}%` }} /> : null}
+          <button className="press attachment-remove" aria-label={`Remove ${file.name}`} title="Remove" onClick={remove}>
+            <Icon name="xmark" size={11} weight="bold" color="#fff" />
+          </button>
+        </span>
+        <Sheet open={preview} onClose={() => setPreview(false)} width="min(92vw, 960px)">
+          <ModalHeader title={file.name} onClose={() => setPreview(false)} />
+          <img className="attachment-preview" src={url} alt={file.name} />
+        </Sheet>
+      </>
     )
   }
   return (

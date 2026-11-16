@@ -8,6 +8,8 @@ struct ComposerAttachment: View {
     let remove: () -> Void
     @State private var image: CGImage?
     @State private var loaded = false
+    // Ported from OpenBot 0.66.0: tap an image you attached to see it full size before you send it.
+    @State private var preview = false
     @Environment(\.displayScale) private var displayScale
 
     private var size: CGFloat { 112 }
@@ -31,11 +33,27 @@ struct ComposerAttachment: View {
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .accessibilityLabel("Image attachment: \(file.name)")
+                .onTapGesture {
+                    guard image != nil else { return }
+                    preview = true
+                }
                 .overlay(alignment: .topTrailing) {
                     removeButton
                         .foregroundStyle(.white)
                         .background(.black.opacity(0.75), in: Circle())
                         .padding(4)
+                }
+                .codyncSheet(isPresented: $preview) {
+                    if let image {
+                        VStack(spacing: 12) {
+                            ModalHeader { Text(file.name) }
+                            Image(decorative: image, scale: displayScale)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .padding(20)
+                    }
                 }
             } else {
                 HStack(spacing: 6) {
