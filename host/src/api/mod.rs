@@ -169,6 +169,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::weather::METHODS.contains(&method) {
         return crate::weather::call(hub, method, &b).await;
     }
+    if crate::email::METHODS.contains(&method) {
+        return crate::email::call(hub, method, &b).await;
+    }
     if crate::mcp::policy_management::METHODS.contains(&method) {
         market::vault::unlock(hub.clone()).await?;
         return crate::mcp::policy_management::call(hub, method, &b);

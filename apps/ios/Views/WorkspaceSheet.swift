@@ -17,6 +17,18 @@ struct WorkspaceSheet: View {
     @State private var events: [CalendarEvent] = []
     @State private var feedName = ""
     @State private var feedURL = ""
+    @State private var emailAccounts: [EmailAccount] = []
+    @State private var messages: [EmailMessage] = []
+    @State private var emailAccount = ""
+    @State private var emailName = ""
+    @State private var emailAddress = ""
+    @State private var emailPassword = ""
+    @State private var imapHost = ""
+    @State private var smtpHost = ""
+    @State private var emailUsername = ""
+    @State private var mailTo = ""
+    @State private var mailSubject = ""
+    @State private var mailBody = ""
     @State private var error: String?
     @State private var loading = false
     @State private var title = ""
@@ -24,7 +36,7 @@ struct WorkspaceSheet: View {
     @State private var adding = false
 
     private enum Tab: String, CaseIterable {
-        case board, teams, links, calendar
+        case board, teams, links, calendar, email
     }
 
     var body: some View {
@@ -39,6 +51,7 @@ struct WorkspaceSheet: View {
                 case .teams: teams
                 case .links: linksList
                 case .calendar: calendar
+                case .email: email
                 }
                 if let error {
                     Text(error).font(.footnote).foregroundStyle(Palette.danger)
@@ -321,6 +334,151 @@ struct WorkspaceSheet: View {
         }
     }
 
+    // MARK: email
+
+    private var email: some View {
+        Group {
+            if emailAccounts.isEmpty {
+                CardSection { Text("No email account yet. Add one below.").foregroundStyle(Palette.secondary) }
+            } else {
+                CardSection("Accounts") {
+                    ForEach(emailAccounts) { account in
+                        HStack {
+                            Button {
+                                emailAccount = account.id
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(account.name).foregroundStyle(Palette.text)
+                                    Text(account.address).font(.caption).foregroundStyle(Palette.secondary)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            Spacer(minLength: 0)
+                            if emailAccount == account.id {
+                                Text("Reading").font(.caption).foregroundStyle(Palette.secondary)
+                            }
+                            Button("Remove") { removeAccount(account) }
+                                .buttonStyle(.secondary)
+                        }
+                    }
+                    HStack {
+                        Spacer()
+                        Button("Read inbox") { readInbox() }
+                            .buttonStyle(.secondary)
+                            .disabled(emailAccount.isEmpty)
+                    }
+                }
+                if !messages.isEmpty {
+                    CardSection("Inbox") {
+                        ForEach(messages) { message in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(message.subject.isEmpty ? "(no subject)" : message.subject)
+                                    .foregroundStyle(Palette.text)
+                                Text("\(message.from) · \(message.date)")
+                                    .font(.caption).foregroundStyle(Palette.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            CardSection("Add an account", footer: "IMAP uses TLS on 993; SMTP uses STARTTLS on 587. An app password works where the provider requires one.") {
+                TextField("Name (optional)", text: $emailName).plainTextInput().workspaceField()
+                TextField("me@example.com", text: $emailAddress)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput().workspaceField()
+                SecureField("Password or app password", text: $emailPassword).plainTextInput().workspaceField()
+                TextField("IMAP server (imap.example.com)", text: $imapHost)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput().workspaceField()
+                TextField("SMTP server (smtp.example.com)", text: $smtpHost)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput().workspaceField()
+                TextField("Username (defaults to the address)", text: $emailUsername)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput().workspaceField()
+                HStack {
+                    Spacer()
+                    Button("Save account") { addAccount() }
+                        .buttonStyle(.secondary)
+                        .disabled(emailAddress.isEmpty || imapHost.isEmpty || smtpHost.isEmpty || emailPassword.isEmpty)
+                }
+            }
+
+            if !emailAccounts.isEmpty {
+                CardSection("Send an email", footer: "It is sent at once from the selected account.") {
+                    TextField("To", text: $mailTo)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput().workspaceField()
+                    TextField("Subject", text: $mailSubject).plainTextInput().workspaceField()
+                    TextField("Message", text: $mailBody, axis: .vertical).plainTextInput().workspaceField()
+                    HStack {
+                        Spacer()
+                        Button("Send") { sendMail() }
+                            .buttonStyle(.secondary)
+                            .disabled(mailTo.isEmpty || (mailBody.isEmpty && mailSubject.isEmpty))
+                    }
+                }
+            }
+        }
+    }
+
+    private func readInbox() {
+        guard !emailAccount.isEmpty else { return }
+        Task {
+            do {
+                messages = try await store.emailInbox(account: emailAccount)
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func addAccount() {
+        Task {
+            do {
+                _ = try await store.saveEmailAccount(
+                    name: emailName.isEmpty ? emailAddress : emailName,
+                    address: emailAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: emailPassword,
+                    imapHost: imapHost.trimmingCharacters(in: .whitespacesAndNewlines),
+                    smtpHost: smtpHost.trimmingCharacters(in: .whitespacesAndNewlines),
+                    username: emailUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+                emailAccounts = try await store.emailAccounts()
+                emailAccount = emailAccounts.last?.id ?? emailAccount
+                emailName = ""
+                emailAddress = ""
+                emailPassword = ""
+                imapHost = ""
+                smtpHost = ""
+                emailUsername = ""
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func removeAccount(_ account: EmailAccount) {
+        Task {
+            do {
+                _ = try await store.deleteEmailAccount(account.id)
+                emailAccounts = try await store.emailAccounts()
+                if emailAccount == account.id {
+                    emailAccount = emailAccounts.first?.id ?? ""
+                    messages = []
+                }
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func sendMail() {
+        Task {
+            do {
+                _ = try await store.sendEmail(account: emailAccount, to: mailTo, subject: mailSubject, body: mailBody)
+                mailTo = ""
+                mailSubject = ""
+                mailBody = ""
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
     // MARK: loading
 
     private func load() async {
@@ -332,7 +490,9 @@ struct WorkspaceSheet: View {
             async let shared = store.sharedLinks()
             async let calendars = store.calendarFeeds()
             async let agenda = store.calendarAgenda()
-            (tasks, templates, links, feeds, events) = try await (board, teams, shared, calendars, agenda)
+            async let mails = store.emailAccounts()
+            (tasks, templates, links, feeds, events, emailAccounts) = try await (board, teams, shared, calendars, agenda, mails)
+            if emailAccount.isEmpty { emailAccount = emailAccounts.first?.id ?? "" }
             error = nil
         } catch { self.error = message(error) }
     }
@@ -349,6 +509,7 @@ private extension WorkspaceSheet.Tab {
         case .teams: return "Teams"
         case .links: return "Links"
         case .calendar: return "Calendar"
+        case .email: return "Email"
         }
     }
 }

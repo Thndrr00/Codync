@@ -134,6 +134,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::digest::tool_call(hub, name).await?
             } else if name == "weather" {
                 crate::weather::tool_call(hub, name, arguments).await?
+            } else if name == "email_inbox" || name == "email_send" {
+                crate::email::tool_call(hub, name, arguments).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, arguments).await?
             };

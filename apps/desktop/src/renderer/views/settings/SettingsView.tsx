@@ -40,17 +40,19 @@ import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 import { MembersSection } from './MembersSection'
 import { CalendarFeedsSection } from './CalendarFeedsSection'
+import { EmailSection } from './EmailSection'
 import { ExtensionsSection } from './ExtensionsSection'
 import { MaintenanceStore } from '../../store/maintenance-store'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
-export type SettingsPage = 'general' | 'members' | 'calendar' | 'extensions' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
+export type SettingsPage = 'general' | 'members' | 'calendar' | 'email' | 'extensions' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
 
 const thisComputer = isMac ? 'This Mac' : 'This computer'
 const pages: { id: SettingsPage; title: string; label?: string; group: string; icon: string }[] = [
   { id: 'general', title: 'General', group: 'Personal', icon: 'gearshape' },
   { id: 'members', title: 'Members', group: 'Personal', icon: 'person.2' },
   { id: 'calendar', title: 'Calendars', group: 'Personal', icon: 'calendar' },
+  { id: 'email', title: 'Email', group: 'Personal', icon: 'envelope' },
   { id: 'extensions', title: 'Extensions', group: thisComputer, icon: 'puzzlepiece.extension' },
   { id: 'computers', title: 'Computers & devices', label: 'Computers', group: thisComputer, icon: 'desktopcomputer' },
   { id: 'network', title: 'Network', group: thisComputer, icon: 'codync.network' },
@@ -63,7 +65,7 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
 ]
 
 /** Each page as `screen_viewed` names it; Computer access and Voice chat report themselves. */
-const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null, members: null, calendar: null, extensions: null }
+const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null, members: null, calendar: null, email: null, extensions: null }
 
 /** `page` is the window's: a command (the menu bar's network rows) can turn the open sheet to another page. */
 export function SettingsView({ page, setPage, onExtensions }: { page: SettingsPage; setPage: (page: SettingsPage) => void; onExtensions?: () => void }) {
@@ -121,6 +123,8 @@ function PageContent({ page, onExtensions, onPage }: { page: SettingsPage; onExt
       return <MembersPage />
     case 'calendar':
       return <CardForm><CalendarFeedsSection /></CardForm>
+    case 'email':
+      return <CardForm><EmailSection /></CardForm>
     case 'extensions':
       return <CardForm><ExtensionsSection /></CardForm>
     case 'computers':

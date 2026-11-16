@@ -38,6 +38,9 @@ internal fun WorkspaceSheet(store: AppStore) {
     var links by remember { mutableStateOf<List<SharedLink>>(emptyList()) }
     var feeds by remember { mutableStateOf<List<CalendarFeed>>(emptyList()) }
     var events by remember { mutableStateOf<List<CalendarEvent>>(emptyList()) }
+    var emails by remember { mutableStateOf<List<EmailAccount>>(emptyList()) }
+    var messages by remember { mutableStateOf<List<EmailMessage>>(emptyList()) }
+    var mailAccount by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -50,6 +53,8 @@ internal fun WorkspaceSheet(store: AppStore) {
             links = store.sharedLinks()
             feeds = store.calendarFeeds()
             events = store.calendarAgenda()
+            emails = store.emailAccounts()
+            if (mailAccount.isEmpty()) mailAccount = emails.firstOrNull()?.id ?: ""
             error = null
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -214,6 +219,96 @@ internal fun WorkspaceSheet(store: AppStore) {
                         }
                     }
                 }
+                WorkspaceTab.Email -> {
+                    var mailName by remember { mutableStateOf("") }
+                    var mailAddress by remember { mutableStateOf("") }
+                    var mailPassword by remember { mutableStateOf("") }
+                    var mailImap by remember { mutableStateOf("") }
+                    var mailSmtp by remember { mutableStateOf("") }
+                    var mailUser by remember { mutableStateOf("") }
+                    var mailTo by remember { mutableStateOf("") }
+                    var mailSubject by remember { mutableStateOf("") }
+                    var mailBody by remember { mutableStateOf("") }
+                    if (emails.isEmpty()) CardSection {
+                        row { Text("No email account yet. Add one below.", style = Type.body, color = Palette.secondary) }
+                    } else CardSection("Accounts") {
+                        for (account in emails) row {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.weight(1f).clickable { mailAccount = account.id }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(account.name, style = Type.body, color = Palette.text)
+                                    Text(account.address, style = Type.footnote, color = Palette.secondary)
+                                }
+                                if (mailAccount == account.id) Text("Reading", style = Type.footnote, color = Palette.secondary)
+                                SecondaryButton("Remove") { run {
+                                    store.deleteEmailAccount(account.id)
+                                    emails = store.emailAccounts()
+                                    if (mailAccount == account.id) {
+                                        mailAccount = emails.firstOrNull()?.id ?: ""
+                                        messages = emptyList()
+                                    }
+                                } }
+                            }
+                        }
+                        row {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                SecondaryButton("Read inbox", enabled = mailAccount.isNotEmpty()) { run {
+                                    messages = store.emailInbox(mailAccount)
+                                } }
+                            }
+                        }
+                    }
+                    if (messages.isNotEmpty()) CardSection("Inbox") {
+                        for (message in messages) row {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(message.subject.ifEmpty { "(no subject)" }, style = Type.body, color = Palette.text)
+                                Text("${message.from} · ${message.date}", style = Type.footnote, color = Palette.secondary, maxLines = 2)
+                            }
+                        }
+                    }
+                    CardSection("Add an account", "IMAP uses TLS on 993; SMTP uses STARTTLS on 587. An app password works where the provider requires one.") {
+                        row {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FieldBox(mailName, { mailName = it }, "Name (optional)")
+                                FieldBox(mailAddress, { mailAddress = it }, "me@example.com")
+                                FieldBox(mailPassword, { mailPassword = it }, "Password or app password")
+                                FieldBox(mailImap, { mailImap = it }, "IMAP server (imap.example.com)")
+                                FieldBox(mailSmtp, { mailSmtp = it }, "SMTP server (smtp.example.com)")
+                                FieldBox(mailUser, { mailUser = it }, "Username (defaults to the address)")
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    SecondaryButton("Save account",
+                                        enabled = mailAddress.isNotBlank() && mailImap.isNotBlank() && mailSmtp.isNotBlank() && mailPassword.isNotEmpty()) { run {
+                                        val saved = store.saveEmailAccount(
+                                            mailName.ifBlank { mailAddress },
+                                            mailAddress.trim(),
+                                            mailPassword,
+                                            mailImap.trim(),
+                                            mailSmtp.trim(),
+                                            mailUser.trim().ifBlank { mailAddress.trim() },
+                                        )
+                                        emails = store.emailAccounts()
+                                        mailAccount = saved.id
+                                        mailName = ""; mailAddress = ""; mailPassword = ""; mailImap = ""; mailSmtp = ""; mailUser = ""
+                                    } }
+                                }
+                            }
+                        }
+                    }
+                    if (emails.isNotEmpty()) CardSection("Send an email", "It is sent at once from the selected account.") {
+                        row {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FieldBox(mailTo, { mailTo = it }, "To")
+                                FieldBox(mailSubject, { mailSubject = it }, "Subject")
+                                FieldBox(mailBody, { mailBody = it }, "Message", minLines = 3, maxLines = 8)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    SecondaryButton("Send", enabled = mailTo.isNotBlank() && (mailBody.isNotBlank() || mailSubject.isNotBlank())) { run {
+                                        store.sendEmail(mailAccount, mailTo.trim(), mailSubject.trim(), mailBody)
+                                        mailTo = ""; mailSubject = ""; mailBody = ""
+                                    } }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             if (error != null) Text(error ?: "", style = Type.footnote, color = Palette.danger)
         }
@@ -241,6 +336,7 @@ private enum class WorkspaceTab(val label: String) {
     Teams("Teams"),
     Links("Links"),
     Calendar("Calendar"),
+    Email("Email"),
 }
 
 private fun statusTitle(status: String): String = when (status) {

@@ -148,6 +148,66 @@ internal suspend fun AppStore.calendarAgenda(days: Int = 14): List<CalendarEvent
     (hostCall("calendarAgenda", buildJsonObject { put("days", days) }).jsonObject["events"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::eventOf) } ?: emptyList()
 
+/** An email account on this computer; `configured` says its password is saved. */
+internal data class EmailAccount(
+    val id: String,
+    val name: String,
+    val address: String,
+    val imapHost: String,
+    val smtpHost: String,
+    val configured: Boolean,
+)
+
+/** One message header from the inbox. */
+internal data class EmailMessage(val uid: String, val from: String, val subject: String, val date: String)
+
+private fun mailAccountOf(json: JsonObject): EmailAccount = EmailAccount(
+    id = json.str("id") ?: "",
+    name = json.str("name") ?: "Email",
+    address = json.str("address") ?: "",
+    imapHost = json.str("imapHost") ?: "",
+    smtpHost = json.str("smtpHost") ?: "",
+    configured = json.bool("configured") ?: false,
+)
+
+private fun mailOf(json: JsonObject): EmailMessage = EmailMessage(
+    uid = json.str("uid") ?: "",
+    from = json.str("from") ?: "",
+    subject = json.str("subject") ?: "",
+    date = json.str("date") ?: "",
+)
+
+internal suspend fun AppStore.emailAccounts(): List<EmailAccount> =
+    (hostCall("emailAccounts", buildJsonObject {}).jsonObject["accounts"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::mailAccountOf) } ?: emptyList()
+
+internal suspend fun AppStore.saveEmailAccount(name: String, address: String, password: String, imapHost: String, smtpHost: String, username: String): EmailAccount =
+    mailAccountOf(hostCall("saveEmailAccount", buildJsonObject {
+        put("name", name)
+        put("address", address)
+        put("password", password)
+        put("imapHost", imapHost)
+        put("smtpHost", smtpHost)
+        put("username", username)
+    }).jsonObject["account"]?.jsonObject ?: buildJsonObject {})
+
+internal suspend fun AppStore.deleteEmailAccount(id: String): Boolean =
+    hostCall("deleteEmailAccount", buildJsonObject { put("id", id) })
+        .jsonObject["deleted"]?.jsonPrimitive?.booleanOrNull == true
+
+internal suspend fun AppStore.emailInbox(account: String, limit: Int = 20): List<EmailMessage> =
+    (hostCall("emailInbox", buildJsonObject { put("account", account); put("limit", limit) }, 60_000)
+        .jsonObject["messages"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::mailOf) } ?: emptyList()
+
+internal suspend fun AppStore.sendEmail(account: String, to: String, subject: String, body: String): Boolean =
+    hostCall("emailSend", buildJsonObject {
+        put("account", account)
+        put("to", to)
+        put("subject", subject)
+        put("body", body)
+    }, 60_000).jsonObject["sent"]?.jsonPrimitive?.booleanOrNull == true
+
 /** One group member's turn in a short meeting; `audio` is base64 for `audioFormat`. */
 internal data class MeetingTurn(
     val botId: String,

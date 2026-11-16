@@ -16,6 +16,7 @@ is bigger than one release.
 | Web page clipper for bots (`clip_page`) | done (host) |
 | Daily digest and a `daily_digest` tool for bots | done (host) |
 | Weather (`weather` tool, Open-Meteo) | done (host) |
+| Email accounts (IMAP/SMTP via the local Python bridge) | done (host; screens on desktop, iPhone and Android) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
