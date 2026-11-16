@@ -31,6 +31,7 @@ kept for the reasoning and the sources; the decisions they led to live in `docs/
 | 2026-11-11 | `copilotkit-prompt.html` | Prompt: CopilotKit, the 106 repos |
 | 2026-11-11 | `agentes-chat-research.html` | agentes.chat: what can be taken (the plan's origin) |
 | 2026-11-13 | `opendesign-plan.html` | OpenDesign → Codync: 67 improvements and a plan |
+| 2026-11-16 | `agentes-chat-adrs-0041-0170.md` | agentes.chat's ADRs after 0040: first pass, five read in full |
 
 The plan built on `agentes-chat-research.html` is [docs/plan-agentes-chat.md](../../plan-agentes-chat.md)
 and the patterns kept are [docs/features/agentes-chat.md](../../features/agentes-chat.md).
