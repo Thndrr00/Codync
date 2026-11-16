@@ -49,7 +49,7 @@ pub use devices::{Device, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
-pub use members::{Member, MemberRole};
+pub use members::MemberRole;
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, TeamMember, TeamSettings, lane_key, message_text, run_session_key,

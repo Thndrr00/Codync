@@ -7,7 +7,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
-fn allowed(headers: &HeaderMap, port: u16) -> bool {
+fn origin_allowed(headers: &HeaderMap, port: u16) -> bool {
     let mut origins = headers.get_all(ORIGIN).iter();
     let Some(origin) = origins.next() else {
         // Native clients and server-to-server webhooks don't send Origin.
@@ -21,7 +21,7 @@ fn allowed(headers: &HeaderMap, port: u16) -> bool {
 }
 
 pub(super) async fn guard(State(port): State<u16>, request: Request, next: Next) -> Response {
-    if !allowed(request.headers(), port) {
+    if !origin_allowed(request.headers(), port) {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "untrusted browser origin"}))).into_response();
     }
     next.run(request).await
@@ -35,10 +35,10 @@ mod tests {
     #[test]
     fn native_clients_and_exact_local_origins_are_accepted() {
         let mut headers = HeaderMap::new();
-        assert!(allowed(&headers, 19300));
+        assert!(origin_allowed(&headers, 19300));
         for origin in ["http://127.0.0.1:19300", "http://localhost:19300", "http://[::1]:19300"] {
             headers.insert(ORIGIN, origin.parse().unwrap());
-            assert!(allowed(&headers, 19300), "{origin}");
+            assert!(origin_allowed(&headers, 19300), "{origin}");
         }
     }
 
@@ -58,14 +58,14 @@ mod tests {
             "http://user@localhost:19300",
         ] {
             headers.insert(ORIGIN, origin.parse().unwrap());
-            assert!(!allowed(&headers, 19300), "{origin}");
+            assert!(!origin_allowed(&headers, 19300), "{origin}");
         }
         headers.insert(ORIGIN, "http://localhost:19300".parse().unwrap());
         headers.append(ORIGIN, "http://localhost:19300".parse().unwrap());
-        assert!(!allowed(&headers, 19300));
+        assert!(!origin_allowed(&headers, 19300));
         headers.remove(ORIGIN);
         headers.insert(ORIGIN, HeaderValue::from_bytes(b"\xff").unwrap());
-        assert!(!allowed(&headers, 19300));
+        assert!(!origin_allowed(&headers, 19300));
     }
 
     #[tokio::test]

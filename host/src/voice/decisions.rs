@@ -35,7 +35,7 @@ pub(crate) fn call(hub: &Hub, caller: &Caller, method: &str, body: Value) -> Res
     );
     let actor = match caller {
         Caller::Local => json!({"kind":"owner","id":"local"}),
-        Caller::Device { key, .. } => json!({"kind":"device","id":key}),
+        Caller::Device { key, .. } | Caller::Member { key, .. } => json!({"kind":"device","id":key}),
         Caller::Pairing { .. } => anyhow::bail!("Owner control is required"),
     };
     let data = json!({"source":"voice_decisions","text":format!("Owner-confirmed call decisions\n\n{summary}\n\nThis receipt records confirmation only; it does not execute actions."),

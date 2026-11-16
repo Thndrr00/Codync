@@ -725,6 +725,7 @@ mod tests {
                 created_at: now_ms(),
                 last_seen_at: None,
                 account: None,
+                member_id: None,
             })
             .unwrap();
         let injected = b64(grant_key.verifying_key().as_bytes());
@@ -864,6 +865,7 @@ mod tests {
                 created_at: now_ms(),
                 last_seen_at: None,
                 account: None,
+                member_id: None,
             })
             .unwrap();
         *fake.state.lock().unwrap() =
@@ -911,6 +913,7 @@ mod tests {
                 created_at: now_ms(),
                 last_seen_at: None,
                 account: None,
+                member_id: None,
             })
             .unwrap();
         *fake.state.lock().unwrap() = json!({"owner": null, "grants": [], "requests": []});

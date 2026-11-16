@@ -162,7 +162,7 @@ impl Store {
     }
 
     /// Documents whose title or body matches `query`, newest first, for the global search.
-    pub fn search_documents(&self, query: &str, limit: u64) -> Result<Vec<serde_json::Value>> {
+    pub fn search_documents(&self, query: &str, limit: i64) -> Result<Vec<serde_json::Value>> {
         let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         let like = format!("%{escaped}%");
         let db = self.db.locked();

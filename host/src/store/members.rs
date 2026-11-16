@@ -5,9 +5,7 @@
 //! remove people). Removing a member closes their devices on the next recheck.
 
 use super::Store;
-use crate::LockExt;
 use anyhow::{Result, ensure};
-use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 

@@ -789,11 +789,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 return Ok(ControlFlow::Break(json!({"messages": [], "documents": [], "tasks": [], "scheduled": []})));
             }
             let limit = b["limit"].as_u64().unwrap_or(20).clamp(1, 50);
-            let messages = hub.store.search_messages(query, limit)?;
+            let limit = i64::try_from(limit).unwrap_or(20);
+            let messages = hub.store.search_messages_text(query, limit)?;
             let documents = hub.store.search_documents(query, limit)?;
             let tasks: Vec<Value> = hub
                 .store
-                .search_board(query, i64::try_from(limit).unwrap_or(20))?
+                .search_board(query, limit)?
                 .into_iter()
                 .map(|task| {
                     json!({

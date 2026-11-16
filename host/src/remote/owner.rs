@@ -161,6 +161,7 @@ mod tests {
                 created_at: 1,
                 last_seen_at: None,
                 account: account.map(Into::into),
+                member_id: None,
             })
             .unwrap();
     }

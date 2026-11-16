@@ -273,6 +273,8 @@ mod tests {
             action_rules_on: false,
             security_profile: None,
             mode: None,
+            blocked_tools: vec![],
+            team: None,
         };
         // Several at once: each with its own rev, in order.
         let other = BotConfig { id: "b0".into(), ..cfg.clone() };

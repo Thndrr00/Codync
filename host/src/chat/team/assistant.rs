@@ -170,7 +170,8 @@ async fn run(hub: &Arc<Hub>, asker: &Asker, tool: &str, args: &Value) -> Result<
 }
 
 fn message(hub: &Arc<Hub>, asker: &Asker, args: &Value) -> Result<Value> {
-    let (to, message) = message_args(args)?;
+    let (to, text) = message_args(args)?;
+    let message = text.as_str();
     check_message(message)?;
     if hub.assistant.running(&asker.id) >= MAX_RUNNING {
         bail!("{MAX_RUNNING} requests are still running: read_replies first, then try again");

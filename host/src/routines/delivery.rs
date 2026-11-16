@@ -6,6 +6,7 @@ use crate::LockExt;
 use crate::hub::Hub;
 use crate::store::routine_delivery::Delivery;
 use anyhow::{Result, anyhow};
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -218,7 +219,7 @@ async fn send(hub: &Arc<Hub>, job: Delivery) {
     send_with(hub, &job, operation).await;
 }
 
-async fn send_with(hub: &Arc<Hub>, job: &Delivery, operation: impl std::future::Future<Output = Result<()>>) {
+async fn send_with(hub: &Arc<Hub>, job: &Delivery, operation: impl Future<Output = Result<()>>) {
     let result = tokio::select! {
         biased;
         () = cancelled(hub, job) => Err(anyhow!("Delivery was cancelled; its remote outcome may be unknown")),

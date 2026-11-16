@@ -288,6 +288,7 @@ mod tests {
             created_at: 1,
             last_seen_at: None,
             account: None,
+            member_id: None,
         };
         s.put_device(&d).unwrap();
         s.put_device(&Device { key: "dk2".into(), ..d.clone() }).unwrap();

@@ -133,7 +133,7 @@ mod tests {
         assert!(
             resolve(
                 "bot",
-                &[json!({"id":uuid::Uuid::new_v4(),"name":"large.bin","size":21*1024*1024,"sha256":"unused"})]
+                &[json!({"id":uuid::Uuid::new_v4().to_string(),"name":"large.bin","size":21*1024*1024,"sha256":"unused"})]
             )
             .is_err()
         );

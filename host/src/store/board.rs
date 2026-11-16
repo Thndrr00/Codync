@@ -204,7 +204,7 @@ mod tests {
     fn a_card_can_be_created_changed_moved_and_deleted() {
         let store = Store::open(std::path::Path::new(":memory:")).unwrap();
         let task = store
-            .save_board_task(None, "  review the PR ", "", "todo", Some("b1"), None, None, None, None, NOW)
+            .save_board_task(None, "  review the PR ", "", "todo", Some("b1"), None, None, None, NOW)
             .expect("created");
         assert_eq!(task.title, "review the PR");
         assert_eq!(store.board_tasks().unwrap().len(), 1);

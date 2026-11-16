@@ -481,7 +481,7 @@ impl Store {
     }
 
     /// Chats whose text matches `query`, newest first, for the global search.
-    pub fn search_messages(&self, query: &str, limit: u64) -> Result<Vec<Value>> {
+    pub fn search_messages_text(&self, query: &str, limit: i64) -> Result<Vec<Value>> {
         let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
         let like = format!("%{escaped}%");
         let c = self.db.locked();

@@ -107,6 +107,7 @@ async fn hermes_rpc_scripts_use_file_stdin_and_json_arguments_with_one_result_pe
 }
 
 #[tokio::test]
+#[allow(clippy::assert_is_empty)]
 async fn hermes_rpc_scripts_never_retry_partial_failure_and_reject_bad_inputs_before_dispatch() {
     let host = Mock::start().await;
     assert_eq!(result(&host.run(&["partial_failure"], None).await, 1)["isError"], true);

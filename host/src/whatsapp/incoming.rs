@@ -15,11 +15,12 @@ impl WhatsApp {
             return;
         }
         // With a list, only the owner, allowed people and allowed groups get through.
-        let allowed = allowed(hub);
+        let permitted = allowed(hub);
         let me = self.state.lock().await.me.clone().unwrap_or_default();
         let own = !me.is_empty() && (chat == me || sender == me);
-        if !allowed.is_empty() && !own {
-            let listed = if group { allowed.iter().any(|a| a == chat) } else { allowed.iter().any(|a| a == sender) };
+        if !permitted.is_empty() && !own {
+            let listed =
+                if group { permitted.iter().any(|a| a == chat) } else { permitted.iter().any(|a| a == sender) };
             if !listed {
                 return;
             }

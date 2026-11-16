@@ -366,7 +366,7 @@ async fn run_tool(hub: &Hub, id: &str, tool: &str, arguments: Value) -> Result<V
     // A manifest's permissions are asked once, on this computer; until then nothing runs.
     let granted = approved(&hub.store, id);
     let missing: Vec<&str> =
-        manifest.permissions.iter().map(String::as_str).filter(|p| !granted.iter().any(|g| g == p)).collect();
+        manifest.permissions.iter().map(String::as_str).filter(|p| !granted.iter().any(|g| g.as_str() == *p)).collect();
     ensure!(missing.is_empty(), "approve this extension in Settings › Extensions first: {}", missing.join(", "));
     let runtime = Runtime::detect(manifest.runtime.as_deref())?;
     let dir = extension_dir(id)?;
@@ -405,6 +405,7 @@ async fn run_tool(hub: &Hub, id: &str, tool: &str, arguments: Value) -> Result<V
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::Store;
 
     fn with_extension(files: &[(&str, &str)]) -> (PathBuf, String) {
         let base = std::env::temp_dir().join(format!("codync-ext-{}", uuid::Uuid::new_v4()));
@@ -448,7 +449,7 @@ mod tests {
 
     #[test]
     fn permissions_are_approved_per_extension() {
-        let store = crate::store::Store::open(std::path::Path::new(":memory:")).unwrap();
+        let store = Store::open(Path::new(":memory:")).unwrap();
         assert!(approved(&store, "demo").is_empty());
         save_approved(&store, "demo", &["network".into(), "files".into()]).unwrap();
         assert_eq!(approved(&store, "demo"), vec!["network".to_string(), "files".to_string()]);

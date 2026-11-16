@@ -4,7 +4,7 @@
 #[cfg(test)]
 const REVISION: &str = "10d25f8ad65fdf71304e9272959421a0c22e5d23";
 
-pub(super) const INSTALL_UNIX: &str = r#"bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/10d25f8ad65fdf71304e9272959421a0c22e5d23/scripts/install.sh | bash -s -- --commit 10d25f8ad65fdf71304e9272959421a0c22e5d23 --non-interactive --skip-browser --skip-computer-use'"#;
+pub(super) const INSTALL_UNIX: &str = r"bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/10d25f8ad65fdf71304e9272959421a0c22e5d23/scripts/install.sh | bash -s -- --commit 10d25f8ad65fdf71304e9272959421a0c22e5d23 --non-interactive --skip-browser --skip-computer-use'";
 
 pub(super) const INSTALL_WINDOWS: &str = r#"powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Invoke-RestMethod -ErrorAction Stop 'https://raw.githubusercontent.com/NousResearch/hermes-agent/10d25f8ad65fdf71304e9272959421a0c22e5d23/scripts/install.ps1'))) -Commit '10d25f8ad65fdf71304e9272959421a0c22e5d23' -NonInteractive -SkipBrowser -SkipComputerUse""#;
 

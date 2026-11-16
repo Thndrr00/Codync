@@ -50,6 +50,7 @@ pub fn save(hub: &Hub, group_id: &str, name: &str, now: i64) -> Result<TeamTempl
         }
     }
     ensure!(members.len() >= 2, "a team needs at least two members");
+    let team = group.team.clone().unwrap_or_default();
     let template = TeamTemplate {
         id: uuid::Uuid::new_v4().to_string(),
         name: {
@@ -59,9 +60,9 @@ pub fn save(hub: &Hub, group_id: &str, name: &str, now: i64) -> Result<TeamTempl
         description: group.description.clone(),
         created_at: now,
         members,
-        mode: group.team.mode.clone(),
-        voice: group.team.voice.clone(),
-        roles: serde_json::to_value(&group.team.members)?.as_array().cloned().unwrap_or_default(),
+        mode: team.mode.clone(),
+        voice: team.voice.clone(),
+        roles: serde_json::to_value(&team.members)?.as_array().cloned().unwrap_or_default(),
         chief: group.chief_bot_id.clone(),
     };
     let mut templates = read(hub)?;

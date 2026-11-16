@@ -147,7 +147,7 @@ async fn hermes_recovery_delivers_a_saved_step_even_when_its_bot_is_now_hidden()
         value: None,
     });
     f.hub.routines.stage_flow(&f.hub.store, start.clone()).unwrap();
-    super::engine::record(
+    engine::record(
         &f.hub,
         &NewStep {
             run_id: &start.run_id,
