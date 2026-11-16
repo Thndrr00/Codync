@@ -68,6 +68,7 @@ mod tui;
 mod update;
 mod usage;
 mod voice;
+mod weather;
 mod whatsapp;
 
 use agent::backends;

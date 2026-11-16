@@ -36,9 +36,11 @@ pub async fn tool_call(hub: &Hub, name: &str, args: &Value) -> Result<Value> {
 async fn forecast(hub: &Hub, args: &Value) -> Result<Value> {
     let place = match args["place"].as_str().map(str::trim).filter(|p| !p.is_empty()) {
         Some(place) => place.to_owned(),
-        None => hub.store.kv_get(PLACE_KEY).filter(|p| !p.trim().is_empty()).ok_or_else(|| {
-            anyhow::anyhow!("name a place once (the computer remembers it for next time)")
-        })?,
+        None => hub
+            .store
+            .kv_get(PLACE_KEY)
+            .filter(|p| !p.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("name a place once (the computer remembers it for next time)"))?,
     };
     ensure!(place.chars().count() <= 120, "that place name is too long");
     let found = geocode(&place).await?;
