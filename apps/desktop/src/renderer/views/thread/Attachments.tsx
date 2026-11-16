@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { isImageName, type Attachment, type SharedFile } from '@shared/models'
+import { Button } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, Sheet, SheetPage } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
+import { copyPicture } from '../../lib/copy-image'
+import { useTr } from '../../lib/use-language'
 import { useStoreRef } from '../../store/context'
 import './attachments.css'
 
@@ -60,11 +63,28 @@ export type ImageSource = { file: Attachment; botId: string } | { file: SharedFi
 
 /** A picture full size, in a sheet. */
 export function AttachmentViewer({ source, close }: { source: ImageSource | null; close: () => void }) {
+  const store = useStoreRef()
+  const tr = useTr()
+  const [note, setNote] = useState<string | null>(null)
+  const copy = async () => {
+    if (!source) return
+    try {
+      const bytes = 'entryId' in source
+        ? await store.sharedFileData(source.file, source.entryId)
+        : await store.attachmentData(source.file.id, source.botId)
+      if (!bytes) return setNote(tr('The picture could not be copied'))
+      await copyPicture(new Uint8Array(bytes))
+      setNote(tr('Copied'))
+    } catch (reason) {
+      setNote(reason instanceof Error ? reason.message : tr('The picture could not be copied'))
+    }
+  }
   return (
     <Sheet open={source !== null} onClose={close} width={1040} height={800}>
       {source ? (
         <SheetPage>
-          <ModalHeader title={source.file.name} />
+          <ModalHeader title={source.file.name} trailing={<Button kind="secondary" onClick={() => void copy()}>{tr('Copy')}</Button>} />
+          {note ? <Text size="caption" tone="secondary">{note}</Text> : null}
           <div className="attachment-viewer">
             <AttachmentImage source={source} fit="full" />
           </div>
