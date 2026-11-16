@@ -4,6 +4,7 @@
 pub mod apps;
 pub mod artifacts;
 pub mod calls;
+pub mod channel_history;
 pub mod context;
 pub mod decider;
 pub mod fallbacks;

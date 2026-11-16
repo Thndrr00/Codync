@@ -21,6 +21,7 @@ maps to Codync's own shape was taken; the rest is listed below with the reason.
 | A WhatsApp number can answer with only the answer | Every request gets a 👀 reaction; the "Trabajando en ello…" line is a per-number switch, on by default | `host/src/whatsapp/settings.rs`, `incoming.rs` (`acknowledge`), `transport.rs`, the bridge's `react`, the switch in the WhatsApp sheet of the desktop, iPhone and Android apps (the terminal has no WhatsApp sheet) |
 | Add skills from a GitHub link | A bot installs a skill from a public `github.com` link (the folder that holds `SKILL.md`, the file, or a repository whose top holds one) with its `install_skill` tool, which saves the folder with the link as its source and turns it on for that bot | `host/src/market/github_skill.rs`, `market::install_from_link` in `host/src/market/skills.rs`, `installSkill {url}`, `host/src/chat/skills.rs` |
 | Product analytics for all of it | `message_pinned` (`pinned`) for a pin and an unpin, and `setting_changed` with `whatsapp_working_message` for the switch; the media of 0.70.0 sends `media_made` (`kind`, `agent`) | `host/src/analytics/observe.rs`, `host/src/agent/bot/files.rs`, [analytics events](../reference/analytics-events.md) |
+| A routine, or an agent in your own chat, reads a connected Slack, Discord, Telegram or WhatsApp chat | `read_channel_messages {source?, limit?}` answers the channel messages this computer delivered to the bot, newest first: text, who and when; it reads the bot's own chat and sends nothing | `host/src/chat/channel_history.rs`, `host/src/mcp.rs`, `api/bots.rs` (`chatCall`) |
 
 The pins surface, its keys and its reasonings are documented in
 [chat messages](../features/chat-messages.md#pins) and in the user manual page
@@ -51,9 +52,10 @@ message, not a section, so `withMoves` keeps returning its band.
   that bot's settings, so the access list is the connection itself.
 - **Signal and relay machines in San Jose and Sydney**: Codync's cloud posts its own placement, nothing
   to copy in the apps.
-- **Reading a Slack, Discord, Telegram or WhatsApp chat from a routine**: Codync's WhatsApp, Slack and
-  Discord channels are inbound message readers with per-thread answers; a read-back tool for their
-  history is its own change, not a copy of OpenBot's server-side reader.
+- **Reading a whole channel's history from a routine, beyond what reached the bot**: OpenBot reads the
+  server side, every chat it hosts; Codync's `read_channel_messages` (above) reads what each channel
+  delivered to the bot, which is the part a routine can summarize here. A wider reader needs each
+  channel's own server-side history, its own change per channel.
 - **The message input's pill/card corners, the reworked cards above it and the one-movement
   open/close**: Codync's composer and its queue, waiting block and notice cards have their own shape
   already (see [chat messages](../features/chat-messages.md#motion-and-scrolling)); matching OpenBot's
