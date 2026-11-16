@@ -43,7 +43,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "addMember" => {
             crate::enterprise::add_member(&hub.store, str_arg(&b, "email")?, b["name"].as_str().unwrap_or_default())?
         }
-        "removeMember" => json!({"removed": crate::enterprise::remove_member(&hub.store, str_arg(&b, "id")?)?}),
+        "removeMember" => json!({"removed": crate::enterprise::remove_member(hub, str_arg(&b, "id")?)?}),
         "clearAuditLog" => {
             crate::audit::clear(hub)?;
             json!({})
@@ -268,6 +268,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 "joinAccount": false,
                 // A signed-in phone may offer to bring this computer into its account (`joinAccount`).
                 "canJoinAccount": crate::remote::owner::can_join(hub),
+                // Who this client acts as: the owner, or the person (and role) its session belongs to.
+                "member": crate::members::profile(hub, caller),
                 // Shells out to `tailscale`: keep it off the async workers.
                 "urls": tokio::task::spawn_blocking(move || crate::service::addresses(port)).await?,
             })

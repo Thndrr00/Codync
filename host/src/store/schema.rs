@@ -15,8 +15,9 @@ use std::sync::Mutex;
 /// 12: a thread kept from something other than the drawer, and the chat message it came from
 /// (`threads.source`, `.source_entry`: a kept dictation).
 /// 13: a person's role on this computer (`people.role`): admin or member.
-/// 13: a person's role on this computer (`people.role`): admin or member.
-const SCHEMA: i64 = 13;
+/// 14: member accounts: an invited email (`member_invites`) and a member's session token
+/// (`member_sessions`), both stored as digests of the secret.
+const SCHEMA: i64 = 14;
 
 /// 3: authorized devices (keys, not push tickets) with their push and Live Activity
 /// tickets. The old ticket-only `devices` table is dropped; phones re-register on connect.
@@ -34,6 +35,8 @@ const SCHEMA: i64 = 13;
 /// 12: a thread kept from something other than the drawer, and the chat message it came from
 /// (`threads.source`, `.source_entry`: a kept dictation).
 /// 13: a person's role on this computer (`people.role`): admin or member.
+/// 14: member accounts: an invited email (`member_invites`) and a member's session token
+/// (`member_sessions`), both stored as digests of the secret.
 fn migrate(c: &Connection) -> Result<()> {
     let version: i64 =
         c.query_row("SELECT CAST(v AS INTEGER) FROM kv WHERE k = 'schema'", [], |r| r.get(0)).optional()?.unwrap_or(0);
@@ -56,7 +59,8 @@ fn migrate(c: &Connection) -> Result<()> {
     migrate_10(c)?;
     migrate_11(c)?;
     migrate_12(c)?;
-    migrate_13(c)
+    migrate_13(c)?;
+    migrate_14(c)
 }
 
 fn migrate_3(c: &Connection) -> Result<()> {
@@ -253,6 +257,13 @@ fn migrate_13(c: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Member accounts: an invited email and the session token it is exchanged for.
+fn migrate_14(c: &Connection) -> Result<()> {
+    super::member_accounts::open(c)?;
+    c.execute_batch("INSERT INTO kv(k, v) VALUES('schema', '14') ON CONFLICT(k) DO UPDATE SET v = '14';")?;
+    Ok(())
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         let c = Connection::open(path)?;
@@ -310,6 +321,7 @@ impl Store {
         super::apps::open(&c)?;
         super::components::open(&c)?;
         super::open_items::open(&c)?;
+        super::member_accounts::open(&c)?;
         super::threads::open(&c)?;
         super::group_tasks::open(&c)?;
         super::flows::open(&c)?;
@@ -355,7 +367,7 @@ mod tests {
         }
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty());
-        assert_eq!(s.kv_get("schema").as_deref(), Some("13"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("14"));
         drop(s);
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty(), "reopening keeps the new table");
@@ -378,7 +390,7 @@ mod tests {
         let s = Store::open(&db).unwrap();
         let chat: Vec<String> = s.history("b", i64::MAX, 10).unwrap().into_iter().map(|e| e.id).collect();
         assert_eq!(chat, ["info"]);
-        assert_eq!(s.kv_get("schema").as_deref(), Some("13"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("14"));
     }
 
     #[test]

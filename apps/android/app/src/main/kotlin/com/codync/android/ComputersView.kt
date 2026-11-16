@@ -64,6 +64,7 @@ import kotlinx.serialization.json.put
     var components by remember { mutableStateOf(false) }
     var plans by remember { mutableStateOf(false) }
     var personality by remember { mutableStateOf(false) }
+    var memberSignIn by remember { mutableStateOf(false) }
     LaunchedEffect(state.contextId) { store.refreshCloud() }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         PageHeader("Computer management")
@@ -103,6 +104,13 @@ import kotlinx.serialization.json.put
                         Text(tr("Pair a computer"), style = Type.body, color = Palette.text)
                     }
                 }
+                row {
+                    Row(Modifier.fillMaxWidth().plainButton(action = { memberSignIn = true }), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Symbol("person.crop.circle.badge.checkmark", size = 20.dp, tint = Palette.text)
+                        Text(tr("Sign in as a member"), style = Type.body, color = Palette.text)
+                    }
+                }
             }
         } }
     }
@@ -115,6 +123,7 @@ import kotlinx.serialization.json.put
     CodyncSheet(components, { components = false }) { ComponentsSheet(store) }
     CodyncSheet(plans, { plans = false }) { PlanStartSheet(state, store) }
     CodyncSheet(personality, { personality = false }) { ServerSettingsSheet(store) }
+    CodyncSheet(memberSignIn, { memberSignIn = false }) { MemberSignInSheet { memberSignIn = false; pair() } }
     SwatchPanel(coloring, paired?.color, { coloring = false }, store::setColor)
     CodyncDialog(tr("Remove {name}?").replace("{name}", paired?.name ?: "computer"), confirmForget, { confirmForget = false },
         "Its bots and conversations stay on that computer. You can pair again any time.") {

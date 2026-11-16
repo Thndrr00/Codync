@@ -136,7 +136,8 @@ impl Channel {
         if !self.hub.pairing.locked().attempt(source) {
             return Err(self.reject(RejectCode::RateLimited).await);
         }
-        if !self.hub.pairing.locked().valid(code) {
+        // An invitation is the owner's decision already, so it admits like a live pairing code.
+        if !crate::members::invite_open(&self.hub, code) && !self.hub.pairing.locked().valid(code) {
             return Err(self.refuse(id, EXPIRED, "unauthorized").await);
         }
         match certificate::check(&b["certificate"], &self.key, now_ms()) {
@@ -155,25 +156,46 @@ impl Channel {
     /// (`answer`). The code is spent only now: a phone turned away leaves it to the right one, and while the computer
     /// asks the relay keeps the offer, and with it this socket.
     fn let_in(&self, request: &Request<'_>, answer: Option<Answer>) -> Result<(), Kept> {
-        let owner = self.owner_for(request.account).map_err(|message| Kept::Out(message, "otherAccount"))?;
-        if owner.is_none() && answer.is_none() {
+        let invited = crate::members::invite_open(&self.hub, request.code);
+        let owner = if invited {
+            // The invitation is the owner's let-in: it admits whatever account this computer is in.
+            Ok(None)
+        } else {
+            self.owner_for(request.account)
+        };
+        let owner = owner.map_err(|message| Kept::Out(message, "otherAccount"))?;
+        if !invited && owner.is_none() && answer.is_none() {
             return Err(Kept::Unasked);
         }
-        if !self.hub.pairing.locked().redeem(request.code) {
-            return Err(Kept::Out(EXPIRED.into(), "unauthorized"));
-        }
+        // The code is spent only now, and an invitation goes with it: one invitation is one device.
+        let person = if invited {
+            match crate::members::redeem_invite(&self.hub, request.code) {
+                Ok(Some(person)) => Some(person.id),
+                Ok(None) => return Err(Kept::Out(EXPIRED.into(), "unauthorized")),
+                Err(e) => {
+                    tracing::error!(error = format!("{e:#}"), "couldn't redeem a member invitation");
+                    return Err(Kept::Unsaved);
+                }
+            }
+        } else {
+            if !self.hub.pairing.locked().redeem(request.code) {
+                return Err(Kept::Out(EXPIRED.into(), "unauthorized"));
+            }
+            None
+        };
         let device = Device {
             key: self.key.clone(),
             name: request.name.to_owned(),
             platform: request.platform.to_owned(),
             source: DeviceSource::Local,
             grant_id: None,
-            scopes: vec![Scope::Control, Scope::Screen],
+            // A member's device holds Control: the same methods as the owner's phone without its screen.
+            scopes: if person.is_some() { vec![Scope::Control] } else { vec![Scope::Control, Scope::Screen] },
             lease_until: None,
             created_at: now_ms(),
             last_seen_at: None,
             account: request.account.map_or(DeviceAccount::SignedOut, |a| DeviceAccount::Of(a.user_id.clone())),
-            person_id: None,
+            person_id: person,
         };
         if let Err(e) = self.hub.store.put_device(&device) {
             tracing::error!(error = format!("{e:#}"), "couldn't save a paired device");

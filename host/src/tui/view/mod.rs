@@ -20,6 +20,7 @@ mod forms;
 mod goto;
 mod help;
 mod lead_agent;
+mod learning;
 mod network;
 mod network_rules;
 mod new_bot;

@@ -52,5 +52,7 @@ pub(crate) fn validate(cfg: &BotConfig) -> Result<()> {
         bail!("mode must be one of the agent's mode ids, or null for its default");
     }
     cfg.compaction.check().map_err(anyhow::Error::msg)?;
+    cfg.computer_runtime.validate()?;
+    cfg.learning.validate()?;
     crate::agent::fallback::check(cfg)
 }

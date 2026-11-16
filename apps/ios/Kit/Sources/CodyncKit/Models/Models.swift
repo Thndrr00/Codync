@@ -443,6 +443,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var person: String?
     public var skills: [String]?
     public var computer: Bool?
+    /// Where the bot's computer runs; nil from an older host, so it isn't sent.
+    public var computerRuntime: ComputerRuntimeSettings?
     public var manageTeam: Bool?
     /// Nil from a host without the switch, so it isn't sent.
     public var offeredToNetwork: Bool?
@@ -468,6 +470,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         self.cwd = cwd
         self.permission = permission
         self.mode = mode
+        computerRuntime = nil
     }
 
     public init(_ bot: Bot) {
@@ -495,6 +498,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         person = bot.person
         skills = bot.skills
         computer = bot.computer
+        computerRuntime = bot.computerRuntime
         manageTeam = bot.manageTeam
         offeredToNetwork = bot.offeredToNetwork
         reachableByAssistants = bot.reachableByAssistants
@@ -516,6 +520,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         follow(\.command); follow(\.cwd); follow(\.permission); follow(\.mode); follow(\.model); follow(\.modelOptions)
         follow(\.fastMode); follow(\.commitCoauthor); follow(\.fallbacks); follow(\.selfFallbacks); follow(\.pinned); follow(\.hidden)
         follow(\.notify); follow(\.connectors); follow(\.skills); follow(\.computer); follow(\.manageTeam)
+        follow(\.computerRuntime)
         follow(\.sharedMemory); follow(\.harnessMemory); follow(\.offeredToNetwork); follow(\.reachableByAssistants)
         follow(\.verifyCommand); follow(\.backgroundModel); follow(\.saver); follow(\.personality)
         return draft

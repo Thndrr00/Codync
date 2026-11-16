@@ -66,11 +66,13 @@ pub struct PushTicket {
 
 const DEVICE_COLS: &str = "key, name, platform, source, grant_id, scopes, lease_until, created_at, last_seen_at, account, no_account, person_id";
 
-/// A device with its push and Live Activity tickets; the number of device rows removed.
+/// A device with its push and Live Activity tickets; the number of device rows removed. A member
+/// session is backed by its device, so its token goes with it instead of outliving the access.
 pub(super) fn delete_device(tx: &rusqlite::Transaction, key: &str) -> rusqlite::Result<usize> {
     let n = tx.execute("DELETE FROM devices WHERE key = ?1", [key])?;
     tx.execute("DELETE FROM push_tickets WHERE device_key = ?1", [key])?;
     tx.execute("DELETE FROM activity_tickets WHERE device_key = ?1", [key])?;
+    tx.execute("DELETE FROM member_sessions WHERE device_key = ?1", [key])?;
     Ok(n)
 }
 

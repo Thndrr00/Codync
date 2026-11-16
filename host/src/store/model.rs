@@ -270,6 +270,14 @@ pub struct BotConfig {
     pub proactive: ProactiveSettings,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
+    /// Where this bot's computer runs: here, or in a Docker container with its own folder and profile
+    /// (see `computer::runtime`). Local unless chosen.
+    #[serde(default)]
+    pub computer_runtime: crate::computer::runtime::Settings,
+    /// Automatic learning: durable preferences from the user's corrections and repeated instructions, proposed
+    /// for review and saved to memory only when approved (or after the configured number of repeats).
+    #[serde(default)]
+    pub learning: crate::learning::Settings,
     /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it
     /// created (see `chat::manage`). The user turns it on; the bots such a bot creates have it too.
     #[serde(default)]

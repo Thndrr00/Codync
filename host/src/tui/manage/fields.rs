@@ -156,6 +156,13 @@ impl App {
                 let body = person_body(id.as_deref(), &values);
                 self.sheet(if id.is_some() { "updatePerson" } else { "addPerson" }, body, Reply::PeopleSaved);
             }
+            Submit::MemberInvite => {
+                let mut body = json!({"email": values.get("email").and_then(Value::as_str).unwrap_or_default()});
+                if let Some(name) = values.get("name").and_then(Value::as_str).filter(|name| !name.is_empty()) {
+                    body["name"] = json!(name);
+                }
+                self.sheet("inviteMember", body, Reply::MemberInvited);
+            }
             Submit::Section(bot) => {
                 let name = values.get("name").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
                 let section = if name.is_empty() { Value::Null } else { Value::String(name) };

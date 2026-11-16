@@ -1,12 +1,12 @@
-# People on a computer
+# People and member accounts on a computer
 
-Codync has one computer owner and many paired devices, but no member sign-in. A **person** is the
-record that stands in for a member account: someone who uses this computer with their own paired
-phone, or with bots of their own. The owner is implicit; a device, a bot or a connector with no
-person belongs to the owner.
+Codync has one computer owner and many people who use it. The owner is implicit; everyone else is a
+**person** with a role, and a person can have an **account**: an invited email, a one-time invitation
+and a session that proves they are that person. A device, a bot or a connector with no person belongs
+to the owner.
 
 This is the security model for member-scoped MCP servers: one person's connectors, OAuth tokens and
-chats are never visible to another person's phone, only in the host that authorizes the call.
+chats are never visible to another person's app, only in the host that authorizes the call.
 
 ## What a person is
 
@@ -21,11 +21,59 @@ chats are never visible to another person's phone, only in the host that authori
 - A **connector** is shared or personal (`Connector.person`). Empty is shared with every bot on the
   computer. A person's connector is seen only by that person's bots and devices.
 
-There is no member login, and this change adds none: people are created and assigned devices and bots
-on the computer itself, or from an admin's phone. Those methods (`people`, `addPerson`, `updatePerson`,
-`removePerson`, `setDevicePerson`) are reachable by the owner and by an admin's phone; a member's phone
-is refused. Only the owner changes a role: `updatePerson` with `role` is refused for an admin's phone,
-and an admin cannot add an admin.
+## Inviting a member
+
+A member account has no password. The owner, or an admin, hands out an **invitation** from People:
+`inviteMember` takes an email (and an optional name and role) and answers with the person and a
+one-time code. `docs` and the table only ever hold the code's digest (`member_invites`,
+`store/member_accounts.rs`), and inviting the same email again replaces the earlier code. An
+invitation lives for seven days.
+
+The code is also a pairing code: it carries the computer's address and keys, so the member's phone
+scans it with the same "Pair a computer" screen and the host files that device under the person with
+**Control** scope (no screen). A member at the computer itself (the terminal UI, or the desktop app
+over its own tunnel) redeems the code with `acceptMemberInvite`, which answers with a session token
+instead of pairing a phone.
+
+Both paths end in one place: a `devices` row whose `person_id` is the member, authorized by
+`api::devices::permit` and narrowed by `people::caller_person`. There is no second authorization
+system, and a member's invitation never grants a role of its own: the role comes from `people`.
+
+Only the owner can invite an admin, or change anyone's role. An admin can invite members and end
+members' sessions; another admin's invitation and session stay the owner's.
+
+## Sessions
+
+A **session** is a way of acting as a person until it is revoked:
+
+| Kind | How it starts | Ends |
+| --- | --- | --- |
+| Paired device (`kind: "device"`) | The member scans the invitation QR | `revokeMemberSession`, `revokeDevice`, or removing the person |
+| Signed-in session (`kind: "session"`) | `acceptMemberInvite` at the computer, or `memberSignIn` | `revokeMemberSession`, or signing out |
+| Invitation (`kind: "invite"`) | `inviteMember` | Redemption, expiry, `revokeMemberSession`, or removing the person |
+
+`memberSessions` lists them for the owner (and, for an admin, the members and their own session):
+the person, the device or invitation, when it started, when it ends, and whether it is connected.
+`revokeMemberSession` takes the session id: a device loses its row, push tickets and token at once; an
+invitation stops working. The person, their bots, chats and connectors stay, and they can be invited
+again.
+
+A signed-in session's token is checked on this computer's local API only: the desktop app, or any
+client that reaches that API over its own tunnel. Requests from the network authenticate through the
+E2E channel instead, which is what the paired path uses. Tokens expire after 30 days.
+
+## Company sign-in
+
+Settings → Company sign-in configures an OpenID Connect provider and the email domains it owns. A
+verified email at one of those domains maps to a person with `enterprise::member_from_email`, and the
+login exchange `memberSignIn` turns it into a session at the computer. It never creates a person or a
+role: the email has to have been invited already, and the domain has to be one the owner named. The
+exchange is a loopback call, made by the desktop app after the provider verified the email; it trusts
+a client that already holds this computer's token, exactly as that token's owner does.
+
+SCIM provisioning (`/scim/v2/Users`) now writes to `people`: creating a user creates a member person,
+updating one renames them, and deleting one removes them exactly as Settings does. It never grants an
+admin.
 
 ## Admins and members
 
@@ -34,6 +82,7 @@ and an admin cannot add an admin.
 | Bots and chats | Their own | Everyone's |
 | Connectors | Shared and their own; changes only their own | Everyone's; what they add is shared |
 | People and devices | No | Yes, from their phone (`people`, `addPerson`, `updatePerson`, `removePerson`, `setDevicePerson`, `devices`) |
+| Invitations and sessions | No | Members' (`inviteMember`, `memberSessions`, `revokeMemberSession`) |
 | Roles | No | No: only the owner promotes or demotes |
 | Lead bot, roster sections, account and cloud settings | No | No |
 
@@ -42,9 +91,10 @@ admin every bot and chat, and `api::marketplace` lets an admin manage every conn
 the scoping below. `people` also returns `canManageRoles`, false on an admin's phone, so a client can
 show the role without offering to change it.
 
-## What a member's phone sees
+## What a member's app sees
 
-A device assigned to a person gets the same calls as the owner's phone, but scoped in the host:
+A device or session assigned to a person gets the same calls as the owner's phone, but scoped in the
+host:
 
 - **Roster and chats.** Only that person's bots and groups. The event stream filters bots and entries
   before they leave the host (`api::events`), and every method that names a bot, a message or a thread
@@ -58,6 +108,8 @@ A device assigned to a person gets the same calls as the owner's phone, but scop
   bot to the owner or to another person.
 - **Cross-people guard.** A member's `updateBot`, `deleteBot`, `send`, `history`, `thread`,
   permission answers and the rest all pass the same bot check, so guessing an id gains nothing.
+- **Who am I.** `memberProfile` and `hello.member` say whether the caller is the owner or a person,
+  and which role and scopes it holds, so a client shows "Ana, member" instead of guessing.
 
 The owner and this computer still see everything, and an admin's phone sees every bot and chat too:
 that is what owning the computer, or being trusted with it, means. Removing a person is how their
@@ -84,8 +136,8 @@ bot's `connectors` server returns (`market::requests`).
 **Settings → People → Remove** asks first, then ends their access and unassigns everything instead of
 deleting it:
 
-- Their devices are revoked: their rows and push tickets go, so a phone of theirs can no longer open a
-  channel or receive pushes. Pair it again if it should come back as the owner's.
+- Their devices and sessions are revoked, with their push tickets and invitation codes: no phone or
+  token of theirs can call the host again. Pair it again if it should come back as the owner's.
 - Their bots and chats become the owner's; no bot or conversation is deleted.
 - Their connectors become shared, so every bot on the computer can use them.
 
@@ -95,26 +147,39 @@ chat.
 ## Clients
 
 - **Desktop:** Settings → People: add a person, rename or change their email, give them the admin or
-  member role, remove one, and assign a paired device from the row. Extensions shows a person badge on
-  each connector (or **Shared**), and a member's view says **Shared** and **Mine**.
-- **iPhone and Android:** Computer management → People, with the same actions and, on the owner's
-  phone, the role picker; an admin's phone sees each role but can't change it. The section is hidden
-  when the host refuses it, which is what a member's phone gets.
-- **Terminal UI:** Go to → People on this computer: the people, their role, their email and the paired
-  devices each one uses, **n** to add someone, **↵** to rename or change their email, **g** to make
-  them an admin or a member, **x** to remove them, and **Tab** to the device list where **↵** gives a
-  device to a person or back to this computer's owner. Removal asks first and says access ends. The
-  host methods are the same ones the other apps call.
+  member role, remove one, and assign a paired device from the row. **Invite a member** shows the
+  one-time code and the invitation link (or QR) to hand over. **Member sessions** lists invitations,
+  paired phones and signed-in apps with **End session**. **Sign in as a member on this computer**
+  takes the invitation code or the company email and opens that member's own view (their connectors,
+  and who they are), which the host scopes. Extensions shows a person badge on each connector (or
+  **Shared**), and a member's view says **Shared** and **Mine**.
+- **iPhone and Android:** Computer management → People, with the same actions: people and roles,
+  **Invite a member** (the code and link), **Member sessions** with **End session**, and assigning a
+  device. **Sign in as a member** on Computer management scans the invitation with the normal pairing
+  screen. An admin's phone sees roles but can't change them; the section is hidden for a member.
+- **Terminal UI:** Go to → People on this computer: the people, their role, their email and the
+  sessions and devices each one uses. **n** adds someone, **i** invites a member (the sheet keeps the
+  one-time code on screen), **↵** renames or changes their email, **g** makes them an admin or a
+  member, **x** removes them, **Tab** to the sessions list, **v** ends one session (after asking), and
+  **↵** there gives a device to a person or back to this computer's owner. The terminal UI is the
+  owner's own view, so it hands out invitations and ends sessions rather than opening one as a
+  member: a member signs in on their own phone or with the desktop app.
 
 The desktop app and the phones talk to the same host methods; every check is in the host, never in a
 client.
 
 ## Limits
 
-- No member passwords, accounts or invitations exist. A person is a label the owner puts on a device
-  or a bot; whoever holds the paired phone acts as that person.
+- A session token is for this computer's local API: the desktop app and the terminal UI use it over
+  loopback or their own tunnel. A phone or a remote app pairs instead, so its traffic stays inside
+  the E2E channel. A signed-out phone can only pair on the same network or Tailscale; over the Codync
+  relay it needs an account, as before.
+- A member at the owner's computer can read the host's token file, so their session there is a
+  convenience, not a boundary against the owner. The boundary is a member's own remote device.
 - The owner and an admin can read every member's chats and use their connectors. The reverse is
-  refused, and a member's phone can't list people or change a role.
+  refused, and a member can't list people, invite anyone, or end a session.
+- Member invitations are single-use; the desktop and terminal sign-in exchange a code only at the
+  computer. An invitation that leaked is only useful until it is redeemed, revoked, or expires.
 - Composio connections and skills are computer-wide: a member sees them and can use them in a bot,
   but only the owner connects or removes a Composio app.
 - A member's own new bot gets the shared connectors plus their own. It never gets another person's.

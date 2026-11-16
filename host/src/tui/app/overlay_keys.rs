@@ -65,6 +65,7 @@ impl App {
             Action::Channels => self.open_channels(),
             Action::Beliefs => self.open_beliefs(),
             Action::Proposals => self.open_proposals(),
+            Action::Learning => self.open_learning(),
             Action::Demo => {
                 if self.demo {
                     self.quit = true;
@@ -164,6 +165,9 @@ impl App {
                         ConfirmAct::RemovePerson(id) => {
                             self.call("removePerson", json!({"id": id}), After::Sheet(Reply::PeopleSaved))
                         }
+                        ConfirmAct::RevokeSession(key) => {
+                            self.call("revokeMemberSession", json!({"session": key}), After::Sheet(Reply::PeopleSaved))
+                        }
                     }
                     None
                 }
@@ -199,6 +203,7 @@ impl App {
             Overlay::Channels(s) => self.channels_key(s, k),
             Overlay::Beliefs(s) => self.beliefs_key(s, k),
             Overlay::Proposals(s) => self.proposals_key(s, k),
+            Overlay::Learning(s) => self.learning_key(s, k),
             Overlay::Always(s) => self.always_key(s, k),
             Overlay::WhatsNew(s) => s.key(k),
             // A phone that scanned the code waits for this computer to let it in.

@@ -68,6 +68,8 @@ pub enum Action {
     Channels,
     Beliefs,
     Proposals,
+    /// Learned preferences: what the bot proposes from the person's corrections and repeats.
+    Learning,
     Demo,
     Usage,
     CheckUpdate,
@@ -82,7 +84,7 @@ pub enum Action {
     ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 34] = [
+pub const ACTIONS: [(&str, &str, Action); 35] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -103,6 +105,7 @@ pub const ACTIONS: [(&str, &str, Action); 34] = [
     ("Channels: Telegram and Slack…", "", Action::Channels),
     ("What this bot knows about you…", "", Action::Beliefs),
     ("Skills this bot proposes…", "", Action::Proposals),
+    ("Learned preferences: what this bot would remember…", "", Action::Learning),
     ("Demo mode: try it, or leave it", "", Action::Demo),
     ("Usage", "U", Action::Usage),
     ("Check for updates", "", Action::CheckUpdate),
@@ -153,6 +156,8 @@ pub enum ConfirmAct {
     DeleteAgentDownload(String),
     /// A person on this computer: their devices, bots, chats and connectors become the owner's.
     RemovePerson(String),
+    /// One member session or paired device, by key: that access ends at once.
+    RevokeSession(String),
 }
 
 pub struct Confirm {
@@ -454,6 +459,7 @@ pub enum Overlay {
     Channels(Box<super::ChannelsSheet>),
     Beliefs(Box<super::BeliefsSheet>),
     Proposals(Box<super::ProposalsSheet>),
+    Learning(Box<super::LearningSheet>),
     Computer(Box<super::super::manage::computer::ComputerSheet>),
     McpTools(Box<super::super::manage::mcp_tools::McpToolsSheet>),
     N8n(Box<super::super::manage::n8n::N8nSheet>),

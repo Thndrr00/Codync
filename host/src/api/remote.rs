@@ -160,6 +160,29 @@ fn revoke(hub: &Arc<Hub>, key: &str) -> Result<Value> {
 
 /// A new one-time pairing code and the QR that carries it (§4.1).
 async fn pairing(hub: &Arc<Hub>, short_code: bool) -> Result<Value> {
+    let issued = hub.pairing.locked().issue();
+    hub.auth_changed();
+    // A computer in no account connects to the relay for as long as this code lives.
+    hub.cloud.relay_wake.notify_one();
+    let mut answer = pairing_link(hub, &issued.code, issued.expires_at).await?;
+    // Asked for (`codync-host pair`): a code to type instead of scanning, when the Codync cloud can hold the link.
+    if short_code {
+        let url = answer["pairingUrl"].as_str().unwrap_or_default().to_owned();
+        answer["shortCode"] = json!(
+            crate::remote::short_code::register(hub, &url, issued.expires_at)
+                .await
+                .inspect_err(|e| tracing::info!(error = format!("{e:#}"), "no short pairing code"))
+                .ok()
+        );
+    } else {
+        answer["shortCode"] = Value::Null;
+    }
+    Ok(answer)
+}
+
+/// The link a phone or a client scans to join this computer, for `code` until `expires_at`. A member
+/// invitation uses it too, so the code an admin hands out is the one the QR carries.
+pub(crate) async fn pairing_link(hub: &Arc<Hub>, code: &str, expires_at: i64) -> Result<Value> {
     let port = hub.port;
     // Shells out to `tailscale`: keep it off the async workers.
     let urls = tokio::task::spawn_blocking(move || crate::service::addresses(port)).await?;
@@ -167,29 +190,16 @@ async fn pairing(hub: &Arc<Hub>, short_code: bool) -> Result<Value> {
     if urls.is_empty() && cloud.is_none() {
         bail!("No network address a phone could reach, and the Codync cloud is off.");
     }
-    let issued = hub.pairing.locked().issue();
-    hub.auth_changed();
-    // A computer in no account connects to the relay for as long as this code lives.
-    hub.cloud.relay_wake.notify_one();
     let url = crate::service::pairing_url(&crate::service::PairingQr {
         name: &crate::remote::managed::computer_name(&hub.store),
         computer_id: &hub.identity.computer_id(),
         sign_key: &hub.identity.sign_pub_b64(),
         box_key: &hub.identity.box_pub_b64(),
-        code: &issued.code,
+        code,
         urls: &urls,
         cloud: cloud.as_deref(),
     });
-    // Asked for (`codync-host pair`): a code to type instead of scanning, when the Codync cloud can hold the link.
-    let short_code = if short_code {
-        crate::remote::short_code::register(hub, &url, issued.expires_at)
-            .await
-            .inspect_err(|e| tracing::info!(error = format!("{e:#}"), "no short pairing code"))
-            .ok()
-    } else {
-        None
-    };
-    Ok(json!({"pairingUrl": url, "urls": urls, "expiresAt": issued.expires_at, "shortCode": short_code}))
+    Ok(json!({"pairingUrl": url, "urls": urls, "expiresAt": expires_at}))
 }
 
 #[cfg(test)]

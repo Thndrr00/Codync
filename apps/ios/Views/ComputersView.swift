@@ -9,6 +9,7 @@ struct ComputersView: View {
     @Environment(AccountStore.self) private var accounts
     @Environment(\.dismissModal) private var dismissModal
     @State private var addingComputer = false
+    @State private var signingInAsMember = false
     @State private var confirmForget: Computer?
     @State private var confirmRevoke: CloudComputer?
     @State private var access: AccessTarget?
@@ -87,6 +88,15 @@ struct ComputersView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                Button {
+                    signingInAsMember = true
+                } label: {
+                    Label(L10n.tr("Sign in as a member"), systemImage: "person.badge.key")
+                        .foregroundStyle(Palette.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             if let cloudMachine = accounts.cloudMachine { CloudComputerSection(store: cloudMachine) }
         }
@@ -96,6 +106,9 @@ struct ComputersView: View {
         .task { await refreshCloud() }
         .codyncSheet(isPresented: $addingComputer) {
             PairingView(inModal: true)
+        }
+        .codyncSheet(isPresented: $signingInAsMember) {
+            MemberSignInView()
         }
         .codyncSheet(item: $access) { target in
             AccessRequestView(computer: target.computer, pending: accounts.pendingAccess[target.id])

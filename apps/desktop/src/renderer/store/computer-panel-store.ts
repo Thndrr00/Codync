@@ -1,12 +1,27 @@
 import type { HostClient } from '../client/host-client'
 import { Observable } from '../lib/observable.ts'
 export type ComputerPermissions = { browser: boolean; files: boolean; shell: boolean }
+export type ComputerRuntimeKind = 'local' | 'container'
+/** Where a bot's computer runs (`computerPanel`'s `runtime`); nothing here is a secret. */
+export interface ComputerRuntimeSettings {
+  kind: ComputerRuntimeKind; image: string; gvisor: boolean; fallbackLocal: boolean
+}
+export interface ComputerRuntimeStatus {
+  kind: ComputerRuntimeKind; active: ComputerRuntimeKind; available: boolean
+  engine: string | null; gvisor: boolean; gvisorActive: boolean
+  container: string | null; running: boolean; image: string
+  workspace: string; browserProfile: string; detail: string
+}
 export interface ComputerPanelState {
   enabled: boolean; permissions: ComputerPermissions; workspace: string
   screen: { userControl: boolean; agentBot?: string; computerUse: boolean; protectedEntry?: { id: string; botId: string; site: string } | null }
   activity: { id: number; action: string; result: string; createdAt: number }[]
   services?: { research: string; slack: string }
   protectedBrowserAvailable?: boolean
+  runtime?: ComputerRuntimeStatus
+  runtimeChoices?: ComputerRuntimeKind[]
+  settings?: ComputerRuntimeSettings
+  browser?: { profile: string; inContainer: boolean }
 }
 export interface ComputerFile { name: string; directory: boolean; link: boolean }
 
@@ -54,6 +69,20 @@ export class ComputerPanelStore extends Observable {
     this.busy = true; this.error = null; this.changed()
     try {
       await (await this.client()).call('updateBot', { id: this.botId, computer: enabled, computerPermissions: permissions })
+      if (this.alive && lifetime === this.lifetime) await this.load(false, true)
+    } catch (error) { if (this.alive && lifetime === this.lifetime) this.error = String(error) }
+    finally { if (this.alive && lifetime === this.lifetime) { this.busy = false; this.changed() } }
+  }
+  /** Local or a Docker container: the whole saved settings go back, so an image or gVisor choice is kept. */
+  async setRuntime(kind: ComputerRuntimeKind) {
+    if (this.busy || !this.alive) return
+    const runtime = this.state?.settings
+    if (!runtime) return
+    const lifetime = this.lifetime
+    ++this.sequence; this.loading = false
+    this.busy = true; this.error = null; this.changed()
+    try {
+      await (await this.client()).call('updateBot', { id: this.botId, computerRuntime: { ...runtime, kind } })
       if (this.alive && lifetime === this.lifetime) await this.load(false, true)
     } catch (error) { if (this.alive && lifetime === this.lifetime) this.error = String(error) }
     finally { if (this.alive && lifetime === this.lifetime) { this.busy = false; this.changed() } }

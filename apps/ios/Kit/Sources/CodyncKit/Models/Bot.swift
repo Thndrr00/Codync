@@ -1,5 +1,25 @@
 import Foundation
 
+/// Where a bot's computer runs (`computerRuntime`): this computer, or a Docker container with its own folder and
+/// browser profile. Local unless chosen.
+public struct ComputerRuntimeSettings: Codable, Hashable, Sendable {
+    /// `local` or `container`.
+    public var kind: String
+    /// Empty: the host's shipped image.
+    public var image: String
+    /// Use gVisor (`--runtime=runsc`) when Docker has it.
+    public var gvisor: Bool
+    /// A container bot with no Docker runs in its local workspace instead.
+    public var fallbackLocal: Bool
+
+    public init(kind: String = "local", image: String = "", gvisor: Bool = true, fallbackLocal: Bool = true) {
+        self.kind = kind
+        self.image = image
+        self.gvisor = gvisor
+        self.fallbackLocal = fallbackLocal
+    }
+}
+
 // A bot as codync-host sends it (`bot` events, `sync`); field names match its camelCase JSON.
 
 public struct Bot: Codable, Identifiable, Hashable, Sendable {
@@ -69,6 +89,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var skills: [String]
     /// The bot can see and operate the computer's desktop (the built-in `computer` tools).
     public var computer: Bool
+    /// Where its computer runs: here, or in its own Docker container. Nil from an older host.
+    public var computerRuntime: ComputerRuntimeSettings?
     /// The bot can create bots (which can too) and change any bot's setup (the built-in `manage` tools). Nil from an older host.
     public var manageTeam: Bool?
     /// Other computers in the user's networks list this bot and may message it. Nil from an older host.
@@ -177,6 +199,7 @@ extension Bot {
         person = try c.decodeIfPresent(String.self, forKey: .person)
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
         computer = try c.decodeIfPresent(Bool.self, forKey: .computer) ?? false
+        computerRuntime = try? c.decodeIfPresent(ComputerRuntimeSettings.self, forKey: .computerRuntime)
         manageTeam = try c.decodeIfPresent(Bool.self, forKey: .manageTeam)
         offeredToNetwork = try c.decodeIfPresent(Bool.self, forKey: .offeredToNetwork)
         reachableByAssistants = try c.decodeIfPresent(Bool.self, forKey: .reachableByAssistants)

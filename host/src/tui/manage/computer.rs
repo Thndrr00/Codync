@@ -203,6 +203,20 @@ impl App {
                     self.computer_request(&mut sheet, "updateBot", body, ComputerResult::Changed);
                 }
                 KeyCode::Char('p') => sheet.mode = ComputerMode::Site,
+                KeyCode::Char('w') => {
+                    // Where the bot's computer runs: this host, or its own Docker container.
+                    if let Some(settings) = sheet.state["settings"].as_object() {
+                        let mut runtime = settings.clone();
+                        let next = if runtime.get("kind").and_then(Value::as_str) == Some("container") {
+                            "local"
+                        } else {
+                            "container"
+                        };
+                        runtime.insert("kind".into(), Value::String(next.into()));
+                        let body = json!({"id":sheet.bot,"computerRuntime":runtime});
+                        self.computer_request(&mut sheet, "updateBot", body, ComputerResult::Changed);
+                    }
+                }
                 KeyCode::Char(step @ (',' | '.')) => {
                     let choices = sheet.state["scriptLimit"]["choices"].as_array().cloned().unwrap_or_default();
                     let per_hour = sheet.state["scriptLimit"]["perHour"].as_u64().unwrap_or_default();

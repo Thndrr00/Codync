@@ -241,6 +241,16 @@ extension BotStore {
         perform(replay: true) { _ = try await $0.updateBot(d) }
     }
 
+    /// Where the bot's computer runs: here (`local`) or in its own Docker container.
+    public func setComputerRuntime(_ bot: Bot, _ kind: String) {
+        var d = BotDraft(bot)
+        var runtime = bot.computerRuntime ?? ComputerRuntimeSettings()
+        runtime.kind = kind
+        d.computerRuntime = runtime
+        bots[bot.id]?.computerRuntime = runtime
+        perform(replay: true) { _ = try await $0.updateBot(d) }
+    }
+
     /// Whether the bot uses the memory all bots share.
     public func setSharedMemory(_ bot: Bot, _ shared: Bool) {
         var d = BotDraft(bot)

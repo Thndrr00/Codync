@@ -47,12 +47,14 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
     } else if sheet.tab == 0 {
         let permissions = &sheet.state["permissions"];
         let text = format!(
-            "Workspace: {}\n\n0 Master computer access: {}\n1 Desktop and browser: {}\n2 Workspace files: {}\n3 Shell commands: {}\n\nThese gate Codync tools on the real host, not independent harness tools.\nRevocation cancels pending work and owned commands; completed effects remain.\n\nManual entry: {}\np: pause Codync tools, stop current bot work and type a secret yourself on the host.\nf: finish manual entry; a fresh bot snapshot is then required.\nVerify the website yourself. Never paste secrets in chat.",
+            "Workspace: {}\n\n0 Master computer access: {}\n1 Desktop and browser: {}\n2 Workspace files: {}\n3 Shell commands: {}\n\nThese gate Codync tools on the real host or in the bot's container, not independent harness tools.\nRevocation cancels pending work and owned commands; completed effects remain.\n\nRuns: {} · {} · w changes local/container.\n\nManual entry: {}\np: pause Codync tools, stop current bot work and type a secret yourself on the host.\nf: finish manual entry; a fresh bot snapshot is then required.\nVerify the website yourself. Never paste secrets in chat.",
             s(&sheet.state, "workspace"),
             sheet.state["enabled"],
             permissions["browser"],
             permissions["files"],
             permissions["shell"],
+            sheet.state["runtime"]["detail"].as_str().unwrap_or("on this computer"),
+            if sheet.state["runtime"]["gvisorActive"] == true { "gVisor" } else { "" },
             sheet.state["screen"]["protectedEntry"]
         );
         let text = format!(
@@ -135,7 +137,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
             .as_deref()
             .or(sheet.busy.then_some("Waiting for host…"))
             .or(sheet.running.then_some("Command running; Status → 3 revokes shell and stops owned processes.")),
-        "Tab page · Ctrl+R refresh · ↑↓ select/scroll · Enter open/run/confirm · , . local scripts · < > local apps · [ ] plan cards · Esc back/close",
+        "Tab page · Ctrl+R refresh · ↑↓ select/scroll · Enter open/run/confirm · w local/container · , . local scripts · < > local apps · [ ] plan cards · Esc back/close",
     );
 }
 fn plan_start_label(state: &Value) -> String {

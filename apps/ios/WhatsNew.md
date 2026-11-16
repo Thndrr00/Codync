@@ -40,6 +40,8 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - 空的清單與搜尋會顯示氈毛玩偶。
 - LXC 容器中的伺服器更新時，不會再因 AppArmor 設定而中斷。
 - 語音設定可以把聽寫與朗讀回覆送到你在電腦上執行的 OpenAI 相容語音伺服器，使用它提供的模型；不會傳到 OpenAI。
+- 「人員」頁面可以用電子郵件邀請成員：邀請是一次性代碼，手機掃描或桌面版使用，成員只會看到自己的機器人、聊天與連接器。
+- 成員工作階段會列出每支已配對的手機或已登入的應用程式，並可「結束工作階段」；公司登入可把通過驗證的公司信箱對應到受邀的成員。
 ### en-US
 - A new Components page lists the six cards Codync can draw in a chat — metric, comparison, timeline, table, checklist and form — with a preview of each, and a switch to withhold one from a bot. On the desktop, a playground writes a card in a form and publishes it to the gallery.
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
@@ -72,6 +74,8 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - Empty lists and searches show the felt plush.
 - A server in an LXC container updates without the AppArmor profile stopping it.
 - Voice settings can send dictation and spoken replies to an OpenAI-compatible voice server you run on your computer, with the models it serves; nothing goes to OpenAI.
+- People can invite a member by email: the invitation is a one-time code a phone scans or this app uses at the computer, and the member sees only their own bots, chats and connectors.
+- Member sessions list each paired phone or signed-in app with End session, and company sign-in can map a verified work email to an invited member.
 ## 2.39.0
 
 ### zh-Hant

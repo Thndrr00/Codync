@@ -870,6 +870,51 @@ export interface Hello {
   cloud?: string | null
   /** Product analytics on this computer: on unless its owner turned it off. */
   analytics?: boolean
+  /** Who this client acts as: the owner, or the member (and role) its session belongs to. */
+  member?: MemberProfile
+}
+
+/** Who is calling: the owner of the computer, or a member with a role from `people`. */
+export interface MemberProfile {
+  owner: boolean
+  role: 'owner' | 'admin' | 'member'
+  person: Person | null
+  scopes: string[]
+}
+
+/** A member invitation handed out by the owner or an admin (host `inviteMember`). */
+export interface MemberInvite {
+  code: string
+  expiresAt: number
+  /** The QR a phone scans; absent when the computer is reachable only at the computer itself. */
+  pairingUrl?: string
+  urls?: string[]
+  note?: string
+}
+
+/** One member session, paired device or live invitation (`memberSessions`). */
+export interface MemberSession {
+  id: string
+  kind: 'session' | 'device' | 'invite'
+  personId: string
+  person: string
+  email?: string | null
+  role?: 'admin' | 'member'
+  name?: string | null
+  platform?: string | null
+  createdAt: number
+  lastSeenAt?: number | null
+  expiresAt?: number | null
+  connected: boolean
+}
+
+/** What the computer answers when a member signs in at it (`memberSignIn`, `acceptMemberInvite`). */
+export interface MemberSignedIn {
+  token: string
+  person: Person
+  role: 'admin' | 'member'
+  expiresAt: number
+  hostName: string
 }
 
 export interface PairingInfo {

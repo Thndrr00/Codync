@@ -29,6 +29,18 @@ import kotlinx.serialization.json.contentOrNull
         if (model.loading && snapshot == null) row { Waiting("Loading computer…") }
         if (tab == "status" && snapshot != null) {
             row { Text("Workspace: ${snapshot.workspace}", style = Type.caption, color = Palette.secondary) }
+            snapshot.settings?.let { settings ->
+                row { SegmentedChoice(settings.kind, listOf("local" to "Local", "container" to "Container"), { model.runtime(it) }) }
+                row { Text(snapshot.runtime?.detail ?: if (settings.kind == "container") "A Docker container with its own folder and browser profile." else "This computer.", style = Type.caption, color = Palette.secondary) }
+                if (settings.kind == "container") row {
+                    val image = snapshot.runtime?.image?.takeIf { it.isNotEmpty() }
+                        ?: settings.image.takeIf { it.isNotEmpty() } ?: "codync/computer:1"
+                    val gvisor = if (snapshot.runtime?.gvisorActive == true) "gVisor" else if (settings.gvisor) "gVisor when Docker has it" else "Docker runtime"
+                    Text("Image: $image · $gvisor${if (snapshot.runtime?.running == true) " · running" else ""}", style = Type.caption, color = Palette.secondary)
+                }
+                if (settings.kind == "container") row { Text("Browser profile: ${snapshot.runtime?.browserProfile.orEmpty()}", style = Type.caption, color = Palette.secondary) }
+                if (snapshot.runtime?.available == false) row { Text("Docker isn't available. The shell falls back to this workspace; install Docker or start it to use the container.", style = Type.caption, color = Palette.secondary) }
+            }
             healthRows(store, state.generation)
             row { Text(if (snapshot.screen["userControl"]?.jsonPrimitive?.booleanOrNull == true) "You control the screen" else "Host controls the screen", style = Type.body, color = Palette.text) }
             row { SwitchRow("Use the computer", null, snapshot.enabled, {

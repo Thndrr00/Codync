@@ -356,14 +356,23 @@ impl Actor {
             && stop_reason == "end_turn"
             && let Some(turn) = self.turn
         {
-            let request = self
-                .hub
-                .runtime(&self.cfg.id)
-                .message
-                .and_then(|id| self.hub.store.entry(&id))
+            let message_id = self.hub.runtime(&self.cfg.id).message;
+            let request = message_id
+                .as_ref()
+                .and_then(|id| self.hub.store.entry(id))
                 .and_then(|e| e.data["text"].as_str().map(str::to_owned))
                 .unwrap_or_default();
-            tokio::spawn(crate::chat::skill_proposals::consider(self.hub.clone(), self.cfg.clone(), turn, request));
+            tokio::spawn(crate::chat::skill_proposals::consider(
+                self.hub.clone(),
+                self.cfg.clone(),
+                turn,
+                request.clone(),
+            ));
+            // What the person asked for here, and said again or corrected, may be worth remembering: proposed in the
+            // bot's settings, saved only when approved (or after the configured repeats).
+            let hub = self.hub.clone();
+            let cfg = self.cfg.clone();
+            tokio::task::spawn_blocking(move || crate::learning::consider(hub, cfg, request, message_id));
         }
         self.publish_proactive_output(!stopped && done.is_ok() && stop_reason == "end_turn");
         let silent_check_in = super::proactive::silent_update(self.proactive_turn, final_text.as_deref());

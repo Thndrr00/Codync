@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 
 use super::super::app::{After, AgentModel, App, Entry, Overlay, Toggle};
+use super::super::l10n::{fill, tr};
 use super::{Market, MemoryMode, Reply, Shell, Submit, open_browser, s};
 
 impl App {
@@ -65,6 +66,22 @@ impl App {
                 if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::Person { .. }))
                 {
                     self.overlays.pop();
+                }
+                self.load_people();
+            }
+            Reply::MemberInvited => {
+                // The invitation form goes away, and the sheet keeps the one-time code on screen.
+                if matches!(self.overlays.last(), Some(Overlay::Fields(f)) if matches!(&f.submit, Submit::MemberInvite))
+                {
+                    self.overlays.pop();
+                }
+                let person = s(&v["person"], "name");
+                let code = s(&v["invite"], "code");
+                for o in &mut self.overlays {
+                    if let Overlay::People(p) = o {
+                        p.notice =
+                            Some(fill(&tr("Invitation for {name}: {code}"), &[("name", &person), ("code", &code)]));
+                    }
                 }
                 self.load_people();
             }
@@ -606,6 +623,16 @@ impl App {
                         p.busy = false;
                         p.error = Some(e.clone());
                     }
+                }
+            }
+            Reply::MemberInvited => {
+                if let Some(Overlay::Fields(f)) = self.overlays.last_mut()
+                    && matches!(&f.submit, Submit::MemberInvite)
+                {
+                    f.saving = false;
+                    f.error = Some(e);
+                } else {
+                    self.flash(&e);
                 }
             }
             Reply::PeopleSaved => {

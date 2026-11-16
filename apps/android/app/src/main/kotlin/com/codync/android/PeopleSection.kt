@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.codync.android.design.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -28,6 +29,18 @@ internal data class PersonRow(val id: String, val name: String, val email: Strin
 
 /** A paired device as the computer lists it for its owner. */
 private data class DeviceRow(val key: String, val name: String, val personId: String, val person: String)
+
+/** One member session, paired device or live invitation (`memberSessions`). */
+private data class MemberSessionRow(
+    val id: String,
+    val kind: String,
+    val person: String,
+    val email: String,
+    val name: String,
+    val platform: String,
+    val expiresAt: Long?,
+    val connected: Boolean,
+)
 
 internal suspend fun AppStore.people(): List<PersonRow> {
     val list = hostQuery("people", buildJsonObject { }).jsonObject["people"]?.jsonArray ?: return emptyList()
@@ -43,6 +56,26 @@ internal suspend fun AppStore.people(): List<PersonRow> {
 internal suspend fun AppStore.canManageRoles(): Boolean = runCatching {
     hostQuery("people", buildJsonObject { }).jsonObject["canManageRoles"]?.jsonPrimitive?.content?.toBoolean() ?: true
 }.getOrDefault(true)
+
+/** Every member session, paired member device and live invitation; empty on a host without them. */
+private suspend fun AppStore.memberSessions(): List<MemberSessionRow> {
+    val list = runCatching { hostQuery("memberSessions", buildJsonObject { }) }.getOrNull()
+        ?.jsonObject?.get("sessions")?.jsonArray ?: return emptyList()
+    return list.mapNotNull { item ->
+        val row = item.jsonObject
+        val id = row["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+        MemberSessionRow(
+            id = id,
+            kind = row["kind"]?.jsonPrimitive?.content.orEmpty(),
+            person = row["person"]?.jsonPrimitive?.content.orEmpty(),
+            email = row["email"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content.orEmpty(),
+            name = row["name"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content.orEmpty(),
+            platform = row["platform"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content.orEmpty(),
+            expiresAt = row["expiresAt"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content?.toLongOrNull(),
+            connected = row["connected"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+        )
+    }
+}
 
 private suspend fun AppStore.authorizedDevices(): List<DeviceRow> {
     val list = hostQuery("devices", buildJsonObject { }).jsonObject["devices"]?.jsonArray ?: return emptyList()
@@ -67,9 +100,14 @@ private suspend fun AppStore.authorizedDevices(): List<DeviceRow> {
 internal fun PeopleSection(state: AppState, store: AppStore) {
     val scope = rememberCoroutineScope()
     var people by remember { mutableStateOf<List<PersonRow>>(emptyList()) }
+    var sessions by remember { mutableStateOf<List<MemberSessionRow>>(emptyList()) }
     var devices by remember { mutableStateOf<List<DeviceRow>>(emptyList()) }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var inviteName by remember { mutableStateOf("") }
+    var inviteEmail by remember { mutableStateOf("") }
+    var inviteRole by remember { mutableStateOf("member") }
+    var issued by remember { mutableStateOf<Pair<String, String>?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<PersonRow?>(null) }
@@ -78,6 +116,7 @@ internal fun PeopleSection(state: AppState, store: AppStore) {
         runCatching {
             people = store.people()
             devices = store.authorizedDevices()
+            sessions = store.memberSessions()
             canManageRoles = store.canManageRoles()
             error = null
         }.onFailure { error = it.message }
@@ -139,6 +178,84 @@ internal fun PeopleSection(state: AppState, store: AppStore) {
                     }
                 }
                 error?.let { Text(it, style = Type.caption, color = Palette.danger) }
+            }
+        }
+    }
+
+    CardSection("Invite a member",
+        "An invitation is a one-time code the member scans on their phone, or signs in with at the computer. They act as that person, with only their own bots, chats and connectors.") {
+        row {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FieldBox(inviteName, { inviteName = it }, "Name (optional)", 1, 1, fill = Palette.bubbleUser)
+                FieldBox(inviteEmail, { inviteEmail = it }, "Email", 1, 1, fill = Palette.bubbleUser, capitalize = false)
+                if (canManageRoles) {
+                    ChoicePicker(inviteRole, listOf("member" to tr("Member"), "admin" to tr("Admin")),
+                        { inviteRole = it }, label = tr("Role"))
+                }
+                SecondaryButton(if (busy) "Inviting…" else "Invite", enabled = !busy && inviteEmail.isNotBlank()) {
+                    busy = true
+                    scope.launch {
+                        try {
+                            val answer = store.hostQuery("inviteMember", buildJsonObject {
+                                put("name", inviteName.trim()); put("email", inviteEmail.trim()); put("role", inviteRole)
+                            })
+                            val person = answer.jsonObject["person"]?.jsonObject
+                            val invite = answer.jsonObject["invite"]?.jsonObject
+                            issued = (person?.get("name")?.jsonPrimitive?.content.orEmpty() to
+                                (invite?.get("pairingUrl")?.jsonPrimitive?.content
+                                    ?: invite?.get("code")?.jsonPrimitive?.content.orEmpty()))
+                            inviteName = ""
+                            inviteEmail = ""
+                            load()
+                        } catch (e: Exception) {
+                            error = e.message
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+                issued?.let { (person, link) ->
+                    Text(tr("Invitation for {name}").replace("{name}", person), style = Type.caption, color = Palette.secondary)
+                    Text(link, style = Type.caption, color = Palette.text)
+                }
+                error?.let { Text(it, style = Type.caption, color = Palette.danger) }
+            }
+        }
+    }
+
+    CardSection("Member sessions",
+        "A session is a paired phone or a signed-in app. Ending one revokes that device at once; the person and their bots stay.") {
+        row {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (sessions.isEmpty()) Text("None yet", style = Type.caption, color = Palette.secondary)
+                for (session in sessions) {
+                    ValueRow(session.person, detail = when {
+                        session.kind == "invite" -> tr("Invitation")
+                        session.platform.isNotBlank() -> "${session.name} · ${session.platform}"
+                        else -> session.name
+                    }) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                when {
+                                    session.kind == "invite" -> tr("Pending")
+                                    session.connected -> tr("Connected")
+                                    else -> tr("Signed out")
+                                },
+                                style = Type.caption, color = Palette.secondary,
+                            )
+                            SecondaryButton(tr("End session"), enabled = !busy) {
+                                scope.launch {
+                                    try {
+                                        store.hostQuery("revokeMemberSession", buildJsonObject { put("session", session.id) })
+                                        load()
+                                    } catch (e: Exception) {
+                                        error = e.message
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

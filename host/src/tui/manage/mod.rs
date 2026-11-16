@@ -137,6 +137,8 @@ pub enum Reply {
     People,
     /// The paired devices and the person each acts as (`devices`).
     PeopleDevices,
+    /// An invitation was handed out: the People sheet shows its one-time code.
+    MemberInvited,
     /// A person was added, renamed or removed, a device was assigned, or a device's person changed.
     PeopleSaved,
     Skills,
@@ -417,6 +419,8 @@ pub enum Submit {
     },
     /// A handoff card's text (the card's entry id).
     Handoff(String),
+    /// An invitation for a member's email, from the People sheet.
+    MemberInvite,
     VoiceDecisions {
         bot: String,
         receipt: String,

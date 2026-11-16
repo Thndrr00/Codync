@@ -644,6 +644,9 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({})
         }
         "memory" | "memoryFile" => crate::chat::memory::call(hub, method, &b).await?,
+        "learning" | "approveLearning" | "dismissLearning" | "saveLearningSettings" => {
+            crate::learning::call(hub, method, &b)?
+        }
         // The security profiles to choose among: their sentence and what each sets, for a client to show.
         "securityProfiles" => json!({"profiles": crate::agent::security_profile::describe_all()}),
         "importAgentMemory" => {

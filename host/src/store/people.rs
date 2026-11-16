@@ -1,8 +1,8 @@
 //! People on this computer: the owner, who is implicit, and everyone else who uses it with their
-//! own paired phone or their own bots (see `docs/features/people.md`).
+//! own paired phone, their own session or their own bots (see `docs/features/people.md`).
 //!
-//! There is no member sign-in: a person is a record the owner creates, and a device or a bot names
-//! which person it belongs to. A bot, connector or device with no person is the owner's.
+//! A person is a member account: an invited email and a one-time invitation redeem it into a device or
+//! a session (`store::member_accounts`). A bot, connector or device with no person is the owner's.
 //!
 //! A person is a `member` (their own bots, chats and connectors) or an `admin` (they also manage
 //! everyone's people, connectors and bots). Only the owner makes someone an admin.
@@ -78,6 +78,21 @@ impl Store {
         logged("person", row.optional()).flatten()
     }
 
+    /// The person whose email is `email`, whatever its case: the address a company signs in with.
+    pub fn person_by_email(&self, email: &str) -> Option<Person> {
+        let email = email.trim();
+        if email.is_empty() {
+            return None;
+        }
+        let c = self.db.locked();
+        let row = c.query_row(
+            &format!("SELECT {PERSON_COLS} FROM people WHERE codync_lower(email) = codync_lower(?1)"),
+            [email],
+            row_person,
+        );
+        logged("person_by_email", row.optional()).flatten()
+    }
+
     /// Adds a person; `name` is trimmed by the caller. `email` stays `None` when it is empty.
     pub fn add_person(&self, name: &str, email: Option<&str>) -> Result<Person> {
         self.add_person_with_role(name, email, Role::Member)
@@ -129,6 +144,10 @@ impl Store {
         for key in devices {
             super::devices::delete_device(&tx, &key)?;
         }
+        // Their invitations and session tokens end too; a member session is backed by a device row,
+        // so this is the second half of what `delete_device` above already removed.
+        tx.execute("DELETE FROM member_invites WHERE person_id = ?1", [id])?;
+        tx.execute("DELETE FROM member_sessions WHERE person_id = ?1", [id])?;
         let gone = tx.execute("DELETE FROM people WHERE id = ?1", [id])?;
         tx.commit()?;
         Ok(gone > 0)

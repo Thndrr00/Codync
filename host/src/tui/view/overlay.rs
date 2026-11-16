@@ -166,6 +166,7 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
         Overlay::Channels(s) => super::channels::channels(buf, area, s),
         Overlay::Beliefs(s) => super::beliefs::beliefs(buf, area, s),
         Overlay::Proposals(s) => super::proposals::proposals(buf, area, s),
+        Overlay::Learning(s) => super::learning::learning(buf, area, s),
         Overlay::Always(s) => super::rules::always(buf, area, s),
         Overlay::WhatsNew(s) => super::whats_new::whats_new(buf, area, s),
     }

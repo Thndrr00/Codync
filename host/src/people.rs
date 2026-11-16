@@ -1,10 +1,11 @@
 //! People on this computer: the owner, who is implicit, and everyone else who uses it with their own
-//! paired phone or their own bots (docs/features/people.md).
+//! paired phone, their own session or their own bots (docs/features/people.md).
 //!
-//! Codync has no member sign-in. A person is a record the owner creates here, and a device or a bot
-//! names which person it belongs to. The host authorizes every call by that pair: a device assigned to a
-//! person acts as that person (`api::devices::caller_person`), and a bot's person decides which connectors
-//! it may use and whose chats it may read. Everything is checked here, never in a client.
+//! A person can have a member account: an invited email, a one-time invitation and a session
+//! (`members`). A device or a session names which person it belongs to, and the host authorizes every
+//! call by that pair: a device assigned to a person acts as that person (`api::devices::caller_person`),
+//! and a bot's person decides which connectors it may use and whose chats it may read. Everything is
+//! checked here, never in a client.
 //!
 //! A person is a member (their own bots, chats and connectors) or an admin (they also manage everyone's
 //! people, connectors and bots). Only the owner changes a role. Removing a person revokes the phones
@@ -22,7 +23,7 @@ use std::sync::Arc;
 pub const METHODS: [&str; 5] = ["people", "addPerson", "updatePerson", "removePerson", "setDevicePerson"];
 
 /// Longest a person's name may be, in characters.
-const MAX_NAME_CHARS: usize = 80;
+pub(crate) const MAX_NAME_CHARS: usize = 80;
 /// Longest email a person may carry.
 const MAX_EMAIL_CHARS: usize = 200;
 
@@ -159,7 +160,7 @@ fn required<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
 }
 
 /// The role a body names, `member` when it names none.
-fn role_in(b: &Value) -> Result<Role> {
+pub(crate) fn role_in(b: &Value) -> Result<Role> {
     match b.get("role") {
         None | Some(Value::Null) => Ok(Role::Member),
         Some(Value::String(role)) => Role::parse(role).ok_or_else(|| anyhow::anyhow!("`role` must be admin or member")),
@@ -177,7 +178,7 @@ fn text<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
 }
 
 /// A name, trimmed and nonempty.
-fn checked_name(name: &str) -> Result<&str> {
+pub(crate) fn checked_name(name: &str) -> Result<&str> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
         bail!("Use a name of up to {MAX_NAME_CHARS} characters.");
@@ -186,7 +187,7 @@ fn checked_name(name: &str) -> Result<&str> {
 }
 
 /// An optional email: trimmed, empty is none, and it has to look like an address.
-fn checked_email(email: Option<&str>) -> Result<Option<&str>> {
+pub(crate) fn checked_email(email: Option<&str>) -> Result<Option<&str>> {
     let Some(email) = email.map(str::trim).filter(|e| !e.is_empty()) else { return Ok(None) };
     if email.len() > MAX_EMAIL_CHARS || !email.contains('@') || email.chars().any(char::is_whitespace) {
         bail!("Use an email like person@example.com, or leave it empty.");

@@ -6,6 +6,7 @@ import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
 import { useApp, useStore } from '../../store/context'
 import { ComputerPanelStore } from '../../store/computer-panel-store'
+import type { ComputerRuntimeKind } from '../../store/computer-panel-store'
 import { Field, ErrorText } from '../marketplace/pieces'
 import '../marketplace/mcp-tools.css'
 
@@ -35,14 +36,25 @@ export function ComputerPanel({ botId }: { botId: string }) {
     return () => { clearInterval(timer); model.dispose() }
   }, [model])
   const state = model.state
+  const settings = state?.settings
   const canFiles = !!state?.enabled && state.permissions.files
   const canShell = !!state?.enabled && state.permissions.shell
   return <CardForm>
     <TabChoice label="Computer panel" selection={tab} onChange={setTab} options={[{ id: 'status', label: 'Status' }, { id: 'files', label: 'Files' }, { id: 'terminal', label: 'Terminal' }, { id: 'activity', label: 'Activity' }]} />
     <Button kind="secondary" disabled={model.loading} onClick={() => void model.load(true)}>Refresh computer</Button>
     {model.loading && !state && <Text as="div" role="status">Loading computer…</Text>}
-    {tab === 'status' && state && <CardSection title="Computer permissions" footer="These control Codync's tools on the real host. The desktop permission covers apps, mouse and keyboard; it is not a browser sandbox. Harness tools have their own permissions. Revocation cancels pending work and owned shell processes; effects already sent cannot be undone.">
+    {tab === 'status' && state && <CardSection title="Computer permissions" footer="These control Codync's tools on the real host or in this bot's container. The desktop permission covers apps, mouse and keyboard; it is not a browser sandbox. Harness tools have their own permissions. Revocation cancels pending work and owned shell processes; effects already sent cannot be undone.">
       <Text tone="secondary">Workspace: {state.workspace}</Text>
+      {settings ? <>
+        <TabChoice label="Where this bot runs" selection={settings.kind} onChange={(kind) => void model.setRuntime(kind as ComputerRuntimeKind)}
+          options={[{ id: 'local', label: 'Local' }, { id: 'container', label: 'Container' }]} />
+        <Text tone="secondary">{state.runtime?.detail ?? (settings.kind === 'container' ? 'A Docker container with its own folder and browser profile.' : 'This computer.')}</Text>
+        {settings.kind === 'container' ? <>
+          <Text tone="secondary">Image: {state.runtime?.image || settings.image || 'codync/computer:1'} · {state.runtime?.gvisorActive ? 'gVisor' : settings.gvisor ? 'gVisor when Docker has it' : 'Docker runtime'}{state.runtime?.running ? ' · running' : ''}</Text>
+          <Text tone="secondary">Browser profile: {state.browser?.profile ?? state.runtime?.browserProfile}</Text>
+          {!state.runtime?.available ? <Text tone="secondary">Docker isn't available. The shell falls back to this workspace; install Docker or start it to use the container.</Text> : null}
+        </> : null}
+      </> : null}
       <Text>{state.screen.userControl ? 'You control the screen' : state.screen.agentBot ? `Bot ${state.screen.agentBot} is using the screen` : 'No bot using the screen'}</Text>
       <SwitchRow title="Use the computer" on={state.enabled} onChange={(enabled) => void model.setPermissions(enabled, state.permissions)} disabled={model.busy} />
       {(['browser', 'files', 'shell'] as const).map((capability) => <SwitchRow key={capability} title={{ browser: 'Desktop and browser', files: 'Workspace files', shell: 'Shell commands' }[capability]}

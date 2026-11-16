@@ -33,6 +33,8 @@ pub struct PeopleSheet {
     pub step: PeopleStep,
     pub busy: bool,
     pub error: Option<String>,
+    /// The last invitation's one-time code (and its person), shown under the lists.
+    pub notice: Option<String>,
 }
 
 #[derive(Default)]
@@ -172,6 +174,40 @@ pub fn person_body(id: Option<&str>, values: &serde_json::Map<String, Value>) ->
     body
 }
 
+/// The form that invites a member: a one-time code the owner shows, or the terminal UI signs in with.
+pub fn member_fields() -> Fields {
+    Fields {
+        title: tr("Invite a member").into_owned(),
+        note: tr("A one-time code they scan on their phone, or sign in with at this computer. They act as that person, with only their own bots, chats and connectors.").into_owned(),
+        choices: vec![],
+        choice: 0,
+        inputs: vec![
+            Input {
+                name: "name".into(),
+                label: "Name (optional)".into(),
+                secret: false,
+                required: false,
+                multiline: false,
+                placeholder: String::new(),
+                ed: Editor::with(""),
+            },
+            Input {
+                name: "email".into(),
+                label: "Email".into(),
+                secret: false,
+                required: true,
+                multiline: false,
+                placeholder: "person@example.com".into(),
+                ed: Editor::with(""),
+            },
+        ],
+        cursor: 0,
+        error: None,
+        saving: false,
+        submit: Submit::MemberInvite,
+    }
+}
+
 impl App {
     pub(in crate::tui) fn open_people(&mut self) {
         self.overlays.push(Overlay::People(Box::default()));
@@ -214,7 +250,33 @@ impl App {
                 app.load_people();
             }
             KeyCode::Char('n') => {
+                sheet.notice = None;
                 app.overlays.push(Overlay::Fields(Box::new(person_fields(None, "", ""))));
+            }
+            KeyCode::Char('i') if sheet.section == PeopleSection::People => {
+                sheet.notice = None;
+                app.overlays.push(Overlay::Fields(Box::new(member_fields())));
+            }
+            // Ends one member session: the device loses access at once, the person and their bots stay.
+            KeyCode::Char('v') if sheet.section == PeopleSection::Devices => {
+                if let Some(device) = sheet.current().cloned() {
+                    let key = device["key"].as_str().unwrap_or_default().to_owned();
+                    let name = device["name"].as_str().unwrap_or_default().to_owned();
+                    if device["personId"].as_str().unwrap_or_default().is_empty() {
+                        sheet.notice =
+                            Some(tr("That device is this computer's own. Assign it to a person first.").into_owned());
+                    } else {
+                        let confirm = Confirm {
+                            title: fill(&tr("End {name}'s session?"), &[("name", &name)]),
+                            detail: "That device loses access at once. The person, their bots and their chats stay."
+                                .into(),
+                            note: "They can sign in again with a new invitation.".into(),
+                            button: "End session",
+                            act: ConfirmAct::RevokeSession(key),
+                        };
+                        app.overlays.push(Overlay::Confirm(confirm));
+                    }
+                }
             }
             KeyCode::Enter if sheet.section == PeopleSection::People => {
                 if let Some(person) = sheet.current().cloned() {

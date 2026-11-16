@@ -19,6 +19,19 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &PeopleSheet) {
         PeopleStep::List => list(buf, body, sheet),
         PeopleStep::Assign(assign) => picker(buf, body, assign),
     };
+    if sheet.error.is_none()
+        && let Some(notice) = &sheet.notice
+    {
+        let shown = tr(notice);
+        put(
+            buf,
+            inner.x,
+            inner.bottom() - 2,
+            inner.width,
+            &truncate(shown.as_ref(), usize::from(inner.width)),
+            t.bold.patch(t.panel),
+        );
+    }
     footer(buf, inner, sheet.error.as_deref(), keys);
     if sheet.error.is_none() && sheet.busy {
         put(buf, inner.x, inner.bottom() - 2, inner.width, &tr("Saving…"), t.dim.patch(t.panel));
@@ -42,11 +55,18 @@ fn list(buf: &mut Buffer, body: Rect, sheet: &PeopleSheet) -> &'static str {
     );
     y = people_rows(buf, body, y, sheet, room);
     y = (y + 1).min(body.bottom());
-    y = heading(buf, body, y, "Assign a device", "A member's phone only sees and changes what is theirs.", tall);
+    y = heading(
+        buf,
+        body,
+        y,
+        "Sessions and devices",
+        "A member's phone or signed-in app sees only what is theirs.",
+        tall,
+    );
     let _ = devices_rows(buf, body, y, sheet, room);
     match sheet.section {
-        PeopleSection::People => "n add · ↵ rename · g role · x remove · tab devices · esc",
-        PeopleSection::Devices => "↵ assign · tab people · esc",
+        PeopleSection::People => "n add · i invite · ↵ rename · g role · x remove · tab sessions · esc",
+        PeopleSection::Devices => "↵ assign · v end session · tab people · esc",
     }
 }
 

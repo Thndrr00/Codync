@@ -89,6 +89,9 @@ const LOCAL_ONLY: &[&str] = &[
     "addMember",
     "removeMember",
     "rotateScim",
+    // Handing out a member credential is the computer's to do; a paired device pairs instead.
+    "memberSignIn",
+    "acceptMemberInvite",
     // Letting a phone in that brings this computer into its account is decided at the computer.
     "pairingRequests",
     "decidePairing",
@@ -139,6 +142,10 @@ pub const OWNER_ONLY: &[&str] = &[
     "updatePerson",
     "removePerson",
     "setDevicePerson",
+    // A member's invitation and session are the owner's or an admin's to hand out and end.
+    "inviteMember",
+    "memberSessions",
+    "revokeMemberSession",
     "devices",
     // The computer's lead bot and its roster sections belong to its owner, not to one person's phone.
     "setLead",
@@ -168,6 +175,9 @@ pub fn permit_owner(hub: &Hub, caller: &Caller, method: &str) -> Result<(), Forb
             | "updatePerson"
             | "removePerson"
             | "setDevicePerson"
+            | "inviteMember"
+            | "memberSessions"
+            | "revokeMemberSession"
             | "devices"
             | "savePolicy"
             | "removePolicy"

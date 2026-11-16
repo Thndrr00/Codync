@@ -6,6 +6,7 @@ use std::{collections::HashMap, sync::Mutex};
 use tokio::sync::watch;
 
 pub mod panel;
+pub mod runtime;
 mod terminal;
 #[cfg(test)]
 mod tests;

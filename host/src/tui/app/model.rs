@@ -84,6 +84,8 @@ pub enum After {
     ChannelsTeams,
     /// `skillProposals` and the calls that answer with the inbox.
     Proposals,
+    /// `learning`, `approveLearning`, `dismissLearning` and `saveLearningSettings`: the learned-preferences inbox.
+    Learning,
     /// `beliefs`: the notes of the bot as beliefs.
     Beliefs,
     /// A confirm, forget or restore of a belief went through.

@@ -83,12 +83,29 @@ fn is_loopback(ip: IpAddr) -> bool {
 
 /// The bearer token only works from this computer; phones use the E2E channel.
 fn authorized(hub: &Hub, headers: &HeaderMap, peer: SocketAddr) -> bool {
-    let given = headers
+    is_loopback(peer.ip()) && crypto::ct_eq(bearer(headers).as_bytes(), hub.token.as_bytes())
+}
+
+fn bearer(headers: &HeaderMap) -> &str {
+    headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .unwrap_or_default();
-    is_loopback(peer.ip()) && crypto::ct_eq(given.as_bytes(), hub.token.as_bytes())
+        .unwrap_or_default()
+}
+
+/// Who is calling: this computer's own token is the owner, and a member's session token acts as that
+/// member's device. Both are loopback only: a member session is for a client that reaches this
+/// computer (the desktop app over its tunnel); a phone pairs and uses the channel.
+fn caller_for(hub: &Hub, headers: &HeaderMap, peer: SocketAddr) -> Option<Caller> {
+    if !is_loopback(peer.ip()) {
+        return None;
+    }
+    let given = bearer(headers);
+    if crypto::ct_eq(given.as_bytes(), hub.token.as_bytes()) {
+        return Some(Caller::Local);
+    }
+    crate::members::caller_for_token(hub, given)
 }
 
 fn unauthorized() -> ApiError {
@@ -134,7 +151,7 @@ async fn scim_delete(
     if !crate::enterprise::scim_allowed(&hub.store, header) {
         return Err(unauthorized());
     }
-    match crate::enterprise::remove_member(&hub.store, &id) {
+    match crate::enterprise::remove_member(&hub, &id) {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err(ApiError(StatusCode::NOT_FOUND, "unknown member".into())),
         Err(error) => Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{error:#}"))),
@@ -272,16 +289,16 @@ async fn command(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
-    // The token is checked before the body is even looked at.
-    if !authorized(&hub, &headers, peer) {
+    // The token is checked before the body is even looked at. A member session token is a device.
+    let Some(caller) = caller_for(&hub, &headers, peer) else {
         return Err(unauthorized());
-    }
+    };
     let body = if body.is_empty() {
         Value::Null
     } else {
         serde_json::from_slice(&body).map_err(|e| ApiError(StatusCode::BAD_REQUEST, format!("invalid JSON: {e}")))?
     };
-    dispatch(&hub, &Caller::Local, &method, body).await.map(Json).map_err(|e| {
+    dispatch(&hub, &caller, &method, body).await.map(Json).map_err(|e| {
         let (status, message) = error_status(&e);
         ApiError(status, message)
     })
@@ -377,10 +394,10 @@ async fn events(
     headers: HeaderMap,
     Query(q): Query<EventsQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    if !authorized(&hub, &headers, peer) {
+    let Some(caller) = caller_for(&hub, &headers, peer) else {
         return Err(unauthorized());
-    }
-    let events = events_stream(&hub, q.since.unwrap_or(0), q.client.as_deref(), &Caller::Local)
+    };
+    let events = events_stream(&hub, q.since.unwrap_or(0), q.client.as_deref(), &caller)
         .map_err(|e| ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")))?;
     let events = events.map(|v| Ok(Event::default().data(v.to_string())));
     Ok(Sse::new(events).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
@@ -476,5 +493,44 @@ mod tests {
         assert!(!is_loopback(ip("192.168.1.20")));
         assert!(!is_loopback(ip("::ffff:192.168.1.20")));
         assert!(!is_loopback(ip("100.101.102.103")));
+    }
+
+    #[test]
+    fn a_member_session_token_acts_as_that_person_and_only_from_this_computer() {
+        use crate::store::{Device, DeviceAccount, DeviceSource, Scope};
+        let (hub, dir) = temp_hub();
+        let ana = hub.store.add_person("Ana", Some("ana@example.com")).expect("person");
+        hub.store
+            .put_device(&Device {
+                key: "member-1".into(),
+                name: "Ana's desktop".into(),
+                platform: "desktop".into(),
+                source: DeviceSource::Local,
+                grant_id: None,
+                scopes: vec![Scope::Control],
+                lease_until: None,
+                created_at: 1,
+                last_seen_at: None,
+                account: DeviceAccount::Unrecorded,
+                person_id: Some(ana.id.clone()),
+            })
+            .expect("device");
+        hub.store
+            .add_member_session("member-1", &ana.id, "member-token", crate::store::now_ms() + 60_000)
+            .expect("session");
+        let at = |addr: &str| ConnectInfo(addr.parse::<SocketAddr>().expect("address"));
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer member-token".parse().expect("header"));
+        let caller = caller_for(&hub, &headers, at("127.0.0.1:50000")).expect("a member session");
+        assert!(matches!(&caller, Caller::Device { key, scopes } if key == "member-1" && scopes == &[Scope::Control]));
+        assert_eq!(crate::people::caller_person(&hub, &caller).as_deref(), Some(ana.id.as_str()));
+        assert!(
+            caller_for(&hub, &headers, at("192.168.1.20:50000")).is_none(),
+            "a member session is for this computer, not the network"
+        );
+        assert!(caller_for(&hub, &headers, at("127.0.0.1:50000")).is_some(), "a live session");
+        headers.insert("authorization", format!("Bearer {}", hub.token).parse().expect("header"));
+        assert!(matches!(caller_for(&hub, &headers, at("127.0.0.1:50000")), Some(Caller::Local)));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

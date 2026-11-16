@@ -103,7 +103,7 @@ export function EnterpriseSection() {
   if (!status) return null
   if (status.configured) {
     return (
-      <CardSection title={tr('Company sign-in')} footer={tr('People with an email at these domains sign in through the company. SCIM lists the owner and this computer\'s devices; it is read-only until member accounts exist.')}>
+      <CardSection title={tr('Company sign-in')} footer={tr('People with an email at these domains sign in through the company and become the member that email was invited as. SCIM writes to People: a created user is a member, and deleting one removes them like Settings does.')}>
         <ValueRow label={tr('Issuer')}>{status.issuer}</ValueRow>
         <ValueRow label={tr('Client id')}>{status.clientId}</ValueRow>
         <ValueRow label={tr('Email domains')}>{(status.domains ?? []).join(', ')}</ValueRow>

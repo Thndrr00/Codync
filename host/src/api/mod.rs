@@ -32,6 +32,7 @@ mod saved_searches;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
+pub(crate) use remote::pairing_link;
 
 use crate::api::devices::{Caller, Forbidden};
 use crate::hub::Hub;
@@ -103,6 +104,9 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 }
 
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+    if crate::members::METHODS.contains(&method) {
+        return crate::members::call(hub, caller, method, &b).await;
+    }
     if crate::native_channels::METHODS.contains(&method) {
         return crate::native_channels::call(hub, method, &b);
     }

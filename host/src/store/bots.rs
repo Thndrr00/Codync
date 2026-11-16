@@ -282,6 +282,8 @@ mod tests {
             computer: false,
             approval_rules: vec![],
             computer_permissions: crate::computer::Permissions::default(),
+            computer_runtime: crate::computer::runtime::Settings::default(),
+            learning: crate::learning::Settings::default(),
             manage_team: false,
             offered_to_network: true,
             reachable_by_assistants: true,

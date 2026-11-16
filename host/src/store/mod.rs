@@ -21,6 +21,7 @@ mod history;
 mod inflight;
 mod links;
 pub(crate) mod mcp_policies;
+mod member_accounts;
 mod memory;
 mod model;
 pub(crate) mod native_channels;
@@ -57,6 +58,7 @@ pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
 pub use group_tasks::{GroupTask, TaskKind, TaskState, branch as task_branch, new_task};
 pub use links::ConversationLink;
+pub use member_accounts::{INVITE_TTL_MS, MemberInvite, MemberSession, SESSION_TTL_MS};
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,

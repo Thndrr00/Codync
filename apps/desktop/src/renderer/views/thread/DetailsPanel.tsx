@@ -15,6 +15,7 @@ import { BotSettingsPanel } from '../bots/BotEditorView'
 import { NewBotView } from '../bots/NewBotView'
 import { BotAppsCard } from '../bots/BotAppsView'
 import { SkillProposalsCard } from '../bots/SkillProposalsCard'
+import { LearningSection } from '../bots/LearningSection'
 import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ThreadsCard } from './ThreadsCard'
@@ -85,7 +86,7 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
               ) : tab === 'library' ? (
                 <LibraryView botId={botId} openArtifact={openArtifact} />
               ) : tab === 'memory' ? (
-                <><MemoryCard botId={botId} />{bot && !group ? <SkillProposalsCard botId={botId} /> : null}</>
+                <><MemoryCard botId={botId} />{bot && !group ? <><SkillProposalsCard botId={botId} /><LearningSection botId={botId} /></> : null}</>
               ) : tab === 'computer' ? (
                 <ComputerPanel key={`${store.contextId}:${store.computer.id}:${botId}`} botId={botId} />
               ) : tab === 'documents' && bot ? (
