@@ -6,6 +6,7 @@ pub mod artifacts;
 pub mod board_auto;
 pub mod budget_gate;
 pub mod calls;
+pub mod clip;
 pub mod context;
 pub mod decider;
 pub mod embeddings;

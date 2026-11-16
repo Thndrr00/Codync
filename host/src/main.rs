@@ -14,6 +14,7 @@ mod background;
 mod browser;
 mod budget;
 mod bundle;
+mod calendar_feeds;
 mod channels;
 mod chat;
 mod cli;

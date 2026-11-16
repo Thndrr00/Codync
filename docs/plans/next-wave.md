@@ -11,6 +11,8 @@ is bigger than one release.
 | Local models (chat, embeddings, voice) | done: chat via `local-agent`, embeddings, and the system voice |
 | Workspace search with citations | done (lexical + optional semantic rerank) |
 | Team meeting: minutes (`/minutes`) and text roundtable done; voice spoken by the host and played on the phones |
+| Calendar feeds (`.ics`) and a read-only agenda tool for bots | done (host) |
+| Web page clipper for bots (`clip_page`) | done (host) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
@@ -120,6 +122,18 @@ to the signed installers.
   folders; each match carries file, line and a snippet, and reading returns numbered lines.
 - Next: embeddings (fastembed or llama.cpp) behind `codync-mem` for semantic search, and a citation card
   in the chat that opens the file at the line.
+
+## Calendar feeds and web clipping — done (host)
+
+- `host/src/calendar_feeds.rs`: read-only `.ics` subscriptions (Google, Apple, Outlook, any `CalDAV`
+  export) with `calendarFeeds`, `addCalendarFeed`, `removeCalendarFeed` and `calendarAgenda`. It parses
+  UTC, local and all-day events, unfolds long lines, unescapes text, caches each feed for ten minutes,
+  and keeps at most twenty feeds. Bots get `calendar_agenda` as a read-only chat tool.
+- `host/src/chat/clip.rs`: `clip_page` fetches one page (http/https, 5 MiB, 20 s) and returns its
+  title and readable text, dropping scripts, styles, navigation, header, footer and forms.
+- Next: showing subscribed events beside routines in each client's calendar, and a feed editor page.
+- Acceptance: a Google Calendar export URL answers "what's on my calendar this week", and a link in a
+  chat is explained from its text.
 
 ## Team meeting — done (text and voice)
 
