@@ -1,5 +1,6 @@
 ﻿import CodyncKit
 import CodyncUI
+import Foundation
 import SwiftUI
 import UIKit
 
@@ -12,6 +13,10 @@ struct WorkspaceSheet: View {
     @State private var tasks: [BoardTask] = []
     @State private var templates: [TeamTemplate] = []
     @State private var links: [SharedLink] = []
+    @State private var feeds: [CalendarFeed] = []
+    @State private var events: [CalendarEvent] = []
+    @State private var feedName = ""
+    @State private var feedURL = ""
     @State private var error: String?
     @State private var loading = false
     @State private var title = ""
@@ -19,7 +24,7 @@ struct WorkspaceSheet: View {
     @State private var adding = false
 
     private enum Tab: String, CaseIterable {
-        case board, teams, links
+        case board, teams, links, calendar
     }
 
     var body: some View {
@@ -33,6 +38,7 @@ struct WorkspaceSheet: View {
                 case .board: board
                 case .teams: teams
                 case .links: linksList
+                case .calendar: calendar
                 }
                 if let error {
                     Text(error).font(.footnote).foregroundStyle(Palette.danger)
@@ -226,6 +232,95 @@ struct WorkspaceSheet: View {
         }
     }
 
+    // MARK: calendar
+
+    private var calendar: some View {
+        Group {
+            CardSection("Add a calendar", footer: "Paste the .ics address from Google, Apple or Outlook. It is read only.") {
+                TextField("Name (optional)", text: $feedName).plainTextInput().workspaceField()
+                TextField("https://…/calendar.ics", text: $feedURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .plainTextInput()
+                    .workspaceField()
+                HStack {
+                    Spacer()
+                    Button("Add calendar") { addFeed() }
+                        .buttonStyle(.secondary)
+                        .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            if feeds.isEmpty {
+                CardSection { Text("No calendars yet.").foregroundStyle(Palette.secondary) }
+            } else {
+                CardSection("Calendars") {
+                    ForEach(feeds) { feed in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feed.name).foregroundStyle(Palette.text)
+                                Text(feed.url).font(.caption).foregroundStyle(Palette.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Button("Remove") { removeFeed(feed) }
+                                .buttonStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if events.isEmpty {
+                CardSection { Text("No events in the next two weeks.").foregroundStyle(Palette.secondary) }
+            } else {
+                CardSection("Next two weeks") {
+                    ForEach(events) { event in
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.title).foregroundStyle(Palette.text)
+                                Text(when(event)).font(.caption).foregroundStyle(Palette.secondary)
+                                if let place = event.location, !place.isEmpty {
+                                    Text(place).font(.caption).foregroundStyle(Palette.secondary)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func when(_ event: CalendarEvent) -> String {
+        let date = Date(timeIntervalSince1970: Double(event.start) / 1000)
+        let day = date.formatted(date: .abbreviated, time: .omitted)
+        return event.allDay ? day : "\(day), \(date.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private func addFeed() {
+        let url = feedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = feedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        Task {
+            do {
+                let feed = try await store.addCalendarFeed(name: name.isEmpty ? "Calendar" : name, url: url)
+                feeds.append(feed)
+                feedName = ""
+                feedURL = ""
+                events = try await store.calendarAgenda()
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func removeFeed(_ feed: CalendarFeed) {
+        Task {
+            do {
+                _ = try await store.removeCalendarFeed(feed.id)
+                feeds = try await store.calendarFeeds()
+                events = try await store.calendarAgenda()
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
     // MARK: loading
 
     private func load() async {
@@ -235,7 +330,9 @@ struct WorkspaceSheet: View {
             async let board = store.boardTasks()
             async let teams = store.teamTemplates()
             async let shared = store.sharedLinks()
-            (tasks, templates, links) = try await (board, teams, shared)
+            async let calendars = store.calendarFeeds()
+            async let agenda = store.calendarAgenda()
+            (tasks, templates, links, feeds, events) = try await (board, teams, shared, calendars, agenda)
             error = nil
         } catch { self.error = message(error) }
     }
@@ -251,6 +348,7 @@ private extension WorkspaceSheet.Tab {
         case .board: return "Board"
         case .teams: return "Teams"
         case .links: return "Links"
+        case .calendar: return "Calendar"
         }
     }
 }

@@ -99,6 +99,55 @@ internal suspend fun AppStore.revokeSharedLink(token: String): Boolean =
     hostCall("revokeShare", buildJsonObject { put("token", token) })
         .jsonObject["revoked"]?.jsonPrimitive?.booleanOrNull == true
 
+/** A read-only calendar feed this computer subscribes to. */
+internal data class CalendarFeed(val id: String, val name: String, val url: String, val fetchedAt: Long?)
+
+/** One event from a subscribed calendar; times are Unix milliseconds. */
+internal data class CalendarEvent(
+    val feed: String,
+    val title: String,
+    val start: Long,
+    val end: Long?,
+    val allDay: Boolean,
+    val location: String?,
+    val url: String?,
+)
+
+private fun feedOf(json: JsonObject): CalendarFeed = CalendarFeed(
+    id = json.str("id") ?: "",
+    name = json.str("name") ?: "Calendar",
+    url = json.str("url") ?: "",
+    fetchedAt = json.num("fetchedAt"),
+)
+
+private fun eventOf(json: JsonObject): CalendarEvent = CalendarEvent(
+    feed = json.str("feed") ?: "",
+    title = json.str("title") ?: "Untitled",
+    start = json.num("start") ?: 0,
+    end = json.num("end"),
+    allDay = json.bool("allDay") ?: false,
+    location = json.str("location"),
+    url = json.str("url"),
+)
+
+internal suspend fun AppStore.calendarFeeds(): List<CalendarFeed> =
+    (hostCall("calendarFeeds", buildJsonObject {}).jsonObject["feeds"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::feedOf) } ?: emptyList()
+
+internal suspend fun AppStore.addCalendarFeed(name: String, url: String): CalendarFeed =
+    feedOf(hostCall("addCalendarFeed", buildJsonObject {
+        put("name", name)
+        put("url", url)
+    }, 60_000).jsonObject["feed"]?.jsonObject ?: buildJsonObject {})
+
+internal suspend fun AppStore.removeCalendarFeed(id: String): Boolean =
+    hostCall("removeCalendarFeed", buildJsonObject { put("id", id) })
+        .jsonObject["removed"]?.jsonPrimitive?.booleanOrNull == true
+
+internal suspend fun AppStore.calendarAgenda(days: Int = 14): List<CalendarEvent> =
+    (hostCall("calendarAgenda", buildJsonObject { put("days", days) }).jsonObject["events"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::eventOf) } ?: emptyList()
+
 /** One group member's turn in a short meeting; `audio` is base64 for `audioFormat`. */
 internal data class MeetingTurn(
     val botId: String,

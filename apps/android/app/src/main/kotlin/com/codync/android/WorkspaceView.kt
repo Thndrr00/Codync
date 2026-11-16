@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import com.codync.android.design.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The board, the saved teams and the read-only links this computer keeps (iOS `WorkspaceSheet`).
@@ -33,6 +36,8 @@ internal fun WorkspaceSheet(store: AppStore) {
     var tasks by remember { mutableStateOf<List<BoardTask>>(emptyList()) }
     var templates by remember { mutableStateOf<List<TeamTemplate>>(emptyList()) }
     var links by remember { mutableStateOf<List<SharedLink>>(emptyList()) }
+    var feeds by remember { mutableStateOf<List<CalendarFeed>>(emptyList()) }
+    var events by remember { mutableStateOf<List<CalendarEvent>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
@@ -43,6 +48,8 @@ internal fun WorkspaceSheet(store: AppStore) {
             tasks = store.boardTasks()
             templates = store.teamTemplates()
             links = store.sharedLinks()
+            feeds = store.calendarFeeds()
+            events = store.calendarAgenda()
             error = null
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -156,6 +163,57 @@ internal fun WorkspaceSheet(store: AppStore) {
                         }
                     }
                 }
+                WorkspaceTab.Calendar -> {
+                    var feedName by remember { mutableStateOf("") }
+                    var feedUrl by remember { mutableStateOf("") }
+                    CardSection("Add a calendar", "Paste the .ics address from Google, Apple or Outlook. It is read only.") {
+                        row {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FieldBox(feedName, { feedName = it }, "Name (optional)")
+                                FieldBox(feedUrl, { feedUrl = it }, "https://…/calendar.ics")
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    SecondaryButton("Add calendar", enabled = feedUrl.isNotBlank()) { run {
+                                        val feed = store.addCalendarFeed(feedName.trim().ifEmpty { "Calendar" }, feedUrl.trim())
+                                        feeds = feeds + feed
+                                        events = store.calendarAgenda()
+                                        feedName = ""
+                                        feedUrl = ""
+                                    } }
+                                }
+                            }
+                        }
+                    }
+                    if (feeds.isEmpty()) CardSection {
+                        row { Text("No calendars yet.", style = Type.body, color = Palette.secondary) }
+                    } else CardSection("Calendars") {
+                        for (feed in feeds) row {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(feed.name, style = Type.body, color = Palette.text)
+                                    Text(feed.url, style = Type.footnote, color = Palette.secondary, maxLines = 1)
+                                }
+                                SecondaryButton("Remove") { run {
+                                    store.removeCalendarFeed(feed.id)
+                                    feeds = store.calendarFeeds()
+                                    events = store.calendarAgenda()
+                                } }
+                            }
+                        }
+                    }
+                    if (events.isEmpty()) CardSection {
+                        row { Text("No events in the next two weeks.", style = Type.body, color = Palette.secondary) }
+                    } else CardSection("Next two weeks") {
+                        for (event in events) row {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(event.title, style = Type.body, color = Palette.text)
+                                Text(eventTime(event), style = Type.footnote, color = Palette.secondary)
+                                event.location?.takeIf { it.isNotBlank() }?.let {
+                                    Text(it, style = Type.footnote, color = Palette.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
             }
             if (error != null) Text(error ?: "", style = Type.footnote, color = Palette.danger)
         }
@@ -182,6 +240,7 @@ private enum class WorkspaceTab(val label: String) {
     Board("Board"),
     Teams("Teams"),
     Links("Links"),
+    Calendar("Calendar"),
 }
 
 private fun statusTitle(status: String): String = when (status) {
@@ -189,5 +248,11 @@ private fun statusTitle(status: String): String = when (status) {
     "waiting" -> "Waiting"
     "done" -> "Done"
     else -> "To do"
+}
+
+private fun eventTime(event: CalendarEvent): String {
+    val date = Date(event.start)
+    val day = SimpleDateFormat("d MMM", Locale.getDefault()).format(date)
+    return if (event.allDay) day else "$day, " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
 }
 
