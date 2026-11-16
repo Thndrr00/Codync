@@ -26,11 +26,13 @@ what is deliberately left out; it is not a roadmap promise.
 
 Earlier F cards (0.58–0.65) are recorded in `docs/guides/openbot-gap-census.md`.
 
-## In progress
+## Added after the first pass
 
-- Member accounts with login over the existing OIDC/SCIM path.
-- A browser web client in `web/`.
-- Per-person/bot Docker containers with gVisor fallback, and Automatic Learning.
+- Member accounts with invite links or company email, a Control-scoped
+  session tied to a person, and revocation.
+- A browser web client in `web/app/app` with a loopback bridge.
+- Per-person/bot Docker containers with gVisor when available and a local
+  fallback, plus Automatic Learning with approval before saving a fact.
 
 ## Out of scope, with reasons
 
