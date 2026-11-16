@@ -20,6 +20,8 @@ mod schedule;
 mod watch;
 pub use runner::start;
 pub use schedule::{Trigger, local_zone};
+mod undo;
+pub use undo::undo;
 
 use crate::{
     LockExt,
@@ -394,6 +396,8 @@ impl Routines {
         let now = now_ms();
         let id = body["id"].as_str().map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
         let updated = body["id"].is_string();
+        // What the chat's receipt needs to take this change back.
+        let before = undo::snapshot(hub, bot, &id);
         let routine = self.change(&hub.store, |s| {
             let old = check::replaced(s, bot, body, &triggers, now)?;
             if !updated && s.routines.iter().filter(|r| !r.deleted).count() >= 1000 {
@@ -451,7 +455,7 @@ impl Routines {
             s.routines.push(r.clone());
             Ok(r)
         })?;
-        hub.add_entry(&Lane::main(bot), EntryKind::Notice, 0, &json!({"text":format!("{} routine: {name}", if updated {"Updated"} else {"Created"}), "routineId": id, "style":"info"}));
+        hub.add_entry(&Lane::main(bot), EntryKind::Notice, 0, &json!({"text":format!("{} routine: {name}", if updated {"Updated"} else {"Created"}), "routineId": id, "style":"info", "routineUndo": {"id": id, "before": before.unwrap_or(Value::Null), "undone": false}}));
         Ok(json!({"routine":public(&routine)}))
     }
 
@@ -481,6 +485,7 @@ impl Routines {
     }
 
     pub fn remove(&self, hub: &Hub, bot: &str, id: &str) -> Result<Value> {
+        let before = undo::snapshot(hub, bot, id);
         let withdrawn = self.change(&hub.store, |s| {
             let r = s
                 .routines
@@ -495,6 +500,10 @@ impl Routines {
         })?;
         retry::withdraw(hub, &withdrawn);
         flow::forget_routine(hub, id, bot);
+        if let Some(before) = before {
+            let name = before["name"].as_str().unwrap_or("routine").to_owned();
+            hub.add_entry(&Lane::main(bot), EntryKind::Notice, 0, &json!({"text": format!("Deleted routine: {name}"), "routineId": id, "style": "info", "routineUndo": {"id": id, "before": before, "undone": false}}));
+        }
         Ok(json!({"ok":true}))
     }
 

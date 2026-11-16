@@ -42,6 +42,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             b["to"].as_i64().context("to is required")?,
         )?,
         "saveRoutine" => hub.routines.save(hub, str_arg(&b, "botId")?, &b)?,
+        // The chat's Undo on a routine receipt: the routine comes back as it was, or a new one goes.
+        "undoRoutineChange" => crate::routines::undo(hub, &b)?,
         "setRoutineEnabled" => hub.routines.set_enabled(
             &hub.store,
             str_arg(&b, "botId")?,
