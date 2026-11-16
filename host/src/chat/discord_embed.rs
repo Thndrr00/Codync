@@ -108,7 +108,7 @@ mod tests {
             "channel": "123",
             "title": long,
             "description": "A summary",
-            "color": 3447003,
+            "color": 3_447_003,
             "fields": [{"name": "First", "value": "one", "inline": true}, {"name": "", "value": "dropped"}, {"name": "Second", "value": "two"}],
             "footer": "Codync",
             "author": "A bot",
@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(embed["footer"]["text"], "Codync");
         assert_eq!(embed["image"]["url"], "https://example.com/a.png");
         assert!(embed.get("thumbnail").is_none(), "only http(s) links");
-        assert_eq!(embed["color"], 3447003);
+        assert_eq!(embed["color"], 3_447_003);
     }
 
     #[test]
