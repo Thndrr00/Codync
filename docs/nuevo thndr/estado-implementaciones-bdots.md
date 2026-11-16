@@ -1,0 +1,38 @@
+# Estado de las 50 mejoras de bdots en Codync
+
+Auditoría del código real de Codync (no de los nombres de archivos propuestos) sobre la lista de
+[50 mejoras e implementaciones](50-mejoras-implementaciones-bdots.md).
+
+## Resultado
+
+- **42 de 50 ya estaban implementadas** antes de esta rama.
+- **6 estaban a medias** y se completan aquí.
+- **0 ausentes por completo.**
+
+Las ideas 1–15 (runtime de mini-apps, `_live`, `_data`, `_error`, `_tell`, AppLink, open items,
+shell jobs, secretos, etc.), 16–30 (animaciones y componentes de Desktop/Android) y 35–50
+(proxy de secretos, poda, watchers, ACTION_CLASSES, save_app, diagnóstico MCP) ya vivían en el host
+y los clientes. La documentación de investigación anterior describía el estado previo a esa
+integración, no el actual.
+
+## Vacíos cerrados en esta rama
+
+| Idea | Vacíos | Implementación |
+|---|---|---|
+| 32, 33 | `shape_tool_results` era código muerto; la poda de páginas/imágenes nunca se aplicaba. | `host/src/agent/context_pruner.rs`: un `ContextPruner` por sesión MCP conserva 3 páginas completas y 2 imágenes, recorta el resto a 1.000 caracteres y lo conecta en `mcp.rs`, por donde vuelven al modelo todas las respuestas de herramientas. |
+| 9 | `mark_reported`/`was_reported` existían como herramientas, pero las rutinas no las usaban al notificar. | `host/src/routines/dedup.rs`: clave SHA256 de `routineId` + resultado normalizado; `publish()` omite el aviso si el mismo resultado se envió en las últimas 24 h. Los fallos nunca se deduplican. |
+| 44 | `appsInBackground` se guardaba pero ninguna puerta de aprobación lo consultaba. | `host/src/agent/approval_gate.rs`: un check-in o rutina con la opción desactivada rechaza las herramientas de apps conectadas que pedirían aprobación, en vez de dejar el turno colgado esperando un toque. |
+| 40 | `finish_teaching` aceptaba `navHistory`, pero nada llamaba a CDP. | `host/src/screen/browser_panel.rs` llama a `Page.getNavigationHistory` (solo Windows, donde existe el panel) y lo normaliza; `finish_teaching` lo usa cuando el grabador no lo envía. Sin panel, los eventos DOM siguen funcionando. |
+| 17 | Las pestañas de Android desvanecían el relleno de una a otra en vez de deslizar una pastilla. | `TabChoice` en `Controls.kt` mide cada etiqueta y mueve una sola pastilla con el resorte de `Motion.layout()`. |
+| — | Los modelos wire de bdots solo existían en host, Desktop y Android. | `BdotsModels.swift` en CodyncKit: `ActionClass`, `RulePolicy`, `RobotLook`, `ProactiveSettings`, `AppLink`, `BotApp`, `OpenItem`, `ConnectorFailure` y `MessageBookmark`, con valores por defecto para hosts antiguos. |
+
+Cada cambio lleva tests unitarios: `ContextPruner`, deduplicación de rutinas, puerta de aprobación,
+normalización del historial CDP, geometría de la pastilla y decodificación de los modelos iOS.
+
+## Matiz pendiente
+
+- Idea 31: el `LoopGuard` de Codync usa 3 strikes y normalización distinta del `stableJson()` de
+  bdots. Es una adaptación equivalente en propósito, no una copia literal.
+- Idea 28: el "dissolve" al limpiar se aplica al buscador del marketplace, no al compositor de chat.
+- El grabador DOM (`RECORDER`) sigue sin inyectarse automáticamente en el panel del navegador: los
+  eventos los aporta el agente. La idea 40 ya obtiene el historial de páginas directamente de CDP.
