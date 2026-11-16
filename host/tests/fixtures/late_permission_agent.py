@@ -57,6 +57,6 @@ for line in sys.stdin:
         send({"id": rid, "result": {"stopReason": "end_turn"}})
         if "EARLY" not in text:
             time.sleep(0.5)  # the background work takes a while
-            ask("s9" if "elsewhere" in text else "s1")
+            ask("s9" if "notes elsewhere" in text else "s1")
     else:
         send({"id": rid, "result": {}})

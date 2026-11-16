@@ -78,7 +78,7 @@ impl Actor {
         }
         if let Some((update, identity)) = context::profile_update(&self.hub.store, &snapshot, &self.cfg) {
             prompt = format!("{prompt}\n\n{update}");
-            self.announce = Some((snapshot, identity));
+            self.announce = Some((snapshot.clone(), identity));
         }
         let own_chat = self.active_group.is_none() && self.active_request.is_none() && self.active_routine.is_none();
         if remind_files && own_chat {
@@ -88,7 +88,6 @@ impl Actor {
             prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. To change it, edit a copy of its HTML (list_artifacts) and publish_artifact(path, artifact: its id).]");
         }
         // Declarative UI: the desktop draws it with its own components; no code runs.
-        prompt.push_str("\n\n[Codync: to show a short structured answer (a status table, key facts, small bars), reply with a fenced ```a2ui block whose body is JSON: {\"title\": \"...\", \"blocks\": [{\"type\": \"text\", \"text\": \"...\"}, {\"type\": \"facts\", \"items\": [{\"label\": \"...\", \"value\": \"...\"}]}, {\"type\": \"table\", \"columns\": [\"...\"], \"rows\": [[\"...\"]]}, {\"type\": \"bars\", \"items\": [{\"label\": \"...\", \"value\": 3}]}, {\"type\": \"note\", \"text\": \"...\", \"tone\": \"info|attention|danger\"}, {\"type\": \"choices\", \"prompt\": \"...\", \"options\": [{\"id\": \"...\", \"label\": \"...\"}]}, {\"type\": \"form\", \"prompt\": \"...\", \"fields\": [{\"id\": \"...\", \"label\": \"...\"}], \"submit\": \"...\"}]}. Keep it small and put the explanation outside the block.]");
         Ok(prompt)
     }
 

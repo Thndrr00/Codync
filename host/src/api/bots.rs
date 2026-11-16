@@ -670,6 +670,24 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let seconds = b["seconds"].as_u64().unwrap_or(0);
             json!({"entry": crate::chat::calls::end(hub, str_arg(&b, "botId")?, call, seconds, &b["lines"])?})
         }
+        // A turn that stopped half done: the chat's card continues it with one of its own messages.
+        "continueTurn" => {
+            let id = str_arg(&b, "entryId")?;
+            let e = hub.store.entry(id).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.kind != EntryKind::Notice.as_str() {
+                bail!("That isn't a paused turn card");
+            }
+            let used = crate::agent::bot::pause::begin(&e.data)?;
+            hub.set_entry(id, &used);
+            let row = hub.store.bot(&e.bot_id)?.filter(|r| !r.deleted).context("unknown bot")?;
+            let data = json!({
+                "text": crate::agent::bot::pause::CONTINUE_TEXT,
+                "from": "continue",
+                "clientNonce": uuid::Uuid::new_v4().to_string(),
+            });
+            let entry = crate::chat::messages::post_in_lane(hub, &row.config, Lane::main(&e.bot_id), data)?;
+            json!({"entry": entry})
+        }
         "stop" => {
             hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
@@ -951,6 +969,55 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
             json!({"entry": e})
         }
+        // What a rule would do to a command, here, without waiting for a real request. `rules` and
+        // `actionRules` may be drafts; otherwise the bot's saved ones are used.
+        "testApprovalRule" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted).context("unknown bot")?;
+            let command = str_arg(&b, "command")?;
+            let rules: Vec<crate::agent::approval_rules::ApprovalRule> = match b.get("rules") {
+                Some(value) if value.is_array() => serde_json::from_value(value.clone()).context("invalid rules")?,
+                _ => row.config.approval_rules.clone(),
+            };
+            let policies: std::collections::BTreeMap<crate::store::ActionClass, crate::store::RulePolicy> =
+                match b.get("actionRules") {
+                    Some(value) if value.is_object() => {
+                        serde_json::from_value(value.clone()).context("invalid action rules")?
+                    }
+                    _ => row.config.action_rules.clone(),
+                };
+            let on = b["actionRulesOn"].as_bool().unwrap_or(row.config.action_rules_on);
+            let draft_policies = b.get("actionRules").is_some_and(Value::is_object);
+            let all_quick = crate::agent::approval_rules::quick_rules(&policies);
+            let quick = if on || draft_policies { all_quick.clone() } else { Vec::new() };
+            let evaluation = crate::agent::approval_rules::evaluate(
+                &rules,
+                &quick,
+                row.config.permission,
+                "execute",
+                Some(command),
+                command,
+            );
+            // The classes a quick rule can't cover whatever the tester shows above.
+            let quick_not_enforced: Vec<Value> = crate::agent::approval_rules::QUICK_UNENFORCED
+                .iter()
+                .map(|(class, reason)| json!({"class": class, "reason": reason}))
+                .collect();
+            json!({
+                "evaluation": evaluation,
+                "quickNotEnforced": quick_not_enforced,
+            })
+        }
+        // The rule an "Always allow" answer would keep for a card: its command, else its title.
+        "proposeRule" => {
+            let e = hub.store.entry(str_arg(&b, "entryId")?).ok_or_else(|| anyhow!("unknown card"))?;
+            if e.kind != EntryKind::Permission.as_str() {
+                bail!("That isn't an approval card");
+            }
+            match crate::agent::always_rule::propose(&e.data) {
+                Ok(rule) => json!({"rule": rule, "refusal": null}),
+                Err(refusal) => json!({"rule": null, "refusal": refusal_code(refusal)}),
+            }
+        }
         "respondPermission" => {
             let entry_id = str_arg(&b, "entryId")?;
             let e = hub.store.entry(entry_id).ok_or_else(|| anyhow!("unknown card"))?;
@@ -980,9 +1047,32 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
+            // "Always allow" may carry the rule the person edited or kept: it is checked here and
+            // saved as one more rule, so no later duplicate can widen it silently.
+            if let Some(rule) = b.get("rule").filter(|r| !r.is_null()) {
+                if option_id.as_deref() != Some("always") {
+                    bail!("A rule can only be kept with always allow.");
+                }
+                let rule: crate::agent::approval_rules::ApprovalRule =
+                    serde_json::from_value(rule.clone()).context("invalid rule")?;
+                crate::agent::always_rule::check(&rule).map_err(|refusal| anyhow!("{}", refusal.reason()))?;
+                let row = hub.store.bot(bot)?.filter(|r| !r.deleted).context("unknown bot")?;
+                let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
+                hub.update_bot(&json!({"id": bot, "approvalRules": rules}))?;
+            }
             hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;
             json!({})
         }
         _ => return Ok(ControlFlow::Continue(b)),
     }))
+}
+
+/// The short wire name of a refused rule proposal.
+fn refusal_code(refusal: crate::agent::always_rule::Refusal) -> &'static str {
+    use crate::agent::always_rule::Refusal;
+    match refusal {
+        Refusal::NothingToMatch => "nothingToMatch",
+        Refusal::Chained => "chained",
+        Refusal::Forbidden => "forbidden",
+    }
 }

@@ -133,6 +133,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(windows, ignore = "symlinks need a privilege on Windows")]
     fn claude_reads_its_own_skills_and_follows_a_symlink() {
         let root = scratch();
         let home = root.join("home");

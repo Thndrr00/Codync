@@ -233,9 +233,9 @@ mod tests {
         let members = store.members().unwrap();
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].role, MemberRole::Owner);
-        assert!(!store.remove_member(&members[0].id).unwrap());
         assert!(store.set_member_role(&members[0].id, "member").is_err());
         assert_eq!(store.members().unwrap()[0].role, MemberRole::Owner);
+        assert!(store.remove_member(&members[0].id).is_err(), "the owner cannot be removed");
     }
 
     #[test]

@@ -72,8 +72,12 @@ impl Actor {
             Some(Incoming::Request { id, method, params }) => {
                 let Some(conn) = &self.conn else { return };
                 let acp = conn.acp.clone();
-                if method == "session/request_permission" && self.turn.is_some() {
-                    self.on_permission(id, params).await;
+                if method == "session/request_permission" {
+                    if self.turn.is_some() {
+                        self.on_permission(id, params).await;
+                    } else {
+                        self.late_permission(id, params).await;
+                    }
                 } else {
                     let _ = acp.respond_error(id, -32601, &format!("{method} is not supported by Codync")).await;
                 }
@@ -193,6 +197,59 @@ impl Actor {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// A permission the agent asks for after its turn, or in a session this bot opened: no card can
+    /// wait for a person then, so the bot's rules and setting answer it, or it is declined. Never for
+    /// a session this bot didn't open, nor after the person stopped it.
+    async fn late_permission(&mut self, rpc_id: Value, params: Value) {
+        use crate::agent::approval_rules::{self, Decision, Outcome};
+        use crate::store::Permission;
+        let Some(conn) = &self.conn else { return };
+        let acp = conn.acp.clone();
+        let sid = params["sessionId"].as_str().unwrap_or_default();
+        let own = !sid.is_empty()
+            && (self.session_id.as_deref() == Some(sid)
+                || self.turn_session.as_deref() == Some(sid)
+                || self.conn.as_ref().is_some_and(|c| c.loaded.contains_key(sid)));
+        let options = params["options"].as_array().cloned().unwrap_or_default();
+        let tool = &params["toolCall"];
+        let title = tool["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Use a tool");
+        let raw = &tool["rawInput"];
+        let command = raw["command"].as_str().map(str::to_owned).or_else(|| {
+            raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
+        });
+        let kind = tool["kind"].as_str().unwrap_or("other");
+        let quick =
+            if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
+        let evaluation = approval_rules::evaluate(
+            &self.cfg.approval_rules,
+            &quick,
+            self.cfg.permission,
+            kind,
+            command.as_deref(),
+            title,
+        );
+        let refused =
+            matches!(evaluation.outcome, Outcome::Forbidden { .. } | Outcome::Rule { decision: Decision::Deny, .. });
+        let allow = !sid.is_empty() && own && !self.stop_requested && !refused;
+        let outcome = if allow && self.cfg.permission == Permission::Auto {
+            let chosen = options
+                .iter()
+                .find(|o| o["kind"].as_str().is_some_and(|k| k.starts_with("allow")))
+                .or_else(|| options.iter().find(|o| o["optionId"] == "yes"))
+                .and_then(|o| o["optionId"].as_str());
+            match chosen {
+                Some(option) => json!({"outcome": "selected", "optionId": option}),
+                None => json!({"outcome": "cancelled"}),
+            }
+        } else {
+            json!({"outcome": "cancelled"})
+        };
+        let answered = acp.respond(rpc_id, json!({"outcome": outcome})).await;
+        if let Err(error) = answered {
+            tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't answer a late permission");
         }
     }
 
@@ -386,7 +443,7 @@ impl Actor {
     /// A `send_message`: the user's next bubble, in the turn's lane, right away. Only in the
     /// bot's own chat; a room, a bot request or a routine reads the turn's reply.
     pub(super) fn send_to_user(&mut self, text: String) -> anyhow::Result<()> {
-        let Some(turn) = self.turn else { anyhow::bail!("no turn is running") };
+        let Some(turn) = self.turn else { anyhow::bail!("no turn is running: it was stopped, or never started") };
         if self.active_request.is_some() {
             anyhow::bail!(
                 "send_message isn't available in a bot request: your final reply goes to the requesting bot, so put your answer there"

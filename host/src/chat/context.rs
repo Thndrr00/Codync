@@ -225,6 +225,9 @@ pub fn mark_prompted(store: &Store, bot_id: &str, sent: &Snapshot) -> Result<()>
     save(store, bot_id, &current)
 }
 /// The bot's instructions, rendered live.
+/// Declarative UI a reply may use; the apps draw it with their own components, so no code runs.
+const A2UI_HINT: &str = "Declarative UI: to show a short structured answer (a status table, key facts, small bars), reply with a fenced ```a2ui block whose body is JSON: {\"title\": \"...\", \"blocks\": [{\"type\": \"text\", \"text\": \"...\"}, {\"type\": \"facts\", \"items\": [{\"label\": \"...\", \"value\": \"...\"}]}, {\"type\": \"table\", \"columns\": [\"...\"], \"rows\": [[\"...\"]]}, {\"type\": \"bars\", \"items\": [{\"label\": \"...\", \"value\": 3}]}, {\"type\": \"note\", \"text\": \"...\", \"tone\": \"info|attention|danger\"}, {\"type\": \"choices\", \"prompt\": \"...\", \"options\": [{\"id\": \"...\", \"label\": \"...\"}]}, {\"type\": \"form\", \"prompt\": \"...\", \"fields\": [{\"id\": \"...\", \"label\": \"...\"}], \"submit\": \"...\"}]}. Keep it small and put the explanation outside the block.";
+
 pub fn render(store: &Store, cfg: &BotConfig) -> String {
     let name = cfg.name.trim();
     let mut lines = vec!["Agent profile:".to_owned()];
@@ -263,6 +266,8 @@ pub fn render(store: &Store, cfg: &BotConfig) -> String {
     );
     lines.push(String::new());
     lines.push(format!("Workspace: your default working directory is {}. {} Keep your own files and outputs there. For another project, use explicit paths or change directory for that command; don't change your bot configuration to work elsewhere. This directory is not a sandbox or a grant of access: follow the user's instructions and your permissions, and don't assume other bots' files are yours.", cfg.cwd, if crate::agent::workspace::is_managed(cfg) { "Codync allocated it for you alone." } else { "The user chose this project folder." }));
+    lines.push(String::new());
+    lines.push(A2UI_HINT.to_owned());
     if let Some(skills) = crate::market::skills_brief(store, &cfg.skills) {
         lines.push(String::new());
         lines.push(skills);

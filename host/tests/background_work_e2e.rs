@@ -35,12 +35,13 @@ async fn a_permission_asked_after_the_turn_gets_the_bots_automatic_answer() {
     let host = Host::start().await;
     let bot = host.fixture_bot("Hermes", "late_permission_agent.py", "").await;
 
-    // A bot that asks first: no card waits for it, so it's declined (the way ACP says it), not refused as unsupported.
+    // A bot that asks after its turn: no card can wait for a person, so the bot's setting answers,
+    // and the agent isn't left waiting.
     let asked = answer_after(&host, &bot, "write the notes", 0).await;
-    assert_eq!(asked["result"]["outcome"]["outcome"], "cancelled", "{asked}");
+    assert_eq!(asked["result"]["outcome"], json!({"outcome": "selected", "optionId": "yes"}), "{asked}");
     // Asked just before the turn ends: whether its card or the end of the turn answers it, the agent isn't left waiting.
     let early = answer_after(&host, &bot, "write the notes EARLY", 1).await;
-    assert_eq!(early["result"]["outcome"]["outcome"], "cancelled", "{early}");
+    assert_eq!(early["result"]["outcome"], json!({"outcome": "selected", "optionId": "yes"}), "{early}");
 
     host.call("updateBot", json!({"id": bot, "permission": "auto"})).await;
     let approved = answer_after(&host, &bot, "write the notes", 2).await;
