@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var aboutAnalytics = false
     @State private var support = false
     @State private var channels = false
+    @State private var policies = false
 
     var body: some View {
         CardForm {
@@ -35,6 +36,10 @@ struct SettingsView: View {
                 CardSection {
                     Button { channels = true } label: {
                         RowLabel("Channels", systemImage: "paperplane", chevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    Button { policies = true } label: {
+                        RowLabel("Approvals & policies", systemImage: "checkmark.shield", chevron: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -110,6 +115,11 @@ struct SettingsView: View {
         .codyncSheet(isPresented: $channels) {
             if let store = app.currentStore {
                 ChannelsSheet().environment(store)
+            }
+        }
+        .codyncSheet(isPresented: $policies) {
+            if let store = app.currentStore {
+                PoliciesSheet().environment(store)
             }
         }
     }

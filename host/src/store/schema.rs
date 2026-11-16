@@ -295,6 +295,7 @@ impl Store {
         super::runtime::create_tables(&c)?;
         super::documents::open(&c)?;
         super::mcp_policies::open(&c)?;
+        super::policies::open(&c)?;
         super::links::open(&c)?;
         super::discord::open(&c)?;
         super::matrix::open(&c)?;

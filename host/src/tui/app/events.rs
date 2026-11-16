@@ -285,6 +285,7 @@ impl App {
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),
                     After::RulesSaved => self.rules_saved(Err(e)),
+                    After::Policies | After::PolicySaved | After::PolicyPreview => self.policy_failed(&e),
                     After::Proposal(entry, option) => self.always_proposed(entry, option, Err(e)),
                     After::History(id) => {
                         self.history_busy.remove(&id);
@@ -391,6 +392,9 @@ impl App {
             After::BeliefsChanged => self.beliefs_changed(),
             After::Proposal(entry, option) => self.always_proposed(entry, option, Ok(v)),
             After::RulesSaved => self.rules_saved(Ok(())),
+            After::Policies => self.policies_loaded(&v),
+            After::PolicySaved => self.policy_saved(),
+            After::PolicyPreview => self.policy_previewed(&v),
             After::Dirs => {
                 if let Some(Overlay::Folder(p)) = self.overlays.last_mut() {
                     v["path"].as_str().unwrap_or_default().clone_into(&mut p.path);

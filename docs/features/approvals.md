@@ -5,6 +5,10 @@ itself or shows an approval card, and it decides whether a card can still be ans
 in `host/src/agent/bot/updates.rs` (`on_permission`, `answer_permission`),
 `host/src/agent/approval_rules.rs` and `respondPermission` in `host/src/api/bots.rs`.
 
+Before any of the rules below, a computer's [policies](policy-engine.md) are checked: a `deny` policy
+refuses the request and a policy `allow` approves it. With no policy switched on, everything on this
+page works exactly as described.
+
 ## Rules
 
 A bot's `approvalRules` (part of its config, set with `updateBot`) are checked in order, before
@@ -52,16 +56,21 @@ tool kind from the name unless `kind` says it. It returns `{preview}` with:
 
 - `decision`: `allow`, `ask` or `deny`.
 - `source`: `rule` (one of the person's rules), `quickRule` (a quick rule by kind of action), `forbidden` (the
-  blocklist, before any rule) or `default` (no rule matched, so the bot's Approvals setting decides).
+  blocklist, before any rule), `policy`, `noMatch`, `error` (this computer's [policies](policy-engine.md) decided) or
+  `default` (no rule matched, so the bot's Approvals setting decides).
 - `rule`: the deciding rule's `index`, `decision`, `pattern`, `kind` and whether it is `quick`, or null.
+- `policy`: what the computer's policies say: `outcome` (`policy`, `noMatch`, `error`, `unset`), the deciding
+  `rule` (`name`, `effect`, `index`, `message`), `allowlist`, `variables` (the resolved snapshot, its
+  credentials masked) and `explanation`.
 - `default`: the bot's Approvals setting, `chained`, and `allowPassedOver` as the tester returns them.
 - `explanation`: an audit-style sentence naming the bot, the tool and input, the initiator, and the rule or default
-  that decides, ending "Nothing ran." It is for people to read, not a new policy language.
+  that decides, ending "Nothing ran." When a policy decides, the sentence names the policy rule instead. It is for
+  people to read, not a new policy language.
 
-This preview covers the bot's approval rules and the blocklist. `rules` and `actionRules` test the editor's unsaved
-choices, as the tester does. Connector tools (MCP) are also governed by their tool
-policy (`docs/features/mcp-tool-policies.md`), which this call does not evaluate. Desktop shows the panel under a bot's
-approval rules; a phone shows the same read-only result.
+This preview covers the computer's policies, the bot's approval rules and the blocklist. `rules` and `actionRules`
+test the editor's unsaved choices, as the tester does; `policies` tests an unsaved policy list. Connector tools (MCP)
+are also governed by their tool policy (`docs/features/mcp-tool-policies.md`), which this call does not evaluate.
+Desktop shows the panel under a bot's approval rules; a phone shows the same read-only result.
 
 ## Security profiles
 
@@ -127,7 +136,8 @@ Some commands no bot may run, in any profile and with any approval setting, `aut
 profile included (`host/src/agent/blocklist.rs`): wiping the root or the home folder (`rm -rf /`, `rm -rf ~`,
 `Remove-Item -Recurse -Force C:\`, `rd /s /q C:\`), `sudo`, `mkfs`, `dd if=`, shutting down, formatting, changing
 the execution policy, `net user`, `reg delete`… They are checked before the user's rules and before the bot's
-setting. A match answers the agent's request with its reject option (a cancel when it has none) and writes a notice
+setting, and before this computer's [policies](policy-engine.md), which can't allow one either. A match answers the
+agent's request with its reject option (a cancel when it has none) and writes a notice
 that names the pattern: "Blocked command ("rm -rf /"), never allowed". The same list stops a background `shell_job`
 and a terminal agent's hook (the terminal is told to refuse).
 

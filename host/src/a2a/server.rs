@@ -137,7 +137,8 @@ async fn turn(
         &hub,
         &cfg,
         Lane::main(&cfg.id),
-        json!({"text": request.text.clone(), "clientNonce": request.message_id.clone()}),
+        // Where it came from, for a policy's `initiator.kind` (`agent::bot::context`).
+        json!({"text": request.text.clone(), "clientNonce": request.message_id.clone(), "origin": "network"}),
     )?;
     let mut sent = String::new();
     if let Some(result) = entry.data.get("turnResult")

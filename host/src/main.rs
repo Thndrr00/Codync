@@ -51,6 +51,7 @@ mod network;
 mod network_cli;
 mod notices;
 mod people;
+mod policy;
 mod proactive;
 mod prompt;
 mod remote;

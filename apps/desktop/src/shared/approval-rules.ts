@@ -73,8 +73,17 @@ export function describeEvaluation(e: ApprovalEvaluation): string {
  * default that made it, and a sentence to show. */
 export interface ApprovalPreview {
   decision: RuleDecision
-  source: 'rule' | 'quickRule' | 'default' | 'forbidden'
+  source: 'rule' | 'quickRule' | 'default' | 'forbidden' | 'policy' | 'noMatch' | 'error'
   rule: { index: number; decision: RuleDecision; pattern: string; kind: string | null; quick: boolean } | null
+  /** This computer's policies, which decide before the rules above; absent from an older host. */
+  policy?: {
+    outcome: 'policy' | 'noMatch' | 'error' | 'unset'
+    rule: { id: string; name: string; effect: 'allow' | 'deny'; index: number; message?: string | null } | null
+    allowlist: boolean
+    /** What the rules read, with credentials masked. */
+    variables: Record<string, unknown>
+    explanation: string
+  } | null
   default: 'ask' | 'auto'
   chained: boolean
   allowPassedOver: number | null

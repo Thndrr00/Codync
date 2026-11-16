@@ -92,6 +92,12 @@ pub enum After {
     Proposal(String, String),
     /// The rules sheet's save (`updateBot`).
     RulesSaved,
+    /// `policies`: this computer's policy rules and their presets.
+    Policies,
+    /// A policy was added, changed, switched or removed (`savePolicy`, `setPolicyEnabled`, `removePolicy`).
+    PolicySaved,
+    /// `previewPolicy`: the what-if of the policies sheet.
+    PolicyPreview,
     /// `weekSummary`: the last seven days, for the usage sheet; a host without it says nothing.
     Week,
     /// `skillUsage`: how often each skill's text entered a turn, for the usage sheet's Skill tab.

@@ -75,6 +75,20 @@ pub(super) async fn request(hub: &Arc<Hub>, ev: &Event) -> Option<Decision> {
     if data["command"].as_str().is_some_and(|command| crate::agent::blocklist::blocked(command).is_some()) {
         return Some(Decision::Deny);
     }
+    // This computer's policies govern the terminal agent too: a deny refuses instead of asking.
+    let mut request = crate::policy::Request::tool(&ev.tool);
+    request.command = data["command"].as_str().unwrap_or_default().to_owned();
+    request.intent = data["title"].as_str().unwrap_or("Use a tool").to_owned();
+    request.bot = bot.clone();
+    request.bot_name = config.name.clone();
+    request.initiator = "person".into();
+    let decision = crate::policy::saved(hub, &request);
+    if decision.denied() {
+        if let Some(rule) = decision.rule() {
+            crate::audit::refused(hub, &rule.name, &config.name);
+        }
+        return Some(Decision::Deny);
+    }
     let title = data["title"].as_str().unwrap_or("Use a tool").to_owned();
     wait_card(hub, ev, &bot, &config, &data, &title, None, DECISION_WAIT).await
 }

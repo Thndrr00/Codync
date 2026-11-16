@@ -161,6 +161,7 @@ pub(super) fn overlay(buf: &mut Buffer, area: Rect, app: &mut App, top: &Overlay
         Overlay::Voice(s) => super::voice::voice(buf, area, s),
         Overlay::People(s) => super::super::sheets::people(buf, area, s),
         Overlay::Rules(s) => super::rules::rules(buf, area, s),
+        Overlay::Policies(s) => super::policies::policies(buf, area, s),
         Overlay::Channels(s) => super::channels::channels(buf, area, s),
         Overlay::Beliefs(s) => super::beliefs::beliefs(buf, area, s),
         Overlay::Proposals(s) => super::proposals::proposals(buf, area, s),

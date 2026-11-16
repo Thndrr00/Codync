@@ -143,6 +143,10 @@ pub const OWNER_ONLY: &[&str] = &[
     // The computer's lead bot and its roster sections belong to its owner, not to one person's phone.
     "setLead",
     "renameSection",
+    // The policy engine covers every bot on the computer: a member's phone reads it, never changes it.
+    "savePolicy",
+    "removePolicy",
+    "setPolicyEnabled",
 ];
 
 /// Refuses one of [`OWNER_ONLY`] to a device assigned to a person, unless that person is an admin and the
@@ -152,8 +156,18 @@ pub fn permit_owner(hub: &Hub, caller: &Caller, method: &str) -> Result<(), Forb
     if !OWNER_ONLY.contains(&method) {
         return Ok(());
     }
-    let admins_manage =
-        matches!(method, "people" | "addPerson" | "updatePerson" | "removePerson" | "setDevicePerson" | "devices");
+    let admins_manage = matches!(
+        method,
+        "people"
+            | "addPerson"
+            | "updatePerson"
+            | "removePerson"
+            | "setDevicePerson"
+            | "devices"
+            | "savePolicy"
+            | "removePolicy"
+            | "setPolicyEnabled"
+    );
     if admins_manage && crate::people::is_admin(hub, &person) {
         return Ok(());
     }

@@ -63,6 +63,7 @@ pub enum Action {
     People,
     Network,
     Rules,
+    Policies,
     Channels,
     Beliefs,
     Proposals,
@@ -80,7 +81,7 @@ pub enum Action {
     ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 32] = [
+pub const ACTIONS: [(&str, &str, Action); 33] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -96,6 +97,7 @@ pub const ACTIONS: [(&str, &str, Action); 32] = [
     ("People on this computer…", "", Action::People),
     ("Network: your other computers…", "N", Action::Network),
     ("Approval rules of this bot…", "", Action::Rules),
+    ("Policies of this computer: allow and deny rules, and a what-if…", "", Action::Policies),
     ("Channels: Telegram and Slack…", "", Action::Channels),
     ("What this bot knows about you…", "", Action::Beliefs),
     ("Skills this bot proposes…", "", Action::Proposals),
@@ -498,6 +500,8 @@ pub enum Overlay {
     People(Box<PeopleSheet>),
     /// A bot's approval rules.
     Rules(Box<super::rules::RulesSheet>),
+    /// This computer's policy rules.
+    Policies(Box<super::policies::PoliciesSheet>),
     /// "Always allow" on a card: the rule to keep, to edit.
     Always(Box<super::always::AlwaysSheet>),
     WhatsNew(WhatsNew),

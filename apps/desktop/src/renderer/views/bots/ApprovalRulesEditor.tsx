@@ -78,6 +78,9 @@ export function ApprovalRulesEditor({ rules, onChange, test, preview, quick, onQ
         <HStack gap={8}>
           <Button kind="secondary" onClick={() => onChange([...rules, { pattern: '', decision: 'ask', kind: null }])}>Add rule</Button>
         </HStack>
+        <Text size="footnote" tone="secondary">
+          {tr("This computer's policies decide before these rules. Settings → Approvals & policies.")}
+        </Text>
         {quick && onQuick ? (
           <VStack gap={6}>
             <HStack gap={8}>

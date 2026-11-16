@@ -24,6 +24,9 @@ pub fn action(method: &str) -> Option<&'static str> {
         "networkPromote" => "A recovery key was made",
         "setNetworkRules" => "Who may write to the bots changed",
         "setApproval" => "The approval setting changed",
+        "savePolicy" => "A policy was saved",
+        "removePolicy" => "A policy was removed",
+        "setPolicyEnabled" => "A policy was switched on or off",
         "setAssistants" => "Cloud assistants were let in or out",
         "setEnterprise" | "disconnectEnterprise" => "The company sign-in changed",
         "rotateScim" => "A SCIM token was made",
@@ -38,6 +41,9 @@ pub fn detail(method: &str, body: &Value) -> String {
     let at = |key: &str| body[key].as_str().unwrap_or_default().to_owned();
     match method {
         "setApproval" => body["approval"].as_str().or_else(|| body["mode"].as_str()).unwrap_or_default().to_owned(),
+        "savePolicy" | "removePolicy" | "setPolicyEnabled" => {
+            body["policy"]["name"].as_str().or_else(|| body["name"].as_str()).unwrap_or_default().to_owned()
+        }
         "setAssistants" => {
             if body["on"] == true || body["enabled"] == true {
                 "on".into()
@@ -67,6 +73,15 @@ pub fn detail(method: &str, body: &Value) -> String {
 pub fn record(hub: &Hub, method: &str, body: &Value) {
     let Some(action) = action(method) else { return };
     if let Err(error) = append(hub, action, &detail(method, body)) {
+        tracing::warn!(error = format!("{error:#}"), "audit line was not saved");
+    }
+}
+
+/// Records a policy refusing a bot's call: the rule's name (a label the person wrote) and which bot
+/// asked, never the command or the input.
+pub fn refused(hub: &Hub, rule: &str, bot: &str) {
+    let detail: String = format!("{rule} · {bot}").chars().take(120).collect();
+    if let Err(error) = append(hub, "A policy refused an action", &detail) {
         tracing::warn!(error = format!("{error:#}"), "audit line was not saved");
     }
 }

@@ -83,6 +83,16 @@ The same setting covers changes a bot makes to other bots with **Manage the team
 
 How approval cards work: [Conversations](/docs/conversations#approval-cards).
 
+### Policies for the whole computer
+
+One list of rules in **Settings → Approvals & policies** covers every bot on the computer, before any bot's own approval rules. Each rule is a name, an expression and an effect: **Deny** refuses what it matches, **Allow** permits it. A denied request never reaches the bot: it is refused at once and the chat says which rule did it. An allowed one goes through without a card.
+
+- **Deny first.** Every deny rule that matches refuses, whatever the allow rules say.
+- **A list that allows becomes an allowlist.** If you save an allow rule, anything no allow rule names is refused; save a last rule that is just `true` to let everything else ask as before. With only deny rules, what they don't refuse goes on to the bot's approval rules and its Permissions setting.
+- **Broken rules fail closed.** A rule that can't be compiled or run refuses the request and names the error. Rules are tried when you save them, so most mistakes show up in the editor.
+- **Start from a preset.** Read-only, No shell and No sends are ordinary rules you can edit or remove.
+- **Ask first.** **What would happen?** answers one proposed tool call without doing anything, and shows the rule that decided, what each saved rule says about it, and the values it read (credentials masked).
+
 ## Summarize long chats
 
 For a Claude Code or Codex bot, **Summarize long chats** decides who summarizes the bot's chat so the conversation can go on with room to spare, and when. It sits in the Agent section, under the agent and its fallbacks (on the Details page of a chat's details).

@@ -22,6 +22,7 @@ mod channel_input;
 mod cmd;
 mod codex_names;
 mod compaction;
+mod context;
 mod declarative;
 mod fallback;
 mod fast_mode;

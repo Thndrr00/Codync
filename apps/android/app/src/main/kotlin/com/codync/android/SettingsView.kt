@@ -102,6 +102,7 @@ import com.codync.android.design.*
         EnterpriseSection(state, store)
         PeopleSection(state, store)
         BrowserSection(state, store)
+        PoliciesSection(state, store)
         ComfySection(state, store)
         N8nSection(state, store)
         AuditLogSection(state, store)

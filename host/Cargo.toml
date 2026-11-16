@@ -20,6 +20,9 @@ anyhow = "1.0.104"
 aws-lc-rs = "1"
 axum = { version = "0.8.9", features = ["ws"] }
 base64 = "0.23.1"
+# A policy rule is a CEL expression (`docs/features/policy-engine.md`): cel-rust's parser and
+# interpreter, with `matches()` for regular expressions.
+cel = { version = "0.16.0", features = ["regex"] }
 chacha20poly1305 = "0.11.0"
 chrono = "0.4.45"
 chrono-tz = "0.10.4"

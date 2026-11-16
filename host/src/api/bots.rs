@@ -739,6 +739,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 _ => row.config.approval_rules.clone(),
             };
             crate::agent::approval_rules::validate(&rules)?;
+            // This computer's policies decide first, so the answer says what they say about it. The editor's
+            // unsaved rules when it sends them; otherwise the saved ones.
+            let policies: Vec<crate::store::Policy> = match b.get("policies") {
+                Some(list) if list.is_array() => serde_json::from_value(list.clone())?,
+                _ => hub.store.policies()?,
+            };
             let initiator = b["initiator"].as_str().map(str::to_owned).unwrap_or_else(|| {
                 crate::people::caller_person(hub, caller).and_then(|id| hub.store.person(&id)).map_or_else(
                     || "the owner".to_owned(),
@@ -755,6 +761,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 &row.config,
                 &rules,
                 &quick,
+                &policies,
                 str_arg(&b, "tool")?,
                 b["command"].as_str().filter(|command| !command.trim().is_empty()),
                 b.get("input"),

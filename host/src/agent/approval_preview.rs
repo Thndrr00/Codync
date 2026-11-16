@@ -1,9 +1,9 @@
-//! What a proposed tool call would get, without doing it: the same approval rules a real request goes
-//! through (`approval_rules::evaluate`), the rule that decided, or the bot's default, and a sentence a
-//! person can read like an audit entry. No policy language is added here.
+//! What a proposed tool call would get, without doing it: this computer's policies first, then the same
+//! approval rules a real request goes through (`approval_rules::evaluate`), the rule that decided, or the
+//! bot's default, and a sentence a person can read like an audit entry.
 
 use super::approval_rules::{ApprovalRule, Decision, Evaluation, Outcome};
-use crate::store::{BotConfig, Permission};
+use crate::store::{BotConfig, Permission, Policy};
 use serde_json::{Value, json};
 
 /// The tool kinds the approval cards use. A tool name Codync doesn't recognize is `other`.
@@ -32,6 +32,7 @@ pub fn preview(
     bot: &BotConfig,
     rules: &[ApprovalRule],
     quick: &[ApprovalRule],
+    policies: &[Policy],
     tool: &str,
     command: Option<&str>,
     input: Option<&Value>,
@@ -43,13 +44,32 @@ pub fn preview(
     let input_text = input.and_then(Value::as_str).filter(|text| !text.trim().is_empty());
     let subject = command.or(input_text).unwrap_or(tool);
     let evaluation = super::approval_rules::evaluate(rules, quick, bot.permission, kind, command, subject);
-    let decision = match &evaluation.outcome {
-        Outcome::Forbidden { .. } => Decision::Deny,
-        Outcome::Rule { decision, .. } => *decision,
-        Outcome::Setting { permission } => match permission {
-            Permission::Auto => Decision::Allow,
-            Permission::Ask => Decision::Ask,
-        },
+    let mut request = crate::policy::Request::tool(tool);
+    request.kind = kind.to_owned();
+    request.command = command.unwrap_or_default().to_owned();
+    request.intent = input.map_or_else(|| subject.to_owned(), |input| input.to_string());
+    request.bot = bot.id.clone();
+    request.bot_name = bot.name.clone();
+    // Who the proposal says asks: a person's id isn't known here, so the editor's wording stands in.
+    request.actor = initiator.to_owned();
+    request.initiator = "person".into();
+    let policy = crate::policy::evaluate(policies, &request);
+    // A blocked command stays blocked: it is refused before the policies, so it can't be previewed as allowed.
+    let forbidden = command.and_then(super::blocklist::blocked);
+    let by_policy = forbidden.is_none() && (policy.allowed() || policy.denied());
+    let decision = if forbidden.is_some() || by_policy && policy.denied() {
+        Decision::Deny
+    } else if by_policy {
+        Decision::Allow
+    } else {
+        match &evaluation.outcome {
+            Outcome::Forbidden { .. } => Decision::Deny,
+            Outcome::Rule { decision, .. } => *decision,
+            Outcome::Setting { permission } => match permission {
+                Permission::Auto => Decision::Allow,
+                Permission::Ask => Decision::Ask,
+            },
+        }
     };
     let rule = match &evaluation.outcome {
         Outcome::Rule { index, decision, pattern, kind, quick } => Some(json!({
@@ -61,23 +81,42 @@ pub fn preview(
         })),
         _ => None,
     };
-    let source = match &evaluation.outcome {
-        Outcome::Forbidden { .. } => "forbidden",
-        Outcome::Rule { quick, .. } if *quick => "quickRule",
-        Outcome::Rule { .. } => "rule",
-        Outcome::Setting { .. } => "default",
+    let source = if forbidden.is_some() {
+        "forbidden"
+    } else if by_policy {
+        policy.source()
+    } else {
+        match &evaluation.outcome {
+            Outcome::Forbidden { .. } => "forbidden",
+            Outcome::Rule { quick, .. } if *quick => "quickRule",
+            Outcome::Rule { .. } => "rule",
+            Outcome::Setting { .. } => "default",
+        }
     };
     json!({
         "decision": decision,
         "source": source,
         "rule": rule,
+        "policy": {
+            "outcome": policy.source(),
+            "rule": policy.rule(),
+            "allowlist": matches!(&policy, crate::policy::Decision::Rule { allowlist: true, .. })
+                || matches!(&policy, crate::policy::Decision::NoMatch { allowlist: true }),
+            // What the rules read, with credentials masked, so a person can check a rule's variables.
+            "variables": request.snapshot(),
+            "explanation": crate::policy::explain(&policy, &request),
+        },
         "default": bot.permission,
         "chained": evaluation.chained,
         "allowPassedOver": evaluation.allow_passed_over,
         "tool": tool,
         "kind": kind,
         "initiator": initiator,
-        "explanation": explain(bot, tool, kind, subject, command, input, initiator, &evaluation, decision),
+        "explanation": if by_policy {
+            crate::policy::explain(&policy, &request)
+        } else {
+            explain(bot, tool, kind, subject, command, input, initiator, &evaluation, decision)
+        },
     })
 }
 
@@ -177,6 +216,7 @@ mod tests {
             &cfg,
             &cfg.approval_rules,
             &[],
+            &[],
             "shell",
             Some("git push origin main"),
             None,
@@ -196,7 +236,8 @@ mod tests {
     #[test]
     fn no_matching_rule_falls_back_to_the_bots_setting() {
         let cfg = bot(vec![rule("git *", Decision::Allow)], Permission::Ask);
-        let preview = preview(&cfg, &cfg.approval_rules, &[], "shell", Some("ls -la"), None, "owner", Some("execute"));
+        let preview =
+            preview(&cfg, &cfg.approval_rules, &[], &[], "shell", Some("ls -la"), None, "owner", Some("execute"));
         assert_eq!(preview["decision"], "ask");
         assert_eq!(preview["source"], "default");
         assert!(preview["rule"].is_null());
@@ -207,11 +248,12 @@ mod tests {
     fn forbidden_commands_are_denied_before_any_rule_and_a_chained_command_is_explained() {
         let cfg = bot(vec![rule("git status*", Decision::Allow)], Permission::Auto);
         let forbidden =
-            preview(&cfg, &cfg.approval_rules, &[], "shell", Some("rm -rf /"), None, "owner", Some("execute"));
+            preview(&cfg, &cfg.approval_rules, &[], &[], "shell", Some("rm -rf /"), None, "owner", Some("execute"));
         assert_eq!((forbidden["decision"].as_str(), forbidden["source"].as_str()), (Some("deny"), Some("forbidden")));
         let chained = preview(
             &cfg,
             &cfg.approval_rules,
+            &[],
             &[],
             "shell",
             Some("git status && rm x"),
@@ -222,6 +264,38 @@ mod tests {
         assert_eq!(chained["decision"], "allow", "the setting allows it, the rule was passed over");
         assert_eq!(chained["chained"], true);
         assert!(chained["explanation"].as_str().unwrap().contains("passed over"));
+    }
+
+    #[test]
+    fn a_policy_decides_before_the_approval_rules_and_is_named() {
+        let cfg = bot(vec![rule("git *", Decision::Allow)], Permission::Ask);
+        let deny = Policy {
+            id: "pol_1".into(),
+            name: "No shell".into(),
+            expression: r#"tool.kind == "execute""#.into(),
+            effect: crate::store::PolicyEffect::Deny,
+            message: "Shell commands are off".into(),
+            enabled: true,
+            version: 1,
+            updated_at: 0,
+        };
+        let preview = preview(
+            &cfg,
+            &cfg.approval_rules,
+            &[],
+            &[deny],
+            "shell",
+            Some("git status"),
+            None,
+            "owner",
+            Some("execute"),
+        );
+        assert_eq!((preview["decision"].as_str(), preview["source"].as_str()), (Some("deny"), Some("policy")));
+        assert_eq!(preview["policy"]["rule"]["name"], "No shell");
+        assert_eq!(preview["policy"]["rule"]["effect"], "deny");
+        assert!(preview["policy"]["variables"]["tool"]["kind"].is_string());
+        assert!(preview["explanation"].as_str().unwrap().contains("No shell"));
+        assert!(preview["explanation"].as_str().unwrap().contains("Nothing ran"));
     }
 
     #[test]

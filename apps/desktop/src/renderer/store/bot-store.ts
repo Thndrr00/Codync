@@ -28,6 +28,14 @@ import type { CallLine } from '@shared/calls'
 import { cleanRules, type ApprovalEvaluation, type ApprovalPreview, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostHealth } from '@shared/health'
 import type { SecurityProfile } from '@shared/security-profiles'
+import {
+  cleanPolicy,
+  type PoliciesReply,
+  type Policy,
+  type PolicyDraft,
+  type PolicyPreview,
+  type PolicyPreviewRequest,
+} from '@shared/policies'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
 import { latestOnly } from '../lib/latest-only'
@@ -425,8 +433,31 @@ export class BotStore extends BotSync {
     }
   }
 
-  /** Continues a turn that stopped half done, from its card; the host refuses a card already used. */
-  async continueTurn(entry: Entry): Promise<string | null> {
+  /** This computer's policy rules, their presets, the variables a rule may use and the limits. */
+  async policies(): Promise<PoliciesReply> {
+    return await (await this.ready()).call<PoliciesReply>('policies', {})
+  }
+
+  /** Adds or changes a rule; the host compiles it and refuses what it can't run, with why. */
+  async savePolicy(policy: PolicyDraft): Promise<Policy> {
+    return (await (await this.ready()).call<{ policy: Policy }>('savePolicy', { policy: cleanPolicy(policy) })).policy
+  }
+
+  /** Switches a rule on or off, keeping its text and place. */
+  async setPolicyEnabled(id: string, enabled: boolean): Promise<Policy> {
+    return (await (await this.ready()).call<{ policy: Policy }>('setPolicyEnabled', { id, enabled })).policy
+  }
+
+  async removePolicy(id: string): Promise<boolean> {
+    return (await (await this.ready()).call<{ removed: boolean }>('removePolicy', { id })).removed
+  }
+
+  /** What the policy list says about a proposed call, without acting. */
+  async previewPolicy(body: PolicyPreviewRequest): Promise<PolicyPreview> {
+    return (await (await this.ready()).call<{ preview: PolicyPreview }>('previewPolicy', body)).preview
+  }
+
+  /** Continues a turn that stopped half done, from its card; the host refuses a card already used. */  async continueTurn(entry: Entry): Promise<string | null> {
     try {
       await (await this.ready()).call('continueTurn', { entryId: entry.id })
       return null

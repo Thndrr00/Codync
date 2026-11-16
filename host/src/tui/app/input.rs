@@ -62,6 +62,7 @@ impl App {
             }
             Overlay::Market(m) => Some(&mut m.query),
             Overlay::Rules(s) => (s.mode != super::rules::Mode::List).then_some(&mut s.editor),
+            Overlay::Policies(s) => (s.mode != super::policies::Mode::List).then_some(&mut s.editor),
             Overlay::Always(s) => s.refusal.is_none().then_some(&mut s.editor),
             Overlay::Fields(f) => f.current().map(|i| &mut i.ed),
             Overlay::Routine(f) => match f.field {

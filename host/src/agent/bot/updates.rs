@@ -278,8 +278,26 @@ impl Actor {
             raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
         });
         let kind = tool["kind"].as_str().unwrap_or("other");
-        // The forbidden commands, then the user's rules, then the bot's general setting: one decision, the same one the
-        // rule editor's tester gives.
+        // The forbidden commands, then this computer's policies, then the bot's own rules and its Approvals
+        // setting. A policy can permit, never override a refusal: a blocked command or the bot's own deny rule
+        // still refuses.
+        if let Some(pattern) = command.as_deref().and_then(crate::agent::blocklist::blocked) {
+            self.refuse(rpc_id, &options, &format!("Blocked command (\"{pattern}\"), never allowed: {title}")).await;
+            return;
+        }
+        let mut request =
+            crate::policy::Request::from_tool_call(tool, &title, &self.cfg, command.as_deref(), self.initiator());
+        (request.actor, request.actor_role) = self.actor();
+        let policy = crate::policy::saved(&self.hub, &request);
+        if let Some(why) = policy.refusal() {
+            if let Some(rule) = policy.rule() {
+                crate::audit::refused(&self.hub, &rule.name, &self.cfg.name);
+            }
+            self.refuse(rpc_id, &options, &format!("{why}: {title}")).await;
+            return;
+        }
+        // The user's rules, then the bot's general setting: one decision, the same one the rule editor's
+        // tester gives.
         let quick =
             if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
         let evaluation = approval_rules::evaluate(
@@ -306,10 +324,11 @@ impl Actor {
             Outcome::Rule { pattern, .. } => Some(pattern.clone()),
             _ => None,
         };
-        let allowed = matches!(
-            evaluation.outcome,
-            Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
-        );
+        let allowed = policy.allowed()
+            || matches!(
+                evaluation.outcome,
+                Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
+            );
         // Like the bot's automatic setting always did: with no allow option, its first option.
         if allowed
             && !is_hermes_clarification(tool)

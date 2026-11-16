@@ -190,6 +190,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::mcp::policy::METHODS.contains(&method) {
         return crate::mcp::policy::call(hub, caller, method, b).await;
     }
+    if crate::policy::METHODS.contains(&method) {
+        return crate::policy::api::call(hub, caller, method, &b);
+    }
     if documents::METHODS.contains(&method) {
         return documents::call(hub, method, b);
     }

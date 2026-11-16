@@ -25,6 +25,7 @@ mod model;
 pub(crate) mod native_channels;
 pub mod open_items;
 pub mod people;
+pub(crate) mod policies;
 mod research;
 mod roster;
 pub(crate) mod routine_delivery;
@@ -60,6 +61,7 @@ pub use model::{
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
 };
 pub use people::{Person, Role};
+pub use policies::{MAX_EXPRESSION, MAX_MESSAGE, MAX_NAME, MAX_POLICIES, Policy, PolicyEffect};
 pub use week::Week;
 
 use crate::LockExt;
