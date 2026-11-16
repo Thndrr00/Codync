@@ -18,6 +18,7 @@ struct ThreadSheet: View {
     @State private var info: ThreadInfo?
     @State private var unread = 0
     @State private var replyingTo: Entry?
+    @State private var forwardEntry: Entry?
     @State private var showTrace = false
     @State private var renaming = false
     @State private var renameText = ""
@@ -58,6 +59,7 @@ struct ThreadSheet: View {
             info = await model.readThread(botId, root: root) ?? info
         }
         .codyncSheet(isPresented: $showTrace) { TraceView(botId: botId) }
+        .codyncSheet(item: $forwardEntry) { ForwardSheet(entry: $0) }
         .codyncDialog("Rename thread", isPresented: $renaming, field: DialogField("A short name", text: $renameText)) {
             [DialogAction("Save") { model.renameThread(root, botId: botId, title: renameText) }]
         }
@@ -91,9 +93,13 @@ struct ThreadSheet: View {
         if let branch = info?.branchText, !branch.isEmpty {
             rows.append(ConversationRow("branch") { BranchLine(text: branch) { dismiss() } })
         }
+        if info?.source == "dictation" {
+            rows.append(ConversationRow("dictation") { DictatedLine(text: info?.sourceText) { dismiss() } })
+        }
         if let entry = rootEntry {
             rows.append(ConversationRow("root") {
-                ChatRow(entry: entry, groupStart: true, chat: bot, openTrace: { showTrace = true }, reply: nil)
+                ChatRow(entry: entry, groupStart: true, chat: bot, openTrace: { showTrace = true }, reply: nil,
+                        forward: { forwardEntry = entry })
             })
             rows.append(ConversationRow("count") { CountLine(count: replies.count) })
         }
@@ -102,7 +108,7 @@ struct ThreadSheet: View {
             if unread > 0, index == newLineAfter { rows.append(ConversationRow("new") { UnreadLine() }) }
             rows.append(ConversationRow(reply.id) {
                 ChatRow(entry: reply, groupStart: index == 0 || replies[index - 1].kind == "user" || reply.kind == "user",
-                        chat: bot, openTrace: { showTrace = true }, reply: nil)
+                        chat: bot, openTrace: { showTrace = true }, reply: nil, forward: { forwardEntry = reply })
             })
         }
         if let bot, working {
@@ -157,6 +163,40 @@ private struct BranchLine: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(L10n.tr("Branched from")) \(text)")
+        .padding(.top, 6)
+    }
+}
+
+/// A thread kept from a dictation: where it was said, and a way back to that chat.
+private struct DictatedLine: View {
+    let text: String?
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 8) {
+                Image(systemName: "mic")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.tertiary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L10n.tr("Kept from a dictation"))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(Palette.tertiary)
+                    if let text, !text.isEmpty {
+                        Text(text)
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Kept from a dictation in this chat"))
         .padding(.top, 6)
     }
 }

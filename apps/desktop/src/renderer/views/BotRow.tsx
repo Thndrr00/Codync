@@ -58,5 +58,5 @@ function Preview({ bot, store }: { bot: Bot; store: BotStore }) {
     )
   }
   if (bot.status === 'error') return <Text size="callout" tone="danger" truncate>{messagePreview(bot.lastMessage ?? tr(`Something went wrong`))}</Text>
-  return <Text size="callout" tone="secondary" truncate>{messagePreview(bot.lastMessage ?? (isGroup(bot) ? `${bot.members.length} bots` : `${store.backendName(bot.backend)} · ${place}`))}</Text>
+  return <Text size="callout" tone="secondary" truncate>{messagePreview(bot.lastMessage ?? (isGroup(bot) ? (bot.title || `${bot.members.length} bots`) : `${store.backendName(bot.backend)} · ${place}`))}</Text>
 }

@@ -33,8 +33,11 @@ pub(super) async fn request(hub: &Arc<Hub>, b: &Value) -> Result<Value> {
     }
     let body = Bytes::from(b["body"].as_str().unwrap_or_default().to_owned());
     let hub = Arc::clone(hub);
+    // A phone runs the app over the E2E channel, not as a page this host serves: page actions stay
+    // on a desktop's mini-app window.
+    let origin = (rel == "_webmcp").then_some("device");
     let response =
-        tokio::task::spawn_blocking(move || handle_request(&hub, &bot_id, &slug, &token, &rel, &method, &body))
+        tokio::task::spawn_blocking(move || handle_request(&hub, &bot_id, &slug, &token, &rel, &method, &body, origin))
             .await
             .context("the app request stopped")?;
     let (parts, body) = response.into_parts();

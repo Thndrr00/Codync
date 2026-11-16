@@ -3,7 +3,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
 
-use super::super::app::{After, App, Editor, Overlay};
+use super::super::app::{After, App, Confirm, ConfirmAct, Editor, Overlay};
+use super::super::l10n::{fill, tr};
 use super::{AgentSetup, Fields, Input, Reply, SetupRow, Submit, ctrl, s};
 
 impl App {
@@ -28,14 +29,14 @@ impl App {
     }
 
     /// It has run on this computer: its CLI is there, or an earlier check started it. Until then, a
-    /// check can download it, so only Set up starts one.
+    /// check can download it, so only Set up starts one. A build the user deleted is off, signed in
+    /// or not, so the sheet offers Set up again instead.
     pub fn agent_set_up(&self, a: &AgentSetup) -> bool {
-        a.auth.is_some()
-            || self
-                .backends
-                .iter()
-                .find(|b| b["id"] == a.backend.as_str())
-                .is_some_and(|b| b["installed"] == true || !b["signedIn"].is_null())
+        let b = self.backends.iter().find(|b| b["id"] == a.backend.as_str());
+        if b.is_some_and(|b| b["turnedOff"] == true) {
+            return false;
+        }
+        a.auth.is_some() || b.is_some_and(|b| b["installed"] == true || !b["signedIn"].is_null())
     }
 
     pub fn agent_rows(&self, a: &AgentSetup) -> Vec<SetupRow> {
@@ -58,6 +59,10 @@ impl App {
             }
         }
         rows.push(SetupRow::Check);
+        // Only a build Codync downloaded can be deleted here; an installed CLI is the computer's own.
+        if b.is_some_and(|b| b["downloaded"] == true) {
+            rows.push(SetupRow::Delete);
+        }
         rows
     }
 
@@ -107,11 +112,29 @@ impl App {
                         a.error = None;
                         self.sheet("agentAuth", json!({"backend": backend}), Reply::Auth(backend.clone()));
                     }
+                    Some(SetupRow::Delete) => {
+                        self.overlays.push(Overlay::Agent(a));
+                        self.confirm_agent_delete(&backend);
+                        return None;
+                    }
                 }
             }
             _ => {}
         }
         Some(Overlay::Agent(a))
+    }
+
+    /// The copy Codync downloaded goes; the agent's accounts, sign-ins and bots stay, so its bots
+    /// only need it installed again.
+    fn confirm_agent_delete(&mut self, backend: &str) {
+        let name = self.agent_name(backend);
+        self.overlays.push(Overlay::Confirm(Confirm {
+            title: fill(&tr("Delete {name}?"), &[("name", &name)]),
+            detail: tr("Its accounts, sign-ins and bots stay.").into_owned(),
+            note: tr("Bots using it show as not installed until it is installed again.").into_owned(),
+            button: "Delete",
+            act: ConfirmAct::DeleteAgentDownload(backend.to_owned()),
+        }));
     }
 
     pub(super) fn start_setup(&mut self, backend: &str, step: &str, method: Option<&str>, size: &Value) {

@@ -16,7 +16,7 @@ pub fn tools() -> [Value; 6] {
     [
         json!({
             "name": "save_app",
-            "description": "Register or update an interactive web mini-app you built in apps/<slug>/ (HTML/CSS/JS). Creates a live card in the chat and reloads any open viewer tabs.",
+            "description": "Register or update an interactive web mini-app you built in apps/<slug>/ (HTML/CSS/JS). Creates a live card in the chat and reloads any open viewer tabs. A new app is refused once this computer holds its local app limit; updating an app already saved never counts.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -30,7 +30,7 @@ pub fn tools() -> [Value; 6] {
         }),
         json!({
             "name": "list_apps",
-            "description": "List all mini-apps you have built in this workspace with their versions, URLs and collections.",
+            "description": "List all mini-apps you have built in this workspace with their versions, URLs and collections, plus this computer's local app limit and how many apps and bots it holds.",
             "inputSchema": {"type": "object", "properties": {}},
             "annotations": {"readOnlyHint": true}
         }),
@@ -106,6 +106,7 @@ pub fn call(hub: &Hub, bot_id: &str, name: &str, args: &Value) -> Result<Value> 
                     "Entry file apps/{slug}/{entry} does not exist yet. Write the HTML file inside apps/{slug}/ first, then call save_app."
                 );
             }
+            crate::local_apps::check_new(&hub.store, bot_id, &slug)?;
             let saved = hub.store.save_bot_app(bot_id, &slug, title, description, Some(entry))?;
             let token = saved.owner_token.clone().unwrap_or_default();
             let url = app_url(hub, bot_id, &saved.slug, &token);
@@ -149,7 +150,15 @@ pub fn call(hub: &Hub, bot_id: &str, name: &str, args: &Value) -> Result<Value> 
                     })
                 })
                 .collect();
-            Ok(json!({"apps": apps}))
+            // The agent sees the ceiling and the computer's use beside the apps it can work with.
+            let local_apps = crate::local_apps::status(&hub.store)?;
+            Ok(json!({
+                "apps": apps,
+                "count": local_apps["count"],
+                "limit": local_apps["limit"],
+                "botsWithApps": local_apps["botsWithApps"],
+                "choices": local_apps["choices"],
+            }))
         }
         "delete_app" => {
             let slug = crate::store::apps::check_slug(args["slug"].as_str().context("slug is required")?)?;

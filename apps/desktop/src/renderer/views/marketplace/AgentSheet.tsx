@@ -3,7 +3,7 @@ import type { Backend } from '@shared/models'
 import { AgentIcon, agentTint } from '../../components/AgentIcon'
 import { Button, CardForm, CardSection, IconButton, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { ModalHeader, SheetPage } from '../../components/Overlay'
+import { Dialog, ModalHeader, SheetPage } from '../../components/Overlay'
 import { HStack, IconSlot, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { ThinkingOrb } from '../../components/ThinkingOrb'
@@ -56,11 +56,14 @@ export function NodeNotice({ onAdd }: { onAdd: () => void }) {
  *  asked again however signed in it looked. */
 export function AgentSheet({ initial, recheck = false }: { initial: Backend; recheck?: boolean }) {
   const store = useStore()
+  const tr = useTr()
   const [route, setRoute] = useState<SetupRoute | null>(null)
   const [auth, setAuth] = useState<AgentAuth | null>(null)
   const [checking, setChecking] = useState(false)
   const [authenticating, setAuthenticating] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const checkingRef = useRef(false)
 
   // Live: an install or sign-in updates the host's list.
@@ -70,8 +73,9 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
   const signedIn = auth?.signedIn ?? backend.signedIn ?? null
   const nodeMissing = backend.node === 'missing'
   // It has run on this computer: its CLI is there, or an earlier check started it. Until then, a
-  // check can download it, so only Set up starts one.
-  const setUp = installed || backend.signedIn != null || auth !== null
+  // check can download it, so only Set up starts one. A build the user deleted is off, signed in or
+  // not, so the sheet offers Set up again instead of a check that would download it.
+  const setUp = backend.turnedOff !== true && (installed || backend.signedIn != null || auth !== null)
   const host = store.hostName
 
   const check = async () => {
@@ -101,6 +105,24 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
       setError(errorText(e))
     }
     setAuthenticating(null)
+    await store.refreshBackends()
+  }
+
+  // Delete: only the runtime Codync downloaded goes. Accounts, sign-ins and bots stay, and bots on
+  // this agent show as not installed until it is installed again.
+  const removeRuntime = async () => {
+    const client = store.client
+    if (!client) return
+    setDeleting(true)
+    try {
+      await market.deleteAgentDownload(client, backend.id)
+      setAuth(null)
+      setError(null)
+    } catch (e) {
+      setError(errorText(e))
+    }
+    setDeleting(false)
+    setConfirmingDelete(false)
     await store.refreshBackends()
   }
 
@@ -222,12 +244,28 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
         </CardSection>
         {backend.accounts ? <AgentAccounts backend={backend} onChanged={() => void check()} /> : null}
         <AgentBrings backendId={backend.id} />
+        {backend.downloaded ? (
+          <CardSection>
+            <button className="market-danger-button" disabled={deleting} onClick={() => setConfirmingDelete(true)}>
+              {tr('Delete')}
+            </button>
+          </CardSection>
+        ) : null}
         {error ? <CardSection><ErrorText text={error} /></CardSection> : null}
       </CardForm>
     </SheetPage>
   )
 
-  return <SlideStack base={overview} top={routed} />
+  return <>
+    <SlideStack base={overview} top={routed} />
+    <Dialog
+      open={confirmingDelete}
+      title={tr('Delete {name}?').replaceAll('{name}', backend.name)}
+      message={`${fill(tr('Codync removes the copy it downloaded for {name} on {host} and turns the agent off.'), { name: backend.name, host })} ${tr('Its accounts, sign-ins and bots stay.')} ${tr('Bots using it show as not installed until it is installed again.')}`}
+      actions={[{ title: 'Delete', destructive: true, action: () => void removeRuntime() }]}
+      onClose={() => setConfirmingDelete(false)}
+    />
+  </>
 }
 
 /** Keys an agent reads from its environment, kept on the computer. */

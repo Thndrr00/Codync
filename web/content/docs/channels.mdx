@@ -1,4 +1,4 @@
-Talk to your bots from WhatsApp, Telegram, Slack or Discord. Only the people you allow can write to a bot there, and the bot answers with its own agent, folder and permissions.
+Talk to your bots from WhatsApp, Telegram, Slack, Discord, Matrix, Signal or Microsoft Teams. Only the people you allow can write to a bot there, and the bot answers with its own agent, folder and permissions.
 
 ## Connect a channel
 
@@ -8,6 +8,9 @@ Channels belong to a computer and are set up on it. Open **Extensions → Channe
 - **Telegram:** add the bot @BotFather gave you, choose the Codync bot it answers for, then send `/start` with its pairing code from Telegram.
 - **Slack:** connect the workspace's app with its bot token, app token and signing secret; each channel is bound to a Codync bot and to the Slack users allowed in it.
 - **Discord:** connect the server's bot token, then bind channel ids to Codync bots and list the people allowed in each.
+- **Matrix:** sign in with the bot account's homeserver and an access token or password, then bind a room id or alias to a Codync bot and list the Matrix users allowed there. Invite the account to the rooms first; encrypted rooms are not decrypted yet.
+- **Signal:** run a `signal-cli` daemon on the computer, link the number to it once, then save the number, the daemon's address, each phone number or group, the Codync bot that answers there and the Signal numbers or UUIDs allowed. The daemon owns the account; the number and keys stay on the computer. If the daemon is not running, the channel says so and names the exact commands.
+- **Microsoft Teams:** create an Azure Bot resource, enable its Teams channel and point its messaging endpoint at this computer's public HTTPS address plus the path the channel shows; then save the app id, tenant, client secret (or managed identity) and the people or tenants allowed. Teams cannot reach a loopback address, so expose the host through a reverse proxy or tunnel first.
 
 The same controls remain in **Settings → General → Channels**, with a shortcut to Extensions. Each channel's page shows its state, the bot that answers, the people allowed, its memory and its picture.
 
@@ -29,6 +32,10 @@ for exactly one bot. The terminal offers the same setup in its connector catalog
 optional account fields blank to reuse an existing Hermes profile and its credentials;
 Home Assistant requires explicit watched entity IDs. Each connection has its own session.
 
+This Hermes Signal connection is separate from the host-owned Signal channel under
+**Channels**, which talks to a `signal-cli` daemon and supports per-chat memory, numbered
+approval quotes and files. Use one or the other for a number, not both.
+
 Signal keeps the existing signal-cli account and group policy. Email uses the existing
 IMAP/SMTP mailbox and requires authenticated senders. An optional signed RFC822 webhook
 can receive mail through the host instead of polling alone. Home Assistant delivers watched
@@ -43,12 +50,18 @@ kept as unknown rather than automatically duplicated.
 
 ## Channel memory
 
-Each Telegram bot, Slack channel and Discord channel has a **Channel memory**: what the bot should know about that conversation, such as the project it covers or how its people like answers. It is given to the bot before every message from that channel and saved on its own, so it survives a reconnect.
+Each Telegram bot, Slack channel, Discord channel, Matrix room and Signal chat has a **Channel memory**: what the bot should know about that conversation, such as the project it covers or how its people like answers. The Teams connection has one memory for all its conversations. It is given to the bot before every message from that channel and saved on its own, so it survives a reconnect.
 
 A channel also wears a **Channel picture**: one of twenty icons or, the first choice, the faces of its members. It shows beside the channel in Settings.
 
 Keep it short and stable. Anything that changes per message belongs in the message; anything that belongs to every chat belongs in the bot's [memory](/docs/memory).
 
+## Linked conversations
+
+A channel conversation can share a Codync thread, so the app, a voice call and Slack (or Telegram, Discord, Matrix, Signal or Teams) keep one context. A Slack thread or Discord channel gets a durable root of its own from its first message; a Matrix room, Signal chat or Teams conversation does too. Linking moves later messages and replies to the thread you choose. Linking does not claim to move earlier messages: they stay in the old conversation. The computer exposes this as `conversationLinks`, `linkConversation` and `unlinkConversation`; a call started from a thread carries that thread with `startCall`'s `threadId`. A channel's settings on the desktop and the phones list the links it has, remove one, and link the channel to a thread you pick; for Slack and Telegram you enter the conversation's own id (a thread timestamp or a chat id), because that is how the computer names it.
+
+See [one conversation across text, calls and channels](/docs/conversations#one-conversation-across-text-calls-and-channels).
+
 ## Approvals and routines
 
-An [approval card](/docs/conversations#approval-cards) arrives in the channel with a button per option; anyone allowed there may answer, and the first answer wins. Mentioning the bot in a Slack or Telegram channel can also start a [routine](/docs/routines); those triggers are edited on the computer.
+An [approval card](/docs/conversations#approval-cards) arrives in the channel with a button per option; anyone allowed there may answer, and the first answer wins. Slack shows buttons on the card, Discord and Telegram show them under it, WhatsApp lists the options as numbered replies, Matrix shows a numbered card answered by a reply or a reaction, Signal lists numbered options answered by quoting the card with the number, and Teams shows an Adaptive Card whose buttons answer it. Mentioning the bot in a Slack or Telegram channel can also start a [routine](/docs/routines); those triggers are edited on the computer.

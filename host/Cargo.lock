@@ -727,9 +727,10 @@ dependencies = [
 
 [[package]]
 name = "codync-host"
-version = "2.45.1"
+version = "2.48.0"
 dependencies = [
  "anyhow",
+ "aws-lc-rs",
  "axum",
  "base64 0.23.1",
  "chacha20poly1305",

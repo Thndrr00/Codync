@@ -26,9 +26,15 @@ public struct WhatsAppSheet: View {
             ModalHeader("WhatsApp")
             CardForm {
                 stateSection
+                if let requests = link?.requests, !requests.isEmpty {
+                    waitingSection(requests)
+                }
                 botSection
                 if link?.state == "connected" {
                     allowedSection
+                }
+                if let people = link?.people, !people.isEmpty {
+                    peopleSection(people)
                 }
                 if let error {
                     Text(L10n.tr(error)).font(.caption).foregroundStyle(Palette.danger)
@@ -170,6 +176,58 @@ public struct WhatsAppSheet: View {
                 .disabled(busy || jid.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.vertical, 2)
+        }
+    }
+
+    /// People who asked to write on a restricted number, each with Approve and Deny.
+    private func waitingSection(_ requests: [WhatsAppRequest]) -> some View {
+        CardSection(
+            "Waiting to write",
+            footer: "Someone new wrote to this number. Approve them to let them talk to the bot; deny them and they hear nothing."
+        ) {
+            ForEach(requests, id: \.code) { request in
+                ValueRow(request.name ?? request.sender, detail: request.code) {
+                    HStack(spacing: 8) {
+                        Button("Deny") {
+                            act {
+                                _ = try await store.whatsappAnswerRequest(request.code, approve: false)
+                                notice = "Denied."
+                                link = try? await store.whatsapp()
+                            }
+                        }
+                        .buttonStyle(.secondary)
+                        .disabled(busy)
+                        Button("Approve") {
+                            act {
+                                _ = try await store.whatsappAnswerRequest(request.code, approve: true)
+                                notice = "Approved. The person can write now."
+                                link = try? await store.whatsapp()
+                            }
+                        }
+                        .buttonStyle(.primary)
+                        .disabled(busy)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The people this number knows, with the facts they gave: only the bot changes them.
+    private func peopleSection(_ people: [WhatsAppPerson]) -> some View {
+        CardSection(
+            "Saved facts",
+            footer: "Each person's facts are read only in their own conversations. The bot saves and forgets them with its memory tools."
+        ) {
+            ForEach(people, id: \.sender) { person in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(person.name ?? person.sender).foregroundStyle(Palette.text)
+                    ForEach(person.facts, id: \.self) { fact in
+                        Text(fact).font(.caption).foregroundStyle(Palette.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 6)
+            }
         }
     }
 

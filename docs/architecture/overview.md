@@ -40,7 +40,7 @@ Cloud account metadata includes names, public keys, ownership and access state. 
 
 ## Host owns the logic
 
-Product logic and heavy work run once, in the Rust host. The iPhone app, the desktop app and the terminal UI are views over host state: logic in one client would need a copy in the others, and the copies drift.
+Product logic and heavy work run once, in the Rust host. The iPhone app, the Android app, the desktop app, the web client and the terminal UI are views over host state: logic in one client would need a copy in the others, and the copies drift.
 
 The host owns:
 

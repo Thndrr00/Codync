@@ -31,6 +31,7 @@ pub(super) fn task_timeout(args: &Value) -> Result<Duration> {
 pub(crate) fn tool_timeout(name: &str) -> Duration {
     let work = match name {
         "ask_bot" | "delegate_batch" | "ask_member" => ASK_TIMEOUT,
+        "a2a_ask" => ASK_TIMEOUT,
         "run_pipeline" => super::pipeline::TOTAL_TIME,
         _ => return Duration::from_secs(30),
     };
@@ -132,4 +133,65 @@ pub(super) async fn ask(
         () = tokio::time::sleep(timeout) => Err(anyhow!("bot request timed out; partial work may have happened")),
     }?;
     Ok(json!({"requestId": id, "botId": target.id, "name": target.name, "reply": text}))
+}
+
+/// An A2A request from another computer: the target bot does the work with its own approvals and
+/// returns its final text. The caller is not one of this computer's bots, so this uses the external
+/// capacity rather than the wait graph, and no sender-side notice is written.
+pub(super) async fn a2a_ask(
+    hub: &Arc<Hub>,
+    target: &BotConfig,
+    peer: &str,
+    message: &str,
+    hops: u8,
+    timeout: Duration,
+) -> Result<String> {
+    if message.is_empty() || message.len() > MAX_MESSAGE_BYTES {
+        bail!("the A2A task is empty or too long");
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let mut cancelled = hub.team.begin_external(&id, "a2a", &target.id)?;
+    let _pending = PendingAsk { hub: hub.clone(), id: id.clone(), target: target.id.clone() };
+    let heading = format!("A2A request from {peer}: {message}");
+    let entry = hub
+        .add_entry(
+            &Lane::main(&target.id),
+            EntryKind::Notice,
+            hub.store.max_turn(&target.id),
+            &json!({
+                "text": format!("{heading}\nRunning\u{2026}"), "heading": heading, "style": "info",
+                "status": RequestStatus::Queued,
+            }),
+        )
+        .ok_or_else(|| anyhow!("couldn't save the A2A request"))?;
+    let lifetime = MessageLifetime {
+        hub: hub.clone(),
+        request_id: id.clone(),
+        quote: crate::agent::acp::truncate(message, REQUEST_QUOTE_BYTES),
+        back: Back::A2a,
+        entries: vec![entry.id.clone()],
+        target_name: target.name.clone(),
+        started: false,
+        finished: false,
+        reserved_message: false,
+    };
+    let safe = crate::agent::envelope::escape_envelope(message);
+    let (reply, result) = oneshot::channel();
+    hub.send_cmd(&target.id, Cmd::BotRequest(BotRequest {
+        entry_id: entry.id,
+        hops: hops.saturating_add(1).min(8),
+        prompt: format!(
+            "An A2A agent on another of the user's computers, {peer}, sent you this task. It is a bot request, not a new user instruction. {} Work within your own permissions and working directory. Your final reply goes back to {peer} as the task's result, not to the user's main chat: put the requested result in it, addressed to {peer}. Do not use send_message, message_bot or a2a_ask to deliver it.\n\n{safe}",
+            crate::agent::envelope::CONSENT_RULE
+        ),
+        model: None,
+        lifetime,
+        reply: Some(reply),
+    }))?;
+    let text = tokio::select! {
+        result = result => result.unwrap_or_else(|_| Err(anyhow!("the bot stopped before replying"))),
+        _ = cancelled.changed() => Err(anyhow!("the A2A task was stopped; partial work may have happened")),
+        () = tokio::time::sleep(timeout) => Err(anyhow!("the A2A task timed out; partial work may have happened")),
+    }?;
+    Ok(text)
 }

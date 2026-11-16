@@ -12,3 +12,17 @@ suspend fun AppStore.disconnectGitHub(): GitHubStatus = GitHub.decode(hostQuery(
 /** Gives the host a GitHub token; it answers with the account that token belongs to. */
 suspend fun AppStore.setGitHubToken(token: String): GitHubStatus =
     GitHub.decode(hostQuery("setGitHubToken", body("token" to token.trim()), timeoutMillis = 60_000))
+
+/** Creates a repository on that account; the answer carries `created` plus the fresh status. */
+suspend fun AppStore.githubCreateRepo(name: String, isPrivate: Boolean, description: String): GitHubStatus =
+    GitHub.decode(
+        hostQuery(
+            "githubCreateRepo",
+            buildJsonObject {
+                put("name", name.trim())
+                put("private", isPrivate)
+                put("description", description.trim())
+            },
+            timeoutMillis = 60_000,
+        ),
+    )

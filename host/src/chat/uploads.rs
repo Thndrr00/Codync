@@ -94,6 +94,17 @@ pub fn remove(root: &Path, upload: &str) -> Result<()> {
     std::fs::remove_dir_all(dir(root, upload)?).context("deleting the upload")
 }
 
+/// Drops an upload the user cancelled, partial chunks included. A folder already gone counts as
+/// cancelled, so clicking cancel twice, or after the last chunk, still succeeds.
+pub fn cancel(root: &Path, upload: &str) -> Result<bool> {
+    let dir = dir(root, upload)?;
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e).context("cancelling the upload"),
+    }
+}
+
 /// What the agent reads after the message text.
 pub fn prompt_suffix(paths: &[PathBuf]) -> String {
     let list: Vec<String> = paths.iter().map(|p| format!("- {}", p.display())).collect();
@@ -122,6 +133,18 @@ mod tests {
         assert!(clean_name("..").is_err());
         assert!(clean_name(".ssh").is_err());
         assert!(clean_name("dir/").is_err());
+    }
+
+    #[test]
+    fn cancelling_an_upload_removes_its_partial_file() {
+        let root = std::env::temp_dir().join(format!("codync-uploads-{}", uuid::Uuid::new_v4()));
+        let upload = uuid::Uuid::new_v4().to_string();
+        append(&root, &upload, "a.txt", 0, b"half", false).expect("first chunk");
+        assert!(cancel(&root, &upload).expect("cancel"));
+        assert!(resolve(&root, &upload).is_err(), "the partial file is gone");
+        assert!(cancel(&root, &upload).is_ok_and(|removed| !removed), "a second cancel is quiet");
+        assert!(cancel(&root, "../other").is_err(), "an id cannot leave the folder");
+        std::fs::remove_dir_all(&root).expect("clean up");
     }
 
     #[test]

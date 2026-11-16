@@ -69,27 +69,15 @@ pub(super) async fn message(
     Ok(())
 }
 
-/// Sends a permission card with a button per option; returns the message id, so it can be settled.
-pub(super) async fn card(
-    ep: &Endpoint,
-    token: &str,
-    channel: &str,
-    text: &str,
-    buttons: &[(String, String)],
-) -> Result<String> {
+/// Sends a permission card shaped by [`crate::channels::render::discord`]; returns the message id, so it can
+/// be settled.
+pub(super) async fn card(ep: &Endpoint, token: &str, channel: &str, body: &Value) -> Result<String> {
     let url = format!("{}/channels/{channel}/messages", ep.api);
     let client = egress::client(ep.policy, &url).await?;
-    let row: Vec<serde_json::Value> = buttons
-        .iter()
-        .map(|(label, id)| {
-            json!({"type": 2, "style": 1, "label": label.chars().take(80).collect::<String>(), "custom_id": id})
-        })
-        .collect();
-    let body = json!({"content": text, "components": [{"type": 1, "components": row}]});
     let response = client
         .post(&url)
         .header("authorization", format!("Bot {token}"))
-        .json(&body)
+        .json(body)
         .timeout(Duration::from_secs(60))
         .send()
         .await

@@ -48,6 +48,8 @@ pub enum Event {
     AgentRetired,
     /// Codync started summarizing a bot's chat (`agent::bot::compaction`).
     ContextCompacted,
+    /// A tool call's arguments carry a credential (`agent::bot::governance`).
+    ToolCaution,
     UsageReadFailed,
     SessionReset,
     PermissionAnswered,
@@ -128,6 +130,9 @@ pub enum Event {
     NetworkChanged,
     /// A network step failed (`NetworkStage`): starting a node, a letter, or a `network*` call.
     NetworkFailed,
+    /// A webhook delivery reached a routine: owner kind, result, status, body size and answer time,
+    /// never its URL, secret, event type or body.
+    WebhookReceived,
     /// Error tracking (`errors`): a panic or an uncaught error.
     Exception,
 }
@@ -171,6 +176,7 @@ impl Event {
             Self::AgentFellBack => "agent_fell_back",
             Self::AgentRetired => "agent_retired",
             Self::ContextCompacted => "context_compacted",
+            Self::ToolCaution => "tool_caution",
             Self::UsageReadFailed => "usage_read_failed",
             Self::SessionReset => "session_reset",
             Self::PermissionAnswered => "permission_answered",
@@ -226,6 +232,7 @@ impl Event {
             Self::NetworkJoined => "network_joined",
             Self::NetworkChanged => "network_changed",
             Self::NetworkFailed => "network_failed",
+            Self::WebhookReceived => "webhook_received",
             Self::Exception => "$exception",
         }
     }

@@ -38,6 +38,8 @@ struct Portable {
     #[serde(default)]
     fast_mode: bool,
     #[serde(default)]
+    commit_coauthor: bool,
+    #[serde(default)]
     permission: Permission,
     /// Fallback agents by name only: their commands are paths on the exporting computer.
     #[serde(default)]
@@ -57,6 +59,7 @@ impl Portable {
             model: bot.model.clone(),
             model_options: bot.model_options.clone(),
             fast_mode: bot.fast_mode,
+            commit_coauthor: bot.commit_coauthor,
             permission: bot.permission,
             fallbacks: bot.fallbacks.iter().map(|f| Fallback { command: None, ..f.clone() }).collect(),
             self_fallbacks: bot.self_fallbacks,

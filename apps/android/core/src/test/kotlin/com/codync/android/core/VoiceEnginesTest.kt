@@ -56,6 +56,23 @@ class VoiceEnginesTest {
         assertFalse(eleven.live)
     }
 
+    @Test fun xaiReadsRepliesAndGroqDictatesWithoutCarryingACall() {
+        val choices = Prefs().choices
+        assertFalse(VoiceProvider.Xai.carriesCalls); assertTrue(VoiceProvider.Xai.speaks); assertFalse(VoiceProvider.Xai.transcribes)
+        assertTrue(VoiceProvider.Groq.transcribes); assertFalse(VoiceProvider.Groq.speaks)
+        assertEquals(listOf(VoiceProvider.OpenAI, VoiceProvider.Gemini, VoiceProvider.ElevenLabs), VoiceProvider.callProviders)
+        assertEquals(listOf(VoiceProvider.OpenAI, VoiceProvider.Gemini, VoiceProvider.ElevenLabs, VoiceProvider.Groq),
+            VoiceProvider.dictationProviders)
+        // A dictation-only provider has no voice to pick.
+        assertEquals("", choices.voice(VoiceProvider.Groq))
+        choices.speechOutput = "xai"
+        choices.speechMode(VoiceProvider.OpenAI, true)
+        choices.provider = VoiceProvider.OpenAI
+        assertEquals(VoiceProvider.Xai, choices.speechProvider(VoiceProvider.OpenAI))
+        assertTrue(choices.engineChoice(VoiceProvider.OpenAI, "").contains("xai"))
+        assertEquals(VoiceProvider.Xai, choices.provider?.let { choices.speechProvider(it) })
+    }
+
     @Test fun aCallTakesAnotherEngineOnlyWhenWhatItsEngineIsBuiltFromChanges() {
         val choices = Prefs().choices; val gemini = VoiceProvider.Gemini
         assertEquals(choices.engineChoice(null, ""), choices.engineChoice(null, ""))

@@ -381,4 +381,16 @@ pub const HARNESSES: &[Harness] = &[
         login: Some("{bin} login"),
         signed_in: None,
     },
+    Harness {
+        id: "agui",
+        name: "AG-UI agent",
+        // No CLI: the host itself is the adapter, so there is nothing to install.
+        bins: &[],
+        local: Some("codync-host agui-acp"),
+        registry: None,
+        setup: "Save the endpoint URL in this agent's settings (Extensions > AG-UI agent).",
+        install: None,
+        login: None,
+        signed_in: None,
+    },
 ];

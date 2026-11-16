@@ -313,7 +313,14 @@ export function BotAvatar({ bot, size = 40, animated = true }: { bot: Bot; size?
  * A group chat's face, clustered like iMessage: two bots tucked diagonally, three in a
  * triangle, four in a 2×2 grid; past four the last cell counts the rest.
  */
-export function GroupAvatar({ members, size = 40, animated = true }: { members: Bot[]; size?: number; animated?: boolean }) {
+export function GroupAvatar({ members, size = 40, animated = true, photo = null }: { members: Bot[]; size?: number; animated?: boolean; photo?: string | null }) {
+  if (photo) {
+    return (
+      <div aria-hidden className="avatar-frame" style={{ width: size, height: size }}>
+        <img src={photo} alt="" className="avatar-photo" style={{ width: size, height: size }} draggable={false} />
+      </div>
+    )
+  }
   // Members drift a little, each on its own beat, so a group reads as several people.
   const drift = animated && members.length > 1
   const place = (bot: Bot, side: number, corner: CSSProperties, index: number) => (
@@ -366,7 +373,9 @@ export function GroupAvatar({ members, size = 40, animated = true }: { members: 
 
 /** A bot's character, or a group's members (Android `BotAvatar`). */
 export function BotOrGroupAvatar({ bot, members = [], size = 44, animated = true }: { bot: Bot; members?: Bot[]; size?: number; animated?: boolean }) {
-  return isGroup(bot) && !bot.customIcon ? <GroupAvatar members={members} size={size} animated={animated} /> : <BotAvatar bot={bot} size={size} animated={animated} />
+  return isGroup(bot) && !bot.customIcon
+    ? <GroupAvatar members={members} size={size} animated={animated} photo={bot.avatarPhoto ?? null} />
+    : <BotAvatar bot={bot} size={size} animated={animated} />
 }
 
 /** Avatar with the roster status dot: filled = unread, amber = needs you. A group shows its members; `agent`
@@ -383,7 +392,10 @@ export function AvatarWithStatus({ bot, members = [], size = 44, agent = null }:
       {bot.lead ? <LeadAgentBadge size={Math.max(12, size * 0.34)} /> : null}
       {needsInput(bot) ? (
         <div className="avatar-badge needs-you" style={{ width: size * 0.36, height: size * 0.36 }}>
-          <Icon name="exclamationmark" size={size * 0.2} weight="black" scaled={false} />
+          <svg className="felt-yarn" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 8C8 2 16 22 20 15" />
+            <path d="M5 17C9 23 15 1 19 7" />
+          </svg>
         </div>
       ) : bot.unread > 0 ? (
         <div className="avatar-badge unread" style={{ width: size * 0.28, height: size * 0.28 }} />

@@ -25,9 +25,17 @@ import {
 } from '@shared/models'
 import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
-import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
+import { cleanRules, type ApprovalEvaluation, type ApprovalPreview, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostHealth } from '@shared/health'
 import type { SecurityProfile } from '@shared/security-profiles'
+import {
+  cleanPolicy,
+  type PoliciesReply,
+  type Policy,
+  type PolicyDraft,
+  type PolicyPreview,
+  type PolicyPreviewRequest,
+} from '@shared/policies'
 import type { HostClient } from '../client/host-client'
 import { readSharedFile } from '../../shared/files.ts'
 import { latestOnly } from '../lib/latest-only'
@@ -36,15 +44,18 @@ import { prefs } from '../lib/prefs'
 import { noteFirstPrompt } from '../lib/use-kofi-invite'
 import { updatePayload } from './bot-draft'
 import { FileDownloads } from './file-downloads'
+import { FileUploads } from './file-uploads'
 import { BotSections } from './bot-sections'
 import { DevServerCommands } from './dev-servers'
 import { BotSync, sleep } from './bot-sync'
+import type { ServerSettings } from './bot-mirror'
 import { DocumentsStore } from './documents-store'
 import type { VoiceTranscript } from '../lib/voice-transcript'
 import { createAppShareLink } from '../lib/app-links'
+import { normalizeActions, type WebMcpAction } from '@shared/webmcp'
 import { filesToResend, type OutgoingFile } from './outgoing-files.ts'
 
-export { builtInBackendName, type Connection } from './bot-mirror'
+export { builtInBackendName, type Connection, type ServerSettings } from './bot-mirror'
 
 /** What a message carries besides its text; `replyTo` shows on the bubble until the computer's own quote replaces it. */
 export interface SendOptions {
@@ -89,6 +100,13 @@ export class BotStore extends BotSync {
   /** How much of a file the computer has, by the file's own id (shown in the composer while it uploads). */
   readonly uploadPercents = new Map<string, number>()
 
+  /** The files of the message box: each uploads as it is attached, and Send waits for them (see `FileUploads`). */
+  readonly uploads = new FileUploads(
+    <T>(op: (client: HostClient) => Promise<T>) => this.withLink(op),
+    () => this.changed(),
+    this.uploadPercents,
+  )
+
   /** The message sent from here last: its row in the queue scrolls into view (`QueuedMessages`). */
   lastSentNonce: string | null = null
 
@@ -115,22 +133,15 @@ export class BotStore extends BotSync {
           let ids: string[] | null = null
           const pending = this.outgoingFiles.get(nonce)
           if (pending) {
-            ids = []
-            for (const file of pending) {
-              const id = crypto.randomUUID()
-              await client.upload(botId, id, file.name, file.data, (sent) => {
-                this.uploadPercents.set(file.id, Math.min(99, Math.floor((sent * 100) / Math.max(1, file.data.length))))
-                this.changed()
-              })
-              cacheAttachment(id, file.data)
-              this.uploadPercents.delete(file.id)
-              this.changed()
-              ids.push(id)
-            }
+            // Every file uploads as it is attached; Send waits for the ones still on their way.
+            ids = await this.uploads.ids(botId, pending)
+            for (const [i, file] of pending.entries()) cacheAttachment(ids[i]!, file.data)
           }
           return client.send(botId, trimmed, nonce, ids, pasted, replyTo?.id ?? null, thread, call)
         }, true)
+        const files = this.outgoingFiles.get(nonce)
         this.outgoingFiles.delete(nonce)
+        if (files) this.uploads.release(files)
         this.upsert(e)
         this.changed()
         // Only once it arrived, so a resend counts once.
@@ -140,7 +151,6 @@ export class BotStore extends BotSync {
         }
       } catch (error) {
         if (this.outgoingFiles.has(nonce)) this.lastError = `Couldn't send the files: ${error instanceof Error ? error.message : error}`
-        for (const file of this.outgoingFiles.get(nonce) ?? []) this.uploadPercents.delete(file.id)
         this.markLocal(nonce, botId, 'failed')
       }
     })()
@@ -167,7 +177,10 @@ export class BotStore extends BotSync {
   }
 
   discard(entry: Entry) {
-    if (entry.data.clientNonce) this.outgoingFiles.delete(entry.data.clientNonce)
+    if (entry.data.clientNonce) {
+      for (const file of this.outgoingFiles.get(entry.data.clientNonce) ?? []) this.uploads.forget(file.id)
+      this.outgoingFiles.delete(entry.data.clientNonce)
+    }
     this.entries.set(entry.botId, (this.entries.get(entry.botId) ?? []).filter((e) => e.id !== entry.id))
     this.dropEntry(entry)
     this.changed()
@@ -222,6 +235,17 @@ export class BotStore extends BotSync {
     this.perform((c) => c.call('stopAll', {}), true)
   }
 
+  /** A channel sub-task's controls: `stop`, `continue`, `reassign` (with `ownerId`) or `cancel`. */
+  async groupTask(botId: string, taskId: string, action: string, ownerId?: string): Promise<string | null> {
+    try {
+      const client = await this.ready()
+      await client.call('groupTask', { botId, taskId, action, ...(ownerId ? { ownerId } : {}) })
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
   openMessageContext(entries: Entry[], hit: { botId: string; id: string; threadId: string | null }) {
     this.messageContext = { ...hit, entries: entries.filter((e) => !isInternalEntry(e)) }
     this.changed()
@@ -234,6 +258,16 @@ export class BotStore extends BotSync {
 
   newSession(botId: string) {
     this.perform((c) => c.call('newSession', { botId }))
+  }
+
+  /** Removes this chat's messages and turns; its setup, memories, routines, artifacts and files stay. */
+  async deleteHistory(botId: string) {
+    await this.withLink((c) => c.call('deleteHistory', { botId }))
+  }
+
+  /** Asks the chat's agent (or every member of a group) to summarize what it keeps. */
+  async compactContext(botId: string) {
+    await this.withLink((c) => c.call('compactContext', { botId }))
   }
 
   /** Back to the bot's own agent from a fallback: now if it's idle, else from its next turn. The host posts the chat line. */
@@ -342,10 +376,16 @@ export class BotStore extends BotSync {
     }
   }
 
-  /** Answers a card; with `rule`, an "always allow" also keeps that rule for the bot. */
-  respond(entry: Entry, option: string | null, rule?: ApprovalRule) {
+  /** Answers a card; with `rule`, an "always allow" also keeps that rule for the bot; `values` carries a
+   * declarative block's form fields. */
+  respond(entry: Entry, option: string | null, rule?: ApprovalRule, values?: Record<string, string | number | boolean>) {
     this.answer(entry, option ?? '', async (c) => {
-      await c.call('respondPermission', { entryId: entry.id, optionId: option, ...(rule ? { rule } : {}) })
+      await c.call('respondPermission', {
+        entryId: entry.id,
+        optionId: option,
+        ...(rule ? { rule } : {}),
+        ...(values ? { values } : {}),
+      })
       // The card's own update follows on the events stream; hold the spinner until then.
       await sleep(2000)
     })
@@ -371,8 +411,53 @@ export class BotStore extends BotSync {
     }
   }
 
-  /** Continues a turn that stopped half done, from its card; the host refuses a card already used. */
-  async continueTurn(entry: Entry): Promise<string | null> {
+  /** What would happen to a proposed call: the rules, the deciding rule or the default, without running it. */
+  async previewApproval(
+    botId: string,
+    tool: string,
+    command: string,
+    rules?: ApprovalRule[],
+    quick?: { on: boolean; policies: Record<string, string> },
+  ): Promise<ApprovalPreview | null> {
+    try {
+      const body = {
+        botId,
+        tool,
+        ...(command.trim() ? { command } : {}),
+        ...(rules ? { rules: cleanRules(rules) } : {}),
+        ...(quick ? { actionRulesOn: quick.on, actionRules: quick.policies } : {}),
+      }
+      return (await (await this.ready()).call<{ preview: ApprovalPreview }>('previewApproval', body)).preview
+    } catch {
+      return null
+    }
+  }
+
+  /** This computer's policy rules, their presets, the variables a rule may use and the limits. */
+  async policies(): Promise<PoliciesReply> {
+    return await (await this.ready()).call<PoliciesReply>('policies', {})
+  }
+
+  /** Adds or changes a rule; the host compiles it and refuses what it can't run, with why. */
+  async savePolicy(policy: PolicyDraft): Promise<Policy> {
+    return (await (await this.ready()).call<{ policy: Policy }>('savePolicy', { policy: cleanPolicy(policy) })).policy
+  }
+
+  /** Switches a rule on or off, keeping its text and place. */
+  async setPolicyEnabled(id: string, enabled: boolean): Promise<Policy> {
+    return (await (await this.ready()).call<{ policy: Policy }>('setPolicyEnabled', { id, enabled })).policy
+  }
+
+  async removePolicy(id: string): Promise<boolean> {
+    return (await (await this.ready()).call<{ removed: boolean }>('removePolicy', { id })).removed
+  }
+
+  /** What the policy list says about a proposed call, without acting. */
+  async previewPolicy(body: PolicyPreviewRequest): Promise<PolicyPreview> {
+    return (await (await this.ready()).call<{ preview: PolicyPreview }>('previewPolicy', body)).preview
+  }
+
+  /** Continues a turn that stopped half done, from its card; the host refuses a card already used. */  async continueTurn(entry: Entry): Promise<string | null> {
     try {
       await (await this.ready()).call('continueTurn', { entryId: entry.id })
       return null
@@ -525,6 +610,18 @@ export class BotStore extends BotSync {
     this.patchBot(bot, { hidden })
   }
 
+  /** Takes a group out of the open roster, or brings it back; the conversation stays. */
+  setArchived(bot: Bot, archived: boolean) {
+    this.bots.set(bot.id, { ...bot, archived })
+    this.changed()
+    const draft: GroupDraft = {
+      id: bot.id, kind: 'group', name: bot.name, description: bot.description, members: bot.members,
+      pinned: bot.pinned, chiefBotId: bot.chiefBotId ?? null, title: bot.title ?? null, archived,
+      avatarPhoto: bot.avatarPhoto ?? null,
+    }
+    this.perform((c) => c.call('updateBot', draft), true)
+  }
+
   setFastMode(bot: Bot, fastMode: boolean) {
     this.patchBot(bot, { fastMode })
   }
@@ -655,6 +752,16 @@ export class BotStore extends BotSync {
     return id
   }
 
+  /**
+   * Keeps a dictation as a thread of its own, linked to the chat it was dictated in: the transcript
+   * is the thread's first message and the bot answers there, instead of the composer.
+   */
+  async keepDictation(botId: string, text: string, sourceEntryId: string | null = null) {
+    const { threadId } = await (await this.ready()).keepDictation(botId, text, sourceEntryId)
+    await this.refreshThreads(botId)
+    return threadId
+  }
+
   async renameThread(botId: string, threadId: string, title: string) {
     const named = title.trim()
     await (await this.ready()).renameThread(threadId, named)
@@ -722,6 +829,13 @@ export class BotStore extends BotSync {
     this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), allowed: result.allowed }
     this.changed()
   }
+  /** Approves or denies a person who asked to write; approved, they join the allowed chats. */
+  async whatsappAnswerRequest(code: string, approve: boolean) {
+    const result = await (await this.ready()).call<{ requests: import('@shared/models').WhatsAppRequest[] }>(
+      'whatsappAnswerRequest', { code, approve })
+    this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), requests: result.requests }
+    this.changed()
+  }
 
   /** Removes one message on the computer. */
   async deleteEntry(id: string) {
@@ -778,6 +892,17 @@ export class BotStore extends BotSync {
 
   async revokeAppLink(botId: string, slug: string, token: string): Promise<void> {
     await (await this.ready()).call('revokeAppLink', { botId, slug, token })
+  }
+
+  /** What a host-served mini-app page may ask Codync to do (card K15). */
+  async webMcpState(botId: string, slug: string): Promise<WebMcpAction[]> {
+    const answer = await (await this.ready()).call<{ actions?: unknown }>('webMcpState', { botId, slug })
+    return normalizeActions(answer.actions)
+  }
+
+  /** Turns the app's declared actions on or off; the whole list is replaced. */
+  async setWebMcpGrant(botId: string, slug: string, actions: string[]): Promise<void> {
+    await (await this.ready()).call('setWebMcpGrant', { botId, slug, actions })
   }
 
   async deleteBotApp(botId: string, slug: string): Promise<void> {
@@ -898,11 +1023,103 @@ export class BotStore extends BotSync {
     } catch {}
   }
 
+  /** Reads how often each skill's text entered a turn; an older host keeps what was there (nothing). */
+  async refreshSkillUsage() {
+    if (this.retired || !this.client) return
+    try {
+      this.skillUsage = await this.client.call<import('@shared/models').SkillUsage>('skillUsage', {})
+      this.changed()
+    } catch {}
+  }
+
   /** Changes the memory levels that warn and that stop new turns; throws the host's reason when they make no sense. */
   async setHealthThresholds(warn: number, critical: number) {
     if (this.retired || !this.client) return
     this.health = await this.client.call<HostHealth>('setHealthThresholds', { warn, critical })
     this.changed()
+  }
+
+  /** Reads the hourly ceiling on local script requests; an older host keeps what was there (nothing). */
+  async refreshScriptLimit() {
+    if (this.retired || !this.client) return
+    try {
+      this.scriptLimit = await this.client.call<{ perHour: number; choices: number[] }>('scriptLimit', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that ceiling; throws the host's reason when the value isn't one of the choices. */
+  async setScriptLimit(perHour: number) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ perHour: number }>('setScriptLimit', { perHour })
+    this.scriptLimit = { perHour: saved.perHour, choices: this.scriptLimit?.choices ?? [] }
+    this.changed()
+  }
+
+  /** Reads the computer-wide ceiling on local mini-apps; an older host keeps what was there (nothing). */
+  async refreshLocalApps() {
+    if (this.retired || !this.client) return
+    try {
+      this.localApps = await this.client.call<{ count: number; limit: number; choices: number[]; botsWithApps: number }>('localApps', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that ceiling; throws the host's reason when the value isn't one of the choices. */
+  async setLocalAppsLimit(limit: number) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ limit: number }>('setLocalAppsLimit', { limit })
+    if (this.localApps) this.localApps = { ...this.localApps, limit: saved.limit }
+    this.changed()
+  }
+
+  /** Reads when a plan card starts the work by itself; an older host keeps what was there (nothing). */
+  async refreshPlanStart() {
+    if (this.retired || !this.client) return
+    try {
+      this.planStart = await this.client.call<{ afterMs: number | null; presets: number[]; min: number; max: number }>('planStart', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that time (`null` = when the person presses Start); throws the host's reason when it is too short. */
+  async setPlanStart(afterMs: number | null) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ afterMs: number | null }>('setPlanStart', { afterMs })
+    this.planStart = { ...(this.planStart ?? { presets: [], min: 5_000, max: 840_000 }), afterMs: saved.afterMs }
+    this.changed()
+  }
+
+  /** Reads this computer's server settings; an older host keeps what was there (nothing). */
+  async refreshServerSettings() {
+    if (this.retired || !this.client) return
+    try {
+      this.serverSettings = await this.client.call<ServerSettings>('serverSettings', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes the response style, the Claude Code setup switch or the remote control policy. */
+  async setServerSettings(patch: Partial<ServerSettings>) {
+    const saved = await (await this.ready()).call<{ settings: ServerSettings }>('setServerSettings', patch)
+    this.serverSettings = saved.settings
+    this.changed()
+  }
+
+  /** Ends every remote control session; a phone with the Screen scope may call it too. */
+  async stopAllRemoteControl() {
+    const saved = await (await this.ready()).call<{ closed: number; screen: ScreenState }>('screenStopAll', {})
+    this.screen = saved.screen
+    this.changed()
+    return saved.closed
+  }
+
+  /** Only this computer answers a remote control request. */
+  async answerScreenRequest(id: string, allow: boolean) {
+    const saved = await (await this.ready()).call<{ answered: boolean; screen: ScreenState }>('answerScreenRequest', { id, allow })
+    this.screen = saved.screen
+    this.changed()
+    return saved.answered
   }
 
   async refreshUsage() {

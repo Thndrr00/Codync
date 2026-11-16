@@ -441,7 +441,7 @@ mod tests {
         for triggers in [
             json!([{"type":"interval","seconds":5400}]),
             json!([{"type":"once","at":1000}]),
-            json!([{"type":"webhook"},{"type":"interval","seconds":90}]),
+            json!([{"type":"webhook"},{"type":"interval","seconds":900}]),
             json!([{"type":"event","source":"github","event":"issues.opened","filters":{"repo":"o/r"}}]),
             json!([{"type":"event","source":"slack","event":"app_mention","filters":{"channel":"C1","messageContains":"deploy"}}]),
         ] {

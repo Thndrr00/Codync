@@ -1,0 +1,67 @@
+/* The component gallery page: a list of Codync's cards beside a live preview and each bot's say. */
+.components-view {
+  min-height: 0;
+  flex: 1;
+}
+.components-gallery {
+  min-height: 0;
+  flex: 1;
+}
+.components-list {
+  width: 264px;
+  flex: none;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.components-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  transition: background 120ms ease;
+}
+.components-row:hover {
+  background: var(--hover, color-mix(in srgb, var(--text) 6%, transparent));
+}
+.components-row.current {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.components-row-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  padding: 0;
+}
+.components-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.component-preview {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
+}
+.component-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.component-playground {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}

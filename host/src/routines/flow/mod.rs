@@ -20,7 +20,7 @@ mod registry;
 mod tools;
 
 pub use api::{call as api_call, forget_bot, forget_routine};
-pub use canvas::catch_up;
+pub use canvas::{catch_up, lane_bot_ids};
 pub(super) use engine::Start;
 pub use engine::{spawn, start_for};
 pub use recover::recover;

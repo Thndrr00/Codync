@@ -10,7 +10,8 @@ import { dictationPlatform } from '../thread/dictation-platform'
 import { defaultIslandControls, dockFor, localIslandRect, type IslandControls, type IslandEdge } from '@shared/island-layout'
 import { usageNotice, type IslandAction } from '@shared/island-activity'
 import { normalizeIslandHistory, updateIslandHistory, type IslandHistory } from '@shared/island-workspace'
-import { islandUsage } from './island-preferences'
+import { agentDockLine, agentDockRows, type AgentDockLine, type AgentDockRow } from '@shared/island-agents'
+import { islandAgentDock, islandUsage } from './island-preferences'
 import type { IslandShortcutAction } from '@shared/island-shortcuts'
 
 /** The bare notch peeks at once and opens after a rest; the compact island opens sooner. */
@@ -66,6 +67,10 @@ export class IslandModel extends Observable {
     const island = window.codync.island
     island.onSummary((s) => this.apply(s))
     island.onScreen((s) => this.update(() => (this.screen = s)))
+    // The dock's setting changes what the island shows closed and opened (Settings writes it from the chat window).
+    islandAgentDock.subscribe(() => this.update(() => {
+      if (!this.agentDock && this.tab === 'agents') this.tab = 'auto'
+    }))
     window.addEventListener('resize', () => this.update(() => {}))
     setInterval(() => this.update(() => {}), 30_000)
     island.onHover((inside) => this.hover(inside))
@@ -94,7 +99,22 @@ export class IslandModel extends Observable {
   }
 
   get mode() {
-    return islandMode(this.summary, { open: this.open, peek: this.peek, tab: this.tab, deferred: this.deferred, notice: this.screen.quiet ? null : this.notice })
+    return islandMode(this.summary, { open: this.open, peek: this.peek, tab: this.tab, deferred: this.deferred, notice: this.screen.quiet ? null : this.notice, dock: this.agentDock })
+  }
+
+  /** The agent dock: a roster of this computer's bots in the island (off until turned on). */
+  get agentDock() {
+    return islandAgentDock.get()
+  }
+
+  /** The dock's rows, in the order the app's roster has them. */
+  get agents(): AgentDockRow[] {
+    return agentDockRows(this.summary.bots)
+  }
+
+  /** What the collapsed island says: how many agents work, need you, stopped or wait. */
+  get agentLine(): AgentDockLine {
+    return agentDockLine(this.agents)
   }
 
   get frame() {

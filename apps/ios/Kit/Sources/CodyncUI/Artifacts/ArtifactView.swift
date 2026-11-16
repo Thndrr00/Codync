@@ -95,7 +95,13 @@ struct ArtifactView: View {
     @ViewBuilder private var content: some View {
         let html = model.artifacts.html[target.id]
         ZStack {
-            if let html {
+            if artifact?.kind == "diagram" {
+                Text(L10n.tr("Diagrams open on desktop to edit them"))
+                    .font(.callout)
+                    .foregroundStyle(Palette.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(40)
+            } else if let html {
                 ArtifactWebView(artifactId: target.id, html: html)
                     .transition(.opacity)
             } else if let failure = model.artifacts.failures[target.id] {

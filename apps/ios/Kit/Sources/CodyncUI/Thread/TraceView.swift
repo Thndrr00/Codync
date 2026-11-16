@@ -128,13 +128,14 @@ struct ToolRow: View {
     }
 
     private var hasBody: Bool {
-        !(data.output ?? "").isEmpty || !(data.diffs ?? []).isEmpty
+        !(data.output ?? "").isEmpty || !(data.diffs ?? []).isEmpty || !(data.caution?.findings.isEmpty ?? true)
     }
 
     var body: some View {
         if hasBody {
             Disclosure(isExpanded: $expanded) {
                 VStack(alignment: .leading, spacing: 8) {
+                    if let caution = data.caution { cautionPaths(caution) }
                     ForEach(data.diffs ?? [], id: \.self) { DiffView(diff: $0) }
                     if let out = data.output, !out.isEmpty { CodeBox(text: out) }
                 }
@@ -144,18 +145,41 @@ struct ToolRow: View {
         }
     }
 
-    private var label: some View {
-        let title = data.title ?? "Tool"
-        return HStack(spacing: 8) {
-            Image(systemName: icon).frame(width: 18).foregroundStyle(Palette.secondary)
-            Text(title == "Tool" ? L10n.tr("Tool") : title).font(.subheadline).foregroundStyle(Palette.text).lineLimit(2)
-            Spacer(minLength: 4)
-            switch data.status {
-            case "completed": Image(systemName: "checkmark").foregroundStyle(Palette.accent)
-            case "failed": Image(systemName: "xmark").foregroundStyle(Palette.danger)
-            default: ThinkingOrb(state: orb, size: 16, color: Palette.secondary)
+    private var cautionLine: some View {
+        Label {
+            Text(L10n.tr(data.caution?.reason == "inspection_limit"
+                ? "Could not check the arguments for a credential"
+                : "Carries a credential"))
+        } icon: {
+            Image(systemName: "key.fill").foregroundStyle(Palette.warning)
+        }
+        .font(.caption2)
+        .foregroundStyle(Palette.secondary)
+    }
+
+    private func cautionPaths(_ caution: CredentialCaution) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(caution.findings, id: \.self) { finding in
+                Text(finding.path).font(.caption2.monospaced()).foregroundStyle(Palette.tertiary)
             }
         }
-        .font(.caption)
+    }
+
+    private var label: some View {
+        let title = data.title ?? "Tool"
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).frame(width: 18).foregroundStyle(Palette.secondary)
+                Text(title == "Tool" ? L10n.tr("Tool") : title).font(.subheadline).foregroundStyle(Palette.text).lineLimit(2)
+                Spacer(minLength: 4)
+                switch data.status {
+                case "completed": Image(systemName: "checkmark").foregroundStyle(Palette.accent)
+                case "failed": Image(systemName: "xmark").foregroundStyle(Palette.danger)
+                default: ThinkingOrb(state: orb, size: 16, color: Palette.secondary)
+                }
+            }
+            .font(.caption)
+            if data.caution != nil { cautionLine }
+        }
     }
 }

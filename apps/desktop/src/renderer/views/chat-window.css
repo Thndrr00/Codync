@@ -15,6 +15,10 @@
   justify-content: center;
   gap: 10px;
 }
+.empty-state.is-inline {
+  height: auto;
+  padding: 32px 16px;
+}
 .empty-state-message {
   max-width: 360px;
   text-align: center;
@@ -250,7 +254,9 @@ html[data-platform="win32"] .sidebar.compact .sidebar-header {
   height: 18px;
   padding: 0 6px;
   border-radius: var(--radius-pill);
-  background: var(--accent-fill);
+  /* Felt: a soft gradient, a light along the top and the ring of the other felt badges. */
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--accent-fill) 92%, transparent), color-mix(in srgb, var(--accent-fill) 74%, transparent));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.16), 0 0 0 0.5px var(--border);
   color: var(--on-accent);
   font-size: var(--text-caption);
   font-weight: 600;

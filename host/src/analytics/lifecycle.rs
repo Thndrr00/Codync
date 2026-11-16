@@ -21,9 +21,11 @@ pub enum Via {
 }
 
 /// `host_started`, once per start of the host; `service`: run by launchd, systemd or Windows' runner.
-pub fn host_started(hub: &Hub, service: bool) {
+/// `start_ms`: from the process starting to the host being ready to serve, rounded to milliseconds.
+pub fn host_started(hub: &Hub, service: bool, start_ms: i64) {
     let version = env!("CARGO_PKG_VERSION");
-    let p = started(hub.store.kv_get(KV_STARTED).as_deref(), version, service);
+    let mut p = started(hub.store.kv_get(KV_STARTED).as_deref(), version, service);
+    p.insert("start_ms".into(), start_ms.clamp(0, 600_000).into());
     if let Err(e) = hub.store.kv_set(KV_STARTED, version) {
         tracing::warn!(error = format!("{e:#}"), "couldn't save the version this host started as");
     }
@@ -207,6 +209,14 @@ mod tests {
         assert_eq!(p(Some("2.19.3"), false), json!({"first_run": false, "updated_from": "2.19.3", "service": false}));
         assert_eq!(p(Some("2.20.0"), true), json!({"first_run": false, "service": true}));
         assert_eq!(p(None, true), json!({"first_run": false, "service": true}), "a host from before this was kept");
+    }
+
+    #[test]
+    fn a_start_reports_its_rounded_startup_time() {
+        let sent = queued(|hub| host_started(hub, false, 1_234));
+        assert_eq!(sent[0]["properties"]["start_ms"], 1_234);
+        let sent = queued(|hub| host_started(hub, true, -5));
+        assert_eq!(sent[0]["properties"]["start_ms"], 0, "a clock that went backwards is no negative time");
     }
 
     /// The events `report` queued on a throwaway host.

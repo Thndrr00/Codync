@@ -210,7 +210,7 @@ private enum class Root { Loading, AwaitingAccount, Welcome, Choose, Pairing, Ta
     }
     CodyncSheet(access, { access = null }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded)) { AccessRequestView(state, store, it) }
     CodyncSheet(showPairing && !state.loading, { showPairing = false }) { PairingView(state, store, inModal = true) }
-    CodyncSheet(showUsage && !state.loading, { showUsage = false }) { UsageScreen(state, store::refreshUsage, store::reloadUsage, store::weekSummary) }
+    CodyncSheet(showUsage && !state.loading, { showUsage = false }) { UsageScreen(state, store::refreshUsage, store::reloadUsage, store::weekSummary, store) }
     CodyncSheet(showMarketplace && root == Root.Tabs, { showMarketplace = false }) { MarketplaceView(state, store) }
     CodyncSheet(guide, { closeGuide() }) { GettingStartedGuide(state) { closeGuide() } }
     CodyncSheet(groupEditor.takeIf { !state.loading }, { groupEditor = null }) { draft ->

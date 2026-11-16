@@ -1,5 +1,8 @@
 # Computer panel and capability control
 
+Where a bot's computer runs (this host or its own Docker container, with the local fallback) is
+[computer containers](computer-containers.md).
+
 The host owns the panel, workspace operations and capability checks. Windows and
 TUI expose Status, Files, Terminal and Activity. Android exposes Status, Files
 and Activity, following catalog item 26's explicit mobile adaptation. It can

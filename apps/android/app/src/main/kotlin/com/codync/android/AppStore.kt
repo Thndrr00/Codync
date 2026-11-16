@@ -41,6 +41,8 @@ class AppStore(application: Application) : AndroidViewModel(application) {
     internal val shareRequests = java.util.concurrent.atomic.AtomicInteger()
     internal var attachments = AttachmentFiles(application, local.directory)
     internal val downloadLocks = ConcurrentHashMap<String, Mutex>()
+    /** The upload of each attached file under way, so a cancel or a retry stops only its own. */
+    internal val uploadJobs = ConcurrentHashMap<String, Job>()
     internal val mutableState = MutableStateFlow(AppState())
     val state = mutableState.asStateFlow()
     internal var database: MirrorDatabase? = null

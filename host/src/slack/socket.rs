@@ -115,7 +115,7 @@ async fn open(ep: &Endpoint, app_token: &str) -> Result<String> {
     Ok(socket.to_owned())
 }
 
-pub(super) fn handle(hub: &Hub, generation: &str, text: &str) -> Result<Frame> {
+pub(super) fn handle(hub: &Arc<Hub>, generation: &str, text: &str) -> Result<Frame> {
     let frame: Value = serde_json::from_str(text)?;
     Ok(match frame["type"].as_str() {
         Some("hello") => Frame::Hello,
@@ -126,6 +126,15 @@ pub(super) fn handle(hub: &Hub, generation: &str, text: &str) -> Result<Frame> {
             let _configuration = hub.store.connector_lock.locked();
             let Some(c) = load(&hub.store)?.filter(|c| c.generation == generation) else { return Ok(Frame::Reconnect) };
             ingress::accept(hub, &c, &frame["payload"])?;
+            Frame::Ack(id.to_owned())
+        }
+        // A button press on an approval card: acknowledged at once, answered in the background.
+        Some("interactive") => {
+            let id = frame["envelope_id"].as_str().filter(|s| !s.is_empty() && s.len() <= 100);
+            let id = id.context("An interaction came without an envelope id")?;
+            let _configuration = hub.store.connector_lock.locked();
+            let Some(c) = load(&hub.store)?.filter(|c| c.generation == generation) else { return Ok(Frame::Reconnect) };
+            ingress::answer_interaction(Arc::clone(hub), c, &frame["payload"])?;
             Frame::Ack(id.to_owned())
         }
         _ => Frame::Ignore,

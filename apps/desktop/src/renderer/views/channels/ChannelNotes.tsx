@@ -7,7 +7,7 @@ import type { ChannelsStore } from '../../store/channels-store'
 
 /** Small facts this channel keeps, given to the bot with its memory before every message. */
 export function ChannelNotes({ provider, channel, store }: {
-  provider: 'telegram' | 'slack' | 'discord'
+  provider: 'telegram' | 'slack' | 'discord' | 'matrix'
   channel: string
   store: ChannelsStore
 }) {

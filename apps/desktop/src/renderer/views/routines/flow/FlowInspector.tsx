@@ -4,7 +4,7 @@ import { Button, DropdownMenu, Switch } from '../../../components/Controls'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
-import { botKey, latestStep, statusLabel, type FlowCanvas, type FlowLink, type FlowRoutineCard } from '../../../lib/routine-flow.ts'
+import { botKey, latestStep, statusLabel, type FlowCanvas, type FlowLane, type FlowLink, type FlowRoutineCard } from '../../../lib/routine-flow.ts'
 import { useAgentModels } from '../../bots/agent-models'
 import { AgentModelPicker } from '../../bots/AgentModelPicker'
 import { runLabel } from '../routine'
@@ -42,6 +42,11 @@ export function FlowInspector(props: Props) {
   if (selection.kind === 'edge') {
     const link = canvas.links.find((l) => l.id === selection.id)
     return link ? <LinkPanel {...props} link={link} bots={bots} /> : null
+  }
+  if (selection.kind === 'lane') {
+    const card = canvas.routines.find((c) => c.routine.id === selection.routineId)
+    const lane = card?.lanes.find((l) => l.botId === selection.botId)
+    return card && lane ? <LanePanel card={card} lane={lane} bots={bots} /> : null
   }
   const [kind, id] = selection.key.split(':')
   if (kind === 'routine') {
@@ -97,7 +102,7 @@ function LinkPanel({ link, bots, busy, offline, onSaveInstruction, onDisconnect 
   )
 }
 
-function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled }: Props & { card: FlowRoutineCard }) {
+function RoutinePanel({ card, canvas, bots, busy, offline, onTest, onSetEnabled }: Props & { card: FlowRoutineCard }) {
   const tr = useTr()
   const { routine } = card
   const last = card.recentRuns[0]
@@ -106,6 +111,11 @@ function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled }: Pro
     <VStack gap={10} className="flow-inspector">
       <Text weight="semibold">{routine.name}</Text>
       <Text size="callout" tone="secondary">{routine.triggerDescriptions.join(' · ')}</Text>
+      {card.lanes.length > 1 ? (
+        <Text size="caption" tone="secondary">
+          {tr('Shared card: {count} bots work it, each in its own lane.').replace('{count}', String(card.lanes.length))}
+        </Text>
+      ) : null}
       <HStack gap={8}>
         <Text size="callout">{routine.enabled ? tr('Active') : tr('Paused')}</Text>
         <Spacer />
@@ -115,23 +125,43 @@ function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled }: Pro
       <Text size="caption" tone="secondary">{last ? `${tr('Last run')}: ${tr(runLabel(last))}` : tr('No runs yet')}</Text>
       {linked ? null : <Text size="caption" tone="secondary">{tr('Not connected')}</Text>}
       <Button disabled={busy || offline || !linked} onClick={() => onTest(routine.id)}>{tr('Test the flow')}</Button>
-      <Steps card={card} />
+      <Steps card={card} bots={bots} />
       <History card={card} />
     </VStack>
   )
 }
 
+/** One agent's lane of a shared card: whose step it is, how it went and what it said. */
+function LanePanel({ card, lane, bots }: { card: FlowRoutineCard; lane: FlowLane; bots: ReadonlyMap<string, Bot> }) {
+  const tr = useTr()
+  const step = card.steps.find((s) => s.botId === lane.botId) ?? null
+  return (
+    <VStack gap={10} className="flow-inspector">
+      <Text weight="semibold">{bots.get(lane.botId)?.name ?? lane.name}</Text>
+      <Text size="caption" tone="secondary">{tr('Step {depth} in the flow of {name}').replace('{depth}', String(lane.depth + 1)).replace('{name}', card.routine.name)}</Text>
+      <HStack gap={8}>
+        <StatusChip status={lane.status} />
+        <Text size="caption" tone="secondary">{tr(statusLabel(lane.status))}</Text>
+      </HStack>
+      <Text size="caption" tone="secondary">{tr('The other bots keep their own lanes on this card.')}</Text>
+      {step?.error ? <Text size="caption" tone="danger" lines={6}>{step.error}</Text> : null}
+      {step?.output ? <Text size="caption" tone="secondary" lines={8}>{step.output}</Text> : null}
+    </VStack>
+  )
+}
+
 /** The steps of the latest run, one line each, with a bot's error or the start of its answer. */
-function Steps({ card }: { card: FlowRoutineCard }) {
+function Steps({ card, bots }: { card: FlowRoutineCard; bots: ReadonlyMap<string, Bot> }) {
   const tr = useTr()
   if (card.steps.length === 0) return null
+  const name = (botId: string) => bots.get(botId)?.name ?? card.lanes.find((lane) => lane.botId === botId)?.name ?? botId
   return (
     <VStack gap={6}>
       <Text size="caption" tone="secondary" weight="semibold">{tr('Latest run')}</Text>
       {card.steps.map((step) => (
         <VStack key={step.id} gap={2} className="flow-step">
           <HStack gap={8}>
-            <Text size="callout" truncate>{step.botId}</Text>
+            <Text size="callout" truncate>{name(step.botId)}</Text>
             <Spacer />
             <StatusChip status={step.status} />
           </HStack>

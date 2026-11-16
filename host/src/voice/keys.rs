@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 
 const SLOT: &str = "voice";
 const ELEVENLABS: &str = "https://api.elevenlabs.io";
+const XAI: &str = "https://api.x.ai";
+/// Groq's OpenAI-compatible API: the route is `/openai/v1/audio/transcriptions`.
+const GROQ: &str = "https://api.groq.com/openai";
 
 #[derive(Default, Serialize, Deserialize)]
 struct Keys {
@@ -22,6 +25,10 @@ struct Keys {
     gemini: String,
     #[serde(default)]
     elevenlabs: String,
+    #[serde(default)]
+    xai: String,
+    #[serde(default)]
+    groq: String,
 }
 
 impl Keys {
@@ -30,6 +37,8 @@ impl Keys {
             Provider::OpenAi => &self.openai,
             Provider::Gemini => &self.gemini,
             Provider::ElevenLabs => &self.elevenlabs,
+            Provider::Xai => &self.xai,
+            Provider::Groq => &self.groq,
         }
     }
 
@@ -38,6 +47,8 @@ impl Keys {
             Provider::OpenAi => self.openai = key,
             Provider::Gemini => self.gemini = key,
             Provider::ElevenLabs => self.elevenlabs = key,
+            Provider::Xai => self.xai = key,
+            Provider::Groq => self.groq = key,
         }
     }
 }
@@ -60,6 +71,8 @@ impl Provider {
             Self::OpenAi => OPENAI,
             Self::Gemini => GEMINI,
             Self::ElevenLabs => ELEVENLABS,
+            Self::Xai => XAI,
+            Self::Groq => GROQ,
         }
     }
 
@@ -72,7 +85,7 @@ impl Provider {
     /// The keeper's record for this provider's `key`.
     fn record(self, key: &str) -> Record {
         match self {
-            Self::OpenAi => Record::bearer(OPENAI, key),
+            Self::OpenAi | Self::Xai | Self::Groq => Record::bearer(self.base(), key),
             Self::Gemini => Record::google_key(GEMINI, key),
             Self::ElevenLabs => Record::header(ELEVENLABS, "xi-api-key", key.to_owned()),
         }
@@ -83,6 +96,8 @@ impl Provider {
 pub(super) struct Access {
     base: String,
     key: Option<String>,
+    /// `OpenAI` speech goes to a compatible server on this computer, not to `api.openai.com`.
+    local: bool,
 }
 
 /// One client for every provider request. It never follows a redirect: the key would go along with it.
@@ -98,20 +113,35 @@ fn client() -> &'static reqwest::Client {
 }
 
 impl Access {
-    /// Straight to the provider with `key`. `OpenAI` goes to the compatible server on this computer when
-    /// `CODYNC_OPENAI_BASE_URL` names one.
-    pub(super) fn direct(p: Provider, key: &str) -> Result<Self> {
-        let base = match p {
-            Provider::OpenAi => super::endpoint::openai_url(super::endpoint::openai_base()?.as_ref(), ""),
-            _ => p.base().to_owned(),
+    /// Straight to the provider with `key`. `OpenAI` goes to the local voice server when Voice
+    /// chat settings names one (or `CODYNC_OPENAI_BASE_URL` does).
+    pub(super) fn direct(store: &Store, p: Provider, key: &str) -> Result<Self> {
+        let (base, local) = match p {
+            Provider::OpenAi => {
+                let base = super::endpoint::openai_base(store)?;
+                (super::endpoint::openai_url(base.as_ref(), ""), base.is_some())
+            }
+            _ => (p.base().to_owned(), false),
         };
-        Ok(Self { base, key: Some(key.to_owned()) })
+        Ok(Self { base, key: Some(key.to_owned()), local })
     }
 
     /// A fixture server standing in for the provider.
     #[cfg(test)]
     pub(super) fn direct_at(base: &str, key: &str) -> Self {
-        Self { base: base.to_owned(), key: Some(key.to_owned()) }
+        Self { base: base.to_owned(), key: Some(key.to_owned()), local: false }
+    }
+
+    /// A fixture server standing in for a local voice server, with the key it takes (none: it
+    /// wants no authentication).
+    #[cfg(test)]
+    pub(super) fn local_at(base: &str, key: Option<&str>) -> Self {
+        Self { base: base.to_owned(), key: key.map(str::to_owned), local: true }
+    }
+
+    /// Whether these requests go to a compatible server on this computer.
+    pub(super) fn is_local(&self) -> bool {
+        self.local
     }
 
     /// The key itself, for the requests the host builds on its own (`ElevenLabs`).
@@ -129,7 +159,7 @@ impl Access {
         let req = client().request(method, format!("{}{path}", self.base));
         match (&self.key, p) {
             (None, _) => req,
-            (Some(key), Provider::OpenAi) => req.bearer_auth(key),
+            (Some(key), Provider::OpenAi | Provider::Xai | Provider::Groq) => req.bearer_auth(key),
             (Some(key), Provider::Gemini) => req.header("x-goog-api-key", key),
             (Some(key), Provider::ElevenLabs) => req.header("xi-api-key", key),
         }
@@ -140,8 +170,12 @@ fn missing(p: Provider) -> anyhow::Error {
     anyhow!("No {} key on this computer. Add one in the call settings.", p.name())
 }
 
-/// Whether `p` has a key here.
+/// Whether `p` has a key here. `OpenAI` pointed at a local voice server counts as configured:
+/// the server is what makes it work, and it may take no key at all.
 pub(super) fn configured(store: &Store, p: Provider) -> Result<bool> {
+    if p == Provider::OpenAi && super::endpoint::is_custom(store)? {
+        return Ok(true);
+    }
     if p.kept(store) {
         return client::has(store, &slot(p));
     }
@@ -150,16 +184,26 @@ pub(super) fn configured(store: &Store, p: Provider) -> Result<bool> {
 
 /// How to reach `p` with the key saved here.
 pub(super) fn access(store: &Store, p: Provider) -> Result<Access> {
+    // A local voice server takes its own saved key; failing one, the `OpenAI` key this computer
+    // also had (which `CODYNC_OPENAI_BASE_URL` always sent); with neither, no authentication.
+    if p == Provider::OpenAi && super::endpoint::is_custom(store)? {
+        let base = super::endpoint::openai_base(store)?;
+        let key = match super::server::key(store)? {
+            Some(key) => Some(key),
+            None => Some(load(store)?.get(p).to_owned()).filter(|key| !key.is_empty()),
+        };
+        return Ok(Access { base: super::endpoint::openai_url(base.as_ref(), ""), key, local: true });
+    }
     if p.kept(store) {
         if !client::has(store, &slot(p))? {
             return Err(missing(p));
         }
-        return Ok(Access { base: client::short_grant(store, &slot(p))?, key: None });
+        return Ok(Access { base: client::short_grant(store, &slot(p))?, key: None, local: false });
     }
     let keys = load(store)?;
     match keys.get(p) {
         "" => Err(missing(p)),
-        key => Access::direct(p, key),
+        key => Access::direct(store, p, key),
     }
 }
 
@@ -208,5 +252,25 @@ mod tests {
         assert!(configured(&store, Provider::OpenAi).unwrap());
         let route = access(&store, Provider::OpenAi).unwrap();
         assert_eq!((route.base.as_str(), route.key.as_deref()), (OPENAI, Some("sk-voice")));
+        assert!(!route.is_local());
+    }
+
+    #[test]
+    fn a_local_voice_server_needs_no_key_and_sends_the_one_it_is_given() {
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        store.kv_set("voice.baseUrl", "http://127.0.0.1:8890").unwrap();
+        // The server is what makes speech work: no OpenAI key is needed.
+        assert!(configured(&store, Provider::OpenAi).unwrap());
+        let route = access(&store, Provider::OpenAi).unwrap();
+        assert_eq!(route.base, "http://127.0.0.1:8890");
+        assert_eq!(route.key, None, "no key goes to a server that asked for none");
+        assert!(route.is_local());
+        // Its own key wins over an OpenAI key this computer also had.
+        super::super::server::save(&store, &serde_json::json!({"key": "local-token"})).unwrap();
+        save(&store, Provider::OpenAi, "sk-voice").unwrap();
+        let route = access(&store, Provider::OpenAi).unwrap();
+        assert_eq!(route.key.as_deref(), Some("local-token"));
+        // Other providers keep their own routes and keys.
+        assert!(access(&store, Provider::Gemini).is_err(), "Gemini still needs its own key");
     }
 }

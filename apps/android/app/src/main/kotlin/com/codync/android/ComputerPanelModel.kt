@@ -12,9 +12,19 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
+@Serializable internal data class ComputerRuntimeSettings(
+    val kind: String = "local", val image: String = "", val gvisor: Boolean = true, val fallbackLocal: Boolean = true,
+)
+@Serializable internal data class ComputerRuntimeStatus(
+    val kind: String = "local", val active: String = "local", val available: Boolean = true,
+    val engine: String? = null, val gvisor: Boolean = true, val gvisorActive: Boolean = false,
+    val container: String? = null, val running: Boolean = false, val image: String = "",
+    val workspace: String = "", val browserProfile: String = "", val detail: String = "",
+)
 @Serializable internal data class ComputerPanelSnapshot(
     val enabled: Boolean, val permissions: ComputerPermissions, val workspace: String,
     val screen: JsonObject, val activity: List<BotComputerActivity>, val services: JsonObject = buildJsonObject {},
+    val runtime: ComputerRuntimeStatus? = null, val settings: ComputerRuntimeSettings? = null,
 )
 @Serializable internal data class ComputerFileEntry(val name: String, val directory: Boolean, val link: Boolean)
 
@@ -64,6 +74,23 @@ internal class ComputerPanelModel(private val botId: String, private val store: 
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { error = failure.message ?: "Couldn't change computer permissions." }
+            finally { busy = false }
+            load()
+        }
+    }
+    fun runtime(kind: String) {
+        if (!active() || busy) return
+        val settings = snapshot?.settings ?: return
+        ++listing; loading = false
+        busy = true; error = null
+        scope.launch {
+            try {
+                store.hostQuery("updateBot", buildJsonObject {
+                    put("id", botId)
+                    put("computerRuntime", WireJson.encodeToJsonElement(settings.copy(kind = kind)))
+                }, expectedGeneration = generation)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { error = failure.message ?: "Couldn't change where the bot runs." }
             finally { busy = false }
             load()
         }

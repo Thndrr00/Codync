@@ -17,6 +17,8 @@ function panel(create: (...args: unknown[]) => Promise<unknown>) {
       return [state[index], (next: unknown) => { state[index] = typeof next === 'function' ? next(state[index]) : next }]
     },
     useEffect: () => {},
+    useRef: (initial: unknown) => ({ current: initial }),
+    useSyncExternalStore: (_subscribe: unknown, get: () => unknown) => get(),
   }
   const source = readFileSync(new URL('../components/BotAppPanel.tsx', import.meta.url), 'utf8')
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -26,6 +28,7 @@ function panel(create: (...args: unknown[]) => Promise<unknown>) {
     require: (name: string) => {
       if (name === 'react') return React
       if (name === './SlideShell') return { SlideShell: 'shell', useLatchedWhileClosing: (app: unknown) => app }
+      if (name === '../lib/use-language') return { useTr: () => (text: string) => text }
       return { Button: 'button', SegmentedChoice: 'choice', Icon: 'icon', HStack: 'row', VStack: 'column', Spacer: 'spacer', Text: 'text' }
     },
   })

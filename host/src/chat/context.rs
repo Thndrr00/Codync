@@ -273,6 +273,16 @@ pub fn render(store: &Store, cfg: &BotConfig) -> String {
         lines.push(String::new());
         lines.push(cfg.personality.render());
     }
+    let commits = crate::chat::commit_coauthor::section(cfg.commit_coauthor);
+    if !commits.is_empty() {
+        lines.push(String::new());
+        lines.push(commits.to_owned());
+    }
+    let style = crate::server_settings::Settings::load(store).style_section();
+    if !style.is_empty() {
+        lines.push(String::new());
+        lines.push(style.to_owned());
+    }
     lines.push(String::new());
     lines.push(codync_mem::compaction::KEEP.to_owned());
     let mut out = lines.join("\n");
@@ -467,5 +477,21 @@ mod tests {
         mark_prompted(&store, &a.id, &first).expect("mark");
         assert!(!resolve(&store, &a, "s1").expect("resolve").unprompted);
         assert_eq!(resolve(&store, &a, "s1").expect("resolve").prelude, None);
+    }
+
+    #[test]
+    fn the_commit_trailer_reaches_the_profile_only_when_the_user_turns_it_on() {
+        let store = store();
+        let mut bot = cfg("Fixer", "Fix bugs");
+        let trailer = crate::chat::commit_coauthor::TRAILER;
+        assert!(!render(&store, &bot).contains(trailer), "off by default");
+        bot.commit_coauthor = true;
+        assert!(render(&store, &bot).contains(trailer));
+        // A stored bot from an older host reads as off, never as on.
+        let old: BotConfig = serde_json::from_value(serde_json::json!({
+            "id": "b", "name": "Old", "backend": "claude", "cwd": "/tmp",
+        }))
+        .expect("valid bot");
+        assert!(!old.commit_coauthor);
     }
 }

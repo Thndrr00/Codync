@@ -4,7 +4,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use super::super::app::ChannelsSheet;
-use super::super::app::channels::{bot_lines, pairing_instruction, slack_text};
+use super::super::app::channels::{bot_lines, matrix_text, pairing_instruction, signal_text, slack_text, teams_text};
 use super::super::l10n::tr;
 use super::super::md::truncate;
 use super::buffer::{centered, frame_box, put, restyle, u};
@@ -12,7 +12,7 @@ use super::style::theme;
 
 pub(super) fn channels(buf: &mut Buffer, area: Rect, s: &ChannelsSheet) {
     let t = theme();
-    let rows = s.bots.len() * 2 + 9;
+    let rows = s.bots.len() * 2 + 12;
     let r = centered(area, 86, u(rows.clamp(12, usize::from(area.height.saturating_sub(2)).max(12))));
     let title = tr("Channels");
     let inner = frame_box(buf, r, t.text, t.panel, Some((title.as_ref(), t.text)));
@@ -68,12 +68,39 @@ pub(super) fn channels(buf: &mut Buffer, area: Rect, s: &ChannelsSheet) {
         &truncate(&format!("Slack: {}", tr(&slack_text(s.slack.as_ref()))), width),
         t.secondary.patch(t.panel),
     );
+    y += 1;
+    put(
+        buf,
+        inner.x,
+        y,
+        inner.width,
+        &truncate(&format!("Matrix: {}", tr(&matrix_text(s.matrix.as_ref()))), width),
+        t.secondary.patch(t.panel),
+    );
+    y += 1;
+    put(
+        buf,
+        inner.x,
+        y,
+        inner.width,
+        &truncate(&format!("Signal: {}", tr(&signal_text(s.signal.as_ref()))), width),
+        t.secondary.patch(t.panel),
+    );
+    y += 1;
+    put(
+        buf,
+        inner.x,
+        y,
+        inner.width,
+        &truncate(&format!("Microsoft Teams: {}", tr(&teams_text(s.teams.as_ref()))), width),
+        t.secondary.patch(t.panel),
+    );
     put(
         buf,
         inner.x,
         inner.bottom() - 1,
         inner.width,
-        &tr("↑↓ pick  p pair someone  r refresh  esc close"),
+        &tr("↑↓ pick  p pair  d disconnect Matrix  s disconnect Signal  t disconnect Teams  r refresh  esc close"),
         t.dim.patch(t.panel),
     );
 }

@@ -16,6 +16,7 @@ fn pending() -> Artifact {
         id: uuid::Uuid::new_v4().to_string(),
         bot_id: "bot".into(),
         title: "Private report".into(),
+        kind: ArtifactKind::Html,
         size: 12,
         sha256: "hash".into(),
         created_at: 1,
@@ -45,7 +46,7 @@ fn published(hub: &Arc<Hub>) -> (Artifact, String) {
 /// The replacement a scheduled turn would publish: its HTML and metadata wait beside the published artifact.
 fn stage_replacement(hub: &Arc<Hub>, artifact: &Artifact) {
     let html = b"Q2: 40 users";
-    std::fs::write(staged_path("bot", &artifact.id).unwrap(), html).unwrap();
+    std::fs::write(staged_path("bot", &artifact.id, artifact.kind).unwrap(), html).unwrap();
     let update = StagedUpdate {
         title: "Quarterly report (Q2)".into(),
         size: u64::try_from(html.len()).unwrap(),
@@ -118,7 +119,7 @@ async fn a_scheduled_replacement_waits_aside_and_lands_only_when_the_turn_promot
     assert_eq!(events.try_recv().unwrap()["artifact"]["title"], "Quarterly report (Q2)");
     assert_eq!(read_html(&hub, &artifact.id).await, "Q2: 40 users");
     assert!(staged(&hub.store, "bot", &artifact.id).is_none());
-    assert!(!staged_path("bot", &artifact.id).unwrap().exists());
+    assert!(!staged_path("bot", &artifact.id, artifact.kind).unwrap().exists());
 }
 
 #[tokio::test]

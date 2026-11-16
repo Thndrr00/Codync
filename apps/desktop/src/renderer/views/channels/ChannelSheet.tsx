@@ -10,12 +10,14 @@ import { FormSheet, ServiceLogo } from '../marketplace/pieces'
 import { ChannelIconPicker } from '../settings/ChannelIconPicker'
 import { ChannelMemory } from '../settings/ChannelMemory'
 import { DiscordChannel } from '../settings/DiscordChannel'
+import { MatrixChannel } from '../settings/MatrixChannel'
 import { AddTelegram } from '../settings/ChannelsSection'
 import type { ChannelItem, ChannelProviderEntry } from './channel-catalog'
 import { ChannelNotes } from './ChannelNotes'
+import { ChannelLinks } from './ChannelLinks'
 import { ChannelRoutines } from './ChannelRoutines'
 
-const PROVIDER_DOMAIN = { whatsapp: 'whatsapp.com', telegram: 'telegram.org', slack: 'slack.com', discord: 'discord.com' } as const
+const PROVIDER_DOMAIN = { whatsapp: 'whatsapp.com', telegram: 'telegram.org', slack: 'slack.com', discord: 'discord.com', matrix: 'matrix.org' } as const
 
 /** One linked number, bot or group channel: its state, who may write, and what it knows. */
 function ItemCard({ entry, item, store, removing, onRemove }: {
@@ -58,6 +60,7 @@ function ItemCard({ entry, item, store, removing, onRemove }: {
           <ChannelIconPicker value={item.icon} save={(icon) => store.setIcon('telegram', item.channel, icon)} />
           <ChannelMemory value={item.memory} save={(memory) => store.setMemory('telegram', item.channel, memory)} />
           <ChannelNotes provider="telegram" channel={item.channel} store={store} />
+          {item.botId ? <ChannelLinks provider="telegram" channel={item.channel} botId={item.botId} store={store} /> : null}
           {item.botId ? <ChannelRoutines provider="telegram" channel={item.channel} botId={item.botId} /> : null}
           <HStack gap={6}>
             <Button kind="secondary" disabled={store.busy} onClick={() => void store.pair(item.channel)}>{tr('Pair someone')}</Button>
@@ -65,12 +68,15 @@ function ItemCard({ entry, item, store, removing, onRemove }: {
           </HStack>
         </>
       ) : null}
-      {entry.id === 'slack' || entry.id === 'discord' ? (
+      {entry.id === 'slack' || entry.id === 'discord' || entry.id === 'matrix' ? (
         <>
-          <ChannelIconPicker value={item.icon} save={(icon) => store.setIcon(entry.id === 'discord' ? 'discord' : 'slack', item.channel, icon)} />
-          <ChannelMemory value={item.memory} save={(memory) => store.setMemory(entry.id === 'discord' ? 'discord' : 'slack', item.channel, memory)} />
-          <ChannelNotes provider={entry.id === 'discord' ? 'discord' : 'slack'} channel={item.channel} store={store} />
-          {item.botId ? <ChannelRoutines provider={entry.id === 'discord' ? 'discord' : 'slack'} channel={item.channel} botId={item.botId} /> : null}
+          <ChannelIconPicker value={item.icon} save={(icon) => store.setIcon(entry.id, item.channel, icon)} />
+          <ChannelMemory value={item.memory} save={(memory) => store.setMemory(entry.id, item.channel, memory)} />
+          <ChannelNotes provider={entry.id} channel={item.channel} store={store} />
+          {entry.id === 'slack' || entry.id === 'discord' ? (
+            item.botId ? <ChannelLinks provider={entry.id} channel={item.channel} botId={item.botId} store={store} /> : null
+          ) : null}
+          {item.botId ? <ChannelRoutines provider={entry.id} channel={item.channel} botId={item.botId} /> : null}
         </>
       ) : null}
       {entry.id === 'whatsapp' ? (
@@ -136,6 +142,12 @@ export function ChannelSheet({ entry, store, whatsapp, bots, onConnect, onClose 
             </section>
           ) : null}
 
+          {entry.id === 'matrix' ? (
+            <section className="channel-item">
+              <MatrixChannel status={store.matrix} model={store} bots={bots} />
+            </section>
+          ) : null}
+
           {canPair ? <Button disabled={store.busy} onClick={onConnect}>{tr(entry.connected ? 'Manage the link' : 'Link a number')}</Button> : null}
           {entry.id === 'slack' ? (
             <Text size="caption" tone="tertiary">
@@ -148,6 +160,9 @@ export function ChannelSheet({ entry, store, whatsapp, bots, onConnect, onClose 
           ) : null}
           {entry.id === 'discord' && store.discord?.configured ? (
             <Button kind="secondary" disabled={store.busy} onClick={() => void store.disconnectDiscord()}>{tr('Disconnect Discord')}</Button>
+          ) : null}
+          {entry.id === 'matrix' && store.matrix?.configured ? (
+            <Button kind="secondary" disabled={store.busy} onClick={() => void store.disconnectMatrix()}>{tr('Disconnect Matrix')}</Button>
           ) : null}
           {whatsapp?.error ? <Text size="caption" role="alert" tone="danger">{whatsapp.error}</Text> : null}
         </VStack>

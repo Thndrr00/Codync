@@ -208,6 +208,33 @@ impl Screen {
         self.emit();
         Ok(())
     }
+
+    /// "Stop all remote control": ends every viewer session and any takeover on this computer,
+    /// without turning remote screen off, so a later session can start again under the same setting.
+    pub async fn stop_all(&self) -> Result<Stopped> {
+        let takeover = self.control.locked().user;
+        let viewers = self.sessions.locked().values().filter(|v| v.started()).count();
+        self.snapshots.locked().invalidate();
+        let link = self.link.locked().clone();
+        if let Some(link) = link
+            && let Err(error) = link.request("closeAll", json!({})).await
+        {
+            tracing::warn!(error = format!("{error:#}"), "couldn't close screen sessions");
+        }
+        self.sessions.locked().clear();
+        *self.control.locked() = Control::default();
+        self.emit();
+        Ok(Stopped { viewers, takeover })
+    }
+}
+
+/// What "Stop all remote control" ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stopped {
+    /// Viewer sessions that were running: prepared or failed ones are not viewers.
+    pub viewers: usize,
+    /// A phone had taken control, and the bots have it back.
+    pub takeover: bool,
 }
 
 /// Media bypasses the API, so keep checking the device lease while a viewer is connected.
@@ -286,5 +313,29 @@ mod tests {
         );
         *screen.enabled.locked() = Some(false);
         assert!(screen.prepare("phone", IceConfig::default(), false).is_err());
+    }
+
+    #[tokio::test]
+    async fn stopping_every_session_reports_the_viewers_and_the_takeover_it_ended() {
+        let (tx, _) = broadcast::channel(8);
+        let screen = Screen::new(Some(true), tx);
+        let viewer = |state| Viewer {
+            owner: "phone".into(),
+            ice: IceConfig::default(),
+            state,
+            pending_until: i64::MAX,
+            link_id: 1,
+            signaling: None,
+        };
+        screen.sessions.locked().insert("live".into(), viewer(ViewerState::Connected));
+        screen.sessions.locked().insert("pending".into(), viewer(ViewerState::Prepared));
+        screen.control.locked().user = true;
+
+        let stopped = screen.stop_all().await.unwrap();
+        assert_eq!(stopped.viewers, 1, "a prepared session is not a viewer");
+        assert!(stopped.takeover, "a phone had taken control");
+        assert!(screen.sessions.locked().is_empty());
+        assert!(!screen.control.locked().user, "control is back with the bots");
+        assert_eq!(screen.state()["viewers"], 0);
     }
 }

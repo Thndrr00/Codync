@@ -1,11 +1,13 @@
 //! A routine's flow: the chain from the routine's bot, each bot with its latest step's status.
 
 use super::{App, Buffer, Rect, centered, footer, frame_box, multiline, put, row, rput, theme, u, window};
-use crate::tui::l10n::tr;
+use crate::tui::l10n::{fill, tr};
 use crate::tui::manage::{FlowSheet, FlowStage, Target};
 use crate::tui::md::truncate;
 use serde_json::Value;
 
+/// A routine's flow: the chain from the routine's bot, each bot with its latest step's status, and one row per
+/// agent's lane of a shared card (card K14).
 pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
     let t = theme();
     let r = centered(area, 90, 24);
@@ -17,9 +19,34 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
         footer(buf, inner, None, "esc");
         return;
     }
+    let mut top = inner.y;
+    // Card K14: every agent that works this card, each with its latest step; a digit picks one.
+    let lanes = f.lanes();
+    if lanes.len() > 1 {
+        let picked = f.lane.as_deref();
+        let line: Vec<String> = lanes
+            .iter()
+            .enumerate()
+            .map(|(index, lane)| {
+                let status = lane["status"].as_str();
+                let mark = if picked == lane["botId"].as_str() { "*" } else { " " };
+                let lane_name = lane["name"].as_str().unwrap_or_default();
+                format!("{mark}{} {lane_name} {}", index + 1, status_word(status))
+            })
+            .collect();
+        put(
+            buf,
+            inner.x,
+            top,
+            inner.width,
+            &truncate(&line.join("  "), usize::from(inner.width)),
+            t.secondary.patch(t.panel),
+        );
+        top += 1;
+    }
     let rows = f.rows();
-    let height = usize::from(inner.height.saturating_sub(6));
-    for (y, (i, line)) in (inner.y..).zip(rows.iter().enumerate().skip(window(f.cursor, height)).take(height)) {
+    let height = usize::from(inner.height.saturating_sub(6).saturating_sub(top - inner.y));
+    for (y, (i, line)) in (top..).zip(rows.iter().enumerate().skip(window(f.cursor, height)).take(height)) {
         let base = row(buf, inner, y, i == f.cursor);
         let indent = line.depth * 2;
         let arrow = if line.depth == 0 { "" } else { "→ " };
@@ -47,7 +74,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
         rput(buf, inner.right(), y, &format!("{glyph} {status}"), style.patch(base));
     }
     if rows.len() <= 1 {
-        let y = inner.y + 2;
+        let y = top + 1;
         put(
             buf,
             inner.x,
@@ -59,7 +86,40 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
     }
     let (hint, hint_y) = (stage_hint(app, f), inner.bottom().saturating_sub(5));
     match &f.stage {
-        FlowStage::Browse => {}
+        FlowStage::Browse => {
+            // Card K14: the lane picked with a digit, its step and what it said.
+            if let Some(lane) = f.selected_lane() {
+                let status = status_word(lane["status"].as_str());
+                let depth = lane["depth"].as_u64().unwrap_or(0) + 1;
+                let step = fill(
+                    &tr("Step {depth} in the flow of {name}"),
+                    &[("depth", &depth.to_string()), ("name", &f.name)],
+                );
+                let line = format!("{} · {status} · {step}", lane["name"].as_str().unwrap_or_default());
+                put(
+                    buf,
+                    inner.x,
+                    hint_y,
+                    inner.width,
+                    &truncate(&line, usize::from(inner.width)),
+                    t.bold.patch(t.panel),
+                );
+                if let Some(step) = f.lane_step() {
+                    let said = step["error"].as_str().or(step["output"].as_str()).unwrap_or_default();
+                    if !said.is_empty() {
+                        let said = said.replace('\n', " ");
+                        put(
+                            buf,
+                            inner.x,
+                            hint_y + 1,
+                            inner.width,
+                            &truncate(&said, usize::from(inner.width)),
+                            t.secondary.patch(t.panel),
+                        );
+                    }
+                }
+            }
+        }
         FlowStage::Pick { cursor } => {
             let from = f.rows().get(f.cursor).map_or_else(|| f.bot.clone(), |r| r.bot.clone());
             put(buf, inner.x, hint_y, inner.width, &hint, t.bold.patch(t.panel));
@@ -74,11 +134,23 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, f: &FlowSheet) {
         }
     }
     let keys = match f.stage {
-        FlowStage::Browse => "a connect a bot · e instruction · d disconnect · t test · esc",
+        FlowStage::Browse => "a connect a bot · e instruction · d disconnect · t test · 1-9 lane · esc",
         FlowStage::Pick { .. } => "↑↓ choose · ↵ next · esc",
         FlowStage::Instruction { .. } => "↵ save · esc",
     };
     footer(buf, inner, None, keys);
+}
+
+/// A lane's step status in a word or two, as the list under the title reads it.
+fn status_word(status: Option<&str>) -> String {
+    match status {
+        Some("running") => tr("running").into_owned(),
+        Some("succeeded") => tr("succeeded").into_owned(),
+        Some("failed") => tr("failed").into_owned(),
+        Some("skipped") => tr("skipped").into_owned(),
+        Some("cancelled") => tr("cancelled").into_owned(),
+        _ => tr("Not run yet").into_owned(),
+    }
 }
 
 fn stage_hint(app: &App, f: &FlowSheet) -> String {

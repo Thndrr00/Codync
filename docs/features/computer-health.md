@@ -25,10 +25,36 @@ line into "back to normal". Older duplicate banners are coalesced when the host 
 
 | Client | Where |
 |---|---|
-| Desktop | Settings → Diagnostics → Computer health (numbers, agents, the two levels to edit); a line in the notch island when memory is short |
-| Android | the Status tab of the computer panel: level, memory, CPU, disk and agents |
+| Desktop | Settings → Diagnostics → Computer health (numbers, agents, the two levels to edit); the Usage page's header (RAM, CPU, disk); a line in the notch island when memory is short |
+| Android | the Status tab of the computer panel: level, memory, CPU, disk and agents; the Usage screen's header |
+| iPhone | the Usage screen's header (RAM, CPU, disk) |
 | Terminal | one amber word in the header when memory is short |
-| iPhone | not done (no iOS work was asked for) |
+
+`hostHealth` is not local-only: a paired device with the Control scope reads it, so the owner sees a
+joined or cloud computer's health from any of their devices through the relay. Codync accounts have
+one owner and no member roles on a computer; a member of a network of computers cannot call another
+computer's API, so they never see it.
+
+## Memory already given back
+
+Codync's own memory work predates this list and is measured, not simulated:
+
+- **Idle agents.** A session unused for 30 minutes is closed; once every session is idle (or a
+  routine run ends with no other open), the agent process stops with everything it started, and the
+  next message relaunches and resumes it (`agent/bot/lifecycle.rs`). Under memory pressure the same
+  release runs at once for every bot at rest.
+- **Runaway agents.** An agent above 1.5 GB that keeps at least doubling its low-water mark is told,
+  then stopped after four samples (`health.rs`), which frees the process group.
+- **Browser tabs.** The Browser panel caps its tabs (`browser_panel::MAX_TABS`) and asks the user to
+  close one; the agent browser is an isolated Chrome/Edge profile, so its tabs are the browser's
+  memory, not a Codync window's.
+- **One window per role.** The desktop app keeps one chat window, one pairing window and one island
+  per display rather than a pool of hidden windows.
+
+What is **not** done, and needs profiling before code: unloading idle *pages* in the agent browser
+(CDP `Target.closeTarget` or `Page.setWebLifecycleState`), a window pool for the desktop app, and a
+per-process private-memory reading on Windows. There is no measured win to claim yet, so no process
+management was rewritten.
 
 ## Not done
 

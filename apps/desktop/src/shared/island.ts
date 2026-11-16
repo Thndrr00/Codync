@@ -124,9 +124,9 @@ export interface NotchScreen {
 }
 
 /** Closed shapes, then the open views (640 pt wide, under a header of tabs). */
-export type IslandMode = 'hidden' | 'peek' | 'compact' | 'overview' | 'empty' | 'approval' | 'finished' | 'failed' | 'message' | 'usage' | 'activity' | 'status' | 'options' | 'workspace' | 'integrations'
-/** The header's choice: `auto` shows what needs you first (an approval, a finished or failed bot). */
-export type IslandTab = 'auto' | 'bots' | 'message' | 'usage' | 'approvals' | 'activity' | 'status' | 'options' | 'workspace' | 'integrations'
+export type IslandMode = 'hidden' | 'peek' | 'compact' | 'overview' | 'empty' | 'approval' | 'finished' | 'failed' | 'message' | 'usage' | 'activity' | 'status' | 'options' | 'workspace' | 'integrations' | 'agents'
+/** The header's choice: `auto` shows what needs you first (an approval, a finished or failed bot, else the agent dock). */
+export type IslandTab = 'auto' | 'bots' | 'agents' | 'message' | 'usage' | 'approvals' | 'activity' | 'status' | 'options' | 'workspace' | 'integrations'
 /** A bot that just stopped, shown until it times out (done) or is dismissed (failed). */
 export interface IslandNotice {
   kind: 'finished' | 'failed'
@@ -157,7 +157,7 @@ export const stopsDictation = (from: IslandTab, to: IslandTab, dictating: boolea
 
 export function islandMode(
   summary: IslandSummary,
-  { open, peek, tab, deferred, notice }: { open: boolean; peek: boolean; tab: IslandTab; deferred: ReadonlySet<string>; notice: IslandNotice | null },
+  { open, peek, tab, deferred, notice, dock }: { open: boolean; peek: boolean; tab: IslandTab; deferred: ReadonlySet<string>; notice: IslandNotice | null; dock: boolean },
 ): IslandMode {
   if (!open) {
     // Alerts open the island by themselves.
@@ -166,11 +166,15 @@ export function islandMode(
     if (peek) return 'peek'
     return summary.bots.some(isActive) ? 'compact' : 'hidden'
   }
+  // The Agents tab exists only while the dock is on; without it the tab falls back to `auto`.
+  if (tab === 'agents' && dock) return 'agents'
   if (tab === 'message' || tab === 'usage' || tab === 'activity' || tab === 'status' || tab === 'options' || tab === 'workspace' || tab === 'integrations') return tab
   if (tab === 'approvals') return summary.permissions.length ? 'approval' : 'activity'
   if (tab === 'auto') {
     if (summary.permissions.length) return 'approval'
     if (notice) return notice.kind
+    // With the dock on, opening the island (a hover, a click) shows the roster of agents.
+    if (dock) return 'agents'
   }
   return summary.bots.some(isActive) ? 'overview' : 'empty'
 }

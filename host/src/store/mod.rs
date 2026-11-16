@@ -9,18 +9,25 @@ mod analytics;
 pub mod apps;
 mod bots;
 mod channel_activity;
+pub mod components;
 mod computer_activity;
 mod devices;
 mod documents;
 mod entries;
 pub mod flow_steps;
 pub mod flows;
+mod group_tasks;
+mod history;
 mod inflight;
+mod links;
 pub(crate) mod mcp_policies;
+mod member_accounts;
 mod memory;
 mod model;
 pub(crate) mod native_channels;
 pub mod open_items;
+pub mod people;
+pub(crate) mod policies;
 mod research;
 mod roster;
 pub(crate) mod routine_delivery;
@@ -36,20 +43,28 @@ pub(crate) mod week;
 mod workspaces;
 pub use visibility::is_internal;
 pub(crate) mod discord;
+pub(crate) mod matrix;
+pub(crate) mod signal;
 pub(crate) mod slack;
+pub(crate) mod teams;
 pub(crate) mod whatsapp;
 
-pub use apps::{AppLink, AppLinkMode, BotApp};
+pub use apps::{AppLink, AppLinkMode, AppTotals, BotApp};
 pub use channel_activity::ChannelActivity;
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceAccount, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
+pub use group_tasks::{GroupTask, TaskKind, TaskState, branch as task_branch, new_task};
+pub use links::ConversationLink;
+pub use member_accounts::{INVITE_TTL_MS, MemberInvite, MemberSession, SESSION_TTL_MS};
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
     Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
 };
+pub use people::{Person, Role};
+pub use policies::{MAX_EXPRESSION, MAX_MESSAGE, MAX_NAME, MAX_POLICIES, Policy, PolicyEffect};
 pub use week::Week;
 
 use crate::LockExt;

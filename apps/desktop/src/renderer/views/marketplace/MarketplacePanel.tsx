@@ -1,14 +1,20 @@
 import type { ReactNode } from 'react'
 import type { Backend } from '@shared/models'
 import { CharacterAvatar } from '../../components/Avatar'
+import { Plush } from '../../components/Plush'
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useTr } from '../../lib/use-language'
+import { EmptyState } from '../HostStateView'
 import { AgentTile, NodeNotice } from './AgentSheet'
-import { ComposioSection } from './ComposioSection'
 import type { ConnectorCatalog } from './connector-catalog'
 import { CATEGORIES, CATEGORY_LABELS, EXTENSION_SECTIONS, type ExtensionSection, type MarketAgent, type MarketApp, type MarketConnector, type MarketSkill } from './market-models'
 import { ItemGrid, LoadMoreRow, MarketRow, MarketSection, ServiceLogo, SkeletonGrid, SkillGlyph, TileIcon } from './pieces'
+
+/** A search or a list with nothing in it, with the plush above the text. */
+function MarketEmpty({ title }: { title: string }) {
+  return <EmptyState inline plush={<Plush />} title={title} />
+}
 
 /** One tab of Extensions: the line saying where its items come from, the tab, and an error under it. */
 export function MarketPanel({ section, hostName, error, children }: { section: ExtensionSection; hostName: string; error: string | null; children: ReactNode }) {
@@ -30,7 +36,7 @@ function grouped<T extends { category: string; featured: boolean }>(items: T[]):
   return [{ title: 'Featured', items: featured }, ...groups].filter((g) => g.items.length > 0)
 }
 
-export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, onAddConnector, onInstallConnector, onViewConnector }: {
+export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, onAddConnector, onInstallConnector, onViewConnector, children }: {
   apps: MarketApp[]
   query: string
   catalog: ConnectorCatalog<MarketConnector>
@@ -40,6 +46,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
   onAddConnector: () => void
   onInstallConnector: (connector: MarketConnector) => void
   onViewConnector: (connector: MarketConnector) => void
+  children?: ReactNode
 }) {
   const tr = useTr()
   const rows = catalog.items.items
@@ -54,6 +61,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
                   key={app.id}
                   title={app.name}
                   subtitle={app.tagline}
+                  note={app.guide?.kind === 'key' ? tr('Needs a key from {name}').replaceAll('{name}', app.name) : undefined}
                   added={added.includes(app.id) || app.installed}
                   icon={<ServiceLogo website={app.website} name={app.name} />}
                   onAdd={() => onAddApp(app)}
@@ -64,9 +72,8 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
           </MarketSection>
         ))
       ) : query ? (
-        <Text tone="secondary">{tr('No apps match “{query}”.').replaceAll('{query}', query)}</Text>
+        <MarketEmpty title={tr('No apps match “{query}”.').replaceAll('{query}', query)} />
       ) : null}
-      <ComposioSection query={query} />
       <MarketSection title={tr('Custom connector')}>
         <MarketRow
           title={tr('Any MCP server')}
@@ -101,6 +108,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
           </>
         )}
       </MarketSection>
+      {children}
     </div>
   )
 }
@@ -134,7 +142,7 @@ export function MarketAgentsPanel({ agents, query, added, onAdd, onView }: {
           </MarketSection>
         ))
       ) : (
-        <Text tone="secondary">{tr('No agents match “{query}”.').replaceAll('{query}', query)}</Text>
+        <MarketEmpty title={tr('No agents match “{query}”.').replaceAll('{query}', query)} />
       )}
     </div>
   )
@@ -154,7 +162,7 @@ export function AgentsPanel({ agents, query, needsNode, onAddNode, onAgent }: {
       {needsNode ? <NodeNotice onAdd={onAddNode} /> : null}
       <div className="market-panel-scroll fade-in">
         {agents.length === 0 ? (
-          <Text tone="secondary">{query ? tr('No agents match “{query}”.').replaceAll('{query}', query) : tr('No agents yet.')}</Text>
+          <MarketEmpty title={query ? tr('No agents match “{query}”.').replaceAll('{query}', query) : tr('No agents yet.')} />
         ) : (
           <div className="agent-grid">
             {agents.map((b) => <AgentCard key={b.id} backend={b} onClick={() => onAgent(b)} />)}
@@ -226,7 +234,7 @@ export function SkillsPanel({ skills, loading, query, installedSkillIds, busySki
         </MarketSection>
       ) : null}
       {!loading && skills.length === 0 && query ? (
-        <Text tone="secondary">{tr('No skills match “{query}”.').replaceAll('{query}', query)}</Text>
+        <MarketEmpty title={tr('No skills match “{query}”.').replaceAll('{query}', query)} />
       ) : null}
     </div>
   )

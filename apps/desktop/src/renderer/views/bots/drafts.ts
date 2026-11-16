@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { rebase } from '@shared/draft-rebase'
 import { AUTO_MODE } from '@shared/approvals'
-import { draftOf, type Bot, type BotDraft } from '@shared/models'
+import { draftOf, type Bot, type BotDraft, type Person } from '@shared/models'
 import { AVATAR_COLORS, AVATAR_SHAPES } from '../../lib/theme'
 import type { BotStore } from '../../store/bot-store'
 
@@ -25,6 +25,8 @@ export interface InstalledSkill {
 export interface Plugins {
   connectors: InstalledConnector[]
   skills: InstalledSkill[]
+  /** Who is on this computer; empty on a member's phone, which never sees the people list. */
+  people: Person[]
 }
 
 const pick = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)]!
@@ -58,15 +60,20 @@ export function fillDefaults(store: BotStore, draft: BotDraft): BotDraft {
   return next
 }
 
-/** The connectors and skills installed on the computer (kit `refreshPlugins`). */
+/** The connectors, skills and people on the computer (kit `refreshPlugins`). */
 async function loadPlugins(store: BotStore): Promise<Plugins> {
   const client = store.client
-  if (!client) return { connectors: [], skills: [] }
-  const [c, s] = await Promise.allSettled([
+  if (!client) return { connectors: [], skills: [], people: [] }
+  const [c, s, p] = await Promise.allSettled([
     client.call<{ items: InstalledConnector[] }>('connectors'),
     client.call<{ items: InstalledSkill[] }>('skills'),
+    client.call<{ people: Person[] }>('people'),
   ])
-  return { connectors: c.status === 'fulfilled' ? c.value.items : [], skills: s.status === 'fulfilled' ? s.value.items : [] }
+  return {
+    connectors: c.status === 'fulfilled' ? c.value.items : [],
+    skills: s.status === 'fulfilled' ? s.value.items : [],
+    people: p.status === 'fulfilled' ? p.value.people : [],
+  }
 }
 
 export function usePlugins(store: BotStore): Plugins | null {

@@ -8,6 +8,7 @@ import { CHINA_COMMUNITY, DISCORD, EMAIL, GITHUB, KO_FI } from "../links";
 const nav: [href: string, label: string][] = [
   ["/#product", "Product"],
   ["/docs", "Docs"],
+  ["/app", "Web app"],
   ["/compare", "Compare"],
   ["/#cost", "Pricing"],
   ["/#faq", "FAQ"],
@@ -76,6 +77,7 @@ const footerColumns: { title: string; links: [label: string, href: string][] }[]
     title: "Product",
     links: [
       ["Docs", "/docs"],
+      ["Web app", "/app"],
       ["Free AI agent app", "/free-ai-agent-app"],
       ["Claude Code on iPhone", "/claude-code-iphone"],
       ["Codex on iPhone", "/codex-iphone"],

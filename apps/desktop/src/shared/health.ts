@@ -52,7 +52,7 @@ export function healthAlert(health: HostHealth | null): string | null {
 /** The numbers, for the status tab. */
 export function healthLines(health: HostHealth): { label: string; value: string }[] {
   return [
-    { label: 'Memory', value: `${health.ramUsedPercent} % used · ${bytesText(health.ramFree)} free of ${bytesText(health.ramTotal)}` },
+    { label: 'RAM', value: `${health.ramUsedPercent} % used · ${bytesText(health.ramFree)} free of ${bytesText(health.ramTotal)}` },
     { label: 'CPU', value: `${Math.round(health.cpu)} %` },
     { label: 'Disk', value: health.diskTotal > 0 ? `${bytesText(health.diskFree)} free of ${bytesText(health.diskTotal)}` : 'Unknown' },
   ]

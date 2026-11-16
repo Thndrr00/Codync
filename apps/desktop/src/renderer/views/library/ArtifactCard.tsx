@@ -15,15 +15,18 @@ export function ArtifactCard({ botId, card, open }: { botId: string; card: Card;
   const html = store.artifacts.html.get(card.id)
   const title = artifact?.title ?? card.title
   const newest = artifact?.updatedAt
+  const kind = artifact?.kind ?? card.kind
   useEffect(() => store.artifacts.load(store.client, botId, card.id, card.updatedAt), [store, store.client, botId, card.id, card.updatedAt, newest])
   return (
-    <button className="artifact-card" onClick={open} aria-label={`${title}, ${tr('Artifact')}`}>
-      <div className="artifact-card-preview">{html ? <ArtifactFrame id={card.id} html={html} title={title} preview /> : null}</div>
+    <button className="artifact-card" onClick={open} aria-label={`${title}, ${tr(kind === 'diagram' ? 'Diagram' : 'Artifact')}`}>
+      <div className="artifact-card-preview">{kind === 'diagram'
+        ? <div className="artifact-diagram-preview"><Icon name="square.on.square" size={34} color="var(--secondary)" /></div>
+        : html ? <ArtifactFrame id={card.id} html={html} title={title} preview /> : null}</div>
       <HStack gap={12} className="artifact-card-footer">
-        <Icon name="chart.bar.doc.horizontal" size={26} color="var(--secondary)" />
+        <Icon name={kind === 'diagram' ? 'square.on.square' : 'chart.bar.doc.horizontal'} size={26} color="var(--secondary)" />
         <VStack shrink>
           <Text size="subheadline" weight="semibold" truncate>{title}</Text>
-          <Text size="caption" tone="secondary">{tr('Artifact')}</Text>
+          <Text size="caption" tone="secondary">{tr(kind === 'diagram' ? 'Diagram' : 'Artifact')}</Text>
         </VStack>
       </HStack>
     </button>

@@ -1,0 +1,57 @@
+name: codync
+
+# One host container and its data volume. `--profile proxy` adds Caddy in front of the
+# phone's channel; see docs/guides/docker.md.
+services:
+  codync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Compiled into the binary: main is port 19222 and the production cloud.
+        CODYNC_ENV: main
+    image: ${CODYNC_IMAGE:-codync-host:local}
+    init: true
+    restart: unless-stopped
+    ports:
+      # The port on this machine; the host listens on the same number inside.
+      - "${CODYNC_PORT:-19222}:${CODYNC_PORT:-19222}"
+    environment:
+      CODYNC_HOME: /data
+      CODYNC_BIND: 0.0.0.0
+      CODYNC_PORT: "${CODYNC_PORT:-19222}"
+      # The URL your own reverse proxy serves, so the pairing link advertises it. Empty: none.
+      CODYNC_EXTERNAL_URL: "${CODYNC_EXTERNAL_URL:-}"
+      # Routines and log lines use this zone; the image is UTC without it.
+      TZ: "${TZ:-UTC}"
+      RUST_LOG: "${RUST_LOG:-codync_host=info}"
+    volumes:
+      - codync-data:/data
+    # The host stops its agents and flushes analytics on SIGTERM; give it time.
+    stop_grace_period: 30s
+
+  # TLS and a hostname for the phone, forwarding only /channel. The API, its events, the
+  # terminals and OAuth are for a caller on the computer itself, so anything else forwarded
+  # here would publish them to whoever reaches the proxy.
+  #   CODYNC_DOMAIN=codync.example.com docker compose --profile proxy up -d
+  proxy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    depends_on:
+      codync:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CODYNC_DOMAIN: "${CODYNC_DOMAIN:-}"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  codync-data:
+  caddy-data:
+  caddy-config:

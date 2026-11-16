@@ -148,7 +148,7 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        let mut body = json!({"id":"routine","name":"Renamed","instruction":"Check status","triggers":[{"type":"interval","seconds":60}]});
+        let mut body = json!({"id":"routine","name":"Renamed","instruction":"Check status","triggers":[{"type":"interval","seconds":900}]});
         let saved = hub.routines.save(&hub, "bot", &body).unwrap();
         assert_eq!(
             saved["routine"]["outputs"][0]["target"], "C-newer",

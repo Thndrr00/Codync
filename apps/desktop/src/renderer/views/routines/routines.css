@@ -213,6 +213,11 @@ textarea.routine-input {
   user-select: text;
   word-break: break-all;
 }
+/* The pasted signing secret: the field takes the room the button leaves. */
+.webhook-secret .market-field {
+  flex: 1;
+  min-width: 0;
+}
 
 /* The routine list (RoutinesView). */
 .routines {

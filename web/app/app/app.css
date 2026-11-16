@@ -1,0 +1,131 @@
+/* The web client's own surfaces. The rest of the site is dark; this app area follows the system or
+   the reader's choice, so its colors are variables rather than fixed Tailwind shades. */
+
+:root {
+  --app-bg: #0a0a0a;
+  --app-panel: #141414;
+  --app-panel-2: #1c1c1c;
+  --app-hover: #242424;
+  --app-line: #262626;
+  --app-text: #ededed;
+  --app-muted: #a3a3a3;
+  --app-faint: #737373;
+  --app-accent: #fafafa;
+  --app-accent-text: #0a0a0a;
+  --app-good: #4ade80;
+  --app-warn: #fbbf24;
+  --app-bad: #f87171;
+  --app-shadow: 0 24px 60px rgb(0 0 0 / 0.5);
+}
+
+:root[data-app-theme="light"] {
+  --app-bg: #fafafa;
+  --app-panel: #ffffff;
+  --app-panel-2: #f2f2f2;
+  --app-hover: #eaeaea;
+  --app-line: #e5e5e5;
+  --app-text: #171717;
+  --app-muted: #525252;
+  --app-faint: #737373;
+  --app-accent: #171717;
+  --app-accent-text: #fafafa;
+  --app-good: #15803d;
+  --app-warn: #b45309;
+  --app-bad: #b91c1c;
+  --app-shadow: 0 24px 60px rgb(0 0 0 / 0.12);
+}
+
+.app-shell {
+  color-scheme: dark;
+}
+
+:root[data-app-theme="light"] .app-shell {
+  color-scheme: light;
+}
+
+.app-shell ::selection {
+  background: var(--app-text);
+  color: var(--app-bg);
+}
+
+.app-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.app-shell ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--app-line);
+}
+
+.app-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes app-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes app-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes app-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.app-rise {
+  animation: app-rise 160ms ease-out both;
+}
+
+.app-pulse {
+  animation: app-pulse 1.6s ease-in-out infinite;
+}
+
+.app-caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.55;
+  animation: app-blink 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-rise,
+  .app-pulse,
+  .app-caret::after {
+    animation: none;
+  }
+  .app-caret::after {
+    opacity: 0.55;
+  }
+}

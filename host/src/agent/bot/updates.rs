@@ -2,6 +2,7 @@
 
 use super::approval_age;
 use super::fast_mode::Listing;
+use super::governance;
 use super::stall::ToolOutcome;
 use super::tool_entry::{activity, mark_bookkeeping, merge_tool_content};
 use super::{Actor, Reacted, Seg, SegKind};
@@ -31,6 +32,20 @@ pub(super) enum Answer {
     Agent(Value),
     /// A Codync tool (`Cmd::Approve`): true when the user allowed it.
     Codync(oneshot::Sender<bool>),
+    /// A declarative block (`Cmd::Block`): the chosen action and the form's values, or none when the
+    /// card closed without an answer.
+    Block(oneshot::Sender<Option<Value>>),
+}
+
+impl Answer {
+    /// Whether whoever waited for this card has gone (its tool timed out or its call was dropped).
+    fn abandoned(&self) -> bool {
+        match self {
+            Self::Agent(_) => false,
+            Self::Codync(reply) => reply.is_closed(),
+            Self::Block(reply) => reply.is_closed(),
+        }
+    }
 }
 
 impl Actor {
@@ -95,6 +110,11 @@ impl Actor {
 
     pub(super) fn on_update(&mut self, u: &Value) {
         let turn = self.turn.unwrap_or(0);
+        if self.turn_first_output.is_none()
+            && matches!(u["sessionUpdate"].as_str(), Some("agent_message_chunk" | "agent_thought_chunk" | "tool_call"))
+        {
+            self.turn_first_output = Some(crate::store::now_ms());
+        }
         match u["sessionUpdate"].as_str().unwrap_or_default() {
             "agent_message_chunk" => {
                 let t = acp::content_text(&u["content"]);
@@ -120,13 +140,37 @@ impl Actor {
                 });
                 merge_tool_content(&mut data, &u["content"]);
                 mark_bookkeeping(&self.cfg, &mut data);
+                if governance::mark(&mut data, &u["rawInput"]) {
+                    crate::analytics::tool_caution(&self.hub, &data["caution"]);
+                }
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
                 self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
                 let working = activity(&data).to_owned();
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
-                    self.tools.insert(tool_id, e.id);
+                    self.tools.insert(tool_id.clone(), e.id);
+                }
+                // A tool that starts the agent's own subagent gets a card of its own.
+                if self.subagents.start_with_tool(&tool_id, &title, &u["rawInput"], crate::store::now_ms()) {
+                    match status.as_str() {
+                        "completed" => {
+                            self.subagents.finish(
+                                &tool_id,
+                                crate::chat::subagents::State::Done,
+                                crate::store::now_ms(),
+                            );
+                        }
+                        "failed" => {
+                            self.subagents.finish(
+                                &tool_id,
+                                crate::chat::subagents::State::Failed,
+                                crate::store::now_ms(),
+                            );
+                        }
+                        _ => {}
+                    }
+                    self.save_subagents(turn);
                 }
                 self.set_activity(&working);
             }
@@ -145,6 +189,9 @@ impl Actor {
                 }
                 merge_tool_content(&mut e.data, &u["content"]);
                 mark_bookkeeping(&self.cfg, &mut e.data);
+                if governance::mark(&mut e.data, &u["rawInput"]) {
+                    crate::analytics::tool_caution(&self.hub, &e.data["caution"]);
+                }
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &e.data);
                 let working = (e.data["status"] == "in_progress").then(|| activity(&e.data).to_owned());
                 let status = e.data["status"].as_str().unwrap_or_default().to_owned();
@@ -152,6 +199,23 @@ impl Actor {
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
                     self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());
+                }
+                // A subagent's card follows its call: the newest step, then how it ended.
+                if self.subagents.has(tool_id) {
+                    let changed = match status.as_str() {
+                        "completed" => {
+                            self.subagents.finish(tool_id, crate::chat::subagents::State::Done, crate::store::now_ms())
+                        }
+                        "failed" => self.subagents.finish(
+                            tool_id,
+                            crate::chat::subagents::State::Failed,
+                            crate::store::now_ms(),
+                        ),
+                        _ => self.subagents.step(tool_id, &title),
+                    };
+                    if changed {
+                        self.save_subagents(turn);
+                    }
                 }
                 if let Some(working) = working {
                     self.set_activity(&working);
@@ -214,8 +278,26 @@ impl Actor {
             raw["command"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "))
         });
         let kind = tool["kind"].as_str().unwrap_or("other");
-        // The forbidden commands, then the user's rules, then the bot's general setting: one decision, the same one the
-        // rule editor's tester gives.
+        // The forbidden commands, then this computer's policies, then the bot's own rules and its Approvals
+        // setting. A policy can permit, never override a refusal: a blocked command or the bot's own deny rule
+        // still refuses.
+        if let Some(pattern) = command.as_deref().and_then(crate::agent::blocklist::blocked) {
+            self.refuse(rpc_id, &options, &format!("Blocked command (\"{pattern}\"), never allowed: {title}")).await;
+            return;
+        }
+        let mut request =
+            crate::policy::Request::from_tool_call(tool, &title, &self.cfg, command.as_deref(), self.initiator());
+        (request.actor, request.actor_role) = self.actor();
+        let policy = crate::policy::saved(&self.hub, &request);
+        if let Some(why) = policy.refusal() {
+            if let Some(rule) = policy.rule() {
+                crate::audit::refused(&self.hub, &rule.name, &self.cfg.name);
+            }
+            self.refuse(rpc_id, &options, &format!("{why}: {title}")).await;
+            return;
+        }
+        // The user's rules, then the bot's general setting: one decision, the same one the rule editor's
+        // tester gives.
         let quick =
             if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
         let evaluation = approval_rules::evaluate(
@@ -242,10 +324,11 @@ impl Actor {
             Outcome::Rule { pattern, .. } => Some(pattern.clone()),
             _ => None,
         };
-        let allowed = matches!(
-            evaluation.outcome,
-            Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
-        );
+        let allowed = policy.allowed()
+            || matches!(
+                evaluation.outcome,
+                Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
+            );
         // Like the bot's automatic setting always did: with no allow option, its first option.
         if allowed
             && !is_hermes_clarification(tool)
@@ -328,18 +411,14 @@ impl Actor {
 
     /// A Codync card whose tool stopped waiting (it timed out, or its call was dropped) expires, buttons and all.
     pub(super) async fn expire_abandoned(&mut self) {
-        let gone: Vec<String> = self
-            .perms
-            .iter()
-            .filter(|(_, answer)| matches!(answer, Answer::Codync(reply) if reply.is_closed()))
-            .map(|(id, _)| id.clone())
-            .collect();
+        let gone: Vec<String> =
+            self.perms.iter().filter(|(_, answer)| answer.abandoned()).map(|(id, _)| id.clone()).collect();
         for id in gone {
-            self.answer_permission(&id, None).await;
+            self.answer_permission(&id, None, None).await;
         }
     }
 
-    pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>) {
+    pub(super) async fn answer_permission(&mut self, entry_id: &str, option_id: Option<String>, values: Option<Value>) {
         self.waiting.answered(entry_id);
         let Some(answer) = self.perms.remove(entry_id) else {
             // No agent waits on it any more (its process went away): close the card, so it
@@ -369,10 +448,22 @@ impl Actor {
                     status = "expired";
                 }
             }
+            Answer::Block(reply) => {
+                // A form's fields go with the chosen action; a cancel carries neither.
+                let answer = option_id
+                    .as_deref()
+                    .map(|option| json!({"optionId": option, "values": values.clone().unwrap_or(Value::Null)}));
+                if reply.send(answer).is_err() {
+                    status = "expired";
+                }
+            }
         }
         if let Some(mut e) = self.hub.store.entry(entry_id) {
             e.data["status"] = status.into();
             e.data["selected"] = option_id.into();
+            if let Some(values) = values {
+                e.data["values"] = values;
+            }
             self.hub.set_entry(entry_id, &e.data);
         }
         if self.perms.is_empty() && self.turn.is_some() {

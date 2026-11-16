@@ -54,6 +54,20 @@ pub(crate) async fn receive(State(hub): State<Arc<Hub>>, headers: HeaderMap, bod
         {
             return Ok(StatusCode::UNAUTHORIZED.into_response());
         }
+        // Slack sends a button press as a form field, so the raw body is read before JSON is tried.
+        if headers
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.starts_with("application/x-www-form-urlencoded"))
+        {
+            let payload = url::form_urlencoded::parse(body.as_ref())
+                .find(|(key, _)| &**key == "payload")
+                .map(|(_, value)| value)
+                .context("Missing interaction payload")?;
+            let interaction: Value = serde_json::from_str(&payload)?;
+            answer_interaction(hub.clone(), c, &interaction)?;
+            return Ok(StatusCode::OK.into_response());
+        }
         let envelope: Value = serde_json::from_slice(&body)?;
         if envelope["type"] == "url_verification" {
             let challenge = envelope["challenge"].as_str().filter(|s| s.len() <= 256).context("Invalid challenge")?;
@@ -70,6 +84,27 @@ pub(crate) async fn receive(State(hub): State<Arc<Hub>>, headers: HeaderMap, bod
         }
     }
 }
+/// A Slack button press answers its approval in the background: Slack wants its HTTP answer or socket
+/// acknowledgement within three seconds, and the answer itself goes through the host's permission method.
+pub(super) fn answer_interaction(hub: Arc<Hub>, c: Config, interaction: &Value) -> Result<()> {
+    if interaction["type"] != "block_actions" {
+        return Ok(());
+    }
+    let Some(action) = interaction["actions"].as_array().and_then(|actions| actions.first()) else { return Ok(()) };
+    let (Some(value), Some(channel), Some(user)) =
+        (action["value"].as_str(), interaction["channel"]["id"].as_str(), interaction["user"]["id"].as_str())
+    else {
+        return Ok(());
+    };
+    let (value, channel, user) = (value.to_owned(), channel.to_owned(), user.to_owned());
+    tokio::spawn(async move {
+        if let Err(error) = super::cards::answer(&hub, &c, &channel, &user, &value).await {
+            tracing::warn!(error = format!("{error:#}"), "A Slack approval answer was not taken");
+        }
+    });
+    Ok(())
+}
+
 /// Queues the prompt in one Slack `event_callback`, whether it came signed over HTTP or through Socket Mode. An event
 /// that is not for a bound bot, from an allowed person, in a conversation the bot is in, is dropped without error.
 pub(super) fn accept(hub: &Hub, c: &Config, envelope: &Value) -> Result<()> {

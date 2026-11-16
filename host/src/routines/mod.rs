@@ -5,10 +5,14 @@ mod check;
 mod delivery;
 pub use check::Checked;
 mod editor;
+mod enforce;
 pub mod events;
 mod failed;
+mod failures;
 pub mod flow;
+mod guardrails;
 mod idle;
+pub mod limits;
 pub(crate) use editor::days_in_month;
 pub use editor::{ScheduleDraft, preview as schedule_preview};
 pub mod hooks;
@@ -80,6 +84,9 @@ pub struct Routine {
     /// Finished runs in a row that ran nothing that changes anything (`idle.rs`).
     #[serde(default)]
     pub idle_runs: u32,
+    /// Failed runs in a row; ten of them pause the routine (`guardrails`).
+    #[serde(default)]
+    pub failure_runs: u32,
     #[serde(default = "default_missed_policy")]
     pub missed_policy: String,
     #[serde(default = "default_limit_policy")]
@@ -184,6 +191,8 @@ pub struct Routines {
     state: Mutex<State>,
     /// How many runs each bot has in flight (at most `Hub::MAX_SIDE`).
     active: Mutex<std::collections::HashMap<String, usize>>,
+    /// The local script requests each bot made in the last hour (`limits`).
+    scripts: limits::Slots,
     scheduler: Mutex<Option<tokio::task::JoinHandle<()>>>,
     stopping: std::sync::atomic::AtomicBool,
     /// Bumped whenever the webhook set the relay registers (`hooks()`) changes.
@@ -198,6 +207,7 @@ impl Default for Routines {
             output_workers: Arc::new(tokio::sync::Semaphore::new(4)),
             state: Mutex::default(),
             active: Mutex::default(),
+            scripts: limits::Slots::default(),
             scheduler: Mutex::default(),
             stopping: std::sync::atomic::AtomicBool::default(),
             hooks_rev: tokio::sync::watch::channel(0).0,
@@ -405,6 +415,7 @@ impl Routines {
                 triggers.clone_from(&saved.triggers);
             }
         }
+        guardrails::check_interval(&triggers)?;
         let now = now_ms();
         let id = body["id"].as_str().map_or_else(|| uuid::Uuid::new_v4().to_string(), str::to_owned);
         let updated = body["id"].is_string();
@@ -433,6 +444,7 @@ impl Routines {
                 // Same triggers keep what their watches saw; new ones start a fresh baseline.
                 watch: old.as_ref().filter(|o| o.triggers == triggers).map(|o| o.watch.clone()).unwrap_or_default(),
                 idle_runs: 0,
+                failure_runs: 0,
                 triggers,
                 webhook_key: old.as_ref().map_or_else(webhook_key, |r| r.webhook_key.clone()),
                 deleted: false,
@@ -459,6 +471,9 @@ impl Routines {
             if !(1..=86_400).contains(&r.timeout_seconds) {
                 bail!("timeoutSeconds must be between 1 and 86400");
             }
+            if r.enabled {
+                guardrails::check_enabled_cap(s, Some(&id))?;
+            }
             if !r.enabled {
                 hub.store.cancel_routine_outputs(&id)?;
                 s.pending_flows.retain(|flow| flow.routine_id != id);
@@ -475,15 +490,22 @@ impl Routines {
 
     pub fn set_enabled(&self, store: &Store, bot: &str, id: &str, enabled: bool) -> Result<Value> {
         self.change(store, |s| {
-            let r = s
+            let index = s
                 .routines
-                .iter_mut()
-                .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
+                .iter()
+                .position(|r| r.id == id && r.bot_id == bot && !r.deleted)
                 .context("routine not found")?;
+            if enabled && !s.routines[index].enabled {
+                guardrails::check_interval(&s.routines[index].triggers)?;
+                guardrails::check_enabled_cap(s, Some(id))?;
+            }
+            let r = &mut s.routines[index];
             if enabled && !r.enabled {
                 r.next_runs = r.triggers.iter().map(|t| t.next(now_ms())).collect::<Result<_>>()?;
                 // A watch paused for failing checks gets its full allowance again.
                 r.watch.iter_mut().for_each(|w| w.failures = 0);
+                // Turning it back on gives it a full run of chances again.
+                r.failure_runs = 0;
             }
             r.enabled = enabled;
             r.updated_at = now_ms();
@@ -562,16 +584,22 @@ impl Routines {
 
     /// The routine's webhook: the public URL through the Codync cloud (when it's on; a private
     /// relay doesn't deliver them), the local one, and the key. `rotate` replaces the key first,
-    /// cutting off the old one.
-    pub fn credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool) -> Result<Value> {
-        if rotate {
+    /// cutting off the old one; `key` sets it instead, for the sender's own signing secret.
+    pub fn credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool, key: Option<&str>) -> Result<Value> {
+        let pasted = key.map(str::trim).filter(|key| !key.is_empty());
+        if let Some(key) = pasted
+            && (!(16..=1024).contains(&key.len()) || !key.bytes().all(|b| b.is_ascii_graphic()))
+        {
+            bail!("The signing secret is 16 to 1024 characters, without spaces.");
+        }
+        if rotate || pasted.is_some() {
             self.change(&hub.store, |s| {
                 let r = s
                     .routines
                     .iter_mut()
                     .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
                     .context("routine not found")?;
-                r.webhook_key = webhook_key();
+                r.webhook_key = pasted.map_or_else(webhook_key, str::to_owned);
                 r.updated_at = now_ms();
                 Ok(())
             })?;
@@ -623,9 +651,17 @@ impl Routines {
 
     /// One delivery from the local endpoint or the cloud: checks the key or signature, then
     /// queues a run when the event matches. Retries of a delivery id return its first run.
-    pub fn receive(&self, hub: &Hub, id: &str, headers: &hooks::Headers, body: &[u8]) -> Result<Value, Refused> {
+    /// `local` deliveries spend a slot of the bot's hourly script ceiling (`limits`).
+    pub fn receive(
+        &self,
+        hub: &Hub,
+        id: &str,
+        headers: &hooks::Headers,
+        body: &[u8],
+        local: bool,
+    ) -> Result<Value, Refused> {
         let r = self.state.locked().routines.iter().find(|r| r.id == id && !r.deleted).cloned();
-        let Some(r) = r.filter(|r| hooks::authorized(&r.webhook_key, headers, body)) else {
+        let Some(r) = r.filter(|r| hooks::authorized(&r.webhook_key, headers, body, crate::store::now_ms())) else {
             return Err(Refused::Unauthorized);
         };
         let delivery = hooks::delivery_id(headers)?;
@@ -637,6 +673,12 @@ impl Routines {
         }
         if !r.triggers.iter().any(|t| matches!(t, Trigger::Webhook) || t.matches(&event)) {
             return Ok(json!({"ignored": "event does not match this routine"}));
+        }
+        // A retry of a delivery already queued returns its run, so it spends no second slot.
+        let known = delivery.is_some()
+            && self.state.locked().runs.iter().any(|run| run.routine_id == id && run.delivery_id == delivery);
+        if local && !known {
+            self.scripts.take(&hub.store, &r.bot_id, crate::store::now_ms())?;
         }
         self.enqueue(&hub.store, &r.bot_id, id, event, delivery, false).map_err(|e| match e.downcast::<Refused>() {
             Ok(refused) => refused,

@@ -4,8 +4,9 @@
 //!   (<https://registry.modelcontextprotocol.io>) or added by hand. They're
 //!   installed once per computer and handed to the agent as `mcpServers` when a
 //!   bot that has them turned on starts or resumes its session.
-//! - **Apps** are connected through Composio and listed as `composio-*`
-//!   connectors; see `composio`.
+//! - **Apps** are MCP servers built from the reviewed `CopilotKit/OpenBot` catalogue
+//!   (`copilotkit`, through its `install.rs` bridge), connected through Composio as
+//!   `composio-*` connectors (`composio`), or added from the nightly app list (`openbot`).
 //! - **Skills** are instruction folders (a `SKILL.md` plus any files it uses),
 //!   from <https://github.com/anthropics/skills> or written in Codync (by the
 //!   user, or by a bot with `chat::skills`), kept in
@@ -23,6 +24,8 @@ pub mod bot_secrets;
 pub mod catalog;
 pub mod composio;
 pub mod connector_update;
+pub mod copilotkit;
+pub mod guide;
 pub mod hermes;
 pub mod hermes_apps;
 pub mod login;
@@ -48,11 +51,14 @@ mod skill_usage;
 mod skills;
 mod updates;
 
+#[cfg(test)]
 pub use custom::add_custom_connector;
-pub use install::{import_connectors, install_connector, list_connectors, remove_connector};
+pub use custom::add_custom_connector_as;
+pub use install::{import_connectors, install_connector, list_connectors, list_connectors_for, remove_connector};
 pub use registry::{browse_connectors, connector_info, refresh_first_page};
 pub use skill_usage::{
-    note_use as note_skill_use, offer_skill, retire_dormant as retire_dormant_skills, skill_touched, skills_root,
+    load_tokens as skill_load_tokens, note_load as note_skill_load, note_use as note_skill_use, offer_skill,
+    report as skill_usage_report, retire_dormant as retire_dormant_skills, skill_read, skill_touched, skills_root,
     written_skills,
 };
 pub use skills::{
@@ -117,6 +123,10 @@ pub struct Connector {
     /// Remote servers that want sign-in; see `oauth`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth: Option<oauth::OAuth>,
+    /// The person who added it (`people`): only their bots and devices see it. Empty = shared with
+    /// every bot on this computer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<String>,
 }
 
 impl Connector {
@@ -167,8 +177,29 @@ impl Connector {
             },
             // Set up with a token before Codync could sign in to it (GitHub): it can switch.
             "canSignIn": self.oauth.is_none() && self.url.as_deref().is_some_and(oauth::offers_sign_in),
+            // Empty = shared with every bot on this computer; otherwise only that person's bots and devices.
+            "person": self.person,
         })
     }
+}
+
+/// Whether `person` (the caller's, where `None` is the owner) may see a connector: shared ones, or their own.
+pub fn visible_to(c: &Connector, person: Option<&str>) -> bool {
+    match person {
+        None => true,
+        Some(person) => c.person.is_none() || c.person.as_deref() == Some(person),
+    }
+}
+
+/// Whether `person` may change a connector: only the person who added it (the owner, for a shared one).
+pub fn owned_by(c: &Connector, person: Option<&str>) -> bool {
+    c.person.as_deref() == person
+}
+
+/// Whether a bot of `person` may use a connector: shared ones, and that person's own. A bot's person is
+/// empty for the owner's bots, which get the shared ones and nothing that belongs to a member.
+pub fn for_bot(c: &Connector, person: Option<&str>) -> bool {
+    c.person.is_none() || (person.is_some() && c.person.as_deref() == person)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -246,6 +277,19 @@ pub fn connector_ids(store: &crate::store::Store) -> Result<Vec<String>> {
         .collect())
 }
 
+/// The connectors a bot with `person` can turn on: shared ones and that person's own (a bot with no person
+/// is the owner's, and gets only the shared ones), then connected apps, which belong to the computer.
+pub fn connector_ids_for(store: &crate::store::Store, person: Option<&str>) -> Result<Vec<String>> {
+    let mut ids: Vec<String> = connectors(store)?.into_iter().filter(|c| for_bot(c, person)).map(|c| c.id).collect();
+    ids.extend(
+        composio::connections(store)?
+            .iter()
+            .filter(|c| c.active())
+            .map(|c| format!("{}{}", composio::PREFIX, c.toolkit)),
+    );
+    Ok(ids)
+}
+
 /// The bots that have this connector turned on.
 pub fn bots_using(store: &crate::store::Store, id: &str) -> Result<Vec<crate::store::BotRow>> {
     let mut bots = store.bots()?;
@@ -261,7 +305,8 @@ pub enum Installed {
 }
 
 impl Installed {
-    /// What every bot gets: a skill a bot wrote stays with that bot.
+    /// What every bot gets: a skill a bot wrote stays with that bot, and a connector goes only to bots
+    /// of its person (shared ones to all).
     pub fn ids(self, store: &crate::store::Store) -> Result<Vec<String>> {
         match self {
             Self::Connectors => connector_ids(store),
@@ -270,20 +315,29 @@ impl Installed {
     }
 }
 
-/// A connector or skill installed on the computer is on for every bot; each bot can turn it off.
+/// A connector or skill installed on the computer is on for every bot that can use it; each bot can turn it off.
+/// A member's connector only reaches that person's bots, never the owner's.
 pub fn enable_new(hub: &crate::hub::Hub, kind: Installed, before: &[String]) -> Result<()> {
     let new: Vec<String> = kind.ids(&hub.store)?.into_iter().filter(|id| !before.contains(id)).collect();
     turn_on(hub, kind, &new, None)
 }
 
-/// Turns `ids` on for `bot`, or for every bot. One call at a time reads and writes the bots' lists, so two
-/// installs can't drop each other's ids; a bot that can't take the change (its folder is gone, say) is skipped.
+/// Turns `ids` on for `bot`, or for every bot that can use them. One call at a time reads and writes the bots'
+/// lists, so two installs can't drop each other's ids; a bot that can't take the change (its folder is gone, say)
+/// is skipped.
 pub fn turn_on(hub: &crate::hub::Hub, kind: Installed, ids: &[String], bot: Option<&str>) -> Result<()> {
     static TURN_ON: std::sync::Mutex<()> = std::sync::Mutex::new(());
     if ids.is_empty() {
         return Ok(());
     }
     let _guard = TURN_ON.locked();
+    // Which person each new connector belongs to; a skill has none.
+    let owners: BTreeMap<String, Option<String>> = match kind {
+        Installed::Connectors => {
+            connectors(&hub.store)?.into_iter().filter(|c| ids.contains(&c.id)).map(|c| (c.id, c.person)).collect()
+        }
+        Installed::Skills => BTreeMap::new(),
+    };
     for row in hub.store.bots()? {
         if row.deleted || row.config.is_group() || bot.is_some_and(|b| b != row.config.id) {
             continue;
@@ -293,6 +347,11 @@ pub fn turn_on(hub: &crate::hub::Hub, kind: Installed, ids: &[String], bot: Opti
             Installed::Skills => ("skills", row.config.skills),
         };
         for id in ids {
+            // A shared connector is on for every bot; a personal one only for bots of its person.
+            let personal = owners.get(id).and_then(|person| person.as_deref());
+            if personal.is_some_and(|person| Some(person) != row.config.person.as_deref()) {
+                continue;
+            }
             if !on.contains(id) {
                 on.push(id.clone());
             }
@@ -335,16 +394,22 @@ pub fn update_connectors<T>(
     Ok(result)
 }
 
-fn add_connector(store: &crate::store::Store, mut c: Connector) -> Result<Value> {
+pub(crate) fn add_connector(store: &crate::store::Store, mut c: Connector) -> Result<Value> {
     update_connectors(store, |all| {
-        if c.registry_name.is_none() {
+        if c.registry_name.is_none() && c.catalog.is_none() {
             // Recheck under the write lock: another install may have finished during OAuth discovery.
-            ensure_name_available(&c.name, all)?;
+            ensure_name_available(&c.name, all, c.person.as_deref())?;
         }
-        // A registry server is installed once: installing it again replaces it under the id the bots know.
-        if let Some(name) = c.registry_name.as_deref()
-            && let Some(existing) = all.iter_mut().find(|x| x.registry_name.as_deref() == Some(name))
-        {
+        // A registry server, or a catalogue app, is installed once: installing it again replaces it
+        // under the id the bots know. Each person's install is their own, with their own sign-in.
+        let existing = match (c.registry_name.as_deref(), c.catalog.as_deref()) {
+            (Some(name), _) => {
+                all.iter_mut().find(|x| x.person == c.person && x.registry_name.as_deref() == Some(name))
+            }
+            (None, Some(app)) => all.iter_mut().find(|x| x.person == c.person && x.catalog.as_deref() == Some(app)),
+            (None, None) => None,
+        };
+        if let Some(existing) = existing {
             c.id.clone_from(&existing.id);
             *existing = c;
             return Ok(existing.public());
@@ -356,10 +421,28 @@ fn add_connector(store: &crate::store::Store, mut c: Connector) -> Result<Value>
     })
 }
 
-/// A custom connector can't take an installed connector's name. Names are compared as
-/// given, not as slugs: distinct names may share an id prefix.
-fn ensure_name_available(name: &str, all: &[Connector]) -> Result<()> {
-    if all.iter().any(|c| c.name == name) {
+/// Installs the app `id` from whichever catalogue ships it, with the values the user typed.
+///
+/// The reviewed `CopilotKit/OpenBot` catalogue has its own bridge; the nightly list's apps are
+/// servers the user's fields configure, added like a custom connector. `person` is whose library it goes in
+/// (`None` = the owner's, shared with every bot).
+pub(crate) async fn install_app_as(
+    store: &crate::store::Store,
+    id: &str,
+    values: &Value,
+    person: Option<&str>,
+) -> Result<Value> {
+    if copilotkit::app(id).is_ok() {
+        return copilotkit::install_app_as(store, id, values, person).await;
+    }
+    openbot::install_app(store, id, values, person).await
+}
+
+/// A custom connector can't take another connector's name within the same person's library (a member's
+/// "GitHub" and the owner's are separate). Names are compared as given, not as slugs: distinct names may
+/// share an id prefix.
+fn ensure_name_available(name: &str, all: &[Connector], person: Option<&str>) -> Result<()> {
+    if all.iter().any(|c| c.name == name && c.person.as_deref() == person) {
         bail!(
             "A connector named \"{name}\" is already installed. Sign in to it or remove it in your library, or choose another name."
         );
@@ -367,7 +450,7 @@ fn ensure_name_available(name: &str, all: &[Connector]) -> Result<()> {
     Ok(())
 }
 
-fn unique_id(base: &str, taken: &[String]) -> String {
+pub(crate) fn unique_id(base: &str, taken: &[String]) -> String {
     let base = slug(base);
     let mut id = base.clone();
     let mut n = 2;
@@ -412,6 +495,14 @@ async fn get(policy: Policy, url: &str, timeout: Duration) -> Result<reqwest::Re
 mod tests {
     use super::*;
 
+    /// One method installs from either catalogue, and an id neither ships still says so.
+    #[tokio::test]
+    async fn an_app_install_finds_the_catalogue_that_ships_it() {
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("store");
+        let error = install_app_as(&store, "nope", &json!({}), None).await.unwrap_err();
+        assert!(error.to_string().contains("Unknown app"), "{error}");
+    }
+
     #[test]
     fn slugs_are_safe() {
         assert_eq!(slug("GitHub MCP Server"), "github-mcp-server");
@@ -434,6 +525,7 @@ mod tests {
             url: None,
             headers: BTreeMap::new(),
             oauth: None,
+            person: None,
         };
         let exe = std::path::Path::new("/bin/codync-host");
         let config = c.acp(exe, 1).unwrap();

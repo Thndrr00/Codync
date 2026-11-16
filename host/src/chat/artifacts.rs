@@ -8,7 +8,6 @@ use crate::chat::files;
 use crate::hub::Hub;
 use crate::store::{Store, now_ms};
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
-use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
@@ -23,7 +22,25 @@ pub const MAX_ARTIFACT: u64 = 5 * 1024 * 1024;
 const MAX_TITLE: usize = 200;
 
 /// The `chat` server's artifact tools (when to use them: `outbox::INSTRUCTIONS`).
-pub const TOOLS: [&str; 2] = ["publish_artifact", "list_artifacts"];
+pub const TOOLS: [&str; 3] = ["publish_artifact", "publish_diagram", "list_artifacts"];
+
+/// What an artifact holds: a self-contained HTML page, or an editable diagram scene.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ArtifactKind {
+    #[default]
+    Html,
+    Diagram,
+}
+
+impl ArtifactKind {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Html => "html",
+            Self::Diagram => "scene.json",
+        }
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +48,8 @@ pub struct Artifact {
     pub id: String,
     pub bot_id: String,
     pub title: String,
+    #[serde(default)]
+    pub kind: ArtifactKind,
     pub size: u64,
     pub sha256: String,
     pub created_at: i64,
@@ -75,16 +94,16 @@ impl Artifact {
     /// An artifact card entry's data, as published: what the tests post as its card.
     #[cfg(test)]
     fn card_entry(&self) -> Value {
-        card(&self.id, &self.title, self.updated_at)
+        card(&self.id, &self.title, self.updated_at, self.kind)
     }
 }
 
 /// An artifact card's data. A replacement's card is built from its own title and time, before that version is public.
-fn card(id: &str, title: &str, updated_at: i64) -> Value {
+fn card(id: &str, title: &str, updated_at: i64, kind: ArtifactKind) -> Value {
     json!({
         "text": card_text(title),
         "final": true,
-        "artifact": {"id": id, "title": title, "updatedAt": updated_at},
+        "artifact": {"id": id, "title": title, "updatedAt": updated_at, "kind": kind},
     })
 }
 
@@ -93,7 +112,7 @@ pub fn card_text(title: &str) -> String {
     format!("Artifact: {title}")
 }
 
-pub fn tools() -> [Value; 2] {
+pub fn tools() -> [Value; 3] {
     [
         json!({
             "name": "publish_artifact",
@@ -111,10 +130,11 @@ pub fn tools() -> [Value; 2] {
         }),
         json!({
             "name": "list_artifacts",
-            "description": "Your artifacts, newest first: id, title, when each was last published, and the path of its current HTML (to make changes, edit a copy and publish that; never edit this file in place).",
+            "description": "Your artifacts, newest first: id, kind, title, when each was last published, and the path of its current content (to make changes, edit a copy and publish that; never edit this file in place).",
             "inputSchema": {"type": "object", "properties": {}},
             "annotations": {"readOnlyHint": true},
         }),
+        crate::chat::diagrams::tool(),
     ]
 }
 
@@ -139,10 +159,16 @@ pub fn root(bot: &str) -> PathBuf {
     crate::service::data_dir().join("bots").join(bot).join("artifacts")
 }
 
-/// The file holding an artifact's current HTML. Ids are UUIDs, so they never leave the folder.
-pub fn html_path(bot: &str, id: &str) -> Result<PathBuf> {
+/// The file holding an artifact's current content. Ids are UUIDs, so they never leave the folder:
+/// `<id>.html` for an HTML artifact, `<id>.scene.json` for a diagram.
+pub fn content_path(bot: &str, id: &str, kind: ArtifactKind) -> Result<PathBuf> {
     let id = uuid::Uuid::parse_str(id).context("invalid artifact id")?;
-    Ok(root(bot).join(format!("{id}.html")))
+    Ok(root(bot).join(format!("{id}.{}", kind.extension())))
+}
+
+/// The file holding an HTML artifact's current page.
+pub fn html_path(bot: &str, id: &str) -> Result<PathBuf> {
+    content_path(bot, id, ArtifactKind::Html)
 }
 
 pub fn get(store: &Store, bot: &str, id: &str) -> Option<Artifact> {
@@ -163,9 +189,12 @@ fn staged_key(bot: &str, id: &str) -> String {
     format!("{}.staged", key(bot, id))
 }
 
-/// Where a staged replacement's HTML waits: `<id>.staged.html`, next to the published `<id>.html`.
-fn staged_path(bot: &str, id: &str) -> Result<PathBuf> {
-    Ok(html_path(bot, id)?.with_extension("staged.html"))
+/// Where a staged replacement waits, next to the published content.
+fn staged_path(bot: &str, id: &str, kind: ArtifactKind) -> Result<PathBuf> {
+    Ok(content_path(bot, id, kind)?.with_extension(match kind {
+        ArtifactKind::Html => "staged.html",
+        ArtifactKind::Diagram => "staged.scene.json",
+    }))
 }
 
 fn staged(store: &Store, bot: &str, id: &str) -> Option<StagedUpdate> {
@@ -179,7 +208,7 @@ fn save_staged(store: &Store, bot: &str, id: &str, update: &StagedUpdate) -> Res
 /// Applies a staged replacement: the public metadata and HTML become the check-in's version, whole or not at all.
 fn commit_staged(store: &Store, bot: &str, artifact: &mut Artifact) -> Result<bool> {
     let Some(update) = staged(store, bot, &artifact.id) else { return Ok(false) };
-    let (from, to) = (staged_path(bot, &artifact.id)?, html_path(bot, &artifact.id)?);
+    let (from, to) = (staged_path(bot, &artifact.id, artifact.kind)?, content_path(bot, &artifact.id, artifact.kind)?);
     ensure!(from.exists(), "the staged artifact update is missing");
     std::fs::rename(&from, &to).context("applying the staged artifact update")?;
     artifact.title = update.title;
@@ -287,13 +316,17 @@ fn write(dest: &Path, source: &Path) -> Result<(u64, String)> {
 /// The `chat` server's artifact tools.
 pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
-        "publish_artifact" => publish(hub, bot, args).await,
+        "publish_artifact" => publish(hub, bot, args, ArtifactKind::Html).await,
+        "publish_diagram" => publish(hub, bot, args, ArtifactKind::Diagram).await,
         "list_artifacts" => {
             let artifacts: Vec<Value> = list(&hub.store, bot)
                 .iter()
                 .map(|artifact| {
-                    let path = html_path(bot, &artifact.id).map(|path| path.display().to_string()).unwrap_or_default();
-                    json!({"id": artifact.id, "title": artifact.title, "updatedAt": artifact.updated_at, "path": path})
+                    let path = content_path(bot, &artifact.id, artifact.kind)
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_default();
+                    json!({"id": artifact.id, "kind": artifact.kind, "title": artifact.title,
+                        "updatedAt": artifact.updated_at, "path": path})
                 })
                 .collect();
             Ok(json!({"artifacts": artifacts}))
@@ -302,26 +335,53 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
     }
 }
 
-async fn publish(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Value> {
+async fn publish(hub: &Arc<Hub>, bot: &str, args: &Value, kind: ArtifactKind) -> Result<Value> {
     let row = hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
-    let source = args["path"].as_str().filter(|s| !s.is_empty()).ok_or_else(|| anyhow!("path is required"))?;
     let existing = match args["artifact"].as_str().filter(|s| !s.is_empty()) {
         Some(id) => {
             Some(get(&hub.store, bot, id).ok_or_else(|| anyhow!("no artifact {id}: list_artifacts shows yours"))?)
         }
         None => None,
     };
+    if let Some(artifact) = &existing {
+        ensure!(
+            artifact.kind == kind,
+            "that artifact is a {}; use {} to change it",
+            if artifact.kind == ArtifactKind::Diagram { "diagram" } else { "page" },
+            if artifact.kind == ArtifactKind::Diagram { "publish_diagram" } else { "publish_artifact" }
+        );
+    }
     let title = match (args["title"].as_str(), &existing) {
         (Some(value), _) => title(value)?,
         (None, Some(artifact)) => artifact.title.clone(),
         (None, None) => bail!("title is required for a new artifact"),
     };
+    let source = args["path"].as_str().filter(|s| !s.is_empty()).map(str::to_owned);
+    let scene = args["scene"].as_object().map(|_| args["scene"].clone());
+    let inline_scene = kind == ArtifactKind::Diagram && scene.is_some();
+    if !inline_scene && source.is_none() {
+        bail!("path is required");
+    }
     let id = existing.as_ref().map_or_else(|| uuid::Uuid::new_v4().to_string(), |artifact| artifact.id.clone());
     // Replacing what the user already has waits aside: a silent or failed check-in must leave that version intact.
     let public = existing.as_ref().is_some_and(Artifact::is_public);
-    let dest = if public { staged_path(bot, &id)? } else { html_path(bot, &id)? };
-    let (dest, source) = (dest, Path::new(&row.config.cwd).join(source));
-    let (size, sha256) = tokio::task::spawn_blocking(move || write(&dest, &source)).await??;
+    let dest = if public { staged_path(bot, &id, kind)? } else { content_path(bot, &id, kind)? };
+    let cwd = PathBuf::from(&row.config.cwd);
+    let (size, sha256) = if kind == ArtifactKind::Diagram {
+        let scene = match (scene, source) {
+            (Some(scene), _) => scene,
+            (None, Some(source)) => {
+                let source = cwd.join(source);
+                tokio::task::spawn_blocking(move || crate::chat::diagrams::from_path(&source)).await??
+            }
+            (None, None) => bail!("a diagram needs path or scene"),
+        };
+        let dest = dest.clone();
+        tokio::task::spawn_blocking(move || crate::chat::diagrams::write(&dest, &scene)).await??
+    } else {
+        let source = cwd.join(source.context("path is required")?);
+        tokio::task::spawn_blocking(move || write(&dest, &source)).await??
+    };
     let now = now_ms();
     let mut artifact = match existing {
         Some(artifact) if public => {
@@ -342,6 +402,7 @@ async fn publish(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Value> {
                 id: id.clone(),
                 bot_id: bot.to_owned(),
                 title: title.clone(),
+                kind,
                 size,
                 sha256,
                 created_at: now,
@@ -355,9 +416,9 @@ async fn publish(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Value> {
             artifact
         }
     };
-    let mut answer = json!({"published": true, "artifact": {"id": artifact.id, "title": title}});
+    let mut answer = json!({"published": true, "artifact": {"id": artifact.id, "title": title, "kind": kind}});
     let (reply, posted) = oneshot::channel();
-    hub.send_cmd(bot, Cmd::PostArtifact { data: card(&artifact.id, &title, now), reply })?;
+    hub.send_cmd(bot, Cmd::PostArtifact { data: card(&artifact.id, &title, now, kind), reply })?;
     let posted = tokio::time::timeout(Duration::from_secs(10), posted)
         .await
         .map_err(|_| anyhow!("the artifact was saved, but its card wasn't posted in time"))?
@@ -393,50 +454,6 @@ async fn publish(hub: &Arc<Hub>, bot: &str, args: &Value) -> Result<Value> {
     Ok(answer)
 }
 
-/// The apps' artifact methods: `readArtifact {botId, artifactId, offset}` and `renameArtifact {botId, artifactId,
-/// title}`. The list is the chat's Library (`chat::library`).
-pub async fn api(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
-    let bot = b["botId"].as_str().ok_or_else(|| anyhow!("`botId` is required"))?;
-    ensure!(hub.store.bot(bot)?.is_some_and(|row| !row.deleted), "unknown bot");
-    let id = b["artifactId"].as_str().ok_or_else(|| anyhow!("`artifactId` is required"))?;
-    let mut artifact = get(&hub.store, bot, id).ok_or_else(|| anyhow!("unknown artifact"))?;
-    ensure!(artifact.is_public(), "artifact is not yet published");
-    match method {
-        "readArtifact" => {
-            let offset = b["offset"].as_u64().ok_or_else(|| anyhow!("offset must be a nonnegative integer"))?;
-            let path = html_path(bot, id)?;
-            let size = artifact.size;
-            let data = tokio::task::spawn_blocking(move || read(&path, size, offset)).await??;
-            Ok(
-                json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size, "artifact": artifact}),
-            )
-        }
-        "renameArtifact" => {
-            artifact.title = title(b["title"].as_str().unwrap_or_default())?;
-            put(hub, &mut artifact)?;
-            retitle_card(hub, &artifact);
-            Ok(json!({"artifact": artifact}))
-        }
-        _ => bail!("unknown artifact method: {method}"),
-    }
-}
-
-/// The artifact's newest card takes the new title too: older apps and a cache that never saw the rename show the card's.
-fn retitle_card(hub: &Hub, artifact: &Artifact) {
-    let Some(id) = artifact.entry_id.as_deref() else { return };
-    let retitled = hub.edit_entry(id, |card| {
-        if card.data["artifact"]["id"] != artifact.id.as_str() {
-            return Ok(false);
-        }
-        card.data["text"] = card_text(&artifact.title).into();
-        card.data["artifact"]["title"] = artifact.title.clone().into();
-        Ok(true)
-    });
-    if let Err(e) = retitled {
-        tracing::info!(artifact = artifact.id, error = format!("{e:#}"), "couldn't retitle the artifact's card");
-    }
-}
-
 /// One chunk of an artifact's HTML, from `offset`.
 fn read(path: &Path, size: u64, offset: u64) -> Result<Vec<u8>> {
     ensure!(offset <= size, "invalid artifact offset");
@@ -446,10 +463,14 @@ fn read(path: &Path, size: u64, offset: u64) -> Result<Vec<u8>> {
 /// The note a bot reads before a message about one of its artifacts (a reply to the artifact's card).
 pub fn note(store: &Store, bot: &str, id: &str) -> Option<String> {
     let artifact = get(store, bot, id)?;
-    let path = html_path(bot, id).ok()?;
+    let path = content_path(bot, id, artifact.kind).ok()?;
+    let (what, tool) = match artifact.kind {
+        ArtifactKind::Html => ("HTML", "publish_artifact"),
+        ArtifactKind::Diagram => ("scene", "publish_diagram"),
+    };
     Some(format!(
-        "[Codync: this is about your artifact \"{}\" (id {id}). Its current HTML is {}; to change the artifact, edit a copy \
-         and publish_artifact with artifact: \"{id}\".]",
+        "[Codync: this is about your artifact \"{}\" (id {id}). Its current {what} is {}; to change the artifact, edit a \
+         copy and {tool} with artifact: \"{id}\".]",
         artifact.title,
         path.display()
     ))
@@ -460,35 +481,9 @@ pub fn note(store: &Store, bot: &str, id: &str) -> Option<String> {
 mod visibility_tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "artifact_tests.rs"]
+mod tests;
 
-    #[test]
-    fn titles_are_trimmed_and_bounded() {
-        assert_eq!(title("  Weekly report ").unwrap(), "Weekly report");
-        assert!(title("   ").is_err());
-        assert!(title(&"x".repeat(MAX_TITLE + 1)).is_err());
-        assert!(title("a\nb").is_err());
-    }
-
-    #[test]
-    fn artifacts_are_written_whole_and_read_in_chunks() {
-        let dir = std::env::temp_dir().join(format!("codync-artifacts-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let (source, dest) = (dir.join("artifact.html"), dir.join("artifacts/p.html"));
-        let html = "<h1>Hi</h1>".repeat(50_000);
-        std::fs::write(&source, &html).unwrap();
-        let (size, sha) = write(&dest, &source).unwrap();
-        assert_eq!(size, html.len() as u64);
-        assert_eq!(sha, files::digest_hex(&Sha256::digest(html.as_bytes())));
-        let first = read(&dest, size, 0).unwrap();
-        assert_eq!(first.len(), files::CHUNK_SIZE);
-        let rest = read(&dest, size, first.len() as u64).unwrap();
-        assert_eq!([first, rest].concat(), html.as_bytes());
-        assert!(read(&dest, size, size + 1).is_err(), "past the end");
-        std::fs::write(&source, "").unwrap();
-        assert!(write(&dest, &source).is_err(), "an empty artifact");
-        assert!(html_path("b", "../x").is_err(), "ids are UUIDs");
-        let _ = std::fs::remove_dir_all(dir);
-    }
-}
+#[path = "artifact_api.rs"]
+mod artifact_api;
+pub use artifact_api::api;

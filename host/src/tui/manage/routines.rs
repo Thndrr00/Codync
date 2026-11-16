@@ -57,6 +57,7 @@ impl App {
                     instruction: Editor::default(),
                     when: Editor::default(),
                     outputs: Editor::default(),
+                    thread: false,
                     original_outputs: Some(String::new()),
                     original_output_values: json!([]),
                     original: Value::Null,
@@ -93,6 +94,7 @@ impl App {
                     instruction: Editor::with(&s(&r, "instruction")),
                     when: Editor::with(text.as_deref().unwrap_or_default()),
                     outputs: Editor::with(r["outputText"].as_str().unwrap_or_default()),
+                    thread: r["thread"].as_bool().unwrap_or(false),
                     original_outputs: r["outputText"].as_str().map(str::to_owned),
                     original_output_values: r["outputs"].as_array().map_or_else(|| json!([]), |outputs| json!(outputs)),
                     original: if text.is_some() { Value::Null } else { triggers },
@@ -124,11 +126,21 @@ impl App {
                 self.sheet("runRoutine", json!({"botId": bot, "id": r["id"]}), Reply::Routines(bot.clone()));
                 self.flash(&format!("Running {} now", s(&r, "name")));
             }
-            (KeyCode::Char('w' | 'W'), Some(r)) if !has_webhook(&r) => {
+            (KeyCode::Char('w' | 'W' | 's'), Some(r)) if !has_webhook(&r) => {
                 self.flash("Only a routine that runs on a webhook has a URL and key");
             }
             (KeyCode::Char('w'), Some(r)) => {
                 self.sheet("routineWebhook", json!({"botId": bot, "id": r["id"]}), Reply::Webhook);
+            }
+            (KeyCode::Char('s'), Some(r)) => {
+                // The sender's own signing secret replaces the key, as a Standard Webhooks sender needs.
+                self.overlays.push(Overlay::Routines(l));
+                self.overlays.push(Overlay::Fields(Box::new(super::fields::routine_key_fields(
+                    &bot,
+                    &s(&r, "id"),
+                    &s(&r, "name"),
+                ))));
+                return None;
             }
             (KeyCode::Char('W'), Some(r)) => {
                 let c = Confirm {
@@ -160,7 +172,7 @@ impl App {
     }
 
     pub(in crate::tui) fn routine_key(&mut self, mut f: Box<RoutineForm>, k: KeyEvent) -> Option<Overlay> {
-        use RoutineField::{Instruction, Name, Outputs, When};
+        use RoutineField::{Instruction, Name, Outputs, Thread, When};
         // Tab finishes a time zone being typed after the schedule before it moves on.
         if k.code == KeyCode::Tab
             && f.field == When
@@ -185,26 +197,29 @@ impl App {
                     Name => Instruction,
                     Instruction => When,
                     When => Outputs,
-                    Outputs => Name,
+                    Outputs => Thread,
+                    Thread => Name,
                 };
             }
             KeyCode::BackTab | KeyCode::Up => {
                 f.field = match f.field {
-                    Name => Outputs,
+                    Name => Thread,
                     Instruction => Name,
                     When => Instruction,
                     Outputs => When,
+                    Thread => Outputs,
                 };
             }
-            _ => {
-                let ed = match f.field {
-                    Name => &mut f.name,
-                    Instruction => &mut f.instruction,
-                    When => &mut f.when,
-                    Outputs => &mut f.outputs,
-                };
-                ed.key(k);
+            KeyCode::Char(' ' | 'h' | 'l') | KeyCode::Left | KeyCode::Right if f.field == Thread => {
+                f.thread = !f.thread;
             }
+            _ => match f.field {
+                Thread => {}
+                Name => f.name.key(k),
+                Instruction => f.instruction.key(k),
+                When => f.when.key(k),
+                Outputs => f.outputs.key(k),
+            },
         }
         Some(Overlay::Routine(f))
     }
@@ -230,7 +245,8 @@ impl App {
                 }
             }
         };
-        let mut body = json!({"botId": f.bot, "name": name, "instruction": instruction, "triggers": triggers});
+        let mut body =
+            json!({"botId": f.bot, "name": name, "instruction": instruction, "triggers": triggers, "thread": f.thread});
         if (f.original_outputs.is_some() || !f.outputs.text.trim().is_empty())
             && f.original_outputs.as_deref() != Some(f.outputs.text.as_str())
         {

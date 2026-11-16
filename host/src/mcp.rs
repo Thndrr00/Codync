@@ -1,5 +1,5 @@
 //! Built-in stdio MCP servers: `chat` sends the user messages, reacts to messages, changes the bot's name and instructions and saves skills; `team` discovers and asks other bots; `manage`
-//! creates bots and changes any bot's setup, and `computer` operates the desktop, when enabled. Calls go through authenticated loopback
+//! creates bots and changes any bot's setup; `docs` searches this computer's documentation and code; and `computer` operates the desktop, when enabled. Calls go through authenticated loopback
 //! HTTP to the running host, which owns delegation and screen control.
 
 use anyhow::Result;
@@ -41,6 +41,8 @@ pub enum Server {
     Team,
     Manage,
     Memory,
+    /// This computer's documentation and code, indexed for search.
+    Docs,
     /// The local ComfyUI, for a bot whose owner turned the ComfyUI connector on.
     Comfy,
     Composio,
@@ -97,12 +99,24 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::skills::tools());
                 list.push(crate::chat::skills::tool());
                 list.extend(crate::dev_servers::tools());
+                list.extend(crate::chat::group::drop::tools().as_array().into_iter().flatten().cloned());
+                list.push(crate::chat::group::send::tool());
+                list.push(crate::declarative::tool());
+                list.push(crate::components::tool());
+                list.push(crate::views::tool());
             }
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }
         Server::Team => ("codync-team", crate::chat::team::INSTRUCTIONS, crate::chat::team::tools()),
-        Server::Manage => ("codync-manage", crate::chat::manage::INSTRUCTIONS, crate::chat::manage::tools()),
+        Server::Manage => {
+            let mut tools = crate::chat::manage::tools();
+            if let Some(list) = tools.as_array_mut() {
+                list.extend(crate::chat::group::tools::tools().as_array().into_iter().flatten().cloned());
+            }
+            ("codync-manage", crate::chat::manage::INSTRUCTIONS, tools)
+        }
         Server::Memory => ("codync-memory", crate::chat::memory::INSTRUCTIONS, crate::chat::memory::tools()),
+        Server::Docs => ("codync-docs", crate::docs::INSTRUCTIONS, crate::docs::tools()),
         Server::Comfy => ("codync-comfyui", crate::tools::comfy_mcp::INSTRUCTIONS, crate::tools::comfy_mcp::tools()),
         Server::Composio => {
             ("codync-composio", crate::market::composio::INSTRUCTIONS, crate::market::composio::tools())
@@ -208,10 +222,23 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
         Server::Chat if params["name"] == crate::dev_servers::START => {
             ("chatCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(25))
         }
+        // Posting a request into a channel waits on the same approval card the team changes use.
+        Server::Chat if params["name"] == crate::chat::group::send::TOOL => {
+            ("chatCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(25))
+        }
+        // A declarative block waits for the person to fill it in and answer.
+        Server::Chat if crate::declarative::TOOLS.contains(&params["name"].as_str().unwrap_or_default()) => {
+            ("chatCall", crate::declarative::ANSWER_TIMEOUT + Duration::from_secs(15))
+        }
+        // A `form` card waits for the person the same way; every other card is drawn at once.
+        Server::Chat if crate::components::TOOLS.contains(&params["name"].as_str().unwrap_or_default()) => {
+            ("chatCall", crate::components::ANSWER_TIMEOUT + Duration::from_secs(15))
+        }
         Server::Chat => ("chatCall", Duration::from_secs(if params["name"] == "send_file" { 70 } else { 30 })),
         Server::Team => ("teamCall", crate::chat::team::tool_timeout(params["name"].as_str().unwrap_or_default())),
         Server::Manage => ("manageCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(30)),
         Server::Memory => ("memoryCall", Duration::from_mins(2)),
+        Server::Docs => ("docsCall", Duration::from_secs(30)),
         Server::Comfy => ("comfyCall", crate::tools::comfy_mcp::CALL_TIMEOUT),
         Server::Composio => ("composioCall", Duration::from_mins(2)),
         // The first listing may wait for the other computers.
@@ -236,6 +263,7 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
                         | Server::Team
                         | Server::Manage
                         | Server::Memory
+                        | Server::Docs
                         | Server::Comfy
                         | Server::Routines
                         | Server::Network

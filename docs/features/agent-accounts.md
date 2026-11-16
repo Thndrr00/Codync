@@ -51,3 +51,16 @@ existing Antigravity account selection and does not add or remove accounts.
 
 Host methods: `listAccounts`, `accountAuthenticate`, `deleteAccount` and
 `agentSignOut` (returns the refreshed `auth` check).
+
+## Signing in after the chat started
+
+- Agent keys (`setAgentEnv`) live in the vault and are read on every launch (`auth::launch_env`), and
+  a turn refused for authentication restarts the agent (`bot/queue.rs`), so a key saved after the
+  chat began reaches the next turn without a new chat. A chat waiting on a sign-in card resumes when
+  `agentAuth`/`agentAuthenticate` reports signed in (`market::agent_sign_in::agent_signed_in`).
+- Website and app logins (`list_logins`, `request_login`, `type_login`) are read live from the vault
+  or 1Password reference on each tool call, so a login saved mid-chat is listed and usable at once.
+  The agent instructions tell it to check saved logins before asking the user to take over a sign-in
+  page. Ported from OpenBot 0.65.
+- Whether Claude agents load the person's own `~/.claude` setup is a server setting, off by default:
+  [server settings](server-settings.md#use-my-claude-code-setup).

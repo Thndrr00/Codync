@@ -1,10 +1,10 @@
 import type { WhatsAppState } from '../../../shared/models'
-import type { DiscordStatus, SlackStatus, TelegramBotStatus } from '../../../shared/channels'
+import type { DiscordStatus, MatrixStatus, SlackStatus, TelegramBotStatus } from '../../../shared/channels'
 
-/** The four messaging channels a computer can host, as the Marketplace lists them. */
-export type ChannelProvider = 'whatsapp' | 'telegram' | 'slack' | 'discord'
+/** The five messaging channels a computer can host, as the Marketplace lists them. */
+export type ChannelProvider = 'whatsapp' | 'telegram' | 'slack' | 'discord' | 'matrix'
 
-/** One channel of a provider: a linked number, a Telegram bot, a Slack or Discord channel. */
+/** One channel of a provider: a linked number, a Telegram bot, a Slack, Discord or Matrix channel. */
 export interface ChannelItem {
   /** `provider:channel`, stable across reloads. */
   key: string
@@ -38,6 +38,7 @@ export interface ChannelSources {
   telegram: TelegramBotStatus[]
   slack: SlackStatus | null
   discord: DiscordStatus | null
+  matrix: MatrixStatus | null
 }
 
 export const CHANNEL_PROVIDERS: { id: ChannelProvider; name: string; description: string }[] = [
@@ -61,6 +62,11 @@ export const CHANNEL_PROVIDERS: { id: ChannelProvider; name: string; description
     name: 'Discord',
     description: 'Answers in your server\'s channels, and approvals work from Discord buttons. The bot token stays in this computer.',
   },
+  {
+    id: 'matrix',
+    name: 'Matrix',
+    description: 'Answers in the Matrix rooms you bind, from any homeserver. The session stays in this computer and approvals work from numbered replies or reactions.',
+  },
 ]
 
 /** A channel's state as the shared wording says it, plus whether it wants attention. */
@@ -75,17 +81,18 @@ export function stateOf(raw: string): { state: ChannelItem['state']; text: strin
 const peopleOf = (ids: (string | number)[]) => ids.map((id) => ({ id: String(id), label: `Person ${id}` }))
 
 function bindingItems(
-  provider: 'slack' | 'discord',
-  bindings: { channelId: string; botId: string; allowedUsers: string[]; memory?: string; icon?: string }[] | null,
+  provider: 'slack' | 'discord' | 'matrix',
+  bindings: { channelId?: string; roomId?: string; botId: string; allowedUsers: string[]; memory?: string; icon?: string }[] | null,
   state: string,
   botName: (id: string) => string | null,
 ): ChannelItem[] {
   return (bindings ?? []).map((binding) => {
     const text = stateOf(state)
+    const channel = binding.channelId ?? binding.roomId ?? ''
     return {
-      key: `${provider}:${binding.channelId}`,
-      channel: binding.channelId,
-      label: binding.channelId,
+      key: `${provider}:${channel}`,
+      channel,
+      label: channel,
       subtitle: text.text,
       state: text.state,
       stateText: text.text,
@@ -160,7 +167,13 @@ export function buildChannelCatalog(sources: ChannelSources, botName: (id: strin
     bindingItems('discord', sources.discord?.bindings ?? null, sources.discord?.configured ? discordState : 'disconnected', botName),
     sources.discord?.configured === true,
   )
-  return [whatsapp, entry('telegram', telegram, telegram.length > 0), slack, discord]
+  const matrixState = sources.matrix?.state ?? 'disconnected'
+  const matrix = entry(
+    'matrix',
+    bindingItems('matrix', sources.matrix?.bindings ?? null, sources.matrix?.configured ? matrixState : 'disconnected', botName),
+    sources.matrix?.configured === true,
+  )
+  return [whatsapp, entry('telegram', telegram, telegram.length > 0), slack, discord, matrix]
 }
 
 /** The channels matching a search, by name, channel or the provider's words. */

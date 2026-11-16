@@ -6,7 +6,7 @@
 //!
 //! Idea from rakazo's `packages/adapters/src/routine-watch.ts` (Apache-2.0) and `bdots` (Idea 42).
 
-use super::{EntryKind, Hub, Lane, Result, Routines, Status, Store, Trigger, bail, json, new_run};
+use super::{Hub, Result, Routines, Status, Store, Trigger, bail, json, new_run};
 use crate::egress::Policy;
 use anyhow::{Context, anyhow};
 use serde::{Deserialize, Serialize};
@@ -231,10 +231,11 @@ pub async fn run(hub: std::sync::Arc<Hub>, check: Check) {
     match hub.routines.record_watch(&hub.store, &check, found) {
         Ok(Some((name, reason))) => {
             tracing::warn!(routine = %check.routine_id, reason = %reason, "watch paused its routine");
-            let notice = json!({"text":format!("{name}: {reason}"),"routineId":check.routine_id,"style":"error"});
-            if hub.add_entry(&Lane::main(&check.bot_id), EntryKind::Notice, 0, &notice).is_none() {
-                tracing::error!(routine = %check.routine_id, "couldn't post the paused routine notice");
-            }
+            let finding = crate::notices::Finding::error(
+                format!("routine:{}:paused", check.routine_id),
+                format!("{name}: {reason}"),
+            );
+            let _ = crate::notices::raise(&hub, &check.bot_id, vec![finding]);
         }
         Ok(None) => {}
         Err(error) => {

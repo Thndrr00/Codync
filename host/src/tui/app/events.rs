@@ -33,6 +33,7 @@ impl App {
                 self.entries.clear();
                 self.history_done.clear();
                 self.floors.clear();
+                self.uploads.clear();
             }
             Msg::Connected { since } => {
                 self.stream_since = since;
@@ -49,6 +50,34 @@ impl App {
                 }
             }
             Msg::Term(id, v) => self.on_term(&id, &v),
+            Msg::Upload { key, path, id, sent, total } => {
+                self.on_upload(&key, &path, |upload| {
+                    if upload.id == id && upload.state == super::uploads::UploadState::Uploading {
+                        upload.sent = sent;
+                        upload.total = total;
+                    }
+                });
+            }
+            Msg::Uploaded { key, path, id } => {
+                self.on_upload(&key, &path, |upload| {
+                    if upload.id == id {
+                        upload.sent = upload.total;
+                        upload.state = super::uploads::UploadState::Done;
+                    }
+                });
+            }
+            Msg::UploadFailed { key, path, id, error } => {
+                let reason = error.clone();
+                let marked = self.on_upload(&key, &path, |upload| {
+                    // A cancel the person made keeps its own state.
+                    if upload.id == id && upload.state == super::uploads::UploadState::Uploading {
+                        upload.state = super::uploads::UploadState::Failed(error);
+                    }
+                });
+                if marked && !reason.is_empty() {
+                    self.flash(&format!("Upload failed: {reason} · ctrl+r retries, ⌫ removes it"));
+                }
+            }
         }
     }
 
@@ -93,6 +122,13 @@ impl App {
                     }
                     self.kofi_reply(&bot, &e);
                     self.entries.entry(bot).or_default().insert(e.seq, e);
+                }
+            }
+            Some("historyCleared") => {
+                if let Some(bot) = v["botId"].as_str() {
+                    self.entries.remove(bot);
+                    self.floors.remove(bot);
+                    self.history_done.remove(bot);
                 }
             }
             _ => {}
@@ -186,6 +222,10 @@ impl App {
             self.connection_reply(&id, step, r);
             return;
         }
+        if let After::Composio(step) = after {
+            self.composio_reply(step, r);
+            return;
+        }
         if let After::Sent(key) = after {
             self.sent(&key, r);
             return;
@@ -230,12 +270,23 @@ impl App {
             Err(e) => {
                 match after {
                     After::Hello => self.error = Some(e),
-                    After::Tracked | After::Week | After::RuleTest | After::Profiles | After::Health | After::Comfy => {
-                    }
-                    After::Channels | After::ChannelsSlack => self.flash(&format!("Channels: {e}")),
+                    After::Tracked
+                    | After::Week
+                    | After::SkillUsage
+                    | After::RuleTest
+                    | After::Profiles
+                    | After::Health
+                    | After::Comfy => {}
+                    After::Channels
+                    | After::ChannelsSlack
+                    | After::ChannelsMatrix
+                    | After::ChannelsSignal
+                    | After::ChannelsTeams => self.flash(&format!("Channels: {e}")),
                     After::Beliefs | After::BeliefsChanged => self.flash(&format!("Memory: {e}")),
                     After::Proposals => self.flash(&format!("Skills: {e}")),
+                    After::Learning => self.flash(&format!("Learning: {e}")),
                     After::RulesSaved => self.rules_saved(Err(e)),
+                    After::Policies | After::PolicySaved | After::PolicyPreview => self.policy_failed(&e),
                     After::Proposal(entry, option) => self.always_proposed(entry, option, Err(e)),
                     After::History(id) => {
                         self.history_busy.remove(&id);
@@ -277,6 +328,7 @@ impl App {
             | After::ThreadOpened(_, _)
             | After::QueuedEdited(_, _, _)
             | After::Connection(_, _)
+            | After::Composio(_)
             | After::Roster(_, _)
             | After::RosterStopped(_)
             | After::Pairing
@@ -305,6 +357,10 @@ impl App {
                 self.backends = v["backends"].as_array().cloned().unwrap_or_default();
                 self.flash("Agents refreshed");
             }
+            After::AgentBuildDeleted => {
+                self.backends = v["backends"].as_array().cloned().unwrap_or_default();
+                self.flash("Deleted.");
+            }
             After::Update => match v["state"]["availableVersion"].as_str() {
                 Some(version) => self.flash(&format!("Version {version} is available: run codync-host update")),
                 None => self.flash("The host is up to date."),
@@ -322,17 +378,25 @@ impl App {
                 }
             }
             After::Week => self.week = v,
+            After::SkillUsage => self.skills = v,
             After::RuleTest => self.rules_tested(&v),
             After::Health => self.health = v,
             After::Comfy => self.comfy = v,
             After::Profiles => self.profiles = v["profiles"].as_array().cloned().unwrap_or_default(),
             After::Channels => self.channels_loaded(&v),
             After::ChannelsSlack => self.channels_slack_loaded(v),
+            After::ChannelsMatrix => self.channels_matrix_loaded(v),
+            After::ChannelsSignal => self.channels_signal_loaded(v),
+            After::ChannelsTeams => self.channels_teams_loaded(v),
             After::Proposals => self.proposals_loaded(&v),
+            After::Learning => self.learning_loaded(&v),
             After::Beliefs => self.beliefs_loaded(&v),
             After::BeliefsChanged => self.beliefs_changed(),
             After::Proposal(entry, option) => self.always_proposed(entry, option, Ok(v)),
             After::RulesSaved => self.rules_saved(Ok(())),
+            After::Policies => self.policies_loaded(&v),
+            After::PolicySaved => self.policy_saved(),
+            After::PolicyPreview => self.policy_previewed(&v),
             After::Dirs => {
                 if let Some(Overlay::Folder(p)) = self.overlays.last_mut() {
                     v["path"].as_str().unwrap_or_default().clone_into(&mut p.path);
@@ -424,6 +488,7 @@ impl App {
                 {
                     self.drafts.remove(key);
                     self.files.remove(key);
+                    self.uploads.remove(key);
                     self.pasted.remove(key);
                 }
                 self.sends.remove(key);

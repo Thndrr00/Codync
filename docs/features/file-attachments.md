@@ -13,6 +13,17 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
 - Upload: `upload {botId, uploadId, name, offset, data (base64), done}`, 384 KiB per call so each
   stays under the channel's 1 MiB message limit. A repeated chunk is accepted (retry); anything out
   of order is refused. Then `send {…, attachments: [uploadId]}`; the text may be empty.
+- Every file starts uploading **when it is attached**, under its own upload id, so the message box
+  shows what the computer has before Send names it. Each attachment draws a ring of the bytes the
+  computer holds; a click (or tap) on the ring cancels that upload with
+  `cancelUpload {botId, uploadId}`, which deletes its partial folder
+  (`chat::uploads::cancel`). One file failing or being cancelled never stops the others.
+- A failed upload stays in the box with its reason and **Retry**, which drops the partial and starts
+  that file again only. Send waits while a file is on its way, failed or cancelled: it goes once the
+  file arrives, is retried successfully, or is removed. This is the same on desktop
+  (`store/file-uploads.ts`, `ComposerAttachment.tsx`), iPhone (`BotStore+Uploads`), Android
+  (`AppStoreUploads.kt`) and the terminal UI (`app/uploads.rs`), whose file row shows the percentage
+  and `ctrl+x` cancels the uploading file while `ctrl+r` retries a failed one.
 - Storage (`host/src/chat/uploads.rs`): `<workspace>/uploads/<uploadId>/<name>` for a personal
   workspace (so reading needs no extra approval), otherwise
   `~/.codync/bots/<bot>/uploads/<uploadId>/<name>`. Only UUID ids and plain file names are accepted.
@@ -21,6 +32,8 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
   for display.
 - A queued message taken back (`unqueue`) deletes its uploads: the bot finds nothing of it in its folder, and
   `readUpload` refuses them. A message Stop dropped keeps its files, for the chat's *Not sent* row.
+  Removing an attachment from the box before Send cancels its upload too, so no partial folder stays
+  on the computer.
 - Files don't go through the relay mailbox: while the computer is offline, a message with files
   waits in the composer's send button (disabled) instead. A failed send keeps its files on the device
   for Resend until the app quits. After that the iPhone and desktop refuse Resend with an error and the
@@ -34,7 +47,7 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
   own size. Sent and bot-shared images use the same viewer.
 - Terminal UI: dragging a file onto the terminal pastes its path, which becomes an attachment (⌫ on
   an empty draft removes the last one); sent files show as `▤ name size` lines. It uploads with the
-  same `upload` chunks.
+  same `upload` chunks, starting when the file is attached.
 - A files-only message previews in the roster as its file names.
 
 ## Files from a bot

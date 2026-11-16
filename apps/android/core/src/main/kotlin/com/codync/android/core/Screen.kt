@@ -80,6 +80,14 @@ data class ScreenConnection(val session: String, val iceServers: List<ScreenIceS
 
 @Serializable data class ScreenAnswer(val session: String, val sdp: String)
 
+/** What `screenStopAll` stopped: viewer sessions that ran, whether a phone had taken control, and the new state. */
+@Serializable
+data class ScreenStopped(val closed: Int = 0, val takeover: Boolean = false, val screen: ScreenState? = null) {
+    companion object {
+        fun decode(value: JsonObject): ScreenStopped = WireJson.decodeFromJsonElement(value)
+    }
+}
+
 /** Ordered trickle ICE events; absent trickle support preserves the original complete-SDP exchange. */
 @Serializable
 data class ScreenCandidate(val type: String, val candidate: String? = null, val sdpMLineIndex: Int? = null,

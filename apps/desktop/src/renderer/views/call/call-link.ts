@@ -34,6 +34,8 @@ export class CallLink {
     readonly botId: string,
     /** The call's id: what it sends the bot carries it. */
     readonly call: string,
+    /** The thread it shares, when the chat is a side conversation (a Slack or Discord thread). */
+    readonly threadId?: string | null,
   ) {}
 
   /** Starts the call on the computer (again, when a provider session is replaced): what the voice needs. */
@@ -41,6 +43,7 @@ export class CallLink {
     const client = await this.store.ready()
     return client.call<CallSession>('startCall', {
       botId: this.botId, callId: this.call, mode, provider, model, voice, language: navigator.language,
+      ...(this.threadId ? { threadId: this.threadId } : {}),
     }, 30_000)
   }
 

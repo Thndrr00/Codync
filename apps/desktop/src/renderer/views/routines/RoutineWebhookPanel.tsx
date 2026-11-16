@@ -1,16 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { CardSection, IconButton } from '../../components/Controls'
+import { Button, CardSection, IconButton } from '../../components/Controls'
 import { Dialog } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText, type RoutineWebhook } from './routine'
 import { LabeledRow } from './RoutineScheduleFields'
+import { Field } from '../marketplace/pieces'
 import './routines.css'
 import { useTr } from '../../lib/use-language'
 
 
-/** A saved webhook routine's address and key: copy either, reveal or replace the key. */
+/** A saved webhook routine's address and key: copy either, reveal, replace or adopt a sender's. */
 export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routineId: string }) {
   const tr = useTr()
   const store = useStore()
@@ -20,16 +21,18 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
   const [copied, setCopied] = useState<'url' | 'key' | null>(null)
   const [confirmRotate, setConfirmRotate] = useState(false)
   const [rotating, setRotating] = useState(false)
+  const [secret, setSecret] = useState('')
 
-  const load = async (rotate: boolean) => {
+  const load = async (rotate: boolean, key?: string) => {
     setRotating(rotate)
     try {
-      const value = await (await store.ready()).call<RoutineWebhook>('routineWebhook', { botId, id: routineId, rotate })
+      const value = await (await store.ready()).call<RoutineWebhook>('routineWebhook', { botId, id: routineId, rotate, key: key?.trim() || undefined })
       setWebhook(value)
       if (rotate) {
         setCopied(null)
         setShowKey(true)
       }
+      if (key) setSecret('')
       setError(null)
     } catch (e) {
       setError(errorText(e))
@@ -83,6 +86,15 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
               <IconButton title="Replace key" icon="arrow.triangle.2.circlepath" disabled={rotating || store.isOffline} onClick={() => setConfirmRotate(true)} />
             </>,
           )}
+          <LabeledRow label={tr("Sender's signing secret")} className="webhook-row webhook-secret">
+            <Field value={secret} onChange={setSecret} placeholder="whsec_…" />
+            <Button kind="secondary" disabled={secret.trim().length < 16 || rotating || store.isOffline} onClick={() => void load(false, secret)}>
+              Use it
+            </Button>
+          </LabeledRow>
+          <Text size="caption" tone="tertiary" className="routine-caption">
+            {tr('A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret.')}
+          </Text>
         </CardSection>
       ) : error ? (
         <Text size="caption" tone="danger" className="routine-caption">{error}</Text>

@@ -26,7 +26,7 @@ export interface ComputerChoice {
  * ready-made suggestion; the rest starts on the defaults and changes in its Settings. Unnamed, the host names
  * it after its first conversations.
  */
-export function NewBotView({ computer }: { computer: ComputerChoice | null }) {
+export function NewBotView({ computer, onCreated }: { computer: ComputerChoice | null; onCreated?: () => void }) {
   const store = useStore()
   const [draft, setDraft] = useState(() => fillDefaults(store, newDraft()))
   const change = useCallback((update: (d: BotDraft) => BotDraft) => setDraft(update), [])
@@ -35,6 +35,7 @@ export function NewBotView({ computer }: { computer: ComputerChoice | null }) {
   const create = async () => {
     const bot = await store.save({ ...draft, name: draft.name.trim() })
     store.setSelection(bot.id)
+    onCreated?.()
   }
 
   return (

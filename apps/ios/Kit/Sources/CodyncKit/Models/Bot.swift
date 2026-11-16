@@ -1,5 +1,25 @@
 import Foundation
 
+/// Where a bot's computer runs (`computerRuntime`): this computer, or a Docker container with its own folder and
+/// browser profile. Local unless chosen.
+public struct ComputerRuntimeSettings: Codable, Hashable, Sendable {
+    /// `local` or `container`.
+    public var kind: String
+    /// Empty: the host's shipped image.
+    public var image: String
+    /// Use gVisor (`--runtime=runsc`) when Docker has it.
+    public var gvisor: Bool
+    /// A container bot with no Docker runs in its local workspace instead.
+    public var fallbackLocal: Bool
+
+    public init(kind: String = "local", image: String = "", gvisor: Bool = true, fallbackLocal: Bool = true) {
+        self.kind = kind
+        self.image = image
+        self.gvisor = gvisor
+        self.fallbackLocal = fallbackLocal
+    }
+}
+
 // A bot as codync-host sends it (`bot` events, `sync`); field names match its camelCase JSON.
 
 public struct Bot: Codable, Identifiable, Hashable, Sendable {
@@ -8,10 +28,14 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var kind: String
     /// A group's bots.
     public var members: [String]
+    /// A group's request tree: the request, its assignments to members, and their children.
+    public var tasks: [GroupTask] = []
     public var name: String
     public var description: String
     public var avatarColor: String
     public var avatarShape: String
+    /// The channel picture as a data URL, drawn instead of the members' faces; nil for none.
+    public var avatarPhoto: String?
     public var customIcon: CustomIcon?
     public var backend: String
     public var command: String?
@@ -28,6 +52,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var modelOptions: [String: String] = [:]
     /// The agent's Fast mode (Claude Code, Codex): faster replies for more usage.
     public var fastMode: Bool = false
+    /// The agent ends the commit messages it writes with Codync's co-author trailer. Off unless the user turns it on.
+    public var commitCoauthor: Bool = false
     /// What the agent says about Fast mode: `unknown` (no session yet), `offered`, `unsupported`,
     /// or `refused` (it turned it off; `fastModeIssue` says why).
     public var fastModeSupport: String = "unknown"
@@ -47,12 +73,24 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     /// The user's section in the roster ("Work"); nil in none.
     public var section: String?
     public var hidden: Bool
+    /// For a group, its short line under the name in the roster; nil for none.
+    public var title: String?
+    /// For a group, whether it is out of the open roster (its conversation stays).
+    public var archived: Bool = false
+    /// For a group, whether it keeps what its members learn here: their own chats don't get those memories.
+    public var keepMemories: Bool = false
+    /// For a group, the member that leads it (its Chief of Staff); nil for none.
+    public var chiefBotId: String?
     public var notify: Bool?
     /// Installed connector / skill ids this bot uses (see `Market.swift`).
     public var connectors: [String]
+    /// The person whose bot this is (`people`); nil is the owner's.
+    public var person: String?
     public var skills: [String]
     /// The bot can see and operate the computer's desktop (the built-in `computer` tools).
     public var computer: Bool
+    /// Where its computer runs: here, or in its own Docker container. Nil from an older host.
+    public var computerRuntime: ComputerRuntimeSettings?
     /// The bot can create bots (which can too) and change any bot's setup (the built-in `manage` tools). Nil from an older host.
     public var manageTeam: Bool?
     /// Other computers in the user's networks list this bot and may message it. Nil from an older host.
@@ -124,10 +162,12 @@ extension Bot {
         id = try c.decode(String.self, forKey: .id)
         kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "agent"
         members = try c.decodeIfPresent([String].self, forKey: .members) ?? []
+        tasks = (try? c.decodeIfPresent([GroupTask].self, forKey: .tasks)) ?? []
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Bot"
         description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
         avatarColor = try c.decodeIfPresent(String.self, forKey: .avatarColor) ?? "blue"
         avatarShape = try c.decodeIfPresent(String.self, forKey: .avatarShape) ?? "blob"
+        avatarPhoto = try c.decodeIfPresent(String.self, forKey: .avatarPhoto)
         customIcon = try c.decodeIfPresent(CustomIcon.self, forKey: .customIcon)
         backend = try c.decodeIfPresent(String.self, forKey: .backend) ?? "custom"
         command = try c.decodeIfPresent(String.self, forKey: .command)
@@ -138,6 +178,7 @@ extension Bot {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         modelOptions = try c.decodeIfPresent([String: String].self, forKey: .modelOptions) ?? [:]
         fastMode = try c.decodeIfPresent(Bool.self, forKey: .fastMode) ?? false
+        commitCoauthor = try c.decodeIfPresent(Bool.self, forKey: .commitCoauthor) ?? false
         fastModeSupport = try c.decodeIfPresent(String.self, forKey: .fastModeSupport) ?? "unknown"
         fastModeIssue = try c.decodeIfPresent(String.self, forKey: .fastModeIssue)
         account = try c.decodeIfPresent(String.self, forKey: .account)
@@ -149,10 +190,16 @@ extension Bot {
         position = try c.decodeIfPresent(Int.self, forKey: .position) ?? 0
         section = try c.decodeIfPresent(String.self, forKey: .section)
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+        keepMemories = try c.decodeIfPresent(Bool.self, forKey: .keepMemories) ?? false
+        chiefBotId = try c.decodeIfPresent(String.self, forKey: .chiefBotId)
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify)
         connectors = try c.decodeIfPresent([String].self, forKey: .connectors) ?? []
+        person = try c.decodeIfPresent(String.self, forKey: .person)
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
         computer = try c.decodeIfPresent(Bool.self, forKey: .computer) ?? false
+        computerRuntime = try? c.decodeIfPresent(ComputerRuntimeSettings.self, forKey: .computerRuntime)
         manageTeam = try c.decodeIfPresent(Bool.self, forKey: .manageTeam)
         offeredToNetwork = try c.decodeIfPresent(Bool.self, forKey: .offeredToNetwork)
         reachableByAssistants = try c.decodeIfPresent(Bool.self, forKey: .reachableByAssistants)

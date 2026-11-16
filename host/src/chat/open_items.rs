@@ -210,6 +210,18 @@ fn shell_job(hub: &Hub, bot_id: &str, args: &Value) -> Result<Value> {
                 bail!("That command is never allowed (\"{pattern}\")");
             }
             let row = hub.store.bot(bot_id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            // This computer's policies cover a background job too: a deny refuses it before it starts.
+            let request = crate::policy::Request {
+                command: command.clone(),
+                intent: "Run a shell command in the background".into(),
+                bot: row.config.id.clone(),
+                bot_name: row.config.name.clone(),
+                initiator: "channel".into(),
+                ..crate::policy::Request::tool("shell")
+            };
+            if let Some(why) = crate::policy::refusal(hub, &request) {
+                bail!("{why}");
+            }
             let job_id = format!("job_{}", &uuid::Uuid::new_v4().simple().to_string()[..10]);
             let output = Arc::new(Mutex::new(String::new()));
             let exit_code = Arc::new(Mutex::new(None));

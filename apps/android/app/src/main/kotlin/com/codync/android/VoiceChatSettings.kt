@@ -40,13 +40,13 @@ import kotlinx.coroutines.launch
         CardForm {
             val provider = engine
             var speech by remember(provider) { mutableStateOf(provider?.let(choices::speechMode) == true) }
-            var localSpeech by remember { mutableStateOf(choices.localSpeech) }
+            var speechOutput by remember { mutableStateOf(choices.speechOutput) }
             var wakePhrase by remember { mutableStateOf(choices.wakePhrase) }
             CardSection("Voice", footer = provider?.let { "Your own ${it.title} key, billed by ${it.title}. During a call, applies when you close settings." }
                 ?: "Android speech, on this device. During a call, applies when you close settings.", Modifier.animateContentSize(Motion.layoutSize)) {
                 row {
                     ValueRow("Engine") {
-                        ChoicePicker(provider, listOf<Pair<VoiceProvider?, String>>(null to "On device") + VoiceProvider.entries.map { it to it.title },
+                        ChoicePicker(provider, listOf<Pair<VoiceProvider?, String>>(null to "On device") + VoiceProvider.callProviders.map { it to it.title },
                             { engine = it; choices.provider = it }, label = "Engine")
                     }
                 }
@@ -57,8 +57,10 @@ import kotlinx.coroutines.launch
                         }
                     }
                     if (speech) {
-                        row { ValueRow("Speech output", detail = "NeuTTS runs on your computer with its prepared Hermes model. Recognition still uses your selected speech provider.") {
-                            ChoicePicker(localSpeech, listOf(false to "Provider voice", true to "NeuTTS local · Jo"), { localSpeech = it; choices.localSpeech = it }, label = "Speech output")
+                        row { ValueRow("Speech output", detail = if (speechOutput == "xai") tr("Replies are read aloud by xAI on its own key. Recognition still uses your selected speech provider.")
+                                else "NeuTTS runs on your computer with its prepared Hermes model. Recognition still uses your selected speech provider.") {
+                            ChoicePicker(speechOutput, listOf("provider" to "Provider voice", "xai" to tr("xAI voice"), "neutts" to "NeuTTS local · Jo"),
+                                { speechOutput = it; choices.speechOutput = it }, label = "Speech output")
                         } }
                         row { PauseRow(settings, ::change) }
                     }
@@ -76,6 +78,10 @@ import kotlinx.coroutines.launch
                 }
             }
             if (provider != null) key(provider) { ProviderVoiceSettings(provider, speech, state, store, choices) }
+            if (provider != null && speech && speechOutput == "xai") key("xai") { ProviderVoiceSettings(VoiceProvider.Xai, true, state, store, choices, speechOnly = true) }
+            val dictation = choices.dictation
+            if (dictation != null && dictation != provider) key("dictation-${dictation.id}") { ProviderVoiceSettings(dictation, false, state, store, choices, dictationOnly = true) }
+            LocalVoiceServerSection(state, store)
             CardSection("Call receipts", "Applies to the next call. Text is stored with this bot on the host. Realtime transcription can add provider charges. Text may be incomplete and does not confirm playback or decisions.") {
                 row { SwitchRow("Save call transcripts", null, transcripts, { transcripts = it; VoicePreferences.transcripts(context, it) }) }
             }
@@ -110,9 +116,11 @@ private val readingSpeedOptions: List<Pair<Float, String>> = readingSpeeds.map {
 
 /**
  * One provider: the key the computer keeps, models, voice and this month's minutes. Keys are entered
- * on the computer itself (the host takes `setVoiceKey` from loopback only).
+ * on the computer itself (the host takes `setVoiceKey` from loopback only). `speechOnly` keeps the key
+ * and spoken-replies model (xAI), with no speech-to-text row.
  */
-@Composable private fun ProviderVoiceSettings(provider: VoiceProvider, speech: Boolean, state: AppState, store: AppStore, choices: VoiceChoices) {
+@Composable private fun ProviderVoiceSettings(provider: VoiceProvider, speech: Boolean, state: AppState, store: AppStore,
+    choices: VoiceChoices, speechOnly: Boolean = false, dictationOnly: Boolean = false) {
     val scope = rememberCoroutineScope()
     val host = state.hostName
     /** null while the computer hasn't answered yet. */
@@ -155,18 +163,24 @@ private val readingSpeedOptions: List<Pair<Float, String>> = readingSpeeds.map {
         catch (error: Exception) { saved = false; result = false to (error.message ?: "Couldn't reach $host."); return@LaunchedEffect }
         if (saved == true) loadModels()
     }
-    // With a key saved, Test starts a call credential (or reads "OK" aloud) with the chosen model and voice.
+    // With a key saved, Test starts a call credential (or reads "OK" aloud) with the chosen model and voice; a
+    // dictation-only card lists the key's models instead.
     fun test() {
         if (busy || !hasKey) return
         busy = true; result = null
         scope.launch {
             try {
-                val clip = if (speech) store.voiceSpeak(provider, speechModel, voice, "OK", localOutput = choices.localSpeech) else null
-                if (clip == null) store.voiceSession(provider, model, voice)
+                if (dictationOnly) {
+                    store.voiceModels(provider)
+                } else if (speech) {
+                    val clip = store.voiceSpeak(provider, speechModel, voice, "OK", localOutput = choices.localSpeech)
+                    // Reads "OK" with this voice, so the key's reading is heard, not just checked.
+                    AndroidClipPlayer.play(clip.first, clip.second)
+                } else {
+                    store.voiceSession(provider, model, voice)
+                }
                 result = true to "Key works"
                 loadModels()
-                // Reads "OK" with this voice, so the key's reading is heard, not just checked.
-                if (clip != null) AndroidClipPlayer.play(clip.first, clip.second)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { result = false to (error.message ?: "The key didn't work.") }
             finally { busy = false }
@@ -180,7 +194,13 @@ private val readingSpeedOptions: List<Pair<Float, String>> = readingSpeeds.map {
         }
     }
 
-    CardSection(provider.title, footer = if (hasKey) null else "Add a key to choose from ${provider.title}'s models.",
+    CardSection(provider.title, footer = if (hasKey) {
+            when {
+                dictationOnly -> tr("For dictation in the message box.")
+                speechOnly -> tr("Read replies aloud with your own xAI key.")
+                else -> null
+            }
+        } else "Add a key to choose from ${provider.title}'s models.",
         modifier = Modifier.animateContentSize(Motion.layoutSize)) {
         if (saved != null || result != null) row {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -203,11 +223,18 @@ private val readingSpeedOptions: List<Pair<Float, String>> = readingSpeeds.map {
                 }
             }
         }
-        if (speech) {
+        if (dictationOnly) {
             row { picker("Speech to text", transcribe, models.transcribe.map { it to it }) { transcribe = it; choices.choose(provider, VoiceChoices.Model.Transcribe, it) } }
-            row { picker("Text to speech", speechModel, models.speech.map { it to it }) { speechModel = it; choices.choose(provider, VoiceChoices.Model.Speech, it) } }
-        } else row { picker("Model", model, models.models.map { it to it }) { model = it; choices.choose(provider, VoiceChoices.Model.Realtime, it) } }
-        row { picker("Voice", voice, voices) { voice = it; choices.voice(provider, it) } }
-        row { ValueRow("This month", "≈ ${choices.minutes(provider)} min", Modifier.graphicsLayer { alpha = if (hasKey) 1f else .55f }) }
+        } else {
+            if (speech) {
+                if (!speechOnly) row { picker("Speech to text", transcribe, models.transcribe.map { it to it }) { transcribe = it; choices.choose(provider, VoiceChoices.Model.Transcribe, it) } }
+                row { picker("Text to speech", speechModel, models.speech.map { it to it }) { speechModel = it; choices.choose(provider, VoiceChoices.Model.Speech, it) } }
+            } else {
+                row { picker("Model", model, models.models.map { it to it }) { model = it; choices.choose(provider, VoiceChoices.Model.Realtime, it) } }
+                if (choices.dictation == provider) row { picker("Speech to text", transcribe, models.transcribe.map { it to it }) { transcribe = it; choices.choose(provider, VoiceChoices.Model.Transcribe, it) } }
+            }
+            row { picker("Voice", voice, voices) { voice = it; choices.voice(provider, it) } }
+            row { ValueRow("This month", "≈ ${choices.minutes(provider)} min", Modifier.graphicsLayer { alpha = if (hasKey) 1f else .55f }) }
+        }
     }
 }

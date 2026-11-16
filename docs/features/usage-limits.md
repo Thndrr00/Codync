@@ -36,6 +36,20 @@ Adding an agent is one row in `READERS` (`usage/services.rs`). The reader's `id`
 
 The readers checked only against source fail closed: anything unexpected is no reading, never a wrong number. Check one against a real login when a computer has it.
 
+## Skill usage (Breakdown > Skills)
+
+The Usage screen's **Breakdown** has a **Skills** tab, on desktop, the phones and the terminal UI (`U`, then `t`). It answers `skillUsage`: one row per skill with how many turns loaded its text, the estimated tokens and list cost of that text, its share of the tokens of all skill loads, and how many bots loaded it, the most tokens first.
+
+- **What counts as a load.** A finished tool call (`completed`, not a failed one or an edit) that names `<skills>/<id>/SKILL.md` during a turn. Reading a script or another file in the skill's folder still counts as a use for dormancy (`market/skill_usage.rs`), but not as a load of its text. A turn loads each skill once, however many times its agent reads the file.
+- **Tokens.** About four bytes of `SKILL.md` make one token, the same estimate OpenBot uses. A skill removed mid-turn has no estimate and adds no tokens.
+- **Cost.** An estimate only, at standard API list input rates per million tokens (`usage/pricing.rs`, sources and date in its header). It is not what a subscription plan charged. A model with no rate leaves the skill's cost **Unavailable**, never `$0.00`; a skill whose loads were partly priced shows the priced part.
+- **Kept on the host.** Counts live in the host's kv under `skills.usage.v1` next to the dormancy times, so every client shows the same numbers and a restart keeps them. Counting starts with this version: older turns are not counted retroactively.
+- **Never content.** The report carries ids, names, counts and estimates. It never carries the skill's text, a file path or a bot's message.
+
+## The computer
+
+The Usage screen also shows the computer's RAM, CPU and disk, read from `hostHealth`, above the Breakdown. A paired device with the Control scope can read it, so an owner sees the machine their agents run on from any of their devices, including a cloud computer through the relay. It is not local-only. Codync accounts have one owner and no member roles on a computer: anyone the owner pairs with Control can read the health, and a member of a *network* of computers cannot call another computer's API at all (they message its bots). The desktop Settings > Diagnostics page and the phones' status card read the same `hostHealth`.
+
 ### An agent's own slash command
 
 `usage/acp_read.rs` runs an ACP slash command that the adapter answers itself. Antigravity's `/usage` is one: its ACP server handles it with no LLM and asks Google with its own login, so the host never touches that login.

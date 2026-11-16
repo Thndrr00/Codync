@@ -2,41 +2,90 @@
 
 The Extensions screen configures capabilities installed on one computer. Account membership does not install the same capability on every computer, so each computer has its own Extensions, opened from that computer and never switched inside: with several computers, from the Extensions button on its heading in the bot list (desktop and iPhone); on the desktop with one computer, from the sidebar footer; on the iPhone, also from its row in Manage computers.
 
-Under the open section, one line says where that section comes from: agents from the ACP registry, connectors from the MCP Registry, skills from Anthropic, and that they install on this computer. Credentials sits on the title row, beside the computer name, on the iPhone, Android and desktop, so the list can use the rest of the screen. The terminal has no Credentials control on this sheet. The desktop and iPhone installed count is labeled **Connectors & skills**, and opens a library with that same title. It includes connected apps (stored as connectors), but excludes agents; agents show their own installation status in the Agents section. The terminal already separates these categories and does not show a combined installed count.
+Under the open section, one line says where that section comes from: agents from the ACP registry, apps from CopilotKit's reviewed connector catalogue and Composio, the MCP Registry under the apps, skills from Anthropic, and that they install on this computer. Credentials sits on the title row, beside the computer name, on the iPhone, Android and desktop, so the list can use the rest of the screen. The terminal has no Credentials control on this sheet. The desktop and iPhone installed count is labeled **Connectors & skills**, and opens a library with that same title. It includes connected apps (stored as connectors), but excludes agents; agents show their own installation status in the Agents section. The terminal already separates these categories and does not show a combined installed count.
 
 | Capability | Implementation | Behavior |
 | --- | --- | --- |
+| Apps | `host/src/market/copilotkit/` (its `install.rs` is the bridge) | Browse the bundled app catalogue and install one as an MCP connector with its sign-in, key or nothing at all; Composio's key and its 1,000+ apps end the same list; the MCP Registry and custom connectors stay in the same Apps tab |
 | Agents | `host/src/agent/backends.rs`, `host/src/agent/registry.rs`, `host/src/agent/node.rs` | Detect installed harnesses, resolve ACP registry adapters, provide Node.js for npm agents |
-| Connectors | `host/src/market/mod.rs`, `registry.rs`, `install.rs`, `custom.rs` | Discover MCP servers or add one manually; install per computer; on for every bot unless a bot turns it off |
-| Connected apps | `host/src/market/composio.rs` | Expose connected Composio apps as connectors |
+| Connectors | `host/src/market/mod.rs`, `registry.rs`, `install.rs`, `custom.rs` | Discover MCP servers or add one manually; install per computer as shared, or into one person's library ([people](people.md)); shared ones are on for every bot unless a bot turns them off |
+| Connected apps | `host/src/market/composio.rs` | Expose connected Composio apps as connectors; the whole computer shares them, and only the owner connects one |
 | Skills | `host/src/market/skills.rs`, `host/src/market/openbot/` | Instruction folders containing `SKILL.md`, stored under `~/.codync/skills/<id>`; the bundled OpenBot catalog installs offline, and anthropics/skills stays available; on for every bot unless a bot turns it off |
 
-The marketplace content under `host/src/market/openbot/` is generated from the OpenBot marketplace by
-`tools/import-openbot-catalog.mjs` and ships with the host: 27 agents, 92 skills (including the pstack
-pack) and 36 apps. Skills install from an embedded archive, so browsing works without a network; the
-attributions and licences are in `host/src/market/openbot/NOTICE.md`. Marketplace agents are bot
-profiles with a title, category, creator, version and the skills and routines they bring. Installing one
-creates the bot on the computer's defaults, turns on exactly the skills it brings and creates its
-routines (a catalog schedule becomes a cron trigger in the computer's time zone). The Apps tab groups
-apps by category, the Agents tab adds ready-made bots, coordinator teams and the agent CLIs, and the
-Skills tab adds the user's own skill, the OpenBot catalog and the Anthropic catalog.
+A connector is shared by default, so every bot on the computer can use it. A **person** on the
+computer ([people](people.md)) may have connectors of their own: they see shared plus their own, and
+their bots get the same. A member's phone can add, sign in to and remove only its own; a shared
+connector, and another person's, stay out of reach. Settings → People shows who is on the computer and
+which paired phone is theirs. There is no member sign-in: the owner assigns a device or a bot to a
+person on the computer, and the host authorizes every call by that assignment.
 
-Composio Connect is featured in Connectors through the official MCP Registry
+Three catalogues ship with the host, and they are not mixed:
+
+- **Agents and skills**: `host/src/market/openbot/`, generated from the `nightly-labs/openbot` marketplace
+  by `tools/import-openbot-catalog.mjs`: 27 agents, 92 skills (including the pstack pack) and the apps
+  CopilotKit's catalogue doesn't cover. Skills install from an embedded archive, so browsing works
+  without a network; attributions and licences are in `host/src/market/openbot/NOTICE.md`. An app
+  comes over only with its vendor's own published entry: its MCP endpoint, sign-in kind, prompts and
+  limitations, as GitLab's, Omnisend's and Higgsfield's did.
+- **Apps**: `host/src/market/copilotkit/`, every connector of the `CopilotKit/OpenBot` catalogue,
+  regenerated with `tools/import-copilotkit-connectors.mjs` from `server/src/plugins/catalogue.ts` of
+  that checkout (MIT, see its `NOTICE.md`). The entries keep upstream's keys, titles, vendors, hosts and
+  paths, auth kinds, headers, OAuth endpoints and scopes, consent parameters, registration endpoint,
+  reviewed write/read tool lists and docs links, so an app authenticates here exactly as it does there.
+  Codync writes only the sheet: category, tagline, description, prompts, field labels. The module's
+  `install.rs` is the bridge that turns an entry into a connector.
+- **Composio**: no file; its 1,000+ apps are Composio's live list, reached with the user's own Platform
+  key and connected through Composio's sign-in.
+
+Marketplace agents are bot profiles with a title, category, creator, version and the skills and
+routines they bring. Installing one creates the bot on the computer's defaults, turns on exactly the
+skills it brings and creates its routines (a catalog schedule becomes a cron trigger in the computer's
+time zone). The Apps tab groups apps by category, the Agents tab adds ready-made bots, coordinator
+teams and the agent CLIs, and the Skills tab adds the user's own skill, the OpenBot catalog and the
+Anthropic catalog.
+
+An app installs with `installMarketApp {id, values}`: the host builds the connector from the entry, so
+a client never has to know which header or OAuth endpoint an app uses. `none` is a plain remote server,
+`deployment-bearer` sends the typed key in the entry's own header (Exa's `x-api-key`, wrapped in
+`Bearer ` only where the entry says so), `user-oauth` pins the vendor's endpoints, scopes and consent
+parameters on the connector and either takes the user's own OAuth client (Google issues no pasted
+token) or registers Codync at the entry's registration endpoint (Notion), and `builtin` (Routines)
+installs nothing: it is already on, so Add answers with its public shape. Installing an app again
+replaces the connector under the id its bots know, so Add after a failure repairs it.
+
+Composio's apps are in the Apps tab (`host/src/market/composio.rs`): one Platform API key
+(`setComposioKey`, checked with Composio before it is kept) unlocks a live search of
+1,000+ apps (`composioToolkits {search, cursor}` → `{items, nextCursor}`, 30 per page).
+Connecting one follows the app's own sign-in page (`composioConnect {toolkit}` →
+`{status, url, connection}`), or the key fields the app declares
+(`composioConnectFields`), then polls `composioConnection {id}` until it is active. A
+connected app is a `composio-<slug>` connector, turned on per bot like any other. The
+key stays on the computer; removing it disconnects the apps.
+Composio Connect is also in the MCP Registry at the end of the Apps tab
 (`io.github.ComposioHQ/composio`, `https://connect.composio.dev/mcp`). Install it
-and sign in with the shared MCP OAuth flow; no Platform API key is needed.
-The agent discovers and connects apps through Composio's hosted tools. For
-manual header authentication, add the endpoint as a custom connector with
+and sign in with the shared MCP OAuth flow; no Platform API key is needed there.
+For manual header authentication, add that endpoint as a custom connector with
 `x-consumer-api-key: ck_…`. Consumer keys are not interchangeable with Platform
-project keys (`ak_…`, sent as `x-api-key`), which the legacy Platform integration uses. The Apps shelf and Platform-key
-setup have been removed from Extensions; existing connections and pending
-connection requests remain supported.
-All clients render the host's connector catalog and use its existing sign-in
-flow; Composio is installed from Connectors on every client. The terminal already
-has only Agents, Connectors and Skills tabs.
+project keys (`ak_…`, sent as `x-api-key`).
+All clients render the key, the apps and the connect flow; the terminal has the
+same tabs and sheets.
+
+Most of a broker's catalogue has no sign-in to send somebody to, so a key app opens a form of the
+vendor's own field names and says nothing about where to get the key. Every app now carries a guide
+instead (`composioToolkits` items and both `composioConnect` answers: `{kind, steps, url}`,
+`host/src/market/guide/`): what to do at the vendor, the vendor's own page when one is known, and
+the form's boxes relabelled in plain words (`key_guides.json` beside the module, ported from
+OpenBot, see its `NOTICE.md`). The catalogue's own link wins over the map, and a link that is not
+`https` or points at Composio (the broker, not the vendor) is dropped rather than shown; an app
+outside the map gets no invented page. Rows put a "Needs a key from …" line under a key app and list
+sign-in apps first, and each client's sheet draws the steps and an *Open <app>'s page* button, so
+somebody who expected a sign-in is never left at a bare form. The reviewed catalogue and the nightly
+list get the same guide from `steps`/`docsUrl`, with their fields relabelled the same way. The
+terminal prints the steps and URL as the sheet's note and marks key apps *needs a key*.
 
 Install runs the CLI's own native installer where it has one, on Windows too (Claude Code, Codex, Grok, Qwen, Droid, Qoder, Cursor…, `Install` in `backends.rs`); CLIs published only on npm (Gemini, Cline, Auggie, Kilo…) install with `codync-host npm install -g <package>`, npm on the computer's own Node or else on Codync's. A CLI with its own ACP mode then runs as installed, without Node.js (except an OpenCode older than 2: the registry build runs in its place, [OpenCode](../upstream-agents/opencode.md)). Refreshing the agents re-reads the PATH a fresh login would get (the login shell's; on Windows the user's and machine's PATH from the registry), so a CLI found by an installer that just ran shows up without restarting the host. Many agents' ACP adapters run through `npx` (Claude, Codex, Gemini, Qwen…). On a computer without Node.js, the agent list marks each of them `node: "missing"` (only then is the field there; `added` once Codync's copy is in place) and they aren't available; Extensions shows one *Add Node.js* notice above the agents, each such agent reads *Needs Node.js*, and its setup sheet gets a Node.js step between Install and Sign in. Adding it (`agentSetup {step: "node"}`, a setup terminal running `codync-host node`) downloads the official Node.js of a pinned version (`VERSION` and SHA-256s in `node.rs`) once into `~/.codync/node/<version>`; npm installs with it go to `~/.codync/node/global`. Both folders come last on the agent search path, so the computer's own Node and CLIs always win, and nothing outside `~/.codync` changes. Linux builds of Node need glibc: on musl distros (Alpine) install Node.js yourself.
 
-Extensions shows one section at a time — Agents, Connectors, or Skills — and each is one list that scrolls; there are no pages. The lists are lazy (iPhone `LazyVGrid`, Android `LazyColumn`), so only the rows near view are built. Agents and Skills arrive whole. The Connectors section opens with the first registry page (`marketConnectors {search, cursor}` → `{items, nextCursor}`, 60 metadata records per API page); while a cursor remains, placeholder rows end the list (`LoadMoreRow`), and when they come into view the client asks for the page at the cursor, one page per ask, then again each time the cursor moves on while the end stays in view (`ConnectorCatalog.loadMore`). A page with nothing Codync can install still moves the cursor, so the list reads on and never stalls on an empty answer. If a fetch fails, the rows stay, the error shows under the list, the end of the list becomes a Try again button, and it also asks again once it scrolls back into view. A registry that answers with the cursor it was asked for ends the list there: the host drops that cursor rather than serve the same page forever. Searching starts the list over; late responses from an older search are ignored. In the terminal, moving the cursor within about a screen of the end of Connectors asks for the next page the same way. Listed: stdio npm/PyPI/OCI/NuGet packages (the registry's runtime and package arguments become inputs) and streamable-HTTP or SSE remotes (URL `{variables}` become inputs). Not listed: MCPB bundles and packages that serve HTTP locally; add those as a custom connector.
+Extensions shows one section at a time — Apps, Channels, Agents, CLIs, or Skills — and each is one list that scrolls; there are no pages. The lists are lazy (iPhone `LazyVGrid`, Android `LazyColumn`), so only the rows near view are built. Agents and Skills arrive whole. The Apps tab's app catalogues arrive first, then the MCP Registry opens with the first registry page (`marketConnectors {search, cursor}` → `{items, nextCursor}`, 60 metadata records per API page); while a cursor remains, placeholder rows end the list (`LoadMoreRow`), and when they come into view the client asks for the page at the cursor, one page per ask, then again each time the cursor moves on while the end stays in view (`ConnectorCatalog.loadMore`). A page with nothing Codync can install still moves the cursor, so the list reads on and never stalls on an empty answer. If a fetch fails, the rows stay, the error shows under the list, the end of the list becomes a Try again button, and it also asks again once it scrolls back into view. A registry that answers with the cursor it was asked for ends the list there: the host drops that cursor rather than serve the same page forever. Searching starts the list over; late responses from an older search are ignored. In the terminal, moving the cursor within about a screen of the end of the registry asks for the next page the same way, and the registry keeps its own Connectors tab there. The Composio apps end the Apps tab and page the same way, 30 per ask. Listed: stdio npm/PyPI/OCI/NuGet packages (the registry's runtime and package arguments become inputs) and streamable-HTTP or SSE remotes (URL `{variables}` become inputs). Not listed: MCPB bundles and packages that serve HTTP locally; add those as a custom connector.
 
 Registry package installs use pinned package references: npm, PyPI and NuGet require the package’s own version; OCI uses the tag or SHA-256 digest already in its image identifier, even when the separate package version is omitted. Untagged images, `latest` tags without a digest, and invalid references are rejected; a server-level version does not pin the executable package.
 
@@ -109,7 +158,7 @@ Picking a built-in command, or sending a message that is just one (`/fast`), run
 
 ## Sign-in for remote connectors (`host/src/market/oauth.rs`, discovery in `discovery.rs`)
 
-Installing a remote connector probes it: a 401 to `initialize`, or (with no headers given) protected-resource metadata naming an authorization server, for servers like Call2Me that only refuse tool calls, marks it `signedOut`, and bots don't get it until someone signs in. Sign-in follows the MCP authorization spec: protected-resource metadata → authorization-server metadata → dynamic client registration (both redirect URIs at once) → PKCE. Tokens stay on the computer and are refreshed on use (or after a 401); the refresh names the connector URL as `resource`, as the code exchange does. A refresh the token endpoint refuses with an OAuth `error` signs the connector out; `invalid_client` also drops the client registration, so the next sign-in registers again. A 5xx, 408 or 429, `temporarily_unavailable`, an answer that isn't an OAuth error (a proxy's page) or an unreachable server keeps the tokens: a token that hasn't expired yet is still used, otherwise the call fails with "Couldn't renew the sign-in to <name>. Try again in a moment." and the next one tries again.
+Installing a remote connector probes it: a 401 to `initialize`, or (with no headers given) protected-resource metadata naming an authorization server, for servers like Call2Me that only refuse tool calls, marks it `signedOut`, and bots don't get it until someone signs in. Sign-in follows the MCP authorization spec: protected-resource metadata → authorization-server metadata → dynamic client registration (both redirect URIs at once) → PKCE. A catalogue app (`market::copilotkit`) skips discovery: its vendor's endpoints, scopes, consent parameters and registration endpoint are pinned in reviewed data and never come from a caller, and an OAuth client the user pasted (Google) is used with the redirect URIs recorded against it instead of being registered. A consent that names its issuer (`iss`, RFC 9207) must name the one the sign-in was sent to, so a code cannot be finished at another server. Tokens stay on the computer and are refreshed on use (or after a 401); the refresh names the connector URL as `resource`, as the code exchange does. A refresh the token endpoint refuses with an OAuth `error` signs the connector out; `invalid_client` also drops the client registration, so the next sign-in registers again. Signing out and removing a connector also revoke the grant at the vendor (RFC 7009) when it publishes a revocation endpoint; the stored tokens are dropped either way. A 5xx, 408 or 429, `temporarily_unavailable`, an answer that isn't an OAuth error (a proxy's page) or an unreachable server keeps the tokens: a token that hasn't expired yet is still used, otherwise the call fails with "Couldn't renew the sign-in to <name>. Try again in a moment." and the next one tries again.
 
 | Where the user signs in | Redirect URI | Who finishes |
 | --- | --- | --- |
@@ -138,6 +187,16 @@ For non-Cursor agents, discovery reads reasoning selects from ACP `thought_level
 A model's `options` are its own settings, such as reasoning effort or fast mode: `[{id, name, values: [{id, name}], default}]`. Every `initialize` sends `clientCapabilities._meta.parameterizedModelPicker: true`; Cursor then lists plain models and, on `cursor/list_available_models` (asked only of the Cursor backend), each model's settings as ACP select config options. Without the flag Cursor offers one fixed variant per model (`grok-4.7[reasoning_effort=high,fast=true]`) and rejects every other. The bot stores the picks as `modelOptions` (option id → value; an absent id means the agent's default). After choosing the model with `session/set_config_option`, the host sets each option the same way, on new sessions and again after `session/load`, because Cursor resumes a session on its last-used model. A bot saved with a variant ID keeps working: when the agent lists the plain model instead, the bracket's `key=value` pairs become options (Auto's `default[]` becomes `default`). Some values change Cursor's billing: a larger context (Grok 4.7 at 500K) turns on its Max Mode. Changing the model or agent clears the options; the host also clears them when an app that predates them changes the model.
 
 The graphical editors summarize harness, model, effort and Fast mode in one expandable row. Expanded controls keep harness and model accessible, with one shared search list and refresh at its right. Choosing a harness opens its model list; choosing a model hides only that list. Effort uses advertised levels and one Default reset label; Fast mode shares the panel. The terminal keeps keyboard fields and shows the effective default in its Options row (←→ moves, space changes). Errors are visible and retryable. Custom commands and agents without model discovery retain manual ID entry; an existing unlisted ID is preserved. The probe uses an isolated directory, so project-specific agent configuration can differ from the real bot session. Changing the model restarts the bot's agent sessions with fresh model context and preserves the stored chat history. The agent remains responsible for validating availability when a session starts.
+
+A spent plan window stops every model of that agent, so the pickers say so before a turn fails: a chip beside the agent's name carries the reset time, and each model it stops is labeled **Usage limit reached** (spoken with the row on a phone). Both come from the `usage` the host already read — `spentWindow` and `spentNote` in `apps/desktop/src/renderer/lib/usage-presentation.ts`, `Usage.spentWindow` and `spentNote` in CodyncKit's `ProviderMascot.swift`, `UsageReport.spentWindow` in the Android `core` module, and `spent_note` in `host/src/tui/view/usage.rs` — so opening the picker asks the provider for nothing and shows nothing when no window is spent.
+
+## Deleting a downloaded agent
+
+A registry agent runs from the build Codync downloaded under `~/.codync/agents`, and only that copy can be deleted from the apps: the computer's own CLI, if one is installed, is not Codync's to remove. `deleteAgentDownload {backend}` removes every version folder of that build and records the agent as turned off (`agents-off.json` in the host's data directory), so it is off even though its folder is gone: `installed` stays true while a build exists, and `available` is false while `turnedOff` is set and nothing else runs the agent. Its accounts, sign-ins, bots and chats are untouched; a bot on a deleted agent shows the existing **Not installed** state (its **Set up** row, in the terminal) until a build is installed again, at which point `downloaded` turns it back on without the marker being rewritten.
+
+A turned-off agent also counts as not set up in every client (`setUp`, `agent_set_up`), even while its sign-in is still there, so opening its page offers **Set up** again instead of a check that would download the build at once.
+
+The Delete action sits at the end of an agent's page and only appears while `downloaded` is true: desktop `AgentSheet.tsx`, iOS `AgentSheet.swift`, Android `AgentSheet.kt` and the terminal UI's agent sheet (`SetupRow::Delete`) each ask for confirmation first, saying what it removes and that accounts, sign-ins and bots stay. The confirmation's Delete runs the method and re-reads the agent list from the same answer (`{removed, backends}`), so the sheet shows Install or Set up again without a second round trip.
 
 ## Fast mode
 

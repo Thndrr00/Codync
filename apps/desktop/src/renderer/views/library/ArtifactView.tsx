@@ -10,6 +10,7 @@ import { useStore } from '../../store/context'
 import { Composer } from '../thread/Composer'
 import { MacChatButton } from '../thread/MacChatButton'
 import { ArtifactFrame, artifactShareItems, renameArtifact, TitleField } from './ArtifactParts'
+import { DiagramView } from './DiagramView'
 
 /**
  * An artifact full size over its chat (Grok Bot's artifact view): close, its title (click to rename) and share on top, and a
@@ -23,6 +24,7 @@ export function ArtifactView({ botId, artifactId, close }: { botId: string; arti
   const html = store.artifacts.html.get(artifactId)
   const failed = store.artifacts.failed.get(artifactId)
   const newest = artifact?.updatedAt
+  const diagram = artifact?.kind === 'diagram' ? (html ? new TextDecoder().decode(html.bytes) : null) : null
   useEffect(() => store.artifacts.load(store.client, botId, artifactId), [store, store.client, botId, artifactId, newest])
   useScreenViewed('artifact', artifactId)
   return (
@@ -31,7 +33,7 @@ export function ArtifactView({ botId, artifactId, close }: { botId: string; arti
         <div className="top-chrome-row">
           <MacChatButton className="ringed" title={tr('Close artifact')} icon="xmark" direction={[-1, 0]} onClick={close} />
           <Spacer />
-          {artifact ? (
+          {artifact && artifact.kind !== 'diagram' ? (
             <DropdownMenu className="mac-chat-button ringed artifact-share" title={tr('Share artifact')} items={() => artifactShareItems(store, artifact, setError)}>
               <Icon name="square.and.arrow.up" size={16} weight="medium" />
             </DropdownMenu>
@@ -40,7 +42,9 @@ export function ArtifactView({ botId, artifactId, close }: { botId: string; arti
         {artifact ? <ArtifactTitle artifact={artifact} onError={setError} /> : null}
       </div>
       <div className="artifact-body">
-        {html ? (
+        {artifact?.kind === 'diagram' && diagram ? (
+          <DiagramView key={`${artifactId}:${artifact.updatedAt}`} botId={botId} artifact={artifact} source={diagram} onError={setError} />
+        ) : html && artifact?.kind !== 'diagram' ? (
           <ArtifactFrame id={artifactId} html={html} title={artifact?.title ?? ''} />
         ) : failed ? (
           <VStack gap={6} className="artifact-state">
@@ -83,7 +87,7 @@ function ArtifactTitle({ artifact, onError }: { artifact: Artifact; onError: (me
   return (
     <button className="title-pill" title={tr('Rename artifact')} onClick={() => setEditing(true)}>
       <HStack as="span" gap={7}>
-        <Icon name="chart.bar.doc.horizontal" size={16} color="var(--secondary)" />
+        <Icon name={artifact.kind === 'diagram' ? 'square.on.square' : 'chart.bar.doc.horizontal'} size={16} color="var(--secondary)" />
         <Text size="body" weight="medium" tone="text" truncate>{artifact.title}</Text>
       </HStack>
     </button>

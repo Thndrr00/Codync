@@ -7,8 +7,13 @@ import kotlinx.serialization.Serializable
 
 /** Public metadata from the existing host marketplace and credential APIs. */
 @Serializable data class ComposioStatus(val configured: Boolean, val keyUrl: String)
+/** How to connect an app: what to do at the vendor, and the vendor's own page to do it on. */
+@Serializable data class ConnectionGuide(val kind: String, val steps: List<String>, val url: String? = null) {
+    val signingIn: Boolean get() = kind == "signIn"
+}
 @Serializable data class ComposioApp(val slug: String, val name: String, val description: String? = null,
-    val logo: String? = null, val connection: ComposioConnectionState? = null) {
+    val logo: String? = null, val connection: ComposioConnectionState? = null, val needsKey: Boolean? = null,
+    val keyNote: String? = null, val guide: ConnectionGuide? = null) {
     val connected: Boolean get() = connection?.status == "active"
 }
 @Serializable data class ComposioApps(val items: List<ComposioApp>, val nextCursor: String? = null)
@@ -16,7 +21,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class ComposioField(val name: String, val label: String, val description: String? = null,
     val secret: Boolean = false, val required: Boolean = false)
 @Serializable data class ComposioConnect(val status: String, val url: String? = null, val connection: String? = null,
-    val mode: String? = null, val fields: List<ComposioField>? = null) {
+    val mode: String? = null, val fields: List<ComposioField>? = null, val guide: ConnectionGuide? = null) {
     fun checked(): ComposioConnect {
         when (status) {
             "redirect" -> {

@@ -33,6 +33,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.codync.android.core.LinkState
+import com.codync.android.core.HostHealth
+import com.codync.android.core.SkillUsage
+import com.codync.android.core.SkillUsageRow
 import com.codync.android.core.UsageProvider
 import com.codync.android.core.UsageReport
 import com.codync.android.core.WeekSummary
@@ -50,7 +53,7 @@ import kotlin.math.roundToInt
  * provider, the tightest limit as a big bar, every limit listed below. Pull down to refresh.
  */
 @Composable fun UsageScreen(state: AppState, refresh: (force: Boolean) -> Unit, reload: suspend () -> Unit,
-    week: suspend () -> WeekSummary? = { null }) {
+    week: suspend () -> WeekSummary? = { null }, store: AppStore? = null) {
     val dismiss = LocalDismissModal.current
     val report = remember(state.usage) { runCatching { UsageReport.decode(state.usage) }.getOrNull() ?: UsageReport() }
     val online = state.actualConnection is LinkState.Ready
@@ -58,6 +61,14 @@ import kotlin.math.roundToInt
     LaunchedEffect(online) { if (online) refresh(false) }
     var summary by remember { mutableStateOf<WeekSummary?>(null) }
     LaunchedEffect(online) { if (online) summary = week() }
+    var health by remember { mutableStateOf<HostHealth?>(null) }
+    var skills by remember { mutableStateOf<SkillUsage?>(null) }
+    LaunchedEffect(online) {
+        if (!online || store == null) return@LaunchedEffect
+        health = store.hostHealth() ?: health
+        skills = store.skillUsage() ?: skills
+    }
+    var tab by rememberSaveable { mutableStateOf(UsageTab.Limits) }
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(leading = { IconButton("Close", "xmark", action = dismiss) },
             title = { Text("Usage", style = Type.body.semibold, color = Palette.text) })
@@ -65,14 +76,76 @@ import kotlin.math.roundToInt
             EmptyUsage("No computer yet", "Usage shows up once a computer is connected.")
             return@Column
         }
-        PullToRefresh({ if (online) reload() }, Modifier.weight(1f)) {
+        PullToRefresh({
+            if (online) {
+                reload()
+                store?.let {
+                    health = it.hostHealth() ?: health
+                    skills = it.skillUsage() ?: skills
+                }
+            }
+        }, Modifier.weight(1f)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                for (provider in report.providers) key(provider.id) { ProviderCard(provider) }
-                summary?.takeIf { it.activeBots > 0 }?.let { WeekCard(it) }
-                if (report.providers.isEmpty()) EmptyUsage("No usage yet", "Your computer reads plan limits from the agents installed on it.")
+                health?.let { HealthCard(it) }
+                Text(tr("Breakdown"), Modifier.fillMaxWidth(), style = Type.caption, color = Palette.tertiary)
+                TabChoice(tab, listOf(UsageTab.Limits to "Limits", UsageTab.Skills to "Skills"), { tab = it })
+                when (tab) {
+                    UsageTab.Limits -> {
+                        for (provider in report.providers) key(provider.id) { ProviderCard(provider) }
+                        summary?.takeIf { it.activeBots > 0 }?.let { WeekCard(it) }
+                        if (report.providers.isEmpty()) EmptyUsage("No usage yet", "Your computer reads plan limits from the agents installed on it.")
+                    }
+                    UsageTab.Skills -> SkillCard(skills)
+                }
             }
         }
     }
+}
+
+private enum class UsageTab { Limits, Skills }
+
+/** The computer's RAM, CPU and disk, read from `hostHealth`. */
+@Composable private fun HealthCard(health: HostHealth) {
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(20.dp)).background(Palette.surface).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for ((label, value) in health.lines()) DetailRow(tr(label), value)
+    }
+}
+
+/** How often each skill's text entered a turn, with its estimated tokens, cost and share. */
+@Composable private fun SkillCard(usage: SkillUsage?) {
+    Column(Modifier.fillMaxWidth().clip(RoundedRectangle(20.dp)).background(Palette.surface).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val rows = usage?.skills.orEmpty()
+        if (rows.isEmpty()) {
+            Text(tr("No skill has been loaded yet."), style = Type.subheadline, color = Palette.secondary)
+        } else {
+            for (row in rows) SkillRow(row)
+        }
+        Text(tr("A load is counted when an agent reads a skill's SKILL.md during a turn."), style = Type.caption2, color = Palette.tertiary)
+    }
+}
+
+@Composable private fun SkillRow(row: SkillUsageRow) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row {
+            Text(row.name, Modifier.weight(1f), style = Type.subheadline.semibold, color = Palette.text, maxLines = 1)
+            Text(costText(row.costUsd), style = Type.footnote.monospacedDigit,
+                color = if (row.costUsd == null) Palette.secondary else Palette.text)
+        }
+        val loads = "${row.loads} ${tr("loads")}"
+        val tokens = "${row.tokens} ${tr("tokens")}"
+        val share = "${Math.round(row.share * 100)}%"
+        val agents = "${row.agents} ${tr("agents")}"
+        Text(listOf(loads, tokens, share, agents).joinToString(" · "), style = Type.caption, color = Palette.secondary)
+    }
+}
+
+private fun costText(cost: Double?): String = when {
+    cost == null -> tr("Unavailable")
+    cost == 0.0 -> "$0.00"
+    cost < 0.01 -> tr("Under $0.01")
+    else -> String.format(Locale.US, "$%.2f", cost)
 }
 
 /** The last seven days, as counts: what was said, done and approved. */

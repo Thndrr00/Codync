@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub fn router(hub: Arc<Hub>) -> Router {
     let main = Router::new()
@@ -34,6 +34,9 @@ pub fn router(hub: Arc<Hub>) -> Router {
                 .layer(axum::extract::DefaultBodyLimit::max(20 * 1024 * 1024)),
         )
         .route("/events", get(events))
+        .route("/agui/{bot}", post(agui_run).layer(axum::extract::DefaultBodyLimit::max(crate::agui::MAX_BODY)))
+        .route("/a2a/{bot}/.well-known/agent-card.json", get(a2a_card))
+        .route("/a2a/{bot}", post(a2a_run).layer(axum::extract::DefaultBodyLimit::max(crate::a2a::server::MAX_BODY)))
         .route("/scim/v2/Users", get(scim_users).post(scim_create))
         .route("/scim/v2/Users/{id}", axum::routing::delete(scim_delete))
         .route("/api/{method}", post(command))
@@ -47,6 +50,13 @@ pub fn router(hub: Arc<Hub>) -> Router {
         .layer(axum::middleware::from_fn_with_state(hub.port, super::origin::guard));
     Router::new()
         .merge(main)
+        // A Bot Framework activity authenticates with its own JWT, not a bearer token or a browser
+        // origin, and arrives through a public HTTPS proxy whose Host is not loopback. It is kept
+        // outside the rebinding and origin guards for that reason; `teams::inbound` verifies the JWT.
+        .merge(Router::<Arc<Hub>>::new().route(
+            "/hooks/teams/{id}",
+            post(crate::teams::receive).layer(axum::extract::DefaultBodyLimit::max(256 * 1024)),
+        ))
         .merge(super::apps_runtime::router().layer(axum::middleware::from_fn(super::rebinding::guard)))
         .with_state(hub)
 }
@@ -73,12 +83,29 @@ fn is_loopback(ip: IpAddr) -> bool {
 
 /// The bearer token only works from this computer; phones use the E2E channel.
 fn authorized(hub: &Hub, headers: &HeaderMap, peer: SocketAddr) -> bool {
-    let given = headers
+    is_loopback(peer.ip()) && crypto::ct_eq(bearer(headers).as_bytes(), hub.token.as_bytes())
+}
+
+fn bearer(headers: &HeaderMap) -> &str {
+    headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .unwrap_or_default();
-    is_loopback(peer.ip()) && crypto::ct_eq(given.as_bytes(), hub.token.as_bytes())
+        .unwrap_or_default()
+}
+
+/// Who is calling: this computer's own token is the owner, and a member's session token acts as that
+/// member's device. Both are loopback only: a member session is for a client that reaches this
+/// computer (the desktop app over its tunnel); a phone pairs and uses the channel.
+fn caller_for(hub: &Hub, headers: &HeaderMap, peer: SocketAddr) -> Option<Caller> {
+    if !is_loopback(peer.ip()) {
+        return None;
+    }
+    let given = bearer(headers);
+    if crypto::ct_eq(given.as_bytes(), hub.token.as_bytes()) {
+        return Some(Caller::Local);
+    }
+    crate::members::caller_for_token(hub, given)
 }
 
 fn unauthorized() -> ApiError {
@@ -124,7 +151,7 @@ async fn scim_delete(
     if !crate::enterprise::scim_allowed(&hub.store, header) {
         return Err(unauthorized());
     }
-    match crate::enterprise::remove_member(&hub.store, &id) {
+    match crate::enterprise::remove_member(&hub, &id) {
         Ok(true) => Ok(StatusCode::NO_CONTENT),
         Ok(false) => Err(ApiError(StatusCode::NOT_FOUND, "unknown member".into())),
         Err(error) => Err(ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{error:#}"))),
@@ -189,6 +216,56 @@ async fn statusline(
     StatusCode::NO_CONTENT
 }
 
+/// `POST /agui/{bot}`: one bot turn as an AG-UI run over Server-Sent Events (see `agui`).
+async fn agui_run(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::agui::serve(hub, &bot, body).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
+}
+
+/// `GET /a2a/{bot}/.well-known/agent-card.json`: the A2A card of a bot offered to the network.
+async fn a2a_card(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::a2a::server::agent_card(hub, &bot).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
+}
+
+/// `POST /a2a/{bot}`: an A2A `message/send` or `message/stream` (see `a2a`).
+async fn a2a_run(
+    State(hub): State<Arc<Hub>>,
+    Path(bot): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    if !authorized(&hub, &headers, peer) {
+        return Err(unauthorized());
+    }
+    crate::a2a::server::serve(hub, &bot, body).await.map_err(|e| {
+        let (status, message) = error_status(&e);
+        ApiError(status, message)
+    })
+}
+
 /// `POST /ingest/hook`: one event of an agent running in a terminal, from `codync-host hook`. A permission request
 /// answers only once a person has decided (or the wait runs out), so the connection may stay open for minutes.
 async fn hook(
@@ -212,16 +289,16 @@ async fn command(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
-    // The token is checked before the body is even looked at.
-    if !authorized(&hub, &headers, peer) {
+    // The token is checked before the body is even looked at. A member session token is a device.
+    let Some(caller) = caller_for(&hub, &headers, peer) else {
         return Err(unauthorized());
-    }
+    };
     let body = if body.is_empty() {
         Value::Null
     } else {
         serde_json::from_slice(&body).map_err(|e| ApiError(StatusCode::BAD_REQUEST, format!("invalid JSON: {e}")))?
     };
-    dispatch(&hub, &Caller::Local, &method, body).await.map(Json).map_err(|e| {
+    dispatch(&hub, &caller, &method, body).await.map(Json).map_err(|e| {
         let (status, message) = error_status(&e);
         ApiError(status, message)
     })
@@ -231,6 +308,8 @@ async fn command(
 struct OAuthCallback {
     state: Option<String>,
     code: Option<String>,
+    /// The issuer the consent came back from (RFC 9207).
+    iss: Option<String>,
     error: Option<String>,
     error_description: Option<String>,
 }
@@ -246,9 +325,14 @@ async fn oauth_callback(
         return StatusCode::FORBIDDEN.into_response();
     }
     let error = q.error_description.or(q.error);
-    let result =
-        market::oauth::finish(&hub.store, q.state.as_deref().unwrap_or_default(), q.code.as_deref(), error.as_deref())
-            .await;
+    let result = market::oauth::finish(
+        &hub.store,
+        q.state.as_deref().unwrap_or_default(),
+        q.code.as_deref(),
+        error.as_deref(),
+        q.iss.as_deref(),
+    )
+    .await;
     let (title, detail) = match &result {
         Ok(c) => (format!("{} is connected", c.name), "You can close this tab and go back to Codync.".to_owned()),
         Err(e) => ("Sign-in didn't finish".to_owned(), format!("{e:#}")),
@@ -310,10 +394,10 @@ async fn events(
     headers: HeaderMap,
     Query(q): Query<EventsQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    if !authorized(&hub, &headers, peer) {
+    let Some(caller) = caller_for(&hub, &headers, peer) else {
         return Err(unauthorized());
-    }
-    let events = events_stream(&hub, q.since.unwrap_or(0), q.client.as_deref(), &Caller::Local)
+    };
+    let events = events_stream(&hub, q.since.unwrap_or(0), q.client.as_deref(), &caller)
         .map_err(|e| ApiError(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")))?;
     let events = events.map(|v| Ok(Event::default().data(v.to_string())));
     Ok(Sse::new(events).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
@@ -329,19 +413,25 @@ async fn routine_hook(
     body: Bytes,
 ) -> Result<Json<Value>, ApiError> {
     use crate::routines::hooks::{MAX_BODY, Refused};
-    if body.len() > MAX_BODY {
+    let started = Instant::now();
+    let bytes = body.len();
+    if bytes > MAX_BODY {
+        crate::analytics::webhook_received(&hub, true, StatusCode::PAYLOAD_TOO_LARGE.as_u16(), bytes, 0);
         return Err(ApiError(StatusCode::PAYLOAD_TOO_LARGE, "event too large".into()));
     }
     let headers =
         headers.iter().filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned()))).collect();
-    hub.routines.receive(&hub, &id, &headers, &body).map(Json).map_err(|e| {
-        let status = match e {
-            Refused::Unauthorized => StatusCode::UNAUTHORIZED,
-            Refused::Paused | Refused::Busy => StatusCode::CONFLICT,
-            Refused::Invalid(_) => StatusCode::BAD_REQUEST,
-        };
-        ApiError(status, e.to_string())
-    })
+    let result = hub.routines.receive(&hub, &id, &headers, &body, true);
+    let status = match &result {
+        Ok(_) => StatusCode::OK,
+        Err(Refused::Unauthorized) => StatusCode::UNAUTHORIZED,
+        Err(Refused::Paused | Refused::Busy) => StatusCode::CONFLICT,
+        Err(Refused::RateLimited(_)) => StatusCode::TOO_MANY_REQUESTS,
+        Err(Refused::Invalid(_)) => StatusCode::BAD_REQUEST,
+    };
+    let ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+    crate::analytics::webhook_received(&hub, true, status.as_u16(), bytes, ms);
+    result.map(Json).map_err(|e| ApiError(status, e.to_string()))
 }
 
 #[cfg(test)]
@@ -403,5 +493,44 @@ mod tests {
         assert!(!is_loopback(ip("192.168.1.20")));
         assert!(!is_loopback(ip("::ffff:192.168.1.20")));
         assert!(!is_loopback(ip("100.101.102.103")));
+    }
+
+    #[test]
+    fn a_member_session_token_acts_as_that_person_and_only_from_this_computer() {
+        use crate::store::{Device, DeviceAccount, DeviceSource, Scope};
+        let (hub, dir) = temp_hub();
+        let ana = hub.store.add_person("Ana", Some("ana@example.com")).expect("person");
+        hub.store
+            .put_device(&Device {
+                key: "member-1".into(),
+                name: "Ana's desktop".into(),
+                platform: "desktop".into(),
+                source: DeviceSource::Local,
+                grant_id: None,
+                scopes: vec![Scope::Control],
+                lease_until: None,
+                created_at: 1,
+                last_seen_at: None,
+                account: DeviceAccount::Unrecorded,
+                person_id: Some(ana.id.clone()),
+            })
+            .expect("device");
+        hub.store
+            .add_member_session("member-1", &ana.id, "member-token", crate::store::now_ms() + 60_000)
+            .expect("session");
+        let at = |addr: &str| ConnectInfo(addr.parse::<SocketAddr>().expect("address"));
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer member-token".parse().expect("header"));
+        let caller = caller_for(&hub, &headers, at("127.0.0.1:50000")).expect("a member session");
+        assert!(matches!(&caller, Caller::Device { key, scopes } if key == "member-1" && scopes == &[Scope::Control]));
+        assert_eq!(crate::people::caller_person(&hub, &caller).as_deref(), Some(ana.id.as_str()));
+        assert!(
+            caller_for(&hub, &headers, at("192.168.1.20:50000")).is_none(),
+            "a member session is for this computer, not the network"
+        );
+        assert!(caller_for(&hub, &headers, at("127.0.0.1:50000")).is_some(), "a live session");
+        headers.insert("authorization", format!("Bearer {}", hub.token).parse().expect("header"));
+        assert!(matches!(caller_for(&hub, &headers, at("127.0.0.1:50000")), Some(Caller::Local)));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

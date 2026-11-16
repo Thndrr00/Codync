@@ -59,9 +59,11 @@ async fn serve_root(
     State(hub): State<Arc<Hub>>,
     Path((bot_id, slug, token)): Path<(String, String, String)>,
 ) -> Response {
-    tokio::task::spawn_blocking(move || handle_request(&hub, &bot_id, &slug, &token, "", &Method::GET, &Bytes::new()))
-        .await
-        .unwrap_or_else(|error| json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": error.to_string()})))
+    tokio::task::spawn_blocking(move || {
+        handle_request(&hub, &bot_id, &slug, &token, "", &Method::GET, &Bytes::new(), None)
+    })
+    .await
+    .unwrap_or_else(|error| json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": error.to_string()})))
 }
 
 async fn handle_live(
@@ -89,11 +91,15 @@ async fn handle_subpath(
     State(hub): State<Arc<Hub>>,
     Path((bot_id, slug, token, path)): Path<(String, String, String, String)>,
     method: Method,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    tokio::task::spawn_blocking(move || handle_request(&hub, &bot_id, &slug, &token, &path, &method, &body))
-        .await
-        .unwrap_or_else(|error| json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": error.to_string()})))
+    let origin = headers.get(header::ORIGIN).and_then(|value| value.to_str().ok()).map(str::to_owned);
+    tokio::task::spawn_blocking(move || {
+        handle_request(&hub, &bot_id, &slug, &token, &path, &method, &body, origin.as_deref())
+    })
+    .await
+    .unwrap_or_else(|error| json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": error.to_string()})))
 }
 
 fn security_headers(content_type: &str) -> HeaderMap {
@@ -127,6 +133,7 @@ pub(super) fn handle_request(
     rel: &str,
     method: &Method,
     body: &Bytes,
+    origin: Option<&str>,
 ) -> Response {
     if *method == Method::OPTIONS {
         return text_resp(StatusCode::NO_CONTENT, "text/plain; charset=utf-8", "");
@@ -148,6 +155,9 @@ pub(super) fn handle_request(
     if rel == "_tell" && *method == Method::POST {
         return handle_tell(hub, bot_id, &app, &link, body);
     }
+    if rel == "_webmcp" {
+        return handle_webmcp(hub, bot_id, slug, method, body, origin);
+    }
     if rel == "_error" && *method == Method::POST {
         return handle_error(hub, bot_id, &app, body);
     }
@@ -155,6 +165,42 @@ pub(super) fn handle_request(
         return json_resp(StatusCode::METHOD_NOT_ALLOWED, json!({"error": "Method not allowed"}));
     }
     serve_static(hub, bot_id, &app, rel)
+}
+
+fn handle_webmcp(hub: &Hub, bot_id: &str, slug: &str, method: &Method, body: &Bytes, origin: Option<&str>) -> Response {
+    if *method == Method::GET {
+        let granted = crate::webmcp::granted(hub, bot_id, slug).unwrap_or_default();
+        let actions: Vec<Value> = crate::webmcp::actions()
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|action| {
+                let name = action["name"].as_str().unwrap_or_default();
+                json!({
+                    "name": name,
+                    "description": action["description"],
+                    "granted": granted.iter().any(|g| g == name),
+                })
+            })
+            .collect();
+        return json_resp(StatusCode::OK, json!({"actions": actions}));
+    }
+    if *method != Method::POST {
+        return json_resp(StatusCode::METHOD_NOT_ALLOWED, json!({"error": "Method not allowed"}));
+    }
+    // Only a page this host serves may make the request: a watched website can't borrow the app's token.
+    if !crate::webmcp::host_origin(hub.port, origin) {
+        return json_resp(StatusCode::FORBIDDEN, json!({"error": "This page isn't served by Codync"}));
+    }
+    let Ok(payload) = serde_json::from_slice::<Value>(body) else {
+        return json_resp(StatusCode::BAD_REQUEST, json!({"error": "Invalid JSON"}));
+    };
+    let action = payload["action"].as_str().unwrap_or_default();
+    let arguments = payload.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    match crate::webmcp::invoke(hub, bot_id, slug, action, &arguments) {
+        Ok(safe) => json_resp(StatusCode::OK, json!({"ok": true, "action": action, "arguments": safe})),
+        Err(error) => json_resp(StatusCode::FORBIDDEN, json!({"error": error.to_string()})),
+    }
 }
 
 fn handle_data(
@@ -404,6 +450,8 @@ fn client_script(app: &BotApp, link: &AppLink) -> String {
       {{ method: "DELETE" }}
     ),
     tell: (text) => req("_tell", {{ method: "POST", body: JSON.stringify({{ text }}) }}),
+    actions: () => req("_webmcp").then(d => d.actions || []),
+    act: (action, args) => req("_webmcp", {{ method: "POST", body: JSON.stringify({{ action, arguments: args || {{}} }}) }}),
     subscribe: (col, fn) => {{
       if (!subs.has(col)) subs.set(col, new Set());
       subs.get(col).add(fn);
@@ -455,6 +503,22 @@ fn client_script(app: &BotApp, link: &AppLink) -> String {
 
   window.codync = api;
   window.bdots = api;
+
+  // WebMCP: the page's declared Codync actions are registered with the browser's model context
+  // when it offers one. Only the actions the person granted are reported as usable.
+  if (navigator.modelContext && typeof navigator.modelContext.registerTool === "function") {{
+    api.actions().then((list) => {{
+      for (const action of list) {{
+        if (!action.granted) continue;
+        navigator.modelContext.registerTool({{
+          name: action.name,
+          description: action.description,
+          inputSchema: {{ type: "object" }},
+          execute: (args) => api.act(action.name, args),
+        }});
+      }}
+    }}).catch(() => {{}});
+  }}
 }})();
 "#
     )

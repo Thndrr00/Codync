@@ -184,6 +184,7 @@ fn model_catalog(session: &Value, options: &Value) -> Value {
         text(&session["models"]["currentModelId"])
     };
     let initial_options = reasoning_options(session);
+    sort_newest_first(&mut models);
     for model in &mut models {
         let own = model_options(options, model["id"].as_str().unwrap_or_default());
         model["options"] = json!(if options.is_null() { initial_options.clone() } else { own });
@@ -191,6 +192,57 @@ fn model_catalog(session: &Value, options: &Value) -> Value {
     json!({"models": models, "currentModelId": current,
         "defaultModelOptions": true,
         "fastMode": crate::agent::config::fast_mode_config(session).is_some()})
+}
+
+/// Newest model first, so every picker leads with the latest version. A name without a version
+/// (`Auto`, `120B`) goes last, and the agent's own order breaks ties: the sort is stable.
+fn sort_newest_first(models: &mut [Value]) {
+    models.sort_by(|a, b| match (version_of(a), version_of(b)) {
+        (Some(newer), Some(old)) => old.cmp(&newer),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
+}
+
+/// The version in a model's name: `GPT-5.10` is `[5, 10]`, `GPT-4` is `[4]`, and `120B` (a
+/// parameter size) has none. Dot-separated numbers compare numerically, so `5.10` is newer than
+/// `5.2`. The last number in the name wins, as names put the version at the end.
+fn version_of(model: &Value) -> Option<Vec<u64>> {
+    let name = text(&model["name"]).or_else(|| text(&model["id"]))?;
+    version_in(&name)
+}
+
+fn version_in(name: &str) -> Option<Vec<u64>> {
+    let bytes = name.as_bytes();
+    let mut found = None;
+    let mut i = 0;
+    while i < bytes.len() {
+        if !bytes[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let mut groups = Vec::new();
+        loop {
+            let start = i;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+            let Ok(group) = name[start..i].parse::<u64>() else { break };
+            groups.push(group);
+            if i + 1 < bytes.len() && bytes[i] == b'.' && bytes[i + 1].is_ascii_digit() {
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        // `120B`, `32K`, `1M`: a size, not a version. (`GPT-4o` ends in a letter that is no unit.)
+        let size = matches!(bytes.get(i), Some(b'B' | b'b' | b'K' | b'k' | b'M' | b'm' | b'G' | b'g' | b'T' | b't'));
+        if !groups.is_empty() && !size {
+            found = Some(groups);
+        }
+    }
+    found
 }
 
 /// One model's options as `[{id, name, values: [{id, name}], default}]`, from Cursor's
@@ -313,6 +365,27 @@ mod tests {
         assert_eq!(result["models"][1]["name"], "Second");
         assert_eq!(result["models"][1]["options"], json!([]));
         assert_eq!(model_ids(&session), ["m1", "m2"]);
+    }
+
+    #[test]
+    fn newest_models_come_first_and_the_agents_order_breaks_ties() {
+        let session = json!({"configOptions": [{"id": "model", "category": "model", "type": "select",
+        "currentValue": "gpt-4", "options": [
+            {"value": "gpt-4", "name": "GPT-4"},
+            {"value": "gpt-5.2", "name": "GPT-5.2"},
+            {"value": "size", "name": "120B"},
+            {"value": "gpt-5.10", "name": "GPT-5.10"},
+            {"value": "gpt-5.2-turbo", "name": "GPT-5.2 Turbo"},
+            {"value": "gpt-5.2-pro", "name": "GPT-5.2 Pro"}
+        ]}]});
+        let result = model_catalog(&session, &Value::Null);
+        let names: Vec<&str> = result["models"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).collect();
+        assert_eq!(names, ["GPT-5.10", "GPT-5.2", "GPT-5.2 Turbo", "GPT-5.2 Pro", "GPT-4", "120B"]);
+        assert_eq!(version_in("GPT-5.10"), Some(vec![5, 10]));
+        assert_eq!(version_in("GPT-5.2"), Some(vec![5, 2]));
+        assert_eq!(version_in("GPT-4"), Some(vec![4]));
+        assert_eq!(version_in("120B"), None, "a parameter size is not a version");
+        assert_eq!(version_in("Auto"), None);
     }
 
     #[test]

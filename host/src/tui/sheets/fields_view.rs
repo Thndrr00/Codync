@@ -85,8 +85,12 @@ pub fn fields(buf: &mut Buffer, area: Rect, f: &Fields) {
             " … Saving "
         } else if matches!(f.submit, Submit::Connection(_)) {
             " ↵ Continue "
-        } else if matches!(f.submit, Submit::Connector(_)) {
+        } else if matches!(f.submit, Submit::Connector(_) | Submit::App(_)) {
             " ↵ Add "
+        } else if matches!(&f.submit, Submit::Composio(c) if c.step == crate::tui::manage::composio::Step::Done) {
+            " ↵ Done "
+        } else if matches!(f.submit, Submit::Composio(_)) {
+            " ↵ Connect "
         } else {
             " ↵ Save "
         },

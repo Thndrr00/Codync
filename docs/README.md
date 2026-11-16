@@ -22,6 +22,8 @@ Source review, a passing build, local integration tests and production acceptanc
 | Test cloud computers (Codync Cloud), isolated per worktree or on the persistent Dev | [Cloud computer testing](guides/cloud-computer-testing.md) |
 | Configure dev/main or deploy the services | [Environments and deployment](guides/environments-and-deployment.md) |
 | Run the host on a Linux server or cloud VM | [Linux servers](guides/linux-servers.md) |
+| Run the host in a container | [Docker](guides/docker.md) |
+| Open bots in a browser | [Web client](features/web-client.md) |
 | Reproduce or check something on Windows (UTM VM) | [Windows testing](guides/windows-testing.md) |
 | Set up accounts, approvals or desktop SSH | [Accounts and SSH](guides/accounts-and-ssh.md) |
 | Check connectors against live services | [Connector verification](guides/connector-verification.md) |
@@ -34,12 +36,15 @@ Source review, a passing build, local integration tests and production acceptanc
 
 - [Lead bot](features/lead-bot.md) (every computer's own bot: on top, checks in, speaks first on calls)
 - [Chat messages](features/chat-messages.md)
+- [Web client](features/web-client.md) (a browser as Codync's fifth client, through a loopback bridge)
 - [Group chats and replies](features/groups-and-replies.md)
 - [Bot-to-bot collaboration](features/bot-collaboration.md)
 - [codync-network](features/codync-network.md) (your computers' network: bots message bots on the user's other computers)
 - [Cloud assistants](features/cloud-assistants.md) (ChatGPT, Claude and others message the bots through the Codync connector)
 - [codync-network and cloud assistants: design](design/codync-network.md) (why iroh, connectors and relays, trust, addresses, quiet letters, the connector's choices, next steps)
 - [Context and memory](features/context-and-memory.md)
+- [Automatic learning](features/automatic-learning.md) (durable preferences from corrections and repeats, saved only on approval)
+- [Memory as beliefs](features/memory-beliefs.md) (what the bot knows about you, its confidence and history)
 - [Usage limits](features/usage-limits.md) (which agents show, how each one is read, and which can't be)
 - [Bot memory and compaction](design/bot-memory.md) (design; storage, gate and dreaming built, compaction to come)
 - [Bot memory research](design/bot-memory-research.md) (files vs. database, embeddings, open-source systems, harness instructions)
@@ -52,7 +57,10 @@ Source review, a passing build, local integration tests and production acceptanc
 - [iOS Shortcuts](features/ios-shortcuts.md)
 - [File attachments](features/file-attachments.md)
 - [Artifacts and the Library](features/artifacts.md)
+- [Declarative UI and shared view state](features/declarative-ui.md) (AG-UI cards K3 and K4: forms in the chat, and the agent acting on the view you have open)
+- [Inspector and WebMCP](features/inspector-webmcp.md) (a development-only event panel, and the declared actions a host-served mini-app may ask for)
 - [Remote screen](features/remote-screen.md) and [computer use](features/computer-use.md)
+- [Computer containers](features/computer-containers.md) (a bot's own Docker container, or this host, per bot)
 - [Computer identity and list ordering](features/computer-order.md)
 - [Notch island (desktop)](features/notch-island.md)
 - [Terminal agent sessions](features/terminal-sessions.md) (Claude Code, Gemini CLI and friends in your own terminal, with approvals from Codync)

@@ -20,12 +20,14 @@ mod forms;
 mod goto;
 mod help;
 mod lead_agent;
+mod learning;
 mod network;
 mod network_rules;
 mod new_bot;
 mod overlay;
 mod pair;
 mod permission;
+mod policies;
 mod proposals;
 mod queue;
 mod roster;
@@ -33,11 +35,14 @@ mod roster_tools;
 mod rules;
 mod skill;
 mod style;
+mod subagents;
+mod tasks;
 mod thread;
 mod time;
 mod trace;
 mod transcript;
 mod usage;
+mod voice;
 mod whats_new;
 
 pub(super) use buffer::{centered, frame_box, hline, put, restyle, rput, u, window};
@@ -75,7 +80,14 @@ pub fn draw(f: &mut Frame<'_>, app: &mut App) {
         _ => Width::Huge,
     };
     let buf = f.buffer_mut();
-    buf.set_style(area, theme().text);
+    let base = match super::appearance::chat_background_now() {
+        Some(background) if theme().color => {
+            let hex = if super::appearance::dark_now() { background.dark } else { background.light };
+            theme().text.bg(rgb(hex))
+        }
+        _ => theme().text,
+    };
+    buf.set_style(area, base);
     if area.width < 40 || area.height < 12 {
         let c = app.counts();
         put(buf, 0, 0, area.width, "Make the window bigger", theme().bold);

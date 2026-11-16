@@ -8,6 +8,26 @@ How the end-to-end (e2e) checks drive the apps: Playwright for the desktop app, 
 
 Run them one at a time: never start a test binary several times in parallel, or several copies of the suite, not even to hunt a flake. Repeat it one run after another, a few times at most. On 2026-11-04 parallel repeats left about 200 `claude -p /usage` processes behind, using 55 GB on a 32 GB Mac, and froze it.
 
+## Offline agent mocks
+
+`host/src/testing/` serves an offline mock harness for agent tests: an OpenAI-compatible provider, an MCP echo server, an A2A agent and an AG-UI endpoint, all on one loopback port. It is compiled into debug builds only, behind the hidden `codync-host mock` subcommand; a release binary has no such command.
+
+```sh
+cd host
+cargo run -- mock            # prints {"port":N}, then serves until stopped
+```
+
+Every path takes plain JSON and needs no key:
+
+- `POST /v1/chat/completions` (plain or `"stream": true`) and `POST /v1/embeddings`, with `GET /v1/models`.
+- `POST /mcp`: `initialize`, `ping`, `tools/list`, `tools/call` (`echo`).
+- `GET /.well-known/agent-card.json` and `POST /a2a` (`message/send`).
+- `POST /agui/{bot}`: an AG-UI run over SSE using the event names in `host/src/agui/events.rs`.
+
+The provider picks its answer from markers in the request: `[mock:error]` (or model `mock-error`) answers a 500 in OpenAI's error shape, `[mock:tool]` (or any request with `tools`) answers a tool call, and the turn after the tool result answers `The mock tool answered.` Everything else answers `Mock answer.` The AG-UI run reads `[mock:error]` and `[mock:approval]` in the last user message; the latter adds a `codync.approval` event.
+
+`host/tests/mock_offline_e2e.rs` uses it: `tests/fixtures/mock_provider_agent.py` is a scripted ACP agent that talks to the mock provider, so one test runs a tool call, a provider error and an approval round trip with no network and no keys; another checks every mock endpoint directly. The helper starts its own `codync-host mock`, reads the printed port, and skips when the test binary was built without the command (a release build).
+
 ## Real agents
 
 Everyday tests use the fake agents, which only answer the way we expect. Run the real ones too, one short turn per agent on the cheapest model, with nothing in parallel (it uses your own plan), when:

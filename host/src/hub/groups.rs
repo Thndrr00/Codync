@@ -40,6 +40,7 @@ impl Hub {
                 }
             };
             if left {
+                crate::chat::group::tasks::member_left(self, &group, id);
                 self.emit_bot(&group);
             }
         }

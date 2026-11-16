@@ -11,7 +11,13 @@ use std::sync::Mutex;
 /// 8: a flow link's own model and effort (`routine_flow_links.model`, `.model_options`).
 /// 9: a thread's title, branch origin and archive flag (`threads`).
 /// 10: a phone that paired with no account is told apart from a device paired before 2.36.0 (`devices.no_account`).
-const SCHEMA: i64 = 10;
+/// 11: people on this computer (`people`) and the person a device belongs to (`devices.person_id`).
+/// 12: a thread kept from something other than the drawer, and the chat message it came from
+/// (`threads.source`, `.source_entry`: a kept dictation).
+/// 13: a person's role on this computer (`people.role`): admin or member.
+/// 14: member accounts: an invited email (`member_invites`) and a member's session token
+/// (`member_sessions`), both stored as digests of the secret.
+const SCHEMA: i64 = 14;
 
 /// 3: authorized devices (keys, not push tickets) with their push and Live Activity
 /// tickets. The old ticket-only `devices` table is dropped; phones re-register on connect.
@@ -25,6 +31,12 @@ const SCHEMA: i64 = 10;
 /// 8: a flow link's own model and effort (`routine_flow_links.model`, `.model_options`).
 /// 9: a thread's title, branch origin and archive flag (`threads`).
 /// 10: a phone that paired with no account is told apart from a device paired before 2.36.0 (`devices.no_account`).
+/// 11: people on this computer (`people`) and the person a device belongs to (`devices.person_id`).
+/// 12: a thread kept from something other than the drawer, and the chat message it came from
+/// (`threads.source`, `.source_entry`: a kept dictation).
+/// 13: a person's role on this computer (`people.role`): admin or member.
+/// 14: member accounts: an invited email (`member_invites`) and a member's session token
+/// (`member_sessions`), both stored as digests of the secret.
 fn migrate(c: &Connection) -> Result<()> {
     let version: i64 =
         c.query_row("SELECT CAST(v AS INTEGER) FROM kv WHERE k = 'schema'", [], |r| r.get(0)).optional()?.unwrap_or(0);
@@ -44,7 +56,11 @@ fn migrate(c: &Connection) -> Result<()> {
     migrate_7(c)?;
     migrate_8(c)?;
     migrate_9(c)?;
-    migrate_10(c)
+    migrate_10(c)?;
+    migrate_11(c)?;
+    migrate_12(c)?;
+    migrate_13(c)?;
+    migrate_14(c)
 }
 
 fn migrate_3(c: &Connection) -> Result<()> {
@@ -196,6 +212,58 @@ fn migrate_10(c: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// People on this computer: the owner stays implicit (no row), and a device may name a person.
+fn migrate_11(c: &Connection) -> Result<()> {
+    c.execute_batch(
+        "BEGIN;
+         CREATE TABLE IF NOT EXISTS people(
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, created_at INTEGER NOT NULL);
+         COMMIT;",
+    )?;
+    let has: bool =
+        c.query_row("SELECT count(*) > 0 FROM pragma_table_info('devices') WHERE name = 'person_id'", [], |r| {
+            r.get(0)
+        })?;
+    if !has {
+        c.execute_batch("ALTER TABLE devices ADD COLUMN person_id TEXT;")?;
+    }
+    c.execute_batch("INSERT INTO kv(k, v) VALUES('schema', '11') ON CONFLICT(k) DO UPDATE SET v = '11';")?;
+    Ok(())
+}
+
+/// A dictation kept as a thread remembers which conversation it was dictated in.
+fn migrate_12(c: &Connection) -> Result<()> {
+    let has = |name: &str| -> Result<bool> {
+        Ok(c.query_row("SELECT count(*) > 0 FROM pragma_table_info('threads') WHERE name = ?1", [name], |r| r.get(0))?)
+    };
+    if !has("source")? {
+        c.execute_batch("ALTER TABLE threads ADD COLUMN source TEXT;")?;
+    }
+    if !has("source_entry")? {
+        c.execute_batch("ALTER TABLE threads ADD COLUMN source_entry TEXT;")?;
+    }
+    c.execute_batch("INSERT INTO kv(k, v) VALUES('schema', '12') ON CONFLICT(k) DO UPDATE SET v = '12';")?;
+    Ok(())
+}
+
+/// A person may be an admin (they manage people, connectors and bots) or a member (only their own).
+fn migrate_13(c: &Connection) -> Result<()> {
+    let has: bool =
+        c.query_row("SELECT count(*) > 0 FROM pragma_table_info('people') WHERE name = 'role'", [], |r| r.get(0))?;
+    if !has {
+        c.execute_batch("ALTER TABLE people ADD COLUMN role TEXT NOT NULL DEFAULT 'member';")?;
+    }
+    c.execute_batch("INSERT INTO kv(k, v) VALUES('schema', '13') ON CONFLICT(k) DO UPDATE SET v = '13';")?;
+    Ok(())
+}
+
+/// Member accounts: an invited email and the session token it is exchanged for.
+fn migrate_14(c: &Connection) -> Result<()> {
+    super::member_accounts::open(c)?;
+    c.execute_batch("INSERT INTO kv(k, v) VALUES('schema', '14') ON CONFLICT(k) DO UPDATE SET v = '14';")?;
+    Ok(())
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         let c = Connection::open(path)?;
@@ -238,7 +306,12 @@ impl Store {
         super::runtime::create_tables(&c)?;
         super::documents::open(&c)?;
         super::mcp_policies::open(&c)?;
+        super::policies::open(&c)?;
+        super::links::open(&c)?;
         super::discord::open(&c)?;
+        super::matrix::open(&c)?;
+        super::signal::open(&c)?;
+        super::teams::open(&c)?;
         super::whatsapp::open(&c)?;
         super::slack::open(&c)?;
         super::native_channels::open(&c)?;
@@ -246,8 +319,11 @@ impl Store {
         super::research::open(&c)?;
         super::analytics::open(&c)?;
         super::apps::open(&c)?;
+        super::components::open(&c)?;
         super::open_items::open(&c)?;
+        super::member_accounts::open(&c)?;
         super::threads::open(&c)?;
+        super::group_tasks::open(&c)?;
         super::flows::open(&c)?;
         codync_mem::schema::migrate(&c)?;
         let secret_key = if path == Path::new(":memory:") {
@@ -291,7 +367,7 @@ mod tests {
         }
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty());
-        assert_eq!(s.kv_get("schema").as_deref(), Some("10"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("14"));
         drop(s);
         let s = Store::open(&db).unwrap();
         assert!(s.devices().unwrap().is_empty(), "reopening keeps the new table");
@@ -314,7 +390,7 @@ mod tests {
         let s = Store::open(&db).unwrap();
         let chat: Vec<String> = s.history("b", i64::MAX, 10).unwrap().into_iter().map(|e| e.id).collect();
         assert_eq!(chat, ["info"]);
-        assert_eq!(s.kv_get("schema").as_deref(), Some("10"));
+        assert_eq!(s.kv_get("schema").as_deref(), Some("14"));
     }
 
     #[test]

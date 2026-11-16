@@ -115,6 +115,28 @@ pub(super) async fn message(ep: &Endpoint, token: &str, chat: i64, text: &str, k
     sent["message_id"].as_i64().context("Telegram sent no message id")
 }
 
+/// Sends an approval card: HTML text with the inline keyboard
+/// [`crate::channels::render::telegram`] built for it.
+pub(super) async fn card(
+    ep: &Endpoint,
+    token: &str,
+    chat: i64,
+    text: &str,
+    reply_markup: Option<&Value>,
+) -> Result<i64> {
+    let mut body = json!({
+        "chat_id": chat,
+        "text": clip(text),
+        "parse_mode": "HTML",
+        "link_preview_options": {"is_disabled": true},
+    });
+    if let Some(markup) = reply_markup {
+        body["reply_markup"] = markup.clone();
+    }
+    let sent = call(ep, token, "sendMessage", &body).await?;
+    sent["message_id"].as_i64().context("Telegram sent no message id")
+}
+
 /// Replaces a message's text (and drops its buttons).
 pub(super) async fn edit(ep: &Endpoint, token: &str, chat: i64, message: i64, text: &str) -> Result<()> {
     let body = json!({"chat_id": chat, "message_id": message, "text": clip(text), "link_preview_options": {"is_disabled": true}});

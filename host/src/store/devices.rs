@@ -52,6 +52,9 @@ pub struct Device {
     pub last_seen_at: Option<i64>,
     #[serde(skip)]
     pub account: DeviceAccount,
+    /// The person whose phone this is (`people`); `None` means the owner's own device.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person_id: Option<String>,
 }
 
 /// A push ticket with the device's push key (§6.7) and account context.
@@ -61,14 +64,15 @@ pub struct PushTicket {
     pub ctx: Option<String>,
 }
 
-const DEVICE_COLS: &str =
-    "key, name, platform, source, grant_id, scopes, lease_until, created_at, last_seen_at, account, no_account";
+const DEVICE_COLS: &str = "key, name, platform, source, grant_id, scopes, lease_until, created_at, last_seen_at, account, no_account, person_id";
 
-/// A device with its push and Live Activity tickets; the number of device rows removed.
-fn delete_device(tx: &rusqlite::Transaction, key: &str) -> rusqlite::Result<usize> {
+/// A device with its push and Live Activity tickets; the number of device rows removed. A member
+/// session is backed by its device, so its token goes with it instead of outliving the access.
+pub(super) fn delete_device(tx: &rusqlite::Transaction, key: &str) -> rusqlite::Result<usize> {
     let n = tx.execute("DELETE FROM devices WHERE key = ?1", [key])?;
     tx.execute("DELETE FROM push_tickets WHERE device_key = ?1", [key])?;
     tx.execute("DELETE FROM activity_tickets WHERE device_key = ?1", [key])?;
+    tx.execute("DELETE FROM member_sessions WHERE device_key = ?1", [key])?;
     Ok(n)
 }
 
@@ -92,6 +96,7 @@ fn row_device(r: &rusqlite::Row) -> rusqlite::Result<Device> {
             (None, true) => DeviceAccount::SignedOut,
             (None, false) => DeviceAccount::Unrecorded,
         },
+        person_id: r.get(11)?,
     })
 }
 
@@ -117,8 +122,8 @@ impl Store {
         };
         let c = self.db.locked();
         c.execute(
-            "INSERT INTO devices(key, name, platform, source, grant_id, scopes, lease_until, created_at, account, no_account)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "INSERT INTO devices(key, name, platform, source, grant_id, scopes, lease_until, created_at, account, no_account, person_id)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(key) DO UPDATE SET name = ?2, platform = ?3, source = ?4, grant_id = ?5,
                scopes = ?6, lease_until = ?7, account = ?9, no_account = ?10",
             params![
@@ -131,7 +136,8 @@ impl Store {
                 d.lease_until,
                 d.created_at,
                 account,
-                no_account
+                no_account,
+                d.person_id
             ],
         )?;
         Ok(())
@@ -315,6 +321,7 @@ mod tests {
             created_at: 1,
             last_seen_at: None,
             account: DeviceAccount::Unrecorded,
+            person_id: None,
         };
         s.put_device(&d).unwrap();
         s.put_device(&Device { key: "dk2".into(), ..d.clone() }).unwrap();

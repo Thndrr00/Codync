@@ -66,6 +66,21 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
     var checking by remember { mutableStateOf(false) }
     var authenticating by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var confirmingDelete by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    // Delete: only the runtime Codync downloaded goes. Accounts, sign-ins and bots stay, and a bot on
+    // this agent shows it as not installed until it is installed again.
+    fun removeRuntime() {
+        if (deleting) return
+        deleting = true
+        error = null
+        scope.launch {
+            try { store.deleteAgentDownload(backend.id) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { error = failure.message ?: "Couldn't delete the copy Codync downloaded." }
+            finally { deleting = false }
+        }
+    }
     fun check() {
         if (checking) return
         checking = true
@@ -88,7 +103,7 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
         when {
             shown == null -> Column(Modifier.fillMaxSize().background(Palette.background)) {
                 ModalHeader(backend.name)
-                Overview(backend, auth, checking, authenticating, error, state, store, { route = it }, ::check) { method ->
+                Overview(backend, auth, checking, authenticating, error, state, store, deleting, { confirmingDelete = true }, { route = it }, ::check) { method ->
                     authenticating = method.id
                     scope.launch {
                         try { auth = store.agentAuthenticate(backend.id, method.id); error = null }
@@ -102,10 +117,23 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
             else -> SetupTerminal(backend.takeUnless { shown.step == "node" }, shown.step, shown.method, state, store, back)
         }
     }
+    CodyncDialog(
+        tr("Delete {name}?").replace("{name}", backend.name),
+        isPresented = confirmingDelete,
+        onDismiss = { confirmingDelete = false },
+        message = deleteMessage(backend.name, state.hostName),
+    ) { listOf(DialogAction("Delete", destructive = true) { removeRuntime() }) }
 }
 
+/** What deleting the downloaded copy leaves alone, said before it happens. */
+@Composable private fun deleteMessage(name: String, host: String): String = listOf(
+    tr("Codync removes the copy it downloaded for {name} on {host} and turns the agent off.").replace("{name}", name).replace("{host}", host),
+    tr("Its accounts, sign-ins and bots stay."),
+    tr("Bots using it show as not installed until it is installed again."),
+).joinToString(" ")
+
 @Composable private fun Overview(backend: AgentBackend, auth: AgentAuth?, checking: Boolean, authenticating: String?, error: String?, state: AppState, store: AppStore,
-    go: (SetupRoute) -> Unit, check: () -> Unit, authenticate: (AgentAuthMethod) -> Unit) {
+    deleting: Boolean, askDelete: () -> Unit, go: (SetupRoute) -> Unit, check: () -> Unit, authenticate: (AgentAuthMethod) -> Unit) {
     val host = state.hostName
     val signedIn = auth?.signedIn ?: backend.signedIn
     val curated = backend.curated
@@ -177,12 +205,19 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
             }
         }
         if (backend.accounts == true) AgentAccountsSection(backend, state, store, check)
+        if (backend.downloaded) CardSection {
+            row {
+                LinkButton(tr("Delete"), enabled = !deleting, color = if (deleting) Palette.tertiary else Palette.danger, action = askDelete)
+            }
+        }
         error?.let { CardSection { row { SelectionContainer { ErrorRow(it) } } } }
     }
 }
 
-/** It has run on this computer: its CLI is there, or an earlier check started it. Until then, a check can download it. */
-private fun setUp(backend: AgentBackend, auth: AgentAuth?) = backend.installed || backend.signedIn != null || auth != null
+/** It has run on this computer: its CLI is there, or an earlier check started it. Until then, a check can download it.
+ *  A build the user deleted is off, signed in or not, so the sheet offers Set up again instead. */
+private fun setUp(backend: AgentBackend, auth: AgentAuth?) =
+    !backend.turnedOff && (backend.installed || backend.signedIn != null || auth != null)
 
 private fun statusText(backend: AgentBackend, setUp: Boolean, auth: AgentAuth?, signedIn: Boolean?, checking: Boolean, host: String) = when {
     checking -> if (auth == null) "Checking with ${backend.name}… The first check can download it." else "Checking…"

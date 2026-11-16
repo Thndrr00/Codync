@@ -13,7 +13,7 @@ import {
   type ThreadInfo,
   type Usage,
 } from '@shared/models'
-import type { Artifact, ArtifactChunk, LibraryItem } from '@shared/artifacts'
+import type { Artifact, ArtifactChunk, LibraryItem, ServerLibraryFilter, ServerLibraryItem } from '@shared/artifacts'
 import { parseCallCue, type CallCue } from '@shared/calls'
 import type { NetworkView } from '@shared/network'
 import { trNow } from '../lib/l10n.ts'
@@ -105,6 +105,10 @@ export type HostEvent =
   | { type: 'botDeleted'; id: string; rev: number }
   | { type: 'entry'; entry: Entry }
   | { type: 'entryDeleted'; id: string; rev: number }
+  /** A chat's or group's messages and turns went; its side threads and setup stay. */
+  | { type: 'historyCleared'; botId: string; deleted: number; rev: number }
+  /** This computer's server settings changed: response style, Claude Code setup, remote control policy. */
+  | { type: 'serverSettings'; settings: import('../store/bot-mirror').ServerSettings }
   /** A thread's root line says how many of its replies are unread, and carries its summary for the chip under it
    * (`thread` is null once the thread has nothing left, as after deleting it). */
   | { type: 'thread'; threadId: string; botId: string; unread: number; thread: import('@shared/models').ThreadSummary | null }
@@ -124,6 +128,12 @@ export type HostEvent =
   | { type: 'call'; cue: CallCue }
   /** These bots' routine-flow canvases changed: load them again. */
   | { type: 'routineFlow'; rev: number; botIds: string[] }
+  /** What a view shows changed (`chat:<botId>`, `routine:<botId>`); card K4. */
+  | { type: 'viewState'; view: string; rev: number; state: Record<string, unknown>; by: string }
+  /** The agent invoked one of a view's named actions: the screen showing it follows. */
+  | { type: 'viewAction'; view: string; action: string; arguments: Record<string, unknown>; rev: number }
+  /** A host-served mini-app page asked for one of its granted Codync actions (card K15). */
+  | { type: 'webMcpAction'; action: string; arguments: Record<string, unknown>; botId: string; slug: string }
   | { type: 'whatsapp'; whatsapp: import('@shared/models').WhatsAppState }
   | { type: 'resync' }
   /** An event this app version couldn't read (host newer/older than the app). */
@@ -165,6 +175,12 @@ export function parseEvent(line: string): HostEvent | null {
     }
     case 'entryDeleted':
       return typeof raw.id === 'string' && typeof raw.rev === 'number' ? { type, id: raw.id, rev: raw.rev } : { type: 'undecodable', kind: 'entryDeleted' }
+    case 'historyCleared':
+      return typeof raw.botId === 'string' && typeof raw.rev === 'number'
+        ? { type, botId: raw.botId, deleted: Number(raw.deleted ?? 0), rev: raw.rev }
+        : { type: 'undecodable', kind: 'historyCleared' }
+    case 'serverSettings':
+      return raw.settings ? { type, settings: raw.settings as import('../store/bot-mirror').ServerSettings } : null
     case 'entry': {
       const entry = raw.entry as Entry | undefined
       if (!entry || typeof entry.id !== 'string' || typeof entry.botId !== 'string') return { type: 'undecodable', kind: 'entry' }
@@ -197,6 +213,24 @@ export function parseEvent(line: string): HostEvent | null {
     case 'routineFlow': {
       const botIds = Array.isArray(raw.botIds) ? raw.botIds.filter((id): id is string => typeof id === 'string') : null
       return botIds && typeof raw.rev === 'number' ? { type, rev: raw.rev, botIds } : { type: 'undecodable', kind: 'routineFlow' }
+    }
+    case 'viewState': {
+      const state = raw.state && typeof raw.state === 'object' && !Array.isArray(raw.state) ? (raw.state as Record<string, unknown>) : null
+      return typeof raw.view === 'string' && typeof raw.rev === 'number' && state
+        ? { type, view: raw.view, rev: raw.rev, state, by: typeof raw.by === 'string' ? raw.by : 'client' }
+        : { type: 'undecodable', kind: 'viewState' }
+    }
+    case 'viewAction': {
+      const args = raw.arguments && typeof raw.arguments === 'object' ? (raw.arguments as Record<string, unknown>) : {}
+      return typeof raw.view === 'string' && typeof raw.action === 'string'
+        ? { type, view: raw.view, action: raw.action, arguments: args, rev: typeof raw.rev === 'number' ? raw.rev : 0 }
+        : { type: 'undecodable', kind: 'viewAction' }
+    }
+    case 'webMcpAction': {
+      const args = raw.arguments && typeof raw.arguments === 'object' ? (raw.arguments as Record<string, unknown>) : {}
+      return typeof raw.action === 'string' && typeof raw.botId === 'string' && typeof raw.slug === 'string'
+        ? { type, action: raw.action, arguments: args, botId: raw.botId, slug: raw.slug }
+        : { type: 'undecodable', kind: 'webMcpAction' }
     }
     case 'thread': {
       const thread = raw.thread as import('@shared/models').ThreadSummary | null | undefined
@@ -236,12 +270,22 @@ export class HostClient {
     return this.call('library', { botId })
   }
 
+  /** Every bot's Library on this computer, newest first; `all` sends no filter. */
+  serverLibrary(filter: ServerLibraryFilter = 'all'): Promise<{ items: ServerLibraryItem[] }> {
+    return this.call('serverLibrary', filter === 'all' ? {} : { filter })
+  }
+
   readArtifact(botId: string, artifactId: string, offset: number): Promise<ArtifactChunk> {
     return this.call('readArtifact', { botId, artifactId, offset })
   }
 
   renameArtifact(botId: string, artifactId: string, title: string): Promise<{ artifact: Artifact }> {
     return this.call('renameArtifact', { botId, artifactId, title })
+  }
+
+  /** Replaces a diagram's scene; `sha256` is the version the editor started from. */
+  saveArtifactScene(botId: string, artifactId: string, scene: unknown, sha256?: string): Promise<{ artifact: Artifact }> {
+    return this.call('saveArtifactScene', { botId, artifactId, scene, ...(sha256 ? { sha256 } : {}) })
   }
 
   constructor(readonly transport: HostTransport) {}
@@ -286,6 +330,15 @@ export class HostClient {
     return this.call('renameThread', { threadId, title })
   }
 
+  /** Keeps a dictation as a thread of its own, linked to the chat it was dictated in. */
+  async keepDictation(botId: string, text: string, sourceEntryId: string | null = null) {
+    return this.call<{ threadId: string; entry: Entry }>('keepDictation', {
+      botId,
+      text,
+      ...(sourceEntryId ? { sourceEntryId } : {}),
+    })
+  }
+
   async archiveThread(threadId: string, archived = true) {
     return this.call('archiveThread', { threadId, archived })
   }
@@ -307,14 +360,20 @@ export class HostClient {
   /** Bytes per `upload` call: base64 of it stays well under the channel's 1 MiB message. */
   static uploadChunk = 384 * 1024
 
-  async upload(botId: string, uploadId: string, name: string, data: Uint8Array, onProgress?: (sent: number) => void) {
+  async upload(botId: string, uploadId: string, name: string, data: Uint8Array, onProgress?: (sent: number) => void, shouldStop?: () => boolean) {
     let offset = 0
     do {
+      if (shouldStop?.()) throw new Error('Upload cancelled')
       const end = Math.min(offset + HostClient.uploadChunk, data.length)
       await this.call('upload', { botId, uploadId, name, data: toBase64(data.subarray(offset, end)), offset, done: end === data.length }, 60_000)
       offset = end
       onProgress?.(offset)
     } while (offset < data.length)
+  }
+
+  /** Drops a file the user stopped uploading: the computer deletes its partial chunks. */
+  async cancelUpload(botId: string, uploadId: string) {
+    return this.call<{ removed: boolean }>('cancelUpload', { botId, uploadId })
   }
 
   async readUpload(botId: string, uploadId: string) {

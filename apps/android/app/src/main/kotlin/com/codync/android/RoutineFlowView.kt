@@ -3,11 +3,13 @@ package com.codync.android
 import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -106,6 +108,14 @@ private fun placeBot(store: AppStore, canvasBot: String, canvas: FlowCanvas, bot
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(routine.name, Modifier.weight(1f), style = Type.system(13f), color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (RoutineFlow.isUnconnected(canvas, routine.id)) Text(tr("Not connected"), style = Type.caption, color = Palette.secondary)
+                }
+                // Card K14: every agent that works this card, each in its own lane, opened by tapping it.
+                if (card.lanes.size > 1) {
+                    Text(tr("Bots on this routine"), style = Type.caption, color = Palette.tertiary)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (lane in card.lanes) LaneChip(lane) { select(FlowSelection.OfLane(routine.id, lane.botId)) }
+                    }
                 }
                 for (row in rows.filter { it.routineId == routine.id }) {
                     val name = bots[row.botId]?.name ?: tr("Unknown bot")

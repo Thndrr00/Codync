@@ -109,8 +109,11 @@ impl Actor {
                 let _ = reply.send(self.post_artifact(data));
             }
             Cmd::Stop => self.stop().await,
-            Cmd::Permission { entry_id, option_id } => self.answer_permission(&entry_id, option_id).await,
+            Cmd::Permission { entry_id, option_id, values } => {
+                self.answer_permission(&entry_id, option_id, values).await;
+            }
             Cmd::Approve { title, detail, reply } => self.ask_approval(&title, &detail, reply),
+            Cmd::Block { data, reply } => self.show_block(data, reply),
             Cmd::NewSession => {
                 if self.turn.is_some() {
                     self.stop().await;
@@ -122,6 +125,12 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::SwitchBack => self.switch_back().await,
+            Cmd::CompactNow => {
+                self.queue.push_back(Queued::Compact { idle: false });
+                if self.turn.is_none() {
+                    self.next_in_queue(done_tx).await;
+                }
+            }
             Cmd::CallEnded { call } => {
                 if self.turn_call.as_ref() == Some(&call) {
                     self.turn_call = None;
@@ -129,6 +138,13 @@ impl Actor {
                 let _ = self.dreamer.send(memory::DreamEvent::Flush);
             }
             Cmd::Reconfigure(base) => self.reconfigure(*base).await,
+            Cmd::RestartAgent => {
+                if self.turn.is_some() {
+                    self.restart_after_turn = true;
+                } else {
+                    self.restart_agent().await;
+                }
+            }
             Cmd::Shutdown => return false,
         }
         true
@@ -213,7 +229,7 @@ impl Actor {
         self.files.cancel();
         let ids: Vec<String> = self.perms.keys().cloned().collect();
         for id in ids {
-            self.answer_permission(&id, None).await;
+            self.answer_permission(&id, None, None).await;
         }
         if let (Some(c), Some(sid)) = (&self.conn, &self.turn_session) {
             let _ = c.acp.notify("session/cancel", json!({"sessionId": sid})).await;

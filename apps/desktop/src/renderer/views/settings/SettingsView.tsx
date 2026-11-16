@@ -23,12 +23,15 @@ import { NetworkView } from './NetworkView'
 import { errorText, isMac, thisMac } from './parts'
 import { UsageSection } from './UsageLimits'
 import { ThemePaletteSection } from './ThemePaletteSection'
+import { ChatAppearanceSection } from './ChatAppearanceSection'
 import { EnterpriseSection } from './EnterpriseSection'
+import { PeopleSection } from './PeopleSection'
 import { DiagnosticsButton } from './DiagnosticsButton'
 import { GettingStartedSection } from './GettingStartedSection'
 import { WeekSummaryView } from './WeekSummaryView'
 import { VoiceChatSettingsView } from './VoiceChatSettingsView'
 import { ComputerAccessView } from '../computer-access/ComputerAccessView'
+import { PoliciesView } from './PoliciesView'
 import { FormSheet } from '../marketplace/pieces'
 import { AnalyticsSheet } from './AnalyticsSheet'
 import { N8nSettings } from './N8nSettings'
@@ -39,9 +42,15 @@ import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
+import { ArchivedGroupsSection } from './ArchivedGroupsSection'
+import { LocalAppsSection } from './LocalAppsSection'
+import { LocalScriptsSection } from './LocalScriptsSection'
+import { PlanStartSection } from './PlanStartSection'
+import { ServerSettingsSection } from './ServerSettingsSection'
+import { useIslandAgentDock } from '../island/island-preferences'
 
 /** The chat window's Settings: pages in a sidebar, ChatGPT's settings layout. */
-export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
+export type SettingsPage = 'general' | 'computers' | 'network' | 'access' | 'policies' | 'voice' | 'usage' | 'updates' | 'diagnostics' | 'n8n'
 
 const thisComputer = isMac ? 'This Mac' : 'This computer'
 const pages: { id: SettingsPage; title: string; label?: string; group: string; icon: string }[] = [
@@ -49,6 +58,7 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
   { id: 'computers', title: 'Computers & devices', label: 'Computers', group: thisComputer, icon: 'desktopcomputer' },
   { id: 'network', title: 'Network', group: thisComputer, icon: 'codync.network' },
   { id: 'access', title: 'Computer access', group: thisComputer, icon: 'hand.raised' },
+  { id: 'policies', title: 'Approvals & policies', label: 'Policies', group: thisComputer, icon: 'checkmark.shield' },
   { id: 'voice', title: 'Voice chat', group: 'Personal', icon: 'waveform' },
   { id: 'usage', title: 'Usage', group: 'Personal', icon: 'gauge.with.dots.needle.33percent' },
   { id: 'updates', title: 'Updates', group: thisComputer, icon: 'arrow.down.circle' },
@@ -57,7 +67,7 @@ const pages: { id: SettingsPage; title: string; label?: string; group: string; i
 ]
 
 /** Each page as `screen_viewed` names it; Computer access and Voice chat report themselves. */
-const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, voice: null, diagnostics: null, n8n: null }
+const pageScreens: Record<SettingsPage, Screen | null> = { general: 'settings', updates: 'settings', computers: 'computers', network: 'settings', usage: 'usage', access: null, policies: 'settings', voice: null, diagnostics: null, n8n: null }
 
 /** `page` is the window's: a command (the menu bar's network rows) can turn the open sheet to another page. */
 export function SettingsView({ page, setPage, onExtensions }: { page: SettingsPage; setPage: (page: SettingsPage) => void; onExtensions?: () => void }) {
@@ -109,6 +119,8 @@ function PageContent({ page, onExtensions, onPage }: { page: SettingsPage; onExt
   switch (page) {
     case 'access':
       return <ComputerAccessView />
+    case 'policies':
+      return <PoliciesView />
     case 'general':
       return <GeneralSettings onExtensions={onExtensions} onAccess={() => onPage('access')} />
     case 'computers':
@@ -159,6 +171,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   useEffect(() => void window.codync.app.launchAtLogin().then(setLaunchAtLogin), [])
   const [island, setIsland] = useState(false)
   useEffect(() => void window.codync.island.enabled().then(setIsland), [])
+  const [dock, setDock] = useIslandAgentDock()
   const [voiceShortcut, setVoiceShortcut] = useState<VoiceShortcut>('off')
   useEffect(() => void window.codync.speech.shortcut().then(setVoiceShortcut), [])
   const tr = useTr()
@@ -219,6 +232,9 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         <SwitchRow title="Show agent logos" detail="Marks each bot with its agent's logo when your bots use more than one agent." on={agentLogos} onChange={setAgentLogos} />
       </CardSection>
       <EnterpriseSection />
+      <PeopleSection />
+      <ServerSettingsSection />
+      <ChatAppearanceSection />
       <ThemePaletteSection />
       <CardSection
         title="Language"
@@ -247,6 +263,16 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
             {islandLabel(window.codync.platform)}
           </Switch>
         ) : null}
+        {/* The dock rides on the island: meaningless without it, so it follows the switch above. */}
+        {window.codync.island.supported ? (
+          <SwitchRow
+            title="Agent dock"
+            detail="Shows the agents on this computer in the island, at its edge, and opens on their roster. Needs the island."
+            on={dock}
+            onChange={setDock}
+            disabled={!island}
+          />
+        ) : null}
         {/* On-device speech, so macOS only. */}
         {window.codync.speech.available ? (
           <ValueRow label="Voice input shortcut" detail="Talk to a bot from any app, then tap the key once more to send.">
@@ -263,8 +289,12 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <ChannelsSection onExtensions={onExtensions} />
       <GitHubSection />
       <AgentImportSection />
+      <LocalScriptsSection />
+      <LocalAppsSection />
+      <PlanStartSection />
       <DemoSection />
       <HiddenBotsSection />
+      <ArchivedGroupsSection />
     </CardForm>
   )
 }
@@ -299,12 +329,14 @@ function UsageLimitsList() {
   const app = useApp()
   const stores = app.computers.flatMap((c) => app.store(c.id) ?? [])
   const [refreshing, setRefreshing] = useState(false)
-  const withUsage = stores.filter((s) => s.usage.providers.length > 0 || s.usage.services?.length)
+  const withUsage = stores.filter((s) => s.usage.providers.length > 0 || s.usage.services?.length || s.skillUsage?.skills.length || s.health)
   const refresh = async () => {
     if (refreshing) return
     setRefreshing(true)
     try {
-      await Promise.all(stores.map((s) => s.refreshUsage()))
+      await Promise.all(stores.map(async (s) => {
+        await Promise.all([s.refreshUsage(), s.refreshHealth(), s.refreshSkillUsage()])
+      }))
     } finally {
       setRefreshing(false)
     }
@@ -335,6 +367,8 @@ function UsageLimitsList() {
               {store.hostName}
             </>}
             usage={store.usage}
+            skills={store.skillUsage}
+            health={store.health}
             onShown={(id, shown) => void store.setUsageShown(id, shown).catch((e: unknown) => app.setError(errorText(e)))}
             onOrder={(ids) => store.setUsageOrder(ids).catch((e: unknown) => app.setError(errorText(e)))}
           />

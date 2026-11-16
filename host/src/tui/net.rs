@@ -124,45 +124,72 @@ impl Client {
         });
     }
 
-    /// Uploads `files` in 384 KiB chunks (under the channel's message limit, like the apps), then sends
-    /// `body` with them attached. The reply comes back as `Msg::Reply(after, …)`.
-    pub fn spawn_send_files(&self, mut body: Value, files: Vec<PathBuf>, after: After, tx: UnboundedSender<Msg>) {
+    /// Uploads one draft file in 384 KiB chunks (under the channel's message limit, like the apps) as it
+    /// is attached; progress, the end and a failure come back as `Msg::Upload*`. A cancelled upload
+    /// stops between chunks.
+    pub fn spawn_upload(
+        &self,
+        key: String,
+        bot_id: String,
+        path: std::path::PathBuf,
+        id: String,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        tx: UnboundedSender<Msg>,
+    ) {
         use base64::Engine as _;
+        use std::sync::atomic::Ordering;
         const CHUNK: usize = 384 * 1024;
         const MAX: u64 = 100 * 1024 * 1024;
         let c = self.clone();
+        let sent_path = path.clone();
         tokio::spawn(async move {
-            let upload = async {
-                let mut ids = Vec::new();
-                for path in &files {
-                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                    let data = tokio::fs::read(path).await.map_err(|e| format!("Can't read {name}: {e}"))?;
-                    if data.len() as u64 > MAX {
-                        return Err(format!("{name} is over 100 MB."));
-                    }
-                    let id = uuid::Uuid::new_v4().to_string();
-                    let mut offset = 0;
-                    loop {
-                        let end = (offset + CHUNK).min(data.len());
-                        let chunk = base64::engine::general_purpose::STANDARD.encode(&data[offset..end]);
-                        let done = end == data.len();
-                        c.call(
-                            "upload",
-                            &json!({"botId": body["botId"], "uploadId": id, "name": name,
-                                    "offset": offset, "data": chunk, "done": done}),
-                        )
-                        .await?;
-                        if done {
-                            break;
-                        }
-                        offset = end;
-                    }
-                    ids.push(id);
+            let result = async {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let data = tokio::fs::read(&path).await.map_err(|e| format!("Can't read {name}: {e}"))?;
+                if data.len() as u64 > MAX {
+                    return Err(format!("{name} is over 100 MB."));
                 }
-                body["attachments"] = ids.into();
-                c.call("send", &body).await
-            };
-            let _ = tx.send(Msg::Reply(after, upload.await));
+                let total = data.len();
+                let mut offset = 0;
+                loop {
+                    if cancel.load(Ordering::Relaxed) {
+                        // A chunk in flight may have put the partial back after the first cancel.
+                        let _ = c.call("cancelUpload", &json!({"botId": bot_id, "uploadId": id})).await;
+                        return Err(String::new());
+                    }
+                    let end = (offset + CHUNK).min(data.len());
+                    let chunk = base64::engine::general_purpose::STANDARD.encode(&data[offset..end]);
+                    let done = end == data.len();
+                    c.call(
+                        "upload",
+                        &json!({"botId": bot_id, "uploadId": id, "name": name,
+                                "offset": offset, "data": chunk, "done": done}),
+                    )
+                    .await?;
+                    offset = end;
+                    let _ = tx.send(Msg::Upload {
+                        key: key.clone(),
+                        path: sent_path.clone(),
+                        id: id.clone(),
+                        sent: offset as u64,
+                        total: total as u64,
+                    });
+                    if done {
+                        return Ok(());
+                    }
+                }
+            }
+            .await;
+            match result {
+                Ok(()) => {
+                    let _ = tx.send(Msg::Uploaded { key, path: sent_path, id });
+                }
+                // A cancel already said so in the box; the host call clears its partial file.
+                Err(error) if error.is_empty() => {}
+                Err(error) => {
+                    let _ = tx.send(Msg::UploadFailed { key, path: sent_path, id, error });
+                }
+            }
         });
     }
 

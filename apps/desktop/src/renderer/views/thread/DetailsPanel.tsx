@@ -12,8 +12,10 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { useScreenViewed } from '../../store/analytics'
 import { BotSettingsPanel } from '../bots/BotEditorView'
+import { NewBotView } from '../bots/NewBotView'
 import { BotAppsCard } from '../bots/BotAppsView'
 import { SkillProposalsCard } from '../bots/SkillProposalsCard'
+import { LearningSection } from '../bots/LearningSection'
 import { MemoryCard } from '../bots/MemoryView'
 import { DocumentsCard } from '../bots/DocumentsView'
 import { ThreadsCard } from './ThreadsCard'
@@ -28,7 +30,7 @@ import '../bots/documents.css'
 import { useTr } from '../../lib/use-language'
 
 
-export type DetailsTab = 'details' | 'library' | 'apps' | 'memory' | 'documents' | 'threads' | 'computer' | 'settings'
+export type DetailsTab = 'details' | 'library' | 'apps' | 'memory' | 'documents' | 'threads' | 'computer' | 'settings' | 'new'
 
 const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'details', label: 'Details' },
@@ -39,6 +41,7 @@ const TABS: { id: DetailsTab; label: string }[] = [
   { id: 'threads', label: 'Threads' },
   { id: 'computer', label: 'Computer' },
   { id: 'settings', label: 'Settings' },
+  { id: 'new', label: 'New agent' },
 ]
 
 /** The inspector beside a conversation (Grok Bot's): who the bot is, then its details, library, memory and settings. */
@@ -83,13 +86,17 @@ export function DetailsPanel({ botId, routineId, tab, setTab, editGroup, openArt
               ) : tab === 'library' ? (
                 <LibraryView botId={botId} openArtifact={openArtifact} />
               ) : tab === 'memory' ? (
-                <><MemoryCard botId={botId} />{bot && !group ? <SkillProposalsCard botId={botId} /> : null}</>
+                <><MemoryCard botId={botId} />{bot && !group ? <><SkillProposalsCard botId={botId} /><LearningSection botId={botId} /></> : null}</>
               ) : tab === 'computer' ? (
                 <ComputerPanel key={`${store.contextId}:${store.computer.id}:${botId}`} botId={botId} />
               ) : tab === 'documents' && bot ? (
                 <DocumentsCard bot={bot} store={store} />
               ) : tab === 'threads' && bot ? (
                 <ThreadsCard bot={bot} store={store} />
+              ) : tab === 'new' ? (
+                <div className="details-new-bot">
+                  <NewBotView computer={null} onCreated={() => setTab('details')} />
+                </div>
               ) : (
                 <BotSettingsPanel botId={botId} part="rarely" />
               )}

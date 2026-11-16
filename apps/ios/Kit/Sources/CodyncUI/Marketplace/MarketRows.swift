@@ -51,6 +51,8 @@ struct AgentCard: View {
 struct MarketRow<Icon: View>: View {
     let title: String
     let subtitle: String
+    /// A line under the subtitle, such as "Needs a key from …".
+    var note: String? = nil
     let added: Bool
     var busy = false
     var addLabel = "Add"
@@ -68,6 +70,7 @@ struct MarketRow<Icon: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.tr(title)).font(.body.weight(.medium)).foregroundStyle(Palette.text).lineLimit(1)
                 Text(L10n.tr(subtitle)).font(.subheadline).foregroundStyle(Palette.secondary).lineLimit(1)
+                if let note { KeyNote(text: note) }
             }
             Spacer(minLength: 8)
             if busy {

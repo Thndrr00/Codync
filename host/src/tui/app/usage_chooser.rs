@@ -16,6 +16,10 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => Some(Overlay::Usage(scroll.saturating_sub(1))),
             KeyCode::PageDown | KeyCode::Char(' ') => Some(Overlay::Usage((scroll + 10).min(max))),
             KeyCode::PageUp => Some(Overlay::Usage(scroll.saturating_sub(10))),
+            KeyCode::Char('t') => {
+                self.usage_skills = !self.usage_skills;
+                Some(Overlay::Usage(0))
+            }
             KeyCode::Char('s') if !usage_services(self).is_empty() => {
                 self.overlays.push(Overlay::UsageChooser { row: 0, moving: false });
                 Some(Overlay::Usage(scroll))

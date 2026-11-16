@@ -1,4 +1,5 @@
 import { checkVersions, isBelow, type VersionMismatch } from '@shared/compat'
+import { hasServerLibrary } from '@shared/artifacts'
 import { mixesAgents } from '@shared/fallbacks'
 import {
   isInternalEntry,
@@ -27,6 +28,13 @@ import { ComposerDrafts } from '@shared/composer-drafts'
 import { canLoadHistory } from '@shared/mirror-window'
 import { loadIconCache, saveIconCache } from '../lib/icon-cache'
 import { trNow } from '../lib/l10n.ts'
+
+/** Server-wide settings every client reads (`serverSettings`). */
+export interface ServerSettings {
+  responseStyle: 'natural' | 'classic'
+  claudeUserSetup: boolean
+  remoteControl: { access: 'everyone' | 'admins' | 'owner'; askOnHost: boolean }
+}
 
 /** The first host where the user picks the lead and may delete it. */
 const LEAD_CHOICE_HOST = '2.33.0'
@@ -90,6 +98,18 @@ export class BotMirror extends Observable {
   usage: Usage = { providers: [] }
   /** Memory, CPU and disk of this computer (`hostHealth`); null until read, or from an older host. */
   health: HostHealth | null = null
+  /** How often each skill's text entered a turn (`skillUsage`); null until read, or from an older host. */
+  skillUsage: import('@shared/models').SkillUsage | null = null
+  /** The hourly ceiling on local script requests (`scriptLimit`); null until read, or from an older host. */
+  scriptLimit: { perHour: number; choices: number[] } | null = null
+  /** The computer-wide ceiling on local mini-apps, how many it holds and how many bots made them (`localApps`);
+   * null until read, or from an older host. */
+  localApps: { count: number; limit: number; choices: number[]; botsWithApps: number } | null = null
+  /** When a plan card starts the work by itself (`planStart`); null until read, or from an older host. */
+  planStart: { afterMs: number | null; presets: number[]; min: number; max: number } | null = null
+  /** How the agents' updates read, whether Claude uses the person's setup, and who may control this computer
+   * (`serverSettings`); null until read, or from an older host. */
+  serverSettings: ServerSettings | null = null
   screen: ScreenState | null = null
   /** This computer's n8n instance; null on a host that predates it. */
   n8n: N8nState | null = null
@@ -196,6 +216,11 @@ export class BotMirror extends Observable {
     return this.hostVersion !== null && hostHasSections(this.hostVersion.version)
   }
 
+  /** The host has the server's Library (`serverLibrary`); an older one leaves the page out. */
+  get hasServerLibrary() {
+    return this.hostVersion !== null && hasServerLibrary(this.hostVersion.version)
+  }
+
   /** The user picks the lead (`setLead`) and may delete it: an older host refuses both. */
   get hasLeadChoice() {
     return this.hostVersion !== null && !isBelow(this.hostVersion.version, LEAD_CHOICE_HOST)
@@ -224,9 +249,10 @@ export class BotMirror extends Observable {
     return this.hostUpdate?.kind === 'requested' ? this.hostUpdate.at + HOST_UPDATE_WAIT : null
   }
 
-  /** Roster order: the lead, then pinned bots, then where the user dragged them, then most recent activity. */
+  /** Roster order: the lead, then pinned bots, then where the user dragged them, then most recent activity.
+   *  An archived group stays out of the open list (`archivedBots`). */
   get roster(): Bot[] {
-    return [...this.bots.values()].filter((b) => !b.hidden).sort(rosterOrder)
+    return [...this.bots.values()].filter((b) => !b.hidden && !(b.kind === 'group' && b.archived)).sort(rosterOrder)
   }
 
   /** The visible bots run more than one agent, so the roster marks each with its agent's logo. Not before
@@ -237,6 +263,13 @@ export class BotMirror extends Observable {
 
   get hiddenBots(): Bot[] {
     return [...this.bots.values()].filter((b) => b.hidden).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** Groups taken out of the open roster, by name: what the settings offer to restore. */
+  get archivedBots(): Bot[] {
+    return [...this.bots.values()]
+      .filter((b) => b.kind === 'group' && b.archived && !b.hidden)
+      .sort((a, b) => a.name.localeCompare(b.name))
   }
 
   backendName(id: string) {

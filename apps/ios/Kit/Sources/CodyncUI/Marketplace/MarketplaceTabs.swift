@@ -66,7 +66,9 @@ extension MarketplaceView {
                 MarketSection(title: title) {
                     ItemGrid {
                         ForEach(group) { app in
-                            MarketRow(title: app.name, subtitle: app.tagline, added: app.installed || addedApps.contains(app.id),
+                            MarketRow(title: app.name, subtitle: app.tagline,
+                                      note: app.guide?.kind == "key" ? L10n.tr("Needs a key from {name}").replacingOccurrences(of: "{name}", with: app.name) : nil,
+                                      added: app.installed || addedApps.contains(app.id),
                                       open: { viewingApp = app }) {
                                 ServiceLogo(website: app.website, name: app.name, registryName: nil)
                             } add: {
@@ -77,10 +79,8 @@ extension MarketplaceView {
                 }
             }
         } else if !query.isEmpty {
-            Text(L10n.tr("No apps match “{query}”.").replacingOccurrences(of: "{query}", with: query))
-                .foregroundStyle(Palette.secondary)
+            MarketEmpty(title: L10n.fill(L10n.tr("No apps match “{query}”."), ["query": query]))
         }
-        ComposioSection(query: query)
         MarketSection(title: "MCP Registry") {
             if connectors.loading {
                 SkeletonGrid()
@@ -103,12 +103,12 @@ extension MarketplaceView {
                 }
             }
         }
+        ComposioSection(query: query)
     }
 
     @ViewBuilder private var agentsTab: some View {
         if shownMarketAgents.isEmpty {
-            Text(query.isEmpty ? L10n.tr("No agents yet.") : L10n.tr("No agents match “{query}”.").replacingOccurrences(of: "{query}", with: query))
-                .foregroundStyle(Palette.secondary)
+            MarketEmpty(title: L10n.fill(L10n.tr(query.isEmpty ? "No agents yet." : "No agents match “{query}”."), ["query": query]))
         } else {
             ForEach(groups(shownMarketAgents, category: \.category, featured: \.featured), id: \.0) { title, group in
                 MarketSection(title: title) {
@@ -149,8 +149,7 @@ extension MarketplaceView {
             SkeletonGrid()
         } else if shownSkills.isEmpty {
             if !query.isEmpty {
-                Text(L10n.tr("No skills match “{query}”.").replacingOccurrences(of: "{query}", with: query))
-                    .foregroundStyle(Palette.secondary)
+                MarketEmpty(title: L10n.fill(L10n.tr("No skills match “{query}”."), ["query": query]))
             }
         } else {
             ItemGrid {
@@ -179,9 +178,9 @@ extension MarketplaceView {
     }
 }
 
-/// The end of a list the registry continues. In view, it asks for the page at `cursor`, and again each
-/// time the cursor moves on while it stays in view. After a failure it shows Try again, and asks again
-/// once it scrolls back into view.
+/// The end of a list the registry or Composio continues. In view, it asks for the page at `cursor`, and
+/// again each time the cursor moves on while it stays in view. After a failure it shows Try again, and
+/// asks again once it scrolls back into view.
 struct LoadMoreRow: View {
     let cursor: String
     let failed: Bool

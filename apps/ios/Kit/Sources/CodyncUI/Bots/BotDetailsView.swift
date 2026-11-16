@@ -137,6 +137,22 @@ struct BotDetailsView: View {
                                   isOn: Binding(get: { bot.computer }, set: { model.setComputer(bot, $0) }))
                             .disabled(model.isOffline)
                             .outlinedCard()
+                        if let runtime = bot.computerRuntime {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(L10n.tr("Where it runs"))
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Palette.text)
+                                TabChoice(selection: Binding(get: { runtime.kind }, set: { model.setComputerRuntime(bot, $0) }),
+                                          options: [("local", "Local"), ("container", "Container")])
+                                Text(runtime.kind == "container"
+                                     ? "A Docker container with its own folder and browser profile. Without Docker, the shell falls back to the local workspace and the computer panel says so."
+                                     : "This computer, as Codync has always run it.")
+                                    .font(.caption)
+                                    .foregroundStyle(Palette.secondary)
+                                ComputerRuntimeDetail(botId: botId, kind: runtime.kind)
+                            }
+                            .outlinedCard()
+                        }
                     }
                 }
                 RoutinesView(botId: botId, initialId: routineId)
@@ -144,7 +160,10 @@ struct BotDetailsView: View {
         case .library:
             LibraryView(botId: botId, openArtifact: openArtifact)
         case .memory:
-            MemoryCard(botId: botId)
+            VStack(alignment: .leading, spacing: 28) {
+                MemoryCard(botId: botId)
+                if let bot, !bot.isGroup { LearningSection(botId: botId) }
+            }
         case .documents:
             DocumentsView(botId: botId)
         case .settings:

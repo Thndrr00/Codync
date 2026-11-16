@@ -12,7 +12,7 @@ use crate::store::Store;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 const KEY: &str = "skills.usage.v1";
 const DAY_MS: i64 = 86_400_000;
@@ -33,6 +33,27 @@ pub struct Usage {
     /// Bot id → when it was last offered to save a skill.
     #[serde(default)]
     offered: HashMap<String, i64>,
+    /// Skill id → how many turns loaded its text, and what that text is worth.
+    #[serde(default)]
+    loads: HashMap<String, Load>,
+}
+
+/// How often a skill's text entered a turn. One turn loads a skill at most once, however many times
+/// its agent reads the file, so the count is turns, not file reads.
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq, Eq)]
+pub struct Load {
+    pub count: u64,
+    /// Estimated tokens of the skill text at each load, added up (`SKILL.md` bytes / 4).
+    pub tokens: u64,
+    /// Estimated list cost, in millionths of a dollar, of the loads whose model has a known rate.
+    #[serde(default)]
+    pub cost_micros: u64,
+    /// Loads whose model had a known rate. No known load leaves the skill unpriced, never free.
+    #[serde(default)]
+    pub priced: u64,
+    /// The bots that loaded it.
+    #[serde(default)]
+    pub agents: BTreeSet<String>,
 }
 
 impl Usage {
@@ -87,6 +108,83 @@ pub fn note_use(store: &Store, id: &str, now: i64) {
     {
         tracing::warn!(error = format!("{error:#}"), "couldn't note a skill's use");
     }
+}
+
+/// Estimated tokens of a skill's `SKILL.md`: about four bytes of text make one token. A missing
+/// file (a skill that was removed while a turn ran) has no estimate.
+pub fn load_tokens(id: &str) -> Option<u64> {
+    const MAX: u64 = 1_000_000;
+    let size = std::fs::metadata(skills_dir().join(id).join("SKILL.md")).ok()?.len();
+    Some(size.div_ceil(4).min(MAX))
+}
+
+/// The id of the skill a tool call's `input` read: the path names `<root>/<id>/SKILL.md`. Reading a
+/// script or another file in the skill's folder is a use of the skill, but not a load of its text.
+pub fn skill_read(input: &Value, root: &str) -> Option<String> {
+    if input.is_null() || root.is_empty() {
+        return None;
+    }
+    // JSON writes a Windows path's backslashes doubled; both forms become `/`, and case doesn't matter there.
+    let text = input.to_string().replace("\\\\", "/").replace('\\', "/").to_lowercase();
+    let root = root.trim_end_matches('/').to_lowercase();
+    let after = &text[text.find(&root)? + root.len()..];
+    let rest = after.strip_prefix('/')?;
+    let (id, file) = rest.split_once('/')?;
+    let id: String = id.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')).collect();
+    let loads = file.starts_with("skill.md")
+        && file["skill.md".len()..].chars().next().is_none_or(|c| matches!(c, '"' | '\\' | '?' | ' '));
+    (loads && !id.is_empty() && id != "." && id != "..").then_some(id)
+}
+
+/// Notes one turn's load of `id` by `bot`: a count, the text's estimated tokens, and its list cost
+/// when `cost` is known. The first load of the hour also counts as the skill's use.
+pub fn note_load(store: &Store, bot: &str, id: &str, tokens: Option<u64>, cost: Option<f64>, now: i64) {
+    let mut usage = Usage::load(store);
+    usage.touch(id, now);
+    let load = usage.loads.entry(id.to_owned()).or_default();
+    load.count = load.count.saturating_add(1);
+    load.tokens = load.tokens.saturating_add(tokens.unwrap_or(0));
+    if let Some(cost) = cost.filter(|cost| cost.is_finite() && *cost >= 0.0) {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let micros = (cost.min(1_000_000.0) * 1_000_000.0).round() as u64;
+        load.cost_micros = load.cost_micros.saturating_add(micros);
+        load.priced = load.priced.saturating_add(1);
+    }
+    load.agents.insert(bot.to_owned());
+    if let Err(error) = usage.save(store) {
+        tracing::warn!(error = format!("{error:#}"), "couldn't note a skill's load");
+    }
+}
+
+/// `skillUsage`: every skill's loads, estimated tokens and cost, its share of all skill-load tokens,
+/// and how many bots loaded it, the most tokens first.
+pub fn report(store: &Store) -> Value {
+    let usage = Usage::load(store);
+    let names: HashMap<String, String> = skills(store).into_iter().map(|skill| (skill.id, skill.name)).collect();
+    let total: u64 = usage.loads.values().map(|load| load.tokens).sum();
+    let mut rows: Vec<Value> = usage
+        .loads
+        .iter()
+        .map(|(id, load)| {
+            #[allow(clippy::cast_precision_loss, reason = "token counts are far below f64's exact range")]
+            let share = if total == 0 { 0.0 } else { load.tokens as f64 / total as f64 };
+            json!({
+                "id": id,
+                "name": names.get(id).cloned().unwrap_or_else(|| id.clone()),
+                "loads": load.count,
+                "tokens": load.tokens,
+                "costUsd": (load.priced > 0).then(|| load.cost_micros as f64 / 1_000_000.0),
+                "share": share,
+                "agents": load.agents.len(),
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        let tokens = b["tokens"].as_u64().cmp(&a["tokens"].as_u64());
+        let loads = b["loads"].as_u64().cmp(&a["loads"].as_u64());
+        tokens.then(loads).then_with(|| a["id"].as_str().cmp(&b["id"].as_str()))
+    });
+    json!({"skills": rows, "totalTokens": total})
 }
 
 /// The skills folder as text, with `/` separators, for matching it in a tool call's input.
@@ -224,6 +322,52 @@ mod tests {
         assert_eq!(skill_touched(&windows, root).as_deref(), Some("pdf"));
         let upper = json!({"command": "type c:\\users\\ME\\.codync\\SKILLS\\pdf\\SKILL.md"});
         assert_eq!(skill_touched(&upper, root).as_deref(), Some("pdf"));
+    }
+
+    #[test]
+    fn only_the_skill_file_loads_its_text() {
+        let root = "C:/Users/me/.codync/skills";
+        let file = json!({"path": "C:/Users/me/.codync/skills/release-checklist/SKILL.md"});
+        assert_eq!(skill_read(&file, root).as_deref(), Some("release-checklist"));
+        let windows = json!({"file_path": "C:\\Users\\me\\.codync\\skills\\pdf\\SKILL.md"});
+        assert_eq!(skill_read(&windows, root).as_deref(), Some("pdf"));
+        let script = json!({"path": "C:/Users/me/.codync/skills/pdf/scripts/merge.py"});
+        assert_eq!(skill_read(&script, root), None, "a script is a use, not a load of the text");
+        let other = json!({"path": "C:/Users/me/.codync/skills/pdf/NOTES.md"});
+        assert_eq!(skill_read(&other, root), None);
+        assert_eq!(skill_read(&Value::Null, root), None);
+        assert_eq!(skill_read(&file, ""), None);
+    }
+
+    #[test]
+    fn loads_keep_their_count_tokens_cost_and_bots() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("memory store");
+        note_load(&store, "ada", "pdf", Some(300), Some(0.0006), 1_000);
+        note_load(&store, "ada", "pdf", Some(300), Some(0.0006), 2_000);
+        note_load(&store, "grace", "pdf", Some(300), None, 3_000);
+        note_load(&store, "ada", "deploy", Some(100), None, 4_000);
+        let usage = Usage::load(&store);
+        let pdf = &usage.loads["pdf"];
+        assert_eq!((pdf.count, pdf.tokens, pdf.priced, pdf.cost_micros), (3, 900, 2, 1_200));
+        assert_eq!(pdf.agents.len(), 2);
+        assert_eq!(usage.loads["deploy"].count, 1);
+    }
+
+    #[test]
+    fn the_report_shares_tokens_and_leaves_an_unpriced_skill_unpriced() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("memory store");
+        note_load(&store, "ada", "pdf", Some(300), Some(0.0006), 1_000);
+        note_load(&store, "grace", "pdf", Some(300), None, 2_000);
+        note_load(&store, "ada", "deploy", Some(100), None, 3_000);
+        let report = report(&store);
+        let skills = report["skills"].as_array().expect("skills");
+        assert_eq!(report["totalTokens"], 700);
+        assert_eq!(skills[0]["id"], "pdf");
+        assert_eq!(skills[0]["loads"], 2);
+        assert_eq!(skills[0]["agents"], 2);
+        assert!((skills[0]["share"].as_f64().expect("share") - 600.0 / 700.0).abs() < 1e-9);
+        assert!((skills[0]["costUsd"].as_f64().expect("priced") - 0.0006).abs() < 1e-9);
+        assert_eq!(skills[1]["costUsd"], Value::Null, "an unpriced skill is not free");
     }
 
     #[test]

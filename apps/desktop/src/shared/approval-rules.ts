@@ -69,6 +69,30 @@ export function describeEvaluation(e: ApprovalEvaluation): string {
   }
 }
 
+/** What the host's what-if says about a proposed call (`previewApproval`): its decision, the rule or the
+ * default that made it, and a sentence to show. */
+export interface ApprovalPreview {
+  decision: RuleDecision
+  source: 'rule' | 'quickRule' | 'default' | 'forbidden' | 'policy' | 'noMatch' | 'error'
+  rule: { index: number; decision: RuleDecision; pattern: string; kind: string | null; quick: boolean } | null
+  /** This computer's policies, which decide before the rules above; absent from an older host. */
+  policy?: {
+    outcome: 'policy' | 'noMatch' | 'error' | 'unset'
+    rule: { id: string; name: string; effect: 'allow' | 'deny'; index: number; message?: string | null } | null
+    allowlist: boolean
+    /** What the rules read, with credentials masked. */
+    variables: Record<string, unknown>
+    explanation: string
+  } | null
+  default: 'ask' | 'auto'
+  chained: boolean
+  allowPassedOver: number | null
+  tool: string
+  kind: string
+  initiator: string
+  explanation: string
+}
+
 /** The rules with the one at `from` moved to `to` (the first match decides, so order matters). */
 export function moveRule(rules: ApprovalRule[], from: number, to: number): ApprovalRule[] {
   if (from === to || from < 0 || to < 0 || from >= rules.length || to >= rules.length) return rules

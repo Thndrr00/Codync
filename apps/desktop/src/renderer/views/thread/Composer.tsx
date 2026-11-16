@@ -35,7 +35,7 @@ type Trailing = 'interrupt' | 'stop' | 'call' | 'send'
  * message it quotes sits at the top of the box and goes out with the next send. Under an artifact, `about` is the
  * artifact: the box keeps a draft of its own, and every message replies to the artifact's card.
  */
-export function Composer({ botId, thread = null, reply = null, about = null, cancelReply, onCall, onInterrupt }: {
+export function Composer({ botId, thread = null, reply = null, about = null, cancelReply, onCall, onInterrupt, onOpenThread }: {
   botId: string
   /** A document's side conversation (`doc:<id>`) the message goes to, instead of the chat. */
   thread?: string | null
@@ -46,15 +46,17 @@ export function Composer({ botId, thread = null, reply = null, about = null, can
   onCall?: (() => void) | null
   /** Interrupts the bot while it is speaking in a voice call. */
   onInterrupt?: (() => void) | null
+  /** Opens a thread of this chat, after a dictation is kept as one. */
+  onOpenThread?: (threadId: string) => void
 }) {
   const store = useStore()
   // Remount transient editor state (selection, attachments, IME) when its destination changes.
   return <DestinationComposer key={JSON.stringify([store.contextId, store.computer.id, botId, thread, about?.id])}
-    botId={botId} thread={thread} about={about} reply={reply} cancelReply={cancelReply} onCall={onCall} onInterrupt={onInterrupt} />
+    botId={botId} thread={thread} about={about} reply={reply} cancelReply={cancelReply} onCall={onCall} onInterrupt={onInterrupt} onOpenThread={onOpenThread} />
 }
 
-function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall, onInterrupt }: {
-  botId: string; thread: string | null; about: Artifact | null; reply: Entry | null; cancelReply?: () => void; onCall?: (() => void) | null; onInterrupt?: (() => void) | null
+function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall, onInterrupt, onOpenThread }: {
+  botId: string; thread: string | null; about: Artifact | null; reply: Entry | null; cancelReply?: () => void; onCall?: (() => void) | null; onInterrupt?: (() => void) | null; onOpenThread?: (threadId: string) => void
 }) {
   const store = useStore()
   const tr = useTr()
@@ -75,9 +77,11 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   const pasted = useRef<string[]>([])
   const working = !!bot && isWorkingIn(bot, botId)
   const empty = !draft.trim() && !files.length
+  /** Every attached file reached the computer: Send waits for a file on its way, or retried after a failure. */
+  const filesReady = files.every((f) => store.uploads.state(f.id)?.status === 'uploaded')
   /** A session the person runs in their own terminal: it is read here, answered in that terminal. */
   const terminal = !!bot && bot.backend === 'external'
-  const canSend = !terminal && !empty && (store.connection.kind === 'online' || (store.canQueue && !files.length))
+  const canSend = !terminal && !empty && filesReady && (store.connection.kind === 'online' || (store.canQueue && !files.length))
   const canAttach = !!bot && !terminal
 
   const members = bot && isGroup(bot) ? store.members(bot) : []
@@ -171,6 +175,8 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
       }
       accepted.push({ id: crypto.randomUUID(), name: f.name, data: f.data })
     }
+    // Each uploads now, so its ring shows before Send names it.
+    for (const file of accepted) store.uploads.begin(botId, file)
     setFiles((list) => [...list, ...accepted])
   }
 
@@ -211,6 +217,21 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
   }
   useVoiceShortcut(dictation, draft, submit, () => field.current?.focus())
 
+  /** Keeps the last dictation as a thread of its own, linked to this chat, and opens it. */
+  const keepAsThread = () => {
+    const said = dictation.dictated.trim()
+    if (!said) return
+    // The thread takes the words, so the box no longer offers them to this chat.
+    if (draft.endsWith(dictation.dictated)) setDraft(draft.slice(0, draft.length - dictation.dictated.length).trimEnd())
+    dictation.forget()
+    void store.keepDictation(botId, said).then(
+      (id) => onOpenThread?.(id),
+      (e: unknown) => store.setError(e instanceof Error ? e.message : String(e)),
+    )
+  }
+  // A kept dictation belongs to the chat itself: a thread's box or an artifact's never offers it.
+  const canKeepDictation = !!dictation.dictated.trim() && !dictation.busy && !thread && !about && !terminal
+
   const trailing: Trailing = terminal ? 'send' : onInterrupt && !draft && !files.length ? 'interrupt' : working && !draft && !files.length ? 'stop' : onCall && !draft && !files.length ? 'call' : 'send'
   const [symbol, label] = ({
     interrupt: ['stop.fill', 'Interrupt'],
@@ -249,10 +270,26 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
           <ComposerReveal open={files.length > 0}>
             <div className="file-chips">
               {files.map((f) => (
-                <ComposerAttachment key={f.id} file={f} remove={() => setFiles((list) => list.filter((x) => x.id !== f.id))} />
+                <ComposerAttachment
+                  key={f.id}
+                  file={f}
+                  botId={botId}
+                  remove={() => {
+                    store.uploads.forget(f.id)
+                    setFiles((list) => list.filter((x) => x.id !== f.id))
+                  }}
+                />
               ))}
             </div>
           </ComposerReveal>
+          {canKeepDictation ? (
+            <HStack className="composer-kept" gap={6}>
+              <button className="press composer-kept-action" onClick={keepAsThread}>{tr('Keep as thread')}</button>
+              <button className="press composer-kept-dismiss" aria-label={tr('Dismiss')} title={tr('Dismiss')} onClick={() => dictation.forget()}>
+                <Icon name="xmark" size={10} weight="medium" />
+              </button>
+            </HStack>
+          ) : null}
           <div className="composer-box">
             {/* One capsule: attachments, the field, and send / stop / call. */}
             {canAttach ? (

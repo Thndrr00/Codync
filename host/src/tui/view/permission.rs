@@ -103,6 +103,36 @@ pub(super) fn permission_card(out: &mut Built, app: &App, e: &Entry, b: &Bot, wi
             out.lines.push(row(l.spans));
         }
     }
+    if let Some(index) = e.data["questionIndex"].as_u64() {
+        let count = e.data["questionCount"].as_u64().unwrap_or(1).max(1);
+        out.lines.push(row(vec![Span::styled(format!("Question {} of {count}", index + 1), t.secondary)]));
+        if let Some(answers) = e.data["answers"].as_array().filter(|a| !a.is_empty()) {
+            let summary = index + 1 == count;
+            if summary {
+                out.lines.push(row(vec![Span::styled("Summary", t.bold)]));
+            }
+            for answer in answers {
+                let text = answer["text"].as_str().unwrap_or_default();
+                let label = answer["label"].as_str().unwrap_or_default();
+                out.lines.push(row(vec![
+                    Span::styled(truncate(text, inner.saturating_sub(w(label) + 3)), t.secondary),
+                    Span::raw("  "),
+                    Span::styled(label.to_owned(), t.text),
+                ]));
+            }
+        }
+    }
+    if let Some(at) = e.data["autoApproveAt"].as_i64().filter(|_| e.data["status"] == "pending") {
+        // A plan card that starts by itself in a minute or more counts down, as the apps' Start button does.
+        let remaining = (at - crate::store::now_ms()).max(0);
+        let total = remaining / 1_000 + i64::from(remaining % 1_000 > 0);
+        if total >= 60 {
+            out.lines.push(row(vec![Span::styled(
+                format!("Starts by itself in {}:{:02}", total / 60, total % 60),
+                t.amber,
+            )]));
+        }
+    }
     out.lines.push(row(vec![]));
     // Buttons, wrapping onto more lines when narrow.
     let mut opts = e.options();
@@ -191,5 +221,7 @@ mod tests {
         let o = |k: &str| (String::new(), String::new(), k.to_owned());
         let keys = option_keys(&[o("allow_once"), o("allow_always"), o("reject_once"), o("reject_always")]);
         assert_eq!(keys, ["y", "a", "n", "4"]);
+        // The Back row of a question card gets a digit, as any option without a letter does.
+        assert_eq!(option_keys(&[o("allow_once"), o("other")]), ["y", "2"]);
     }
 }

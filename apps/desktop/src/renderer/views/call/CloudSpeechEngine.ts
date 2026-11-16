@@ -82,9 +82,10 @@ export class CloudSpeechEngine extends VoiceEngine {
   constructor(
     readonly provider: VoiceProvider,
     private speech: CloudSpeech,
+    chunk = SPEECH_CHUNK[provider],
   ) {
     super()
-    this.chunk = VoiceSettings.localSpeech() ? 120 : SPEECH_CHUNK[provider]
+    this.chunk = VoiceSettings.localSpeech() ? 120 : chunk
   }
 
   async start() {

@@ -30,6 +30,18 @@ pub(crate) use blocking::tool_timeout;
 use blocking::{ASK_TIMEOUT, ask};
 pub use requests::{Requests, Turn};
 
+/// An A2A task from another computer, run through the same actor and approvals as any bot request.
+pub(crate) async fn a2a_ask(
+    hub: &Arc<Hub>,
+    target: &BotConfig,
+    peer: &str,
+    message: &str,
+    hops: u8,
+    timeout: std::time::Duration,
+) -> Result<String> {
+    blocking::a2a_ask(hub, target, peer, message, hops, timeout).await
+}
+
 const MAX_MESSAGE_BYTES: usize = 32_000;
 const MAX_PENDING_MESSAGES: usize = 64;
 /// What an exchange notice keeps of a reply.
@@ -89,6 +101,7 @@ pub fn tools() -> Value {
         members::tool(),
         batch::tool(),
         pipeline::tool(),
+        crate::a2a::tool(),
     ])
 }
 
@@ -185,7 +198,7 @@ impl BotRequest {
             }
             Back::Remote(to) => remote::answer(&message.hub, to, &outcome, self.hops),
             Back::Assistant { request } => message.hub.assistant.answered(request, outcome),
-            Back::Openai => {}
+            Back::Openai | Back::A2a => {}
         }
     }
 }
@@ -238,9 +251,15 @@ pub(crate) enum RequestStatus {
 /// user's cloud assistant.
 enum Back {
     Openai,
-    Local { sender: String },
+    Local {
+        sender: String,
+    },
     Remote(remote::Return),
-    Assistant { request: String },
+    Assistant {
+        request: String,
+    },
+    /// An A2A task from another computer: its outcome goes back as a letter, never a chat turn.
+    A2a,
 }
 
 impl Back {
@@ -248,7 +267,7 @@ impl Back {
     /// or the cloud assistant hears so, without a reply turn.
     fn cancelled(&self, hub: &Arc<Hub>, hops: u8) {
         match self {
-            Self::Openai | Self::Local { .. } => {}
+            Self::Openai | Self::Local { .. } | Self::A2a => {}
             Self::Remote(to) => remote::cancelled(hub, to, hops),
             Self::Assistant { request } => hub.assistant.cancelled(request),
         }
@@ -436,6 +455,7 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
             let source = visible_bot(hub, from)?;
             return members::ask(hub, &source, args["question"].as_str().unwrap_or_default()).await;
         }
+        "a2a_ask" => crate::a2a::ask_tool(hub, from, args).await,
         "ask_bot" | "delegate_batch" | "run_pipeline" => {
             let source = visible_bot(hub, from)?;
             match name {

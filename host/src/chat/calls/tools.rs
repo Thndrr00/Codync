@@ -3,7 +3,7 @@
 use super::context::{self, RECENT};
 use crate::agent::bot::Cmd;
 use crate::hub::{Hub, Runtime};
-use crate::store::{BotConfig, Entry, EntryKind};
+use crate::store::{BotConfig, Entry, EntryKind, Lane};
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -63,7 +63,9 @@ fn relay(hub: &Arc<Hub>, cfg: &BotConfig, call: &str, text: &str) -> Result<Valu
         format!("{text}\n\n[The user's own words on the call: «{said}»]")
     };
     let data = json!({"text": text, "attachments": [], "call": call, "from": "voice"});
-    crate::chat::messages::post(hub, cfg, data)?;
+    let lane = crate::chat::calls::root(&hub.store, call)
+        .map_or_else(|| Lane::main(&cfg.id), |root| Lane::in_thread(&cfg.id, &root));
+    crate::chat::messages::post_in_lane(hub, cfg, lane, data)?;
     Ok(json!({"sent": true, "note": "The bot's reply will arrive as a separate message."}))
 }
 
@@ -121,7 +123,7 @@ fn answer(hub: &Hub, cfg: &BotConfig, option: &str) -> Result<Value> {
     // A card in a group belongs to the bot that asked.
     let owner = card.data["author"].as_str().unwrap_or(&card.bot_id).to_owned();
     let option_id = pick["optionId"].as_str().map(str::to_owned);
-    hub.send_cmd(&owner, Cmd::Permission { entry_id: card.id.clone(), option_id })?;
+    hub.send_cmd(&owner, Cmd::Permission { entry_id: card.id.clone(), option_id, values: None })?;
     Ok(json!({"answered": pick["name"]}))
 }
 

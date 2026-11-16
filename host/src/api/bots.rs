@@ -60,6 +60,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             b["enabled"].as_bool().context("enabled is required")?,
         )?,
         "deleteEntry" => json!({"deleted": hub.delete_entry(str_arg(&b, "entryId")?)?}),
+        "deleteHistory" => hub.delete_history(str_arg(&b, "botId")?)?,
+        "compactContext" => hub.compact_context(str_arg(&b, "botId")?)?,
         "deleteRoutine" => hub.routines.remove(hub, str_arg(&b, "botId")?, str_arg(&b, "id")?)?,
         "runRoutine" => hub.routines.enqueue(
             &hub.store,
@@ -75,6 +77,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             str_arg(&b, "botId")?,
             str_arg(&b, "id")?,
             b["rotate"].as_bool().unwrap_or(false),
+            b["key"].as_str(),
         )?,
         "routineCall" => crate::routines::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"])?,
         "memoryCall" => {
@@ -112,6 +115,16 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::artifacts::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::dev_servers::TOOLS.contains(&name) {
                 crate::dev_servers::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::group::drop::TOOLS.contains(&name) {
+                crate::chat::group::drop::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::declarative::TOOLS.contains(&name) {
+                crate::declarative::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::components::TOOLS.contains(&name) {
+                crate::components::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::views::TOOLS.contains(&name) {
+                crate::views::call(hub, bot, name, &b["arguments"])?
+            } else if name == crate::chat::group::send::TOOL {
+                crate::chat::group::send::call(hub, bot, &b["arguments"]).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, &b["arguments"]).await?
             }
@@ -139,7 +152,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             json!({"id":entry.id,"botId":entry.bot_id,"threadId":entry.thread_id,"status":entry.data["status"],"result":entry.data["turnResult"]})
         }
         "manageCall" => {
-            crate::chat::manage::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?
+            let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
+            if crate::chat::group::tools::TOOLS.contains(&name) {
+                crate::chat::group::tools::call(hub, bot, name, &b["arguments"]).await?
+            } else {
+                crate::chat::manage::call(hub, bot, name, &b["arguments"]).await?
+            }
         }
         "history" => {
             let bot = str_arg(&b, "botId")?;
@@ -208,6 +226,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let mut b = b;
             // Only a bot's `create_bot` records who made one.
             b["createdBy"] = Value::Null;
+            let asked = b["person"].as_str().map(str::to_owned);
+            let person = new_bot_person(hub, caller, asked.as_deref())?;
+            if let Some(member) = person.as_deref() {
+                crate::people::check_group_members(hub, &b, member)?;
+            }
+            b["person"] = json!(person);
             let cfg = crate::agent::new_bot::with_defaults(hub, b).await?;
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.create_bot(cfg)).await??})
@@ -221,6 +245,22 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let mut b = b;
             if let Some(patch) = b.as_object_mut() {
                 patch.remove(crate::chat::instruction_history::AUTHOR);
+            }
+            // A bot keeps its person: a member's device can't move a bot to the owner (or to anyone else),
+            // an admin manages any bot, and the owner's choice has to name a person that exists.
+            if let Some(person) = crate::people::caller_person(hub, caller) {
+                if !crate::people::is_admin(hub, &person) {
+                    crate::people::check_group_members(hub, &b, &person)?;
+                    b["person"] = json!(person);
+                } else if let Some(named) = b["person"].as_str()
+                    && hub.store.person(named).is_none()
+                {
+                    bail!("unknown person");
+                }
+            } else if let Some(person) = b["person"].as_str()
+                && hub.store.person(person).is_none()
+            {
+                bail!("unknown person");
             }
             let hub = hub.clone();
             json!({"bot": tokio::task::spawn_blocking(move || hub.update_bot(&b)).await??})
@@ -375,6 +415,15 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     .await??;
             json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size})
         }
+        // Drops a file the user stopped uploading: its partial chunks leave the computer, and the
+        // upload's id can never reach a `send`.
+        "cancelUpload" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted);
+            let root = crate::chat::uploads::root(&row.ok_or_else(|| anyhow!("unknown bot"))?.config);
+            let id = str_arg(&b, "uploadId")?.to_owned();
+            let removed = tokio::task::spawn_blocking(move || crate::chat::uploads::cancel(&root, &id)).await??;
+            json!({"removed": removed})
+        }
         "send" => {
             let bot = str_arg(&b, "botId")?;
             let text = b["text"].as_str().unwrap_or_default().trim();
@@ -447,6 +496,35 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             json!({"entry": crate::chat::messages::post_in_lane(hub, &row.config, lane, data)?})
         }
+        // A dictation kept as a thread of its own, linked to the chat it was dictated in: the
+        // transcript is the thread's first message and the bot answers there. The client opens it.
+        "keepDictation" => {
+            let bot = str_arg(&b, "botId")?;
+            let text = b["text"].as_str().unwrap_or_default().trim();
+            if text.is_empty() {
+                bail!("empty dictation");
+            }
+            let row = hub.store.bot(bot)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            if crate::external::is_external(&row.config) {
+                bail!("this bot runs in your terminal: a dictation can't be kept for it here");
+            }
+            let asked = b["sourceEntryId"].as_str().filter(|id| !id.is_empty()).map(str::to_owned);
+            let source = asked.or_else(|| {
+                hub.store
+                    .history(bot, i64::MAX, 10)
+                    .ok()
+                    .and_then(|entries| entries.into_iter().rev().find(|e| matches!(e.kind.as_str(), "user" | "agent")))
+                    .map(|e| e.id)
+            });
+            let thread = hub.store.create_dictation_thread(bot, text, source.as_deref())?;
+            let entry = crate::chat::messages::post_in_lane(
+                hub,
+                &row.config,
+                Lane::in_thread(bot, &thread),
+                json!({"text": text}),
+            )?;
+            json!({"threadId": thread, "entry": entry})
+        }
         // A waiting message rewritten before it goes out.
         "editQueued" => {
             let (reply, answer) = tokio::sync::oneshot::channel();
@@ -499,6 +577,26 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             hub.stop_bot(str_arg(&b, "botId")?)?;
             json!({})
         }
+        // A channel request's sub-tasks: stop, continue, reassign or cancel one row of its tree.
+        "groupTask" => {
+            let action = str_arg(&b, "action")?;
+            crate::chat::group::tasks::act(
+                hub,
+                str_arg(&b, "botId")?,
+                str_arg(&b, "taskId")?,
+                action,
+                b["ownerId"].as_str(),
+            )?
+        }
+        // A person asked the lead to drop the channel's running request: its whole run ends.
+        "dropRequest" => {
+            let group = hub.store.bot(str_arg(&b, "botId")?)?.filter(|row| !row.deleted).context("Unknown bot.")?;
+            if !group.config.is_group() {
+                bail!("only a channel has requests to drop");
+            }
+            let by = b["by"].as_str().map(str::trim).filter(|by| !by.is_empty()).unwrap_or("The user");
+            json!({"dropped": crate::chat::group::tasks::drop_run(hub, &group.config, by)?})
+        }
         "tokenBudgets" => hub.budget.status(crate::store::now_ms()),
         "setTokenBudget" => {
             let limit = b["limit"].as_u64();
@@ -542,19 +640,21 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "newSession" => {
             let bot = str_arg(&b, "botId")?;
-            if !hub.store.bot(bot)?.is_some_and(|r| crate::external::is_external(&r.config)) {
-                hub.send_cmd(bot, Cmd::NewSession)?;
-            }
+            hub.new_conversation(bot)?;
             json!({})
         }
         "memory" | "memoryFile" => crate::chat::memory::call(hub, method, &b).await?,
+        "learning" | "approveLearning" | "dismissLearning" | "saveLearningSettings" => {
+            crate::learning::call(hub, method, &b)?
+        }
         // The security profiles to choose among: their sentence and what each sets, for a client to show.
         "securityProfiles" => json!({"profiles": crate::agent::security_profile::describe_all()}),
         "importAgentMemory" => {
             crate::chat::memory::import_agent_memory(hub, str_arg(&b, "botId")?, &b["facts"]).await?
         }
         "library" => crate::chat::library::list(hub, str_arg(&b, "botId")?)?,
-        "readArtifact" | "renameArtifact" => crate::chat::artifacts::api(hub, method, &b).await?,
+        "serverLibrary" => crate::chat::library::server(hub, b["filter"].as_str())?,
+        "readArtifact" | "renameArtifact" | "saveArtifactScene" => crate::chat::artifacts::api(hub, method, &b).await?,
         "editHandoff" | "keepConversation" => crate::chat::handoff::call(hub, method, &b)?,
         "react" => {
             let e = hub.react(str_arg(&b, "entryId")?, str_arg(&b, "emoji")?)?;
@@ -627,6 +727,58 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 .collect();
             json!({"evaluation": evaluation, "quickNotEnforced": not_enforced})
         }
+        // What would happen to a proposed call: the same rules as a real request, the deciding rule (or
+        // the default), and an audit-style explanation. Nothing is sent to the bot.
+        "previewApproval" => {
+            let row =
+                hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("unknown bot"))?;
+            let policies = match b.get("actionRules") {
+                Some(map) if map.is_object() => serde_json::from_value(map.clone())?,
+                _ => row.config.action_rules.clone(),
+            };
+            let quick_on = b["actionRulesOn"].as_bool().unwrap_or(row.config.action_rules_on);
+            let quick = if quick_on { crate::agent::approval_rules::quick_rules(&policies) } else { Vec::new() };
+            // The editor's unsaved rules when it sends them; otherwise the bot's saved ones.
+            let rules: Vec<crate::agent::approval_rules::ApprovalRule> = match b.get("rules") {
+                Some(list) if !list.is_null() => serde_json::from_value(list.clone())?,
+                _ => row.config.approval_rules.clone(),
+            };
+            crate::agent::approval_rules::validate(&rules)?;
+            // This computer's policies decide first, so the answer says what they say about it. The editor's
+            // unsaved rules when it sends them; otherwise the saved ones.
+            let policies: Vec<crate::store::Policy> = match b.get("policies") {
+                Some(list) if list.is_array() => serde_json::from_value(list.clone())?,
+                _ => hub.store.policies()?,
+            };
+            let initiator = b["initiator"].as_str().map(str::to_owned).unwrap_or_else(|| {
+                crate::people::caller_person(hub, caller).and_then(|id| hub.store.person(&id)).map_or_else(
+                    || "the owner".to_owned(),
+                    |person| {
+                        format!(
+                            "{} {}",
+                            if person.role == crate::store::Role::Admin { "admin" } else { "member" },
+                            person.name
+                        )
+                    },
+                )
+            });
+            let preview = crate::agent::approval_preview::preview(
+                &row.config,
+                &rules,
+                &quick,
+                &policies,
+                str_arg(&b, "tool")?,
+                b["command"].as_str().filter(|command| !command.trim().is_empty()),
+                b.get("input"),
+                &initiator,
+                b["kind"].as_str(),
+            );
+            let not_enforced: Vec<Value> = crate::agent::approval_rules::QUICK_UNENFORCED
+                .iter()
+                .map(|(class, why)| json!({"class": class, "reason": why}))
+                .collect();
+            json!({"preview": preview, "quickNotEnforced": not_enforced})
+        }
         // The rule an "always allow" answer to this card means, to show (and let the person edit) before it is saved.
         "proposeRule" => {
             let e = hub.store.entry(str_arg(&b, "entryId")?).ok_or_else(|| anyhow!("unknown card"))?;
@@ -645,6 +797,19 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 bail!("That isn't an approval card");
             }
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            // A declarative block's form: its fields are checked against the block's own schema before
+            // the answer goes on, so a client can't smuggle values the form never offered.
+            let values = match b.get("values") {
+                Some(Value::Object(fields)) => Some(Value::Object(fields.clone())),
+                Some(Value::Null) | None => None,
+                Some(_) => bail!("`values` must be an object of the form's field ids"),
+            };
+            // A declarative block's form, or a `form` card's, is checked against its own schema before
+            // the answer goes on, so a client can't smuggle values the form never offered.
+            let values = match e.data.get("component").filter(|component| component.is_object()) {
+                Some(component) => crate::components::answers(component, values)?,
+                None => crate::declarative::answers(&e.data["block"], values)?,
+            };
             // The card is the effect's key: the first decision is the one that happens. The same
             // answer again (another device, a retry) gets the card back; a different one is refused.
             match e.data["status"].as_str() {
@@ -671,7 +836,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             // A card in a group belongs to the bot that asked.
             let bot = e.data["author"].as_str().unwrap_or(&e.bot_id);
-            hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id })?;
+            hub.send_cmd(bot, Cmd::Permission { entry_id: entry_id.to_owned(), option_id, values })?;
             json!({})
         }
         _ => return Ok(ControlFlow::Continue(b)),
@@ -695,4 +860,24 @@ fn save_always_rule(hub: &Hub, card: &crate::store::Entry, option_id: Option<&st
     let rules = crate::agent::always_rule::added(&row.config.approval_rules, rule);
     hub.update_bot(&json!({"id": card.bot_id, "approvalRules": rules}))?;
     Ok(())
+}
+
+/// The person a new bot belongs to: a member's device always makes its own (the body can't name another),
+/// an admin may name one and otherwise makes their own, and the owner may name one or leave it empty.
+fn new_bot_person(hub: &Hub, caller: &Caller, asked: Option<&str>) -> Result<Option<String>> {
+    if let Some(person) = crate::people::caller_person(hub, caller) {
+        if !crate::people::is_admin(hub, &person) {
+            return Ok(Some(person));
+        }
+        let Some(asked) = asked.filter(|p| !p.is_empty()) else { return Ok(Some(person)) };
+        if hub.store.person(asked).is_none() {
+            bail!("unknown person");
+        }
+        return Ok(Some(asked.to_owned()));
+    }
+    let Some(person) = asked.filter(|p| !p.is_empty()) else { return Ok(None) };
+    if hub.store.person(person).is_none() {
+        bail!("unknown person");
+    }
+    Ok(Some(person.to_owned()))
 }

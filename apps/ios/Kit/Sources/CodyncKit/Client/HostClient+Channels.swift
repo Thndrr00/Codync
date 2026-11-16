@@ -9,6 +9,17 @@ private extension String {
 // only carry them.
 
 public extension HostClient {
+    /// A channel sub-task: stop it, let it go on, give it another member, or cancel its branch.
+    func groupTask(_ botId: String, taskId: String, action: String, ownerId: String? = nil) async throws {
+        struct Body: Encodable {
+            var botId: String
+            var taskId: String
+            var action: String
+            var ownerId: String?
+        }
+        let _: Empty = try await call("groupTask", Body(botId: botId, taskId: taskId, action: action, ownerId: ownerId))
+    }
+
     struct TelegramBody: Encodable {
         var name: String
         var userId: Int64?
@@ -44,6 +55,79 @@ public extension HostClient {
     func discordStatus() async throws -> DiscordStatus { try await call("discordStatus", Empty()) }
 
     func disconnectDiscord() async throws -> DiscordStatus { try await call("disconnectDiscord", Empty()) }
+
+    func matrixStatus() async throws -> MatrixStatus { try await call("matrixStatus", Empty()) }
+
+    func disconnectMatrix() async throws -> MatrixStatus { try await call("disconnectMatrix", Empty()) }
+
+    func signalStatus() async throws -> SignalStatus { try await call("signalStatus", Empty()) }
+
+    func disconnectSignal() async throws -> SignalStatus { try await call("disconnectSignal", Empty()) }
+
+    /// Saves the signal-cli daemon and its chats; the host checks the daemon and its linked number first.
+    func setSignal(number: String, daemon: String, bindings: [SignalBinding]) async throws -> SignalStatus {
+        struct Body: Encodable {
+            var number: String
+            var daemon: String
+            var bindings: [Binding]
+        }
+        struct Binding: Encodable {
+            var chat: String
+            var botId: String
+            var allowedUsers: [String]
+        }
+        let body = Body(number: number.trimmed, daemon: daemon.trimmed,
+                        bindings: bindings.map { Binding(chat: $0.chat.trimmed, botId: $0.botId,
+                                                          allowedUsers: $0.allowedUsers.map(\.trimmed)) })
+        return try await call("setSignalChannel", body, timeout: 60)
+    }
+
+    func teamsStatus() async throws -> TeamsStatus { try await call("teamsStatus", Empty()) }
+
+    func disconnectTeams() async throws -> TeamsStatus { try await call("disconnectTeams", Empty()) }
+
+    /// Saves the Azure Bot registration and its allowed people; the host gets a Bot Framework token first.
+    func setTeams(appId: String, tenantId: String, password: String, managedIdentity: Bool, botId: String,
+                  allowedUsers: [String], allowedTenants: [String], memory: String, icon: String) async throws -> TeamsStatus {
+        struct Body: Encodable {
+            var appId: String
+            var tenantId: String
+            var appPassword: String
+            var managedIdentity: Bool
+            var botId: String
+            var allowedUsers: [String]
+            var allowedTenants: [String]
+            var memory: String
+            var icon: String
+        }
+        let body = Body(appId: appId.trimmed, tenantId: tenantId.trimmed, appPassword: password,
+                        managedIdentity: managedIdentity, botId: botId,
+                        allowedUsers: allowedUsers.map(\.trimmed), allowedTenants: allowedTenants.map(\.trimmed),
+                        memory: memory, icon: icon)
+        return try await call("setTeamsChannel", body, timeout: 60)
+    }
+
+    /// Sets the Matrix session and its bound rooms up; the host signs in and checks every room first.
+    func setMatrix(homeserver: String, user: String, accessToken: String, password: String,
+                   bindings: [MatrixBinding]) async throws -> MatrixStatus {
+        struct Body: Encodable {
+            var homeserver: String
+            var user: String
+            var accessToken: String
+            var password: String
+            var bindings: [Binding]
+        }
+        struct Binding: Encodable {
+            var roomId: String
+            var botId: String
+            var allowedUsers: [String]
+        }
+        let body = Body(homeserver: homeserver.trimmed, user: user.trimmed, accessToken: accessToken.trimmed,
+                        password: password,
+                        bindings: bindings.map { Binding(roomId: $0.roomId.trimmed, botId: $0.botId,
+                                                        allowedUsers: $0.allowedUsers.map(\.trimmed)) })
+        return try await call("setMatrixChannel", body, timeout: 60)
+    }
 
     /// Sets the Discord bot and its bound channels up; the host checks the token before saving anything.
     func setDiscord(guildId: String, botUserId: String, botToken: String,
@@ -88,6 +172,12 @@ public extension HostClient {
         return try await call("setGitHubToken", Body(token: token.trimmed))
     }
 
+    /// Creates a repository on that account; the answer carries `created` plus the fresh status.
+    func githubCreateRepo(name: String, isPrivate: Bool, description: String) async throws -> GitHubStatus {
+        struct Body: Encodable { var name: String; var `private`: Bool; var description: String }
+        return try await call("githubCreateRepo", Body(name: name.trimmed, private: isPrivate, description: description.trimmed))
+    }
+
     func whatsappState() async throws -> WhatsAppLink { try await call("whatsappState", Empty()) }
 
     /// Starts the link; the host reports the QR code through `whatsappState`.
@@ -126,5 +216,47 @@ public extension HostClient {
         struct Answer: Decodable { var allowed: [String] }
         let answer: Answer = try await call("whatsappSetAllowed", Body(jid: jid, allowed: allowed))
         return answer.allowed
+    }
+
+    /// Approves or denies a person who asked to write; approved, they join the allowed chats.
+    func whatsappAnswerRequest(code: String, approve: Bool) async throws -> [WhatsAppRequest] {
+        struct Body: Encodable { var code: String; var approve: Bool }
+        struct Answer: Decodable { var requests: [WhatsAppRequest] }
+        let answer: Answer = try await call("whatsappAnswerRequest", Body(code: code, approve: approve))
+        return answer.requests
+    }
+
+    // MARK: conversation links (card K13)
+
+    struct ConversationLinkBody: Encodable {
+        var botId: String
+        var provider: String
+        var channel: String
+        var thread: String?
+        var threadId: String?
+    }
+
+    /// The conversations of a bot linked to a Codync thread.
+    func conversationLinks(botId: String) async throws -> [ConversationLink] {
+        struct Body: Encodable { var botId: String }
+        struct Answer: Decodable { var links: [ConversationLink] }
+        let answer: Answer = try await call("conversationLinks", Body(botId: botId))
+        return answer.links
+    }
+
+    /// Links a channel conversation to `threadId`; every link of the bot comes back.
+    func linkConversation(botId: String, provider: String, channel: String, thread: String, threadId: String) async throws -> [ConversationLink] {
+        struct Answer: Decodable { var links: [ConversationLink] }
+        let body = ConversationLinkBody(botId: botId, provider: provider, channel: channel, thread: thread, threadId: threadId)
+        let answer: Answer = try await call("linkConversation", body)
+        return answer.links
+    }
+
+    /// Takes a channel conversation's link away; its next message starts a conversation of its own.
+    func unlinkConversation(botId: String, provider: String, channel: String, thread: String) async throws -> [ConversationLink] {
+        struct Answer: Decodable { var links: [ConversationLink] }
+        let body = ConversationLinkBody(botId: botId, provider: provider, channel: channel, thread: thread)
+        let answer: Answer = try await call("unlinkConversation", body)
+        return answer.links
     }
 }

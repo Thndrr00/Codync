@@ -11,6 +11,7 @@ import makeWASocket, {
     jidNormalizedUser,
     useMultiFileAuthState,
 } from 'baileys'
+import { sendContent } from './media.mjs'
 
 const root = process.argv[2]
 if (!root) {
@@ -188,9 +189,8 @@ async function pair(command) {
 async function send(command) {
     if (!socket) return out({ type: 'error', id: command.id, error: 'WhatsApp is not connected' })
     try {
-        const content = command.path
-            ? { document: { url: command.path }, fileName: command.name ?? 'file', mimetype: command.mimetype ?? 'application/octet-stream', caption: command.text ?? undefined }
-            : { text: command.text ?? '' }
+        // A photo keeps its size so WhatsApp does not crop it; anything else goes as a document.
+        const content = await sendContent(command)
         const sent = await socket.sendMessage(command.to, content)
         out({ type: 'sent', id: command.id, messageId: sent?.key?.id ?? null })
     } catch (error) {

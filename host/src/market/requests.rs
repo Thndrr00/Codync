@@ -84,10 +84,16 @@ pub(super) fn ask_bot_secret(
 }
 
 pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
-    hub.store.bot(bot)?.filter(|b| !b.deleted && !b.config.is_group()).ok_or_else(|| anyhow!("unknown bot"))?;
+    let cfg = hub
+        .store
+        .bot(bot)?
+        .filter(|b| !b.deleted && !b.config.is_group())
+        .ok_or_else(|| anyhow!("unknown bot"))?
+        .config;
     match name {
         "search_connectors" => super::browse_connectors(&hub.store, text(args, "query")?, "").await,
-        "list_connectors" => super::list_connectors(&hub.store),
+        // What this bot may use: shared connectors and its person's, never another person's.
+        "list_connectors" => super::list_connectors_for(&hub.store, cfg.person.as_deref()),
         "list_logins" => super::logins::list(&hub.store),
         "request_login" => {
             let site = super::logins::normalize_site(text(args, "site")?);
@@ -121,6 +127,10 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
                     .into_iter()
                     .find(|c| c.id == id)
                     .ok_or_else(|| anyhow!("unknown connector"))?;
+                // A bot asks for its own person's connectors and the shared ones, not another person's.
+                if !super::for_bot(&c, cfg.person.as_deref()) {
+                    bail!("That connector belongs to someone else on this computer");
+                }
                 (c.name, c.registry_name)
             } else {
                 let registry = text(args, "registryName")?;

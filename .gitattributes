@@ -1,0 +1,3 @@
+# The container's entrypoint and health check run as shell scripts: a CRLF checkout (Windows,
+# with core.autocrlf) would break their shebang inside the image.
+docker/*.sh text eol=lf

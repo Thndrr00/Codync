@@ -21,14 +21,37 @@ enum class VoiceProvider(val id: String, val title: String, val keyPage: String,
         "gemini-3.8-flash-tts", 150, listOf("Kore", "Puck", "Charon", "Fenrir", "Aoede", "Leda", "Orus", "Zephyr")),
     /** Speech only: ElevenLabs holds no live conversation here. Its voices come from the account. */
     ElevenLabs("elevenlabs", "ElevenLabs", "https://elevenlabs.io/app/settings/api-keys", "sk_…", "", "scribe_v1",
-        "eleven_flash_v2_5", 600, listOf("21m00Tcm4TlvDq8ikWAM"));
+        "eleven_flash_v2_5", 600, listOf("21m00Tcm4TlvDq8ikWAM")),
+    /** Speech only: xAI reads replies aloud and hears nothing (OpenBot 0.60). */
+    Xai("xai", "xAI", "https://console.x.ai", "xai-…", "", "", "xai-tts", 150,
+        listOf("eve", "ara", "leo", "rex", "sal")),
+    /** Dictation only: Groq's Whisper hears speech and reads nothing (OpenBot 0.60). */
+    Groq("groq", "Groq", "https://console.groq.com/keys", "gsk_…", "", "whisper-large-v3-turbo", "", 600,
+        emptyList());
 
     /** A live conversation is only possible with a provider that holds one. */
-    val live: Boolean get() = this != ElevenLabs
+    val live: Boolean get() = this == OpenAI || this == Gemini
+
+    /** Whether it can hear speech (xAI reads replies only). */
+    val transcribes: Boolean get() = this != Xai
+
+    /** Whether it can read replies aloud (Groq hears only). */
+    val speaks: Boolean get() = this != Groq
+
+    /** A whole call needs both: xAI and Groq each do half. */
+    val carriesCalls: Boolean get() = transcribes && speaks
 
     val defaults: VoiceDefaults get() = VoiceDefaults(model, transcribeModel, speechModel)
 
-    companion object { fun of(id: String?): VoiceProvider? = entries.firstOrNull { it.id == id } }
+    companion object {
+        fun of(id: String?): VoiceProvider? = entries.firstOrNull { it.id == id }
+
+        /** What the call engine picker offers. */
+        val callProviders: List<VoiceProvider> get() = entries.filter { it.carriesCalls }
+
+        /** What the dictation engine menu offers. */
+        val dictationProviders: List<VoiceProvider> get() = entries.filter { it.transcribes }
+    }
 }
 
 /** The provider's newest model for each voice mode, as the computer last found them. */
@@ -50,21 +73,50 @@ enum class VoiceProvider(val id: String, val title: String, val keyPage: String,
 }
 
 /**
+ * The local voice server this computer's speech goes through (iOS `VoiceServer`): an
+ * OpenAI-compatible server the person runs there. Codync runs no model itself.
+ */
+@Serializable data class VoiceServer(val baseUrl: String = "", val transcribeModel: String = "", val speechModel: String = "",
+    val keySaved: Boolean = false, val effective: String = "https://api.openai.com", val custom: Boolean = false,
+    val environment: String? = null, val suggestions: List<String> = VoiceServer.localModelSuggestions) {
+    companion object {
+        /** The models common local servers serve, until the computer reports its own list. */
+        val localModelSuggestions = listOf("parakeet-tdt-0.6b-v3", "parakeet-unified-en-0.6b", "whisper-turbo", "cohere-transcribe-03-2026")
+    }
+}
+
+/** What `testVoiceServer` answered: whether the server works, and why not. */
+@Serializable data class VoiceServerTest(val ok: Boolean = false, val message: String = "", val models: List<String>? = null,
+    val effective: String? = null)
+
+/**
  * The call settings kept on this phone (iOS `VoiceSettings`): the engine, each provider's mode,
  * models and voice, and this month's minutes. A default model isn't stored, so a newer one reaches the user.
  */
 class VoiceChoices(private val read: (String) -> String?, private val write: (String, String?) -> Unit) {
-    var localSpeech: Boolean
-        get() = read("callSpeechOutput") == "neutts"
-        set(value) = write("callSpeechOutput", if (value) "neutts" else null)
+    /** What reads a reply aloud: the call engine's provider (`provider`), xAI's route (`xai`) or NeuTTS (`neutts`). */
+    var speechOutput: String
+        get() = read("callSpeechOutput") ?: "provider"
+        set(value) = write("callSpeechOutput", value)
+    val localSpeech: Boolean get() = speechOutput == "neutts"
+
+    /** The provider that reads replies aloud: the call engine's, or xAI's own route. */
+    fun speechProvider(provider: VoiceProvider): VoiceProvider =
+        if (speechOutput == "xai") VoiceProvider.Xai else provider
+
     var wakePhrase: Boolean
         get() = read("callWakePhrase") == "true"
         set(value) = write("callWakePhrase", if (value) "true" else null)
     enum class Model(val prefix: String) { Realtime("callModel"), Transcribe("callSpeechToText"), Speech("callSpeechModel") }
 
     var provider: VoiceProvider?
-        get() = VoiceProvider.of(read("callEngine"))
+        get() = VoiceProvider.of(read("callEngine"))?.takeIf { it.carriesCalls }
         set(value) = write("callEngine", value?.id)
+
+    /** The engine picked beside the mic, separate from the call engine. */
+    var dictation: VoiceProvider?
+        get() = VoiceProvider.of(read("dictationEngine"))?.takeIf { it.transcribes }
+        set(value) = write("dictationEngine", value?.id)
 
     fun defaults(provider: VoiceProvider): VoiceDefaults = read("callDefaults.${provider.id}")
         ?.let { runCatching { WireJson.decodeFromString(VoiceDefaults.serializer(), it) }.getOrNull() } ?: provider.defaults
@@ -88,9 +140,9 @@ class VoiceChoices(private val read: (String) -> String?, private val write: (St
     fun voice(provider: VoiceProvider): String {
         val stored = read("callVoice.${provider.id}")?.takeIf { it.isNotBlank() }
         return when {
-            provider == VoiceProvider.ElevenLabs -> stored ?: provider.voices[0]
+            provider == VoiceProvider.ElevenLabs -> stored ?: provider.voices.firstOrNull().orEmpty()
             stored != null && stored in provider.voices -> stored
-            else -> provider.voices[0]
+            else -> provider.voices.firstOrNull().orEmpty()
         }
     }
     fun voice(provider: VoiceProvider, voice: String) = write("callVoice.${provider.id}", voice)
@@ -98,8 +150,12 @@ class VoiceChoices(private val read: (String) -> String?, private val write: (St
     /** What a call's engine is built from (`language`: on device): a different one picked mid-call takes over the call. */
     fun engineChoice(provider: VoiceProvider?, language: String): String = when {
         provider == null -> "device $language wake=$wakePhrase"
-        speechMode(provider) -> "${provider.id} speech ${model(provider, Model.Transcribe)} ${model(provider, Model.Speech)} ${voice(provider)} local=$localSpeech"
-        else -> "${provider.id} ${model(provider, Model.Realtime)} ${voice(provider)}"
+        !speechMode(provider) -> "${provider.id} ${model(provider, Model.Realtime)} ${voice(provider)}"
+        else -> {
+            val speech = speechProvider(provider)
+            "${provider.id} speech ${model(provider, Model.Transcribe)} ${speech.id} " +
+                "${model(speech, Model.Speech)} ${voice(speech)} $speechOutput"
+        }
     }
 
     /** The provider's model list as last fetched with the user's key. */

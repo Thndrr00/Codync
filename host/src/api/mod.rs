@@ -32,6 +32,7 @@ mod saved_searches;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
+pub(crate) use remote::pairing_link;
 
 use crate::api::devices::{Caller, Forbidden};
 use crate::hub::Hub;
@@ -75,6 +76,11 @@ fn str_arg<'a>(b: &'a Value, k: &str) -> Result<&'a str> {
 /// Runs one API method for `caller` (permissions per spec §6.6).
 pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
     devices::permit(caller, method)?;
+    devices::permit_owner(hub, caller, method)?;
+    // A member's device acts as that person: it can't name another person's bot, whatever the method.
+    if let Some(person) = crate::people::caller_person(hub, caller) {
+        crate::people::check_bot(hub, &b, &person)?;
+    }
     let observed = crate::analytics::observe_call(hub, caller, method, &b);
     let audited = b.clone();
     let result = route(hub, caller, method, b).await;
@@ -98,6 +104,9 @@ pub async fn dispatch(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -
 }
 
 async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Result<Value> {
+    if crate::members::METHODS.contains(&method) {
+        return crate::members::call(hub, caller, method, &b).await;
+    }
     if crate::native_channels::METHODS.contains(&method) {
         return crate::native_channels::call(hub, method, &b);
     }
@@ -139,6 +148,18 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::discord::METHODS.contains(&method) {
         return crate::discord::call(hub, method, b).await;
     }
+    if crate::matrix::METHODS.contains(&method) {
+        return crate::matrix::call(hub, method, b).await;
+    }
+    if crate::signal::METHODS.contains(&method) {
+        return crate::signal::call(hub, method, b).await;
+    }
+    if crate::teams::METHODS.contains(&method) {
+        return crate::teams::call(hub, method, b).await;
+    }
+    if crate::a2a::METHODS.contains(&method) {
+        return crate::a2a::call(hub, method, &b).await;
+    }
     if crate::slack::METHODS.contains(&method) {
         return crate::slack::call(hub, method, b).await;
     }
@@ -173,8 +194,17 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::mcp::policy::METHODS.contains(&method) {
         return crate::mcp::policy::call(hub, caller, method, b).await;
     }
+    if crate::policy::METHODS.contains(&method) {
+        return crate::policy::api::call(hub, caller, method, &b);
+    }
     if documents::METHODS.contains(&method) {
         return documents::call(hub, method, b);
+    }
+    if crate::views::METHODS.contains(&method) {
+        return crate::views::api_call(hub, caller, method, &b).await;
+    }
+    if crate::webmcp::METHODS.contains(&method) {
+        return crate::webmcp::api(hub, method, &b);
     }
     if matches!(method, "listComputerActivity" | "exportComputerActivity") {
         return computer_activity::read(hub, method, &b);
@@ -192,13 +222,21 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         // Only signing in reads the vault; other computer tools work without a keyring.
         || (method == "computerCall" && b["name"] == "type_login")
         || method.starts_with("voice")
-        || method == "setVoiceKey"
+        || matches!(method, "setVoiceKey" | "setVoiceServer" | "testVoiceServer")
         || matches!(method, "agentAuth" | "agentAuthenticate" | "setAgentEnv" | "accountAuthenticate" | "agentSignOut" | "agentModels")
     {
         market::vault::unlock(hub.clone()).await?;
     }
-    if matches!(method, "channelNotes" | "addChannelNote" | "removeChannelNote") {
+    if matches!(method, "channelNotes" | "addChannelNote" | "removeChannelNote")
+        || crate::channels::LINK_METHODS.contains(&method)
+    {
         return crate::channels::call(hub, method, &b);
+    }
+    if crate::docs::METHODS.contains(&method) {
+        return crate::docs::call(hub, method, &b);
+    }
+    if crate::components::METHODS.contains(&method) {
+        return crate::components::api_call(hub, method, &b);
     }
     if method == "listFiles" {
         return files::list(hub, &b).await;
@@ -215,7 +253,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };
-    let b = match catalog::call(hub, method, b).await? {
+    let b = match catalog::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };

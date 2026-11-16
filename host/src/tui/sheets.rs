@@ -24,11 +24,15 @@ mod flow_view;
 mod library_view;
 mod market_view;
 mod memory_view;
+mod people;
+mod server_library_view;
 pub use documents::draw as documents;
 pub use flow_view::draw as flow;
 pub use library_view::draw as library;
 pub use market_view::draw as market;
 pub use memory_view::draw as memory;
+pub use people::draw as people;
+pub use server_library_view::draw as server_library;
 
 use super::app::{App, Editor};
 use super::manage::{AgentSetup, Fields, Page, RoutineList, SetupRow, Submit};
@@ -202,7 +206,7 @@ pub fn routines(buf: &mut Buffer, area: Rect, app: &App, l: &RoutineList) {
         buf,
         inner,
         None,
-        "n new · c ask the bot · ↵ edit · space on/off · r run now · f flow · w copy webhook · W new key · x delete · esc",
+        "n new · c ask the bot · ↵ edit · space on/off · r run now · f flow · w copy webhook · W new key · s secret · x delete · esc",
     );
 }
 
@@ -345,6 +349,11 @@ pub fn agent(buf: &mut Buffer, area: Rect, app: &App, a: &AgentSetup) {
                 format!("Downloads {name} on {} if it needs to, then checks its sign-in.", app.host),
             ),
             SetupRow::Check => ("↻", "Check again".to_owned(), String::new()),
+            SetupRow::Delete => (
+                "✕",
+                "Delete".to_owned(),
+                format!("Codync removes the copy it downloaded for {name} on {} and turns the agent off.", app.host),
+            ),
         };
         let title = tr(&title);
         let detail = tr(&detail);

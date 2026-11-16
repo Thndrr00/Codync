@@ -33,9 +33,10 @@ function ChatRoot({ app }: { app: AppModel }) {
   const demo = useModel(demoMode).model
   const language = useAppLanguage()
   useEffect(() => {
-    const arabic = resolvedLanguage(language, navigator.language) === 'ar'
-    document.documentElement.dir = arabic ? 'rtl' : 'ltr'
-    document.documentElement.lang = arabic ? 'ar' : resolvedLanguage(language, navigator.language)
+    const resolved = resolvedLanguage(language, navigator.language)
+    const rightToLeft = resolved === 'ar' || resolved === 'he'
+    document.documentElement.dir = rightToLeft ? 'rtl' : 'ltr'
+    document.documentElement.lang = resolved
   }, [language])
   // The person's theme file, followed while the window is open.
   useEffect(() => {

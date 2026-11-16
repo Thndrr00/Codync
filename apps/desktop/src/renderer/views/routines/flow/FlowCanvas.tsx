@@ -8,7 +8,11 @@ import {
 } from '../../../lib/routine-flow.ts'
 import { FlowNodeCard } from './FlowNodeCard'
 
-export type FlowSelection = { kind: 'node'; key: string } | { kind: 'edge'; id: string } | null
+export type FlowSelection =
+  | { kind: 'node'; key: string }
+  | { kind: 'edge'; id: string }
+  | { kind: 'lane'; routineId: string; botId: string }
+  | null
 
 interface Props {
   canvas: FlowCanvas
@@ -246,9 +250,11 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               step={card ? stepOf(card, card.routine.botId) : step}
               unconnected={card ? isUnconnected(canvas, card.routine.id) : false}
               selected={selection?.kind === 'node' && selection.key === raw.key}
+              selectedLane={selection?.kind === 'lane' && selection.routineId === raw.id ? selection.botId : null}
               connectTarget={hovered?.key === raw.key && raw.kind === 'bot' && raw.id !== wire?.from}
               disabled={disabled}
               onSelect={() => onSelect({ kind: 'node', key: raw.key })}
+              onSelectLane={(botId) => onSelect({ kind: 'lane', routineId: raw.id, botId })}
               onDragStart={(e) => startDrag(raw, e)}
               onPortStart={(e) => startWire(raw, e)}
               onKey={(e) => keyOnNode(raw, e)}

@@ -14,7 +14,7 @@ const TICK: Duration = Duration::from_secs(60);
 const HOUR_MS: i64 = 3_600_000;
 const PROMPT: &str = "[Proactive check-in, started by you on a schedule, not by the user] Review your open items, \
 routines and recent conversation. If something needs the user's attention or you have useful progress to report, \
-say it briefly. If not, reply with exactly NO_UPDATE.";
+say it briefly and put every finding in one message. If not, reply with exactly NO_UPDATE.";
 
 /// When a bot was last woken and how many times on `day` (its local date).
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
@@ -87,9 +87,15 @@ fn check_in(hub: &Hub, now: i64) {
             continue;
         }
         let ledger = hub.store.kv_get(&key(id)).and_then(|raw| serde_json::from_str::<Ledger>(&raw).ok());
+        let last_check_in = ledger.as_ref().map_or(0, |ledger| ledger.last);
         let (next, due) = decide(&cfg.proactive, ledger, now);
         // A busy bot is asked again on the next tick, without using up today's budget.
         if due && hub.runtime(id).status != BotStatus::Idle {
+            continue;
+        }
+        // The last check-in already told the person something and they have not answered: wait
+        // for a reply or the cooldown instead of raising the same points again.
+        if due && crate::notices::check_in_waiting(hub, id, last_check_in) {
             continue;
         }
         if due && let Err(error) = dispatch_bot_turn(hub, id, PROMPT, "proactive") {
@@ -128,6 +134,8 @@ mod tests {
             timezone: Some("UTC".into()),
             max_per_day,
             apps_in_background: true,
+            notice_cooldown_hours: 6,
+            notice_batch_minutes: 10,
         }
     }
 

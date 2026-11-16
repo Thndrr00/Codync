@@ -74,6 +74,9 @@ struct BotConversationView: View {
     let botId: String
     let peerId: String
     @Environment(BotStore.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+    /// The chat background of this theme; reading it here redraws the sheet when Settings changes it.
+    @AppStorage(ChatAppearance.backgroundKey) private var storedChatBackground = ""
     @State private var fetched: [Entry]?
     @State private var error: String?
 
@@ -103,7 +106,7 @@ struct BotConversationView: View {
             }
             .defaultScrollAnchor(.bottom)
         }
-        .background(Palette.background)
+        .background(ChatAppearance.background(dark: colorScheme == .dark))
         .task(id: peerId) {
             do {
                 fetched = try await model.botConversation(botId, peer: peerId)

@@ -137,7 +137,23 @@ Live acceptance requires the configured Worker and fresh host/helper/phone build
 - Confirm that offer/answer exchange finishes before gathering completes, that late candidates reach both peers, and that candidates generated before the answer are applied afterward in order. Completion must come last.
 - Check mixed old/new phone, host and helper combinations, duplicate offers/subscriptions, another device's session ID, queue overflow, signaling loss, fresh-session recovery and stale-session rejection.
 - Verify Wi-Fi/cellular changes, reconnect after sleep and renewal before the one-hour expiry.
-- Revoke the phone or disable screen access while streaming; input and media must stop. Verify a control-only device cannot call `screenPrepare`, `screenOffer`, `screenCandidate` or subscribe to `screenCandidates`.
+- Revoke the phone or disable screen access while streaming; input and media must stop. Verify a control-only device cannot call `screenPrepare`, `screenOffer`, `screenCandidate`, `screenCandidates` or `screenStopAll`.
 - Verify LAN/direct-only mode without internet access, and the explicit error when relay secrets are absent.
 
 See [Cloudflare testing](../guides/cloudflare-testing.md) for transport checks and [architecture](../architecture/overview.md) for data flow.
+
+## Policy
+
+Who may control this computer, and whether each session is allowed here first, are server settings
+([server settings](server-settings.md#remote-desktop-policy)): `everyone`, `admins` (the same as
+everyone until member roles exist) or `owner` (this computer only), plus "Ask on this computer". With
+the question on, a device's `screenPrepare` waits up to 30 seconds for an answer at the computer and
+does not start if nobody answers.
+
+`screenStopAll` ends every viewer session and any takeover on this computer, local or remote, without
+turning Remote screen off. It returns `closed` (viewer sessions that were running), `takeover`
+(whether a phone had taken control, now handed back to the bots) and the new `screen` state. The
+computer may always call it. A paired device may call it when it holds the **Screen** scope and the
+remote-control policy allows devices; a Control-only device and the `owner` policy are refused. Only
+this computer answers the "Ask on this computer" question. The terminal UI has no screen viewer or
+session list, so it has no Stop all action; its screen-helper management is unaffected.

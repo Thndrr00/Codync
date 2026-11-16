@@ -60,6 +60,12 @@ pub struct ProactiveSettings {
     /// Whether connected apps/MCP tools may run in background routines and proactive check-ins (Idea 44).
     #[serde(default = "yes")]
     pub apps_in_background: bool,
+    /// How long a raised topic waits for an answer before the bot may raise it again.
+    #[serde(default = "default_notice_cooldown_hours")]
+    pub notice_cooldown_hours: u32,
+    /// Findings raised this close together share one notice.
+    #[serde(default = "default_notice_batch_minutes")]
+    pub notice_batch_minutes: u32,
 }
 
 impl Default for ProactiveSettings {
@@ -72,6 +78,8 @@ impl Default for ProactiveSettings {
             timezone: None,
             max_per_day: default_max_per_day(),
             apps_in_background: true,
+            notice_cooldown_hours: default_notice_cooldown_hours(),
+            notice_batch_minutes: default_notice_batch_minutes(),
         }
     }
 }
@@ -88,6 +96,12 @@ fn default_quiet_end() -> u8 {
 fn default_max_per_day() -> u32 {
     3
 }
+fn default_notice_cooldown_hours() -> u32 {
+    6
+}
+fn default_notice_batch_minutes() -> u32 {
+    10
+}
 
 /// Transcript entry kinds (the `kind` column / wire field).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +113,8 @@ pub enum EntryKind {
     Plan,
     Permission,
     Notice,
+    /// The subagents an agent started in one turn: one card per turn (see `chat::subagents`).
+    Subagents,
 }
 
 impl EntryKind {
@@ -111,6 +127,7 @@ impl EntryKind {
             Self::Plan => "plan",
             Self::Permission => "permission",
             Self::Notice => "notice",
+            Self::Subagents => "subagents",
         }
     }
 }
@@ -155,7 +172,8 @@ pub struct BotConfig {
     /// Optional geometric robot avatar look (`BOT_AVATAR_LOOKS`, Idea 21).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_look: Option<String>,
-    /// A small square photo as a data URL (PNG, JPEG or WebP), shown instead of the generated face.
+    /// A small square photo as a data URL (PNG, JPEG or WebP), shown instead of the generated face;
+    /// for a group, the channel picture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_photo: Option<String>,
     /// Empty for a group.
@@ -176,6 +194,10 @@ pub struct BotConfig {
     /// Ask the agent for its Fast mode (Claude Code, Codex): faster replies for more usage.
     #[serde(default)]
     pub fast_mode: bool,
+    /// The agent ends the commit messages it writes with Codync's co-author trailer (see
+    /// `chat::commit_coauthor`). Off unless the user turns it on.
+    #[serde(default)]
+    pub commit_coauthor: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
     /// Agents that carry on, in order, when the bot's own can't answer (see `agent::fallback`).
@@ -200,6 +222,10 @@ pub struct BotConfig {
     /// Connector ids (MCP servers) handed to the agent; see `market`.
     #[serde(default)]
     pub connectors: Vec<String>,
+    /// The person whose bot this is (`people`); empty means the owner's. Its connectors are shared ones
+    /// plus its person's, and only that person's devices see it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<String>,
     /// Skill ids the bot is told about; see `market`.
     #[serde(default)]
     pub skills: Vec<String>,
@@ -244,6 +270,14 @@ pub struct BotConfig {
     pub proactive: ProactiveSettings,
     #[serde(default)]
     pub computer_permissions: crate::computer::Permissions,
+    /// Where this bot's computer runs: here, or in a Docker container with its own folder and profile
+    /// (see `computer::runtime`). Local unless chosen.
+    #[serde(default)]
+    pub computer_runtime: crate::computer::runtime::Settings,
+    /// Automatic learning: durable preferences from the user's corrections and repeated instructions, proposed
+    /// for review and saved to memory only when approved (or after the configured number of repeats).
+    #[serde(default)]
+    pub learning: crate::learning::Settings,
     /// The bot gets the built-in `manage` MCP server: it creates bots and changes the setup of the bots it
     /// created (see `chat::manage`). The user turns it on; the bots such a bot creates have it too.
     #[serde(default)]
@@ -280,6 +314,16 @@ pub struct BotConfig {
     /// For a group chat, the member bot ID designated as Chief of Staff.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chief_bot_id: Option<String>,
+    /// A group's short line under its name in the roster; empty for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// A group taken out of the open roster; its conversation stays and it can be restored.
+    #[serde(default)]
+    pub archived: bool,
+    /// A channel that keeps what its members learn in it ("Keep memories in this channel"): a member's
+    /// memory write there goes to the channel, not its own layer, so its other chats don't get it.
+    #[serde(default)]
+    pub keep_memories: bool,
     #[serde(default)]
     pub created_at: i64,
 }

@@ -71,6 +71,12 @@ fun AppStore.deleteBot(bot: Bot, onDeleted: () -> Unit) = action("delete:" + bot
     onDeleted()
 }
 
+/** Removes the chat's messages and turns; its setup, memories, routines, artifacts and files stay. */
+fun AppStore.deleteHistory(bot: Bot) = command("deleteHistory", body("botId" to bot.id), "delete-history:" + bot.id)
+
+/** Asks the chat's agent (or every member of a group) to summarize what it keeps. */
+fun AppStore.compactContext(bot: Bot) = command("compactContext", body("botId" to bot.id), "compact:" + bot.id)
+
 /** A refusal shows; the bot's next update shows the rest. */
 fun AppStore.devServerAction(action: DevServerAction, botId: String, id: String) = command(action.method, body("botId" to botId, "id" to id), action.method + ":" + id)
 
@@ -176,6 +182,10 @@ suspend fun AppStore.signOutAgent(backend: String) {
 suspend fun AppStore.weekSummary(): WeekSummary? = runCatching {
     WireJson.decodeFromJsonElement<WeekSummary>(hostQuery("weekSummary", buildJsonObject { put("days", 7) }))
 }.getOrNull()
+/** How often each skill's text entered a turn; null from an older host or when it can't be reached. */
+suspend fun AppStore.skillUsage(): SkillUsage? = runCatching {
+    SkillUsage.decode(hostQuery("skillUsage", buildJsonObject { }))
+}.getOrNull()
 /** The security profiles the host offers; null from an older host or when it can't be reached. */
 suspend fun AppStore.securityProfiles(): List<SecurityProfile>? = runCatching {
     SecurityProfile.decodeAll(hostQuery("securityProfiles", buildJsonObject { }))
@@ -192,6 +202,26 @@ suspend fun AppStore.testApprovalRule(botId: String, command: String, rules: Lis
         }
     }
     ApprovalRules.decodeEvaluation(hostQuery("testApprovalRule", payload))
+}.getOrNull()
+/** What would happen to a proposed tool call under the bot's rules; null when the host can't say. */
+suspend fun AppStore.previewApproval(
+    botId: String,
+    tool: String,
+    command: String,
+    rules: List<ApprovalRule>? = null,
+    quick: Pair<Boolean, Map<String, String>>? = null,
+): ApprovalPreview? = runCatching {
+    val payload = buildJsonObject {
+        put("botId", botId)
+        put("tool", tool)
+        if (command.isNotBlank()) put("command", command)
+        rules?.let { put("rules", WireJson.encodeToJsonElement(ApprovalRules.clean(it))) }
+        quick?.let { (on, policies) ->
+            put("actionRulesOn", on)
+            put("actionRules", WireJson.encodeToJsonElement(policies))
+        }
+    }
+    ApprovalRules.decodePreview(hostQuery("previewApproval", payload))
 }.getOrNull()
 /** A forced usage read that returns when it's done, for pull to refresh. */
 suspend fun AppStore.reloadUsage() { refreshUsage(true); actions["usage"]?.join() }
@@ -242,8 +272,10 @@ suspend fun AppStore.routineSchedule(draft: RoutineScheduleDraft): RoutineSchedu
     val response = hostQuery("routineSchedule", buildJsonObject { put("draft", WireJson.encodeToJsonElement(draft)) })
     return WireJson.decodeFromJsonElement(response)
 }
-suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean = false): RoutineWebhook {
-    val response = hostQuery("routineWebhook", buildJsonObject { put("botId", botId); put("id", id); put("rotate", rotate) })
+suspend fun AppStore.routineWebhook(botId: String, id: String, rotate: Boolean = false, key: String? = null): RoutineWebhook {
+    val response = hostQuery("routineWebhook", buildJsonObject {
+        put("botId", botId); put("id", id); put("rotate", rotate); if (key != null) put("key", key)
+    })
     return WireJson.decodeFromJsonElement(response)
 }
 

@@ -7,6 +7,7 @@ import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { errorText, type MarketApp } from './market-models'
 import { ErrorText, Field, ItemRow, MarketSection, ServiceLogo, WebLink } from './pieces'
+import { ConnectionGuideCard } from './ConnectionGuide'
 import { usePlugins } from './plugins'
 import { useTr } from '../../lib/use-language'
 
@@ -58,24 +59,24 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
             {app.website ? <WebLink title={app.website} url={app.website} className="small truncate" /> : null}
             <dl className="market-facts">
               <dt>{tr('Creator')}</dt><dd>{app.creator}</dd>
-              <dt>{tr('Origin')}</dt><dd>{app.origin ? <WebLink title={app.creator} url={app.origin} className="small" /> : tr('Reviewed by OpenBot')}</dd>
+              <dt>{tr('Origin')}</dt><dd>{app.origin ? <WebLink title={app.creator} url={app.origin} className="small" /> : tr('Reviewed by CopilotKit')}</dd>
               <dt>{tr('Category')}</dt><dd>{tr(app.category)}</dd>
               <dt>{tr('Version')}</dt><dd>{app.version}</dd>
               <dt>{tr('Updated')}</dt><dd>{app.updated}</dd>
             </dl>
           </VStack>
         </CardSection>
-        {app.setup === 'local' && app.steps.length ? (
+        {app.guide ? <ConnectionGuideCard guide={app.guide} name={app.name} /> : null}
+        {app.setup === 'local' && !app.guide && app.steps.length ? (
           <CardSection title={tr('Setup')} footer={tr('Runs on {name}.').replaceAll('{name}', store.hostName)}>
             <ol className="market-steps">
               {app.steps.map((step) => <li key={step}>{step}</li>)}
             </ol>
-            {app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Open the guide')} url={app.docsUrl} className="small" /> : null}
           </CardSection>
         ) : null}
         {app.setup === 'key' ? (
           <CardSection title={tr('Setup')} footer={tr('Keys are saved on {name} only.').replaceAll('{name}', store.hostName)}>
-            {app.steps.length ? (
+            {!app.guide && app.steps.length ? (
               <ol className="market-steps">
                 {app.steps.map((step) => <li key={step}>{step}</li>)}
               </ol>
@@ -92,7 +93,7 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
                 {field.hint ? <Text size="caption" tone="secondary">{field.hint}</Text> : null}
               </VStack>
             ))}
-            {app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Get a key')} url={app.docsUrl} className="small" /> : null}
+            {!app.guide && app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Get a key')} url={app.docsUrl} className="small" /> : null}
           </CardSection>
         ) : null}
         {app.setup === 'link' || app.setup === 'open' ? (
@@ -100,6 +101,19 @@ export function AppSheet({ app, added, onAdded, onError }: { app: MarketApp; add
             <Text tone="secondary">
               {app.setup === 'link' ? tr('{name} asks you to sign in to your own account in the browser.').replaceAll('{name}', app.name) : tr('Nothing to fill in here.')}
             </Text>
+            {app.fields.map((field) => (
+              <VStack key={field.id} gap={4}>
+                <Field
+                  label={field.label}
+                  value={values[field.id] ?? ''}
+                  secret={!field.url}
+                  placeholder={field.placeholder ?? field.label}
+                  onChange={(v) => setValues((old) => ({ ...old, [field.id]: v }))}
+                />
+                {field.hint ? <Text size="caption" tone="secondary">{field.hint}</Text> : null}
+              </VStack>
+            ))}
+            {!app.guide && app.fields.length && app.docsUrl ? <WebLink title={app.docsLabel ?? tr('Open the guide')} url={app.docsUrl} className="small" /> : null}
           </CardSection>
         ) : null}
         {app.prompts.length ? (

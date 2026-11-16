@@ -132,8 +132,8 @@ pub enum Trigger {
 impl Trigger {
     pub fn validate(&self, now: i64) -> Result<()> {
         match self {
-            Self::Interval { seconds } if !(1..=31_536_000).contains(seconds) => {
-                bail!("interval must be between 1 second and 365 days")
+            Self::Interval { seconds } if !(super::guardrails::MIN_INTERVAL_SECONDS..=31_536_000).contains(seconds) => {
+                bail!("interval must be between {} minutes and 365 days", super::guardrails::MIN_INTERVAL_SECONDS / 60)
             }
             Self::Once { at } if *at <= now => bail!("one-time trigger must be in the future"),
             Self::Cron { expression, time_zone } => {
@@ -282,6 +282,8 @@ mod tests {
     #[test]
     fn invalid_schedules_are_rejected() {
         assert!(Trigger::Interval { seconds: 0 }.validate(0).is_err());
+        assert!(Trigger::Interval { seconds: 899 }.validate(0).is_err(), "fifteen minutes is the floor");
+        assert!(Trigger::Interval { seconds: 900 }.validate(0).is_ok());
         assert!(Trigger::Once { at: 0 }.validate(0).is_err());
         assert!(Trigger::Cron { expression: "* * * * *".into(), time_zone: "not-a-zone".into() }.validate(0).is_err());
     }

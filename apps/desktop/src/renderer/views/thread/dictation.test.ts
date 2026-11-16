@@ -68,6 +68,24 @@ test('on-device words go after the draft, and finish waits for the last of them'
   assert.equal(s.dictation.busy, false)
 })
 
+test('the words a dictation added stay offerable as a thread until the next one', () => {
+  const s = setup()
+  s.dictation.start(s.box())
+  s.say({ type: 'partial', text: 'in the' })
+  s.say({ type: 'final', text: 'in the parser' })
+  s.dictation.finish()
+  s.say({ type: 'stopped' })
+  assert.equal(s.dictation.dictated, 'in the parser', 'what the dictation added, not what was typed before');
+  s.dictation.forget()
+  assert.equal(s.dictation.dictated, '');
+  // The shortcut's tap sends, so the words are already a message: no thread offer.
+  s.dictation.start(s.box())
+  s.say({ type: 'final', text: 'and then' })
+  s.dictation.finish(() => {})
+  s.say({ type: 'stopped' })
+  assert.equal(s.dictation.dictated, '');
+});
+
 test('cancel drops words still on their way', () => {
   const s = setup()
   s.dictation.start(s.box())
@@ -94,7 +112,7 @@ test('a speech error ends it and reports it; a send already asked for goes with 
 test('without on-device speech or a provider, the mic says what to pick', () => {
   const s = setup({ speech: null })
   s.dictation.start(s.box())
-  assert.equal(s.dictation.error, 'No speech here. Pick OpenAI, Gemini or ElevenLabs beside the mic.')
+  assert.equal(s.dictation.error, 'No speech here. Pick OpenAI, Gemini, ElevenLabs or Groq beside the mic.')
   assert.equal(s.dictation.listening, false)
 })
 

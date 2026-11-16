@@ -6,6 +6,10 @@ import kotlinx.serialization.json.*
 
 // Threads: a side conversation opened from a chat, so one message can be followed without filling the chat.
 
+/** A chat's live threads, fetched for a picker (the thread a channel conversation shares, card K13). */
+internal suspend fun AppStore.channelThreads(botId: String): List<ThreadInfo> =
+    ThreadInfo.decodeList(hostQuery("threads", buildJsonObject { put("botId", botId); put("archived", false) }))
+
 /** A chat's live threads, or its archive drawer, newest first; the host never sends their lines. */
 internal fun AppStore.refreshThreads(botId: String, archived: Boolean = false) {
     action("threads:$botId:$archived") {

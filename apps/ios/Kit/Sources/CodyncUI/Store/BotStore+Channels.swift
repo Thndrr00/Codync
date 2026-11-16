@@ -34,6 +34,36 @@ extension BotStore {
         try await ready().setDiscord(guildId: guildId, botUserId: botUserId, botToken: botToken, bindings: bindings)
     }
 
+    public func matrixStatus() async throws -> MatrixStatus { try await ready().matrixStatus() }
+
+    public func disconnectMatrix() async throws -> MatrixStatus { try await ready().disconnectMatrix() }
+
+    public func signalStatus() async throws -> SignalStatus { try await ready().signalStatus() }
+
+    public func disconnectSignal() async throws -> SignalStatus { try await ready().disconnectSignal() }
+
+    public func setSignal(number: String, daemon: String, bindings: [SignalBinding]) async throws -> SignalStatus {
+        try await ready().setSignal(number: number, daemon: daemon, bindings: bindings)
+    }
+
+    public func teamsStatus() async throws -> TeamsStatus { try await ready().teamsStatus() }
+
+    public func disconnectTeams() async throws -> TeamsStatus { try await ready().disconnectTeams() }
+
+    public func setTeams(appId: String, tenantId: String, password: String, managedIdentity: Bool, botId: String,
+                         allowedUsers: [String], allowedTenants: [String], memory: String,
+                         icon: String) async throws -> TeamsStatus {
+        try await ready().setTeams(appId: appId, tenantId: tenantId, password: password,
+                                   managedIdentity: managedIdentity, botId: botId, allowedUsers: allowedUsers,
+                                   allowedTenants: allowedTenants, memory: memory, icon: icon)
+    }
+
+    public func setMatrix(homeserver: String, user: String, accessToken: String, password: String,
+                          bindings: [MatrixBinding]) async throws -> MatrixStatus {
+        try await ready().setMatrix(homeserver: homeserver, user: user, accessToken: accessToken,
+                                    password: password, bindings: bindings)
+    }
+
     /// Adds a Telegram bot the host will talk through, answered by `botId`.
     public func addTelegramBot(name: String, token: String, botId: String) async throws -> [TelegramBot] {
         try await ready().addTelegramBot(name: name, token: token, botId: botId)
@@ -51,6 +81,11 @@ extension BotStore {
     /// Gives the computer a GitHub token; it answers with the account that token belongs to.
     public func setGitHubToken(_ token: String) async throws -> GitHubStatus {
         try await ready().setGitHubToken(token)
+    }
+
+    /// Creates a repository on that account; the answer carries `created` plus the fresh status.
+    public func githubCreateRepo(name: String, isPrivate: Bool, description: String) async throws -> GitHubStatus {
+        try await ready().githubCreateRepo(name: name, isPrivate: isPrivate, description: description)
     }
 
     /// The computer's linked WhatsApp number.
@@ -73,5 +108,33 @@ extension BotStore {
     /// Lets a chat or person write, or takes them out. Returns the list as it is then.
     public func whatsappSetAllowed(_ jid: String, allowed: Bool) async throws -> [String] {
         try await ready().whatsappSetAllowed(jid: jid, allowed: allowed)
+    }
+
+    /// Approves or denies a person who asked to write; approved, they join the allowed chats.
+    public func whatsappAnswerRequest(_ code: String, approve: Bool) async throws -> [WhatsAppRequest] {
+        try await ready().whatsappAnswerRequest(code: code, approve: approve)
+    }
+
+    /// The conversations of `botId` linked to a Codync thread (card K13).
+    public func conversationLinks(_ botId: String) async throws -> [ConversationLink] {
+        try await ready().conversationLinks(botId: botId)
+    }
+
+    /// The chat's threads, for choosing the one a channel conversation shares.
+    public func channelThreads(_ botId: String) async throws -> [ThreadInfo] {
+        try await ready().threads(botId: botId)
+    }
+
+    /// Links a channel conversation to a thread; every link of the bot comes back.
+    public func linkConversation(botId: String, provider: String, channel: String, thread: String,
+                                 threadId: String) async throws -> [ConversationLink] {
+        try await ready().linkConversation(botId: botId, provider: provider, channel: channel, thread: thread,
+                                           threadId: threadId)
+    }
+
+    /// Takes a channel conversation's link away.
+    public func unlinkConversation(botId: String, provider: String, channel: String,
+                                   thread: String) async throws -> [ConversationLink] {
+        try await ready().unlinkConversation(botId: botId, provider: provider, channel: channel, thread: thread)
     }
 }

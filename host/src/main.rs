@@ -2,7 +2,9 @@
 
 #![allow(dead_code, reason = "some host code is reached from clients and each other")]
 
+mod a2a;
 mod agent;
+mod agui;
 mod analytics;
 mod analytics_cli;
 mod api;
@@ -17,10 +19,13 @@ mod chat;
 mod cli;
 mod cloud_cli;
 mod compat;
+mod components;
 mod computer;
+mod declarative;
 mod dev_servers;
 mod diagnostics;
 mod discord;
+mod docs;
 mod doctor;
 mod documents;
 mod egress;
@@ -34,15 +39,22 @@ mod icons;
 mod import;
 mod import_cli;
 mod keeper;
+mod learning;
 mod local_api;
+mod local_apps;
 mod market;
+mod matrix;
 mod mcp;
+mod members;
 mod n8n;
 mod n8n_program;
 mod n8n_remote;
 mod native_channels;
 mod network;
 mod network_cli;
+mod notices;
+mod people;
+mod policy;
 mod proactive;
 mod prompt;
 mod remote;
@@ -51,17 +63,24 @@ mod routines;
 mod screen;
 mod send_cli;
 mod sentinel;
+mod server_settings;
 mod service;
 mod shell;
+mod signal;
 mod slack;
 mod store;
+mod teams;
 mod telegram;
+#[cfg(debug_assertions)]
+mod testing;
 mod theme;
 mod tools;
 mod tui;
 mod update;
 mod usage;
+mod views;
 mod voice;
+mod webmcp;
 mod whatsapp;
 
 use agent::backends;
@@ -74,7 +93,10 @@ use std::fmt::Write as _;
 use std::future::IntoFuture;
 use std::io::Read;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// When this process started, for `host_started.start_ms`.
+pub static STARTED: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 /// Poison-tolerant locking. Every critical section in the host is a short,
 /// self-contained update, so a panic elsewhere never leaves the data half
@@ -278,6 +300,14 @@ enum Sub {
         #[command(subcommand)]
         server: McpServer,
     },
+    /// Presents a remote AG-UI endpoint to a bot as an ACP agent (started by the host, not by hand).
+    #[command(hide = true)]
+    AguiAcp,
+    /// Local mocks for offline agent tests: an OpenAI-compatible provider, MCP, A2A and AG-UI.
+    /// Debug builds only; a release binary has no such command.
+    #[cfg(debug_assertions)]
+    #[command(hide = true)]
+    Mock(testing::Args),
 }
 
 #[derive(Subcommand)]
@@ -366,6 +396,13 @@ enum McpServer {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
         port: u16,
     },
+    /// Search this computer's documentation and code, with file and line citations.
+    Docs {
+        #[arg(long)]
+        bot: String,
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+    },
     /// For a Claude Code, Codex or other agent session on this computer that isn't a Codync bot:
     /// list the user's bots (here and on their other computers), message one, read its reply.
     /// Add it to the agent, for example `claude mcp add codync -- codync-host mcp network --name "Claude Code"`.
@@ -443,6 +480,8 @@ fn write_token_file(token: &str) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Forced here, at the start, so `host_started` can report how long the host took to be ready.
+    LazyLock::force(&STARTED);
     // Every TLS connection (the relay, HTTPS) uses aws-lc-rs, also in builds that have ring too.
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let cli = Cli::parse();
@@ -578,6 +617,9 @@ async fn main() -> Result<()> {
         }
         Sub::Node => agent::node::add().await,
         Sub::Keeper => keeper::run().await,
+        Sub::AguiAcp => agui::shim::run().await,
+        #[cfg(debug_assertions)]
+        Sub::Mock(args) => testing::serve(args).await,
         Sub::Npm { args } => std::process::exit(agent::node::npm(&args).await?),
         Sub::Statusline { port, wrapped } => {
             statusline(port, wrapped.join(" ")).await;
@@ -638,6 +680,7 @@ async fn main() -> Result<()> {
         Sub::Mcp { server: McpServer::Team { bot, port } } => mcp::serve(bot, port, mcp::Server::Team).await,
         Sub::Mcp { server: McpServer::Manage { bot, port } } => mcp::serve(bot, port, mcp::Server::Manage).await,
         Sub::Mcp { server: McpServer::Memory { bot, port } } => mcp::serve(bot, port, mcp::Server::Memory).await,
+        Sub::Mcp { server: McpServer::Docs { bot, port } } => mcp::serve(bot, port, mcp::Server::Docs).await,
         Sub::Mcp { server: McpServer::Comfy { bot, port } } => mcp::serve(bot, port, mcp::Server::Comfy).await,
         Sub::Mcp { server: McpServer::Composio { bot, port } } => mcp::serve(bot, port, mcp::Server::Composio).await,
         Sub::Mcp { server: McpServer::Network { name, port } } => mcp::serve(name, port, mcp::Server::Network).await,
@@ -679,7 +722,8 @@ async fn serve(bind: &str, port: u16) -> Result<()> {
     let hub = hub::Hub::new(store, host_id, identity, token, port);
     hub.start()?;
     network::start(&hub).await;
-    analytics::host_started(&hub, service::started_by_service());
+    let start_ms = i64::try_from(STARTED.elapsed().as_millis()).unwrap_or(i64::MAX);
+    analytics::host_started(&hub, service::started_by_service(), start_ms);
     let agent_checks = background::start(&hub);
     tracing::info!(version = env!("CARGO_PKG_VERSION"), bind, port, "codync-host listening");
     // Peer addresses: some settings may only be changed from this computer.

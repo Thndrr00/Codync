@@ -10,6 +10,8 @@ Usage meters use Codync's dotted style on desktop, iPhone, Android and their wid
 
 On desktop, enable **Settings > General > System > Show island**. In the island's **Options**, choose the top, bottom, left or right edge, a display, and compact or expanded density. Unlock its position to drag the handle to another edge. Positions are remembered per display; the island stays within the usable screen area, with the centered Mac notch as the exception. Automatic, primary-display and pointer-follow placement remain available. On Linux, the floating island requires X11.
 
+**Agent dock** turns the island into a roster of this computer's agents. It is off by default, and it is the island's setting: turn it on in the island's **Options**, next to density, or in **Settings > General > System** under the island's switch. On, hovering the notch, clicking the island or its **Agents** tab shows one row per bot in the same order as the sidebar, with its character, name, state (**Working**, **Needs you**, **Failed** or **Idle**), unread count and a line saying what it is doing, what it needs or why it stopped. A click opens that conversation in Codync, and an approval still opens first when one is waiting. Collapsed, the island says how many agents are working or need you, for example **2 agents working**. The dock sits on the island's own edge and follows its placement, density and text size. The iPhone, Android and terminal UI have no screen-edge dock and are unchanged.
+
 The island's **Usage** tab shows up to two providers per page, or one in narrow layouts. Use the arrows to change pages and scroll inside a provider's card to reach additional limits. Long labels and reset times wrap within the card; accounts that cannot report limits show an explanation. Pin providers or individual limits to put them first. The refresh button shows progress and errors, and the timestamp distinguishes saved readings from current ones. Optional island-only notices highlight a chosen usage threshold or a reset within 15 minutes.
 
 The **Activity** tab links to unread conversations, pending approvals, recent routine runs and their flow steps, and new channel mentions. The host records mention metadata when Slack, Discord or Telegram accepts a message; this list starts empty after upgrading and does not reconstruct older mentions. **Connection and health** shows the host route, resource readings and diagnostics, active voice-call controls, and n8n's status and editor shortcut. Select a bot to open its conversation or stop it through the existing host action. The approval queue can be browsed without answering a different card.
@@ -18,7 +20,11 @@ On desktop, open **Settings > Usage** to see the limits reported by your connect
 
 Usage shows the agents your bots run. The button beside the computer's name opens a list of every agent that can report on that computer: use its switches to turn on one no bot uses yet or hide one you don't want to see, and drag an agent by its handle to change the order Usage lists them in. In the terminal UI, press `s` on the usage sheet to open that list, and `J` or `K` to move an agent. The choices belong to the computer: your other devices follow them. An agent that's on but has nothing to read says **No reading yet**, which usually means it's signed out.
 
-These agents can report their limits: Claude Code, Codex, Google Antigravity, Cursor, GitHub Copilot, Grok Build, Hermes Agent, Amp, Auggie, Junie, Kilo, Kimi Code, Kiro CLI, Mistral Vibe, oh-my-pi and OpenCode. Unified Cursor plans, including Super, show one **Weekly** allowance with its next reset. Older Cursor plans retain their monthly usage readings.
+The **Breakdown** under the computer's health has two tabs. **Limits** is the list above. **Skills** shows how many times each skill's text entered a turn, the estimated tokens and cost of that text, its share of the tokens of all skill loads, and how many bots loaded it. A load is counted when an agent finishes a tool call that reads the skill's `SKILL.md` during a turn, once per skill per turn; counting starts with this version. The token count is about four bytes per token. The cost is an estimate at standard API list rates, not what a subscription plan charged: a model with no known rate shows **Unavailable**, never `$0.00`. The terminal UI shows the same tab with `t` on the usage sheet. Nothing in the report includes the skill's text, a file path or a message.
+
+Above the Breakdown, Usage shows the computer's RAM, CPU and disk. A phone or another computer paired with that computer's control access sees it, including a cloud computer through the relay. Codync accounts have one owner and no member roles on a computer, so there is no separate member view to hide it from; a member of a network of computers only messages bots and never calls another computer's API.
+
+These agents can report their limits: Claude Code, Codex, Google Antigravity, Cursor, GitHub Copilot, Grok Build, Hermes Agent, Amp, Auggie, Junie, Kilo, Kimi Code, Kiro CLI, Mistral Vibe, oh-my-pi and OpenCode. Unified Cursor plans, including Super, show one **Weekly** allowance with its next reset. Older Cursor plans retain their monthly usage readings. Kimi Code's plan shows its monthly row when the CLI reports one. An OpenCode Go reading that reports a $0 charge shows **Unavailable**, not `$0.00`, because that is the subscription's accounting rather than a price.
 
 Cursor usage works with the CLI's saved sign-in file on Linux and Windows, or the Cursor desktop app's sign-in. On macOS, a CLI login stored only in Keychain needs the desktop app signed in too; CLI file storage also works. You do not need to install the Cursor desktop app on a Linux or Windows host just to report usage.
 
@@ -89,11 +95,26 @@ Hermes Agent runs its own `hermes acp` mode, with the provider and model you pic
 
 When Hermes asks you to choose between answers, Codync shows the choices for you to select, even when the bot automatically approves tools.
 
+## AG-UI agents
+
+A bot can also run an agent that lives somewhere else and speaks [AG-UI](https://docs.ag-ui.com) instead of ACP. Set the bot's **Agent** to **AG-UI agent**, then open **Extensions** on that computer, choose **AG-UI agent**, and save the endpoint:
+
+- **Endpoint URL:** the address that accepts an AG-UI run and streams its events. Use HTTPS; HTTP works only for a server on this computer (`localhost` or a loopback address).
+- **Access token:** optional, sent as `Authorization: Bearer`.
+
+Both values stay in the host's vault on the computer and are given to the bot's adapter each time it starts. The bot streams the remote agent's text and tool calls into its chat like any other agent, and an approval the remote agent asks for appears as a normal Codync approval card. The remote agent's own tools run there; Codync's tools are not available to it, and the bot's model settings do not apply. You can also save the same two variables for one bot only, under that bot's **Agent** settings.
+
+## AG-UI clients
+
+The reverse works too: another app that speaks AG-UI can talk to a Codync bot. Send a run to `POST /agui/<bot id or name>` on the host's local API, with the same `Authorization: Bearer` token the other local API routes use, and read the events from the response stream. The newest user message in the run becomes a message in the bot's chat; the bot's reply, tool calls and approval cards stream back as AG-UI events. An approval is answered with `respondPermission`, using the `botId` and `entryId` the approval event carries. The endpoint only answers this computer's own apps and helpers; a browser-based client should call it from its server or be served from the host's own origin.
+
 ## Other agents from the ACP registry
 
 Codync also lists every other agent in the ACP registry, about 40 more. These need no install: Codync fetches one the first time a bot uses it, through `npx`, `uvx` or a build for your platform, which it keeps in `~/.codync/agents`. Codync refreshes its copy of the registry once a day.
 
 Codync doesn't know these agents' own sign-in commands. If one needs an account, sign in to it on the computer first, or use a sign-in option the agent offers in its setup sheet.
+
+Codync can also remove the build it downloaded: open the agent's page and choose **Delete** at the end, then confirm. Nothing else changes on the computer: the agent's accounts, sign-ins and bots stay, and the bot keeps its settings and chats. A bot on it shows the agent as **Not installed** until you set it up again, which downloads a fresh build and carries on with the same account. The action is only there for a build Codync downloaded; an agent you installed yourself is yours to remove.
 
 ## A custom command
 
@@ -146,7 +167,16 @@ In the bot's settings, under **Agent**:
 
 On desktop and iPhone, the collapsed Agent row summarizes the harness, model, effort and Fast mode. Expand it to access all settings. Click the harness or model to search; selecting a model closes only the search list. The refresh control is beside the search field. In the terminal, use the Agent, Model and model-option fields with the keyboard.
 
+When you've used up a plan window, the Agent row says when it comes back: a chip beside the agent's name carries the reset time, and every model that window stops is labeled **Usage limit reached**. It reads the usage Codync already shows under Usage limits, so it never asks the provider for anything.
+
 Changing the model or its options starts a new agent session; the chat history stays. Switching the bot to a different agent starts it on that agent's default model.
+
+## Personality and the Claude Code setup
+
+Two settings belong to the computer, not to one bot. On the desktop they're in **Settings**; on the iPhone and Android, in the computer's management screen under **Personality & remote control**.
+
+- **Personality** chooses how agents post updates between their steps. **Natural** (the default) writes a short note only when a finding changes the plan or before a long step, then answers with the verdict first. **Classic** shows the agent's own text as it comes. In the terminal, type `/natural` or `/classic` in the message box.
+- **Use my Claude Code setup** is off by default. Off, Claude agents don't load your `~/.claude` CLAUDE.md, skills, agents, hooks or plugins, so each turn sends a shorter prompt; your sign-in settings still apply and the bot's workspace files still load. Turn it on to give them your setup. In the terminal, `/claude-setup` turns it on and `/claude-setup-off` turns it off.
 
 ## The agent for a new bot
 

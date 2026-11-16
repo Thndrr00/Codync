@@ -13,6 +13,8 @@ use serde_json::{Value, json};
 pub enum Section {
     Yours,
     Bot,
+    /// A group's own layer, which every member reads in the room.
+    Channel,
     /// Both layers' long-form files.
     Notes,
     Dreams,
@@ -21,12 +23,13 @@ pub enum Section {
 }
 
 impl Section {
-    const ALL: [Self; 5] = [Self::Yours, Self::Bot, Self::Notes, Self::Dreams, Self::Harness];
+    const ALL: [Self; 6] = [Self::Yours, Self::Bot, Self::Channel, Self::Notes, Self::Dreams, Self::Harness];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Yours => "About you",
             Self::Bot => "This bot",
+            Self::Channel => "This channel",
             Self::Notes => "Notes",
             Self::Dreams => "Dreams",
             Self::Harness => "Claude Code",
@@ -77,6 +80,7 @@ impl MemorySheet {
         let list = match self.section {
             Section::Yours => &view["yours"]["entries"],
             Section::Bot => &view["bot"]["entries"],
+            Section::Channel => &view["channel"]["entries"],
             Section::Dreams => &view["dreams"],
             Section::Notes => {
                 // This bot's own first, then the shared ones; each row says which.
@@ -103,8 +107,9 @@ impl MemorySheet {
         let was = self.rows().get(self.cursor).map(key);
         self.view = Some(view);
         if !self.sections().contains(&self.section) {
-            // Claude Code's memory was just turned off.
-            self.section = Section::Bot;
+            // Claude Code's memory was just turned off, or this is a channel.
+            let channel = self.view.as_ref().is_some_and(|v| v["channel"].is_object());
+            self.section = if channel { Section::Channel } else { Section::Bot };
         }
         let rows = self.rows();
         self.cursor = was
@@ -112,8 +117,12 @@ impl MemorySheet {
             .unwrap_or_else(|| self.cursor.min(rows.len().saturating_sub(1)));
     }
 
-    /// Sections worth showing: Claude Code's memory only when it is kept on.
+    /// Sections worth showing: a channel shows only its own layer; Claude Code's memory only when it is kept on.
     pub fn sections(&self) -> Vec<Section> {
+        let channel = self.view.as_ref().is_some_and(|v| v["channel"].is_object());
+        if channel {
+            return vec![Section::Channel];
+        }
         let harness = self.view.as_ref().is_some_and(|v| v["projectMemory"].is_object());
         Section::ALL.into_iter().filter(|s| *s != Section::Harness || harness).collect()
     }
@@ -129,21 +138,19 @@ impl MemorySheet {
 
 impl App {
     pub fn open_memory(&mut self) {
-        let Some(bot) = self.bot().filter(|b| !b.group).map(|b| b.id.clone()) else {
-            self.flash("A group has no memory of its own");
-            return;
-        };
+        let Some(bot) = self.bot().map(|b| (b.id.clone(), b.group)) else { return };
+        let (id, group) = bot;
         let m = MemorySheet {
-            bot: bot.clone(),
+            bot: id.clone(),
             view: None,
-            section: Section::Bot,
+            section: if group { Section::Channel } else { Section::Bot },
             cursor: 0,
             scroll: Scroll::default(),
             mode: MemoryMode::Browse,
             error: None,
             busy: true,
         };
-        self.sheet("memory", m.body(), Reply::Memory(bot));
+        self.sheet("memory", m.body(), Reply::Memory(id));
         self.overlays.push(Overlay::Memory(m));
     }
 
@@ -205,7 +212,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('s') if !m.busy => {
+            KeyCode::Char('s') if !m.busy && m.section != Section::Channel => {
                 let shared = m.view.as_ref().is_some_and(|v| v["shared"] == true);
                 m.busy = true;
                 self.sheet(
@@ -214,7 +221,7 @@ impl App {
                     Reply::MemorySaved(m.bot.clone()),
                 );
             }
-            KeyCode::Char('m') if !m.busy => return self.harness_memory_key(m),
+            KeyCode::Char('m') if !m.busy && m.section != Section::Channel => return self.harness_memory_key(m),
             _ => {}
         }
         Some(Overlay::Memory(m))

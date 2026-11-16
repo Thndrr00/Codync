@@ -85,7 +85,7 @@ impl Actor {
             prompt.push_str("\n\n[Codync: send_file(path, name?) shares any regular file up to 100 MiB as a downloadable card. Use it instead of sending a local path.]");
         }
         if remind_artifacts && own_chat {
-            prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. To change it, edit a copy of its HTML (list_artifacts) and publish_artifact(path, artifact: its id).]");
+            prompt.push_str("\n\n[Codync: for a report, plan, tracker or dashboard the user will come back to, write one self-contained HTML file and publish_artifact(path, title) instead of a long message. For a diagram or flowchart the user should edit, publish an Excalidraw scene with publish_diagram. To change an artifact, edit a copy of its content (list_artifacts) and publish it with artifact: its id.]");
         }
         Ok(prompt)
     }
@@ -132,6 +132,8 @@ impl Actor {
         }
         self.lane = lane.clone();
         self.turn = Some(turn);
+        self.turn_skills.clear();
+        self.turn_first_output = None;
         // Only the user's own words feed memory: not another bot's, a room's or a routine's.
         let from_user = !hidden && self.source() == TurnSource::User;
         self.turn_text = from_user.then(|| text.to_owned());
@@ -161,6 +163,7 @@ impl Actor {
         self.watchdog.reset();
         self.loop_guard = super::stall::LoopGuard::default();
         self.plan_entry = None;
+        self.subagents = crate::chat::subagents::Card::default();
         self.last_text = None;
         self.sent.clear();
         self.reacted = Reacted::No;
@@ -353,14 +356,23 @@ impl Actor {
             && stop_reason == "end_turn"
             && let Some(turn) = self.turn
         {
-            let request = self
-                .hub
-                .runtime(&self.cfg.id)
-                .message
-                .and_then(|id| self.hub.store.entry(&id))
+            let message_id = self.hub.runtime(&self.cfg.id).message;
+            let request = message_id
+                .as_ref()
+                .and_then(|id| self.hub.store.entry(id))
                 .and_then(|e| e.data["text"].as_str().map(str::to_owned))
                 .unwrap_or_default();
-            tokio::spawn(crate::chat::skill_proposals::consider(self.hub.clone(), self.cfg.clone(), turn, request));
+            tokio::spawn(crate::chat::skill_proposals::consider(
+                self.hub.clone(),
+                self.cfg.clone(),
+                turn,
+                request.clone(),
+            ));
+            // What the person asked for here, and said again or corrected, may be worth remembering: proposed in the
+            // bot's settings, saved only when approved (or after the configured repeats).
+            let hub = self.hub.clone();
+            let cfg = self.cfg.clone();
+            tokio::task::spawn_blocking(move || crate::learning::consider(hub, cfg, request, message_id));
         }
         self.publish_proactive_output(!stopped && done.is_ok() && stop_reason == "end_turn");
         let silent_check_in = super::proactive::silent_update(self.proactive_turn, final_text.as_deref());
@@ -454,6 +466,8 @@ impl Actor {
         if !grouped && !delegated && !self.proactive_turn && !stopped && !failed && stop_reason == "end_turn" {
             self.offer_skill();
         }
+        // The turn's subagents end with it: this runtime reports nothing after.
+        self.stop_subagents(self.turn.unwrap_or(0));
         self.turn = None;
         self.reply_hops = None;
         // A call's opening is heard on the call: no alert.
@@ -544,7 +558,17 @@ impl Actor {
         };
         let started = self.hub.runtime(&self.id()).started_at.unwrap_or_else(now_ms);
         let ms = now_ms() - started;
-        analytics::turn_finished(&self.hub, &self.cfg.backend, outcome, stop_reason, failure, self.source(), ms);
+        let first_output = self.turn_first_output.map(|at| (at - started).max(0));
+        analytics::turn_finished(
+            &self.hub,
+            &self.cfg.backend,
+            outcome,
+            stop_reason,
+            failure,
+            self.source(),
+            ms,
+            first_output,
+        );
     }
 
     /// What started the turn that is starting or running.

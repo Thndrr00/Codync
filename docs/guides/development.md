@@ -222,5 +222,17 @@ Firebase lives in the same `codync-auth` project, with the Android apps `com.pok
 
 - `node tools/host-smoke.mjs`: starts a real host on a random port with a temporary data folder (never the dev one) and checks `/health`, `hostHealth`, `diagnostics` (including that secrets are redacted), `auditLog`, `enterpriseStatus` and that the API refuses a missing token. It needs a built `host/target/debug/codync-host`.
 - `node tools/memory-budget.mjs [port] [--json]`: prints the memory level, free memory and each running agent, and exits non-zero when the level is critical. Reads the dev token from `~/.codync-dev/token` unless `CODYNC_TOKEN_FILE` says otherwise.
-- `node tools/i18n-audit.mjs [language] [--strict]`: lists the literal keys the desktop calls `tr('…')` with that the language file lacks. `--strict` fails when any is missing.
+- `node tools/i18n-audit.mjs [language] [--strict]`: lists the literal keys the desktop calls `tr('ï¿½')` with that the language file lacks. `--strict` fails when any is missing.
 - `node tools/app-smoke.mjs [port]`: with the desktop app open on a `--remote-debugging-port`, walks the read-only UI paths over CDP: the roster, Settings opening and closing, Extensions listing Channels with its four cards, and Ctrl+K opening the command palette. It changes nothing and leaves the planner where it found it.
+
+## Containers
+
+The repository root holds a `Dockerfile` for the host, a `docker-compose.yml`, a `.dockerignore` that keeps the build context to `host/` plus the trees its build reads, and the health check in `docker/healthcheck.sh`. They build the same `serve` you run on a Linux server, with the data directory on a volume:
+
+```sh
+docker build -t codync-host:local .
+docker run -d -p 19222:19222 -v codync-data:/data codync-host:local
+docker compose up -d --build          # the same, with the port and URL in .env
+```
+
+The image ships the host only: no agent, no Node.js, no credential store. Build, pairing routes, backup, upgrades, the loopback rules for a published port, and what a container does not isolate are in [Docker](docker.md). No CI job builds the image yet; `host.yml` builds the release archives.

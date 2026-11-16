@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import com.codync.android.core.Bot
 import com.codync.android.core.LinkState
 import com.codync.android.core.UsageReport
 import com.codync.android.design.*
+import com.kyant.shapes.Capsule
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -80,22 +82,29 @@ private enum class PickerStage { Closed, Agents, Models, Settings }
     val agentName = agents.firstOrNull { it.id == backend }?.name ?: backend
     val modelName = if (value.isEmpty()) "Default" else modelChoices.firstOrNull { it.id == value }?.name ?: value
     val levels = modelOptions.mapNotNull { option -> option.values.firstOrNull { it.id == (options[option.id] ?: option.default) }?.name }
-    val summary = (listOf(agentName, modelName) + levels + if (fastMode) listOf("Fast") else emptyList()).joinToString(" · ")
-    // A spent plan window stops this agent's models: say so, and when it comes back (Usage screen).
+    val details = (listOf(modelName) + levels + if (fastMode) listOf("Fast") else emptyList()).joinToString(" · ")
+    // A spent plan window stops this agent's models: a chip beside its name says when it comes back,
+    // and each model it stops says so (the Usage screen's readings, nothing asked anew).
     val usage = remember(state.usage) { runCatching { UsageReport.decode(state.usage) }.getOrNull() }
     val spent = usage?.spentWindow(backend)
+    val spentReset = spent?.resetsShort()
+    val limit = when {
+        spentReset != null -> tr("Usage limit reached · {reset}").replace("{reset}", resetLine(spentReset))
+        spent != null -> tr("Usage limit reached")
+        else -> null
+    }
     Column(Modifier.fillMaxWidth().animateContentSize(Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().clickable { open(if (stage == PickerStage.Closed) PickerStage.Models else PickerStage.Closed) }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Crossfade(summary, Modifier.weight(1f), animationSpec = Motion.fade(), label = "Agent summary") { text ->
-                Text(text, style = Type.subheadline, color = Palette.text)
+            Text(agentName, style = Type.subheadline.medium, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            limit?.let {
+                Text(it, Modifier.widthIn(max = 140.dp).clip(Capsule()).background(Palette.surface).padding(horizontal = 7.dp, vertical = 2.dp),
+                    style = Type.caption, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Crossfade(details, Modifier.weight(1f), animationSpec = Motion.fade(), label = "Agent summary") { text ->
+                Text(text, style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Symbol(if (stage == PickerStage.Closed) "chevron.down" else "chevron.up", size = 12.dp, tint = Palette.secondary)
-        }
-        spent?.let { window ->
-            val reset = window.resetsShort()
-            Text(reset?.let { tr("Usage limit reached · {reset}").replace("{reset}", resetLine(it)) } ?: tr("Usage limit reached"),
-                style = Type.caption, color = Palette.secondary)
         }
         if (stage != PickerStage.Closed) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -122,6 +131,11 @@ private enum class PickerStage { Closed, Agents, Models, Settings }
                         else { if (c.id != value) choose(c.id.ifEmpty { null }, emptyMap()); open(PickerStage.Settings) }
                     }.padding(horizontal = 6.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(c.name, Modifier.weight(1f), style = Type.body, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // A spent window stops every one of this agent's models.
+                        if (stage == PickerStage.Models && c.id.isNotEmpty() && spent != null) {
+                            Text(tr("Usage limit reached"), Modifier.clip(Capsule()).background(Palette.surface).padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = Type.caption, color = Palette.secondary, maxLines = 1)
+                        }
                         if (c.signedIn) Box(Modifier.size(13.dp).clip(CircleShape).background(Palette.accentFill), contentAlignment = Alignment.Center) {
                             Symbol("checkmark", size = 9.dp, tint = Palette.onAccent)
                         }

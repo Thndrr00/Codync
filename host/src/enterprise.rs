@@ -1,6 +1,6 @@
 //! Company sign-in and user sync: an `OpenID Connect` provider the owner names, checked by discovery, and a `bearer token`
-//! for a SCIM client. Codync has no member accounts of its own yet, so the SCIM endpoint lists the account owner and
-//! this computer's paired devices as read-only users.
+//! for a SCIM client. Members live in `people`: SCIM creates and removes them there, and a verified
+//! company email maps to one (`member_from_email`) for the login exchange in `members`.
 
 use crate::hub::Hub;
 use crate::store::Store;
@@ -113,43 +113,27 @@ pub fn rotate_scim(store: &Store) -> Result<String> {
     Ok(token)
 }
 
-const MEMBERS: &str = "enterprise.members";
-
-/// A person the company's directory lists. Codync has no per-member sign-in yet; a member is a record a
-/// provisioning client manages, kept so a SCIM sync has somewhere to write.
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Member {
-    pub id: String,
-    pub user_name: String,
-    #[serde(default)]
-    pub display_name: String,
-    #[serde(default = "yes")]
-    pub active: bool,
-    pub created_at: i64,
+/// A person as the directory and SCIM see them (`docs/features/people.md`).
+pub fn member_json(person: &crate::store::Person) -> Value {
+    json!({
+        "id": person.id,
+        "userName": person.email.clone().unwrap_or_else(|| person.name.clone()),
+        "displayName": person.name,
+        "active": true,
+        "createdAt": person.created_at,
+        "role": person.role.as_str(),
+    })
 }
 
-fn yes() -> bool {
-    true
-}
-
-fn members(store: &Store) -> Result<Vec<Member>> {
-    Ok(crate::market::vault::read(store, MEMBERS)?
-        .filter(|raw| !raw.is_empty())
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default())
-}
-
-fn save_members(store: &Store, people: &[Member]) -> Result<()> {
-    crate::market::vault::write(store, MEMBERS, &serde_json::to_string(people)?)
-}
-
-/// The people a SCIM client created, without secrets.
+/// The people a SCIM client or an owner created, without secrets. The `people` table is the one
+/// source of truth: a member is a person with an email (see `docs/features/people.md`).
 pub fn member_list(store: &Store) -> Result<Value> {
-    Ok(json!({"members": members(store)?}))
+    let members: Vec<Value> = store.people()?.iter().map(member_json).collect();
+    Ok(json!({"members": members}))
 }
 
-/// Adds a member from an email (the SCIM `userName`), or updates the one with that email.
+/// Adds a member from an email (the SCIM `userName`), or updates the one with that email. A person
+/// created this way is a `member`: a directory sync never grants an admin.
 pub fn add_member(store: &Store, user_name: &str, display_name: &str) -> Result<Value> {
     let user_name = user_name.trim().to_lowercase();
     if user_name.len() < 3
@@ -163,77 +147,63 @@ pub fn add_member(store: &Store, user_name: &str, display_name: &str) -> Result<
     if display_name.chars().count() > 120 {
         bail!("That name is too long.");
     }
-    let mut people = members(store)?;
-    let found = people.iter_mut().find(|person| person.user_name == user_name).map(|existing| {
-        display_name.clone_into(&mut existing.display_name);
-        existing.active = true;
-        existing.clone()
-    });
-    if let Some(existing) = found {
-        save_members(store, &people)?;
-        return Ok(json!({"member": existing}));
-    }
-    if people.len() >= 500 {
-        bail!("The directory is full.");
-    }
-    let member = Member {
-        id: uuid::Uuid::new_v4().to_string(),
-        user_name: user_name.clone(),
-        display_name: display_name.to_owned(),
-        active: true,
-        created_at: crate::store::now_ms(),
+    let person = match store.person_by_email(&user_name) {
+        Some(existing) => {
+            let name = if display_name.is_empty() { existing.name.clone() } else { display_name.to_owned() };
+            store.update_person(&existing.id, &name, Some(&user_name))?.unwrap_or(existing)
+        }
+        None => {
+            let name =
+                if display_name.is_empty() { user_name.split('@').next().unwrap_or(&user_name) } else { display_name };
+            store.add_person_with_role(name, Some(&user_name), crate::store::Role::Member)?
+        }
     };
-    people.push(member.clone());
-    save_members(store, &people)?;
-    Ok(json!({"member": member}))
+    Ok(json!({"member": member_json(&person)}))
 }
 
-/// Removes the member with this id; false when it wasn't there.
-pub fn remove_member(store: &Store, id: &str) -> Result<bool> {
-    let mut people = members(store)?;
-    let before = people.len();
-    people.retain(|person| person.id != id);
-    if people.len() == before {
-        return Ok(false);
-    }
-    save_members(store, &people)?;
-    Ok(true)
+/// Removes the member with this id, the same way Settings does: their devices and invitations go,
+/// their bots and connectors become the owner's, and nothing is deleted. False when it wasn't there.
+pub fn remove_member(hub: &std::sync::Arc<Hub>, id: &str) -> Result<bool> {
+    Ok(crate::people::remove(hub, id)?["removed"].as_bool().unwrap_or(false))
 }
 
 /// The member a SCIM resource id names, if any.
-pub fn member_by_id(store: &Store, id: &str) -> Result<Option<Member>> {
-    Ok(members(store)?.into_iter().find(|person| person.id == id))
+pub fn member_by_id(store: &Store, id: &str) -> Option<crate::store::Person> {
+    store.person(id)
 }
 
-/// The SCIM list this computer can answer: the account owner and its paired devices, read-only.
+/// The person a signed-in company email belongs to, whatever its case. Company sign-in maps the
+/// provider's verified email through this, then exchanges it for a member session at the computer
+/// (`members::memberSignIn`).
+pub fn member_from_email(store: &Store, email: &str) -> Option<crate::store::Person> {
+    store.person_by_email(email)
+}
+
+/// Whether `email` is at a domain the configured company owns. Company sign-in never maps an email
+/// from anywhere else to a member, even if a person happens to carry that address.
+pub fn domain_allows(store: &Store, email: &str) -> Result<bool> {
+    let Some(config) = load(store)? else { return Ok(false) };
+    let Some((_, domain)) = email.trim().to_lowercase().rsplit_once('@') else { return Ok(false) };
+    Ok(config.domains.iter().any(|allowed| allowed == domain))
+}
+
+/// The SCIM list this computer can answer: the account owner and the people on it. A person is a
+/// real member account now, so its devices are its sessions, not users of their own.
 pub fn scim_users(hub: &Hub) -> Result<Value> {
     let mut resources = Vec::new();
     if let Some(owner) = hub.cloud.status().owner {
         resources.push(json!({
-            "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:User"],
             "id": owner.user_id,
             "userName": owner.email.unwrap_or_else(|| owner.user_id.clone()),
             "active": true,
             "displayName": "Owner",
         }));
     }
-    for device in hub.store.devices()? {
-        resources.push(json!({
-            "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-            "id": device.key,
-            "userName": device.name,
-            "active": true,
-            "displayName": device.platform,
-        }));
-    }
-    for member in members(&hub.store)? {
-        resources.push(json!({
-            "schemas": ["urn:ietf:params:scim:api:messages:2.0:User"],
-            "id": member.id,
-            "userName": member.user_name,
-            "displayName": member.display_name,
-            "active": member.active,
-        }));
+    for person in hub.store.people()? {
+        let mut resource = member_json(&person);
+        resource["schemas"] = json!(["urn:ietf:params:scim:api:messages:2.0:User"]);
+        resources.push(resource);
     }
     let total = resources.len();
     Ok(json!({"schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"], "totalResults": total,
@@ -269,17 +239,42 @@ mod tests {
     }
 
     #[test]
-    fn members_are_added_once_and_removed() {
+    fn a_scim_member_is_a_person_who_can_sign_in() {
         let hub = hub();
         *hub.store.secret_key.lock().unwrap() = Some(zeroize::Zeroizing::new(vec![7; 32]));
         add_member(&hub.store, "Ana@Example.com", "Ana").unwrap();
         add_member(&hub.store, "ana@example.com", "Ana B").unwrap();
-        let people = members(&hub.store).unwrap();
+        let people = hub.store.people().unwrap();
         assert_eq!(people.len(), 1, "the same email updates the member");
-        assert_eq!(people[0].display_name, "Ana B");
-        assert!(remove_member(&hub.store, &people[0].id).unwrap());
-        assert!(!remove_member(&hub.store, &people[0].id).unwrap());
+        assert_eq!(people[0].name, "Ana B");
+        assert_eq!(people[0].role, crate::store::Role::Member, "a directory sync never grants an admin");
+        assert_eq!(member_from_email(&hub.store, "ANA@example.com").unwrap().id, people[0].id);
+        assert!(member_by_id(&hub.store, &people[0].id).is_some());
+        assert!(member_list(&hub.store).unwrap()["members"].as_array().unwrap().len() == 1);
+
+        assert!(remove_member(&hub, &people[0].id).unwrap());
+        assert!(!remove_member(&hub, &people[0].id).unwrap());
+        assert!(member_from_email(&hub.store, "ana@example.com").is_none());
         assert!(add_member(&hub.store, "nonsense", "").is_err());
+    }
+
+    #[test]
+    fn company_sign_in_only_maps_the_domains_the_owner_named() {
+        let hub = hub();
+        *hub.store.secret_key.lock().unwrap() = Some(zeroize::Zeroizing::new(vec![7; 32]));
+        add_member(&hub.store, "ana@example.com", "Ana").unwrap();
+        assert!(!domain_allows(&hub.store, "ana@example.com").unwrap(), "no company sign-in yet");
+        let config = Config {
+            issuer: "https://id.example.com".into(),
+            client_id: "client".into(),
+            domains: vec!["example.com".into()],
+            endpoints: json!({}),
+        };
+        crate::market::vault::write(&hub.store, CONFIG, &serde_json::to_string(&config).unwrap()).unwrap();
+        assert!(domain_allows(&hub.store, "ANA@Example.com").unwrap());
+        assert!(!domain_allows(&hub.store, "ana@elsewhere.com").unwrap());
+        assert!(domain_allows(&hub.store, "nonsense").is_ok_and(|allowed| !allowed));
+        assert_eq!(member_from_email(&hub.store, "ana@example.com").unwrap().name, "Ana");
     }
 
     #[test]

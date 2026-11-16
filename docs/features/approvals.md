@@ -5,6 +5,10 @@ itself or shows an approval card, and it decides whether a card can still be ans
 in `host/src/agent/bot/updates.rs` (`on_permission`, `answer_permission`),
 `host/src/agent/approval_rules.rs` and `respondPermission` in `host/src/api/bots.rs`.
 
+Before any of the rules below, a computer's [policies](policy-engine.md) are checked: a `deny` policy
+refuses the request and a policy `allow` approves it. With no policy switched on, everything on this
+page works exactly as described.
+
 ## Rules
 
 A bot's `approvalRules` (part of its config, set with `updateBot`) are checked in order, before
@@ -43,6 +47,30 @@ the command, by the same `approval_rules::evaluate` a real request goes through,
 `outcome` is `forbidden` (with the blocklist `pattern`), `rule` (`index`, `decision`, `pattern`) or `setting` (the
 bot's `permission`), plus `chained` and `allowPassedOver` (an allow rule that matched but was skipped because the
 command runs several). `rules` tests a list that is not saved yet; without it the bot's saved rules are used.
+
+**What would happen?** `previewApproval {botId, tool, command?, input?, kind?, initiator?, rules?, actionRules?, actionRulesOn?}`
+answers the same question for a proposed tool call without acting (`host/src/agent/approval_preview.rs`). `tool` is the
+agent's tool name (or an MCP tool's), `command` its shell command when it has one, `input` any other argument, and
+`initiator` who asks (`the owner`, `member Ana`, a bot); when omitted the host names the caller. The host infers the
+tool kind from the name unless `kind` says it. It returns `{preview}` with:
+
+- `decision`: `allow`, `ask` or `deny`.
+- `source`: `rule` (one of the person's rules), `quickRule` (a quick rule by kind of action), `forbidden` (the
+  blocklist, before any rule), `policy`, `noMatch`, `error` (this computer's [policies](policy-engine.md) decided) or
+  `default` (no rule matched, so the bot's Approvals setting decides).
+- `rule`: the deciding rule's `index`, `decision`, `pattern`, `kind` and whether it is `quick`, or null.
+- `policy`: what the computer's policies say: `outcome` (`policy`, `noMatch`, `error`, `unset`), the deciding
+  `rule` (`name`, `effect`, `index`, `message`), `allowlist`, `variables` (the resolved snapshot, its
+  credentials masked) and `explanation`.
+- `default`: the bot's Approvals setting, `chained`, and `allowPassedOver` as the tester returns them.
+- `explanation`: an audit-style sentence naming the bot, the tool and input, the initiator, and the rule or default
+  that decides, ending "Nothing ran." When a policy decides, the sentence names the policy rule instead. It is for
+  people to read, not a new policy language.
+
+This preview covers the computer's policies, the bot's approval rules and the blocklist. `rules` and `actionRules`
+test the editor's unsaved choices, as the tester does; `policies` tests an unsaved policy list. Connector tools (MCP)
+are also governed by their tool policy (`docs/features/mcp-tool-policies.md`), which this call does not evaluate.
+Desktop shows the panel under a bot's approval rules; a phone shows the same read-only result.
 
 ## Security profiles
 
@@ -108,7 +136,8 @@ Some commands no bot may run, in any profile and with any approval setting, `aut
 profile included (`host/src/agent/blocklist.rs`): wiping the root or the home folder (`rm -rf /`, `rm -rf ~`,
 `Remove-Item -Recurse -Force C:\`, `rd /s /q C:\`), `sudo`, `mkfs`, `dd if=`, shutting down, formatting, changing
 the execution policy, `net user`, `reg delete`… They are checked before the user's rules and before the bot's
-setting. A match answers the agent's request with its reject option (a cancel when it has none) and writes a notice
+setting, and before this computer's [policies](policy-engine.md), which can't allow one either. A match answers the
+agent's request with its reject option (a cancel when it has none) and writes a notice
 that names the pattern: "Blocked command ("rm -rf /"), never allowed". The same list stops a background `shell_job`
 and a terminal agent's hook (the terminal is told to refuse).
 
@@ -149,6 +178,19 @@ The card is the effect's key: the first decision is the one that happens.
 
 Two answers that arrive at the same moment both see a pending card; the bot's actor applies the
 first and drops the second, so only one reaches the agent.
+
+## Questions, one at a time
+
+Claude Code's `AskUserQuestion` reaches the host through the `hook --ask` bridge
+(`host/src/external/question.rs`). Up to four questions, each with two to four single-choice
+answers, become question cards: `toolKind` is `question`, and each card's `options` are that
+question's answers. The card also carries `questions` (the whole set), `questionIndex`,
+`questionCount` and `answers` (what was answered before it). The last question's card adds no
+Back row; every later one does (`optionId` `__back`), and answering it re-asks the question
+before, with its earlier answer kept. Clients show one question at a time in a bubble, with
+"Question i of n", Back to the previous question, and a summary of every answer before the last
+one is sent. The host API is unchanged: an answer is still one of the card's options.
+
 
 Ideas from rakazo's `action-approval.ts`, `approval-effect-key.ts` and `answerable-ask.ts`
 (Apache-2.0); no code copied. Rakazo's channel receipts and message commands need messaging

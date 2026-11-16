@@ -80,8 +80,8 @@ extension VoiceEngine {
         return switch provider {
         case .openAI: .openai
         case .gemini: .gemini
-        case .elevenLabs: .cloud
-        case nil: .onDevice
+        case .elevenLabs, .xai: .cloud
+        case .groq, nil: .onDevice
         }
     }
 }
@@ -101,14 +101,24 @@ enum VoiceSettings {
     static var wakePhrase: Bool { UserDefaults.standard.bool(forKey: wakePhraseKey) }
 
     static var provider: VoiceProvider? {
-        UserDefaults.standard.string(forKey: engineKey).flatMap(VoiceProvider.init(rawValue:))
+        let stored = UserDefaults.standard.string(forKey: engineKey).flatMap(VoiceProvider.init(rawValue:))
+        // A provider that does half a call is offered where it fits, not as the call's engine.
+        return stored?.carriesCalls == true ? stored : nil
     }
 
     /// The same choice for dictation into the message box, picked beside its mic.
     static let dictationEngineKey = "dictationEngine"
 
     static var dictationProvider: VoiceProvider? {
-        UserDefaults.standard.string(forKey: dictationEngineKey).flatMap(VoiceProvider.init(rawValue:))
+        let stored = UserDefaults.standard.string(forKey: dictationEngineKey).flatMap(VoiceProvider.init(rawValue:))
+        return stored?.transcribes == true ? stored : nil
+    }
+
+    /// What reads a reply aloud: the call engine's provider, or xAI's own route.
+    static var speechOutput: String { UserDefaults.standard.string(forKey: speechOutputKey) ?? "provider" }
+
+    static func speechProvider(_ provider: VoiceProvider) -> VoiceProvider {
+        speechOutput == "xai" ? .xai : provider
     }
 
     static func modelKey(_ provider: VoiceProvider) -> String { "callModel.\(provider.rawValue)" }
@@ -181,9 +191,9 @@ enum VoiceSettings {
     /// What a call's engine is built from (`CallView.begin`): a different one picked mid-call takes over the call.
     static func engineChoice(_ provider: VoiceProvider?) -> String {
         guard let provider else { return "device \(UserDefaults.standard.string(forKey: OnDeviceEngine.languageKey) ?? "") wake=\(wakePhrase)" }
-        return isSpeechMode(provider)
-            ? "\(provider.rawValue) speech \(transcribeModel(provider)) \(speechModel(provider)) \(voice(provider)) \(localSpeech)"
-            : "\(provider.rawValue) \(model(provider)) \(voice(provider))"
+        guard isSpeechMode(provider) else { return "\(provider.rawValue) \(model(provider)) \(voice(provider))" }
+        let speech = speechProvider(provider)
+        return "\(provider.rawValue) speech \(transcribeModel(provider)) \(speech.rawValue) \(speechModel(speech)) \(voice(speech)) \(speechOutput)"
     }
 
     static func voiceKey(_ provider: VoiceProvider) -> String { "callVoice.\(provider.rawValue)" }
@@ -191,8 +201,8 @@ enum VoiceSettings {
     static func voice(_ provider: VoiceProvider) -> String {
         let stored = UserDefaults.standard.string(forKey: voiceKey(provider)).flatMap { $0.isEmpty ? nil : $0 }
         // The account's own voices (ElevenLabs) are not in the fixed list.
-        if provider == .elevenLabs { return stored ?? provider.voices[0] }
-        return stored.flatMap { provider.voices.contains($0) ? $0 : nil } ?? provider.voices[0]
+        if provider == .elevenLabs { return stored ?? provider.voices.first ?? "" }
+        return stored.flatMap { provider.voices.contains($0) ? $0 : nil } ?? provider.voices.first ?? ""
     }
 }
 

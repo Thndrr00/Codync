@@ -323,6 +323,8 @@ export function BotAppsCard({ botId }: { botId: string }) {
           toasts.push(tr('Share link revoked'), 'info')
           await refresh()
         }}
+        onLoadActions={(slug) => store.webMcpState(botId, slug)}
+        onSetActions={(slug, actions) => store.setWebMcpGrant(botId, slug, actions)}
       />
       <ToastContainer toasts={toasts.toasts} onDismiss={toasts.dismiss} />
     </div>

@@ -9,6 +9,12 @@ public struct ThreadInfo: Codable, Identifiable, Hashable, Sendable {
     public var fromEntry: String?
     /// That message's text, for "Branched from …".
     public var branchText: String?
+    /// What kept the thread besides the drawer: `dictation` for a kept dictation.
+    public var source: String?
+    /// For a dictation, the chat message it was dictated under.
+    public var sourceEntry: String?
+    /// That message's text, so the thread says where the dictation came from.
+    public var sourceText: String?
     public var archived: Bool
     public var createdAt: Int64
     public var updatedAt: Int64
@@ -17,11 +23,15 @@ public struct ThreadInfo: Codable, Identifiable, Hashable, Sendable {
     public var lastAuthor: String?
 
     public init(id: String, title: String, fromEntry: String?, branchText: String?, archived: Bool,
-                createdAt: Int64, updatedAt: Int64, unread: Int, lastText: String?, lastAuthor: String?) {
+                createdAt: Int64, updatedAt: Int64, unread: Int, lastText: String?, lastAuthor: String?,
+                source: String? = nil, sourceEntry: String? = nil, sourceText: String? = nil) {
         self.id = id
         self.title = title
         self.fromEntry = fromEntry
         self.branchText = branchText
+        self.source = source
+        self.sourceEntry = sourceEntry
+        self.sourceText = sourceText
         self.archived = archived
         self.createdAt = createdAt
         self.updatedAt = updatedAt

@@ -33,12 +33,12 @@ pub enum LibraryItem {
 /// The newest title of each artifact (artifact id → title), and the bots whose Library was read for them.
 #[derive(Default)]
 pub struct ArtifactTitles {
-    titles: HashMap<String, String>,
+    pub(super) titles: HashMap<String, String>,
     asked: HashSet<String>,
 }
 
 impl LibraryItem {
-    fn parse(v: &Value) -> Option<Self> {
+    pub(super) fn parse(v: &Value) -> Option<Self> {
         let at = v["at"].as_i64().unwrap_or_default();
         let file = &v["file"];
         match v["kind"].as_str()? {
@@ -107,7 +107,7 @@ impl App {
     }
 
     /// `f`: saves the row to Downloads, or stops the download running.
-    fn save_item(&mut self, bot: &str, item: LibraryItem) {
+    pub(super) fn save_item(&mut self, bot: &str, item: LibraryItem) {
         if self.cancel_download() {
             return;
         }
@@ -191,7 +191,7 @@ fn adds_to_library(e: &Entry) -> bool {
 }
 
 /// `r` on an artifact: its title in a field of its own.
-fn rename_fields(bot: String, artifact: String, title: &str) -> Fields {
+pub(super) fn rename_fields(bot: String, artifact: String, title: &str) -> Fields {
     Fields {
         title: "Rename artifact".into(),
         note: String::new(),

@@ -87,7 +87,8 @@ private fun AppStore.setDownload(fileId: String, download: FileDownloadState?) =
 /** The chat or thread the message is in (a thread's first message too) is the one open. */
 private fun AppStore.showing(export: FileExport): Boolean {
     val current = state.value
-    return foreground && current.selectedBot == export.botId && (current.thread == export.threadId || current.thread == export.entryId)
+    val open = current.selectedBot == null || current.selectedBot == export.botId
+    return foreground && open && (current.thread == export.threadId || current.thread == export.entryId)
 }
 
 /** Library downloads retain the same deferred share ownership as conversation cards. */

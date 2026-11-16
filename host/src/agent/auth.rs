@@ -180,6 +180,13 @@ pub async fn check(store: &Store, backend: &str) -> Result<Value> {
         status.signed_in = backends::signed_in(backend).or_else(|| backends::credential_state(backend).signed_in);
     }
     status.signed_in = backends::apply_prompt_refusal(backend, status.signed_in);
+    // The AG-UI agent has no sign-in: an unset endpoint reports unknown, which keeps its endpoint form open.
+    // Once the URL is saved it is ready; the bot's own Agent settings can change it later.
+    if backend == crate::agui::BACKEND {
+        let ready =
+            saved_value(store, backend, crate::agui::endpoint::URL_ENV)?.is_some_and(|url| !url.trim().is_empty());
+        status.signed_in = ready.then_some(true);
+    }
     backends::set_signed_in(backend, status.signed_in);
     CHECKED.locked().insert(backend.to_owned(), status.clone());
     let mut v = serde_json::to_value(&status)?;
@@ -358,7 +365,15 @@ fn save_env(store: &Store, backend: &str, bot: Option<&str>, vars: &Map<String, 
         if !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') || k.is_empty() {
             bail!("`{k}` isn't an environment variable name");
         }
-        changes.push((k.clone(), v.as_str().map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned)));
+        // The AG-UI endpoint gets the same check as the local voice server's URL, when it is saved.
+        let value = v.as_str().map(str::trim).filter(|s| !s.is_empty());
+        if backend == crate::agui::BACKEND
+            && k == crate::agui::endpoint::URL_ENV
+            && let Some(url) = value
+        {
+            crate::agui::endpoint::parse_endpoint(url, "The AG-UI endpoint URL")?;
+        }
+        changes.push((k.clone(), value.map(str::to_owned)));
     }
     if let Some(bot) = bot {
         let slot = bot_env_slot(backend, bot);

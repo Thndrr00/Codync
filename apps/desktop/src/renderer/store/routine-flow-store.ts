@@ -52,7 +52,8 @@ export class RoutineFlowStore extends Observable {
     try {
       const canvas = await (await this.client()).call<FlowCanvas>('routineFlowCanvas', { botId: this.botId })
       if (sequence !== this.sequence || this.disposed) return
-      this.canvas = canvas
+      // An older host has no lanes yet: the card still draws, with its steps only.
+      this.canvas = { ...canvas, routines: canvas.routines.map((card) => ({ ...card, lanes: card.lanes ?? [] })) }
       this.error = null
       this.unsupported = false
     } catch (error) {

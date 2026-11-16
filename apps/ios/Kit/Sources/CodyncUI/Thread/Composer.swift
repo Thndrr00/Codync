@@ -16,6 +16,8 @@ struct Composer: View {
     var onCall: (() -> Void)?
     /// Interrupts the bot while it is speaking in a voice call.
     var onInterrupt: (() -> Void)?
+    /// Opens a thread of this chat, after a dictation is kept as one.
+    var onOpenThread: ((String) -> Void)?
     /// An artifact's viewer: every message is about the artifact (a reply to its card), from a draft of its own.
     var artifact: Artifact?
     /// A thread's message box: messages go to the thread (`threadId`) and it keeps a draft of its own.
@@ -51,7 +53,9 @@ struct Composer: View {
 
     private var canSend: Bool {
         // Offline computers still take text: the relay holds it for them, or with no relay this phone does.
-        !isEmpty && (model.connection == .online || ((model.canQueue || model.holdsOnPhone) && files.isEmpty))
+        // A file still on its way (or one that failed) holds the send until it arrives or is removed.
+        let uploaded = files.allSatisfy { model.fileUploads[$0.id]?.status == .uploaded }
+        return !isEmpty && uploaded && (model.connection == .online || ((model.canQueue || model.holdsOnPhone) && files.isEmpty))
     }
 
     private var canAttach: Bool { bot != nil }
@@ -128,6 +132,9 @@ struct Composer: View {
                 }
                 if !files.isEmpty {
                     fileChips.transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                if canKeepDictation {
+                    keptBar.transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 box
             }
@@ -218,6 +225,41 @@ struct Composer: View {
         .animation(Motion.reduced(Motion.morph, reduceMotion), value: canSend)
     }
 
+    /// The last dictation, offered as a thread of its own instead of this chat's next message.
+    private var canKeepDictation: Bool {
+        !dictation.dictated.isEmpty && !dictation.listening && !dictation.transcribing
+            && thread == nil && artifact == nil && onOpenThread != nil
+    }
+
+    private var keptBar: some View {
+        HStack(spacing: 6) {
+            Button {
+                keepAsThread()
+            } label: {
+                Text(L10n.tr("Keep as thread"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Palette.accent)
+                    .padding(.leading, 12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            IconButton("Dismiss", systemImage: "xmark") { dictation.forget() }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 6)
+    }
+
+    /// The thread takes the dictated words: it sends them as its first message and opens.
+    private func keepAsThread() {
+        let said = dictation.dictated
+        guard let onOpenThread, !said.isEmpty else { return }
+        if draft.hasSuffix(said) { draft = String(draft.dropLast(said.count)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        dictation.forget()
+        Task {
+            if let root = await model.keepDictation(botId, text: said) { onOpenThread(root) }
+        }
+    }
+
     /// Dictation, beside send / call (Grok Bot's): a light circle with its engine menu; while it
     /// listens or transcribes, the recording pill.
     private var micButton: some View {
@@ -275,6 +317,7 @@ struct Composer: View {
         .padding(.vertical, boxPadding)
         .onChange(of: draftKey, initial: true) {
             dictation.stop()
+            dictation.forget()
             draft = model.composerDraft(for: draftKey)
         }
         // Another chat in the same view never inherits the reply.
@@ -326,10 +369,15 @@ struct Composer: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(files) { file in
-                    ComposerAttachment(file: file) {
+                    ComposerAttachment(file: file, upload: model.fileUploads[file.id]) {
+                        model.forgetUpload(file.id)
                         withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
                             files.removeAll { $0.id == file.id }
                         }
+                    } cancel: {
+                        model.cancelUpload(file)
+                    } retry: {
+                        model.retryUpload(file)
                     }
                 }
             }
@@ -354,6 +402,7 @@ struct Composer: View {
                 continue
             }
             files.append(file)
+            model.startUpload(file, for: botId)
         }
     }
 
@@ -403,6 +452,7 @@ struct Composer: View {
     private func submit() {
         // Words still on their way would land in the emptied box.
         dictation.stop()
+        dictation.forget()
         if files.isEmpty, let command = SlashCommands.builtIn(for: bot, members: members, draft: draft) { return run(command) }
         guard canSend else { return }
         withAnimation(Motion.reduced(Motion.conversation, reduceMotion)) {

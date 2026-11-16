@@ -160,8 +160,7 @@ extension AppLanguageTests {
         #expect(AppLanguage.preference(in: suite) == .ptBR)
         #expect(AppLanguage(rawValue: "pt-BR") == .ptBR)
         #expect(AppLanguage.ptBR.catalogName == "pt-BR")
-        #expect(Array(AppLanguage.allCases.suffix(4)) == [.es, .ptBR, .ru, .ar])
-        #expect(Array(AppLanguage.allCases.suffix(4)) == [.es, .ptBR, .ru, .it])
+        #expect(Array(AppLanguage.allCases.suffix(4)) == [.ru, .ar, .he, .it])
         #expect(AppLanguage.menuTitle(.ptBR, preference: .en, systemIsChinese: true) == "Português (Brasil)")
         #expect(!AppLanguage.usesChinese(preference: .ptBR, systemIsChinese: true))
         let locale = AppLanguage.locale(preference: .ptBR, systemIsChinese: true)
@@ -205,6 +204,21 @@ extension AppLanguageTests {
         #expect(AppLanguage.locale(preference: .ar, systemIsChinese: true).language.languageCode?.identifier == "ar")
         #expect(L10n.tr("Settings", preference: .ar, systemIsChinese: false) != "Settings")
         #expect(L10n.tr("An unknown phrase", preference: .ar) == "An unknown phrase")
+    }
+
+    @Test func hebrewResolvesMirrorsAndLoadsItsBundledCatalog() {
+        #expect(AppLanguage.resolved(preference: .system, languages: ["he-IL"]) == .he)
+        #expect(AppLanguage.resolved(preference: .he, languages: ["en-US"]) == .he)
+        #expect(AppLanguage.menuTitle(.he, preference: .en, systemIsChinese: false) == "עברית")
+        #expect(!AppLanguage.usesChinese(preference: .he, systemIsChinese: true))
+        #expect(AppLanguage.readsRightToLeft(preference: .he, languages: ["en-US"]))
+        #expect(AppLanguage.readsRightToLeft(preference: .system, languages: ["he-IL"]))
+        #expect(!AppLanguage.readsRightToLeft(preference: .ar, languages: ["he-IL"]))
+        #expect(AppLanguage.locale(preference: .he, systemIsChinese: false).language.languageCode?.identifier == "he")
+        #expect(L10n.tr("Settings", preference: .he, systemIsChinese: false) != "Settings")
+        #expect(L10n.tr("An unknown phrase", preference: .he) == "An unknown phrase")
+    }
+
     @Test func botRoutineAndMessageSlotsKeepWhatTheUserWrote() {
         func ru(_ text: String) -> String { L10n.tr(text, preference: .ru, systemIsChinese: false) }
         #expect(ru("Created bot connected") == "Создан бот connected")

@@ -66,7 +66,7 @@ fn installed(connectors: &[Connector], entry: &Entry) -> bool {
 }
 
 /// Use the same installation and vault path as the graphical clients. Inputs never become code.
-pub async fn install(store: &Store, name: &str, option: &str, inputs: &Value) -> Result<Value> {
+pub async fn install(store: &Store, name: &str, option: &str, inputs: &Value, person: Option<&str>) -> Result<Value> {
     ensure!(option == "remote:0", "Unknown Hermes connector option");
     let entry = entry(name).context("Unknown Hermes connector")?;
     let app = &entry.app;
@@ -89,16 +89,18 @@ pub async fn install(store: &Store, name: &str, option: &str, inputs: &Value) ->
     }
     let existing = market::connectors(store)?;
     if app.fields.is_empty()
-        && let Some(connector) = existing
-            .iter()
-            .find(|c| c.catalog.as_deref() == Some(&app.id) || same_url(c.url.as_deref(), url.as_deref()))
+        && let Some(connector) = existing.iter().find(|c| {
+            c.person.as_deref() == person
+                && (c.catalog.as_deref() == Some(&app.id) || same_url(c.url.as_deref(), url.as_deref()))
+        })
     {
         return Ok(connector.public());
     }
-    market::add_custom_connector(
+    market::add_custom_connector_as(
         store,
         &json!({"name":app.server.name,"description":app.description,
         "url":url,"env":env,"headers":headers,"catalog":app.id}),
+        person,
     )
     .await
 }

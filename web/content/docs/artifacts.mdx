@@ -20,6 +20,14 @@ The artifact opens full size over the chat:
 
 An artifact can be up to 5 MB.
 
+## Diagrams
+
+A diagram is an artifact you can edit. Ask for a flowchart, a plan or a sketch, or a bot makes one when a picture explains it better. It appears as a **Diagram** card; open it on the desktop to move shapes, add rectangles, ellipses, diamonds, arrows and text, change colors, and choose **Save diagram**. The saved diagram reopens as you left it, and the bot can change it when you ask.
+
+Diagrams use the Excalidraw scene format, so the JSON can move between Codync and Excalidraw. The iPhone and Android apps open the card and say to edit it on the desktop; they don't draw the scene yet.
+
+A diagram can be up to 2 MB.
+
 ## Changing an artifact
 
 The box at the bottom of an open artifact, **Message about “title”**, sends the bot a message about this artifact. The bot changes the same artifact instead of making a new one; the open artifact reloads with the new version, and every card for it shows it.
@@ -44,4 +52,37 @@ Where to find it:
 
 The Library looks through the bot's newest 500 messages with files.
 
+## The server's Library
+
+The server's **Library** gathers every bot of one computer in the same view: their artifacts and the files they shared or you sent, newest first under the same days. It reads the same stores as each chat's Library, so nothing on your disk is scanned, and a file forwarded to two bots shows once.
+
+**Images** shows only pictures (PNG, JPEG, HEIC, GIF, WebP, TIFF, BMP) and **Files** everything else, including artifacts. Each row names the bot it came from; a click opens it the way the chat does (an artifact in its viewer, a picture full size, a file's download or share sheet).
+
+Where to find it:
+
+- **Desktop:** **Library** in the window's icon bar, or type "Library" in the search palette. **Refresh** reads it again.
+- **iPhone:** the book button beside the roster's filters, or **Server Library** on a chat's Library page.
+- **Android:** **Library** among the roster's actions, or **Server Library** on a chat's Library page.
+- **Terminal UI:** `Ctrl+K`, then **Library of every bot: artifacts and files…**. `Tab` changes the filter, `Enter` opens an artifact in your browser or a file's text in the sheet (an image says how to save it), `f` saves a row to Downloads, and `r` renames an artifact.
+
 Artifacts are kept on your computer, in Codync's data folder. Deleting the bot deletes them.
+
+## Cards Codync draws
+
+Some things a bot shows you are better as a small card than as a page: a number with its change, a plan beside another plan, what happened in order, a short table, a few steps to tick, or a short form. Codync draws those itself, from six named cards: **metric**, **comparison**, **timeline**, **table**, **checklist** and **form**.
+
+A card is a name and its content, checked by your computer before anything is drawn. It can't carry HTML, a script or a link, so a card from any bot, on any of your computers, looks the same and is safe to show. Ask for one ("show me a table of my routines"), and a bot may make one on its own when a list reads better as a card. A **form** card returns what you fill in to the bot.
+
+### The Components page
+
+**Components** in the desktop window's icon bar shows every card Codync can draw, with a preview, the pieces of content each takes, and which computers' data it can read. Each card has a switch per bot: turn it off and that bot can't show that card any more. Saved cards — ones you made in the playground — sit under the six, and can be shown in the gallery or taken out of it.
+
+The **Playground** tab makes a card: pick one, write its content in a form, check it, preview it, and save it as a draft or straight into the gallery. The content is all plain text and numbers; the computer refuses anything else and names the field to fix.
+
+Where to find it:
+
+- **Desktop:** **Components** in the window's icon bar, or type "Components" in the search palette.
+- **iPhone and Android:** **Components** in the computer's settings: the six cards with a preview, and the switch that withholds one from a bot. Making a card is the desktop's job.
+- **Terminal UI:** `Ctrl+K`, then **Components: the cards Codync can draw in a chat…**. `↑`/`↓` moves, `r` reads it again, `q` closes.
+
+

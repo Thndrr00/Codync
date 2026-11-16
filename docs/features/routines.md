@@ -67,10 +67,12 @@ provider model will interpret an ambiguous natural-language request.
 
 A routine has an OR list of triggers:
 
-- `interval`: `seconds` (1 second through 365 days).
+- `interval`: `seconds` (15 minutes through 365 days). An interval under 15 minutes is refused
+  when a routine is saved or enabled; use a cron schedule for more frequent checks. A routine saved
+  before this floor is paused by the scheduler, with a notice saying why.
 - `once`: `at` (Unix milliseconds, in the future when created).
 - `cron`: a five-field `expression` and IANA `timeZone`, including DST.
-- `webhook`: every authenticated JSON delivery runs the routine. The public address needs the computer in an account (`needsAccount` in `routine_webhook`); otherwise only the local address works.
+- `webhook`: every authenticated JSON delivery runs the routine. The public address needs the computer in an account (`needsAccount` in `routine_webhook`); otherwise only the local address works. Besides the bearer key and a GitHub signature, `routine_webhook` takes the sender's own `whsec_…` Standard Webhooks secret (`key`), which becomes the routine's key.
 - `event`: `source`, `event` (`*` matches all), and optional exact-match `filters`.
   `messageContains` matches a substring of `text`. Source names are `slack`,
   `github`, `origin`, `microsoftTeams`, `linear`, `sentry`, `pagerduty`, and `email`.
@@ -99,6 +101,23 @@ A routine has an OR list of triggers:
 For example, Sunday at 14:20 in Taipei is `20 14 * * 0` with `Asia/Taipei`.
 The host computes and displays the next occurrence. Calendar parsing uses
 [Croner](https://docs.rs/croner/3.0.1/croner/), with chrono-tz for named zones.
+
+## Safeguards
+
+Three limits are fixed, not settings (`routines/guardrails.rs`). They apply when a routine is
+saved or turned on, and the scheduler applies them to routines saved before they existed:
+
+- **15-minute floor.** Interval routines can't repeat more often than every 15 minutes. A shorter
+  interval is refused on save and on enable, and the scheduler pauses one it finds with a notice naming
+  the routine and how to bring it back. Cron schedules can still be more frequent.
+- **20 enabled routines per computer.** Turning on a 21st is refused; pause one first. If a
+  computer already has more on (routines enabled before the cap), the oldest 20 stay and the rest
+  are paused with a notice.
+- **10 failures in a row.** Ten consecutive failed runs pause the routine. A success starts the
+  count over, a run the person stopped is neither a success nor another failure, and saving or
+  re-enabling the routine starts the count over too. The chat notice names the routine and says
+  to fix what it needs and turn it back on. Queued runs, a waiting retry and pending outputs are
+  cancelled with it.
 
 ## Execution
 
@@ -160,6 +179,11 @@ host checks the run's turn for a tool call whose ACP kind isn't `read`, `search`
   event and the button. Retrying while the routine has an active run is refused
   (busy); a paused routine is refused until it's resumed.
 
+After ten failed runs in a row the routine pauses regardless of the retry rules above
+(`routines/guardrails.rs`): the tenth failure's notice is the last one, queued work and a waiting
+retry are cancelled, and an info notice names the routine and says how to turn it back on. A
+success, a save or re-enabling it starts the count over.
+
 Each run has a timeout (default one hour, configurable from 1 to 86400 seconds).
 A hung agent is terminated so subsequent work can proceed. When the time limit cuts
 session setup short, an agent that can reopen sessions is stopped too, so a session it was
@@ -186,11 +210,21 @@ cloud is off) and the local `http://127.0.0.1:<port>/hooks/routines/<id>`. Both 
 the same checks (`host/src/routines/hooks.rs`); the protocol is
 [spec §7.8](../reference/remote-relay.md).
 
-- **Authentication**: `Authorization: Bearer <key>`, or `X-Hub-Signature-256` (an
-  HMAC-SHA256 of the body with the key). For GitHub: payload URL = the public URL,
-  content type `application/json`, secret = the key. `routineWebhook` with
-  `rotate: true` replaces the key; the old one stops working at once, including in
-  the cloud.
+- **Authentication**: any one of `Authorization: Bearer <key>`,
+  `X-Hub-Signature-256: sha256=<hex HMAC-SHA256(key, body)>`, or a
+  [Standard Webhooks](https://www.standardwebhooks.com/) signature
+  (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256>`
+  over `<webhook-id>.<webhook-timestamp>.<body>`, timestamp within five minutes).
+  For GitHub: payload URL = the public URL, content type `application/json`,
+  secret = the key. `routineWebhook` with `rotate: true` replaces the key; the old
+  one stops working at once, including in the cloud. `routineWebhook` with a
+  `key` adopts the sender's own signing secret instead (a Standard Webhooks sender
+  such as Composio or Svix hands out a `whsec_…` value to paste).
+- **Standard Webhooks**: ported from `CopilotKit/OpenBot`'s `webhook-security.ts` (Apache-2.0);
+  the checks keep OpenBot's header names, signature form and five-minute window. A
+  `whsec_` secret is accepted as typed and decoded (base64 or base64url, at least 16
+  bytes) before the HMAC is computed, so either reading of the secret verifies. A pasted key is 16 to 1024 characters
+  without spaces.
 - **Events**: a JSON object is the event as-is; a GitHub delivery becomes
   `{source:"github", event:"<event>.<action>", repo, sender, text, url, payload}`
   (GitHub `ping` succeeds without running); other bodies become `{text}`. Event
@@ -200,12 +234,20 @@ the same checks (`host/src/routines/hooks.rs`); the protocol is
 {"source":"github","event":"pull_request.opened","repo":"owner/repo","text":"A PR opened"}
 ```
 
-- **Delivery**: `X-Delivery-Id`, `X-GitHub-Delivery` or `Idempotency-Key`
-  deduplicates retries against retained run records. Bodies are limited to 64 KB.
+- **Delivery**: `X-Delivery-Id`, `X-GitHub-Delivery`, `webhook-id` or
+  `Idempotency-Key` deduplicates retries against retained run records. Bodies are
+  limited to 64 KB.
   A paused routine refuses (`409`); a non-matching event is accepted and ignored.
   While the routine has a run under way or queued (a retry waiting for its time
   doesn't count), the local endpoint answers `409` and the cloud
   queue retries later (30 s doubling to 15 min).
+- **Local scripts ceiling**: a delivery to the local address takes a slot of its
+  bot's hour before it queues a run (`host/src/routines/limits.rs`, ported from
+  `CopilotKit/OpenBot`'s per-agent hourly limit): 30, 60, 120, 300 or 1000 requests
+  an hour, chosen for the computer (`scriptLimit` / `setScriptLimit`) and shared by
+  every bot. Past it the local endpoint answers `429`; public deliveries through the
+  cloud don't count, and a retry of a delivery id already queued spends no second
+  slot. The counts live in memory, so a restart forgets them.
 - **Offline**: the cloud keeps public deliveries for up to 72 hours and hands them
   over one at a time once the host is back; the host acknowledges each.
 - **Trust**: deliveries are not end-to-end encrypted. The cloud terminates HTTPS,
@@ -230,6 +272,7 @@ All normal methods use the existing authenticated host API / authorized E2E chan
 | `runRoutine` | `botId`, `id` (a waiting retry runs now instead) |
 | `retryRoutineRun` | `botId`, `runId` of a failed run whose notice offers a retry; returns the new `run` |
 | `routineWebhook` | `botId`, `id`, optional `rotate`; returns `url` (public or null), `localUrl`, `key`, `connected` |
+| `scriptLimit` / `setScriptLimit` | Computer-wide hourly ceiling on local script deliveries; `setScriptLimit` takes `perHour` (30, 60, 120, 300 or 1000) and returns it |
 | `routineFlowCanvas` and seven more | A routine's flow of bot-to-bot hand-offs: canvas, node positions, connect, disconnect, test. See [routine flows](routine-flows.md#host-api). |
 
 The local-only `routineCall` backs the MCP tools. Each MCP instance is scoped to
@@ -277,7 +320,8 @@ the retry ladder, a queued scheduled fire standing in for the retry, paused rout
 keeping only the latest failure's event, the user retry's busy/paused refusals and
 deleting the routine (`routines/retry.rs`), waiting retries vs. Stop, the tick and a
 scheduled fire (`routines/runner.rs`), timezone calculation, invalid schedules, event filters,
-persistence, pause/resume, bot ownership, bearer/HMAC checks, GitHub event mapping and
+persistence, pause/resume, bot ownership, bearer/HMAC checks, Standard Webhooks
+signatures and their clock window, the decoded `whsec_` secret, GitHub event mapping and
 the relay's hook registration, acks and retries. `cloud/test/hooks.test.ts` covers the
 edge checks, queue limits, deduplication, ordering, retry and expiry; the cloud e2e
 (`npm run e2e`, step 5b) delivers through a real Worker and host, including a signed
@@ -305,8 +349,9 @@ comparison.
 
 Codync retains that compact sidebar and the chat-based setup path, while providing
 a direct editor: a light Repeat choice with the time and day for the common
-schedules, and Custom for a cron typed as written. Existing duration intervals keep their cadence until
-explicitly replaced. Editing hydrates the original expression, timezone and interval
+schedules, and Custom for a cron typed as written. Existing duration intervals of at least 15
+minutes keep their cadence until explicitly replaced; a shorter one is paused by the scheduler.
+Editing hydrates the original expression, timezone and interval
 exactly; compound and provider-event triggers retain a lossless Keep existing
 triggers fallback. Expired one-shot timestamps are preserved when editing other fields.
 
@@ -332,8 +377,9 @@ validates it again. Both direct trigger API calls and Bot MCP calls use the same
 host scheduler. Run timeout text is also parsed and validated by the host.
 The built-in agent instructions also select cron for recurring clock schedules.
 
-Existing elapsed-duration intervals remain readable/editable without silently
-changing their execution times. An interval anchored to creation time cannot be
+Existing elapsed-duration intervals of at least 15 minutes remain readable/editable without silently
+changing their execution times; one under the floor is paused with a notice. An interval anchored to
+creation time cannot be
 converted to a wall-clock cron without changing its cadence. One-time schedules
 retain their absolute timestamp: five-field cron has no year or run-count guard.
 Webhook/event triggers remain event-driven. These paths are intentionally not

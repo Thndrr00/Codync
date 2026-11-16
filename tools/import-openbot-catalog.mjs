@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// Imports the OpenBot marketplace content (agents, skills, apps) into the host's bundled
-// marketplace catalogs. Run it from the repository root with the OpenBot checkout as the argument:
+// Imports the `nightly-labs/openbot` marketplace content (agents and skills) into the host's bundled
+// marketplace catalogs. Run it from the repository root with that checkout as the argument:
 //
 //   node tools/import-openbot-catalog.mjs ../openbot-nightly
+//
+// Connectors are a different catalogue and have their own importer:
+// `tools/import-copilotkit-connectors.mjs`.
 //
 // The output is committed. Re-running is safe: the generated folders are replaced.
 import { execFileSync } from 'node:child_process'
@@ -17,7 +20,6 @@ if (!process.argv[2]) {
 
 const out = resolve('host/src/market/openbot')
 const production = join(source, 'marketplace', 'production-catalog')
-const plugins = join(source, 'marketplace', 'plugin-catalog', 'plugins')
 
 /** Codync avatar colors, in the order a hue runs through them. */
 const COLORS = [
@@ -91,7 +93,6 @@ for (const dir of readdirSync(join(pstack, 'skills'))) {
 }
 cpSync(join(pstack, 'LICENSE'), join(out, 'skills', 'pstack-poteto-mode', 'LICENSE'))
 cpSync(join(pstack, 'NOTICE.md'), join(out, 'skills', 'pstack-poteto-mode', 'NOTICE.md'))
-
 const packs = catalog.packs.map((pack) => ({
     id: pack.slug,
     name: pack.slug,
@@ -143,7 +144,16 @@ agents.push({
 // A local server signed in before each start; OpenBot's plugin schema has no field for this.
 const LOGINS = { 'proton-pass': ['pass-cli', 'login'] }
 const apps = []
-for (const slug of readdirSync(plugins)) {
+// The plugin catalog's own order and featured picks, so the most important connectors come first.
+const pluginCatalog = JSON.parse(readFileSync(join(source, 'marketplace', 'plugin-catalog', 'catalog.json'), 'utf8'))
+const order = Array.isArray(pluginCatalog.order) ? pluginCatalog.order : []
+const featured = new Set(Array.isArray(pluginCatalog.featured) ? pluginCatalog.featured : [])
+const rank = (slug) => {
+    const index = order.indexOf(slug)
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index
+}
+const pluginSlugs = [...readdirSync(plugins)].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+for (const slug of pluginSlugs) {
     const plugin = JSON.parse(readFileSync(join(plugins, slug, 'plugin.json'), 'utf8'))
     const pluginUpdated = statSync(join(plugins, slug, 'plugin.json')).mtime.toISOString().slice(0, 10)
     const app = plugin.apps?.[0]
@@ -161,7 +171,7 @@ for (const slug of readdirSync(plugins)) {
         updated: pluginUpdated,
         icon: plugin.iconUrl,
         website: plugin.websiteUrl,
-        featured: ['aave', 'canva', 'notion', 'figma'].includes(plugin.slug),
+        featured: featured.has(plugin.slug),
         setup,
         server: {
             name: app.server.name,
@@ -193,6 +203,6 @@ mkdirSync(out, { recursive: true })
 execFileSync('tar', ['-czf', join(out, 'skills.tar.gz'), '-C', out, 'skills'])
 writeFileSync(join(out, 'skills.json'), JSON.stringify({ skills, packs }, null, 2) + '\n')
 writeFileSync(join(out, 'agents.json'), JSON.stringify({ agents }, null, 2) + '\n')
-writeFileSync(join(out, 'apps.json'), JSON.stringify({ apps }, null, 2) + '\n')
 
-console.log(`wrote ${agents.length} agents, ${skills.length} skills and ${apps.length} apps to ${out}`)
+console.log(`wrote ${agents.length} agents and ${skills.length} skills to ${out}`)
+

@@ -34,11 +34,19 @@ fun flowStatusLabel(status: String?): String = when (status) {
 
 @Serializable data class FlowPosition(val nodeKey: String, val x: Double, val y: Double)
 
+/** One agent working a card: its bot, how deep in the flow it runs and how its last step went (card K14). */
+@Serializable data class FlowLane(
+    val botId: String, val name: String, val depth: Int = 0, val status: String? = null,
+)
+
 @Serializable data class FlowRoutineCard(
     val routine: Routine, val recentRuns: List<RoutineRun> = emptyList(),
     val upcomingRuns: List<Long> = emptyList(), val steps: List<FlowStep> = emptyList(),
+    /** The agents that work this card, the routine's own bot first. */
+    val lanes: List<FlowLane> = emptyList(),
 ) {
     fun step(botId: String): FlowStep? = steps.firstOrNull { it.botId == botId }
+    fun lane(botId: String): FlowLane? = lanes.firstOrNull { it.botId == botId }
 }
 
 @Serializable data class FlowCanvas(

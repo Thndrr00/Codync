@@ -57,6 +57,17 @@ impl Hub {
         });
         v["lastMessage"] = preview.map(|p| crate::agent::acp::truncate(&p, 280)).into();
         v["lastAt"] = last.map_or(cfg.created_at, |l| l.at).into();
+        // A channel's request tree: what it is doing, and what waits for it (Stop, Continue, Reassign, Cancel).
+        if cfg.is_group() {
+            let rows: Vec<Value> = self
+                .store
+                .open_group_tasks(&cfg.id)
+                .unwrap_or_default()
+                .iter()
+                .map(|row| crate::chat::group::tasks::row_value(self, row))
+                .collect();
+            v["tasks"] = json!(rows);
+        }
         v
     }
 

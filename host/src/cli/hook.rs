@@ -27,7 +27,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
 /// Whole-run budget for an event nobody waits on: connect and write, no more.
 const FIRE_AND_FORGET_BUDGET: Duration = Duration::from_secs(2);
 /// How long a permission request may wait for a person; the host gives up 2 s earlier and says so on the card.
-const DECISION_BUDGET: Duration = Duration::from_secs(115);
+/// A plan card may also wait for its start time (up to 14 minutes), which fits inside Claude Code's 900 s.
+const DECISION_BUDGET: Duration = Duration::from_secs(895);
 
 /// Fields that are pointless to forward and can be enormous (a whole file read, a command's full output).
 const DROPPED_FIELDS: &[&str] = &["tool_response", "tool_output", "transcript_path"];

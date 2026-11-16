@@ -3,7 +3,7 @@
 ## What changed
 
 - `host/src/external/install.rs`: a second `PreToolUse` group (`matcher` `AskUserQuestion|ExitPlanMode`, command
-  `... hook --ask`, 120 s). `installed()` needs it; the person's own hooks stay.
+  `... hook --ask`, 900 s). `installed()` needs it; the person's own hooks stay.
 - `host/src/cli/hook.rs`, `main.rs`: `--ask`; only Claude Code (no `--agent`) and only those two tools wait; the envelope
   carries `ask`.
 - `host/src/external/question.rs` (new): turns `AskUserQuestion` into one card per question and `ExitPlanMode` into an

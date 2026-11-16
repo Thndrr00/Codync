@@ -1,0 +1,14 @@
+# Caddy in front of the host for one hostname: it terminates TLS for CODYNC_DOMAIN and
+# forwards only /channel, the end-to-end encrypted connection a phone dials.
+# /api, /events, /term and /oauth are for a caller on the computer itself; anything else
+# forwarded here would publish them to whoever reaches the proxy
+# (docs/guides/docker.md#the-port-the-token-and-loopback).
+{$CODYNC_DOMAIN} {
+	@channel path /channel
+	handle @channel {
+		reverse_proxy codync:19222
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

@@ -22,7 +22,8 @@ const out = join(root, 'build/native')
 const copyBridge = () =>
     cpSync(join(host, 'whatsapp-bridge'), join(out, 'whatsapp'), {
         recursive: true,
-        filter: (p) => !p.endsWith('test-connect.mjs'),
+        // The bridge's own checks stay out of what ships.
+        filter: (p) => !p.endsWith('test-connect.mjs') && !p.endsWith('.test.mjs'),
     })
 // The pinned toolchain (rust-toolchain.toml) through rustup, even when another cargo (Homebrew's)
 // comes first on PATH: only rustup's has the x86_64 target.

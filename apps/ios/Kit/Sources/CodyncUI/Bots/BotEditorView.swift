@@ -73,6 +73,8 @@ struct BotSettingsForm: View {
     @State private var pickingFolder = false
     @State private var pickingAvatar = false
     @State private var viewingSkill: SkillRef?
+    /// Who is on this computer, for the person picker; empty on a member's phone (the host refuses the list).
+    @State private var people: [PersonRecord] = []
     /// Retry model list reloads Permissions too: its modes come from the same list.
     @State private var modelReload = 0
 
@@ -91,6 +93,7 @@ struct BotSettingsForm: View {
         .font(.body)
         .background(Palette.background)
         .task { await model.refreshPlugins() }
+        .task { people = (try? await model.peopleList()) ?? [] }
         // A different agent starts on its default account and model (the picker clears its own model too).
         .onChange(of: draft.backend) { _, _ in
             draft.account = nil
@@ -119,6 +122,7 @@ struct BotSettingsForm: View {
             CardSection("Agent") {
                 fallbackBanner
                 modelPicker
+                commitCredit
                 fallbackList
                 compactionPicker
             }
@@ -207,6 +211,15 @@ struct BotSettingsForm: View {
         if let bot, let step = bot.agentStep { FallbackBanner(bot: bot, step: step) }
     }
 
+    /// Ends the commits the agent writes with Codync's co-author trailer (off unless turned on).
+    @ViewBuilder private var commitCredit: some View {
+        SwitchRow("Credit Codync in commits",
+                  detail: "Ends each commit message the agent writes with Codync's co-author trailer. You stay the author.",
+                  isOn: Binding(get: { draft.commitCoauthor ?? false }, set: { on in
+                      withAnimation(Motion.reduced(Motion.fade, reduceMotion)) { draft.commitCoauthor = on }
+                  }))
+    }
+
     /// Only from a host that has fallbacks (its bots say).
     @ViewBuilder private var fallbackList: some View {
         if draft.fallbacks != nil { FallbackList(draft: $draft, bot: bot) }
@@ -265,6 +278,7 @@ struct BotSettingsForm: View {
                 }
                 if part == .all {
                     modelPicker
+                    commitCredit
                     fallbackList
                     compactionPicker
                 }
@@ -291,11 +305,18 @@ struct BotSettingsForm: View {
                     .help(draft.cwd.isEmpty ? "A persistent workspace allocated for this bot" : draft.cwd)
                 }
                 ApprovalPicker(draft: $draft, reload: modelReload)
+                if let id = draft.id, part == .all {
+                    ApprovalWhatIf(botId: id)
+                }
             }
             .animation(Motion.reduced(Motion.layout, reduceMotion), value: bot?.agentStep)
 
             if let id = draft.id, draft.backend == "hermes", model.bots[id]?.backend == "hermes" {
                 HermesRuntimeCard(botId: id).id(id)
+            }
+
+            if part == .all, let bot {
+                HistoryActions(bot: bot)
             }
 
             CardSection("Activity") {
@@ -333,6 +354,20 @@ struct BotSettingsForm: View {
                 items: model.installedConnectors.map { ($0.id, $0.name, $0.command ?? $0.url ?? "") },
                 selection: Binding(get: { draft.connectors ?? [] }, set: { draft.connectors = $0 })
             )
+            if !people.isEmpty {
+                CardSection("This bot belongs to", footer: "A member's phone only sees and changes what is theirs.") {
+                    ValueRow("Person") {
+                        ChoicePicker(
+                            selection: Binding(
+                                get: { draft.person ?? "" },
+                                set: { draft.person = $0.isEmpty ? nil : $0 }
+                            ),
+                            options: [(id: "", label: L10n.tr("Anyone on this computer"))]
+                                + people.map { (id: $0.id, label: $0.name) }
+                        )
+                    }
+                }
+            }
             PluginToggles(
                 title: "Skills",
                 empty: "No skills yet. Get some from Extensions, or write your own.",

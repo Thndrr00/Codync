@@ -6,12 +6,22 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// A connector you describe yourself: a command line or an https URL.
+#[cfg(test)]
 pub async fn add_custom_connector(store: &crate::store::Store, b: &Value) -> Result<Value> {
+    add_custom_connector_as(store, b, None).await
+}
+
+/// As [`add_custom_connector`], for a person's own library (`None` is the owner's, shared with every bot).
+pub async fn add_custom_connector_as(store: &crate::store::Store, b: &Value, person: Option<&str>) -> Result<Value> {
     let name =
         b["name"].as_str().map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| anyhow!("`name` is required"))?;
     let all = connectors(store)?;
-    ensure_name_available(name, &all)?;
-    let mut c = custom(name, b, &all).await?;
+    // A catalogue app installs once per person and replaces itself under the id the bots know (the connector
+    // takes its `catalog` below); a custom connector can't take an installed name in the same library.
+    if b["catalog"].as_str().is_none_or(str::is_empty) {
+        ensure_name_available(name, &all, person)?;
+    }
+    let mut c = custom(name, b, &all, person).await?;
     c.catalog = b["catalog"].as_str().filter(|s| !s.is_empty()).map(str::to_owned);
     // A catalog app may need its local server signed in before it starts (Proton Pass).
     if let Some(app) = c.catalog.as_deref().and_then(|id| super::openbot::apps().iter().find(|a| a.id == id))
@@ -26,8 +36,8 @@ pub async fn add_custom_connector(store: &crate::store::Store, b: &Value) -> Res
 }
 
 /// A connector from `{command, args?, env?}` or `{url, headers?}`. A command without
-/// `args` is split like a shell would (quotes work).
-pub(super) async fn custom(name: &str, b: &Value, all: &[Connector]) -> Result<Connector> {
+/// `args` is split like a shell would (quotes work). It belongs to `person` (`None` = shared).
+pub(super) async fn custom(name: &str, b: &Value, all: &[Connector], person: Option<&str>) -> Result<Connector> {
     let map = |v: &Value| -> BTreeMap<String, String> {
         v.as_object().into_iter().flatten().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_owned()))).collect()
     };
@@ -44,6 +54,7 @@ pub(super) async fn custom(name: &str, b: &Value, all: &[Connector]) -> Result<C
         url: None,
         headers: map(&b["headers"]),
         oauth: None,
+        person: person.map(str::to_owned),
     };
     let url =
         ["url", "serverUrl", "httpUrl"].iter().find_map(|k| b[*k].as_str()).map(str::trim).filter(|s| !s.is_empty());
@@ -132,8 +143,8 @@ mod tests {
     async fn a_prepared_duplicate_is_rejected_when_it_reaches_the_write_lock() {
         let store = Store::open(Path::new(":memory:")).unwrap();
         // Both requests saw the empty list before either finished preparing its connector.
-        let first = custom("Server", &json!({"command": "node first.js"}), &[]).await.unwrap();
-        let second = custom("Server", &json!({"command": "node second.js"}), &[]).await.unwrap();
+        let first = custom("Server", &json!({"command": "node first.js"}), &[], None).await.unwrap();
+        let second = custom("Server", &json!({"command": "node second.js"}), &[], None).await.unwrap();
         add_connector(&store, first.clone()).unwrap();
         let sealed = store.kv_read("connectors").unwrap();
         assert!(add_connector(&store, second).unwrap_err().to_string().contains("already installed"));
@@ -168,7 +179,7 @@ mod tests {
     async fn an_existing_remote_or_registry_name_cannot_be_reused_by_a_custom_install() {
         for registry_name in [None, Some("io.example/server".to_owned())] {
             let store = Store::open(Path::new(":memory:")).unwrap();
-            let mut existing = custom("Hosted", &json!({"command": "unused"}), &[]).await.unwrap();
+            let mut existing = custom("Hosted", &json!({"command": "unused"}), &[], None).await.unwrap();
             existing.command = None;
             existing.url = Some("https://example.invalid/mcp".into());
             existing.headers.insert("Authorization".into(), "Bearer saved-secret".into());
@@ -188,7 +199,9 @@ mod tests {
         let first = add_custom_connector(&store, &json!({"name": "A B", "command": "node a.js"})).await.unwrap();
         let second = add_custom_connector(&store, &json!({"name": "A-B", "command": "node b.js"})).await.unwrap();
         assert_ne!(first["id"], second["id"]);
-        super::super::import_connectors(&store, r#"{"mcpServers":{"A B":{"command":"node c.js"}}}"#).await.unwrap();
+        super::super::import_connectors(&store, r#"{"mcpServers":{"A B":{"command":"node c.js"}}}"#, None)
+            .await
+            .unwrap();
         assert_eq!(connectors(&store).unwrap().len(), 3);
     }
 }

@@ -51,6 +51,9 @@ const LOCAL_ONLY: &[&str] = &[
     "reportError",
     // Voice keys are entered on the computer itself; phones only use them.
     "setVoiceKey",
+    // So is the local voice server the computer's speech goes through: a phone reads its state
+    // and tests it, but the URL and models are this computer's own setting.
+    "setVoiceServer",
     // An export file is a path on this computer.
     "previewImport",
     "importBots",
@@ -76,7 +79,6 @@ const LOCAL_ONLY: &[&str] = &[
     "updateConnector",
     "claimSign",
     "unclaim",
-    "devices",
     "revokeDevice",
     "accessRequests",
     "decideAccessRequest",
@@ -87,6 +89,9 @@ const LOCAL_ONLY: &[&str] = &[
     "addMember",
     "removeMember",
     "rotateScim",
+    // Handing out a member credential is the computer's to do; a paired device pairs instead.
+    "memberSignIn",
+    "acceptMemberInvite",
     // Letting a phone in that brings this computer into its account is decided at the computer.
     "pairingRequests",
     "decidePairing",
@@ -111,13 +116,82 @@ const LOCAL_ONLY: &[&str] = &[
     "networkRecover",
     // Who may write to this computer's bots is decided at the computer, like who is in.
     "setNetworkRules",
+    // Which Codync panels a host-served page may open is decided at the computer.
+    "webMcpState",
+    "setWebMcpGrant",
 ];
-const SCREEN: &[&str] =
-    &["screenPrepare", "screenOffer", "screenClose", "screenTakeover", "screenCandidate", "screenCandidates"];
+const SCREEN: &[&str] = &[
+    "screenPrepare",
+    "screenOffer",
+    "screenClose",
+    "screenStopAll",
+    "screenTakeover",
+    "screenCandidate",
+    "screenCandidates",
+];
 
 /// A method the caller isn't allowed to call (403).
 #[derive(Debug)]
 pub struct Forbidden;
+
+/// Methods a person's device may not call: who is on the computer, and the devices it lists. A person
+/// who is an admin is let through (only the owner changes a role, checked in `people::call`).
+pub const OWNER_ONLY: &[&str] = &[
+    "people",
+    "addPerson",
+    "updatePerson",
+    "removePerson",
+    "setDevicePerson",
+    // A member's invitation and session are the owner's or an admin's to hand out and end.
+    "inviteMember",
+    "memberSessions",
+    "revokeMemberSession",
+    "devices",
+    // The computer's lead bot and its roster sections belong to its owner, not to one person's phone.
+    "setLead",
+    "renameSection",
+    // The policy engine covers every bot on the computer: a member's phone reads it, never changes it.
+    "savePolicy",
+    "removePolicy",
+    "setPolicyEnabled",
+    // The component gallery is the computer's: its cards are shown to every bot.
+    "saveComponent",
+    "publishComponent",
+    "deleteComponent",
+    "setComponentAccess",
+];
+
+/// Refuses one of [`OWNER_ONLY`] to a device assigned to a person, unless that person is an admin and the
+/// method is one admins manage. The owner is never a person.
+pub fn permit_owner(hub: &Hub, caller: &Caller, method: &str) -> Result<(), Forbidden> {
+    let Some(person) = crate::people::caller_person(hub, caller) else { return Ok(()) };
+    if !OWNER_ONLY.contains(&method) {
+        return Ok(());
+    }
+    let admins_manage = matches!(
+        method,
+        "people"
+            | "addPerson"
+            | "updatePerson"
+            | "removePerson"
+            | "setDevicePerson"
+            | "inviteMember"
+            | "memberSessions"
+            | "revokeMemberSession"
+            | "devices"
+            | "savePolicy"
+            | "removePolicy"
+            | "setPolicyEnabled"
+            | "saveComponent"
+            | "publishComponent"
+            | "deleteComponent"
+            | "setComponentAccess"
+    );
+    if admins_manage && crate::people::is_admin(hub, &person) {
+        return Ok(());
+    }
+    Err(Forbidden)
+}
 
 impl std::fmt::Display for Forbidden {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -310,6 +384,13 @@ mod tests {
         assert!(permit(&control, "screenCandidates").is_err());
         assert!(permit(&both, "screenCandidate").is_ok());
         assert!(permit(&both, "screenCandidates").is_ok());
+        assert!(permit(&both, "screenStopAll").is_ok(), "a phone with the screen scope stops every session");
+        assert!(permit(&control, "screenStopAll").is_err(), "stopping every session needs the screen scope");
+        assert!(permit(&Caller::Local, "screenStopAll").is_ok(), "the computer stops its own sessions");
+        assert!(
+            permit(&Caller::Pairing { key: "k".into() }, "screenStopAll").is_err(),
+            "a pairing channel can only pair"
+        );
         assert!(permit(&control, "screenOffer").is_err(), "screen needs the screen scope");
         assert!(permit(&control, "screenStatus").is_ok(), "status is control");
         assert!(permit(&control, "installHostUpdate").is_ok(), "a phone can update a computer that's behind");
@@ -341,6 +422,9 @@ mod tests {
             "discordStatus",
             "setDiscordChannel",
             "disconnectDiscord",
+            "matrixStatus",
+            "setMatrixChannel",
+            "disconnectMatrix",
             "slackStatus",
             "setSlackChannel",
             "disconnectSlack",
@@ -355,6 +439,38 @@ mod tests {
         }
         assert_eq!(both.device_key(), "k");
         assert_eq!(Caller::Local.device_key(), "local");
+    }
+
+    #[tokio::test]
+    async fn a_screen_device_stops_every_session_but_a_control_only_one_cannot() {
+        use crate::remote::identity::Identity;
+        use crate::store::Store;
+        use serde_json::json;
+
+        let dir = std::env::temp_dir().join(format!("codync-stop-all-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(std::path::Path::new(":memory:")).unwrap();
+        let hub = crate::hub::Hub::new(store, "x".into(), Identity::load_or_create(&dir).unwrap(), "t".into(), 0);
+
+        let control = Caller::Device { key: "phone".into(), scopes: vec![Scope::Control] };
+        assert!(
+            super::super::dispatch(&hub, &control, "screenStopAll", json!({})).await.is_err(),
+            "a control-only device cannot stop other viewers"
+        );
+
+        let screen = Caller::Device { key: "phone".into(), scopes: vec![Scope::Control, Scope::Screen] };
+        // "Only this computer" keeps even a Screen device from stopping sessions.
+        let mut settings = crate::server_settings::Settings::load(&hub.store);
+        settings.remote_control.access = crate::server_settings::RemoteAccess::Owner;
+        settings.save(&hub.store).unwrap();
+        assert!(super::super::dispatch(&hub, &screen, "screenStopAll", json!({})).await.is_err());
+        settings.remote_control.access = crate::server_settings::RemoteAccess::Everyone;
+        settings.save(&hub.store).unwrap();
+
+        let answer = super::super::dispatch(&hub, &screen, "screenStopAll", json!({})).await.expect("a screen device");
+        assert_eq!(answer["closed"], 0);
+        assert_eq!(answer["takeover"], false);
+        assert!(answer["screen"].is_object(), "the new screen state comes back");
     }
 
     #[test]

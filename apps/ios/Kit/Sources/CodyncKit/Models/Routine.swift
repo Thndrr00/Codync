@@ -210,10 +210,12 @@ extension HostClient {
         let _: Empty = try await call("retryRoutineRun", Body(botId: botId, runId: runId))
     }
 
-    /// `rotate` replaces the key first; senders using the old one stop working.
-    public func routineWebhook(botId: String, id: String, rotate: Bool = false) async throws -> RoutineWebhook {
-        struct Body: Encodable { let botId: String; let id: String; let rotate: Bool }
-        return try await call("routineWebhook", Body(botId: botId, id: id, rotate: rotate))
+    /// `rotate` replaces the key first; senders using the old one stop working. `key` instead sets
+    /// the sender's own signing secret (a Standard Webhooks sender's `whsec_…`).
+    public func routineWebhook(botId: String, id: String, rotate: Bool = false, key: String? = nil) async throws
+        -> RoutineWebhook {
+        struct Body: Encodable { let botId: String; let id: String; let rotate: Bool; let key: String? }
+        return try await call("routineWebhook", Body(botId: botId, id: id, rotate: rotate, key: key))
     }
 }
 

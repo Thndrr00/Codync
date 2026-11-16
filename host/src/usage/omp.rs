@@ -70,6 +70,11 @@ fn one_limit(
     let resets = epoch_ms(&limit["window"]["resetsAt"]);
     if amount["unit"].as_str().is_some_and(|u| u.eq_ignore_ascii_case("usd")) && amount["limit"].is_null() {
         let spent = amount["used"].as_f64()?;
+        // OpenCode Go reports what its subscription charged, which is $0 for each turn: that is not a
+        // reading, so it shows as unavailable instead of a confident $0.00.
+        if spent <= 0.0 {
+            return Some(Window::note(id, label, "Unavailable"));
+        }
         return Some(Window::note(id, label, format!("${spent:.2} spent")));
     }
     let percent = used_percent(amount)?;
@@ -191,6 +196,15 @@ mod tests {
             {"label":"API","amount":{"used":3.2,"unit":"usd"}}]}]}"#;
         let w = parse(text);
         assert_eq!(w[0].text.as_deref(), Some("$3.20 spent"));
+        assert!(w[0].percent.abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn an_opencode_go_zero_charge_is_unavailable_not_zero() {
+        let text = r#"{"reports":[{"provider":"opencode-go","limits":[
+            {"label":"Go","amount":{"used":0,"unit":"usd"}}]}]}"#;
+        let w = parse(text);
+        assert_eq!(w[0].text.as_deref(), Some("Unavailable"));
         assert!(w[0].percent.abs() < f64::EPSILON);
     }
 }

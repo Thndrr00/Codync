@@ -44,6 +44,7 @@ costs no frames; with Reduce Motion on, nothing moves at all.
 | Failed | A bot stops on an error | "*Bot* stopped." with the error in red, until OK |
 | Message a bot | The header's bubble, or the [voice input shortcut](voice-call.md#voice-input-shortcut) | The bot chip (click for the next bot) and a field with the mic (macOS); Enter sends, Esc closes. Until the shortcut is first used, a tip under the field says how to talk from any app |
 | Usage | The header's gauge or the usage meter | The providers closest to a limit first, two to a page side by side with arrows (and "1 / 3") between pages: each window's bar, percent and reset, or its note when it has no percent |
+| Agents (dock) | The **Agent dock** setting is on: a hover, a click or its tab | This computer's agents in the app's roster order: avatar, name, state (Working, Needs you, Failed, Idle), unread count and one activity line; a click opens that conversation in Codync |
 
 Opened by hover, the island folds 0.8 s after the pointer leaves; opened by a click or a tab,
 10 s after (a 2 pt line counts down). The message field stays until it sends, Esc or a click in
@@ -56,6 +57,37 @@ Every open view is the same size, so switching tabs or an alert taking over neve
 black shape: the next view cross-fades over the last. When another bot takes the focus it
 springs in out of a blur, a bot joining the pills or the column does the same, and the others
 slide to their new places.
+
+## Agent dock
+
+The island can also be a dock of this computer's agents, the way a screen-edge agent dock
+works in tools such as OpenBot, but inside the island rather than as a second floating window.
+Turn on **Agent dock** in **Settings > General > System** (under the island's switch, which it
+needs) or in the island's **Options**, next to density. It is off by default, and while it is off
+the island behaves exactly as it did before: no Agents tab, no roster, the same closed shapes.
+
+On, the header gains an **Agents** tab and opening the island (hovering the notch, clicking it,
+or the tab) lands on that roster instead of the bot in focus. An approval or a finished/failed
+notice still opens first, as it does today, and the Bots tab keeps the big character and its
+ticker. The roster lists the bots the island already receives in the same order as the app's
+roster, one row each: the bot's character, its name, its state (**Working**, **Needs you**,
+**Failed**, **Idle**), its unread count when it has one, and a one-line activity (what it is
+doing, what it needs, or why it stopped). A click opens that conversation in Codync through the
+same island action the big card and the mini column use (`openBot`); the rows are ordinary
+buttons, so they can be reached with the keyboard once the island has it.
+
+Collapsed, the island counts the agents instead of only the bot in focus: "3 agents working" or
+"Needs you" in place of "3 working" (the roster's own heading also covers stopped and idle
+agents). It keeps the island's own shape, edge, placement, density, text size and quiet profile:
+the dock follows the island wherever the person puts it, and it does not add a window, preload
+or renderer entry point. Rows spring in when a bot appears, like the pills and mini column, and
+that motion is off with Reduce Motion. The setting is a device preference (`islandAgentDock`),
+shared by the island window and the chat window's Settings, so turning it on in one shows up in
+the other.
+
+The pure rules (which state a bot is in, the roster order, the counts and the collapsed line)
+live in `apps/desktop/src/shared/island-agents.ts`; the view is
+`apps/desktop/src/renderer/views/island/IslandAgents.tsx`.
 
 ## Workspace and focused controls
 
@@ -199,6 +231,9 @@ device stores. Long-running reads are discarded after selection/owner changes.
   ([notifications and Live Activities](../design/push-and-live-activity.md)); no change.
 - **Terminal UI**: a terminal can't draw over other apps; its roster already shows working and
   waiting bots.
+- **Agent dock**: desktop only, and part of the island rather than a window of its own. The iPhone,
+  Android and terminal clients keep their existing rosters, statuses and unread counts; no
+  screen-edge dock is added on any platform that has no island.
 
 
 ## Operations integrations

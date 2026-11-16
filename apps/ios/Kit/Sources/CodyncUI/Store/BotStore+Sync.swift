@@ -126,6 +126,11 @@ extension BotStore {
                   current.rev == e.rev, !current.isInternal else { break }
             if let card = e.data.artifact { artifacts.announce(card) }
             acknowledgeVisibleConversations(e.botId, entry: e)
+        case let .historyCleared(botId, r):
+            entries[botId] = nil
+            windowFloors[botId] = nil
+            historyComplete.remove(botId)
+            bump(r)
         case let .call(cue):
             // The computer decides what the voice hears; this device hands each cue over once.
             guard let id = UUID(uuidString: cue.call), let call = voiceCalls[id], cue.seq > heardCues[id, default: 0] else { break }
@@ -141,6 +146,9 @@ extension BotStore {
             applyThreadSummary(threadId, botId: botId, summary: summary)
         case let .artifact(artifact):
             artifacts.upsert(artifact)
+        case let .viewAction(view, action, arguments, actionRev):
+            viewActionSeq += 1
+            lastViewAction = ViewActionEvent(view: view, action: action, arguments: arguments, rev: actionRev, seq: viewActionSeq)
         case .resync:
             restartEvents()
         case let .undecodable(type):
@@ -255,5 +263,25 @@ extension BotStore {
         usage = u
         storage.usage[computer.id] = u
         onUsageChanged?(computer.id, u)
+    }
+
+    /// Tells the host what this view shows (`chat:<botId>`, `routine:<botId>`, card K4), so the bot
+    /// can act on it. A conflict (another window or an agent's action wrote first) re-applies the
+    /// same delta to the current version, so two agents' lanes both stay. Best effort otherwise.
+    func reportView(_ view: String, _ ops: [[String: JSONValue]]) {
+        let previous = viewQueues[view]
+        viewQueues[view] = Task {
+            _ = await previous?.value
+            guard let client, connection == .online else { return }
+            do {
+                var answer = try await client.patchViewState(view: view, baseRev: viewRevs[view] ?? 0, ops: ops)
+                if answer.conflict == true {
+                    answer = try await client.patchViewState(view: view, baseRev: answer.rev ?? 0, ops: ops)
+                }
+                if let rev = answer.rev { viewRevs[view] = rev }
+            } catch {
+                // Reporting what is on screen never interrupts the conversation.
+            }
+        }
     }
 }

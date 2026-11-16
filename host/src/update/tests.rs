@@ -186,6 +186,22 @@ async fn a_healthy_update_replaces_the_binary_and_removes_its_backup() {
 }
 
 #[test]
+fn a_host_that_did_not_answer_as_the_new_binary_rolls_back() {
+    let installed = serde_json::json!({
+        "version": "3.0.0",
+        "binaryHash": "new",
+        "computerId": "cid",
+    });
+    assert!(!install::should_roll_back(Some(&installed), "3.0.0", "new", Some("cid")));
+    assert!(install::should_roll_back(None, "3.0.0", "new", Some("cid")), "no answer at all");
+    assert!(install::should_roll_back(Some(&installed), "2.9.0", "new", Some("cid")), "the old version answered");
+    assert!(install::should_roll_back(Some(&installed), "3.0.0", "old", Some("cid")), "the old binary answered");
+    assert!(install::should_roll_back(Some(&installed), "3.0.0", "new", Some("other")), "another computer answered");
+    // A host that could not report an identity before the update accepts any.
+    assert!(!install::should_roll_back(Some(&installed), "3.0.0", "new", None));
+}
+
+#[test]
 fn app_and_homebrew_binaries_keep_their_installation_owner() {
     assert_eq!(
         install::method(std::path::Path::new("/Applications/Codync.app/Contents/Resources/codync-host")),

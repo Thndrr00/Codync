@@ -119,7 +119,64 @@ data class AppearanceSettings(
     val density: UiDensity = UiDensity.Standard,
     val hapticsEnabled: Boolean = true,
     val avatarStyle: AvatarStyle = AvatarStyle.Plush,
-)
+    /** The person's own chat bubble colour, one preset id per theme (`ChatPalette`). */
+    val chatColourLight: String? = null,
+    val chatColourDark: String? = null,
+    /** The colour behind the chat, one preset id per theme (`ChatPalette`). */
+    val chatBackgroundLight: String? = null,
+    val chatBackgroundDark: String? = null,
+) {
+    fun chatColour(dark: Boolean): String? = if (dark) chatColourDark else chatColourLight
+    fun chatBackground(dark: Boolean): String? = if (dark) chatBackgroundDark else chatBackgroundLight
+}
+
+/** One of the 11 chat colours (OpenBot 0.65), with the shade that reads on each theme. */
+data class ChatPreset(val id: String, val light: Long, val dark: Long) {
+    fun hex(dark: Boolean): Long = if (dark) dark else light
+}
+
+/**
+ * The chat colours and the calm backgrounds behind the chat, in the same order and with the same
+ * ids as the iPhone, the desktop app and the terminal UI (`host/src/tui/appearance.rs`).
+ */
+object ChatPalette {
+    val colours: List<ChatPreset> = listOf(
+        ChatPreset("red", 0xFFE35652, 0xFFF8706D),
+        ChatPreset("orange", 0xFFD86706, 0xFFED8125),
+        ChatPreset("yellow", 0xFFD39809, 0xFFE8B027),
+        ChatPreset("green", 0xFF06A74E, 0xFF25BF69),
+        ChatPreset("cyan", 0xFF0DA195, 0xFF2BB9AD),
+        ChatPreset("sky", 0xFF069BC2, 0xFF24B2D8),
+        ChatPreset("blue", 0xFF408DEA, 0xFF5CA5FE),
+        ChatPreset("indigo", 0xFF7B7DEB, 0xFF9596FF),
+        ChatPreset("violet", 0xFFA66BE0, 0xFFBD85F5),
+        ChatPreset("magenta", 0xFFCA5BB6, 0xFFE076CD),
+        ChatPreset("pink", 0xFFDD5487, 0xFFF26FA0),
+    )
+
+    val backgrounds: List<ChatPreset> = listOf(
+        ChatPreset("red", 0xFFFFEFED, 0xFF311B19),
+        ChatPreset("orange", 0xFFFEF0E9, 0xFF2F1D12),
+        ChatPreset("yellow", 0xFFFAF2E6, 0xFF2A200D),
+        ChatPreset("green", 0xFFEBF7ED, 0xFF152619),
+        ChatPreset("cyan", 0xFFE7F8F5, 0xFF0A2724),
+        ChatPreset("sky", 0xFFE7F6FD, 0xFF0C252E),
+        ChatPreset("blue", 0xFFECF4FF, 0xFF162232),
+        ChatPreset("indigo", 0xFFF1F2FF, 0xFF1E2032),
+        ChatPreset("violet", 0xFFF6F1FE, 0xFF251D2F),
+        ChatPreset("magenta", 0xFFFCEFF8, 0xFF2C1B28),
+        ChatPreset("pink", 0xFFFFEFF3, 0xFF2F1A21),
+    )
+
+    fun colour(id: String?): ChatPreset? = colours.firstOrNull { it.id == id }
+    fun background(id: String?): ChatPreset? = backgrounds.firstOrNull { it.id == id }
+
+    /** The next choice for one theme: none, each preset, then none again. */
+    fun next(id: String?, presets: List<ChatPreset>): String? {
+        val at = presets.indexOfFirst { it.id == id }
+        return if (at + 1 < presets.size) presets[at + 1].id else null
+    }
+}
 
 /** Observable device-scoped appearance preferences, persisted in SharedPreferences. */
 class AppearancePreferences(private val prefs: SharedPreferences?) {
@@ -128,6 +185,9 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
 
     private fun load(): AppearanceSettings {
         val p = prefs ?: return AppearanceSettings()
+        // A colour saved before the themes split means both themes, so it survives this change.
+        val legacyColour = p.getString("chatColour", null)
+        val legacyBackground = p.getString("chatBackground", null)
         return AppearanceSettings(
             themeMode = ThemeMode.fromId(p.getString("themeMode", ThemeMode.System.id)),
             accentStyle = AccentStyle.fromId(p.getString("accentStyle", AccentStyle.Default.id)),
@@ -137,6 +197,10 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
             density = UiDensity.fromId(p.getString("density", UiDensity.Standard.id)),
             hapticsEnabled = p.getBoolean("hapticsEnabled", true),
             avatarStyle = AvatarStyle.fromId(p.getString("avatarStyle", AvatarStyle.Plush.id)),
+            chatColourLight = p.getString("chatColourLight", legacyColour),
+            chatColourDark = p.getString("chatColourDark", legacyColour),
+            chatBackgroundLight = p.getString("chatBackgroundLight", legacyBackground),
+            chatBackgroundDark = p.getString("chatBackgroundDark", legacyBackground),
         )
     }
 
@@ -152,6 +216,10 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
             ?.putString("density", next.density.id)
             ?.putBoolean("hapticsEnabled", next.hapticsEnabled)
             ?.putString("avatarStyle", next.avatarStyle.id)
+            ?.putString("chatColourLight", next.chatColourLight)
+            ?.putString("chatColourDark", next.chatColourDark)
+            ?.putString("chatBackgroundLight", next.chatBackgroundLight)
+            ?.putString("chatBackgroundDark", next.chatBackgroundDark)
             ?.apply()
     }
 
@@ -163,6 +231,14 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
     fun setDensity(density: UiDensity) = update { it.copy(density = density) }
     fun setHapticsEnabled(enabled: Boolean) = update { it.copy(hapticsEnabled = enabled) }
     fun setAvatarStyle(style: AvatarStyle) = update { it.copy(avatarStyle = style) }
+
+    /** The person's own bubble colour for one theme; `null` restores the theme's own. */
+    fun setChatColour(dark: Boolean, id: String?) =
+        update { if (dark) it.copy(chatColourDark = id) else it.copy(chatColourLight = id) }
+
+    /** The colour behind the chat for one theme; `null` restores the theme's own. */
+    fun setChatBackground(dark: Boolean, id: String?) =
+        update { if (dark) it.copy(chatBackgroundDark = id) else it.copy(chatBackgroundLight = id) }
 
     companion object {
         @Volatile private var instance: AppearancePreferences? = null
@@ -188,6 +264,8 @@ data class ResolvedPalette(
     val isDark: Boolean,
     val isOled: Boolean,
     val background: Color,
+    /** The colour behind the chat, or null for the theme's own background. */
+    val chatBackground: Color?,
     val surface: Color,
     val bubbleAgent: Color,
     val bubbleUser: Color,
@@ -316,13 +394,22 @@ fun resolvePalette(
         if (contrastRatio(text, tinted) >= 4.5f) tinted else baseBubbleUser
     } else baseBubbleUser
 
+    // The person's own chat colour tints their bubbles; the chat background sits behind the chat.
+    val chatTint = ChatPalette.colour(settings.chatColour(dark))?.let { Color(it.hex(dark)) }
+    val chatBubbleUser = if (chatTint != null) {
+        val tinted = lerp(bubbleUser, chatTint, if (dark) 0.22f else 0.14f)
+        if (contrastRatio(text, tinted) >= 4.5f) tinted else bubbleUser
+    } else bubbleUser
+    val chatBackground = ChatPalette.background(settings.chatBackground(dark))?.let { Color(it.hex(dark)) }
+
     return ResolvedPalette(
         isDark = dark,
         isOled = oled,
         background = baseBackground,
+        chatBackground = chatBackground,
         surface = baseSurface,
         bubbleAgent = baseBubbleAgent,
-        bubbleUser = bubbleUser,
+        bubbleUser = chatBubbleUser,
         border = border,
         text = text,
         secondary = secondary,

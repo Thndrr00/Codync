@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { threadName, type Bot, type ThreadInfo } from '@shared/models'
 import { CardSection, DropdownMenu, IconButton, TabChoice } from '../../components/Controls'
+import { Icon } from '../../components/Icon'
 import { Dialog, Sheet } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
@@ -64,6 +65,7 @@ export function ThreadsCard({ bot, store }: { bot: Bot; store: BotStore }) {
               <VStack gap={2}>
                 <HStack gap={6} align="center">
                   {thread.unread ? <span className="thread-dot" aria-hidden /> : null}
+                  {thread.source === 'dictation' ? <span aria-label={tr('Kept from a dictation')} title={tr('Kept from a dictation')}><Icon name="mic" size={11} /></span> : null}
                   <Text weight="semibold" lines={1}>{tr(threadName(thread))}</Text>
                 </HStack>
                 <Text size="caption" tone="secondary" lines={1}>

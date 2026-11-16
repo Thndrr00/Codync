@@ -15,6 +15,7 @@ const MAILBOX_MAX_AGE_MS: i64 = 25 * 60 * 60 * 1000;
 /// Runs one public webhook delivery and says how it went:
 /// `{"t":"hook.ack","seq","ok"}`, plus `retry` (try again later) and `code` when refused.
 pub(super) fn hook_item(hub: &Arc<Hub>, item: &Value) -> Value {
+    let started = std::time::Instant::now();
     let seq = item["seq"].clone();
     let hook = item["hook"].as_str().unwrap_or_default();
     let headers = item["headers"]
@@ -24,10 +25,22 @@ pub(super) fn hook_item(hub: &Arc<Hub>, item: &Value) -> Value {
     let Some(body) = item["body"].as_str().and_then(|b| crypto::unb64(b).ok()) else {
         return json!({"t": "hook.ack", "seq": seq, "ok": false, "code": "invalid"});
     };
-    match hub.routines.receive(hub, hook, &headers, &body) {
-        Ok(_) => json!({"t": "hook.ack", "seq": seq, "ok": true}),
+    let bytes = body.len();
+    let ms = |started: std::time::Instant| i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+    match hub.routines.receive(hub, hook, &headers, &body, false) {
+        Ok(_) => {
+            crate::analytics::webhook_received(hub, false, 200, bytes, ms(started));
+            json!({"t": "hook.ack", "seq": seq, "ok": true})
+        }
         Err(e) => {
             tracing::info!(hook, code = e.code(), reason = %e, "refused a webhook delivery");
+            let status: u16 = match &e {
+                crate::routines::hooks::Refused::Unauthorized => 401,
+                crate::routines::hooks::Refused::Paused | crate::routines::hooks::Refused::Busy => 409,
+                crate::routines::hooks::Refused::RateLimited(_) => 429,
+                crate::routines::hooks::Refused::Invalid(_) => 400,
+            };
+            crate::analytics::webhook_received(hub, false, status, bytes, ms(started));
             json!({"t": "hook.ack", "seq": seq, "ok": false, "retry": e.retry(), "code": e.code()})
         }
     }

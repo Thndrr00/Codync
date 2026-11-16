@@ -208,6 +208,27 @@ output is consumed by the host and errors do not echo provider secret values.
 Disconnecting removes the active token; connectors using references then require
 reconnection. OAuth remains the preferred flow for services that support it.
 
+## Credentials in a call
+
+`agent/bot/governance.rs` inspects the arguments (`rawInput`) of a call that can take them off this
+computer — an MCP call, whatever the adapter titles it with, or a terminal command — when its entry
+is written: a field named like a credential (`password`, `api_key`, `x-api-key`, `secret`…), a PEM
+private key, a provider's own token format (`sk-…`, `ghp_…`, `AKIA…`, `xoxb-…`) or an
+`Authorization` value. The call row then says the call carries a credential, and unfolding it lists
+where. A connector that was handed a key in the conversation therefore shows it on the call; a
+local read or edit stays quiet, since its file body would only reach the size limit.
+
+Only the category and a structural path (`$.arguments.password`) are kept; the value is not
+copied. A property name that isn't schema-like becomes `[property]`, and one that is itself a
+credential becomes `[credential]`, so a key can't leak through the path. Inspection stops at
+2,000 nodes, 20 levels, 20 findings and a 64 KiB string; past those the row says the arguments
+couldn't be checked instead of reading as safe. It is a hint, not a boundary: a credential under
+a name nobody listed, or encoded inside a larger string, is not reported.
+
+Ported from `CopilotKit/OpenBot`'s `content-governance.ts` (MIT); the call keeps OpenBot's
+categories and limits. A warning that appears is reported once per call as `tool_caution`
+(reason and categories, never the paths) so it can be traced later.
+
 ## Validation
 
 Host tests cover authenticated encryption, record substitution, plaintext migration,
@@ -219,3 +240,35 @@ session on Linux or the macOS login keychain.
 For isolated real-process installation, credential recovery, OAuth protocol,
 remote tool calls and live provider checks, see
 [Connector live verification](../guides/connector-verification.md).
+
+The credential warning is covered by unit tests for its categories, field spellings,
+provider formats, path masking and limits, and by `host/tests/caution_e2e.rs`, which runs a real
+turn: the MCP call is flagged and the local edit next to it stays quiet.
+
+## Who owns an MCP server
+
+Every MCP server is installed on the computer. By default it is **shared**: handed to a bot by its
+`connectors` list, and the person who owns the computer chooses that list in the bot's settings. A
+connector can instead belong to one **person** (`Connector.person`, [people](people.md)), and then
+only that person's bots and devices see it.
+
+A person is a record the owner creates on the computer, not a member account: Codync has one owner
+per computer and no member sign-in. `enterprise` members are SCIM directory records; they do not sign
+in to the computer. The owner can assign a paired phone to a person, and that phone then acts as that
+person in every host call. The host authorizes by `Caller::Device` → `device.person_id`, so a member's
+phone lists shared connectors plus its own, and cannot read, change, sign in to or remove a shared one
+or another person's. A bot sees shared connectors plus its own person's, never another person's
+([people](people.md), `market::visible_to`, `market::for_bot`).
+
+Each personal connector keeps its own id and its own credentials in the same encrypted vault, so two
+people can connect the same app with different accounts and neither sees the other's token. OAuth
+state, verification results and sign-in are keyed by that id.
+
+OpenBot's member-owned servers (0.64) are represented this way: person-scoped connectors, plus the
+owner's per-bot lists and the `manage` server (a bot with `manageTeam` can create bots and change the
+setup of the bots it created, never another bot's connectors). Composio connections remain
+computer-wide and only the owner adds or removes one.
+
+An agent can read and search its other chats: `search_history` and `read_history` cover its own chat,
+its side threads and the group chats it answers in ([context and memory](context-and-memory.md)).
+Another bot's chats stay out of reach, and a member's bot never reads the owner's chats.

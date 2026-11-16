@@ -90,6 +90,7 @@ internal data class DetailsRequest(val tab: DetailsTab = DetailsTab.Details, val
                         DetailsTab.Memory -> Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
                             MemoryCard(bot.id, state, store)
                             if (bot.kind != "group") SkillProposalsCard(bot.id, store)
+                            if (bot.kind != "group") LearningCard(bot.id, store)
                         }
                         DetailsTab.Library -> LibraryView(bot, state, store, openArtifact)
                         DetailsTab.Settings -> BotSettingsForm(state, store, draft, { draft = it }, FormPart.Rarely)

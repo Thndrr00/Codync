@@ -7,6 +7,8 @@ public enum HostEvent: Sendable {
     case bot(Bot)
     case botDeleted(id: String, rev: Int64)
     case entry(Entry)
+    /// A chat's or group's messages and turns went; its side threads and setup stay.
+    case historyCleared(botId: String, rev: Int64)
     case usage(Usage)
     case screen(ScreenState)
     /// An artifact published or renamed (the catch-up replays it too).
@@ -18,6 +20,9 @@ public enum HostEvent: Sendable {
     /// A thread's unread count and summary reached its root line: the chip under the message stays current
     /// (`summary` is nil once the thread is gone).
     case thread(threadId: String, botId: String, unread: Int, summary: ThreadSummary?)
+    /// The newest view action the agent invoked (`chat:<botId>`, `routine:<botId>`); card K4. A view
+    /// handles each sequence once.
+    case viewAction(view: String, action: String, arguments: [String: JSONValue], rev: Int64)
     case resync
     /// An event this app version couldn't decode (host newer/older than the app).
     case undecodable(type: String)
@@ -36,7 +41,7 @@ public struct Empty: Codable, Sendable {
 /// A full editor update must explicitly clear a previous model override.
 struct BotUpdate: Encodable {
     let draft: BotDraft
-    private enum CodingKeys: String, CodingKey { case model, account }
+    private enum CodingKeys: String, CodingKey { case model, account, person }
 
     func encode(to encoder: Encoder) throws {
         try draft.encode(to: encoder)
@@ -47,6 +52,11 @@ struct BotUpdate: Encodable {
         if draft.account == nil {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encodeNil(forKey: .account)
+        }
+        // Clearing the person gives the bot back to the owner; the key has to be there to say so.
+        if draft.person == nil {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeNil(forKey: .person)
         }
     }
 }
@@ -131,6 +141,10 @@ public struct HostClient: Sendable {
             return (try? d.decode(BotWrap.self, from: data)).map { .bot($0.bot) } ?? .undecodable(type: "bot")
         case "entry":
             return (try? d.decode(EntryWrap.self, from: data)).map { .entry($0.entry) } ?? .undecodable(type: "entry")
+        case "historyCleared":
+            struct Cleared: Decodable { var botId: String; var rev: Int64? }
+            return (try? d.decode(Cleared.self, from: data)).map { .historyCleared(botId: $0.botId, rev: $0.rev ?? 0) }
+                ?? .undecodable(type: "historyCleared")
         case "usage":
             return (try? d.decode(UsageWrap.self, from: data)).map { .usage($0.usage) }
         case "screen":
@@ -150,6 +164,15 @@ public struct HostClient: Sendable {
             }
         case "resync":
             return .resync
+        case "viewAction":
+            struct ActionWrap: Decodable { var view: String; var action: String; var arguments: JSONValue?; var rev: Int64? }
+            guard let action = try? d.decode(ActionWrap.self, from: data) else { return .undecodable(type: "viewAction") }
+            return .viewAction(
+                view: action.view,
+                action: action.action,
+                arguments: action.arguments?.object ?? [:],
+                rev: action.rev ?? 0
+            )
         default:
             return nil
         }
@@ -206,6 +229,14 @@ public extension HostClient {
 
     func renameThread(_ threadId: String, title: String) async throws {
         let _: Empty = try await call("renameThread", ["threadId": threadId, "title": title])
+    }
+
+    /// Keeps a dictation as a thread of its own, linked to the chat it was dictated in.
+    func keepDictation(botId: String, text: String, sourceEntryId: String? = nil) async throws -> String {
+        struct Body: Encodable { var botId: String; var text: String; var sourceEntryId: String? }
+        struct Res: Decodable { var threadId: String }
+        let res: Res = try await call("keepDictation", Body(botId: botId, text: text, sourceEntryId: sourceEntryId))
+        return res.threadId
     }
 
     func archiveThread(_ threadId: String, archived: Bool = true) async throws {
@@ -267,6 +298,11 @@ public extension HostClient {
         let _: Empty = try await call("deleteBot", ["botId": id])
     }
 
+    /// Starts the bot's agent over with a fresh context; the host posts the line that marks it.
+    func newSession(botId: String) async throws {
+        let _: Empty = try await call("newSession", ["botId": botId])
+    }
+
     /// The roster as the user dragged it, top first.
     func reorderBots(_ ids: [String]) async throws {
         let _: Empty = try await call("reorderBots", ["ids": ids])
@@ -316,6 +352,13 @@ public extension HostClient {
         return res.entry
     }
 
+    /// Sends a message on to another chat; the host copies its files and marks it forwarded there.
+    func forward(entryId: String, botId: String) async throws -> Entry {
+        struct Res: Decodable { var entry: Entry }
+        let res: Res = try await call("forward", ["entryId": entryId, "botId": botId])
+        return res.entry
+    }
+
     /// `replyTo`: the chat message this one quotes.
     /// `pasted`: what the user pasted rather than typed, which memory never takes as their own words.
     /// `call`: the voice call it was said in (on-device or speech to text).
@@ -336,16 +379,25 @@ public extension HostClient {
     /// Bytes per `upload` call: base64 of it stays well under the channel's 1 MiB message.
     static let uploadChunk = 384 * 1024
 
-    /// Sends one file in chunks for a later `send`; `id` names the upload there.
-    func upload(botId: String, id: String, name: String, data: Data) async throws {
+    /// Sends one file in chunks for a later `send`; `id` names the upload there. `progress` gets the
+    /// bytes the computer has so far; cancelling the task stops between chunks.
+    func upload(botId: String, id: String, name: String, data: Data, progress: (@Sendable (Int) -> Void)? = nil) async throws {
         struct Body: Encodable { var botId, uploadId, name, data: String; var offset: Int; var done: Bool }
         var offset = 0
         repeat {
+            try Task.checkCancellation()
             let end = min(offset + Self.uploadChunk, data.count)
             let chunk = data.subdata(in: offset..<end).base64EncodedString()
             let _: Empty = try await call("upload", Body(botId: botId, uploadId: id, name: name, data: chunk, offset: offset, done: end == data.count), timeout: 60)
             offset = end
+            progress?(offset)
         } while offset < data.count
+    }
+
+    /// Drops a file the user stopped uploading: the computer deletes its partial chunks.
+    func cancelUpload(botId: String, id: String) async throws {
+        struct Body: Encodable { var botId, uploadId: String }
+        let _: Empty = try await call("cancelUpload", Body(botId: botId, uploadId: id))
     }
 
     /// A sent file, fetched back in chunks.
@@ -427,9 +479,16 @@ public extension HostClient {
         let _: Empty = try await call("unqueue", ["botId": botId, "entryId": entryId])
     }
 
-    func respondPermission(entryId: String, optionId: String?) async throws {
-        struct Body: Encodable { var entryId: String; var optionId: String? }
-        let _: Empty = try await call("respondPermission", Body(entryId: entryId, optionId: optionId))
+    func respondPermission(entryId: String, optionId: String?, values: [String: JSONValue]? = nil) async throws {
+        struct Body: Encodable { var entryId: String; var optionId: String?; var values: [String: JSONValue]? }
+        let _: Empty = try await call("respondPermission", Body(entryId: entryId, optionId: optionId, values: values))
+    }
+
+    /// What a view shows (`chat:<botId>`, `routine:<botId>`): card K4. `baseRev` is the version this
+    /// device last had; the host answers `conflict` when another device wrote first.
+    func patchViewState(view: String, baseRev: Int64, ops: [[String: JSONValue]]) async throws -> ViewWrite {
+        struct Body: Encodable { var view: String; var baseRev: Int64; var ops: [[String: JSONValue]] }
+        return try await call("patchViewState", Body(view: view, baseRev: baseRev, ops: ops))
     }
 
     /// Push tickets are bound to this device's key; `pushKey` lets the host seal notification text (§6.7).
@@ -478,7 +537,7 @@ public extension HostClient {
 
     func screenPrepare() async throws -> ScreenConnection {
         let relay = if let channel = transport as? ChannelTransport { try await channel.screenRelayRequired() } else { false }
-        return try await call("screenPrepare", ["relay": relay, "trickle": true])
+        return try await call("screenPrepare", ["relay": relay, "trickle": true], timeout: 45)
     }
 
     /// Sends the offer using the prepared session’s negotiated ICE mode.
@@ -495,6 +554,43 @@ public extension HostClient {
     /// Takes control from bots (they can still look) or hands it back.
     func screenTakeover(_ on: Bool) async throws -> ScreenState {
         try await call("screenTakeover", ["on": on])
+    }
+
+    /// A phone with the Screen scope stops every remote control session; returns how many ran,
+    /// whether a phone had taken control, and the new state.
+    func screenStopAll() async throws -> (closed: Int, takeover: Bool, screen: ScreenState) {
+        struct Res: Decodable { var closed: Int; var takeover: Bool?; var screen: ScreenState }
+        let res: Res = try await call("screenStopAll")
+        return (res.closed, res.takeover ?? false, res.screen)
+    }
+
+    /// Only this computer answers a remote control request (the "Ask on this computer" policy).
+    func answerScreenRequest(id: String, allow: Bool) async throws -> ScreenState {
+        struct Body: Encodable { var id: String; var allow: Bool }
+        struct Res: Decodable { var screen: ScreenState }
+        let res: Res = try await call("answerScreenRequest", Body(id: id, allow: allow))
+        return res.screen
+    }
+
+    /// This computer's server settings: Personality, the Claude Code setup switch and the remote control policy.
+    public func serverSettings() async throws -> ServerSettings {
+        try await call("serverSettings")
+    }
+
+    public func setServerSettings(_ settings: ServerSettings) async throws -> ServerSettings {
+        struct Res: Decodable { var settings: ServerSettings }
+        let res: Res = try await call("setServerSettings", settings)
+        return res.settings
+    }
+
+    /// Removes a chat's or group's messages and turns; its setup, memories, routines, artifacts and files stay.
+    func deleteHistory(botId: String) async throws {
+        let _: Empty = try await call("deleteHistory", ["botId": botId], timeout: 60)
+    }
+
+    /// Asks the chat's agent (or every member of a group) to summarize what it keeps.
+    func compactContext(botId: String) async throws {
+        let _: Empty = try await call("compactContext", ["botId": botId], timeout: 60)
     }
 
 }
@@ -539,6 +635,15 @@ public extension HostClient {
         return try await call("setAgentEnv", Body(backend: backend, vars: vars), timeout: 300)
     }
 
+    /// Deletes the build Codync downloaded for this agent and turns it off; its accounts, sign-ins,
+    /// bots and chats stay, and a bot on it shows the agent as not installed until one is installed
+    /// again. Returns the computer's agents as they are now.
+    func deleteAgentDownload(_ backend: String) async throws -> [Backend] {
+        struct Res: Decodable { var backends: [Backend] }
+        let res: Res = try await call("deleteAgentDownload", ["backend": backend], timeout: 120)
+        return res.backends
+    }
+
     func termInput(_ term: String, _ bytes: Data) async throws {
         let _: Empty = try await call("termInput", ["term": term, "data": bytes.base64EncodedString()])
     }
@@ -556,4 +661,11 @@ public extension HostClient {
 public struct ScreenAnswer: Codable, Sendable {
     public var session: String
     public var sdp: String
+}
+
+/// The host's answer to a view state patch (card K4): the saved version, or the current one when
+/// another device wrote first (`conflict`).
+public struct ViewWrite: Decodable, Sendable {
+    public var rev: Int64?
+    public var conflict: Bool?
 }

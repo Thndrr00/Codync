@@ -5,6 +5,7 @@ import { undoOnFailure } from '../lib/undo-on-failure'
 import { BotMirror, type Connection } from './bot-mirror'
 import { Artifacts } from './artifacts'
 import type { CallCue } from '@shared/calls'
+import { InspectorLog } from '@shared/inspector'
 import { trNow } from '../lib/l10n.ts'
 
 const REFRESH_TIMEOUT = 20_000
@@ -34,12 +35,26 @@ function keptEntries(entries: Map<string, Entry[]>, keep: (e: Entry) => boolean)
  */
 export class BotSync extends BotMirror {
   readonly artifacts = new Artifacts(() => this.changed())
+  /** Recent redacted host events, for the development Inspector only (card K15); null in a release. */
+  readonly inspector: InspectorLog | null = import.meta.env.DEV ? new InspectorLog() : null
   /** The calls in this app, by id: each hands what the computer tells its voice to its engine. */
   readonly callCues = new Map<string, (cue: CallCue) => void>()
   /** The newest cue each call heard (`CallCue.seq`), kept across engine switches: a replayed one isn't said again. */
   private readonly heardCues = new Map<string, number>()
   /** The newest `routineFlow` rev seen for each bot, which redraws its canvas. */
   private readonly flowRevs = new Map<string, number>()
+  /** The newest view action the agent invoked, with a sequence so a view handles each one once. */
+  lastViewAction: { view: string; action: string; arguments: Record<string, unknown>; rev: number; seq: number } | null = null
+  private viewActionSeq = 0
+  /** The newest Codync action a host-served page asked for, with a sequence so one window acts once (card K15). */
+  lastWebMcpAction: { action: string; arguments: Record<string, unknown>; botId: string; slug: string; seq: number } | null = null
+  private webMcpActionSeq = 0
+  /** The last state each view reported or the host announced, for the development Inspector (card K15). */
+  readonly viewStates = new Map<string, unknown>()
+  /** The rev this window last had of each view it reports, so its deltas never stomp another window. */
+  private readonly viewRevs = new Map<string, number>()
+  /** Each view's reports, one at a time, so a delta never races the one before it. */
+  private readonly viewQueues = new Map<string, Promise<void>>()
   private finishRefresh: ((error?: Error) => void) | null = null
   private heldDrop: Connection | null = null
   private dropTimer: ReturnType<typeof setTimeout> | null = null
@@ -50,6 +65,52 @@ export class BotSync extends BotMirror {
 
   flowRev(botId: string): number {
     return this.flowRevs.get(botId) ?? 0
+  }
+
+  /** Tells the host what this window shows (`chat:<botId>`, `routine:<botId>`), so the bot can act on it. */
+  reportView(view: string, ops: Record<string, unknown>[]) {
+    const previous = this.viewQueues.get(view) ?? Promise.resolve()
+    const next = previous
+      .then(async () => {
+        if (this.connection.kind !== 'online') return
+        const client = await this.ready()
+        const send = (baseRev: number) =>
+          client.call<{ rev?: number; conflict?: boolean; state?: unknown }>('patchViewState', { view, baseRev, ops })
+        let answer = await send(this.viewRevs.get(view) ?? 0)
+        // Another window (or the agent's action) wrote first: this delta applies to what is there now,
+        // so both agents' lanes stay. One retry settles it; a second conflict is left to the next report.
+        if (answer.conflict) answer = await send(answer.rev ?? 0)
+        if (typeof answer.rev === 'number') this.viewRevs.set(view, answer.rev)
+        if (answer.state !== undefined) this.viewStates.set(view, answer.state)
+      })
+      // An older host has no views: reporting what's on screen is best effort.
+      .catch(() => {})
+    this.viewQueues.set(view, next)
+  }
+
+  /** What the host last saved for a view, for a view restored after a reload; null when it can't say. */
+  async readViewState(view: string): Promise<Record<string, unknown> | null> {
+    try {
+      const client = await this.ready()
+      const answer = await client.call<{ rev?: number; state?: Record<string, unknown> }>('readViewState', { view })
+      if (typeof answer.rev === 'number') this.viewRevs.set(view, answer.rev)
+      if (answer.state) this.viewStates.set(view, answer.state)
+      return answer.state ?? null
+    } catch {
+      return null
+    }
+  }
+
+  /** Takes the page action waiting for `botId`, so the one view that can show it acts once (card K15). */
+  takeWebMcpAction(botId: string) {
+    const action = this.lastWebMcpAction
+    if (!action) return null
+    // `show_artifact` opens one of the app bot's own artifacts; the other actions name their bot.
+    const wanted = action.action === 'show_artifact' ? action.botId : action.arguments.botId
+    const target = typeof wanted === 'string' ? wanted : action.botId
+    if (target !== botId) return null
+    this.lastWebMcpAction = null
+    return action
   }
   /** The `since` the current events connection asked for, and the per-bot floors snapshotted at its `hello`. */
   private requestedSince = 0
@@ -251,14 +312,44 @@ export class BotSync extends BotMirror {
   }
 
   private apply(event: HostEvent) {
+    this.inspector?.add(event)
     switch (event.type) {
       case 'routineFlow':
         for (const id of event.botIds) this.flowRevs.set(id, event.rev)
         this.changed()
         break
+      case 'viewState':
+        this.viewRevs.set(event.view, event.rev)
+        this.viewStates.set(event.view, event.state)
+        break
+      case 'viewAction':
+        this.viewActionSeq += 1
+        this.lastViewAction = { view: event.view, action: event.action, arguments: event.arguments, rev: event.rev, seq: this.viewActionSeq }
+        break
+      case 'webMcpAction':
+        this.webMcpActionSeq += 1
+        this.lastWebMcpAction = {
+          action: event.action,
+          arguments: event.arguments,
+          botId: event.botId,
+          slug: event.slug,
+          seq: this.webMcpActionSeq,
+        }
+        break
       case 'entryDeleted':
         this.removeEntry(event.id)
         this.bump(event.rev)
+        this.changed()
+        break
+      case 'historyCleared':
+        this.entries.delete(event.botId)
+        this.floors.delete(event.botId)
+        this.historyComplete.delete(event.botId)
+        this.bump(event.rev)
+        this.changed()
+        break
+      case 'serverSettings':
+        this.serverSettings = event.settings
         this.changed()
         break
       case 'icons':

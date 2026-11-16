@@ -1,7 +1,8 @@
 use super::{Store, now_ms};
 use crate::LockExt;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
+use serde::Serialize;
 
 pub(super) fn open(db: &rusqlite::Connection) -> Result<()> {
     // Older hosts keyed all bots' conversations by chat alone. Keep their root and
@@ -35,6 +36,20 @@ pub struct WhatsAppOutgoing {
     pub text: String,
     /// The files the reply carries: path, name and type, as the entry stores them.
     pub files: Vec<serde_json::Value>,
+}
+
+/// The most facts one person's record holds; the prompt states the limit, so a refusal can too.
+pub const WHATSAPP_FACTS: usize = 40;
+/// The most one person fact holds, in characters.
+pub const WHATSAPP_FACT_CHARS: usize = 500;
+
+/// A person Codync knows in one linked `WhatsApp` account: their name and the facts they gave.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WhatsAppPerson {
+    pub sender: String,
+    pub name: String,
+    pub facts: Vec<String>,
 }
 
 #[cfg(test)]
@@ -133,4 +148,138 @@ impl Store {
         self.db.locked().execute("DELETE FROM whatsapp_cards WHERE chat=?1 AND entry_id=?2", params![chat, entry])?;
         Ok(())
     }
+
+    /// The chat and its sender for the conversation a thread belongs to, when it is a `WhatsApp` one.
+    pub fn whatsapp_thread_sender(&self, root: &str) -> Result<Option<(String, String)>> {
+        Ok(self
+            .db
+            .locked()
+            .query_row("SELECT chat,sender FROM whatsapp_threads WHERE root_id=?1", [root], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .optional()?)
+    }
+
+    /// One person of a linked account: their name and the facts they gave, when they are known.
+    pub fn whatsapp_person(&self, account: &str, sender: &str) -> Result<Option<WhatsAppPerson>> {
+        Ok(self
+            .db
+            .locked()
+            .query_row(
+                "SELECT sender,name,facts FROM whatsapp_people WHERE account=?1 AND sender=?2",
+                params![account, sender],
+                person_row,
+            )
+            .optional()?)
+    }
+
+    /// Every person of a linked account, by their newest change: the facts the sheet shows.
+    pub fn whatsapp_people(&self, account: &str) -> Result<Vec<WhatsAppPerson>> {
+        let db = self.db.locked();
+        let mut query = db.prepare(
+            "SELECT sender,name,facts FROM whatsapp_people WHERE account=?1 ORDER BY updated_at DESC LIMIT 100",
+        )?;
+        Ok(query.query_map([account], person_row)?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Keeps the name `WhatsApp` gives for a person, without a fact: a message from them refreshes it.
+    pub fn note_whatsapp_person(&self, account: &str, sender: &str, name: &str) -> Result<()> {
+        if account.is_empty() || sender.is_empty() {
+            return Ok(());
+        }
+        let name = name.trim();
+        self.db.locked().execute(
+            "INSERT INTO whatsapp_people(account,sender,name,facts,updated_at) VALUES(?1,?2,?3,'[]',?4)
+            ON CONFLICT(account,sender) DO UPDATE SET
+                name=CASE WHEN excluded.name<>'' THEN excluded.name ELSE whatsapp_people.name END,
+                updated_at=excluded.updated_at",
+            params![account, sender, name.chars().take(120).collect::<String>(), now_ms()],
+        )?;
+        Ok(())
+    }
+
+    /// Saves one fact the person gave, or corrects the fact with the same text: the record never holds it twice.
+    pub fn remember_whatsapp_person(
+        &self,
+        account: &str,
+        sender: &str,
+        name: &str,
+        raw: &str,
+    ) -> Result<WhatsAppPerson> {
+        if account.is_empty() || sender.is_empty() {
+            bail!("A person needs the WhatsApp account and their own id.");
+        }
+        let fact = one_line(raw);
+        if fact.is_empty() {
+            bail!("text is required: the fact to keep, in one short line");
+        }
+        let chars = fact.chars().count();
+        if chars > WHATSAPP_FACT_CHARS {
+            bail!(
+                "A fact about a person holds at most {WHATSAPP_FACT_CHARS} characters, and this one has {chars}: \
+                 save the point in fewer words."
+            );
+        }
+        let mut person = self
+            .whatsapp_person(account, sender)?
+            .unwrap_or_else(|| WhatsAppPerson { sender: sender.to_owned(), ..WhatsAppPerson::default() });
+        match person.facts.iter().position(|kept| kept.eq_ignore_ascii_case(&fact)) {
+            Some(at) => person.facts[at] = fact,
+            None if person.facts.len() >= WHATSAPP_FACTS => {
+                bail!(
+                    "This person has {WHATSAPP_FACTS} facts, as many as one record holds: forget one with \
+                     person_forget_memory first, or keep this point shorter."
+                );
+            }
+            None => person.facts.push(fact),
+        }
+        if !name.trim().is_empty() {
+            person.name = name.trim().chars().take(120).collect();
+        }
+        self.db.locked().execute(
+            "INSERT INTO whatsapp_people(account,sender,name,facts,updated_at) VALUES(?1,?2,?3,?4,?5)
+            ON CONFLICT(account,sender) DO UPDATE SET name=excluded.name, facts=excluded.facts, updated_at=excluded.updated_at",
+            params![account, sender, person.name, serde_json::to_string(&person.facts)?, now_ms()],
+        )?;
+        Ok(person)
+    }
+
+    /// Takes one fact out, matched by its text exactly or ignoring case when typed from memory.
+    pub fn forget_whatsapp_person_fact(&self, account: &str, sender: &str, raw: &str) -> Result<WhatsAppPerson> {
+        let wanted = one_line(raw);
+        if wanted.is_empty() {
+            bail!("text is required: the fact to forget, exactly as the person's record lists it");
+        }
+        let Some(mut person) = self.whatsapp_person(account, sender)? else {
+            bail!("This person has no saved facts yet.");
+        };
+        let at = person
+            .facts
+            .iter()
+            .position(|kept| *kept == wanted)
+            .or_else(|| person.facts.iter().position(|kept| kept.eq_ignore_ascii_case(&wanted)))
+            .ok_or_else(|| {
+                anyhow::anyhow!("No saved fact matches that text: give one exactly as the record lists it.")
+            })?;
+        person.facts.remove(at);
+        self.db.locked().execute(
+            "UPDATE whatsapp_people SET facts=?3, updated_at=?4 WHERE account=?1 AND sender=?2",
+            params![account, sender, serde_json::to_string(&person.facts)?, now_ms()],
+        )?;
+        Ok(person)
+    }
+}
+
+fn person_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WhatsAppPerson> {
+    let facts: String = row.get(2)?;
+    Ok(WhatsAppPerson {
+        sender: row.get(0)?,
+        name: row.get(1)?,
+        facts: serde_json::from_str(&facts).unwrap_or_default(),
+    })
+}
+
+/// A fact on one line, so it cannot start a section of the prompt of its own.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

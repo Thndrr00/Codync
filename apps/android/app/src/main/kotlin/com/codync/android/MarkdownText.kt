@@ -92,6 +92,9 @@ val LocalNetworkImages = staticCompositionLocalOf<ImageLoader> { error("Missing 
 /** A paragraph reads in the direction of its own text (Arabic and Hebrew right to left); code stays left to right. */
 private fun TextStyle.byText() = copy(textDirection = TextDirection.Content)
 
+/** Code, diffs, commands and file paths stay left to right, even in a mirrored layout. */
+internal val CodeTextDirection = TextDirection.Ltr
+
 /** A table: a bold header and hairlines between rows, scrolling sideways when wide. */
 @Composable private fun MarkdownTable(table: Block.Table, code: Color, linkTint: Color, ink: Color) {
     val columns = maxOf(table.header.size, table.rows.maxOfOrNull { it.size } ?: 0)
@@ -159,6 +162,6 @@ private fun children(node: Node): List<Node> = buildList {
 @Composable fun CodeBox(text: String, style: TextStyle = Type.caption.monospaced) {
     Box(Modifier.fillMaxWidth().heightIn(max = 240.dp).clip(RoundedRectangle(8.dp)).background(Palette.codeBackground)
         .horizontalScroll(rememberScrollState())) {
-        SelectionContainer { Text(text, Modifier.padding(8.dp), style = style, color = Palette.text, softWrap = false) }
+        SelectionContainer { Text(text, Modifier.padding(8.dp), style = style.copy(textDirection = CodeTextDirection), color = Palette.text, softWrap = false) }
     }
 }

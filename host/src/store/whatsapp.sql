@@ -9,3 +9,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_cards(
     PRIMARY KEY(chat, entry_id));
 CREATE INDEX IF NOT EXISTS whatsapp_cards_chat ON whatsapp_cards(chat, sent_at DESC);
 CREATE TABLE IF NOT EXISTS whatsapp_card_exclusions(entry_id TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS whatsapp_people(
+    account TEXT NOT NULL, sender TEXT NOT NULL, name TEXT NOT NULL DEFAULT '',
+    facts TEXT NOT NULL DEFAULT '[]', updated_at INTEGER NOT NULL,
+    PRIMARY KEY(account, sender));

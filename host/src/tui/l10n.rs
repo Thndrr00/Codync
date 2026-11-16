@@ -25,6 +25,8 @@ enum AppLanguage {
     Es,
     PtBr,
     Ru,
+    Ar,
+    He,
     It,
 }
 
@@ -41,6 +43,8 @@ impl AppLanguage {
             "es" => Self::Es,
             "pt-BR" => Self::PtBr,
             "ru" => Self::Ru,
+            "ar" => Self::Ar,
+            "he" => Self::He,
             "it" => Self::It,
             _ => Self::System,
         }
@@ -59,6 +63,8 @@ impl AppLanguage {
             Self::Es => "es",
             Self::PtBr => "pt-BR",
             Self::Ru => "ru",
+            Self::Ar => "ar",
+            Self::He => "he",
             Self::It => "it",
         }
     }
@@ -75,7 +81,9 @@ impl AppLanguage {
             Self::De => Self::Es,
             Self::Es => Self::PtBr,
             Self::PtBr => Self::Ru,
-            Self::Ru => Self::It,
+            Self::Ru => Self::Ar,
+            Self::Ar => Self::He,
+            Self::He => Self::It,
             Self::It => Self::System,
         }
     }
@@ -129,6 +137,16 @@ static RU: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
 static IT: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../apps/ios/Kit/Sources/CodyncKit/Resources/Languages/it.json"))
         .expect("it.json is a string map")
+});
+
+static AR: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../apps/ios/Kit/Sources/CodyncKit/Resources/Languages/ar.json"))
+        .expect("ar.json is a string map")
+});
+
+static HE: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../apps/ios/Kit/Sources/CodyncKit/Resources/Languages/he.json"))
+        .expect("he.json is a string map")
 });
 
 static PREFERENCE: LazyLock<Mutex<AppLanguage>> = LazyLock::new(|| Mutex::new(read_preference()));
@@ -189,6 +207,8 @@ fn active_phrases() -> Option<&'static HashMap<String, String>> {
         AppLanguage::Es => Some(&ES),
         AppLanguage::PtBr => Some(&PT_BR),
         AppLanguage::Ru => Some(&RU),
+        AppLanguage::Ar => Some(&AR),
+        AppLanguage::He => Some(&HE),
         AppLanguage::It => Some(&IT),
         AppLanguage::En | AppLanguage::System => None,
     }
@@ -436,6 +456,8 @@ pub(in crate::tui) fn language_title() -> Cow<'static, str> {
         AppLanguage::Es => Cow::Borrowed("Español"),
         AppLanguage::PtBr => Cow::Borrowed("Português (Brasil)"),
         AppLanguage::Ru => Cow::Borrowed("Русский"),
+        AppLanguage::Ar => Cow::Borrowed("العربية"),
+        AppLanguage::He => Cow::Borrowed("עברית"),
         AppLanguage::It => Cow::Borrowed("Italiano"),
         AppLanguage::System => tr("Follow system"),
     }

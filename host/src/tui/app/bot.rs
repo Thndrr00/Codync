@@ -98,9 +98,51 @@ pub struct Bot {
     pub last_at: i64,
     /// A group chat: several bots and the user, no agent of its own.
     pub group: bool,
+    /// A group's short line under its name; empty for none.
+    pub title: String,
+    /// A group taken out of the open roster; it shows under ARCHIVED.
+    pub archived: bool,
+    /// A group that keeps what its members learn in it; their own chats don't get it.
+    pub keep_memories: bool,
+    /// For a group, the member that leads it; `None` for none.
+    pub lead_bot: Option<String>,
+    /// A group's request tree: what waits, and the controls on each row (host `bot.tasks`).
+    pub tasks: Vec<Task>,
+    /// The channel picture is set (the terminal marks it; the apps draw it).
+    pub has_photo: bool,
     pub members: Vec<String>,
     /// Where the running turn talks: a chat (`None` = its own).
     pub working_chat: Option<String>,
+}
+
+/// One row of a group's request tree: the request, or a member's assignment under it.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Task {
+    pub id: String,
+    /// What the row is about: the request's text, or a line for its assignment.
+    pub instruction: String,
+    #[serde(default)]
+    pub owner_name: Option<String>,
+    /// queued, running, completed, failed, paused or cancelled.
+    pub state: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl Task {
+    pub fn parse(v: &Value) -> Option<Self> {
+        serde_json::from_value(v.clone()).ok()
+    }
+
+    /// Stopped or failed: it offers Continue, Reassign and Cancel.
+    pub fn stopped(&self) -> bool {
+        self.state == "paused" || self.state == "failed"
+    }
+
+    pub fn open(&self) -> bool {
+        matches!(self.state.as_str(), "queued" | "running" | "paused" | "failed")
+    }
 }
 
 /// An agent of a bot's chain that rests (`agent::fallback::resting`) until `until` (epoch ms).
@@ -251,6 +293,12 @@ impl Bot {
             last_message: s("lastMessage"),
             last_at: v["lastAt"].as_i64().unwrap_or(0),
             group: v["kind"] == "group",
+            title: s("title"),
+            archived: v["archived"].as_bool().unwrap_or(false),
+            keep_memories: v["keepMemories"].as_bool().unwrap_or(false),
+            lead_bot: v["chiefBotId"].as_str().map(str::to_owned),
+            tasks: v["tasks"].as_array().into_iter().flatten().filter_map(Task::parse).collect(),
+            has_photo: v["avatarPhoto"].as_str().is_some_and(|p| !p.is_empty()),
             members: strs(&v["members"]),
             working_chat: v["workingChat"].as_str().map(str::to_owned),
         })

@@ -24,6 +24,9 @@ pub fn snapshot(hub: &Hub) -> Result<Value> {
             "telegram": crate::telegram::configuration_state(&hub.store),
             "slack": crate::slack::configuration_state(&hub.store),
             "discord": crate::discord::configuration_state(&hub.store),
+            "matrix": crate::matrix::configuration_state(&hub.store),
+            "signal": crate::signal::configuration_state(&hub.store),
+            "teams": crate::teams::configuration_state(&hub.store),
         },
         "log": log,
     }))
@@ -37,8 +40,8 @@ fn tail(path: &Path, lines: usize) -> Vec<String> {
 }
 
 /// Takes out anything that looks like a credential: what follows `Bearer`, a `token=`/`key=`/`secret=` value, a
-/// provider key, or a long unbroken random-looking run.
-fn redact(line: &str) -> String {
+/// provider key, or a long unbroken random-looking run. The voice error log uses it too.
+pub(crate) fn redact(line: &str) -> String {
     let mut out: Vec<String> = Vec::new();
     let mut after_bearer = false;
     for word in line.split(' ') {

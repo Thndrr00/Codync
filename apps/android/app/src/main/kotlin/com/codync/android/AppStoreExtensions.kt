@@ -23,6 +23,11 @@ suspend fun AppStore.setAgentEnv(backend: String, values: Map<String, String>): 
     refreshBackends()
     return WireJson.decodeFromJsonElement(response)
 }
+/** Deletes the build Codync downloaded for an agent and turns it off; its accounts, sign-ins, bots and chats stay. */
+suspend fun AppStore.deleteAgentDownload(backend: String) {
+    hostQuery("deleteAgentDownload", body("backend" to backend), 120_000)
+    refreshBackends()
+}
 internal fun AppStore.setupTerminal(owner: String, backend: String, step: String, method: String?): SetupTerminalSession {
     require(step in listOf("install", "login", "node"))
     return setupTerminals.getOrPut(owner) {

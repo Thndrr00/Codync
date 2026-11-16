@@ -98,8 +98,8 @@ fn write(
     let expected = before.as_deref().map(mf::hash);
     let message = hub.runtime(&cfg.id).message;
     let writer = match by {
-        By::Person => Writer { author: Author::User, bot: None, cause, message: None },
-        By::Bot => Writer { author: Author::Bot, bot: Some(cfg), cause, message: message.as_deref() },
+        By::Person => Writer { author: Author::User, bot: None, cause, message: None, channel: false },
+        By::Bot => Writer { author: Author::Bot, bot: Some(cfg), cause, message: message.as_deref(), channel: false },
     };
     files::write(hub, layer, name, content, expected.as_deref(), writer)
 }
@@ -186,9 +186,14 @@ pub fn tool(hub: &Hub, cfg: &BotConfig, name: &str, args: &Value) -> Result<Valu
 /// "I learned …" in the chat, with what Undo needs: the version the note had before this change (none: it was new).
 fn announce(hub: &Hub, cfg: &BotConfig, summary: &str, file: &str, shared: bool, before: Option<i64>, change: i64) {
     let text = format!("I learned: {}", crate::agent::acp::truncate(summary.trim(), 200));
-    let data = json!({"text": text, "style": "info",
-        "memoryUndo": {"file": file, "shared": shared, "before": before, "change": change, "undone": false}});
-    hub.add_entry(&Lane::main(&cfg.id), EntryKind::Notice, hub.store.max_turn(&cfg.id), &data);
+    let data =
+        json!({"memoryUndo": {"file": file, "shared": shared, "before": before, "change": change, "undone": false}});
+    // The interruption policy keeps a repeated note from becoming a second notice.
+    let _ = crate::notices::tell(
+        hub,
+        &cfg.id,
+        crate::notices::Finding::new(format!("memory:{file}"), text).with_extra(data),
+    );
 }
 
 /// Asks the person about a contradiction, unless one was asked in the last 24 hours. False when it was held back.

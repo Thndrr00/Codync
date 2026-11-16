@@ -13,8 +13,8 @@ const card = (entryId: string): IslandPermission => ({
   ref: 'c/a', entryId, bot: { name: 'a', shape: 'blob', color: 'blue', backend: 'Claude Code' }, headline: 'Wants to run a command', title: 'ls', diffs: [], options: [], answering: null,
 })
 const summary = (bots: IslandBot[], permissions: IslandPermission[] = []): IslandSummary => ({ bots, permissions, usage: [], health: null })
-const state = (over: Partial<{ open: boolean; peek: boolean; tab: IslandTab; deferred: ReadonlySet<string>; notice: IslandNotice | null }> = {}) =>
-  ({ open: false, peek: false, tab: 'auto' as IslandTab, deferred: new Set<string>(), notice: null, ...over })
+const state = (over: Partial<{ open: boolean; peek: boolean; tab: IslandTab; deferred: ReadonlySet<string>; notice: IslandNotice | null; dock: boolean }> = {}) =>
+  ({ open: false, peek: false, tab: 'auto' as IslandTab, deferred: new Set<string>(), notice: null, dock: false, ...over })
 
 test('explicit island panels retain their selection and the approval tab has an empty destination', () => {
   for (const tab of ['activity', 'status', 'options'] as const) {
@@ -29,7 +29,7 @@ test('side panels keep their vertical wake strip and every open view fits small 
     const screen = { notch: null, edge, density: 'expanded' as const, panel: { width: 320, height: 400 } }
     assert.deepEqual(islandFrame('hidden', screen), { width: 0, height: 160, radius: 0 })
     assert.ok(hitRect({ x: edge === 'left' ? 0 : 320, y: 120, width: 0, height: 160 }).width > 0)
-    for (const mode of ['activity', 'status', 'options', 'usage', 'approval', 'message'] as const) {
+    for (const mode of ['activity', 'status', 'options', 'usage', 'approval', 'message', 'agents'] as const) {
       const frame = islandFrame(mode, screen)
       assert.ok(frame.width <= 320 && frame.height <= 400)
     }
@@ -62,6 +62,21 @@ test('an approval opens the island until it is put off, and opening shows it aga
   assert.equal(islandMode(summary([], [card('e1'), card('e2')]), state({ deferred: new Set(['e1']) })), 'approval')
 })
 
+test('the agent dock opens the island on its roster, after approvals and notices', () => {
+  assert.equal(islandMode(summary([bot('a', 'idle')]), state({ open: true, dock: true })), 'agents')
+  assert.equal(islandMode(summary([bot('a', 'working')]), state({ open: true, dock: true })), 'agents')
+  assert.equal(islandMode(summary([bot('a', 'working')], [card('e1')]), state({ open: true, dock: true })), 'approval')
+  assert.equal(islandMode(summary([bot('a', 'idle')], [card('e1')]), state({ open: true, dock: true, deferred: new Set(['e1']) })), 'agents')
+  assert.equal(islandMode(summary([bot('a', 'idle')]), state({ open: true, dock: true, notice: { kind: 'finished', ref: 'a' } })), 'finished')
+  assert.equal(islandMode(summary([bot('a', 'idle')]), state({ open: true, tab: 'agents', dock: true })), 'agents')
+  // Off, opening shows what it always did, and the hidden tab falls back to it.
+  assert.equal(islandMode(summary([bot('a', 'idle')]), state({ open: true })), 'empty')
+  assert.equal(islandMode(summary([bot('a', 'idle')]), state({ open: true, tab: 'agents' })), 'empty')
+  // The dock rides on the closed island: it never gives it a new resting shape.
+  assert.equal(islandMode(summary([bot('a', 'idle')]), state({ dock: true })), 'hidden')
+  assert.equal(islandMode(summary([bot('a', 'working')]), state({ dock: true })), 'compact')
+})
+
 test('a bot that stops working is done, or failed when it ended in an error', () => {
   const before = new Map<string, string>([['a', 'working'], ['b', 'idle'], ['c', 'needsInput'], ['d', 'working']])
   const after = [bot('a', 'idle'), bot('b', 'idle'), bot('c', 'error'), bot('d', 'working'), bot('e', 'idle')]
@@ -91,7 +106,7 @@ test('shapes follow the notch, and a plain top edge keeps a thin strip that wake
   assert.equal(islandFrame('peek', notch).width, 185 + 64)
   assert.equal(islandFrame('compact', notch).width, 185 + 104)
   // Every open view has one size: switching tabs never moves the shape.
-  for (const mode of ['overview', 'empty', 'approval', 'finished', 'failed', 'message', 'usage'] as const) {
+  for (const mode of ['overview', 'empty', 'approval', 'finished', 'failed', 'message', 'usage', 'agents'] as const) {
     assert.deepEqual(islandFrame(mode, notch), { width: 640, height: 228, radius: 30 })
   }
   // A taller notch pushes the content down.

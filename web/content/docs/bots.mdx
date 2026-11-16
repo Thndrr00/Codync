@@ -40,6 +40,7 @@ You can also ask a bot in its chat to rename itself or change its own instructio
 - **Agent:** the coding agent this bot runs, picked from the agents Codync finds on the computer. Choose **Custom command** to run any agent that speaks the Agent Client Protocol (ACP) by its command line. See [Agents](/docs/agents).
 - **Model:** **Default** or one of the models the agent lists. Some models have their own options, such as reasoning effort, each with its own row. The eye beside a model turns it off in the picker for every device; **Show hidden models** brings them back, and a bot keeps the model it already uses.
 - **Fast mode:** shown when the agent offers it for the model (Claude Code and Codex do). Faster replies for more usage.
+- **Credit Codync in commits:** off by default. When on, the bot's agent ends every git commit message it writes with `Co-authored-by: Codync <bot@codync.dev>`, on its own line after a blank line; you stay the author. Codync adds it as an instruction to the bot, so a commit whose message an agent writes without reading its profile can miss it.
 - **Keys for this bot:** environment variables only this bot's agent gets, such as `ANTHROPIC_API_KEY`, above the agent's own keys. Values are kept in the computer's vault; the agent gets only their names from the host.
 - **Fallbacks:** other agents that carry on when this one runs out of usage or can't answer. See [Agent fallbacks](/docs/agent-fallbacks).
 
@@ -81,6 +82,16 @@ Bots made before Codync 2.34 keep the setting they had. With any setting, your a
 The same setting covers changes a bot makes to other bots with **Manage the team**: unless it's Approve automatically, each change waits for your Allow. The bots it creates get the same setting. It also covers [starting a dev server](/docs/dev-servers#start-one): unless it's Approve automatically, the start waits for your Allow.
 
 How approval cards work: [Conversations](/docs/conversations#approval-cards).
+
+### Policies for the whole computer
+
+One list of rules in **Settings → Approvals & policies** covers every bot on the computer, before any bot's own approval rules. Each rule is a name, an expression and an effect: **Deny** refuses what it matches, **Allow** permits it. A denied request never reaches the bot: it is refused at once and the chat says which rule did it. An allowed one goes through without a card.
+
+- **Deny first.** Every deny rule that matches refuses, whatever the allow rules say.
+- **A list that allows becomes an allowlist.** If you save an allow rule, anything no allow rule names is refused; save a last rule that is just `true` to let everything else ask as before. With only deny rules, what they don't refuse goes on to the bot's approval rules and its Permissions setting.
+- **Broken rules fail closed.** A rule that can't be compiled or run refuses the request and names the error. Rules are tried when you save them, so most mistakes show up in the editor.
+- **Start from a preset.** Read-only, No shell and No sends are ordinary rules you can edit or remove.
+- **Ask first.** **What would happen?** answers one proposed tool call without doing anything, and shows the rule that decided, what each saved rule says about it, and the values it read (credentials masked).
 
 ## Summarize long chats
 

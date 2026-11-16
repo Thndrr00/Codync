@@ -23,7 +23,7 @@ impl Fixture {
     }
 
     async fn install(&self) -> Result<Value> {
-        install_team(&self.hub, catalog::team("software-team")?, Some("claude"), Some("test-model")).await
+        install_team(&self.hub, catalog::team("software-team")?, Some("claude"), Some("test-model"), None).await
     }
 
     fn reject_insert(&self, group: bool) {

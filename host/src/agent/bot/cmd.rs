@@ -104,6 +104,8 @@ pub enum Cmd {
     Permission {
         entry_id: String,
         option_id: Option<String>,
+        /// A declarative block's form fields, alongside the chosen action.
+        values: Option<Value>,
     },
     /// A Codync tool asks the user before it acts (`chat::manage`), on the agent's kind of approval card.
     Approve {
@@ -111,7 +113,18 @@ pub enum Cmd {
         detail: String,
         reply: tokio::sync::oneshot::Sender<bool>,
     },
+    /// A declarative UI block (`declarative::call`): its card in the turn's chat. `reply` is `Some`
+    /// when the block asks for an answer; it receives the chosen action and the form's values, or
+    /// `None` when the card closed unanswered.
+    Block {
+        data: Value,
+        reply: Option<tokio::sync::oneshot::Sender<Option<Value>>>,
+    },
     NewSession,
+    /// The agent's environment changed: start it again (after a running turn ends).
+    RestartAgent,
+    /// The user asked to compact the conversation now (the chat's settings): summarize it at once.
+    CompactNow,
     Reconfigure(Box<BotConfig>),
     /// The user wants the bot's own agent again (`switchBack`).
     SwitchBack,

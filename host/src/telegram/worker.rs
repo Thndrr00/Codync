@@ -7,7 +7,8 @@
 use super::client::{self, Endpoint};
 use super::{Arc, Hub, SLOT, TgBot, Value, commands, json, load, pairing};
 use crate::api::devices::Caller;
-use sha2::{Digest as _, Sha256};
+use crate::channels::approval::Approval;
+use crate::channels::render;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::{Mutex, broadcast::error::RecvError};
@@ -251,7 +252,7 @@ pub(super) async fn handle(hub: &Arc<Hub>, ep: &Endpoint, name: &str, shared: &S
             *route = Some(Route { chat, turn, live: None, cards: HashMap::new() });
         }
     }
-    match super::input::post(hub, name, user, expected, &text, &nonce) {
+    match super::input::post(hub, name, chat, user, expected, &text, &nonce) {
         Ok(entry) => {
             if let Err(error) = hub.store.record_channel_activity(&crate::store::ChannelActivity {
                 id: nonce,
@@ -304,32 +305,6 @@ fn allow(hub: &Hub, expected: &TgBot, user: i64) -> anyhow::Result<()> {
 
 // MARK: approval buttons
 
-/// Identifies what a button was made for, so a button of a card that changed cannot answer another.
-fn card_print(card: &Value) -> String {
-    let mut digest = Sha256::new();
-    digest.update(card["data"]["title"].as_str().unwrap_or_default());
-    for option in card["data"]["options"].as_array().into_iter().flatten() {
-        digest.update(option["optionId"].as_str().unwrap_or_default());
-    }
-    crate::chat::files::digest_hex(&digest.finalize()).chars().take(6).collect()
-}
-
-fn keyboard(card: &Value) -> Option<Value> {
-    let id = card["id"].as_str()?;
-    let print = card_print(card);
-    let row: Vec<Value> = card["data"]["options"]
-        .as_array()?
-        .iter()
-        .filter_map(|o| {
-            let data = format!("p|{id}|{}|{print}", o["optionId"].as_str()?);
-            // Telegram refuses callback data over 64 bytes.
-            let text = o["name"].as_str()?;
-            (data.len() <= 64).then(|| json!({"text": text, "callback_data": data}))
-        })
-        .collect();
-    (!row.is_empty()).then(|| json!(row.chunks(2).collect::<Vec<_>>()))
-}
-
 async fn answer_button(hub: &Arc<Hub>, ep: &Endpoint, bot: &TgBot, query: &Value) {
     let reply = |text: String| async move {
         let body = json!({"callback_query_id": query["id"], "text": text});
@@ -340,16 +315,14 @@ async fn answer_button(hub: &Arc<Hub>, ep: &Endpoint, bot: &TgBot, query: &Value
     if !query["from"]["id"].as_i64().is_some_and(|u| bot.allowed.contains(&u)) {
         return reply("You are not allowed to answer this.".into()).await;
     }
-    let mut parts = query["data"].as_str().unwrap_or_default().split('|');
-    let (Some("p"), Some(id), Some(option), Some(print)) = (parts.next(), parts.next(), parts.next(), parts.next())
-    else {
+    let Some((id, option, print)) = query["data"].as_str().and_then(crate::channels::approval::parse_action) else {
         return reply("That button is not for this.".into()).await;
     };
     let card = hub.store.entry(id).filter(|e| e.bot_id == bot.bot_id && e.kind == "permission");
     let Some(card) = card.and_then(|e| serde_json::to_value(e).ok()) else {
         return reply("That approval is gone.".into()).await;
     };
-    if card_print(&card) != print {
+    if crate::channels::approval::print(&card).as_deref() != Some(print) {
         return reply("That approval changed.".into()).await;
     }
     // The first answer wins, from any client; a later one finds the card settled.
@@ -375,11 +348,20 @@ async fn stream(hub: Arc<Hub>, ep: Endpoint, name: String, shared: Shared) {
         };
         let Some(bot) = current(&hub, &name) else { return };
         let entry = &event["entry"];
-        if event["type"] != "entry" || entry["botId"] != bot.bot_id.as_str() || entry.get("threadId").is_some() {
+        if event["type"] != "entry" || entry["botId"] != bot.bot_id.as_str() {
             continue;
         }
         let mut route = shared.lock().await;
         let Some(route) = route.as_mut().filter(|r| entry["turn"].as_i64().unwrap_or(0) >= r.turn) else { continue };
+        // A conversation the person linked to a Codync thread still answers here; another thread's
+        // entries (a document's, a routine's) do not.
+        if let Some(thread) = entry["threadId"].as_str() {
+            let linked =
+                hub.store.conversation_root(&bot.bot_id, "telegram", &route.chat.to_string(), "").ok().flatten();
+            if linked.as_deref() != Some(thread) {
+                continue;
+            }
+        }
         let result = match entry["kind"].as_str() {
             Some("agent") => reply(&ep, &bot, route, entry).await.map(|finished| {
                 if finished {
@@ -425,26 +407,20 @@ async fn reply(ep: &Endpoint, bot: &TgBot, route: &mut Route, entry: &Value) -> 
 /// An approval the bot asks becomes a message with buttons; once it is settled anywhere, the buttons go.
 async fn card(ep: &Endpoint, bot: &TgBot, route: &mut Route, entry: &Value) -> anyhow::Result<()> {
     let id = entry["id"].as_str().unwrap_or_default();
-    let title = entry["data"]["title"].as_str().unwrap_or("Approval");
     match (entry["data"]["status"].as_str(), route.cards.get(id)) {
         (Some("pending"), None) => {
-            let Some(buttons) = keyboard(entry) else { return Ok(()) };
-            let message =
-                client::message(ep, &bot.token, route.chat, &format!("Needs you: {title}"), Some(buttons)).await?;
+            let Some(model) = Approval::from_entry(entry) else { return Ok(()) };
+            let blocks = model.blocks(|option| crate::channels::approval::action(entry, option));
+            let payload = render::telegram(&blocks);
+            let Some(text) = payload["text"].as_str() else { return Ok(()) };
+            let message = client::card(ep, &bot.token, route.chat, text, payload.get("reply_markup")).await?;
             route.cards.insert(id.into(), message);
         }
         (Some("pending") | None, _) | (Some(_), None) => {}
         (Some(status), Some(&message)) => {
-            let chosen = entry["data"]["options"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .find(|o| o["optionId"] == entry["data"]["selected"])
-                .and_then(|o| o["name"].as_str());
-            let line = match (status, chosen) {
-                ("answered", Some(name)) => format!("{title}\n✓ {name}"),
-                _ => format!("{title}\n(closed)"),
-            };
+            let selected = entry["data"]["selected"].as_str();
+            let line = Approval::from_entry(entry)
+                .map_or_else(|| format!("{status}\n(closed)"), |approval| approval.settled(selected, status));
             client::edit(ep, &bot.token, route.chat, message, &line).await?;
             route.cards.remove(id);
         }

@@ -9,7 +9,7 @@ struct DictationEngineMenu: View {
     var body: some View {
         DropdownMenu {
             [MenuItem("On device", selected: engine == "device") { engine = "device" }]
-                + VoiceProvider.allCases.map { provider in
+                + VoiceProvider.dictationProviders.map { provider in
                     MenuItem(provider.name, selected: engine == provider.rawValue) { engine = provider.rawValue }
                 }
         } label: {

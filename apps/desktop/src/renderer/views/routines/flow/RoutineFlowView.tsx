@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { isGroup, type Bot } from '@shared/models'
 import { Button, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { ModalHeader, Sheet } from '../../../components/Overlay'
@@ -17,6 +17,14 @@ import { RoutineEditorView } from '../RoutineEditorView'
 import './routine-flow.css'
 
 type Mode = 'canvas' | 'list'
+
+/** A selection as the view's state stores it (card K14 keeps each agent's lane here too). */
+function selectionState(selection: FlowSelection) {
+  if (!selection) return null
+  if (selection.kind === 'node') return { kind: 'node', key: selection.key }
+  if (selection.kind === 'edge') return { kind: 'edge', id: selection.id }
+  return { kind: 'lane', routineId: selection.routineId, botId: selection.botId }
+}
 
 /** The bots a routine flow can hand work to: agents of their own, not hidden. */
 const canTakeWork = (bot: Bot) => !bot.hidden && !isGroup(bot) && bot.backend !== 'external'
@@ -38,6 +46,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [note, setNote] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [choose, setChoose] = useState<{ from: string; to: string; at: { x: number; y: number }; routines: { id: string; name: string }[] } | null>(null)
+  /** The saved view state is read before this window reports its own, so a reload keeps the lane. */
+  const [restored, setRestored] = useState(false)
   const offline = store.isOffline
   const rev = store.flowRev(botId)
 
@@ -50,6 +60,55 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   useEffect(() => {
     if (rev > 0) void flow.load()
   }, [rev, flow])
+  // Card K4/K14: a reload restores the mode and the lane the person (or an agent) focused.
+  useEffect(() => {
+    let live = true
+    void store.readViewState(`routine:${botId}`).then((state) => {
+      if (!live) return
+      const picked = state?.selected as { kind?: unknown; id?: unknown; routineId?: unknown; botId?: unknown } | null | undefined
+      if (picked?.kind === 'lane' && typeof picked.routineId === 'string' && typeof picked.botId === 'string') {
+        setSelection({ kind: 'lane', routineId: picked.routineId, botId: picked.botId })
+      } else if (picked?.kind === 'routine' && typeof picked.id === 'string') {
+        setSelection({ kind: 'node', key: `routine:${picked.id}` })
+      }
+      const savedMode = state?.mode
+      if (savedMode === 'list' || savedMode === 'canvas') setMode(savedMode)
+      setRestored(true)
+    })
+    return () => {
+      live = false
+    }
+  }, [store, botId])
+  // Card K4: the canvas reports what the person sees, and follows the agent's named actions.
+  useEffect(() => {
+    if (!restored) return
+    store.reportView(`routine:${botId}`, [
+      { op: 'set', path: '/open', value: true },
+      { op: 'set', path: '/mode', value: mode },
+      { op: 'set', path: '/selected', value: selectionState(selection) },
+    ])
+  }, [store, botId, mode, selection, restored])
+  useEffect(() => () => store.reportView(`routine:${botId}`, [{ op: 'set', path: '/open', value: false }]), [store, botId])
+  const viewAction = store.lastViewAction
+  const handledViewAction = useRef(store.lastViewAction?.seq ?? 0)
+  useEffect(() => {
+    if (!viewAction || viewAction.seq <= handledViewAction.current || viewAction.view !== `routine:${botId}`) return
+    handledViewAction.current = viewAction.seq
+    if (viewAction.action === 'focus_lane') {
+      const { routineId, botId: laneBot } = viewAction.arguments
+      if (typeof routineId !== 'string' || typeof laneBot !== 'string') return
+      setMode('canvas')
+      setSelection({ kind: 'lane', routineId, botId: laneBot })
+      void flow.load()
+      return
+    }
+    if (viewAction.action !== 'create_routine' && viewAction.action !== 'select_routine') return
+    const routineId = viewAction.arguments.routineId
+    if (typeof routineId !== 'string') return
+    setMode('canvas')
+    setSelection({ kind: 'node', key: `routine:${routineId}` })
+    void flow.load()
+  }, [viewAction, botId, flow])
 
   const canvas = model.canvas
   const bots = store.bots

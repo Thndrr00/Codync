@@ -120,15 +120,17 @@ struct CallView: View {
         let engine: any VoiceEngine
         if let provider, VoiceSettings.isSpeechMode(provider) {
             let transcribe = VoiceSettings.transcribeModel(provider)
-            let speechModel = VoiceSettings.speechModel(provider)
-            let voice = VoiceSettings.voice(provider)
+            // Recognition stays with the call's provider; xAI can read the replies instead of it.
+            let speakWith = VoiceSettings.speechProvider(provider)
+            let speechModel = VoiceSettings.speechModel(speakWith)
+            let voice = VoiceSettings.voice(speakWith)
             let client = { [model] () throws -> HostClient in
                 guard let client = model.client else { throw VoiceError("Not connected to \(model.hostName).") }
                 return client
             }
             engine = CloudSpeechEngine(provider: provider, speech: .init(
                 transcribe: { try await VoiceSettings.inReadersScript(client().voiceTranscribe(provider, model: transcribe, wav: $0)) },
-                speak: { try await client().voiceSpeak(provider, model: speechModel, voice: voice, text: $0,
+                speak: { try await client().voiceSpeak(speakWith, model: speechModel, voice: voice, text: $0,
                                                      localOutput: VoiceSettings.localSpeech, botId: botId) },
                 send: { [model, botId, call] in model.send($0, to: botId, call: call) },
                 stream: VoiceSettings.localSpeech ? { text in
@@ -136,7 +138,7 @@ struct CallView: View {
                     try await source.start(text:text,botId:botId)
                     return source
                 } : nil
-            ), localOutput: VoiceSettings.localSpeech)
+            ), localOutput: VoiceSettings.localSpeech, chunk: speakWith.speechChunk)
             // The computer keeps the call, though it carries no voice model.
             Task { _ = try? await link.start("speech", provider: provider) }
             cloudStartedAt = .now
@@ -146,8 +148,8 @@ struct CallView: View {
             engine = switch provider {
             case .openAI: OpenAIRealtimeEngine(model: chosen, voice: voice, link: link)
             case .gemini: GeminiLiveEngine(model: chosen, voice: voice, link: link)
-            // Speech-only, so the branch above always takes it.
-            case .elevenLabs: preconditionFailure("ElevenLabs has no realtime engine")
+            // Speech-only engines, so the branch above always takes them.
+            case .elevenLabs, .xai, .groq: preconditionFailure("\(provider.name) has no realtime engine")
             }
             cloudStartedAt = .now
         } else {

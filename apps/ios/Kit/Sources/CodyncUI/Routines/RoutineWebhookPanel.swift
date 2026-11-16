@@ -1,7 +1,8 @@
 import CodyncKit
 import SwiftUI
 
-/// A saved webhook routine's address and key: copy either, reveal or replace the key.
+/// A saved webhook routine's address and key: copy either, reveal, replace or adopt a sender's
+/// own signing secret.
 struct RoutineWebhookPanel: View {
     let botId: String
     let routineId: String
@@ -13,6 +14,7 @@ struct RoutineWebhookPanel: View {
     @State private var copied: String?
     @State private var confirmRotate = false
     @State private var rotating = false
+    @State private var secret = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -29,6 +31,14 @@ struct RoutineWebhookPanel: View {
                             .disabled(rotating || model.isOffline)
                     }
                 }
+                Field("Sender's signing secret") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        secretField
+                        Text(L10n.tr("A sender that signs with Standard Webhooks, such as Composio or Svix, has its own secret: paste it here and the key above becomes that secret."))
+                            .font(.caption).foregroundStyle(Palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 Text(note(webhook))
                     .font(.caption).foregroundStyle(Palette.secondary).padding(.leading, 4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -42,6 +52,24 @@ struct RoutineWebhookPanel: View {
         .codyncDialog("Replace the key?", isPresented: $confirmRotate,
                       message: "Senders using the current key stop working until they get the new one.") {
             [DialogAction("Replace key", destructive: true) { Task { await load(rotate: true) } }]
+        }
+    }
+
+    /// The sender's own signing secret: a plain field and the button that adopts it.
+    private var secretField: some View {
+        HStack(spacing: 8) {
+            TextField("whsec_…", text: $secret)
+                .textFieldStyle(.plain)
+                .plainTextInput()
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .padding(.horizontal, 12)
+                .frame(height: 38)
+                .background(Palette.bubbleUser, in: Capsule())
+                .disabled(rotating || model.isOffline)
+            Button(L10n.tr("Use it")) { Task { await load(rotate: false, key: secret) } }
+                .buttonStyle(.secondary)
+                .disabled(secret.trimmingCharacters(in: .whitespaces).count < 16 || rotating || model.isOffline)
         }
     }
 
@@ -77,16 +105,19 @@ struct RoutineWebhookPanel: View {
         .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func load(rotate: Bool) async {
+    private func load(rotate: Bool, key: String? = nil) async {
         guard let client = model.client else { error = "Connect to this computer to see the webhook."; return }
         rotating = rotate
         defer { rotating = false }
         do {
-            let value = try await client.routineWebhook(botId: botId, id: routineId, rotate: rotate)
+            let pasted = key?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = try await client.routineWebhook(botId: botId, id: routineId, rotate: rotate,
+                                                        key: pasted?.isEmpty == false ? pasted : nil)
             withAnimation(Motion.reduced(Motion.hover, reduceMotion)) {
                 webhook = value
                 if rotate { copied = nil; showKey = true }
             }
+            if pasted?.isEmpty == false { secret = "" }
             error = nil
         } catch { self.error = error.localizedDescription }
     }

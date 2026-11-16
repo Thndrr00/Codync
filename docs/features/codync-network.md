@@ -156,6 +156,16 @@ that was off learns of a removal.
   sessions (their inbox socket) and Codex threads (`codex queue`), see the crate README. It keeps its own key in
   `~/.codync-network` (the host's are `~/.codync/network` and `network-…`, one per network), so beside a host it is a computer of its own.
 
+## Agents that speak A2A
+
+A bot offered to a network is also an [A2A agent](a2a.md). It has an agent card and a local
+`POST /a2a/{bot}` endpoint (`message/send` and `message/stream`), and another computer calls it with
+the `a2a_ask` tool. The request is a letter carrying the A2A envelope in `meta.a2a`, so the same
+roster, per-bot offering, rules, budgets and answer path apply, and the recipient bot's approvals
+stay in force. A bot kept off the network, a hidden bot and a group are not A2A agents. No A2A port
+is opened to the internet; the local card and JSON-RPC endpoint are authenticated like the rest of
+the local API.
+
 ## Who reaches this computer's bots
 
 Every check is the **receiving** computer's, like the message budgets: no rule depends on the sender's goodwill,
@@ -208,6 +218,8 @@ Planned in order, with what each step touches: [what's left](../plans/codync-net
   `apps/android/app/.../NetworkSheet.kt`.
 - `host/src/chat/team/remote.rs`, `directory.rs`: requests and replies across computers, `list_bots`;
   `assistant.rs`: the cloud assistant and agents that aren't bots (`codync-host mcp network`, `agentCall`).
+- `host/src/a2a/`: the A2A card, local JSON-RPC endpoint and the codync-network adapter (`a2a_ask`),
+  documented in [A2A](a2a.md).
 - `host/src/network_cli.rs`: `codync-host network`.
 - `host/tests/network_e2e.rs`: two real hosts in one network, a bot messaging a bot on the other computer through
   approval and back, a request its recipient's user stops and one that fails, and the view with its per-row

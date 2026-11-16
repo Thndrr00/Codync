@@ -110,19 +110,17 @@ extension BotStore {
                 let e = try await withLink(replay: true) { client in
                     var ids: [String]?
                     if let files = self.outgoingFiles[nonce] {
-                        // A fresh upload per attempt: a retry never appends to a half-sent file.
-                        ids = []
-                        for file in files {
-                            let id = UUID().uuidString
-                            try await client.upload(botId: botId, id: id, name: file.name, data: file.data)
+                        // Each file uploads as it is attached; sending waits for the ones still on their way.
+                        ids = try await self.uploadIds(of: files, for: botId)
+                        for (file, id) in zip(files, ids ?? []) {
                             Self.cacheAttachment(id, file.data)
-                            ids?.append(id)
                         }
                     }
                     try Task.checkCancellation()
                     return try await client.send(botId: botId, text: text, clientNonce: nonce, replyTo: replyTo, attachments: ids,
                                                  pasted: pasted, call: call, threadId: threadId)
                 }
+                if let files = outgoingFiles[nonce] { releaseUploads(files) }
                 outgoingFiles[nonce] = nil
                 upsert(e)
                 if let bot = bots[botId] { onSent?(bot, .delivered) }
@@ -280,7 +278,10 @@ extension BotStore {
     }
 
     public func discard(_ entry: Entry) {
-        if let nonce = entry.data.clientNonce { outgoingFiles[nonce] = nil }
+        if let nonce = entry.data.clientNonce {
+            for file in outgoingFiles[nonce] ?? [] { forgetUpload(file.id) }
+            outgoingFiles[nonce] = nil
+        }
         removeLocal(entry)
         scheduleSave()
     }

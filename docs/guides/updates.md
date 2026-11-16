@@ -211,6 +211,30 @@ computer identity within 30 seconds. Startup failure restores and restarts the
 previous binary. Data is preserved; this is binary rollback, not database rollback
 or recovery from power loss during installation.
 
+### A container without AppArmor
+
+A server in an LXC container (Proxmox, for example) can mount AppArmor and still
+refuse to load a profile. The update therefore treats the profile as one step that a
+container may skip: it reloads `/etc/apparmor.d/codync-host` when that file exists
+(an administrator's profile that lets the bot sandbox create unprivileged user
+namespaces on Ubuntu 23.10 and Debian 13; Codync ships none, so this is normally a
+no-op) and, in a container with no `/sys/kernel/security/apparmor`, skips it with a
+warning. The container is named from `/run/systemd/container`, `/proc/1/cgroup` or a
+root marker (`/.dockerenv`, `/run/.containerenv`) in
+`host/src/service/unix.rs` (`container_from`, `sandbox`, `reload_profile`). Nothing
+else changes: the unit restarts, health must report the new version and fingerprint
+within 30 seconds, and a binary that does not answer rolls back
+(`should_roll_back` in `host/src/update/install.rs`).
+
+The rule is covered by host unit tests: `container_from`/`sandbox` in
+`host/src/service/unix.rs` and `should_roll_back` in `host/src/update/tests.rs`
+(`cd host && cargo test container`, `cargo test rolls_back`). Check a real container
+by hand, since no VM in CI is an LXC container: in a Proxmox LXC container without
+AppArmor, put a profile at `/etc/apparmor.d/codync-host`, run `codync-host update`,
+and confirm the log says the profile step was skipped, `codync-host status` and the
+app report the new version, and a deliberately broken executable comes back as the
+previous one.
+
 The host bundled in the Mac desktop app is updated with the app. Homebrew hosts use
 `brew upgrade leepokai/codync/codync-host`, followed by `codync-host install`.
 Development builds must be rebuilt. The independent updater refuses to overwrite

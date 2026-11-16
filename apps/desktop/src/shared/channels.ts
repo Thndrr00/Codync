@@ -23,6 +23,116 @@ export interface SlackStatus {
   bindings: { channelId: string; botId: string; allowedUsers: string[]; memory?: string; icon?: string }[] | null
 }
 
+/**
+ * One messaging conversation linked to a Codync thread (card K13): the host's `conversationLinks` entry, which
+ * `linkConversation` and `unlinkConversation` change.
+ */
+export interface ConversationLink {
+  botId: string
+  /** `telegram`, `slack`, `discord` or `matrix`. */
+  source: string
+  channel: string
+  /** The provider's thread inside the channel: a Slack thread's timestamp, empty for a Telegram chat or Discord channel. */
+  thread: string
+  /** The Codync thread the conversation writes into. */
+  rootId: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** The Matrix connection, as `matrixStatus` reports it. Room ids look like `!opaque:server`. */
+export interface MatrixBinding {
+  roomId: string
+  botId: string
+  allowedUsers: string[]
+  memory?: string
+  icon?: string
+}
+
+export interface MatrixStatus {
+  configured: boolean
+  homeserver: string | null
+  userId: string | null
+  deviceId: string | null
+  bindings: MatrixBinding[] | null
+  /** `ok`, `starting`, or `error: …`. */
+  state: string
+  deliveries: { id: string; state: string }[]
+}
+
+/** One Signal chat bound to a bot: a phone number or `group:<id>`. */
+export interface SignalBinding {
+  chat: string
+  botId: string
+  allowedUsers: string[]
+  memory?: string
+  icon?: string
+}
+
+/** The signal-cli connection, as `signalStatus` reports it. */
+export interface SignalStatus {
+  configured: boolean
+  number: string | null
+  daemon: string | null
+  bindings: SignalBinding[] | null
+  /** `ok`, `starting`, `notRunning: ...` or `error: ...`. */
+  state: string
+  /** The exact signal-cli commands when the daemon is not set up. */
+  setup: string | null
+  deliveries: { id: string; state: string }[]
+}
+
+/** A Teams connection, as `teamsStatus` reports it. */
+export interface TeamsStatus {
+  configured: boolean
+  appId: string | null
+  tenantId: string | null
+  botId: string | null
+  managedIdentity: boolean
+  allowedUsers: string[] | null
+  allowedTenants: string[] | null
+  memory?: string
+  icon?: string
+  /** The path the Azure Bot registration's messaging endpoint points at. */
+  endpoint: string | null
+  /** What the person must do in Azure; the host cannot create the registration. */
+  registration: string
+  state: string
+  deliveries: { id: string; state: string }[]
+}
+
+/** A Signal number in E.164, or a `group:<id>` chat. */
+export const signalChatOk = (chat: string) =>
+  chat.length <= 512 && (/^\+[1-9]\d{6,14}$/.test(chat) || /^group:[A-Za-z0-9+/=_-]{8,512}$/.test(chat))
+export const signalNumberOk = (number: string) => /^\+[1-9]\d{6,14}$/.test(number)
+export const signalPersonOk = (person: string) =>
+  signalNumberOk(person) || /^[0-9a-fA-F-]{32,64}$/.test(person)
+
+export function signalStateText(state: string): string {
+  if (state === 'ok') return 'Connected'
+  if (state === 'starting') return 'Connecting...'
+  if (state.startsWith('notRunning')) return 'signal-cli is not running'
+  return 'Cannot reach signal-cli'
+}
+
+export function teamsStateText(state: string): string {
+  if (state === 'ok') return 'Connected'
+  if (state === 'starting') return 'Connecting...'
+  return 'Not set up'
+}
+/** A homeserver address: https, or http to a server on this computer's own network. */
+export const matrixHomeserverOk = (url: string) => url.length <= 300 && /^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(url)
+/** A full Matrix user id: `@name:server`. */
+export const matrixUserOk = (id: string) => id.length <= 255 && /^@[^:\s]+:[^\s]+$/.test(id)
+/** A room id or alias: `!opaque:server` or `#alias:server`. */
+export const matrixRoomOk = (id: string) => id.length <= 255 && /^[!#][^:\s]+:[^\s]+$/.test(id)
+
+export function matrixStateText(state: string): string {
+  if (state === 'ok') return 'Connected'
+  if (state === 'starting') return 'Connecting…'
+  return 'Cannot reach Matrix'
+}
+
 /** The Discord connection, as `discordStatus` reports it. Snowflakes are digits. */
 export interface DiscordStatus {
   configured: boolean

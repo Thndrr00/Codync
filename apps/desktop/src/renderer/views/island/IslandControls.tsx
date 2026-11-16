@@ -4,7 +4,7 @@ import type { IslandEdge } from '@shared/island-layout'
 import { Button, Switch } from '../../components/Controls'
 import { useTr } from '../../lib/use-language'
 import type { IslandModel } from './island-model'
-import { useIslandUsage } from './island-preferences'
+import { useIslandAgentDock, useIslandUsage } from './island-preferences'
 
 function Choices({ label, value, options, onChange }: { label: string; value: string; options: { id: string; label: string }[]; onChange: (id: string) => void }) {
   return <div role="group" aria-label={label}><span className="island-subtitle">{label}</span><div className="island-control-actions">{options.map((option) => <Button key={option.id} kind={value === option.id ? 'primary' : 'secondary'} aria-pressed={value === option.id} onClick={() => onChange(option.id)}>{option.label}</Button>)}</div></div>
@@ -35,6 +35,7 @@ export function OptionsView({ model }: { model: IslandModel }) {
   const tr = useTr()
   const controls = model.controls
   const [usage, setUsage] = useIslandUsage()
+  const [dock, setDock] = useIslandAgentDock()
   return <IslandPanel>
     <strong>{tr('Island options')}</strong>
     <IslandOptionsExtras model={model} />
@@ -47,6 +48,8 @@ export function OptionsView({ model }: { model: IslandModel }) {
     ]} onChange={(value) => void model.configure(['automatic', 'primary', 'follow'].includes(value) ? { placement: value as typeof controls.placement, displayId: null } : { displayId: Number(value) })} />
     {controls.displayId !== null && !model.screen.displays?.some((display) => display.id === controls.displayId) ? <span className="island-subtitle">{tr('Saved display is unavailable; using an available display.')}</span> : null}
     <Choices label={tr('Density')} value={controls.density} options={[{ id: 'compact', label: tr('Compact') }, { id: 'expanded', label: tr('Expanded') }]} onChange={(value) => void model.configure({ density: value === 'expanded' ? 'expanded' : 'compact' })} />
+    <Switch label="Agent dock" on={dock} onChange={setDock}>Agent dock</Switch>
+    <span className="island-subtitle">{tr('Show the agents on this computer in the island, at its edge. It opens on their roster and, collapsed, counts the agents working.')}</span>
     <Switch label="Lock position" on={controls.locked} onChange={(locked) => void model.configure({ locked })}>Lock position</Switch>
     <span className="island-subtitle">{tr('Unlock, then drag the handle to a screen edge. Positions are saved per display.')}</span>
     <Switch label="Usage notices" on={usage.notices} onChange={(notices) => setUsage({ ...usage, notices })}>Usage notices</Switch>

@@ -202,6 +202,32 @@ async fn a_failure_in_the_middle_skips_what_hangs_below_it() {
 }
 
 #[tokio::test]
+async fn a_step_that_answers_nothing_skips_what_hangs_below_it() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.link(&r, "a", "b", "EMPTY");
+    f.link(&r, "b", "c", "Never reached");
+    execute(f.hub.clone(), f.start(&r, "run-empty", Root::Replied("seed".into()))).await;
+    assert_eq!(
+        f.steps("run-empty"),
+        [("a".into(), StepStatus::Succeeded), ("b".into(), StepStatus::Succeeded), ("c".into(), StepStatus::Skipped)]
+    );
+    assert_eq!(f.step("run-empty", "b").output, None, "no text to hand on");
+    assert!(f.prompts_of("c").is_empty(), "a skipped step sends nothing");
+    f.shutdown().await;
+}
+
+#[test]
+fn a_run_with_no_text_starts_no_flow() {
+    let routine = crate::routines::tests::routine();
+    let run = crate::routines::new_run(&routine, json!({}), None);
+    let starts = |text: &str| engine::start_for(Some(&routine), &run, Status::Succeeded, None, Some(text)).is_some();
+    assert!(!starts("  \n "), "a run that reported nothing hands nothing on");
+    assert!(!starts("[[no-update]]"), "nor does a pass token");
+    assert!(starts("Seven items today"));
+}
+
+#[tokio::test]
 async fn a_routine_run_that_failed_skips_the_whole_flow() {
     let f = Fixture::new();
     let r = f.routine("a");
@@ -444,6 +470,40 @@ async fn a_canvas_shows_the_flow_on_every_bot_it_passes_through() {
     assert_eq!(canvas["links"][0]["toBotId"], "b");
     let other = f.call("routineFlowCanvas", json!({"botId": "c"})).await.unwrap();
     assert_eq!(other["routines"].as_array().unwrap().len(), 0);
+    f.shutdown().await;
+}
+
+#[tokio::test]
+async fn two_agents_work_one_card_in_their_own_lanes_across_a_reload() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.call("connectRoutineFlow", json!({"routineId": r, "fromBotId": "a", "toBotId": "b"})).await.unwrap();
+    f.link(&r, "b", "c", "Translate it");
+    execute(f.hub.clone(), f.start(&r, "run1", Root::Replied("Seven items today".into()))).await;
+
+    // Both lanes come from saved links and steps, so a fresh canvas (a reload) shows them again.
+    for _ in 0..2 {
+        let canvas = f.call("routineFlowCanvas", json!({"botId": "a"})).await.unwrap();
+        let card = &canvas["routines"][0];
+        let lanes = card["lanes"].as_array().unwrap();
+        assert_eq!(lanes.iter().map(|lane| lane["botId"].as_str().unwrap()).collect::<Vec<_>>(), ["a", "b", "c"]);
+        assert_eq!(lanes[0]["depth"], 0);
+        assert_eq!(lanes[1]["depth"], 1);
+        assert_eq!(lanes[2]["depth"], 2);
+        assert!(lanes.iter().all(|lane| lane["status"] == "succeeded"), "{lanes:?}");
+        assert_eq!(lanes[0]["name"], "a");
+    }
+
+    // Another bot's canvas shows the same card with the same lanes, in the same order.
+    let through_b = f.call("routineFlowCanvas", json!({"botId": "b"})).await.unwrap();
+    assert_eq!(
+        through_b["routines"][0]["lanes"],
+        json!([
+            {"botId": "a", "name": "a", "depth": 0, "status": "succeeded"},
+            {"botId": "b", "name": "b", "depth": 1, "status": "succeeded"},
+            {"botId": "c", "name": "c", "depth": 2, "status": "succeeded"},
+        ])
+    );
     f.shutdown().await;
 }
 

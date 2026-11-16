@@ -19,6 +19,22 @@
 .trace-thought {
   white-space: pre-wrap;
 }
+/* The credential the call carries, under its title, and where it sits once unfolded. */
+.trace-caution {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-caption);
+  color: var(--secondary);
+}
+.trace-caution-paths {
+  margin: 0;
+  padding-left: 15px;
+  font-size: var(--text-caption);
+  color: var(--tertiary);
+  font-family: var(--mono);
+  word-break: break-all;
+}
 /* The "Full conversation" filters (idea 32): a scrollable row of pills. */
 .trace-filters {
   display: flex;

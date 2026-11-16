@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AppLink, BotApp } from '@shared/models'
-import { Button, SegmentedChoice } from './Controls'
+import { grantedActions, normalizeActions, toggledAction, webMcpLabel, type WebMcpAction } from '@shared/webmcp'
+import { Button, SegmentedChoice, Switch } from './Controls'
 import { Icon } from './Icon'
 import { SlideShell, useLatchedWhileClosing } from './SlideShell'
 import { HStack, Spacer, VStack } from './Stack'
 import { Text } from './Text'
+import { useTr } from '../lib/use-language'
 
 /** Ideas 1–7, 47, 48: Sandboxed mini-app viewer drawer with capability share links and error banner. */
 export function BotAppPanel({
@@ -12,12 +14,18 @@ export function BotAppPanel({
   onClose,
   onCreateShareLink,
   onRevokeShareLink,
+  onLoadActions,
+  onSetActions,
 }: {
   app: BotApp | null
   onClose: () => void
   onCreateShareLink?: (slug: string, label: string, mode: 'view' | 'edit') => Promise<{ link: AppLink; url: string }>
   onRevokeShareLink?: (slug: string, token: string) => Promise<void>
+  /** Card K15: the declared Codync actions this page may ask for, and the host's grants. */
+  onLoadActions?: (slug: string) => Promise<WebMcpAction[]>
+  onSetActions?: (slug: string, actions: string[]) => Promise<void>
 }) {
+  const tr = useTr()
   const latched = useLatchedWhileClosing(app)
   const [reloadKey, setReloadKey] = useState(0)
   const [shareOpen, setShareOpen] = useState(false)
@@ -27,6 +35,30 @@ export function BotAppPanel({
   const [shareError, setShareError] = useState<string | null>(null)
   const [creatingLink, setCreatingLink] = useState(false)
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
+  const [webActions, setWebActions] = useState<WebMcpAction[] | null>(null)
+  const [webError, setWebError] = useState<string | null>(null)
+  const [savingAction, setSavingAction] = useState(false)
+  // The callbacks are read through a ref, so a parent re-render doesn't reload the grants.
+  const loadActions = useRef(onLoadActions)
+  loadActions.current = onLoadActions
+
+  useEffect(() => {
+    setWebActions(null)
+    setWebError(null)
+    const load = loadActions.current
+    if (!latched?.slug || !load) return
+    let live = true
+    void load(latched.slug)
+      .then((actions) => {
+        if (live) setWebActions(normalizeActions(actions))
+      })
+      .catch(() => {
+        // A host without WebMCP keeps the panel as it was.
+      })
+    return () => {
+      live = false
+    }
+  }, [latched?.slug, latched?.version])
 
   useEffect(() => {
     setRuntimeError(null)
@@ -87,6 +119,44 @@ export function BotAppPanel({
               <Icon name="xmark" size={12} />
             </Button>
           </HStack>
+
+          {webActions && webActions.length > 0 ? (
+            <VStack gap={6} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+              <HStack align="center" gap={8}>
+                <Icon name="cursorarrow.rays" size={12} />
+                <Text size="caption" weight="semibold">{tr('Browser actions')}</Text>
+                <Spacer />
+                <Text size="caption" tone="secondary">{tr('Only while this app is open')}</Text>
+              </HStack>
+              <Text size="caption" tone="secondary">
+                {tr('Let this app ask Codync to open a panel. It never gets keys, files or other host calls.')}
+              </Text>
+              {webActions.map((action) => (
+                <HStack key={action.name} align="center" gap={8}>
+                  <Text size="caption">{tr(webMcpLabel(action.name))}</Text>
+                  <Spacer />
+                  <Switch
+                    on={action.granted}
+                    disabled={savingAction || !onSetActions}
+                    label={tr(webMcpLabel(action.name))}
+                    onChange={(granted) => {
+                      if (!latched || !onSetActions) return
+                      const next = toggledAction(webActions, action.name, granted)
+                      setSavingAction(true)
+                      setWebError(null)
+                      void onSetActions(latched.slug, grantedActions(next))
+                        .then(() => setWebActions(next))
+                        .catch((error) => {
+                          setWebError(error instanceof Error ? error.message : tr('Could not save the permission.'))
+                        })
+                        .finally(() => setSavingAction(false))
+                    }}
+                  />
+                </HStack>
+              ))}
+              {webError ? <Text size="caption" tone="danger">{webError}</Text> : null}
+            </VStack>
+          ) : null}
 
           {runtimeError ? (
             <HStack

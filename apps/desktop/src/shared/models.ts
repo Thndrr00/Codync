@@ -1,6 +1,8 @@
 import type { ApprovalRule } from './approval-rules'
 import type { ArtifactCard } from './artifacts'
 import type { CallLine } from './calls'
+import type { DeclarativeBlock } from './declarative.ts'
+import type { ComponentCard } from './components.ts'
 import { isInternalEntry } from './entry-visibility.ts'
 export { isInternalEntry } from './entry-visibility.ts'
 import { normalizeDevServer, type DevServer } from './dev-servers.ts'
@@ -26,12 +28,52 @@ export interface Personality {
   heartbeat: string
 }
 
+/** One row of a group's request tree: the request, or a member's assignment under it. */
+export interface GroupTask {
+  id: string
+  groupId: string
+  /** The lane's key: the chat, or its thread. */
+  lane: string
+  /** The user's message the tree answers. */
+  requestId: string
+  rootId: string
+  parentId: string | null
+  ownerId: string | null
+  /** The owner's name, as the host resolves it. */
+  ownerName?: string | null
+  kind: 'request' | 'assignment'
+  /** `queued`, `running`, `completed`, `failed`, `paused` or `cancelled`. */
+  state: string
+  instruction: string
+  note?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** Still part of the request's work: it may take a turn, or wait for one. */
+export function taskOpen(task: GroupTask): boolean {
+  return ['queued', 'running', 'paused', 'failed'].includes(task.state)
+}
+
+/** Stopped or failed: it offers Continue, Reassign and Cancel. */
+export function taskStopped(task: GroupTask): boolean {
+  return task.state === 'paused' || task.state === 'failed'
+}
+
 export interface Bot {
   id: string
   /** `agent`, or `group`: several bots and the user in one chat. */
   kind: string
   members: string[]
   chiefBotId?: string | null
+  /** A group's request tree: the request, its assignments to members, and their children (`chat/group/tasks.rs`). */
+  tasks?: GroupTask[]
+  /** A group's short line under its name in the roster; null for none. */
+  title?: string | null
+  /** A group taken out of the open roster; its conversation stays and it can be restored. */
+  archived: boolean
+  /** A group that keeps what its members learn in it: their own chats don't get those memories. */
+  keepMemories: boolean
   customIcon?: import('./custom-icons').CustomIcon
   name: string
   description: string
@@ -57,6 +99,8 @@ export interface Bot {
   modelOptions: Record<string, string>
   /** The agent's Fast mode (Claude Code, Codex): faster replies for more usage. */
   fastMode: boolean
+  /** Adds Codync's co-author trailer to the commits the agent writes (off unless the user turns it on). */
+  commitCoauthor: boolean
   /** What the agent says about Fast mode: `unknown` (no session yet), `offered`, `unsupported`,
    *  or `refused` (it turned it off; `fastModeIssue` says why). */
   fastModeSupport: string
@@ -80,6 +124,8 @@ export interface Bot {
   hidden: boolean
   notify?: boolean | null
   connectors: string[]
+  /** The person whose bot this is (`people`); empty means the owner's. */
+  person?: string | null
   skills: string[]
   /** The bot can see and operate the computer's desktop. */
   computer: boolean
@@ -143,6 +189,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     id: raw.id,
     kind: raw.kind ?? 'agent',
     members: raw.members ?? [],
+    tasks: raw.tasks ?? [],
     name: raw.name ?? 'Bot',
     description: raw.description ?? '',
     avatarColor: raw.avatarColor ?? 'blue',
@@ -162,6 +209,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     fastMode: raw.fastMode ?? false,
     fastModeSupport: raw.fastModeSupport ?? 'unknown',
     fastModeIssue: raw.fastModeIssue ?? null,
+    commitCoauthor: raw.commitCoauthor ?? false,
     account: raw.account ?? null,
     fallbacks: raw.fallbacks ?? [],
     selfFallbacks: raw.selfFallbacks ?? null,
@@ -198,6 +246,9 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     memoryRev: raw.memoryRev ?? 0,
     isChief: raw.isChief ?? false,
     chiefBotId: raw.chiefBotId ?? null,
+    title: raw.title ?? null,
+    archived: raw.archived ?? false,
+    keepMemories: raw.keepMemories ?? false,
     autoName: raw.autoName ?? false,
     createdAt,
     rev: raw.rev ?? 0,
@@ -254,6 +305,13 @@ export interface FileDiff {
   isNew: boolean
   startLine: number
   patch: string
+}
+
+/** A credential the host found in a tool call's arguments: its category and where it sits, never the value. */
+export interface CredentialCaution {
+  /** sensitive_content | inspection_limit */
+  reason: string
+  findings: { category: string; path: string }[]
 }
 
 export interface PermissionOption {
@@ -468,14 +526,25 @@ export interface EntryData {
   /** tool: whether it's the bot's own bookkeeping (composing its message, keeping its memory), left out of the
    * working steps; a host older than 2.25.0 leaves it out, and the steps then leave out the call too. */
   bookkeeping?: boolean
+  /** tool: a credential in the call's arguments, by category and path; a host older than 2.48.0 leaves it out. */
+  caution?: CredentialCaution
   output?: string
   diffs?: FileDiff[]
   locations?: { path: string; line?: number }[]
   options?: PermissionOption[]
   selected?: string
+  /** A plan card the host will start by itself: when (epoch ms). Absent when it waits for the person. */
+  autoApproveAt?: number | null
   command?: string
   detail?: string
   cwd?: string
+  /** A question card (`toolKind` "question"): which of the agent's questions it asks, of how many. */
+  questionIndex?: number
+  questionCount?: number
+  /** The whole set, so the card can show its progress and the summary before the last answer. */
+  questions?: { text: string; header?: string; options: { label: string; description?: string }[] }[]
+  /** The questions answered before this card's, oldest first. */
+  answers?: { text: string; label: string }[]
   entries?: PlanItem[]
   /** notice: info | error */
   style?: string
@@ -501,6 +570,26 @@ export interface EntryData {
   from?: string
   /** notice: what was said on a realtime call, oldest first. */
   transcript?: CallLine[]
+  /** subagents: the subagents this turn started, in the order they started (`SubagentCard`). */
+  subagents?: Subagent[]
+  /** permission: a declarative UI block the bot shows (`DeclarativeCard`, card K3). */
+  block?: DeclarativeBlock
+  /** permission: one of Codync's own gallery cards (`ComponentCard`): a name plus checked props. */
+  component?: ComponentCard
+  /** permission: the form's answers once the person answered a block, by field id. */
+  values?: Record<string, string | number | boolean> | null
+}
+
+/** One subagent an agent started in a turn (`kind: 'subagents'`): its task, state, newest step and time. */
+export interface Subagent {
+  id: string
+  task: string
+  /** running | done | failed | stopped */
+  state: string
+  /** What it does now, as its tool call named it. */
+  step: string
+  startedAt: number
+  endedAt?: number | null
 }
 
 export interface Entry {
@@ -536,6 +625,12 @@ export interface ThreadInfo {
   fromEntry: string | null
   /** That message's text, for "Branched from …". */
   branchText: string | null
+  /** What kept the thread besides the drawer: `dictation` for a kept dictation. */
+  source: string | null
+  /** For a dictation, the chat message it was dictated under. */
+  sourceEntry: string | null
+  /** That message's text, so the thread says where the dictation came from. */
+  sourceText: string | null
   archived: boolean
   createdAt: number
   updatedAt: number
@@ -570,6 +665,8 @@ export function isChat(e: Entry): boolean {
   switch (e.kind) {
     case 'user':
     case 'permission':
+      return true
+    case 'subagents':
       return true
     case 'notice':
       // Only a fresh conversation gets a line: memory lives in the bot's memory settings, a summary keeps the same
@@ -631,6 +728,27 @@ export interface Usage {
   services?: UsageService[]
 }
 
+/** One skill in the Usage Breakdown's Skill tab. */
+export interface SkillUsageRow {
+  id: string
+  name: string
+  /** Turns whose agent read this skill's `SKILL.md`, one per turn at most. */
+  loads: number
+  /** Estimated tokens of the skill text, added up. */
+  tokens: number
+  /** Estimated list cost in USD; null when no load's model has a known rate. */
+  costUsd: number | null
+  /** This skill's share of the tokens of all skill loads, 0–1. */
+  share: number
+  /** How many bots loaded it. */
+  agents: number
+}
+
+export interface SkillUsage {
+  skills: SkillUsageRow[]
+  totalTokens: number
+}
+
 export interface Backend {
   id: string
   name: string
@@ -651,6 +769,10 @@ export interface Backend {
   accounts?: boolean
   /** Whether the computer's own sign-in can be removed (a logout command or its credential files). */
   signOut?: boolean
+  /** Codync's own downloaded build is unpacked under `~/.codync/agents`. */
+  downloaded?: boolean
+  /** The downloaded build was deleted and nothing else runs this agent: bots show it as not installed. */
+  turnedOff?: boolean
 }
 
 export interface ScreenDisplay {
@@ -675,6 +797,8 @@ export interface ScreenState {
   /** Bots with computer use can act here (Windows: always; elsewhere Remote screen is on). */
   computerUse: boolean
   viewers: number
+  /** "Ask on this computer": the question waiting for the person here, with its 30 s window. */
+  consent?: { id: string; device: string; expiresAt: number; seconds: number } | null
 }
 
 export function normalizeScreen(raw: Partial<ScreenState> | undefined | null): ScreenState | null {
@@ -691,6 +815,7 @@ export function normalizeScreen(raw: Partial<ScreenState> | undefined | null): S
     agentBot: raw.agentBot ?? null,
     computerUse: raw.computerUse ?? false,
     viewers: raw.viewers ?? 0,
+    consent: raw.consent ?? null,
   }
 }
 
@@ -745,6 +870,51 @@ export interface Hello {
   cloud?: string | null
   /** Product analytics on this computer: on unless its owner turned it off. */
   analytics?: boolean
+  /** Who this client acts as: the owner, or the member (and role) its session belongs to. */
+  member?: MemberProfile
+}
+
+/** Who is calling: the owner of the computer, or a member with a role from `people`. */
+export interface MemberProfile {
+  owner: boolean
+  role: 'owner' | 'admin' | 'member'
+  person: Person | null
+  scopes: string[]
+}
+
+/** A member invitation handed out by the owner or an admin (host `inviteMember`). */
+export interface MemberInvite {
+  code: string
+  expiresAt: number
+  /** The QR a phone scans; absent when the computer is reachable only at the computer itself. */
+  pairingUrl?: string
+  urls?: string[]
+  note?: string
+}
+
+/** One member session, paired device or live invitation (`memberSessions`). */
+export interface MemberSession {
+  id: string
+  kind: 'session' | 'device' | 'invite'
+  personId: string
+  person: string
+  email?: string | null
+  role?: 'admin' | 'member'
+  name?: string | null
+  platform?: string | null
+  createdAt: number
+  lastSeenAt?: number | null
+  expiresAt?: number | null
+  connected: boolean
+}
+
+/** What the computer answers when a member signs in at it (`memberSignIn`, `acceptMemberInvite`). */
+export interface MemberSignedIn {
+  token: string
+  person: Person
+  role: 'admin' | 'member'
+  expiresAt: number
+  hostName: string
 }
 
 export interface PairingInfo {
@@ -824,6 +994,20 @@ export interface AuthorizedDevice {
   createdAt?: number | null
   lastSeenAt?: number | null
   connected?: boolean | null
+  /** The person this phone acts as; null is one of the owner's own. */
+  personId?: string | null
+  /** That person's name, as the computer knows it. */
+  person?: string | null
+}
+
+/** Someone who uses a computer with their own phone or bots (`people` on the host). */
+export interface Person {
+  id: string
+  name: string
+  email?: string | null
+  createdAt: number
+  /** `admin` manages people, connectors and bots; `member` only their own. The owner is implicit. */
+  role?: 'admin' | 'member'
 }
 
 export interface CloudOwner {
@@ -848,6 +1032,26 @@ export interface WhatsAppState {
   bot?: string | null
   /** Chats and people allowed to write; empty means anyone. */
   allowed?: string[]
+  /** People waiting for the owner's answer on a restricted number. */
+  requests?: WhatsAppRequest[]
+  /** People this number knows, with the facts they gave. */
+  people?: WhatsAppPerson[]
+}
+
+/** Someone waiting for the owner to let them write to a linked number. */
+export interface WhatsAppRequest {
+  code: string
+  sender: string
+  name?: string
+  /** When the request arrived, in Unix milliseconds. */
+  at: number
+}
+
+/** A person a linked number knows: their name and the facts they gave. */
+export interface WhatsAppPerson {
+  sender: string
+  name?: string
+  facts: string[]
 }
 
 export interface CloudStatus {
@@ -913,6 +1117,8 @@ export interface BotDraft {
   model?: string | null
   modelOptions?: Record<string, string>
   fastMode?: boolean
+  /** Adds Codync's co-author trailer to the commits the agent writes. */
+  commitCoauthor?: boolean
   account?: string | null
   fallbacks?: Fallback[]
   selfFallbacks?: boolean
@@ -920,6 +1126,8 @@ export interface BotDraft {
   hidden?: boolean
   notify?: boolean | null
   connectors?: string[]
+  /** The person whose bot this is (`people`); null means the owner's. */
+  person?: string | null
   skills?: string[]
   computer?: boolean
   manageTeam?: boolean
@@ -963,6 +1171,7 @@ export function draftOf(bot: Bot): BotDraft {
     model: bot.model ?? null,
     modelOptions: bot.modelOptions,
     fastMode: bot.fastMode,
+    commitCoauthor: bot.commitCoauthor,
     account: bot.account ?? null,
     fallbacks: bot.fallbacks,
     selfFallbacks: bot.selfFallbacks ?? undefined,
@@ -970,6 +1179,7 @@ export function draftOf(bot: Bot): BotDraft {
     hidden: bot.hidden,
     notify: bot.notify ?? null,
     connectors: bot.connectors,
+    person: bot.person ?? null,
     skills: bot.skills,
     computer: bot.computer,
     manageTeam: bot.manageTeam ?? undefined,
@@ -1007,6 +1217,14 @@ export interface GroupDraft {
   description: string
   members: string[]
   chiefBotId?: string | null
+  /** A short line under the name; null or empty for none. */
+  title?: string | null
+  /** Out of the open roster. */
+  archived?: boolean
+  /** Keeps what its members learn in the channel; their own chats don't get it. */
+  keepMemories?: boolean
+  /** The channel picture as a data URL; null removes it. */
+  avatarPhoto?: string | null
   customIcon?: import('./custom-icons').CustomIcon
   pinned?: boolean
 }

@@ -20,10 +20,10 @@ interface Routine {
   trigger?: Trigger
 }
 
-const filterKey = (provider: string) => (provider === 'telegram' ? 'chat' : 'channel')
+const filterKey = (provider: string) => (provider === 'telegram' ? 'chat' : provider === 'matrix' ? 'room' : 'channel')
 
 /** The routines that listen to this channel, and a short way to make one. */
-export function ChannelRoutines({ provider, channel, botId }: { provider: 'telegram' | 'slack' | 'discord'; channel: string; botId: string }) {
+export function ChannelRoutines({ provider, channel, botId }: { provider: 'telegram' | 'slack' | 'discord' | 'matrix'; channel: string; botId: string }) {
   const tr = useTr()
   const store = useStore()
   const [routines, setRoutines] = useState<Routine[]>([])

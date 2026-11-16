@@ -1,4 +1,4 @@
-import { readArtifactHTML, type Artifact, type LibraryItem } from '@shared/artifacts'
+import { readArtifactHTML, type Artifact, type LibraryItem, type ServerLibraryFilter, type ServerLibraryItem } from '@shared/artifacts'
 import { FILE_CHUNK_SIZE } from '../../shared/files.ts'
 import type { HostClient } from '../client/host-client'
 import { trNow } from '../lib/l10n.ts'
@@ -33,6 +33,14 @@ export class Artifacts {
     return items
   }
 
+  /** The server's Library (`serverLibrary`), every bot's newest first; its artifacts join the ones known here. */
+  async serverLibrary(client: HostClient | null, filter: ServerLibraryFilter = 'all'): Promise<ServerLibraryItem[]> {
+    if (!client) throw new Error(trNow('Connect to this computer to see its library'))
+    const { items } = await client.serverLibrary(filter)
+    for (const item of items) if (item.kind === 'artifact') this.upsert(item.artifact)
+    return items
+  }
+
   /** Reads the artifact's HTML in the background unless the newest version known is already here; a failure shows. */
   load(client: HostClient | null, botId: string, id: string, updatedAt = 0) {
     if (this.current(id, updatedAt) || this.reading.has(id) || !client) return
@@ -46,6 +54,16 @@ export class Artifacts {
   async rename(client: HostClient | null, botId: string, id: string, title: string) {
     if (!client) throw new Error(trNow('Connect to this computer to rename the artifact'))
     this.upsert((await client.renameArtifact(botId, id, title)).artifact)
+  }
+
+  /** Saves a diagram's scene and keeps the newer bytes here, so reopening shows the person's edit at once. */
+  async saveScene(client: HostClient | null, botId: string, id: string, scene: unknown, sha256?: string) {
+    if (!client) throw new Error(trNow('Connect to this computer to save the diagram'))
+    const { artifact } = await client.saveArtifactScene(botId, id, scene, sha256)
+    const bytes = new TextEncoder().encode(JSON.stringify(scene))
+    this.html.set(id, { updatedAt: artifact.updatedAt, sha256: artifact.sha256, bytes })
+    this.upsert(artifact)
+    return artifact
   }
 
   /** Saves the artifact's newest HTML where the user picks (the native Save dialog). */

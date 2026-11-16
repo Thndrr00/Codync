@@ -17,6 +17,21 @@
 }
 .agent-picker-identity { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 42%; }
 .agent-picker-identity > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A spent plan window: the reset time beside the provider name, and the limit on each model it stops. */
+.agent-picker-limit, .agent-picker-limit-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--secondary);
+  font-size: var(--text-caption);
+}
+.agent-picker-limit-model { flex: 0 0 auto; padding: 2px 6px; }
 .agent-picker-model { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary); }
 .agent-picker-effort { flex: 0 1 auto; max-width: 24%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-caption); color: var(--secondary); }
 .agent-picker-panel { padding: 4px 0 2px; }

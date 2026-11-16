@@ -43,6 +43,9 @@ destroyed for good: versions are kept as the memory history always keeps them.
 
 The list shows the least sure first, then the longest unconfirmed.
 
+Facts the bot proposes on its own from the person's corrections and repeated instructions are reviewed first:
+[automatic learning](automatic-learning.md).
+
 ## Not done
 
 - Per-fact metadata for the one-line facts of `MEMORY.md` (the header is per note).

@@ -6,19 +6,10 @@
 
 use super::{Arc, Config, Endpoint, Hub, Result, Value, client, json};
 use crate::api::devices::Caller;
-use sha2::{Digest, Sha256};
-
-fn card_print(card: &Value) -> String {
-    let mut digest = Sha256::new();
-    digest.update(card["data"]["title"].as_str().unwrap_or_default());
-    for option in card["data"]["options"].as_array().into_iter().flatten() {
-        digest.update(option["optionId"].as_str().unwrap_or_default());
-    }
-    crate::chat::files::digest_hex(&digest.finalize()).chars().take(6).collect()
-}
+use crate::channels::approval::{self, Approval};
 
 fn custom_id(card: &Value, option: &str) -> String {
-    format!("p|{}|{option}|{}", card["id"].as_str().unwrap_or_default(), card_print(card))
+    approval::action(card, option).unwrap_or_default()
 }
 
 /// The person and channel an interaction came from.
@@ -43,9 +34,7 @@ pub(super) async fn accept(hub: &Arc<Hub>, c: &Config, interaction: &Value, ep: 
         client::interaction(ep, token, id, 4, Some("You are not allowed to answer this.")).await?;
         return Ok(());
     }
-    let mut parts = interaction["data"]["custom_id"].as_str().unwrap_or_default().split('|');
-    let (Some("p"), Some(card_id), Some(option), Some(print)) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
+    let Some((card_id, option, print)) = interaction["data"]["custom_id"].as_str().and_then(approval::parse_action)
     else {
         client::interaction(ep, token, id, 4, Some("That button is not for this.")).await?;
         return Ok(());
@@ -63,7 +52,7 @@ pub(super) async fn accept(hub: &Arc<Hub>, c: &Config, interaction: &Value, ep: 
         return Ok(());
     }
     let Ok(card) = serde_json::to_value(&card) else { return Ok(()) };
-    if card_print(&card) != print {
+    if approval::print(&card).as_deref() != Some(print) {
         client::interaction(ep, token, id, 4, Some("That approval changed.")).await?;
         return Ok(());
     }
@@ -83,11 +72,13 @@ pub(super) fn button(card: &Value, option: &str) -> String {
 
 /// The permission's text, shared by the worker and a settled card.
 pub(super) fn text(card: &Value) -> String {
-    let title = card["data"]["title"].as_str().unwrap_or("Approval");
-    match card["data"]["command"].as_str().filter(|c| !c.is_empty()) {
-        Some(command) => format!("Needs you: {title}\n`{command}`"),
-        None => format!("Needs you: {title}"),
-    }
+    Approval::from_entry(card).map_or_else(
+        || "Needs you: Approval".into(),
+        |model| match model.command {
+            Some(command) => format!("Needs you: {}\n`{command}`", model.title),
+            None => format!("Needs you: {}", model.title),
+        },
+    )
 }
 
 #[cfg(test)]

@@ -191,6 +191,11 @@ export class AppModel extends Observable {
     return this.botsOnEveryComputer((store) => store.hiddenBots)
   }
 
+  /** Every computer's archived groups, computer by computer, by name. */
+  get archivedBots(): RosterItem[] {
+    return this.botsOnEveryComputer((store) => store.archivedBots)
+  }
+
   private botsOnEveryComputer(bots: (store: BotStore) => Bot[]): RosterItem[] {
     const items: RosterItem[] = []
     for (const computer of this.computers) {

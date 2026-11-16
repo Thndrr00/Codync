@@ -65,7 +65,7 @@ impl Requests {
         requests.sort_by_key(|request| request["at"].as_i64().unwrap_or_default());
         requests
     }
-    pub(super) fn reserve_message(&self, from: &str) -> Result<u8> {
+    pub(crate) fn reserve_message(&self, from: &str) -> Result<u8> {
         let mut state = self.0.locked();
         let hops = state.next_hop(from)?;
         state.capacity(from, "bot messages")?;
@@ -75,7 +75,7 @@ impl Requests {
         Ok(hops)
     }
 
-    pub(super) fn release_message(&self, from: &str) {
+    pub(crate) fn release_message(&self, from: &str) {
         let mut state = self.0.locked();
         state.messages -= 1;
         if let Some(count) = state.messages_by_sender.get_mut(from) {

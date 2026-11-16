@@ -57,6 +57,9 @@ import kotlinx.coroutines.launch
     var discordToken by remember { mutableStateOf("") }
     var rows by remember { mutableStateOf(listOf<BindingDraft>()) }
     var githubToken by remember { mutableStateOf("") }
+    var repoName by remember { mutableStateOf("") }
+    var repoDescription by remember { mutableStateOf("") }
+    var repoPrivate by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -113,6 +116,7 @@ import kotlinx.coroutines.launch
                                 act { store.setChannelIcon("telegram", bot.name, icon); bots = store.telegramBots() ?: bots }
                             }
                             ChannelNotesRow("telegram", bot.name, store)
+                            if (bot.botId.isNotEmpty()) ChannelLinksRow("telegram", bot.name, bot.botId, store)
                             ChannelRoutinesRow("telegram", bot.name, bot.botId, store)
                             ChannelMemoryField(bot.name, bot.memory) { memory ->
                                 act { store.setChannelMemory("telegram", bot.name, memory); bots = store.telegramBots() ?: bots }
@@ -164,6 +168,7 @@ import kotlinx.coroutines.launch
                                     act { store.setChannelIcon("discord", binding.channelId, icon); discord = store.discordStatus() }
                                 }
                                 ChannelNotesRow("discord", binding.channelId, store)
+                                if (binding.botId.isNotEmpty()) ChannelLinksRow("discord", binding.channelId, binding.botId, store)
                                 ChannelRoutinesRow("discord", binding.channelId, binding.botId, store)
                                 ChannelMemoryField(binding.channelId, binding.memory) { memory ->
                                     act { store.setChannelMemory("discord", binding.channelId, memory); discord = store.discordStatus() }
@@ -224,7 +229,10 @@ import kotlinx.coroutines.launch
                     }
                 }
             }
-            CardSection(tr("GitHub"), footer = tr("A fine-grained token with the repository permissions your workflows need. It stays on the computer; Codync never sends it anywhere else.")) {
+            MatrixSection(state, store)
+            SignalSection(state, store)
+            TeamsSection(state, store)
+            CardSection(tr("GitHub"), footer = tr("A fine-grained token with the repository permissions your workflows need, plus Administration to create repositories. It stays on the computer; Codync never sends it anywhere else.")) {
                 val connected = github
                 row {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -239,6 +247,26 @@ import kotlinx.coroutines.launch
                         if (connected?.configured == true) {
                             if (connected.scopes.isNotEmpty()) {
                                 Text("${tr("Scopes")}: ${connected.scopes.joinToString(", ")}", style = Type.caption, color = Palette.tertiary)
+                            }
+                            if (connected.canCreateRepos) {
+                                PlainInput(repoName, { repoName = it }, tr("New repository name"))
+                                PlainInput(repoDescription, { repoDescription = it }, tr("Description (optional)"))
+                                CodyncSwitch(repoPrivate, onChange = { repoPrivate = it }) { Text(tr("Private"), style = Type.body) }
+                                SecondaryButton(if (busy) tr("Creating…") else tr("Create repository"),
+                                    enabled = !busy && GitHub.repoNameOk(repoName)) {
+                                    act {
+                                        github = store.githubCreateRepo(repoName, repoPrivate, repoDescription)
+                                        repoName = ""
+                                        repoDescription = ""
+                                    }
+                                }
+                            }
+                            connected.created?.let { created ->
+                                Text("${tr("Created")} ${created.fullName}", style = Type.caption, color = Palette.secondary)
+                                Text(created.cloneUrl, style = Type.caption, color = Palette.tertiary)
+                                if (created.originSet) {
+                                    Text(tr("The workspace origin now points here."), style = Type.caption, color = Palette.tertiary)
+                                }
                             }
                             SecondaryButton(tr("Disconnect GitHub"), enabled = !busy) {
                                 act { github = store.disconnectGitHub() }
@@ -282,6 +310,7 @@ import kotlinx.coroutines.launch
                                 act { store.setChannelIcon("slack", binding.channelId, icon); slack = store.slackStatus() }
                             }
                             ChannelNotesRow("slack", binding.channelId, store)
+                            if (binding.botId.isNotEmpty()) ChannelLinksRow("slack", binding.channelId, binding.botId, store)
                             ChannelRoutinesRow("slack", binding.channelId, binding.botId, store)
                             ChannelMemoryField(binding.channelId, binding.memory) { memory ->
                                 act { store.setChannelMemory("slack", binding.channelId, memory); slack = store.slackStatus() }
@@ -299,7 +328,7 @@ import kotlinx.coroutines.launch
 }
 
 /** What the bot should know about one channel, given before every message from it. */
-@Composable private fun ChannelMemoryField(channel: String, value: String, save: suspend (String) -> Unit) {
+@Composable internal fun ChannelMemoryField(channel: String, value: String, save: suspend (String) -> Unit) {
     var text by remember(channel, value) { mutableStateOf(value) }
     var saving by remember(channel) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -321,7 +350,7 @@ private val CHANNEL_ICONS = listOf(
 )
 
 /** The pictures a channel can wear; the first clears it. */
-@Composable private fun ChannelIconRow(value: String, save: suspend (String) -> Unit) {
+@Composable internal fun ChannelIconRow(value: String, save: suspend (String) -> Unit) {
     val scope = rememberCoroutineScope()
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         for (icon in listOf("") + CHANNEL_ICONS) {

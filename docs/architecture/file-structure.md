@@ -68,7 +68,7 @@ Codync/
 ├── tools/                     # Release, App Store and Google Play submission (store_release.py: what both share), font scripts
 ├── packaging/                 # Distribution templates
 ├── marketing/app-store-screenshots/ # App Store screenshot editor (bun dev; Export bundle → out/)
-├── web/                       # Website (Next.js static export)
+├── web/                       # Website and web client (Next.js static export)
 └── .github/workflows/         # CI, signing and release automation
 ```
 
@@ -110,6 +110,7 @@ Codync/
 | Egress policy for outgoing requests to untrusted URLs | `host/src/egress.rs` ([egress policy](../reference/egress-policy.md)) |
 | Artifacts (`publish_artifact`) and a chat's Library | `host/src/chat/artifacts.rs`, `library.rs`; desktop `apps/desktop/src/renderer/views/library/` (+ `src/main/artifacts.ts`); iPhone `apps/ios/Kit/Sources/CodyncUI/Artifacts/` (+ `Store/ArtifactCache.swift`, `BotStore+Artifacts.swift`); Android `ArtifactCardView.kt`, `ArtifactViewer.kt`, `ArtifactWebView.kt`, `LibraryView.kt`, `AppStoreArtifacts.kt` (+ `core/Artifact.kt`, `core/Library.kt`); terminal `host/src/tui/net/artifacts.rs`, `manage/library.rs` |
 | Screen bridge and built-in MCP tools | `host/src/screen/`, `mcp.rs` |
+| Declarative blocks and the component gallery | `host/src/declarative/`, `host/src/components/` ([declarative UI](../features/declarative-ui.md), [component gallery](../features/component-gallery.md)) |
 | Swift transport and cloud API | `apps/ios/Kit/Sources/CodyncKit/Client/` |
 | Account aggregation / one host mirror | `apps/ios/Kit/Sources/CodyncUI/Store/AccountStore.swift` / `BotStore.swift` (+ `BotStore+Connection`, `+Sync`, `+Sending`, `+Actions`, `+Plugins`, `+Cache`, `+Shortcuts`) |
 | iPhone chat, replies, composer and trace | `apps/ios/Kit/Sources/CodyncUI/Thread/` |

@@ -6,17 +6,22 @@ the host keeps it; every app shows it as a card in the chat and opens it full si
 holds everything made or shared there: its artifacts, the files and images the bot shared, and the ones the user sent.
 Asked to change an artifact, the bot publishes it again under the same id, and every open copy shows the new one.
 
+An artifact can also be a **diagram** (`kind: "diagram"`): an editable Excalidraw scene instead of a page. The desktop
+app draws and edits it; iPhone and Android show it read-only with a pointer to the desktop. See
+[diagrams](diagrams.md) for the scene shape, validation and the `publish_diagram`/`saveArtifactScene` protocol.
+
 ## Bots
 
-The built-in `chat` MCP server has two tools (`host/src/chat/artifacts.rs`):
+The built-in `chat` MCP server has three artifact tools (`host/src/chat/artifacts.rs`):
 
 - `publish_artifact {path, title?, artifact?}`: the HTML file (absolute or relative to the bot's working directory,
   up to 5 MiB, inline CSS and JS, libraries from a CDN allowed). Without `artifact` it makes a new artifact and needs
   a title; with `artifact` (an id) it replaces that artifact's HTML, and its title when given. The answer names the
   artifact's id.
-- `list_artifacts {}`: the bot's artifacts, newest first, with each one's id, title, last publish time and the path of
-  its current HTML. To make changes the bot edits a copy and publishes that: the stored file is the live one, checked
-  against its size and SHA-256 on every read.
+- `publish_diagram {path?, scene?, title?, artifact?}`: an editable Excalidraw scene (see [diagrams](diagrams.md)).
+- `list_artifacts {}`: the bot's artifacts, newest first, with each one's id, kind, title, last publish time and the
+  path of its current content. To make changes the bot edits a copy and publishes that: the stored file is the live
+  one, checked against its size and SHA-256 on every read.
 
 When to make one is part of every bot's instructions (`chat::outbox::INSTRUCTIONS`): an artifact instead of a long
 message, one artifact per subject, updated rather than made again. A session whose frozen instructions predate
@@ -33,9 +38,10 @@ title (`replies::quote`), and the bot reads `[Codync: this is about your artifac
 
 ## Host
 
-- Storage: `~/.codync/bots/<bot>/artifacts/<id>.html` holds the newest HTML (replaced whole: written to `.partial`,
-  then renamed). The details live in kv as `artifact.<bot>.<id>`:
-  `{id, botId, title, size, sha256, createdAt, updatedAt, entryId?, rev}`, where `entryId` is the newest card and
+- Storage: `~/.codync/bots/<bot>/artifacts/<id>.html` holds the newest HTML, or `<id>.scene.json` a diagram's scene
+  (replaced whole: written to `.partial`, then renamed). The details live in kv as `artifact.<bot>.<id>`:
+  `{id, botId, title, kind, size, sha256, createdAt, updatedAt, entryId?, rev}`, where `kind` is `html` when missing,
+  `entryId` is the newest card and
   `rev` the sync rev of the last change. Deleting the bot deletes both.
 - API (Control access, like the chat):
   - `library {botId}` → `{items}`, newest first (`host/src/chat/library.rs`): the chat's artifacts
@@ -43,6 +49,9 @@ title (`replies::quote`), and the bot reads `[Codync: this is about your artifac
     `{kind: "file", at, entryId, file: {id, name, size, sha256}}` (read with `readFile`) and files the user attached
     `{kind: "attachment", at, entryId, file: {id, name, size}}` (read with `readUpload`), from its newest 500 messages
     with files.
+  - `serverLibrary {filter?}` → `{items}`, every bot's artifacts and files on this computer, newest first, each with
+    `botId`, `botName` and `image` (the extensions the apps preview). `filter` is `images` or `files`; items are
+    deduplicated by kind and id, and a deleted bot is left out.
   - `readArtifact {botId, artifactId, offset}` → `{data: <base64>, size, artifact: Artifact}`, chunks of at most
     384 KiB like `readFile`.
   - `renameArtifact {botId, artifactId, title}` → `{artifact}`. Titles are trimmed, 1–200 bytes, no control
@@ -53,7 +62,8 @@ title (`replies::quote`), and the bot reads `[Codync: this is about your artifac
   Apps upsert what the events bring and fetch the `library` when they show it; one they can't read is skipped
   (no rewind), and older apps ignore it.
 - Additive: no `minApp` change. The apps show the Library only when the host's `hello` version is 2.25.0 or later
-  (an older host has no `library`); cards need no check, since only those hosts post them.
+  (an older host has no `library`), and the server's Library only from 2.48.0 (`serverLibrary`); cards need no check,
+  since only those hosts post them.
 - Analytics: `artifact_published {change, card}` and the `library` and `artifact` screens
   ([analytics events](../reference/analytics-events.md)).
 
@@ -84,6 +94,10 @@ All four clients show the same things; layout follows each platform.
   name and size. Empty: "Library is empty" / "Artifacts {name} makes and files shared in this chat show here."
   - Desktop: a Library tab in the conversation details panel (Details · Library · Memory · Settings).
   - iPhone and Android: the same tab in the bot's details sheet, which tapping the chat's title opens.
+- **Server's Library**: every bot's artifacts and files of one computer, newest first by day, with an
+  All / Images / Files filter and each row's bot name. Desktop: **Library** in the window bar's rail or the search
+  palette. iPhone: the book button beside the roster's filters. Android: **Library** in the roster's actions.
+  Terminal: `Ctrl+K` → **Library of every bot: artifacts and files…**.
 - **Terminal UI**: a card is a `▤ Artifact: <title>` line. On the selected message, `o` opens the artifact in the
   computer's browser (its HTML written to a temporary file) and `f` saves `<title>.html` to Downloads, like files.
   The Library is a tab of the bot's pages (`L`, ⇧← ⇧→): `↵`/`o` opens an artifact in the browser, `f` saves any row to

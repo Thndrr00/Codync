@@ -35,6 +35,8 @@ import { BotFilesSheet } from './bots/BotFilesSheet'
 import { MarketplaceView } from './marketplace/MarketplaceView'
 import { SignInCodeDialog } from './marketplace/ConnectorSheets'
 import { SettingsView, type SettingsPage } from './settings/SettingsView'
+import { ServerLibraryView } from './library/ServerLibraryView'
+import { ComponentsView } from './components/ComponentsView'
 import { ApprovalSheet } from './settings/ApprovalSheet'
 import { SearchPalette } from './SearchPalette'
 import { AccountWelcomeView, useWelcomeGate } from './AccountWelcomeView'
@@ -63,6 +65,7 @@ import { useTr } from '../lib/use-language'
 import type { ExtensionSection } from './marketplace/market-models'
 import { useTool } from '../lib/use-tool'
 import { useChatNavigation } from './chat-navigation'
+import { InspectorOverlay } from './inspector/InspectorOverlay'
 
 
 /** Native desktop chat: roster on the left, the conversation on the right (Grok Bot's desktop layout). */
@@ -266,6 +269,8 @@ function ChatSplitView() {
   const [marketplaceLink, setMarketplaceLink] = useState<{ section: ExtensionSection; id?: string; installedConnectorId?: string; requestId?: string } | null>(null)
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [componentsOpen, setComponentsOpen] = useState(false)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
   const [showAccount, setShowAccount] = useState(false)
@@ -273,6 +278,8 @@ function ChatSplitView() {
   const newButton = useRef<HTMLButtonElement>(null)
   const railNewButton = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  /** The last page action each store showed, so a re-render doesn't navigate twice (card K15). */
+  const webMcpSeen = useRef(new Map<string, number>())
   useModels([...app.stores.values()])
 
   useEffect(() => {
@@ -293,6 +300,20 @@ function ChatSplitView() {
   const localOnline = !!app.local && onlineStores.includes(app.local)
   const roster = useComputerRoster(app, shown)
   const visibleRoster = roster.items
+
+  // Card K15: a granted action from a host-served page opens the bot it names. ThreadView finishes
+  // the action (an artifact, a call) once that bot is on screen; open_chat only selects it.
+  useEffect(() => {
+    for (const store of app.stores.values()) {
+      const action = store.lastWebMcpAction
+      if (!action) continue
+      if ((webMcpSeen.current.get(store.computer.id) ?? 0) >= action.seq) continue
+      webMcpSeen.current.set(store.computer.id, action.seq)
+      const wanted = action.action === 'show_artifact' ? action.botId : action.arguments.botId
+      const botId = typeof wanted === 'string' ? wanted : action.botId
+      if (store.bots.get(botId)) app.select({ computerId: store.computer.id, botId })
+    }
+  })
 
   const create = (kind: CreateTarget['kind']) => {
     // The selected bot's computer if it's online, else this computer, else any online one.
@@ -454,7 +475,7 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = canvasBot !== null ? 'canvas' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const railActive = canvasBot !== null ? 'canvas' : libraryOpen ? 'library' : componentsOpen ? 'components' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
   const width = compact ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
@@ -462,8 +483,9 @@ function ChatSplitView() {
         <div className="sidebar-rail">
           <AppRail
             active={railActive}
-            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null) }}
+            onBots={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(false) }}
             onCanvas={() => {
+              setLibraryOpen(false)
               if (selectedBot && selectedStore) {
                 setCanvasBot(selectedBot.id)
                 setCanvasStore(selectedStore)
@@ -475,13 +497,15 @@ function ChatSplitView() {
               setCanvasBot(first.bot.id)
               setCanvasStore(first.store)
             }}
-            onUsage={() => setSettings('usage')}
+            onUsage={() => { setLibraryOpen(false); setSettings('usage') }}
+            onLibrary={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setComponentsOpen(false); setLibraryOpen(true) }}
+            onComponents={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(false); setComponentsOpen(true) }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
             onComfy={() => void window.codync.tools.open('comfy')}
             comfy={comfyTool.state}
-            onExtensions={() => openMarketplace()}
-            onSettings={() => setSettings('general')}
+            onExtensions={() => { setLibraryOpen(false); openMarketplace() }}
+            onSettings={() => { setLibraryOpen(false); setSettings('general') }}
             onAccount={() => setShowAccount((s) => !s)}
             accountOpen={showAccount}
             update={<UpdateBadge size={24} />}
@@ -582,6 +606,8 @@ function ChatSplitView() {
         { id: 'agents', title: 'Agents', icon: 'terminal', run: () => { setSearching(false); openMarketplace('agents') } },
         { id: 'skills', title: 'Skills', icon: 'book.pages', run: () => { setSearching(false); openMarketplace('skills') } },
         { id: 'usage', title: 'Usage', icon: 'gauge.with.dots.needle.33percent', run: () => { setSearching(false); setSettings('usage') } },
+        { id: 'library', title: 'Server Library', icon: 'books.vertical', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(true) } },
+        { id: 'components', title: 'Components', icon: 'square.grid.3x3', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(false); setComponentsOpen(true) } },
         { id: 'network', title: 'Network', icon: 'network', run: () => { setSearching(false); setSettings('network') } },
         { id: 'voice', title: 'Voice', icon: 'waveform', run: () => { setSearching(false); setSettings('voice') } },
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
@@ -640,6 +666,32 @@ function ChatSplitView() {
       <Sheet open={settings !== null} onClose={() => setSettings(null)} width={Math.min(800, windowSize.width - 80)} height={Math.min(620, sheetHeight)}>
         {settings ? <SettingsView page={settings} setPage={setSettings} onExtensions={() => { setSettings(null); openMarketplace('channels') }} /> : null}
       </Sheet>
+      <Sheet open={libraryOpen} onClose={() => setLibraryOpen(false)} width={Math.min(800, windowSize.width - 80)} height={Math.min(680, sheetHeight)}>
+        {libraryOpen ? <ServerLibraryView /> : null}
+      </Sheet>
+      <Sheet open={componentsOpen} onClose={() => setComponentsOpen(false)} width={Math.min(920, windowSize.width - 80)} height={sheetHeight}>
+        {componentsOpen ? (() => {
+          // The gallery belongs to a computer: the one in view, else this one.
+          const target = (selectedStore ?? app.local ?? onlineStores[0]) ?? null
+          return (
+            <VStack gap={14} className="component-gallery-sheet">
+              <ModalHeader
+                icon="square.grid.3x3"
+                title={tr('Components')}
+                subtitle={tr('The cards Codync can draw in a chat, and the playground that authors them.')}
+                onClose={() => setComponentsOpen(false)}
+              />
+              {target ? (
+                <StoreContext.Provider value={target}>
+                  <ComponentsView store={target} />
+                </StoreContext.Provider>
+              ) : (
+                <Text as="div" size="callout" tone="secondary">{tr('Waiting for a computer')}</Text>
+              )}
+            </VStack>
+          )
+        })() : null}
+      </Sheet>
       <Dialog
         open={confirmDelete !== null}
         title={tr('Delete {name}?').replaceAll('{name}', () => confirmDelete?.bot.name ?? 'bot')}
@@ -650,6 +702,7 @@ function ChatSplitView() {
       <NameDialog naming={naming} placeholder="Section name" limit={limitSectionName} clean={sectionName} onClose={() => setNaming(null)} />
       <Dialog open={errorMessage !== null} title={tr('Something went wrong')} message={errorMessage} actions={[]} cancel="OK" onClose={() => app.clearErrors()} />
       <SignInCodeDialog />
+      {import.meta.env.DEV ? <InspectorOverlay /> : null}
     </div>
   )
 }

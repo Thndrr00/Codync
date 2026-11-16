@@ -306,6 +306,52 @@ pub fn update_pending(agent: &Value) -> bool {
     launch_kind(agent) == Some(Launch::Download) && binary_dir(agent).is_ok_and(|dir| !dir.join(".installed").exists())
 }
 
+/// This agent's build is unpacked under `~/.codync/agents` and marked installed.
+pub fn downloaded(agent: &Value) -> bool {
+    binary_dir(agent).is_ok_and(|dir| dir.join(".installed").exists())
+}
+
+/// Removes every build Codync downloaded for `agent` (`~/.codync/agents/<id>`): a bot's account,
+/// sign-in and files live elsewhere and stay. `false` when there was nothing to remove.
+pub fn remove_download(agent: &Value) -> Result<bool> {
+    let dir = binary_dir(agent)?;
+    let Some(agent_dir) = dir.parent() else { return Ok(false) };
+    if !agent_dir.is_dir() {
+        return Ok(false);
+    }
+    std::fs::remove_dir_all(agent_dir).with_context(|| format!("removing {}", agent_dir.display()))?;
+    Ok(true)
+}
+
+/// The agents whose downloaded build the user deleted (`~/.codync/agents`), kept apart from the
+/// builds themselves so an agent is still known to be off after its folder is gone.
+fn off_file() -> PathBuf {
+    crate::service::data_dir().join("agents-off.json")
+}
+
+static OFF: Mutex<()> = Mutex::new(());
+
+/// The agents the user turned off by deleting their build, as last saved.
+pub fn turned_off_ids() -> Vec<String> {
+    std::fs::read(off_file()).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
+}
+
+/// Records that `id` is off, or that installing it again turned it on.
+pub fn set_turned_off(id: &str, off: bool) -> Result<()> {
+    let Some(id) = safe_component(id) else { bail!("invalid agent id") };
+    let _one_at_a_time = OFF.locked();
+    let mut ids = turned_off_ids();
+    ids.retain(|known| known != id);
+    if off {
+        ids.push(id.to_owned());
+    }
+    if ids.is_empty() {
+        let _ = std::fs::remove_file(off_file());
+        return Ok(());
+    }
+    std::fs::write(off_file(), serde_json::to_vec(&ids)?).context("saving the deleted agents")
+}
+
 /// Downloads + extracts a binary distribution into [`binary_dir`].
 async fn install_binary(agent: &Value, target: &Value, cmd: &Path, progress: &impl Fn(&str)) -> Result<PathBuf> {
     // A sign-in check and a usage reading can start the same agent at once: installing side by side,
@@ -451,6 +497,35 @@ mod tests {
         remove_other_versions(&root.join("1.1.0"));
         assert!(!root.join("1.0.0").exists());
         assert!(root.join("1.1.0").exists());
+    }
+
+    #[test]
+    fn deleting_a_download_removes_every_build_and_turns_the_agent_off() {
+        let id = format!("test-agent-{}", uuid::Uuid::new_v4());
+        let agent = json!({"id": id, "version": "1.0.0", "distribution": {"binary": {}}});
+        let dir = binary_dir(&agent).unwrap();
+        for version in ["1.0.0", "1.1.0"] {
+            let version_dir = dir.parent().unwrap().join(version);
+            std::fs::create_dir_all(&version_dir).unwrap();
+            std::fs::write(version_dir.join(".installed"), "").unwrap();
+        }
+        assert!(downloaded(&agent));
+        assert!(!turned_off_ids().contains(&id));
+
+        assert!(remove_download(&agent).unwrap());
+        set_turned_off(&id, true).unwrap();
+        assert!(!dir.parent().unwrap().exists(), "every version of the build is gone");
+        assert!(turned_off_ids().contains(&id));
+        assert!(!downloaded(&agent));
+
+        // Installing it again puts a build back, and the list treats it as on without rewriting the marker.
+        std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(".installed"), "").unwrap();
+        assert!(downloaded(&agent));
+        set_turned_off(&id, false).unwrap();
+        assert!(!turned_off_ids().contains(&id));
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
     }
 
     #[cfg(unix)]

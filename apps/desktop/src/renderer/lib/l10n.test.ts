@@ -154,7 +154,7 @@ test('known chrome becomes Chinese and everything else stays', () => {
 
 
 test('each supported locale follows regional system tags and explicit choices win', () => {
-  for (const language of ['ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'it'] as const) {
+  for (const language of ['ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'he', 'it'] as const) {
     assert.equal(resolvedLanguage('system', `${language.toUpperCase()}_XX.UTF-8`), language)
     assert.equal(resolvedLanguage(language, 'zh-TW'), language)
     assert.equal(usesChinese(language, 'zh-TW'), false)
@@ -165,14 +165,14 @@ test('each supported locale follows regional system tags and explicit choices wi
     assert.equal(resetLine('resets 3h 20m', language).includes('3h 20m'), true)
     assert.notEqual(languageTitle(language, 'en', 'en'), 'Follow system')
   }
-  assert.equal(new Set(appLanguages).size, 13)
+  assert.equal(new Set(appLanguages).size, 14)
   assert.equal(resolvedLanguage('system', 'nl-NL'), 'en')
   assert.equal(translate('Settings', 'en', 'ja-JP'), 'Settings')
 })
 
 
 test('Brazilian Portuguese follows Portuguese regions and keeps its native menu name', () => {
-  assert.deepEqual(appLanguages.slice(-5), ['es', 'pt-BR', 'ru', 'ar', 'it'])
+  assert.deepEqual(appLanguages.slice(-6), ['es', 'pt-BR', 'ru', 'ar', 'he', 'it'])
   assert.equal(languageTitle('pt-BR', 'en', 'en'), 'Português (Brasil)')
   for (const tag of ['pt', 'pt-BR', 'pt_BR.UTF-8', 'pt-PT', 'pt-AO', 'pt-MZ', 'PT_cv.UTF-8']) {
     assert.equal(resolvedLanguage('system', tag), 'pt-BR', tag)
@@ -188,7 +188,7 @@ test('Brazilian Portuguese follows Portuguese regions and keeps its native menu 
 test('English reset text remains literal and absolute dates do not become durations', () => {
   assert.equal(resetLine('resets Sep 26 at 12pm', 'en'), 'resets Sep 26 at 12pm')
   assert.equal(resetLine('resets 3h 20m', 'en'), 'resets 3h 20m')
-  for (const language of ['ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'it'] as const) {
+  for (const language of ['ja', 'ko', 'fr', 'de', 'es', 'pt-BR', 'ru', 'ar', 'he', 'it'] as const) {
     assert.equal(resetLine('resets Sep 26 at 12pm', language), `${translate('resets', language)} Sep 26 at 12pm`)
   }
 })
@@ -201,6 +201,19 @@ test('Russian resolves regional tags and keeps its native menu name', () => {
   }
   assert.equal(languageTitle('ru', 'en', 'en'), 'Русский')
   assert.equal(resolvedLanguage('ru', 'pt-BR'), 'ru')
+})
+
+test('Hebrew resolves its regions, mirrors the window and keeps its native menu name', () => {
+  for (const tag of ['he', 'he-IL', 'he_IL.UTF-8', 'he-US']) {
+    assert.equal(resolvedLanguage('system', tag), 'he')
+    assert.equal(readsRightToLeft('system', tag), true)
+    assert.equal(translate('Settings', 'system', tag), translate('Settings', 'he'))
+  }
+  assert.equal(languageTitle('he', 'en', 'en'), 'עברית')
+  assert.equal(readsRightToLeft('he', 'en-US'), true)
+  assert.equal(readsRightToLeft('ar', 'he-IL'), false)
+  assert.equal(translate('Settings', 'he'), 'הגדרות')
+  assert.equal(translate('An unknown phrase', 'he'), 'An unknown phrase')
 })
 
 test('Arabic resolves its regions, mirrors the window and keeps its native menu name', () => {
