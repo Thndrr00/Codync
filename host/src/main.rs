@@ -44,6 +44,7 @@ mod local_api;
 mod local_models;
 mod market;
 mod mcp;
+mod meetings;
 mod n8n;
 mod native_channels;
 mod network;

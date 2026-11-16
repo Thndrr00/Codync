@@ -18,6 +18,7 @@ is bigger than one release.
 | Weather (`weather` tool, Open-Meteo) | done (host) |
 | Email accounts (IMAP/SMTP via the local Python bridge) | done (host; screens on desktop, iPhone and Android) |
 | Waiting-on tracker that feeds the daily digest | done (host; board section on desktop, iPhone and Android) |
+| Meeting notes (microphone recording, transcript and minutes) | done (host; recorder and notes on desktop, iPhone and Android) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
@@ -157,6 +158,19 @@ to the signed installers.
   `waiting.v1`. API: `waitingItems`, `saveWaitingItem`, `setWaitingDone`, `deleteWaitingItem`. The
   daily digest adds them, and bots can list them with the read-only `waiting_on` tool. The board on
   desktop and both phones gains a Waiting on section with an add row, a done action and delete.
+
+## Meeting notes — done (microphone; system audio is next)
+
+- `host/src/meetings.rs`: `startMeeting`, `appendMeetingAudio` (raw 16 kHz mono PCM16, 20 s pieces),
+  `finishMeeting`, `cancelMeeting`, `meetingNotes`, `meetingNote`, `meetingMinutes` and
+  `deleteMeetingNote`. The host writes each piece down with the configured speech provider, or
+  whisper.cpp when none is configured, and keeps the transcript in `meeting-notes.v1`. `meetingMinutes`
+  asks one of the person's agents for Markdown minutes (decisions, owners and open items) and stores
+  them. Bots get read-only `meeting_notes` and `read_meeting_note`.
+- Desktop (Board), iPhone and Android (Workspace › Board) record the microphone, send pieces while
+  they record and show the transcript; **Write minutes** asks a bot. The window or phone must stay
+  open while it records. Recording what the computer plays (system audio) and speaker labels are the
+  next phase.
 
 ## Team meeting - done (text and voice)
 

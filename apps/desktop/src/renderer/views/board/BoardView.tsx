@@ -11,6 +11,7 @@ import type { BotStore } from '../../store/bot-store'
 import { errorText } from '../bots/drafts'
 import { Field } from '../marketplace/pieces'
 import { saveTextFile } from '../share-link'
+import { MeetingsPanel } from './MeetingsPanel'
 import './board.css'
 
 interface BoardTask {
@@ -491,6 +492,8 @@ export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; o
               <Text size="caption" tone="tertiary">{tr('Nothing is waiting on anyone.')}</Text>
             ) : null}
           </section>
+
+          <MeetingsPanel store={store} />
         </>
       )}
       <Dialog

@@ -179,6 +179,7 @@ internal fun WorkspaceSheet(store: AppStore) {
                             Text("Nothing is waiting on anyone.", style = Type.footnote, color = Palette.secondary)
                         }
                     }
+                    MeetingsSection(store) { error = it }
                 }
                 WorkspaceTab.Teams -> {
                     if (templates.isEmpty() && !loading) CardSection {

@@ -1,5 +1,6 @@
 package com.codync.android
 
+import java.util.Base64
 import kotlinx.serialization.json.*
 
 /** One card on the board (host/store/board.rs). */
@@ -120,6 +121,87 @@ internal suspend fun AppStore.setWaitingDone(id: String, done: Boolean): Boolean
 
 internal suspend fun AppStore.deleteWaitingItem(id: String): Boolean =
     hostCall("deleteWaitingItem", buildJsonObject { put("id", id) })
+        .jsonObject["deleted"]?.jsonPrimitive?.booleanOrNull == true
+
+/** A meeting note as a list shows it. */
+internal data class MeetingSummary(
+    val id: String,
+    val title: String,
+    val startedAt: Long,
+    val finishedAt: Long,
+    val chars: Int,
+    val hasMinutes: Boolean,
+)
+
+/** One meeting's transcript and, once asked for, its minutes. */
+internal data class MeetingNote(
+    val id: String,
+    val title: String,
+    val startedAt: Long,
+    val transcript: String,
+    val minutes: String?,
+    val hasMinutes: Boolean,
+)
+
+/** A recording that just started on the computer. */
+internal data class MeetingStart(val id: String, val title: String, val startedAt: Long)
+
+private fun meetingSummaryOf(json: JsonObject): MeetingSummary = MeetingSummary(
+    id = json.str("id") ?: "",
+    title = json.str("title") ?: "Meeting",
+    startedAt = json.num("startedAt") ?: 0,
+    finishedAt = json.num("finishedAt") ?: 0,
+    chars = (json.num("chars") ?: 0).toInt(),
+    hasMinutes = json.bool("hasMinutes") ?: false,
+)
+
+private fun meetingNoteOf(json: JsonObject): MeetingNote = MeetingNote(
+    id = json.str("id") ?: "",
+    title = json.str("title") ?: "Meeting",
+    startedAt = json.num("startedAt") ?: 0,
+    transcript = json.str("transcript") ?: "",
+    minutes = json.str("minutes"),
+    hasMinutes = json.bool("hasMinutes") ?: !json.str("minutes").isNullOrEmpty(),
+)
+
+internal suspend fun AppStore.meetingNotes(): List<MeetingSummary> =
+    (hostCall("meetingNotes", buildJsonObject {}).jsonObject["notes"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::meetingSummaryOf) } ?: emptyList()
+
+internal suspend fun AppStore.meetingNote(id: String): MeetingNote =
+    meetingNoteOf(hostCall("meetingNote", buildJsonObject { put("id", id) })
+        .jsonObject["note"]?.jsonObject ?: buildJsonObject {})
+
+internal suspend fun AppStore.startMeeting(title: String): MeetingStart {
+    val json = hostCall("startMeeting", buildJsonObject { put("title", title) }).jsonObject
+    return MeetingStart(
+        id = json.str("id") ?: "",
+        title = json.str("title") ?: title,
+        startedAt = json.num("startedAt") ?: 0,
+    )
+}
+
+internal suspend fun AppStore.appendMeetingAudio(id: String, pcm: ByteArray) {
+    hostCall("appendMeetingAudio", buildJsonObject {
+        put("id", id)
+        put("audio", Base64.getEncoder().encodeToString(pcm))
+    }, 120_000)
+}
+
+internal suspend fun AppStore.finishMeeting(id: String): MeetingNote =
+    meetingNoteOf(hostCall("finishMeeting", buildJsonObject { put("id", id) }, 600_000)
+        .jsonObject["note"]?.jsonObject ?: buildJsonObject {})
+
+internal suspend fun AppStore.cancelMeeting(id: String): Boolean =
+    hostCall("cancelMeeting", buildJsonObject { put("id", id) })
+        .jsonObject["cancelled"]?.jsonPrimitive?.booleanOrNull == true
+
+internal suspend fun AppStore.meetingMinutes(id: String): MeetingNote =
+    meetingNoteOf(hostCall("meetingMinutes", buildJsonObject { put("id", id) }, 600_000)
+        .jsonObject["note"]?.jsonObject ?: buildJsonObject {})
+
+internal suspend fun AppStore.deleteMeetingNote(id: String): Boolean =
+    hostCall("deleteMeetingNote", buildJsonObject { put("id", id) })
         .jsonObject["deleted"]?.jsonPrimitive?.booleanOrNull == true
 
 internal suspend fun AppStore.teamTemplates(): List<TeamTemplate> =

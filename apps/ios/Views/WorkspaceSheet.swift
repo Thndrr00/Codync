@@ -131,6 +131,7 @@ struct WorkspaceSheet: View {
                     Text("Nothing is waiting on anyone.").font(.caption).foregroundStyle(Palette.secondary)
                 }
             }
+            MeetingsSectionView(store: store)
         }
     }
 

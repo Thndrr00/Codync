@@ -121,3 +121,39 @@
   background: var(--background);
 }
 
+
+/* Meeting notes: the host transcribes a recording and a bot drafts the minutes. */
+.board-meetings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.board-meeting-add {
+  flex-wrap: wrap;
+}
+.board-meeting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-s);
+  background: var(--background);
+}
+.board-meeting-recording {
+  padding: 10px;
+  border-radius: var(--radius-s);
+  background: var(--background);
+}
+.board-meeting-text {
+  padding-top: 8px;
+}
+.board-meeting-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+}
+

@@ -205,7 +205,7 @@ final class Dictation {
 
     /// The call's audio session (a recording tap on a `.record` session fails on some routes) and
     /// `tap` on `engine`'s microphone. False, with everything let go, when the microphone can't be used.
-    fileprivate static func openMic(_ engine: AVAudioEngine, bufferSize: AVAudioFrameCount, tap: (AVAudioFormat) -> AVAudioNodeTapBlock) -> Bool {
+    static func openMic(_ engine: AVAudioEngine, bufferSize: AVAudioFrameCount, tap: (AVAudioFormat) -> AVAudioNodeTapBlock) -> Bool {
         let audio = AVAudioSession.sharedInstance()
         do {
             try audio.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
