@@ -17,6 +17,7 @@ maps to Codync's own shape was taken; the rest is listed below with the reason.
 | Pins of a message, in a chat and its threads, by people and by the agent | `data.pinned: {by, at}`, `pinMessage`/`pinnedMessages`, the `pin_message` tool, 50 pins per chat | `host/src/chat/pins.rs`, `host/src/store/pins.rs`, `apps/ios/Kit/Sources/CodyncUI/Thread/PinsSheet.swift`, `apps/desktop/src/renderer/views/thread/PinsSheet.tsx`, `apps/android/app/src/main/kotlin/com/codync/android/PinsSheet.kt`, the terminal's `B`/`p` |
 | A chat's pins in the chat header, opening the message they name | The pin button lists the chat's pins newest first; a pin opens its thread at the message, with a way back to the latest one | Same three clients, `host/src/chat/pins.rs` (`threadTitle`) |
 | A Grok agent makes pictures and clips in the chat | Taken with 0.70.0's media work: the `/image` and `/video` commands, the Grok tool names and their named inputs | `host/src/media/command.rs`, `host/src/media/flow.rs` |
+| Teach a task: record the pages a person opens and the controls they click, then save it as a skill | The bot's `start_teaching` installs the existing `RECORDER` script in the browser panel's tab (and in every page that follows), `finish_teaching` reads its log back and formats it with the conversation steps; the agent then saves the skill | `host/src/chat/teach.rs` (`RECORDER`, `begin_browser`, `end_browser`), `host/src/screen/browser_panel.rs` (`install_recorder`, `recorder_events`) |
 | Electron 45.3.0 (Chromium 156) | `apps/desktop/package.json`; some sites refused the older browser, and the media viewers want the newer one | `apps/desktop/package.json`, `apps/desktop/package-lock.json` |
 | A WhatsApp number can answer with only the answer | Every request gets a 👀 reaction; the "Trabajando en ello…" line is a per-number switch, on by default | `host/src/whatsapp/settings.rs`, `incoming.rs` (`acknowledge`), `transport.rs`, the bridge's `react`, the switch in the WhatsApp sheet of the desktop, iPhone and Android apps (the terminal has no WhatsApp sheet) |
 | Add skills from a GitHub link | A bot installs a skill from a public `github.com` link (the folder that holds `SKILL.md`, the file, or a repository whose top holds one) with its `install_skill` tool, which saves the folder with the link as its source and turns it on for that bot | `host/src/market/github_skill.rs`, `market::install_from_link` in `host/src/market/skills.rs`, `installSkill {url}`, `host/src/chat/skills.rs` |
@@ -32,13 +33,6 @@ message, not a section, so `withMoves` keeps returning its band.
 
 ## Not ported, and why
 
-- **Teach a task** (record the pages and clicks of the agent's browser tab, then save it as a skill):
-  Codync already turns a walk-through into a skill: `recorded_steps` (`host/src/chat/teach.rs`) reads
-  back the conversation's words and tool steps for the bot to save. What 0.69.0 adds is the *browser
-  recording* — which pages a person opened and which controls they clicked. Codync does own a CDP
-  browser (`host/src/screen/protected_browser.rs`, behind `host/src/browser`), so OpenBot's recorder
-  (`src/backend/browser-recorder.ts`) has a tab to watch; the composer entry that starts it and the
-  step file it writes are their own change.
 - **Mute agent from the sidebar**: Codync's bots carry their own notification switch (taken with 0.70.0's
   mute row), so the release's per-user level table has nothing left to add here.
 - **Pool provider accounts** and **disconnect the first Gemini account**: Codync tracks one account per

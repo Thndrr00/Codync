@@ -109,7 +109,7 @@ pub fn tools() -> [Value; 3] {
         }),
         json!({
             "name": "start_teaching",
-            "description": "Begin a guided teaching session where the user demonstrates a workflow (in the browser or desktop) so you can turn it into a reusable skill with finish_teaching and save_skill.",
+            "description": "Begin a guided teaching session where the user demonstrates a workflow (in the browser or desktop) so you can turn it into a reusable skill with finish_teaching and save_skill. If the browser panel is open, it starts recording the pages the user opens and the controls they click there.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -120,7 +120,7 @@ pub fn tools() -> [Value; 3] {
         }),
         json!({
             "name": "finish_teaching",
-            "description": "End the active teaching session, collect the recorded steps and navigation history, and return a structured trace to save with save_skill.",
+            "description": "End the active teaching session and return a structured trace to save with save_skill: what the browser panel recorded (if it was open), the user's words, and the steps you took. Call it when the user says they are done.",
             "inputSchema": {"type": "object", "properties": {}}
         }),
     ]
@@ -130,41 +130,77 @@ fn teach_kv_key(bot: &str) -> String {
     format!("teach.session.{bot}")
 }
 
-pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
+pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
-        "start_teaching" => start_teaching(hub, bot, args),
-        "finish_teaching" => finish_teaching(hub, bot, args),
+        "start_teaching" => start_teaching(hub, bot, args).await,
+        "finish_teaching" => finish_teaching(hub, bot, args).await,
         _ => bail!("unknown teach tool: {name}"),
     }
 }
 
-fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+/// Installs the recorder in the browser panel's active tab, when the panel is open. Off Windows there
+/// is no panel, so a session is conversation-only.
+async fn begin_browser(hub: &Hub, url: Option<&str>) -> Option<Value> {
+    #[cfg(windows)]
+    {
+        crate::screen::browser_panel::install_recorder(&hub.screen, RECORDER, url).await.ok()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (hub, url);
+        None
+    }
+}
+
+/// Takes what the recorder saw in the panel, if this session recorded there.
+async fn end_browser(hub: &Hub, state: &Value) -> Option<Value> {
+    #[cfg(windows)]
+    {
+        let session = state["browser"]["session"].as_str()?;
+        let script = state["browser"]["script"].as_str()?;
+        crate::screen::browser_panel::recorder_events(&hub.screen, session, script).await.ok()
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (hub, state);
+        None
+    }
+}
+
+async fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let url = args["url"].as_str().map(str::trim).filter(|s| !s.is_empty());
     let goal = args["goal"].as_str().map(str::trim).filter(|s| !s.is_empty());
+    let browser = begin_browser(hub, url).await;
+    let recording = browser.is_some();
     let state = json!({
         "startedAt": crate::store::now_ms(),
         "startSeq": hub.store.last_seq(bot),
         "url": url,
         "goal": goal,
+        "browser": browser,
     });
     hub.store.kv_set(&teach_kv_key(bot), &state.to_string())?;
     let notice = json!({
         "text": format!("Teaching mode started{}", goal.map_or(String::new(), |g| format!(": {g}"))),
         "style": "info",
-        "teaching": {"status": "recording", "url": url, "goal": goal}
+        "teaching": {"status": "recording", "url": url, "goal": goal, "browser": recording}
     });
     hub.add_entry(&Lane::main(bot), EntryKind::Notice, hub.store.max_turn(bot), &notice);
     Ok(json!({
         "status": "recording",
         "url": url,
         "goal": goal,
-        "recorderScriptBytes": RECORDER.len(),
-        "message": "Teaching session started. Ask the user to perform the steps and tell you when they are done, then call finish_teaching."
+        "browserRecording": recording,
+        "message": if recording {
+            "Teaching session started and the browser panel is recording: ask the user to do the task there, then call finish_teaching."
+        } else {
+            "Teaching session started. Ask the user to perform the steps and tell you when they are done, then call finish_teaching."
+        }
     }))
 }
 
-fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+async fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let session = hub
         .store
         .kv_get(&teach_kv_key(bot))
@@ -172,9 +208,15 @@ fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         .unwrap_or_else(|| json!({}));
     let _ = hub.store.kv_delete(&teach_kv_key(bot));
     let recorded = steps(hub, bot)?;
-    let dom_events = args["events"].as_array().map_or(&[][..], |v| v.as_slice());
-    let nav_history = args["navHistory"].as_array().map_or(&[][..], |v| v.as_slice());
-    let dom_steps = format_dom_events(dom_events, nav_history);
+    // What the browser panel saw comes first: a person's own clicks, which the model never saw.
+    let browser = end_browser(hub, &session).await;
+    let mut dom_events: Vec<Value> = args["events"].as_array().cloned().unwrap_or_default();
+    let mut nav_history: Vec<Value> = args["navHistory"].as_array().cloned().unwrap_or_default();
+    if let Some(browser) = &browser {
+        dom_events.extend(browser["events"].as_array().cloned().unwrap_or_default());
+        nav_history.extend(browser["navHistory"].as_array().cloned().unwrap_or_default());
+    }
+    let dom_steps = format_dom_events(&dom_events, &nav_history);
     let notice = json!({
         "text": "Teaching session finished",
         "style": "info",
@@ -187,6 +229,7 @@ fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         "startUrl": session["url"],
         "steps": recorded["steps"],
         "domSteps": dom_steps,
+        "browserRecording": browser.is_some(),
         "instructions": "Generalize these steps into a parameterized reusable skill (never hardcode personal values) and save it with save_skill."
     }))
 }

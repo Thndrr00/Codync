@@ -249,6 +249,82 @@ fn remove_folder(folder: &std::path::Path) -> Result<()> {
 
 /// Dispatches a panel method; `allow_closed` are those that work before the panel exists.
 #[cfg(windows)]
+/// Reads the teaching recorder's log out of the page and clears it, so the next session starts empty.
+/// The recorder (`chat::teach::RECORDER`) keeps it in `localStorage` and `window.name` to survive
+/// navigation.
+const RECORDER_EVENTS: &str = r#"(() => {
+  const KEY = "__bdots_teach";
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch {}
+  try {
+    if (window.name && window.name.startsWith(KEY + ":")) {
+      const b = JSON.parse(window.name.slice(KEY.length + 1));
+      if (Array.isArray(b) && b.length > log.length) log = b;
+    }
+  } catch {}
+  const here = { url: location.href, title: document.title };
+  try { localStorage.removeItem(KEY); } catch {}
+  try { window.name = ""; } catch {}
+  return { events: Array.isArray(log) ? log : [], navHistory: [here], url: here.url, title: here.title };
+})()"#;
+
+/// Installs a recorder script in the active tab: it runs on the page shown now and on every page that
+/// follows, so a person's clicks survive navigation (OpenBot 0.69.0's "Teach a task"). The returned
+/// session and script id go back to `recorder_events` when the recording ends.
+pub async fn install_recorder(screen: &Screen, script: &str, url: Option<&str>) -> Result<Value> {
+    let mut current = screen.panel.lock().await;
+    let panel = current.as_mut().context("Open the browser panel first")?;
+    let attached =
+        rpc(&mut panel.pipe, "Target.attachToTarget", json!({"targetId":panel.active,"flatten":true}), None).await?;
+    let session = attached["sessionId"].as_str().context("Could not reach the tab")?.to_owned();
+    if let Some(url) = url.and_then(|raw| url_argument(Some(raw)).ok()) {
+        let _ = rpc(&mut panel.pipe, "Page.navigate", json!({"url":url}), Some(&session)).await;
+    }
+    let _ = rpc(&mut panel.pipe, "Page.enable", json!({}), Some(&session)).await;
+    let added =
+        rpc(&mut panel.pipe, "Page.addScriptToEvaluateOnNewDocument", json!({"source":script}), Some(&session)).await?;
+    let script_id = added["identifier"].as_str().unwrap_or_default().to_owned();
+    let ran =
+        rpc(&mut panel.pipe, "Runtime.evaluate", json!({"expression":script,"returnByValue":true}), Some(&session))
+            .await;
+    if let Err(error) = ran {
+        let _ = rpc(
+            &mut panel.pipe,
+            "Page.removeScriptToEvaluateOnNewDocument",
+            json!({"identifier":script_id}),
+            Some(&session),
+        )
+        .await;
+        let _ = rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await;
+        return Err(error).context("the recorder could not run on this page");
+    }
+    Ok(json!({"session":session, "script":script_id, "tab":panel.active}))
+}
+
+/// Takes what the recorder saw: the events and the page it ended on. The script is removed and the
+/// session detached, and the page's log is cleared.
+pub async fn recorder_events(screen: &Screen, session: &str, script_id: &str) -> Result<Value> {
+    let mut current = screen.panel.lock().await;
+    let panel = current.as_mut().context("The browser panel was closed")?;
+    let value = rpc(
+        &mut panel.pipe,
+        "Runtime.evaluate",
+        json!({"expression":RECORDER_EVENTS,"returnByValue":true,"awaitPromise":true}),
+        Some(session),
+    )
+    .await;
+    let _ = rpc(
+        &mut panel.pipe,
+        "Page.removeScriptToEvaluateOnNewDocument",
+        json!({"identifier":script_id}),
+        Some(session),
+    )
+    .await;
+    let _ = rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await;
+    let value = value?;
+    Ok(value["result"]["value"].clone())
+}
+
 pub async fn call(hub: &std::sync::Arc<Hub>, method: &str, body: &Value) -> Result<Value> {
     match method {
         "browserPanel" => state(&hub.screen).await,
