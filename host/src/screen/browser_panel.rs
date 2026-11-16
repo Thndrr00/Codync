@@ -214,6 +214,37 @@ pub async fn shot(screen: &Screen, tab: Option<&str>) -> Result<Value> {
     Ok(json!({"image":format!("data:image/png;base64,{data}")}))
 }
 
+/// The tab's navigation history, oldest first (Idea 40). Used to line DOM events up with
+/// the pages a person actually visited while demonstrating a workflow.
+pub async fn navigation_history(screen: &Screen, tab: Option<&str>) -> Result<Vec<Value>> {
+    let mut current = screen.panel.lock().await;
+    let panel = current.as_mut().context("Open the browser panel first")?;
+    let target = tab.map_or_else(|| panel.active.clone(), str::to_owned);
+    let attached =
+        rpc(&mut panel.pipe, "Target.attachToTarget", json!({"targetId":target,"flatten":true}), None).await?;
+    let session = attached["sessionId"].as_str().context("Could not read the tab")?.to_owned();
+    let result = rpc(&mut panel.pipe, "Page.getNavigationHistory", json!({}), Some(&session)).await;
+    rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await.ok();
+    Ok(normalize_history(&result?))
+}
+
+/// Turns a CDP `Page.getNavigationHistory` answer into the pages worth showing: real
+/// addresses only, in the order the browser recorded them.
+fn normalize_history(result: &Value) -> Vec<Value> {
+    result["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            let url = entry["url"].as_str()?;
+            if url.is_empty() || *url == "about:blank" {
+                return None;
+            }
+            Some(json!({"url": url, "title": entry["title"].as_str().unwrap_or_default()}))
+        })
+        .collect()
+}
+
 /// Closes the panel's browser.
 pub async fn shutdown(screen: &Screen) -> Result<Value> {
     let mut current = screen.panel.lock().await;
@@ -267,7 +298,7 @@ pub async fn call(hub: &std::sync::Arc<Hub>, method: &str, body: &Value) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use super::url_argument;
+    use super::{normalize_history, url_argument};
 
     #[test]
     fn only_web_addresses_are_opened() {
@@ -276,5 +307,21 @@ mod tests {
         assert!(url_argument(Some("file:///c:/x")).is_err());
         assert!(url_argument(Some("https://a b.com")).is_err());
         assert!(url_argument(Some(&format!("https://x.com/{}", "a".repeat(2100)))).is_err());
+    }
+
+    #[test]
+    fn navigation_history_keeps_real_pages_in_order() {
+        let result = serde_json::json!({
+            "currentIndex": 2,
+            "entries": [
+                {"id": 1, "url": "about:blank", "title": ""},
+                {"id": 2, "url": "https://example.com/login", "title": "Login"},
+                {"id": 3, "url": "https://example.com/dashboard", "title": "Dashboard"}
+            ]
+        });
+        let pages = normalize_history(&result);
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0]["url"], "https://example.com/login");
+        assert_eq!(pages[1]["title"], "Dashboard");
     }
 }

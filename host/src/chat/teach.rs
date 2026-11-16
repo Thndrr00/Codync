@@ -130,11 +130,11 @@ fn teach_kv_key(bot: &str) -> String {
     format!("teach.session.{bot}")
 }
 
-pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
+pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
         "start_teaching" => start_teaching(hub, bot, args),
-        "finish_teaching" => finish_teaching(hub, bot, args),
+        "finish_teaching" => finish_teaching(hub, bot, args).await,
         _ => bail!("unknown teach tool: {name}"),
     }
 }
@@ -164,7 +164,7 @@ fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     }))
 }
 
-fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+async fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let session = hub
         .store
         .kv_get(&teach_kv_key(bot))
@@ -173,8 +173,28 @@ fn finish_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let _ = hub.store.kv_delete(&teach_kv_key(bot));
     let recorded = steps(hub, bot)?;
     let dom_events = args["events"].as_array().map_or(&[][..], |v| v.as_slice());
-    let nav_history = args["navHistory"].as_array().map_or(&[][..], |v| v.as_slice());
-    let dom_steps = format_dom_events(dom_events, nav_history);
+    // Idea 40: ask CDP for the pages visited when the recorder didn't supply them.
+    // No panel (or an older browser) is not fatal: DOM events still stand on their own.
+    let nav_history: Vec<Value> = match args["navHistory"].as_array() {
+        Some(pages) => pages.clone(),
+        None => {
+            #[cfg(windows)]
+            {
+                hub.screen
+                    .history(None)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(error = format!("{error:#}"), "no CDP navigation history for teaching")
+                    })
+                    .unwrap_or_default()
+            }
+            #[cfg(not(windows))]
+            {
+                Vec::new()
+            }
+        }
+    };
+    let dom_steps = format_dom_events(dom_events, &nav_history);
     let notice = json!({
         "text": "Teaching session finished",
         "style": "info",

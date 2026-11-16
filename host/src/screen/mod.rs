@@ -149,6 +149,12 @@ pub struct Screen {
 }
 
 impl Screen {
+    /// Pages the browser panel visited, for a teaching session's navigation trace.
+    #[cfg(windows)]
+    pub async fn history(&self, tab: Option<&str>) -> anyhow::Result<Vec<Value>> {
+        browser_panel::navigation_history(self, tab).await
+    }
+
     pub fn new(enabled: Option<bool>, events: broadcast::Sender<Value>) -> Self {
         let (helper_generation, _) = watch::channel(0);
         Self {
