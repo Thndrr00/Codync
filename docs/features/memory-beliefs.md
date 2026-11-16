@@ -21,7 +21,9 @@ A note without the lines reads as a medium-confidence fact about the user, so ev
   high and confirmed to today. The chat gets one line, **"I learned: <summary>"**, with an **Undo**. `question` is one short
   question about a contradiction; it is shown only if none was asked for this bot in the last 24 hours.
 - `forget_memory {file, summary?}`: the note is taken out as a new version (a deletion). Its history keeps it, so it can be
-  brought back. Also announced with an Undo.
+  brought back. Also announced with an Undo. A note whose current text the person wrote (its version's author is
+  `Author::User`) is refused, and the bot asks them to delete it in the bot's Memories settings instead; ported from
+  `OpenBot` 0.71.0.
 
 Like every change of memory by a bot, these work only in a turn the user started in the bot's own chat.
 

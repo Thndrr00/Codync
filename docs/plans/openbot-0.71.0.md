@@ -14,6 +14,7 @@ and provider drivers), so this page records what applies, what Codync already do
 | 0.71.0 item | Codync shape | Files |
 | --- | --- | --- |
 | In your own WhatsApp chat, each message from an agent no longer ends with one to three empty lines | The answer goes out trimmed at the end, paragraph breaks inside it kept | `host/src/whatsapp/outgoing.rs` (`outbound_text`) |
+| Asking an agent to delete a memory that you set yourself now sends you to its Memories settings | `forget_memory` refuses a note whose current version was written by the person and tells them to delete it there | `host/src/chat/memory/beliefs.rs` |
 
 ## Added
 
@@ -69,9 +70,6 @@ and provider drivers), so this page records what applies, what Codync already do
   `core/RoutineFlow.kt`) and its run controls live in the routine's own panel; matching OpenBot's
   pointer rules there is a change of its own, and a Stop that ends a run belongs next to Run now, which
   is where the desktop and Android panels already keep it.
-- **A memory the person set themselves**: OpenBot tells the agent to send the person to its Memories
-  settings. Codync's `forget_memory` (`host/src/chat/memory/beliefs.rs`) does not yet tell who wrote
-  the note's current text, so the same reply needs that lookup first; it is a small change of its own.
 - **A note path from a notes app written as a file link**, **the image viewer's sharpness at a display
   scale above 100 %**, **resizing the right panel when no pane is open**, **the empty WhatsApp lines of
   a theme**: each is a small UI or copy fix whose Codync counterpart needs its own read; none is taken

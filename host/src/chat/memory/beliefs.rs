@@ -174,6 +174,16 @@ pub fn tool(hub: &Hub, cfg: &BotConfig, name: &str, args: &Value) -> Result<Valu
         }
         "forget_memory" => {
             before.ok_or_else(|| anyhow!("There's no note {file}."))?;
+            // Ported from OpenBot 0.71.0: a note the person wrote is theirs to delete, in the bot's
+            // Memories settings, so the bot sends them there instead of removing it from the chat.
+            if let Some(id) = earlier
+                && let Some(version) = hub.store.memory_read(|c| mf::version(c, id))?
+                && version.author == Author::User
+            {
+                bail!(
+                    "The user wrote this note themselves: ask them to delete it in the bot's Memories settings, not here."
+                );
+            }
             let version = write(hub, cfg, layer.as_deref(), file, None, By::Bot, Cause::Delete)?;
             let summary = args["summary"].as_str().unwrap_or("you asked me to forget something");
             announce(hub, cfg, summary, file, layer.is_none(), earlier, version.id);
