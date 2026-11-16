@@ -94,7 +94,7 @@ internal fun MeetingsSection(store: AppStore, onError: (String?) -> Unit) {
                         buffer.reset()
                         last?.join()
                         sending = true
-                        last = launch {
+                        last = scope.launch {
                             try {
                                 store.appendMeetingAudio(started.id, bytes)
                             } catch (failure: Exception) {
@@ -104,7 +104,8 @@ internal fun MeetingsSection(store: AppStore, onError: (String?) -> Unit) {
                             }
                         }
                     }
-                    for (pcm in channel) {
+                    while (true) {
+                        val pcm = channel.receiveCatching().getOrNull() ?: break
                         buffer.write(pcm)
                         if (buffer.size() >= MEETING_PIECE_BYTES) flush()
                     }

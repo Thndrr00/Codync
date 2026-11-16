@@ -1,6 +1,7 @@
 import AVFoundation
 import CodyncKit
 import Foundation
+import Observation
 
 /// Records the microphone for a meeting and sends 20 s pieces to the computer, which transcribes
 /// them when the recording stops. The phone keeps no audio after a piece is on its way.
