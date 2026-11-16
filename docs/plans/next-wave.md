@@ -14,6 +14,7 @@ is bigger than one release.
 | Calendar feeds (`.ics`) and a read-only agenda tool for bots | done (host) |
 | RSS/Atom subscriptions and a `news_feed` tool for bots | done (host) |
 | Web page clipper for bots (`clip_page`) | done (host) |
+| Daily digest and a `daily_digest` tool for bots | done (host) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |

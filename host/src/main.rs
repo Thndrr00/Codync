@@ -22,6 +22,7 @@ mod cloud_cli;
 mod compat;
 mod computer;
 mod diagnostics;
+mod digest;
 mod discord;
 mod doctor;
 mod documents;
