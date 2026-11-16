@@ -5,7 +5,14 @@ use crate::store::EntryKind;
 use serde_json::Value;
 
 pub(super) fn is_silent(text: &str) -> bool {
-    text.trim().is_empty() || text.trim() == "NO_UPDATE" || crate::chat::group::is_pass(text)
+    let text = text.trim();
+    let upper = text.to_ascii_uppercase();
+    text.is_empty()
+        || text == "NO_UPDATE"
+        || crate::chat::group::is_pass(text)
+        // Ported from OpenBot 0.68.0: the words a routine imported from Hermes writes for "nothing to
+        // report", and the bracketed no-update some of them use.
+        || matches!(upper.as_str(), "[SILENT]" | "[[SILENT]]" | "[[NO-UPDATE]]")
 }
 
 pub(super) fn is_proactive(data: &Value) -> bool {
@@ -83,6 +90,10 @@ mod tests {
         assert!(is_silent(" NO_UPDATE\n"));
         assert!(is_silent(""));
         assert!(is_silent("(pass)"));
+        assert!(is_silent("[SILENT]"));
+        assert!(is_silent(" [[silent]] "));
+        assert!(is_silent("[[no-update]]"));
+        assert!(!is_silent("[SILENT] Build passed."));
         assert!(!is_silent("NO_UPDATE: waiting for approval"));
         assert!(!is_silent("Your build passed."));
         assert!(!is_proactive(&json!({"text":"NO_UPDATE"})));
