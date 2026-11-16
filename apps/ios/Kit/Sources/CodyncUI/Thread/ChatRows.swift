@@ -229,6 +229,7 @@ struct AgentBubble: View {
 struct NoticeRow: View {
     let entry: Entry
     var addFallback: (() -> Void)?
+    @Environment(BotStore.self) private var model
 
     var body: some View {
         let text = entry.data.text ?? ""
@@ -260,10 +261,17 @@ struct NoticeRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.danger.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
         default:
-            Text(L10n.tr(text))
-                .font(.footnote)
-                .foregroundStyle(Palette.secondary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                Text(L10n.tr(text))
+                    .font(.footnote)
+                    .foregroundStyle(Palette.secondary)
+                    .multilineTextAlignment(.center)
+                if let undo = entry.data.routineUndo, !undo.undone {
+                    Button(L10n.tr("Undo")) { model.undoRoutineChange(entry) }
+                        .buttonStyle(.secondary)
+                        .controlSize(.small)
+                }
+            }
                 .frame(maxWidth: .infinity)
         }
     }

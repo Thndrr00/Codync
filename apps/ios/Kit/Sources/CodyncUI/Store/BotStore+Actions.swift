@@ -257,6 +257,15 @@ extension BotStore {
         answer(entry, "retry") { try await $0.retryRoutineRun(botId: entry.botId, runId: runId) }
     }
 
+    /// Takes back a routine the bot created, changed or deleted, from its notice.
+    public func undoRoutineChange(_ entry: Entry) {
+        answer(entry, "undo") { client in
+            struct Body: Encodable { var entryId: String }
+            let reply: UndoRoutineReply = try await client.call("undoRoutineChange", Body(entryId: entry.id))
+            return reply.entry
+        }
+    }
+
     public func setFastMode(_ bot: Bot, _ fastMode: Bool) {
         var d = BotDraft(bot)
         d.fastMode = fastMode
@@ -415,3 +424,8 @@ extension BotStore {
         for e in older { upsert(e) }
     }
 }
+
+private struct UndoRoutineReply: Decodable {
+    var entry: Entry
+}
+

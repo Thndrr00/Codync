@@ -12,7 +12,8 @@ public struct EntryData: Codable, Hashable, Sendable {
     /// notice: the bot's chat starts over with this handoff.
     public var handoff: HandoffCard?
     public var routineId: String?
-    public var runId: String?
+    /// A routine the bot created, changed or deleted, and what Undo puts back.
+    public var routineUndo: RoutineUndo?    public var runId: String?
     /// notice: a failed routine run the user can run again (`retryRoutineRun`).
     public var retry: Bool?
     /// notice: the bot moved to another agent of its chain, or back to its own.
@@ -162,5 +163,12 @@ public struct Attachment: Codable, Hashable, Sendable, Identifiable {
     public static func isImage(_ name: String) -> Bool {
         ["png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp"].contains((name as NSString).pathExtension.lowercased())
     }
+}
+
+
+/// A routine receipt's Undo: the host keeps what to put back.
+public struct RoutineUndo: Codable, Hashable, Sendable {
+    public var id: String
+    public var undone: Bool
 }
 
