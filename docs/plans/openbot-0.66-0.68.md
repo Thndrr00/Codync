@@ -16,6 +16,7 @@ small and is listed here.
 | 0.68.0 | A scheduled, script or webhook routine that answers only `[SILENT]` stays quiet, as one that answers `[[no-update]]` does; routines imported from Hermes often use these words | The silence check also reads `[SILENT]`, `[[SILENT]]` and `[[NO-UPDATE]]`, any case, beside the empty answer, `NO_UPDATE` and `(pass)`; anything else is still an answer | `host/src/agent/bot/proactive.rs` (`is_silent`) |
 | 0.68.0 | Right-click the island to hide it; the Settings switch shows it again | A right-click anywhere on the island turns it off through the same `island:setEnabled` the Settings switch uses, and Settings › Island keeps the control | `apps/desktop/src/renderer/views/island/IslandWindow.tsx` |
 | 0.66.0 | Click an image you attached to see it at full size before you send it | The composer's image tile opens the whole picture in a sheet, on the desktop, Android and the iPhone; the remove button stays in its corner | `ComposerAttachment.tsx` and `composer.css` (desktop), `ComposerAttachment.kt` (Android), `ComposerAttachment.swift` (iPhone) |
+| 0.66.0 | Agents can post Discord embeds: a card with a title, a description, a link, a colour, fields, a footer, a time, an author, a thumbnail and an image | A bot's `post_discord_embed {channel, title, description?, url?, color?, fields?, footer?, image?, thumbnail?, author?}` builds the card with Discord's own limits (256-character title, 4096 description, 25 fields, http(s) links only) and posts it with `embeds` when the bot is connected | `host/src/chat/discord_embed.rs`, `discord::send_embed`, `discord/client.rs` (`embed`) |
 
 ## Already here, verified in the code
 
@@ -47,8 +48,8 @@ small and is listed here.
   per-provider clients. Codync speaks ACP to the CLI and drives its own browser through a different
   layer, so the fix is the CLI's version or its own change here.
 - **Product-only items** (the OpenBot co-author line in commits, the bug-report and idea cards,
-  Discord embeds, Postiz and the memory connectors, the Ultrafast Speed menu, Claude Fast mode's
-  price confirmation): each belongs to Codync's own product decisions, not to a copy of OpenBot's.
+  Postiz and the memory connectors, the Ultrafast Speed menu, Claude Fast mode's price
+  confirmation): each belongs to Codync's own product decisions, not to a copy of OpenBot's.
 
 ## Checks
 

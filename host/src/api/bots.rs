@@ -110,6 +110,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::skills::dispatch(hub, bot, name, &b["arguments"]).await?
             } else if name == crate::chat::channel_history::TOOL {
                 crate::chat::channel_history::read(hub, bot, &b["arguments"])?
+            } else if name == crate::chat::discord_embed::TOOL {
+                crate::chat::discord_embed::call(hub, bot, &b["arguments"]).await?
             } else if crate::chat::fallbacks::TOOLS.contains(&name) {
                 crate::chat::fallbacks::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::artifacts::TOOLS.contains(&name) {

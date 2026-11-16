@@ -69,6 +69,28 @@ pub(super) async fn message(
     Ok(())
 }
 
+/// Sends one embed card to a bound channel (OpenBot 0.66.0: an agent can post Discord embeds).
+pub(super) async fn embed(ep: &Endpoint, token: &str, channel: &str, embed: &serde_json::Value) -> Result<()> {
+    let url = format!("{}/channels/{channel}/messages", ep.api);
+    let client = egress::client(ep.policy, &url).await?;
+    let body = json!({"embeds": [embed], "allowed_mentions": {"parse": []}});
+    let response = client
+        .post(&url)
+        .header("authorization", format!("Bot {token}"))
+        .json(&body)
+        .timeout(Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Discord embed failed: {}", e.without_url()))?;
+    let status = response.status();
+    if !status.is_success() {
+        let why = egress::json(response, 16 * 1024).await.unwrap_or_default();
+        let why = why["message"].as_str().unwrap_or("refused").to_owned();
+        anyhow::bail!("Discord answered {status}: {why}");
+    }
+    Ok(())
+}
+
 /// Sends a permission card with a button per option; returns the message id, so it can be settled.
 pub(super) async fn card(
     ep: &Endpoint,

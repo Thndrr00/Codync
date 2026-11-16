@@ -192,6 +192,12 @@ pub(crate) async fn send_text(store: &Store, channel: &str, text: &str) -> Resul
     client::message(&Endpoint::discord(), &token, channel, "", text, &[]).await
 }
 
+/// Sends one embed card to a bound channel (an agent's request, `chat::discord_embed`).
+pub(crate) async fn send_embed(store: &Store, channel: &str, embed: &Value) -> Result<()> {
+    let token = credentials(store)?.context("Discord is not configured.")?;
+    client::embed(&Endpoint::discord(), &token, channel, embed).await
+}
+
 pub(crate) async fn call(hub: &Arc<Hub>, method: &str, body: Value) -> Result<Value> {
     crate::market::vault::unlock(hub.clone()).await?;
     let prepared = if method == "setDiscordChannel" {

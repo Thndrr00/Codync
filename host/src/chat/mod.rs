@@ -7,6 +7,7 @@ pub mod calls;
 pub mod channel_history;
 pub mod context;
 pub mod decider;
+pub mod discord_embed;
 pub mod fallbacks;
 pub mod files;
 pub mod forward;
