@@ -113,6 +113,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         }
         Server::Module => ("codync-module", crate::modules::api::INSTRUCTIONS, Value::Null),
     };
+    // Every Codync tool list carries the rule about outside text, so it travels with the tools.
+    let instructions: Arc<str> = format!("{instructions}\n\n{}", crate::untrusted::PROMPT_LINE).into();
     // Requests still running, by id: a cancelled one stops, and its host call with it (a team change's card expires).
     let mut running = std::collections::HashMap::<String, tokio::task::AbortHandle>::new();
     while let Some(line) = lines.next_line().await? {
@@ -131,6 +133,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
         let (replies, token, bot, available_tools) =
             (replies.clone(), token.clone(), bot.clone(), available_tools.clone());
         let module = module.clone();
+        let instructions = instructions.clone();
         while requests.try_join_next().is_some() {}
         if requests.len() >= 100 {
             let _ = replies
@@ -210,6 +213,13 @@ async fn module_tools(port: u16, token: &str, module: &str) -> Value {
     }
 }
 
+/// Outside text as the model reads it: capped, its keys masked, its hidden characters gone, its own markers
+/// defused, inside its envelope.
+fn outside(text: &str) -> String {
+    let text = crate::untrusted::mask_credentials(&crate::agent::loop_guard::cap_tool_output(text));
+    crate::untrusted::envelope(crate::untrusted::EXTERNAL, &text)
+}
+
 /// One tool call through the host. Failures are tool errors the agent can read, not protocol errors.
 async fn call(port: u16, token: &str, bot: &str, module: &str, params: &Value, server: Server) -> Value {
     let body = json!({
@@ -251,22 +261,38 @@ async fn call(port: u16, token: &str, bot: &str, module: &str, params: &Value, s
                 Ok(v) if ok => {
                     return match server {
                         Server::Computer if v["isError"] == true => json!({"content": v["content"], "isError": true}),
-                        Server::Computer => json!({"content": v["content"]}),
+                        // A screen's text is outside content too; its images travel as they came.
+                        Server::Computer => {
+                            let mut content = v["content"].clone();
+                            for item in content.as_array_mut().into_iter().flatten() {
+                                if item["type"] == "text"
+                                    && let Some(text) = item["text"].as_str()
+                                {
+                                    item["text"] = outside(text).into();
+                                }
+                            }
+                            json!({"content": content})
+                        }
                         // A module answers in MCP's own shape, error flag included.
                         Server::Module if v["content"].is_array() => v,
+                        // What a page, a connector, another computer or another bot says is data, not the host.
+                        Server::Chat if params["name"] == "research_sources" => {
+                            json!({"content": [{"type": "text", "text": outside(&v.to_string())}]})
+                        }
+                        Server::Connectors | Server::Network => {
+                            json!({"content": [{"type": "text", "text": outside(&v.to_string())}]})
+                        }
                         Server::Chat
                         | Server::Team
                         | Server::Manage
                         | Server::Memory
                         | Server::Routines
-                        | Server::Network
-                        | Server::Module
-                        | Server::Connectors => {
+                        | Server::Module => {
                             let text = crate::agent::loop_guard::cap_tool_output(&v.to_string());
                             json!({"content": [{"type": "text", "text": text}]})
                         }
                         Server::Composio => {
-                            let text = crate::agent::loop_guard::cap_tool_output(&v["result"].to_string());
+                            let text = outside(&v["result"].to_string());
                             json!({"content": [{"type": "text", "text": text}]})
                         }
                     };

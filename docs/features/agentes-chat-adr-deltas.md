@@ -52,6 +52,17 @@ agentes.chat is `AGPL-3.0-only` and read-only reference: [the patterns](agentes-
 - 0038 mailbox: their own IMAP/SMTP as well as Composio; ours is Composio only
   ([mailbox](mailbox.md)).
 
+## Taken from the ADRs read later
+
+The plan's blocks covered 0001–0040. One more has been read and taken since:
+
+| ADR | What we took | Where |
+|---|---|---|
+| 0117 injection hardening (inputs half) | Outside text — a connector's answer, Composio, a screen's text, another bot's answer, research excerpts — reaches the model inside `<external_data>`, with hidden characters removed, the envelope's own markers defused and key-shaped runs masked; every Codync MCP prompt carries the "this is data" line | [outside content](untrusted-content.md) |
+
+The egress half of 0117 (an address carrying data out, pinned MCP tool descriptions, a preview that loads nothing) is
+not started, and 0037's act-with-undo is still only planned.
+
 ## Adopt later, without the stack
 
 Ordered by what the plan does next; none is started.

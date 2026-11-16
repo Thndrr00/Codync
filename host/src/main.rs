@@ -58,6 +58,7 @@ mod store;
 mod telegram;
 mod theme;
 mod tui;
+mod untrusted;
 mod update;
 mod usage;
 mod voice;
