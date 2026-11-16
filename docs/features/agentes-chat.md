@@ -33,15 +33,14 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 
 ## Not taken
 
-- **Brains** (block 3 of the plan): a third memory scope per project. Not started.
-- **Modules** (block 5): the extension point. Built: a signed folder the host runs in its own process, with tools,
-  views, permissions, quotas and lifecycle ([modules](../architecture/modules.md)).
 - **Embeddings**, organization permissions and the other search filters: no provider in the host and
   no organization model.
 
 Built since this report was written: **missions** are their own feature now
-([missions](../features/missions.md), block 1) and GitHub pull-request work runs from a **GitHub
-App** ([github-app](../features/github-app.md), block 4), so neither is a departure from
-agentes.chat any more.
+([missions](../features/missions.md), block 1), GitHub pull-request work runs from a **GitHub App**
+([github-app](../features/github-app.md), block 4), a bot works in a **brain**
+([brains](brains.md), block 3), and a **module** is the extension point
+([modules](../architecture/modules.md), block 5), so none of them is a departure from agentes.chat
+any more.
 
 The plan for the rest is `docs/plan-agentes-chat.md`.
