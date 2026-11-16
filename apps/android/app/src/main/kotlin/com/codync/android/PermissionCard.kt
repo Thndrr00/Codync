@@ -50,6 +50,11 @@ import kotlinx.serialization.json.jsonPrimitive
     respond: (String?, Map<String, JsonElement>?) -> Unit,
 ) {
     val d = entry.data
+    // A gallery card draws itself; the entry is the same permission card either way.
+    if (d["component"] is JsonObject) {
+        ComponentCard(entry, answering, respond)
+        return
+    }
     // A declarative block (card K3) draws itself; the entry is the same approval either way.
     if (d["block"] is JsonObject) {
         DeclarativeCard(entry, answering, respond)

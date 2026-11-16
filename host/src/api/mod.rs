@@ -231,6 +231,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::docs::METHODS.contains(&method) {
         return crate::docs::call(hub, method, &b);
     }
+    if crate::components::METHODS.contains(&method) {
+        return crate::components::api_call(hub, method, &b);
+    }
     if method == "listFiles" {
         return files::list(hub, &b).await;
     }

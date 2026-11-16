@@ -114,7 +114,7 @@ import kotlinx.serialization.json.contentOrNull
 }
 
 /** A form field: a labelled box for text, a picker for choices, a switch for yes or no. */
-@Composable private fun FieldRow(field: BlockField, value: JsonElement?, pending: Boolean, edit: (String, JsonElement) -> Unit) {
+@Composable internal fun FieldRow(field: BlockField, value: JsonElement?, pending: Boolean, edit: (String, JsonElement) -> Unit) {
     if (field.type == "toggle") {
         CodyncSwitch(value?.booleanOrNull == true, { edit(field.id, JsonPrimitive(it)) }, Modifier.fillMaxWidth(), pending) {
             Text(field.label, style = Type.callout, color = Palette.text)

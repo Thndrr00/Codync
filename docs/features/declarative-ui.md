@@ -16,6 +16,7 @@ where both agents render through the same schema and the same renderer. See
 | --- | --- | --- |
 | K3 | `host/src/declarative/` | A bot shows a form, an approval, a table or a chart; the host checks it against Codync's own catalogue and posts it as an approval card. |
 | K4 | `host/src/views/` | A small versioned state document per view (`chat:<botId>`, `routine:<botId>`), JSON-patch-like deltas from the apps, and named actions the agent invokes. |
+| Gallery | `host/src/components/` | The six cards Codync draws by name (metric, comparison, timeline, table, checklist, form), the playground that authors them, and the data functions the host fills: [component gallery](component-gallery.md). |
 
 ## K3: declarative blocks
 

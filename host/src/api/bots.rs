@@ -119,6 +119,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::group::drop::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::declarative::TOOLS.contains(&name) {
                 crate::declarative::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::components::TOOLS.contains(&name) {
+                crate::components::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::views::TOOLS.contains(&name) {
                 crate::views::call(hub, bot, name, &b["arguments"])?
             } else if name == crate::chat::group::send::TOOL {
@@ -799,7 +801,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 Some(Value::Null) | None => None,
                 Some(_) => bail!("`values` must be an object of the form's field ids"),
             };
-            let values = crate::declarative::answers(&e.data["block"], values)?;
+            // A declarative block's form, or a `form` card's, is checked against its own schema before
+            // the answer goes on, so a client can't smuggle values the form never offered.
+            let values = match e.data.get("component").filter(|component| component.is_object()) {
+                Some(component) => crate::components::answers(component, values)?,
+                None => crate::declarative::answers(&e.data["block"], values)?,
+            };
             // The card is the effect's key: the first decision is the one that happens. The same
             // answer again (another device, a retry) gets the card back; a different one is refused.
             match e.data["status"].as_str() {

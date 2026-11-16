@@ -2,6 +2,7 @@ import type { ApprovalRule } from './approval-rules'
 import type { ArtifactCard } from './artifacts'
 import type { CallLine } from './calls'
 import type { DeclarativeBlock } from './declarative.ts'
+import type { ComponentCard } from './components.ts'
 import { isInternalEntry } from './entry-visibility.ts'
 export { isInternalEntry } from './entry-visibility.ts'
 import { normalizeDevServer, type DevServer } from './dev-servers.ts'
@@ -573,6 +574,8 @@ export interface EntryData {
   subagents?: Subagent[]
   /** permission: a declarative UI block the bot shows (`DeclarativeCard`, card K3). */
   block?: DeclarativeBlock
+  /** permission: one of Codync's own gallery cards (`ComponentCard`): a name plus checked props. */
+  component?: ComponentCard
   /** permission: the form's answers once the person answered a block, by field id. */
   values?: Record<string, string | number | boolean> | null
 }

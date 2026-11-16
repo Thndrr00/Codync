@@ -21,6 +21,7 @@ import { MarkdownText } from './Markdown'
 import { quoteText } from './composer-edits'
 import { PermissionCard } from './PermissionCard'
 import { DeclarativeCard } from './DeclarativeCard'
+import { ComponentCardView } from './ComponentCard'
 import { ConnectionRequestCard } from '../marketplace/ConnectionRequestCard'
 import { AgentSwitchNotice, HandoffNotice } from './HandoffNotice'
 import { SubagentCard } from './Subagents'
@@ -105,7 +106,7 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
       return (
         <VStack gap={4} className="chat-row group-start">
           {chat && isGroup(chat) ? <AuthorLabel botId={entry.data.author} /> : null}
-          {entry.data.block ? <LiveBlock entry={entry} /> : <LivePermission entry={entry} />}
+          {entry.data.component ? <LiveComponent entry={entry} /> : entry.data.block ? <LiveBlock entry={entry} /> : <LivePermission entry={entry} />}
         </VStack>
       )
     case 'subagents':
@@ -312,6 +313,12 @@ function LivePermission({ entry }: { entry: Entry }) {
 function LiveBlock({ entry }: { entry: Entry }) {
   const store = useLiveStore()
   return <DeclarativeCard entry={entry} answering={store.answering.get(entry.id) ?? null} respond={(o, values) => store.respond(entry, o, undefined, values)} />
+}
+
+/** A gallery card: drawn from a catalogue name, and a form's answers take the same path as a block's. */
+function LiveComponent({ entry }: { entry: Entry }) {
+  const store = useLiveStore()
+  return <ComponentCardView entry={entry} answering={store.answering.get(entry.id) ?? null} respond={(o, values) => store.respond(entry, o, undefined, values)} />
 }
 
 /** A message's thread, under it: who replied, how many, and how recently (or how many are new). */

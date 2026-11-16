@@ -10,6 +10,7 @@ mod agent;
 mod analytics;
 mod bot_chat;
 mod catalog;
+pub(in crate::tui) mod components;
 pub(in crate::tui) mod composio;
 pub(in crate::tui) mod computer;
 mod dev_servers;
@@ -39,6 +40,7 @@ mod voice;
 mod when;
 
 pub use analytics::AnalyticsSheet;
+pub use components::ComponentsSheet;
 pub use dev_servers::{DevServer, DevServerSummary, DevServersSheet, LogsView, summary as dev_server_summary};
 pub use documents::{DocumentReply, DocumentSheet};
 pub use fields::{handoff_fields, protected_fill_fields, voice_decision_fields, voice_key_fields, voice_server_fields};
@@ -87,6 +89,10 @@ pub enum Reply {
     Library(String),
     /// The server's Library (`serverLibrary`): every bot's artifacts and files.
     ServerLibrary,
+    /// The component gallery (`listComponents`).
+    Components,
+    /// The component gallery (`listComponents`): the cards Codync can draw.
+    Components,
     /// A file's first chunk for the server Library's preview (`readFile` or `readUpload`).
     ServerLibraryPreview,
     /// A routine's webhook URL and key: copied as a ready-to-run curl.

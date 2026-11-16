@@ -9,7 +9,7 @@
 //! path every other approval card uses, and its fields come back to the host with the choice.
 
 mod card;
-mod props;
+pub(crate) mod props;
 pub mod schema;
 
 pub use card::{ANSWER_TIMEOUT, TOOLS, answers, call, tool};

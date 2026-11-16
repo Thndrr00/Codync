@@ -61,6 +61,7 @@ import kotlinx.serialization.json.put
     var network by remember { mutableStateOf(false) }
     var scripts by remember { mutableStateOf(false) }
     var apps by remember { mutableStateOf(false) }
+    var components by remember { mutableStateOf(false) }
     var plans by remember { mutableStateOf(false) }
     var personality by remember { mutableStateOf(false) }
     LaunchedEffect(state.contextId) { store.refreshCloud() }
@@ -73,7 +74,7 @@ import kotlinx.serialization.json.put
                 CardSection {
                     computerRows(state, store, inAccount != null, ComputerActions(extensions, store::openScreen, voice = { voice = true },
                         channels = { channels = true }, whatsapp = { whatsapp = true },
-                        network = { network = true }, scripts = { scripts = true }, apps = { apps = true }, plans = { plans = true }, personality = { personality = true }, color = { coloring = true }, ask = inAccount?.let { c -> { ask(c) } },
+                        network = { network = true }, scripts = { scripts = true }, apps = { apps = true }, components = { components = true }, plans = { plans = true }, personality = { personality = true }, color = { coloring = true }, ask = inAccount?.let { c -> { ask(c) } },
                         revoke = inAccount?.takeIf { it.isGranted }?.let { c -> { confirmRevoke = c } }) { confirmForget = true })
                 }
             }
@@ -111,6 +112,7 @@ import kotlinx.serialization.json.put
     CodyncSheet(network, { network = false }) { state.network?.let { NetworkSheet(it, store::refreshNetwork) } }
     CodyncSheet(scripts, { scripts = false }) { LocalScriptsSheet(state, store) }
     CodyncSheet(apps, { apps = false }) { LocalAppsSheet(state, store) }
+    CodyncSheet(components, { components = false }) { ComponentsSheet(store) }
     CodyncSheet(plans, { plans = false }) { PlanStartSheet(state, store) }
     CodyncSheet(personality, { personality = false }) { ServerSettingsSheet(store) }
     SwatchPanel(coloring, paired?.color, { coloring = false }, store::setColor)
@@ -126,7 +128,7 @@ import kotlinx.serialization.json.put
 
 /** What the paired computer's row and its menu open; `revoke` is set when this phone's account access can be revoked. */
 private class ComputerActions(val extensions: () -> Unit, val screen: () -> Unit, val voice: () -> Unit, val channels: () -> Unit,
-    val whatsapp: () -> Unit, val network: () -> Unit, val scripts: () -> Unit, val apps: () -> Unit, val plans: () -> Unit, val personality: () -> Unit, val color: () -> Unit,
+    val whatsapp: () -> Unit, val network: () -> Unit, val scripts: () -> Unit, val apps: () -> Unit, val components: () -> Unit, val plans: () -> Unit, val personality: () -> Unit, val color: () -> Unit,
     val ask: (() -> Unit)?, val revoke: (() -> Unit)?, val remove: () -> Unit)
 
 /**
@@ -147,6 +149,7 @@ private fun CardRows.computerRows(state: AppState, store: AppStore, inAccount: B
         if (state.network?.shown == true) row { RowLabel("Network", NETWORK_ICON, chevron = true, modifier = Modifier.plainButton(action = actions.network)) }
         row { RowLabel("Local scripts", "terminal", chevron = true, modifier = Modifier.plainButton(action = actions.scripts)) }
         row { RowLabel("Local apps", "square.on.square", chevron = true, modifier = Modifier.plainButton(action = actions.apps)) }
+        row { RowLabel("Components", "square.grid.3x3", chevron = true, modifier = Modifier.plainButton(action = actions.components)) }
         row { RowLabel("Plan cards", "list.bullet.rectangle", chevron = true, modifier = Modifier.plainButton(action = actions.plans)) }
         row { RowLabel("Personality & remote control", "slider.horizontal.3", chevron = true, modifier = Modifier.plainButton(action = actions.personality)) }
     }
@@ -180,6 +183,7 @@ private fun CardRows.computerRows(state: AppState, store: AppStore, inAccount: B
             if (online && state.network?.shown == true) MenuItem("Network", icon = NETWORK_ICON, action = actions.network) else null,
             if (online) MenuItem("Local scripts", icon = "terminal", action = actions.scripts) else null,
             if (online) MenuItem("Local apps", icon = "square.on.square", action = actions.apps) else null,
+            if (online) MenuItem("Components", icon = "square.grid.3x3", action = actions.components) else null,
             if (online) MenuItem("Plan cards", icon = "list.bullet.rectangle", action = actions.plans) else null,
             if (online) MenuItem("Personality & remote control", icon = "slider.horizontal.3", action = actions.personality) else null,
             actions.revoke?.let { MenuItem("Revoke this phone's access", icon = "lock.slash", destructive = true, divider = true, action = it) },

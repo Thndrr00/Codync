@@ -95,6 +95,8 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var subagents: [EntrySubagent]?
     /// permission: a declarative UI block the bot shows (`DeclarativeCard`, card K3).
     public var block: DeclarativeBlock?
+    /// permission: one of Codync's own gallery cards (`ComponentCard`): a name plus checked props.
+    public var component: ComponentCard?
     /// permission: a block's answers once the person answered, by field id.
     public var values: [String: JSONValue]?
 

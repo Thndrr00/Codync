@@ -69,28 +69,34 @@ impl Block {
     /// The form's answers, checked field by field: only its own fields, each of the right type, every
     /// required one present. `Err` is what the user is told.
     pub fn answers(&self, input: &Value) -> Result<Value> {
-        let Some(given) = input.as_object() else {
-            bail!("The form's values must be an object of field ids.");
-        };
-        if let Some(unknown) = given.keys().find(|key| !self.fields.iter().any(|field| &field.id == *key)) {
-            bail!("This form has no field \"{unknown}\".");
-        }
-        let mut answers = Map::new();
-        for field in &self.fields {
-            match given.get(&field.id).filter(|value| !value.is_null()) {
-                Some(value) => {
-                    answers.insert(field.id.clone(), field.answer(value)?);
-                }
-                None if field.required => bail!("\"{}\" is required.", field.label),
-                None => {}
-            }
-        }
-        Ok(Value::Object(answers))
+        check_answers(&self.fields, input)
     }
 }
 
+/// A form's answers, checked against the fields that form declared. Shared with the component
+/// gallery's `form` card, so both kinds of card accept exactly the same values.
+pub(crate) fn check_answers(fields: &[Field], input: &Value) -> Result<Value> {
+    let Some(given) = input.as_object() else {
+        bail!("The form's values must be an object of field ids.");
+    };
+    if let Some(unknown) = given.keys().find(|key| !fields.iter().any(|field| &field.id == *key)) {
+        bail!("This form has no field \"{unknown}\".");
+    }
+    let mut answers = Map::new();
+    for field in fields {
+        match given.get(&field.id).filter(|value| !value.is_null()) {
+            Some(value) => {
+                answers.insert(field.id.clone(), field.answer(value)?);
+            }
+            None if field.required => bail!("\"{}\" is required.", field.label),
+            None => {}
+        }
+    }
+    Ok(Value::Object(answers))
+}
+
 impl Field {
-    fn answer(&self, value: &Value) -> Result<Value> {
+    pub(crate) fn answer(&self, value: &Value) -> Result<Value> {
         let label = &self.label;
         Ok(match self.kind.as_str() {
             "text" | "multiline" => json!(answer_text(value, label)?),
@@ -268,7 +274,9 @@ fn component(node: &Value, path: &str, fields: &mut Vec<Field>) -> Result<Value>
     Ok(rendered)
 }
 
-fn field(node: &Value, path: &str) -> Result<(Field, Value)> {
+/// One form field, checked: the field itself and the document clients render. Shared with the
+/// component gallery's `form` card.
+pub(crate) fn field(node: &Value, path: &str) -> Result<(Field, Value)> {
     let mut props = Props::new(node, path)?;
     let id = props.id()?;
     let label = props.text("label", true, MAX_LABEL)?.unwrap_or_default();

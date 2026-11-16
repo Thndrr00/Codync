@@ -147,6 +147,11 @@ pub const OWNER_ONLY: &[&str] = &[
     "savePolicy",
     "removePolicy",
     "setPolicyEnabled",
+    // The component gallery is the computer's: its cards are shown to every bot.
+    "saveComponent",
+    "publishComponent",
+    "deleteComponent",
+    "setComponentAccess",
 ];
 
 /// Refuses one of [`OWNER_ONLY`] to a device assigned to a person, unless that person is an admin and the
@@ -167,6 +172,10 @@ pub fn permit_owner(hub: &Hub, caller: &Caller, method: &str) -> Result<(), Forb
             | "savePolicy"
             | "removePolicy"
             | "setPolicyEnabled"
+            | "saveComponent"
+            | "publishComponent"
+            | "deleteComponent"
+            | "setComponentAccess"
     );
     if admins_manage && crate::people::is_admin(hub, &person) {
         return Ok(());

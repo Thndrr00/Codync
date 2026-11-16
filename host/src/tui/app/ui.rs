@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use super::super::manage::{
-    AgentSetup, AnalyticsSheet, BotChatSheet, DevServersSheet, DocumentSheet, Fields, FlowSheet, Library, Market,
-    MemorySheet, NetworkSheet, PeopleSheet, RoutineForm, RoutineList, ServerLibrary, SkillSheet, ThreadSheet,
-    ThreadsSheet,
+    AgentSetup, AnalyticsSheet, BotChatSheet, ComponentsSheet, DevServersSheet, DocumentSheet, Fields, FlowSheet,
+    Library, Market, MemorySheet, NetworkSheet, PeopleSheet, RoutineForm, RoutineList, ServerLibrary, SkillSheet,
+    ThreadSheet, ThreadsSheet,
 };
 use super::{Editor, Mark, WhatsNew};
 
@@ -58,6 +58,7 @@ pub enum Action {
     N8n,
     Library,
     ServerLibrary,
+    Components,
     RefreshAgents,
     Pair,
     People,
@@ -81,7 +82,7 @@ pub enum Action {
     ChatBackground,
 }
 
-pub const ACTIONS: [(&str, &str, Action); 33] = [
+pub const ACTIONS: [(&str, &str, Action); 34] = [
     ("New bot…", "n", Action::NewBot),
     ("New group chat…", "m", Action::NewGroup),
     ("Extensions: agents, connectors, skills…", "A", Action::Market),
@@ -92,6 +93,7 @@ pub const ACTIONS: [(&str, &str, Action); 33] = [
     ("n8n: workflows and runs…", "", Action::N8n),
     ("Library of this bot: artifacts and files…", "L", Action::Library),
     ("Library of every bot: artifacts and files…", "", Action::ServerLibrary),
+    ("Components: the cards Codync can draw in a chat…", "", Action::Components),
     ("Refresh agents", "", Action::RefreshAgents),
     ("Pair a phone…", "P", Action::Pair),
     ("People on this computer…", "", Action::People),
@@ -488,6 +490,8 @@ pub enum Overlay {
     Routine(Box<RoutineForm>),
     Library(Library),
     ServerLibrary(ServerLibrary),
+    /// The component gallery: the cards Codync can draw, read-only in the terminal.
+    Components(Box<ComponentsSheet>),
     Market(Box<Market>),
     Agent(AgentSetup),
     Fields(Box<Fields>),

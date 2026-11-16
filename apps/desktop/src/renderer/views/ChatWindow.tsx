@@ -36,6 +36,7 @@ import { MarketplaceView } from './marketplace/MarketplaceView'
 import { SignInCodeDialog } from './marketplace/ConnectorSheets'
 import { SettingsView, type SettingsPage } from './settings/SettingsView'
 import { ServerLibraryView } from './library/ServerLibraryView'
+import { ComponentsView } from './components/ComponentsView'
 import { ApprovalSheet } from './settings/ApprovalSheet'
 import { SearchPalette } from './SearchPalette'
 import { AccountWelcomeView, useWelcomeGate } from './AccountWelcomeView'
@@ -269,6 +270,7 @@ function ChatSplitView() {
   const [canvasBot, setCanvasBot] = useState<string | null>(null)
   const [canvasStore, setCanvasStore] = useState<BotStore | null>(null)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [componentsOpen, setComponentsOpen] = useState(false)
   const [settings, setSettings] = useState<SettingsPage | null>(null)
   const openVoiceSettings = useCallback(() => setSettings('voice'), [])
   const [showAccount, setShowAccount] = useState(false)
@@ -473,7 +475,7 @@ function ChatSplitView() {
     )
   }
 
-  const railActive = canvasBot !== null ? 'canvas' : libraryOpen ? 'library' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
+  const railActive = canvasBot !== null ? 'canvas' : libraryOpen ? 'library' : componentsOpen ? 'components' : settings === 'usage' ? 'usage' : marketplace !== null ? 'marketplace' : settings !== null ? 'settings' : 'bots'
   const width = compact ? 76 : sidebarWidth
   return (
     <div className={`split ${showAccount || context ? 'covered' : ''}`}>
@@ -496,7 +498,8 @@ function ChatSplitView() {
               setCanvasStore(first.store)
             }}
             onUsage={() => { setLibraryOpen(false); setSettings('usage') }}
-            onLibrary={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(true) }}
+            onLibrary={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setComponentsOpen(false); setLibraryOpen(true) }}
+            onComponents={() => { setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(false); setComponentsOpen(true) }}
             onN8n={() => window.codync.n8n.open()}
             onBrowser={() => void window.codync.browser.open()}
             onComfy={() => void window.codync.tools.open('comfy')}
@@ -604,6 +607,7 @@ function ChatSplitView() {
         { id: 'skills', title: 'Skills', icon: 'book.pages', run: () => { setSearching(false); openMarketplace('skills') } },
         { id: 'usage', title: 'Usage', icon: 'gauge.with.dots.needle.33percent', run: () => { setSearching(false); setSettings('usage') } },
         { id: 'library', title: 'Server Library', icon: 'books.vertical', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(true) } },
+        { id: 'components', title: 'Components', icon: 'square.grid.3x3', run: () => { setSearching(false); setSettings(null); setMarketplace(null); setCanvasBot(null); setLibraryOpen(false); setComponentsOpen(true) } },
         { id: 'network', title: 'Network', icon: 'network', run: () => { setSearching(false); setSettings('network') } },
         { id: 'voice', title: 'Voice', icon: 'waveform', run: () => { setSearching(false); setSettings('voice') } },
         { id: 'updates', title: 'Updates', icon: 'arrow.down.circle', run: () => { setSearching(false); setSettings('updates') } },
@@ -664,6 +668,29 @@ function ChatSplitView() {
       </Sheet>
       <Sheet open={libraryOpen} onClose={() => setLibraryOpen(false)} width={Math.min(800, windowSize.width - 80)} height={Math.min(680, sheetHeight)}>
         {libraryOpen ? <ServerLibraryView /> : null}
+      </Sheet>
+      <Sheet open={componentsOpen} onClose={() => setComponentsOpen(false)} width={Math.min(920, windowSize.width - 80)} height={sheetHeight}>
+        {componentsOpen ? (() => {
+          // The gallery belongs to a computer: the one in view, else this one.
+          const target = (selectedStore ?? app.local ?? onlineStores[0]) ?? null
+          return (
+            <VStack gap={14} className="component-gallery-sheet">
+              <ModalHeader
+                icon="square.grid.3x3"
+                title={tr('Components')}
+                subtitle={tr('The cards Codync can draw in a chat, and the playground that authors them.')}
+                onClose={() => setComponentsOpen(false)}
+              />
+              {target ? (
+                <StoreContext.Provider value={target}>
+                  <ComponentsView store={target} />
+                </StoreContext.Provider>
+              ) : (
+                <Text as="div" size="callout" tone="secondary">{tr('Waiting for a computer')}</Text>
+              )}
+            </VStack>
+          )
+        })() : null}
       </Sheet>
       <Dialog
         open={confirmDelete !== null}

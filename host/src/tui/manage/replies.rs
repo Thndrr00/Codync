@@ -184,6 +184,7 @@ impl App {
             Reply::Flow(bot) => self.flow_loaded(&bot, &v),
             Reply::Library(bot) => self.library_loaded(&bot, v["items"].as_array().map_or(&[], Vec::as_slice)),
             Reply::ServerLibrary => self.server_library_loaded(v["items"].as_array().map_or(&[], Vec::as_slice)),
+            Reply::Components => self.components_loaded(v),
             Reply::ServerLibraryPreview => self.server_library_preview(&v),
             Reply::RoutineSaved => {
                 if let Some(i) = self.overlays.iter().rposition(|o| matches!(o, Overlay::Routine(_))) {
@@ -543,6 +544,15 @@ impl App {
                 }
                 self.flash(&e);
             }
+            Reply::Components => {
+                for o in &mut self.overlays {
+                    if let Overlay::Components(s) = o {
+                        s.gallery.get_or_insert_with(|| serde_json::json!({"components": []}));
+                        s.error = Some(e.clone());
+                    }
+                }
+                self.flash(&e);
+            }
             Reply::Thread { bot, root } => {
                 for o in &mut self.overlays {
                     if let Overlay::Thread(t) = o
@@ -687,6 +697,9 @@ impl App {
                 }
                 Overlay::ServerLibrary(_) => {
                     calls.push(("serverLibrary", json!({}), After::Sheet(Reply::ServerLibrary)));
+                }
+                Overlay::Components(_) => {
+                    calls.push(("listComponents", json!({}), After::Sheet(Reply::Components)));
                 }
                 Overlay::Market(_) | Overlay::Form(_) => {
                     calls.push(("connectors", json!({}), After::Connectors));

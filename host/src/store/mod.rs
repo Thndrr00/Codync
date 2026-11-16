@@ -9,6 +9,7 @@ mod analytics;
 pub mod apps;
 mod bots;
 mod channel_activity;
+pub mod components;
 mod computer_activity;
 mod devices;
 mod documents;

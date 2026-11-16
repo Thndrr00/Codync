@@ -57,7 +57,11 @@ struct ChatRow: View {
         case "permission":
             VStack(alignment: .leading, spacing: 4) {
                 if chat?.isGroup == true { AuthorLabel(botId: entry.data.author) }
-                if entry.data.block != nil {
+                if entry.data.component != nil {
+                    ComponentCardView(entry: entry, answering: model.answering[entry.id]) { option, values in
+                        model.respond(entry, option: option, values: values)
+                    }
+                } else if entry.data.block != nil {
                     DeclarativeCard(entry: entry, answering: model.answering[entry.id]) { option, values in
                         model.respond(entry, option: option, values: values)
                     }

@@ -308,6 +308,7 @@ impl Store {
         super::research::open(&c)?;
         super::analytics::open(&c)?;
         super::apps::open(&c)?;
+        super::components::open(&c)?;
         super::open_items::open(&c)?;
         super::threads::open(&c)?;
         super::group_tasks::open(&c)?;

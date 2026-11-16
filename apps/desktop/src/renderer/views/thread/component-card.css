@@ -1,0 +1,89 @@
+/* One of Codync's own gallery cards (host catalogue version 1), drawn with the approval card's shell. */
+.component-card {
+  width: min(100%, 460px);
+}
+.component-metric-value {
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.component-trend {
+  font-variant-numeric: tabular-nums;
+}
+.component-sparkline {
+  width: 100%;
+  height: 44px;
+  padding-top: 4px;
+}
+.component-sparkline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.component-grid-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  background: var(--background);
+}
+.component-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.component-grid th,
+.component-grid td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.component-grid th {
+  color: var(--secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.component-grid tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+.component-grid.comparison td.side {
+  color: var(--text);
+}
+.component-timeline {
+  width: 100%;
+}
+.component-event {
+  padding-bottom: 2px;
+}
+.component-event-rail {
+  width: 12px;
+  align-self: stretch;
+}
+.component-event-dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.component-event-dot.warning {
+  background: var(--warning, #ff9f0a);
+}
+.component-event-dot.done {
+  background: var(--success, #30d158);
+}
+.component-event-line {
+  flex: 1;
+  width: 1px;
+  min-height: 12px;
+  margin-top: 3px;
+  background: var(--border);
+}
+.component-event-body {
+  padding: 0 0 12px 2px;
+}
+.component-event-detail {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.component-item-done {
+  text-decoration: line-through;
+  text-decoration-color: var(--border);
+}

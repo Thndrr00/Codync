@@ -191,6 +191,7 @@ private struct ComputerRows: View {
     @State private var whatsapp = false
     @State private var localScripts = false
     @State private var localApps = false
+    @State private var components = false
     @State private var planCards = false
     @State private var serverSettings = false
     @State private var people = false
@@ -217,6 +218,8 @@ private struct ComputerRows: View {
             Button { localScripts = true } label: { RowLabel("Local scripts", systemImage: "terminal", chevron: true) }
                 .buttonStyle(.plain)
             Button { localApps = true } label: { RowLabel("Local apps", systemImage: "square.on.square", chevron: true) }
+                .buttonStyle(.plain)
+            Button { components = true } label: { RowLabel("Components", systemImage: "square.grid.3x3", chevron: true) }
                 .buttonStyle(.plain)
             Button { planCards = true } label: { RowLabel("Plan cards", systemImage: "list.bullet.rectangle", chevron: true) }
                 .buttonStyle(.plain)
@@ -278,6 +281,7 @@ private struct ComputerRows: View {
             if store.connection == .online {
                 items.append(MenuItem("Local scripts", icon: "terminal") { localScripts = true })
                 items.append(MenuItem("Local apps", icon: "square.on.square") { localApps = true })
+                items.append(MenuItem("Components", icon: "square.grid.3x3") { components = true })
                 items.append(MenuItem("Plan cards", icon: "list.bullet.rectangle") { planCards = true })
                 items.append(MenuItem("People", icon: "person.2") { people = true })
             }
@@ -295,6 +299,7 @@ private struct ComputerRows: View {
         .codyncSheet(isPresented: $whatsapp) { WhatsAppSheet().environment(store) }
         .codyncSheet(isPresented: $localScripts) { LocalScriptsSheet().environment(store) }
         .codyncSheet(isPresented: $localApps) { LocalAppsSheet().environment(store) }
+        .codyncSheet(isPresented: $components) { ComponentsSheet().environment(store) }
         .codyncSheet(isPresented: $planCards) { PlanStartSheet().environment(store) }
         .codyncSheet(isPresented: $serverSettings) { ServerSettingsSheet().environment(store) }
         .codyncSheet(isPresented: $people) { PeopleSheet().environment(store) }

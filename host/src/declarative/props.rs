@@ -95,7 +95,7 @@ impl<'a> Props<'a> {
 }
 
 /// A table cell: plain text, a finite number, true/false, or empty.
-pub(super) fn cell_value(cell: &Value, path: &str, max_chars: usize) -> Result<Value> {
+pub(crate) fn cell_value(cell: &Value, path: &str, max_chars: usize) -> Result<Value> {
     Ok(match cell {
         Value::Null => Value::Null,
         Value::Bool(on) => json!(on),
@@ -108,7 +108,7 @@ pub(super) fn cell_value(cell: &Value, path: &str, max_chars: usize) -> Result<V
 }
 
 /// Plain text, trimmed and bounded: no markup and no control characters (except a newline or tab).
-pub(super) fn text(value: &Value, path: &str, max: usize) -> Result<String> {
+pub(crate) fn text(value: &Value, path: &str, max: usize) -> Result<String> {
     let Some(text) = value.as_str() else { bail!("`{path}` must be text.") };
     let text = text.trim();
     if text.is_empty() {

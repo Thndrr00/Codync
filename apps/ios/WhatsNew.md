@@ -8,6 +8,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 
 ## 2.48.0
 ### zh-Hant
+- 新的「元件」頁面列出 Codync 能在對話中繪製的六種卡片（指標、對比、時間軸、表格、清單、表單），每張都有預覽，並可逐一停用某個機器人使用。桌面版另有演練場：用表單撰寫卡片、檢查後發佈到圖庫。
 - 應用程式分頁換成 CopilotKit 審核過的連接器目錄：Google Drive、Notion、Linear、Sentry、Exa、Firecrawl 等服務，各自保留原廠的授權方式。
 - 需要登入的應用程式在瀏覽器完成授權，金鑰型的應用程式則填入自己的金鑰；兩者都只留在你的電腦上。
 - 登入回來時會核對發出的服務，移除連接器時也會一併撤銷授權。
@@ -40,6 +41,7 @@ a version without one gets a generic "Bug fixes and improvements" line. Delete o
 - LXC 容器中的伺服器更新時，不會再因 AppArmor 設定而中斷。
 - 語音設定可以把聽寫與朗讀回覆送到你在電腦上執行的 OpenAI 相容語音伺服器，使用它提供的模型；不會傳到 OpenAI。
 ### en-US
+- A new Components page lists the six cards Codync can draw in a chat — metric, comparison, timeline, table, checklist and form — with a preview of each, and a switch to withhold one from a bot. On the desktop, a playground writes a card in a form and publishes it to the gallery.
 - The Apps tab now lists CopilotKit's reviewed connector catalogue: Google Drive, Notion, Linear, Sentry, Exa, Firecrawl and more, each keeping the vendor's own sign-in or key.
 - Apps that need a sign-in finish it in the browser, and key apps take your own key; both stay on your computer.
 - A sign-in that comes back is checked against the service that issued it, and removing a connector revokes its grant.

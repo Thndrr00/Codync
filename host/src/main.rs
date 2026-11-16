@@ -19,6 +19,7 @@ mod chat;
 mod cli;
 mod cloud_cli;
 mod compat;
+mod components;
 mod computer;
 mod declarative;
 mod dev_servers;
