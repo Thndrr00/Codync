@@ -1,0 +1,93 @@
+The web app is Codync's fifth client, after the iPhone, Android, desktop and terminal apps. It opens your computer's bots, chats, approvals, routines, memory and Library in a browser tab, and talks to the same host as every other client.
+
+It is not a hosted copy of Codync. Nothing moves to the website: bots, sessions, files and memory stay on your computer, and the browser is only a window onto the host through a bridge you start yourself.
+
+[Open the web app](/app)
+
+## Why the web app needs a bridge
+
+The host accepts its bearer token only from a loopback address, and it trusts browser requests only from its own exact loopback origin (`http://localhost:<host port>` and its two spellings). That keeps a random web page from reaching your bots through your browser.
+
+A page served by the website is neither of those. Codync solves this with a small local bridge, `web/proxy/host-proxy.mjs`:
+
+1. It serves the web client's built files.
+2. It forwards `POST /api/<method>` and `GET /events` to `127.0.0.1`.
+3. It adds the host token from this computer's data folder on the way.
+
+The browser never receives the token, the token never appears in a URL, and the bridge listens on loopback only. The token is the same one the desktop app uses; pairing a phone still goes over Codync's end-to-end encrypted channel and is not something a browser can join.
+
+## Start it
+
+On the computer that runs Codync:
+
+```sh
+cd web
+npm install
+npm run build
+node proxy/host-proxy.mjs
+```
+
+Open the address it prints, normally [http://localhost:4321](http://localhost:4321). Keep the bridge running while you use the app.
+
+The bridge reads `~/.codync/token` (`~/.codync-dev/token` with `--dev` on macOS and Linux, and `%USERPROFILE%\.codync\token` on Windows). Set `CODYNC_HOME` to use another data folder. The desktop app must be running, or `codync-host serve` must be running in a terminal.
+
+### While developing the website
+
+Run Next's dev server and point the bridge at it:
+
+```sh
+# terminal 1
+cd web
+npm run dev
+
+# terminal 2
+cd web
+node proxy/host-proxy.mjs --next http://localhost:3000
+```
+
+The bridge serves the API and the event stream itself and forwards page requests, including Next's live reload WebSocket, to the dev server. Open the bridge's address, not `localhost:3000`, so the host calls stay same-origin.
+
+## Your own reverse proxy
+
+Any server that can hold the token and remove the browser's `Origin` works. The rules:
+
+- Serve the files from `web/out`.
+- Proxy `/api/*` and `/events` to `127.0.0.1:19222` (`19223` for Codync Dev).
+- Send `Authorization: Bearer <contents of ~/.codync/token>`.
+- Drop `Origin` and `Referer`; the host refuses a foreign origin before it runs a method.
+- Bind to loopback. If you expose it beyond this computer, add TLS and real authentication in front; the host token is not a user login.
+
+Do not put the token in a query string, a cookie that other scripts can read, or a fragment. A URL is copied into history, logs and bookmarks.
+
+## What you can do
+
+| Screen | What works |
+|---|---|
+| Bots | The live roster, search, pinned and hidden bots, unread counts and each bot's current step. |
+| Chat | History, live messages as they stream, approval cards, Stop, New session, and messages that queue while a bot works. |
+| Routines | Every bot's routines, their schedules and last run; run one now, pause or resume it. |
+| Memory | **About you**, **This bot** and a group's room memory, read-only, with usage against the cap. |
+| Library | Every artifact and file from every chat; pages open in a sandboxed frame, files download. |
+| Settings | Theme, this computer's host and addresses, analytics, and the connection's security model. |
+
+## What stays in the desktop app
+
+Some Codync features are tied to the computer's main process or its operating-system permissions. The web client says so instead of offering a broken button:
+
+- Remote screen, computer control and the "Ask on this computer" consent window.
+- The Dynamic Island, menu-bar item and native notifications.
+- Local SSH profiles, the agent setup terminals and host updates.
+- The diagram editor; diagram artifacts open in the desktop app.
+- Creating and editing bots, the routine editor and its flow canvas, and webhook setup.
+- Message attachments and file uploads, voice calls, side-thread replies, reactions and message editing.
+
+Use the desktop or phone app for those. Everything else reads and writes the same host state.
+
+## Safety
+
+- The bridge binds `127.0.0.1` only. Anyone who can open its address can use your bots, so don't tunnel it to other people.
+- The browser holds no host token. A reverse proxy that adds one must be trusted with the same care as the desktop app.
+- The bridge refuses host calls that don't carry the web client's own `X-Codync-Web` header, which another origin can't set without a CORS preflight it never grants.
+- Artifact pages run in an iframe sandbox without `allow-same-origin`, so their scripts can't read the app, the token or your other tabs.
+- The web client caps a Library file at 64 MB; bigger files stay in the desktop app.
+- The hosted website never connects to a host by itself. Opening `/app` on codync.dev only explains how to start the bridge.

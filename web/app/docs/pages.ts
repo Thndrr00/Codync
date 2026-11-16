@@ -148,6 +148,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Run your bots on a cloud computer on your own Boat or InstaBox account: free from Codync, asleep while idle, woken by a message.",
       },
       {
+        slug: "web-app",
+        title: "Web app",
+        description:
+          "Open your bots, chats, approvals, routines, memory and Library in a browser through a local bridge that keeps the host token on your computer.",
+      },
+      {
         slug: "linux-servers",
         title: "Linux servers",
         description:

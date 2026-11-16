@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test lib/host-protocol.test.mts lib/host-client.test.mts",
     "check:docs": "node scripts/check-docs.mjs"
   },
   "dependencies": {

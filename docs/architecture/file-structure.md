@@ -68,7 +68,7 @@ Codync/
 ├── tools/                     # Release, App Store and Google Play submission (store_release.py: what both share), font scripts
 ├── packaging/                 # Distribution templates
 ├── marketing/app-store-screenshots/ # App Store screenshot editor (bun dev; Export bundle → out/)
-├── web/                       # Website (Next.js static export)
+├── web/                       # Website and web client (Next.js static export)
 └── .github/workflows/         # CI, signing and release automation
 ```
 
