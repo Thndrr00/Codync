@@ -2,7 +2,7 @@
 
 use super::{Arc, Hub, Result, WhatsApp, approvals, delivery, json};
 
-/// An agent's answer as it goes out: without the empty lines it may end in, which WhatsApp shows as
+/// An agent's answer as it goes out: without the empty lines it may end in, which `WhatsApp` shows as
 /// blank space under the message. Ported from `OpenBot` 0.71.0 ("each message from an agent no longer
 /// ends with one to three empty lines").
 fn outbound_text(text: &str) -> &str {

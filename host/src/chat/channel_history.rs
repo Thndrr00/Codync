@@ -1,6 +1,6 @@
 //! A bot's read-back of the messages a connected channel brought it. Ported from `OpenBot` 0.69.0
 //! ("a routine, or an agent in your own chat, can read a connected Slack, Discord, Telegram or
-//! WhatsApp chat"). `OpenBot` reads the server side of every chat it hosts; Codync keeps what each
+//! `WhatsApp` chat"). `OpenBot` reads the server side of every chat it hosts; Codync keeps what each
 //! channel delivered to the bot, so a routine summarizes what this computer actually received.
 
 use crate::hub::Hub;
@@ -33,7 +33,7 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     if !source.is_empty() && !SOURCES.contains(&source) {
         bail!("source must be slack, telegram, discord or whatsapp");
     }
-    let limit = args["limit"].as_u64().unwrap_or(20).clamp(1, LIMIT as u64) as usize;
+    let limit = usize::try_from(args["limit"].as_u64().unwrap_or(20).clamp(1, LIMIT as u64)).unwrap_or(LIMIT);
     let mut messages = Vec::with_capacity(limit);
     let mut before = i64::MAX;
     'pages: while messages.len() < limit {
@@ -63,7 +63,7 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
                 break 'pages;
             }
         }
-        if page.len() < PAGE as usize {
+        if page.len() < usize::try_from(PAGE).unwrap_or(usize::MAX) {
             break;
         }
     }

@@ -269,7 +269,7 @@ const RECORDER_EVENTS: &str = r#"(() => {
 })()"#;
 
 /// Installs a recorder script in the active tab: it runs on the page shown now and on every page that
-/// follows, so a person's clicks survive navigation (OpenBot 0.69.0's "Teach a task"). The returned
+/// follows, so a person's clicks survive navigation (`OpenBot` 0.69.0's "Teach a task"). The returned
 /// session and script id go back to `recorder_events` when the recording ends.
 pub async fn install_recorder(screen: &Screen, script: &str, url: Option<&str>) -> Result<Value> {
     let mut current = screen.panel.lock().await;
