@@ -122,7 +122,7 @@ export function CloudBackupSection() {
 
           {status?.lastAt ? <Text size="caption" tone="secondary">Last backup: {when(status.lastAt)}</Text> : <Text size="caption" tone="secondary">No backup yet.</Text>}
           {status?.lastError ? <Text size="caption" tone="danger">{status.lastError}</Text> : null}
-          {status?.files.length ? (
+          {status && status.files.length ? (
             <VStack gap={4}>
               <Text size="caption" weight="semibold" tone="secondary">Uploaded</Text>
               {status.files.slice().reverse().map((file) => (

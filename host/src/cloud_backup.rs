@@ -163,9 +163,12 @@ async fn run_inner(hub: &Arc<Hub>) -> Result<Value> {
     let temp = folder.join(format!("cloud-{}.db", uuid::Uuid::new_v4()));
     let copy = temp.clone();
     let hub_for_copy = hub.clone();
-    tokio::task::spawn_blocking(move || hub_for_copy.store.backup_to(&copy.to_string_lossy()))
-        .await
-        .context("copying the database")??;
+    tokio::task::spawn_blocking(move || {
+        let path = copy.to_string_lossy().to_string();
+        hub_for_copy.store.backup_to(&path)
+    })
+    .await
+    .context("copying the database")??;
     let bytes = tokio::fs::read(&temp).await.context("reading the backup")?;
     let _ = tokio::fs::remove_file(&temp).await;
     ensure!(!bytes.is_empty() && bytes.len() <= 512 * 1024 * 1024, "the database is too large for a cloud backup");
