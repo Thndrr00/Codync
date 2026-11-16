@@ -10,13 +10,8 @@ use crate::store::Permission;
 /// MCP title prefixes of connected apps and Composio tools. Those are the external
 /// effects (send mail, open an issue) the setting is about — local chat, memory and
 /// file tools keep their normal approval flow.
-const APP_TOOL_PREFIXES: &[&str] = &[
-    "mcp__codync-connectors__",
-    "mcp__codync-composio__",
-    "mcp__composio__",
-    "connectors.",
-    "composio.",
-];
+const APP_TOOL_PREFIXES: &[&str] =
+    &["mcp__codync-connectors__", "mcp__codync-composio__", "mcp__composio__", "connectors.", "composio."];
 
 /// Whether a tool call reaches a connected app.
 pub(crate) fn is_app_tool(title: &str) -> bool {
@@ -51,16 +46,13 @@ mod tests {
     use super::*;
 
     fn evaluation(permission: Permission) -> Evaluation {
-        Evaluation {
-            outcome: Outcome::Setting { permission },
-            chained: false,
-            allow_passed_over: None,
-        }
+        Evaluation { outcome: Outcome::Setting { permission }, chained: false, allow_passed_over: None }
     }
 
     #[test]
     fn a_background_run_refuses_an_app_that_would_ask() {
-        let reason = background_apps_reason(true, false, &evaluation(Permission::Ask), "mcp__codync-connectors__send_email");
+        let reason =
+            background_apps_reason(true, false, &evaluation(Permission::Ask), "mcp__codync-connectors__send_email");
         assert!(reason.is_some_and(|r| r.contains("background") && r.contains("send_email")));
     }
 
@@ -69,7 +61,10 @@ mod tests {
         let ask = evaluation(Permission::Ask);
         assert!(background_apps_reason(false, false, &ask, "mcp__codync-connectors__send_email").is_none());
         assert!(background_apps_reason(true, true, &ask, "mcp__codync-connectors__send_email").is_none());
-        assert!(background_apps_reason(true, false, &evaluation(Permission::Auto), "mcp__codync-connectors__send_email").is_none());
+        assert!(
+            background_apps_reason(true, false, &evaluation(Permission::Auto), "mcp__codync-connectors__send_email")
+                .is_none()
+        );
     }
 
     #[test]

@@ -153,7 +153,12 @@ impl Actor {
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
                     let args = serde_json::to_string(&u["rawInput"]).ok();
-                    self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default(), args.as_deref());
+                    self.observe_tool_end(
+                        &status,
+                        &title,
+                        e.data["output"].as_str().unwrap_or_default(),
+                        args.as_deref(),
+                    );
                 }
                 if let Some(working) = working {
                     self.set_activity(&working);

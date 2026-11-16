@@ -291,7 +291,9 @@ impl Routines {
                 && let Some(bot) = hub.store.bot(&run.bot_id)?.filter(|b| !b.deleted)
             {
                 crate::remote::push::notify(hub, &bot.config, None, &bot.config.name, &text, kind);
-                if kind == Some(AlertKind::Done) && let Some(result) = &run.result {
+                if kind == Some(AlertKind::Done)
+                    && let Some(result) = &run.result
+                {
                     super::dedup::mark_reported(hub, &run.bot_id, &run.routine_id, result);
                 }
             }
