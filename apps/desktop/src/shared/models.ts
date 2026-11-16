@@ -406,6 +406,8 @@ export interface EntryData {
   internal?: boolean
   /** An "I learned" notice: what its Undo needs (`undoMemoryChange`); `undone` once taken back. */
   memoryUndo?: { file: string; shared: boolean; before: number | null; change: number; undone: boolean }
+  /** A routine the bot created, changed or deleted, and what Undo puts back. */
+  routineUndo?: { id: string; before: unknown | null; undone: boolean }
   source?: string
   /** Structured conversation data added to the existing team-tool notice. */
   botMessage?: BotMessage

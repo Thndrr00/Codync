@@ -847,6 +847,13 @@ export class BotStore extends BotSync {
     this.changed()
   }
 
+  /** Takes back a routine the bot created, changed or deleted: the notice's Undo. */
+  async undoRoutineChange(entry: Entry) {
+    const res = await (await this.ready()).call<{ entry: Entry }>('undoRoutineChange', { entryId: entry.id })
+    this.upsert(res.entry)
+    this.changed()
+  }
+
   /** Reads the computer's health; an older host keeps what was there (nothing). */
   async refreshHealth() {
     if (this.retired || !this.client) return
