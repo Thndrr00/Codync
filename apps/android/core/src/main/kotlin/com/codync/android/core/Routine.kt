@@ -14,6 +14,8 @@ import java.time.format.FormatStyle
     val createdAt: Long = 0, val updatedAt: Long = 0,
     val triggerDescriptions: List<String> = emptyList(), val nextRunAt: Long? = null,
     val timeoutSeconds: Int? = null, val lastError: String? = null,
+    /** The run in flight (or waiting to start), so the canvas can offer Stop for it (OpenBot 0.71.0). */
+    val running: String? = null,
     /** What a due occurrence that could not run follows: `skip` or `runOnce` (older hosts send nothing). */
     val missedPolicy: String? = null,
     /** What a run that would pass the bot's daily token limit follows: `wait` or `skip` (older hosts send nothing). */

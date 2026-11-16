@@ -21,6 +21,8 @@ interface Props {
   onConnect: (fromBotId: string, toBotId: string, at: { x: number; y: number }) => void
   /** Runs this routine's flow now, from its card. */
   onRun: (routineId: string) => void
+  /** Stops the routine run in flight, from its card (OpenBot 0.71.0). */
+  onStop: (routineId: string) => void
 }
 
 const NUDGE = 20
@@ -75,7 +77,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, the edges between them, pan (drag the background), zoom (wheel and buttons). */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onConnect, onRun }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onConnect, onRun, onStop }: Props) {
   const tr = useTr()
   const nodes = useMemo(() => layoutNodes(canvas), [canvas])
   const edges = useMemo(() => flowEdges(canvas), [canvas])
@@ -255,6 +257,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               onPortStart={(e) => startWire(raw, e)}
               onKey={(e) => keyOnNode(raw, e)}
               onRun={raw.kind === 'routine' ? () => onRun(raw.id) : undefined}
+              onStop={raw.kind === 'routine' ? () => onStop(raw.id) : undefined}
             />
           )
         })}

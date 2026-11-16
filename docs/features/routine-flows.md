@@ -25,6 +25,11 @@ those routines, where the nodes sit, and the bots **placed** on it before any li
 
 ## Running a flow
 
+A routine's card on the canvas shows **Run** while it has no run in flight and **Stop** while one is
+queued or running: the host puts the live run's id in the routine's `running` field
+(`Routines::list`), and Stop cancels the bot's turn, which is the run's turn. Ported from `OpenBot`
+0.71.0, where Stop takes the place of Run now in the canvas top bar.
+
 1. The routine's run ends (`Routines::complete`). A reply other than `(pass)` becomes the root step
    (`output` = the reply, `botId` = the routine's bot). A failed, interrupted or cancelled run records
    the root step that way and **skips** every bot the flow reaches.

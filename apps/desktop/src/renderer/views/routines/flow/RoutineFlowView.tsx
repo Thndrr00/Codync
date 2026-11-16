@@ -166,6 +166,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                   setSelection({ kind: 'node', key: `routine:${id}` })
                   void flow.test(id)
                 }}
+                onStop={() => void store.stop(botId)}
               />
             ) : (
               <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} />

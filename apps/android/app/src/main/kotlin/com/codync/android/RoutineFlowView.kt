@@ -96,7 +96,7 @@ private fun Context.screenReaderOn(): Boolean =
             FlowList(canvas, byId) { selection = it }
         } else {
             FlowCanvasView(canvas, byId, online && !busy, { selection = it }, { key, x, y -> store.moveFlowNode(bot.id, key, x, y) },
-                { routineId -> store.testFlow(bot.id, routineId) })
+                { routineId -> store.testFlow(bot.id, routineId) }, { store.stopBot(bot) })
         }
     }
 

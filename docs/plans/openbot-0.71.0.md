@@ -15,6 +15,7 @@ and provider drivers), so this page records what applies, what Codync already do
 | --- | --- | --- |
 | In your own WhatsApp chat, each message from an agent no longer ends with one to three empty lines | The answer goes out trimmed at the end, paragraph breaks inside it kept | `host/src/whatsapp/outgoing.rs` (`outbound_text`) |
 | Asking an agent to delete a memory that you set yourself now sends you to its Memories settings | `forget_memory` refuses a note whose current version was written by the person and tells them to delete it there | `host/src/chat/memory/beliefs.rs` |
+| Stop a routine run from the Routines canvas: while the routine in focus works, Stop takes the place of Run now, in the top bar and in the details panel | Each routine carries the live run's `running` id (`Routines::list`); a routine card shows **Stop** while it has one and **Run** otherwise, and Stop cancels the bot's turn, which is the run's turn | `host/src/routines/mod.rs`, `FlowNodeCard.tsx` and `FlowCanvas.tsx` (desktop), `RoutineFlowCanvas.kt` and `RoutineFlowView.kt` (Android), [routine flows](../features/routine-flows.md#running-a-flow) |
 
 ## Added
 
@@ -65,11 +66,10 @@ and provider drivers), so this page records what applies, what Codync already do
   engine is the platform's on both phones and its own chunking on the desktop
   (`views/call/voice.ts`), so these are written against OpenBot's engine. They are candidates for a
   look of their own, not copies.
-- **The canvas**: dragging a step or a note by its text, the caret where a click lands, and Stop for
-  the routine in focus. Codync's flow canvas has its own pointer handling (`lib/routine-flow.ts`,
-  `core/RoutineFlow.kt`), and it has no run controls: a run is started from the routine's own editor
-  and stopped from its notice in the chat (**Cancel task**, `store.cancelRoutineRun`). A canvas Stop
-  is a canvas feature of its own, not a copy of this one.
+- **The canvas's pointer rules**: dragging a step or a note by its text, and the caret where a click
+  lands. Codync's flow canvas has its own pointer handling (`lib/routine-flow.ts`,
+  `core/RoutineFlow.kt`) and its nodes are labels, not editable text: editing is in the inspector, so
+  there is no caret to place. Stop is in (above).
 - **A note path from a notes app written as a file link**, **the image viewer's sharpness at a display
   scale above 100 %**, **resizing the right panel when no pane is open**, **the empty WhatsApp lines of
   a theme**: each is a small UI or copy fix whose Codync counterpart needs its own read; none is taken

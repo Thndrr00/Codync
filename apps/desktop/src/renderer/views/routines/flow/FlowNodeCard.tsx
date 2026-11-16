@@ -94,10 +94,11 @@ interface Props {
   onKey: (event: KeyboardEvent) => void
   /** Runs this routine's flow; only routine cards have it. */
   onRun?: () => void
+  onStop?: () => void
 }
 
 /** One node of the canvas: a routine with its week and last runs, a bot with its latest step, or a step that makes a picture or a clip. */
-export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun }: Props) {
+export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop }: Props) {
   const tr = useTr()
   const title = node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : (bot?.name ?? tr('Unknown bot'))
   const kindName = node.kind === 'routine' ? tr('Routine') : node.kind === 'media' ? tr(media?.kind === 'video' ? 'Clip step' : 'Picture step') : tr('Bot')
@@ -138,7 +139,22 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
             <Text size="caption" tone="secondary" truncate>{routine?.routine.triggerDescriptions.join(' · ')}</Text>
           )}
         </VStack>
-        {node.kind === 'routine' && onRun ? (
+        {node.kind === 'routine' && routine?.routine.running && onStop ? (
+          <button
+            type="button"
+            className="flow-run-button flow-stop-button"
+            title={tr('Stop')}
+            aria-label={tr('Stop')}
+            disabled={disabled}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              onStop()
+            }}
+          >
+            <Icon name="stop.fill" size={12} />
+          </button>
+        ) : node.kind === 'routine' && onRun ? (
           <button
             type="button"
             className="flow-run-button"

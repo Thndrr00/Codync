@@ -305,7 +305,15 @@ impl Routines {
                 run
             })
             .collect::<Vec<_>>();
-        json!({"routines": state.routines.iter().filter(|r| r.bot_id == bot && !r.deleted).map(public).collect::<Vec<_>>(),
+        json!({"routines": state.routines.iter().filter(|r| r.bot_id == bot && !r.deleted).map(|routine| {
+            let mut value = public(routine);
+            // The run in flight, so a canvas can offer Stop for it (OpenBot 0.71.0). A queued run counts
+            // too: stopping it is how a person takes it back before it starts.
+            if let Some(run) = state.runs.iter().rev().find(|run| run.routine_id == routine.id && run.status.active()) {
+                value["running"] = json!(run.id);
+            }
+            value
+        }).collect::<Vec<_>>(),
             "runs": runs})
     }
 

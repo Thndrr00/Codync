@@ -51,6 +51,8 @@ export interface Routine {
   outputDescriptions?: string[] | null
   /** Runs post in a thread of the bot's chat. */
   thread?: boolean | null
+  /** The run in flight (or waiting to start), so a canvas can offer Stop for it. */
+  running?: string | null
 }
 
 export interface RoutineRun {

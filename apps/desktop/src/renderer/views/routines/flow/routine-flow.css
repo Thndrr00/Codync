@@ -224,6 +224,14 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* The run in flight: Stop takes the play button's place, in the danger colour. */
+.flow-stop-button {
+  color: var(--danger);
+}
+.flow-stop-button:hover {
+  background: var(--danger);
+  color: var(--on-danger, #fff);
+}
 
 /* The week ahead: one thin column per day, a tick per occurrence. */
 .flow-week {

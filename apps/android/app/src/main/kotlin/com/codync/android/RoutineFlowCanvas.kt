@@ -61,7 +61,7 @@ import kotlin.math.roundToInt
  * the view, whose translation is in pixels. A drag on a node moves it (saved on release); a drag elsewhere pans; a pinch zooms.
  */
 @Composable internal fun FlowCanvasView(canvas: FlowCanvas, bots: Map<String, Bot>, editable: Boolean, select: (FlowSelection) -> Unit,
-    move: (String, Double, Double) -> Unit, run: (String) -> Unit) {
+    move: (String, Double, Double) -> Unit, run: (String) -> Unit, stop: () -> Unit) {
     val nodes = remember(canvas) { RoutineFlow.layout(canvas) }
     val edges = remember(canvas) { RoutineFlow.edges(canvas) }
     val density = LocalDensity.current.density
@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
                         live = Triple(node.key, base.second + dx, base.third + dy)
                     },
                     drop = { live?.takeIf { it.first == node.key }?.let { move(node.key, it.second, it.third) }; live = null },
-                    run = run)
+                    run = run, stop = stop)
             }
             // Each link has a small handle at the middle of its edge, so it can be selected on the canvas too.
             for (edge in edges.filter { it.linkId != null }) {
@@ -186,7 +186,7 @@ import kotlin.math.roundToInt
 
 /** One node: a routine with its week and last runs, a bot with its avatar and latest step, or a step that makes a picture or a clip. */
 @Composable private fun FlowNodeCard(node: Node, x: Double, y: Double, canvas: FlowCanvas, bots: Map<String, Bot>, editable: Boolean,
-    select: (FlowSelection) -> Unit, drag: (Double, Double) -> Unit, drop: () -> Unit, run: (String) -> Unit) {
+    select: (FlowSelection) -> Unit, drag: (Double, Double) -> Unit, drop: () -> Unit, run: (String) -> Unit, stop: () -> Unit) {
     val density = LocalDensity.current.density
     val card = if (node.isRoutine) canvas.routines.firstOrNull { it.routine.id == node.id } else null
     val media = RoutineFlow.mediaOf(canvas, node.key)
@@ -223,9 +223,13 @@ import kotlin.math.roundToInt
             }
             if (card != null) {
                 val connected = !RoutineFlow.isUnconnected(canvas, card.routine.id)
-                IconButton(tr(if (connected) "Run this routine now" else "Connect a bot first"), "play.fill",
-                    enabled = editable && connected) {
-                    run(card.routine.id)
+                if (card.routine.running != null) {
+                    IconButton(tr("Stop"), "stop.fill", enabled = editable) { stop() }
+                } else {
+                    IconButton(tr(if (connected) "Run this routine now" else "Connect a bot first"), "play.fill",
+                        enabled = editable && connected) {
+                        run(card.routine.id)
+                    }
                 }
             }
         }
