@@ -238,6 +238,17 @@ impl Actor {
             }
             _ => {}
         }
+        // Idea 44: a check-in or routine can't tap an approval card. Refuse external-app
+        // tools that would ask when the bot has background apps turned off.
+        if let Some(reason) = crate::agent::approval_gate::background_apps_reason(
+            self.active_routine.is_some() || self.proactive_turn,
+            self.cfg.proactive.apps_in_background,
+            &evaluation,
+            &title,
+        ) {
+            self.refuse(rpc_id, &options, &reason).await;
+            return;
+        }
         let rule_pattern = match &evaluation.outcome {
             Outcome::Rule { pattern, .. } => Some(pattern.clone()),
             _ => None,
