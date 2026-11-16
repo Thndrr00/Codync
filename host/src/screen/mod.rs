@@ -155,6 +155,12 @@ impl Screen {
         browser_panel::navigation_history(self, tab).await
     }
 
+    /// Injects a script into the browser panel, for the teaching recorder.
+    #[cfg(windows)]
+    pub async fn inject_script(&self, tab: Option<&str>, script: &str) -> anyhow::Result<()> {
+        browser_panel::inject_script(self, tab, script).await
+    }
+
     pub fn new(enabled: Option<bool>, events: broadcast::Sender<Value>) -> Self {
         let (helper_generation, _) = watch::channel(0);
         Self {

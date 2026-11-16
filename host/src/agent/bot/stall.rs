@@ -1,6 +1,12 @@
 //! Stall gate: stops a turn that keeps failing the same way. When the same tool call fails with the same
 //! error [`SAME_ERROR_STRIKES`] times in a row, with no successful tool call in between, the agent is looping
 //! and only spending the user's quota; the host stops the turn and says why.
+//!
+//! Call arguments are compared as canonical JSON with sorted keys (`stable_json`), so two attempts that
+//! differ only in key order are still the same blind retry (Idea 31 from bdots). Codync keeps its own
+//! three-strike threshold instead of bdots' five: a stuck agent is stopped sooner.
+
+use serde_json::Value;
 
 /// Identical failures in a row that stop the turn.
 pub const SAME_ERROR_STRIKES: u8 = 3;
@@ -10,7 +16,7 @@ const ERROR_TEXT_MAX: usize = 200;
 /// What a tool call ended with, as far as the gate cares.
 pub enum ToolOutcome<'a> {
     Succeeded,
-    Failed { title: &'a str, output: &'a str },
+    Failed { title: &'a str, output: &'a str, args: Option<&'a str> },
 }
 
 #[derive(Default)]
@@ -24,12 +30,12 @@ pub struct LoopGuard {
 impl LoopGuard {
     /// Records a finished tool call; returns the reason the first time the gate trips.
     pub fn observe(&mut self, outcome: &ToolOutcome<'_>) -> Option<String> {
-        let ToolOutcome::Failed { title, output } = outcome else {
+        let ToolOutcome::Failed { title, output, args } = outcome else {
             self.last = None;
             self.strikes = 0;
             return None;
         };
-        let signature = format!("{title}\n{}", normalize(output));
+        let signature = format!("{title}\n{}\n{}", stable_args(args), normalize(output));
         if self.last.as_deref() == Some(signature.as_str()) {
             self.strikes += 1;
         } else {
@@ -80,12 +86,47 @@ fn normalize(text: &str) -> String {
     }
 }
 
+/// Canonical JSON: object keys sorted alphabetically at every level, so the same call with its
+/// properties in a different order has one signature (Idea 31's `stableJson()`).
+pub fn stable_json(value: &Value) -> String {
+    match value {
+        Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let body = keys
+                .iter()
+                .map(|key| format!("{}:{}", quote(key.as_str()), stable_json(&map[key.as_str()])))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{{{body}}}")
+        }
+        Value::Array(items) => {
+            let body = items.iter().map(stable_json).collect::<Vec<_>>().join(",");
+            format!("[{body}]")
+        }
+        other => other.to_string(),
+    }
+}
+
+fn quote(text: &str) -> String {
+    serde_json::to_string(text).unwrap_or_else(|_| format!("\"{text}\""))
+}
+
+/// Canonical form of a tool call's raw arguments; unparseable text is used as-is.
+fn stable_args(args: Option<&str>) -> String {
+    let Some(args) = args else { return String::new() };
+    match serde_json::from_str::<Value>(args) {
+        Ok(value) => stable_json(&value),
+        Err(_) => args.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn failed<'a>(title: &'a str, output: &'a str) -> ToolOutcome<'a> {
-        ToolOutcome::Failed { title, output }
+        ToolOutcome::Failed { title, output, args: None }
     }
 
     #[test]
@@ -120,6 +161,32 @@ mod tests {
             guard.observe(&failed(title, "File does not exist."));
         }
         assert!(guard.tripped().is_none());
+    }
+
+    #[test]
+    fn argument_key_order_does_not_hide_a_blind_retry() {
+        let mut guard = LoopGuard::default();
+        let a = r#"{"path":"src/a.rs","mode":"write","nested":{"z":1,"a":2}}"#;
+        let b = r#"{"nested":{"a":2,"z":1},"mode":"write","path":"src/a.rs"}"#;
+        let call = |args| ToolOutcome::Failed { title: "Write", output: "read-only", args: Some(args) };
+        assert!(guard.observe(&call(a)).is_none());
+        assert!(guard.observe(&call(b)).is_none());
+        assert!(guard.observe(&call(a)).is_some(), "same call in a different key order still trips");
+    }
+
+    #[test]
+    fn different_arguments_are_not_the_same_call() {
+        let mut guard = LoopGuard::default();
+        let call = |args| ToolOutcome::Failed { title: "Read", output: "missing", args: Some(args) };
+        guard.observe(&call(r#"{"path":"a.rs"}"#));
+        guard.observe(&call(r#"{"path":"b.rs"}"#));
+        assert!(guard.tripped().is_none());
+    }
+
+    #[test]
+    fn stable_json_sorts_keys_at_every_level() {
+        let value: Value = serde_json::from_str(r#"{"b":{"d":1,"c":2},"a":[{"z":0,"y":1}]}"#).unwrap();
+        assert_eq!(stable_json(&value), r#"{"a":[{"y":1,"z":0}],"b":{"c":2,"d":1}}"#);
     }
 
     #[test]

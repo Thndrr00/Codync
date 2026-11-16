@@ -82,10 +82,10 @@ impl Actor {
     }
 
     /// Feeds a finished tool call to the stall gate; a tripped gate is stopped by `on_incoming`.
-    fn observe_tool_end(&mut self, status: &str, title: &str, output: &str) {
+    fn observe_tool_end(&mut self, status: &str, title: &str, output: &str, args: Option<&str>) {
         let outcome = match status {
             "completed" => ToolOutcome::Succeeded,
-            "failed" => ToolOutcome::Failed { title, output },
+            "failed" => ToolOutcome::Failed { title, output, args },
             _ => return,
         };
         if let Some(reason) = self.loop_guard.observe(&outcome) {
@@ -123,7 +123,8 @@ impl Actor {
                 crate::chat::memory::turns::touched(&self.hub, &self.cfg, &data);
                 let title = data["title"].as_str().unwrap_or("Tool").to_owned();
                 let status = data["status"].as_str().unwrap_or_default().to_owned();
-                self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default());
+                let args = serde_json::to_string(&u["rawInput"]).ok();
+                self.observe_tool_end(&status, &title, data["output"].as_str().unwrap_or_default(), args.as_deref());
                 let working = activity(&data).to_owned();
                 if let Some(e) = self.add(EntryKind::Tool, turn, data) {
                     self.tools.insert(tool_id, e.id);
@@ -151,7 +152,8 @@ impl Actor {
                 let title = e.data["title"].as_str().unwrap_or("Tool").to_owned();
                 self.hub.set_entry(&entry_id, &e.data);
                 if status != before {
-                    self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default());
+                    let args = serde_json::to_string(&u["rawInput"]).ok();
+                    self.observe_tool_end(&status, &title, e.data["output"].as_str().unwrap_or_default(), args.as_deref());
                 }
                 if let Some(working) = working {
                     self.set_activity(&working);

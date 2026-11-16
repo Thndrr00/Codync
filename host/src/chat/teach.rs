@@ -133,15 +133,26 @@ fn teach_kv_key(bot: &str) -> String {
 pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "recorded_steps" => steps(hub, bot),
-        "start_teaching" => start_teaching(hub, bot, args),
+        "start_teaching" => start_teaching(hub, bot, args).await,
         "finish_teaching" => finish_teaching(hub, bot, args).await,
         _ => bail!("unknown teach tool: {name}"),
     }
 }
 
-fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
+async fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     let url = args["url"].as_str().map(str::trim).filter(|s| !s.is_empty());
     let goal = args["goal"].as_str().map(str::trim).filter(|s| !s.is_empty());
+    // Ideas 38–39: arm the recorder in the browser panel before the person starts clicking.
+    // A desktop-only demonstration has no panel and keeps working from chat tool steps.
+    #[cfg(windows)]
+    let recorder = hub
+        .screen
+        .inject_script(None, RECORDER)
+        .await
+        .inspect_err(|error| tracing::warn!(error = format!("{error:#}"), "could not inject the teaching recorder"))
+        .is_ok();
+    #[cfg(not(windows))]
+    let recorder = false;
     let state = json!({
         "startedAt": crate::store::now_ms(),
         "startSeq": hub.store.last_seq(bot),
@@ -160,6 +171,7 @@ fn start_teaching(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         "url": url,
         "goal": goal,
         "recorderScriptBytes": RECORDER.len(),
+        "recorderInstalled": recorder,
         "message": "Teaching session started. Ask the user to perform the steps and tell you when they are done, then call finish_teaching."
     }))
 }

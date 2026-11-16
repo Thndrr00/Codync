@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { insertCodeBlock, quote, wrapInCode } from './composer-edits.ts'
+import { draftAfterDissolve, insertCodeBlock, quote, wrapInCode } from './composer-edits.ts'
 
 test('wrapping a selection edits one range and keeps it selected', () => {
   assert.deepEqual(wrapInCode('run ls now', 4, 6), { start: 4, end: 6, replacement: '`ls`', selectionStart: 5, selectionEnd: 7 })
@@ -28,4 +28,9 @@ test('a block starts on a new line after text', () => {
 
 test('quote prefixes each selected line', () => {
   assert.equal(quote('a\nb\nc', 0, 3).replacement, '> a\n> b')
+})
+
+test('the delayed clear empties the sent text but keeps anything typed afterwards', () => {
+  assert.equal(draftAfterDissolve('sent text', 'sent text'), '')
+  assert.equal(draftAfterDissolve('sent text and more', 'sent text'), 'sent text and more')
 })

@@ -245,6 +245,29 @@ fn normalize_history(result: &Value) -> Vec<Value> {
         .collect()
 }
 
+/// Injects the teaching recorder into a tab: once for future documents and once for the page
+/// already open, so a demonstration can start before any navigation (Ideas 38–39).
+pub async fn inject_script(screen: &Screen, tab: Option<&str>, script: &str) -> Result<()> {
+    let mut current = screen.panel.lock().await;
+    let panel = current.as_mut().context("Open the browser panel first")?;
+    let target = tab.map_or_else(|| panel.active.clone(), str::to_owned);
+    let attached =
+        rpc(&mut panel.pipe, "Target.attachToTarget", json!({"targetId":target,"flatten":true}), None).await?;
+    let session = attached["sessionId"].as_str().context("Could not reach the tab")?.to_owned();
+    let added = rpc(
+        &mut panel.pipe,
+        "Page.addScriptToEvaluateOnNewDocument",
+        json!({"source":script}),
+        Some(&session),
+    )
+    .await;
+    let now = rpc(&mut panel.pipe, "Runtime.evaluate", json!({"expression":script}), Some(&session)).await;
+    rpc(&mut panel.pipe, "Target.detachFromTarget", json!({"sessionId":session}), None).await.ok();
+    added?;
+    now?;
+    Ok(())
+}
+
 /// Closes the panel's browser.
 pub async fn shutdown(screen: &Screen) -> Result<Value> {
     let mut current = screen.panel.lock().await;

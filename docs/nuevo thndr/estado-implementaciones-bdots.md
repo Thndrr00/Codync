@@ -29,10 +29,14 @@ integración, no el actual.
 Cada cambio lleva tests unitarios: `ContextPruner`, deduplicación de rutinas, puerta de aprobación,
 normalización del historial CDP, geometría de la pastilla y decodificación de los modelos iOS.
 
-## Matiz pendiente
+## Matices cerrados
 
-- Idea 31: el `LoopGuard` de Codync usa 3 strikes y normalización distinta del `stableJson()` de
-  bdots. Es una adaptación equivalente en propósito, no una copia literal.
-- Idea 28: el "dissolve" al limpiar se aplica al buscador del marketplace, no al compositor de chat.
-- El grabador DOM (`RECORDER`) sigue sin inyectarse automáticamente en el panel del navegador: los
-  eventos los aporta el agente. La idea 40 ya obtiene el historial de páginas directamente de CDP.
+- Idea 31: `LoopGuard` ya compara argumentos como JSON canónico con claves ordenadas en todos los
+  niveles (`stable_json`). Codync conserva sus 3 strikes en vez de los 5 de bdots: es una decisión
+  de producto para frenar antes al agente atascado, no una laguna.
+- Idea 28: el compositor de chat ya disuelve el texto con una micro-escala hacia abajo al enviar o
+  ejecutar un comando que limpia el borrador. El borrador solo se vacía si no se escribió nada
+  durante la animación. El `.t-clear` del buscador del marketplace se mantiene.
+- Grabador DOM (ideas 38–39): `start_teaching` inyecta `RECORDER` en el panel del navegador con
+  `Page.addScriptToEvaluateOnNewDocument` y `Runtime.evaluate` (solo Windows, donde existe el
+  panel). Devuelve `recorderInstalled` para que el agente sepa si los eventos DOM estarán disponibles.
