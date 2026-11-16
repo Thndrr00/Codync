@@ -39,14 +39,6 @@ impl PolicyEffect {
             Self::Deny => "deny",
         }
     }
-
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "allow" => Some(Self::Allow),
-            "deny" => Some(Self::Deny),
-            _ => None,
-        }
-    }
 }
 
 /// One rule as it is saved.
