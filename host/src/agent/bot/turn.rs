@@ -449,6 +449,19 @@ impl Actor {
         }
         self.turn = None;
         self.reply_hops = None;
+        // Files the agent changed during the turn are taken in now, not only at the next turn. A file
+        // written moments ago is still settling, so it gets one more look shortly after.
+        {
+            let (hub, cfg) = (self.hub.clone(), self.cfg.clone());
+            tokio::task::spawn_blocking(move || {
+                if memory::files::scan(&hub, &cfg) {
+                    std::thread::sleep(Duration::from_millis(
+                        u64::try_from(memory::files::SETTLE_MS).unwrap_or(2000) + 250,
+                    ));
+                    memory::files::scan(&hub, &cfg);
+                }
+            });
+        }
         // A call's opening is heard on the call: no alert.
         let opening = std::mem::take(&mut self.active_prompt);
         if self.routine_completion.is_none() {

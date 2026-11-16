@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 /// A file changed more recently than this may still be mid-write: the next scan takes it.
-pub(super) const SETTLE_MS: i64 = 2_000;
+pub(crate) const SETTLE_MS: i64 = 2_000;
 /// How long a file's earlier versions are kept, and with them what a bot forgot.
 const KEEP_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
