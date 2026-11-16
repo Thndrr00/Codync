@@ -206,8 +206,8 @@ internal fun <T> tabPillOffset(bounds: Map<T, DpSize>, options: List<T>, index: 
         tabPillOffset(bounds, options.map { it.first }, index, spacing),
         Motion.layout(), label = "TabPillX",
     )
-    val pillWidth by animateDpAsState(bounds[selected]?.width ?: 0.dp, Motion.layout(), label = "TabPillWidth")
-    val pillHeight by animateDpAsState(bounds[selected]?.height ?: 0.dp, Motion.layout(), label = "TabPillHeight")
+    val pillWidth by animateDpAsState(selected?.let { bounds[it]?.width } ?: 0.dp, Motion.layout(), label = "TabPillWidth")
+    val pillHeight by animateDpAsState(selected?.let { bounds[it]?.height } ?: 0.dp, Motion.layout(), label = "TabPillHeight")
     // Four long labels (German) on a narrow phone scroll rather than cut a label short.
     Box(modifier.horizontalScroll(rememberScrollState())) {
         if (index >= 0 && pillWidth > 0.dp && pillHeight > 0.dp) {

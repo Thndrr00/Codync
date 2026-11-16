@@ -640,11 +640,12 @@ mod tests {
             run.report_pending = true;
             run
         };
+        let (first, second) = (finished("run-1"), finished("run-2"));
         let routines = Routines::default();
         routines
             .change(&hub.store, |s| {
                 s.routines.push(routine);
-                s.runs.extend([finished("run-1"), finished("run-2")]);
+                s.runs.extend([first, second]);
                 Ok(())
             })
             .unwrap();
