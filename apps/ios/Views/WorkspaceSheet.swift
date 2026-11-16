@@ -11,6 +11,10 @@ struct WorkspaceSheet: View {
     @Environment(\.openURL) private var openURL
     @State private var tab = Tab.board
     @State private var tasks: [BoardTask] = []
+    @State private var waiting: [WaitingItem] = []
+    @State private var waitTitle = ""
+    @State private var waitWho = ""
+    @State private var waitDue = ""
     @State private var templates: [TeamTemplate] = []
     @State private var links: [SharedLink] = []
     @State private var feeds: [CalendarFeed] = []
@@ -96,6 +100,37 @@ struct WorkspaceSheet: View {
                     Text("Nothing on the board yet.").foregroundStyle(Palette.secondary)
                 }
             }
+            CardSection("Waiting on", footer: "Replies, reviews and deliveries other people owe you. They show in the daily digest and a bot can list them.") {
+                TextField("What are you waiting on", text: $waitTitle).plainTextInput().workspaceField()
+                TextField("From (optional)", text: $waitWho).plainTextInput().workspaceField()
+                TextField("Due (2026-11-20, optional)", text: $waitDue).plainTextInput().workspaceField()
+                HStack {
+                    Spacer()
+                    Button("Add") { addWaiting() }
+                        .buttonStyle(.secondary)
+                        .disabled(waitTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                ForEach(waiting.filter { !$0.done }) { item in
+                    HStack(spacing: 8) {
+                        Button { finishWaiting(item) } label: {
+                            Image(systemName: "circle").foregroundStyle(Palette.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title).foregroundStyle(Palette.text)
+                            Text([item.counterpart, waitingDue(item)].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(Palette.secondary)
+                                .opacity(item.counterpart.isEmpty && waitingDue(item).isEmpty ? 0 : 1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contextActions { [MenuItem("Delete", icon: "trash", destructive: true, divider: true) { deleteWaiting(item) }] }
+                }
+                if waiting.allSatisfy({ $0.done }), !loading {
+                    Text("Nothing is waiting on anyone.").font(.caption).foregroundStyle(Palette.secondary)
+                }
+            }
         }
     }
 
@@ -173,6 +208,60 @@ struct WorkspaceSheet: View {
             do {
                 _ = try await store.deleteBoardTask(task.id)
                 tasks = try await store.boardTasks()
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func waitingDue(_ item: WaitingItem) -> String {
+        guard let due = item.dueAt else { return "" }
+        return Date(timeIntervalSince1970: Double(due) / 1000)
+            .formatted(.dateTime.month(.abbreviated).day())
+    }
+
+    private func addWaiting() {
+        let title = waitTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let due = waitDue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dueAt = due.isEmpty ? nil : formatter.date(from: due).map { Int($0.timeIntervalSince1970 * 1000) }
+        if !due.isEmpty, dueAt == nil {
+            error = "The due date is a day, like 2026-11-20."
+            return
+        }
+        Task {
+            do {
+                _ = try await store.saveWaitingItem(
+                    title: title,
+                    counterpart: waitWho.trimmingCharacters(in: .whitespacesAndNewlines),
+                    dueAt: dueAt
+                )
+                waiting = try await store.waitingItems()
+                waitTitle = ""
+                waitWho = ""
+                waitDue = ""
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func finishWaiting(_ item: WaitingItem) {
+        Task {
+            do {
+                _ = try await store.setWaitingDone(item.id, done: true)
+                waiting = try await store.waitingItems()
+                error = nil
+            } catch { self.error = message(error) }
+        }
+    }
+
+    private func deleteWaiting(_ item: WaitingItem) {
+        Task {
+            do {
+                _ = try await store.deleteWaitingItem(item.id)
+                waiting = try await store.waitingItems()
                 error = nil
             } catch { self.error = message(error) }
         }
@@ -491,7 +580,8 @@ struct WorkspaceSheet: View {
             async let calendars = store.calendarFeeds()
             async let agenda = store.calendarAgenda()
             async let mails = store.emailAccounts()
-            (tasks, templates, links, feeds, events, emailAccounts) = try await (board, teams, shared, calendars, agenda, mails)
+            async let pending = store.waitingItems()
+            (tasks, templates, links, feeds, events, emailAccounts, waiting) = try await (board, teams, shared, calendars, agenda, mails, pending)
             if emailAccount.isEmpty { emailAccount = emailAccounts.first?.id ?? "" }
             error = nil
         } catch { self.error = message(error) }

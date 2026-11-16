@@ -102,3 +102,22 @@
 .board-card:active {
   cursor: grabbing;
 }
+
+/* What other people owe you: kept by the host and repeated in the daily digest. */
+.board-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.board-waiting-add {
+  flex-wrap: wrap;
+}
+.board-waiting-row {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--background);
+}
+

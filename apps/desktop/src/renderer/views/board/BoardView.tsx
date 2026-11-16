@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { isGroup } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
-import { Button, ChoicePicker, DropdownMenu, Spinner } from '../../components/Controls'
+import { Button, ChoicePicker, DropdownMenu, IconButton, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, Sheet } from '../../components/Overlay'
 import { HStack, Spacer, VStack } from '../../components/Stack'
@@ -22,6 +22,18 @@ interface BoardTask {
   routineId?: string
   dueAt?: number
   repeat?: string
+  createdAt: number
+  updatedAt: number
+}
+
+interface WaitingItem {
+  id: string
+  title: string
+  counterpart: string
+  url: string
+  note: string
+  dueAt?: number
+  done: boolean
   createdAt: number
   updatedAt: number
 }
@@ -50,6 +62,10 @@ export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; o
   const [computer, setComputer] = useState(() => online[0]?.computer.id ?? '')
   const store = online.find((s) => s.computer.id === computer) ?? online[0]
   const [tasks, setTasks] = useState<BoardTask[]>([])
+  const [waiting, setWaiting] = useState<WaitingItem[]>([])
+  const [waitTitle, setWaitTitle] = useState('')
+  const [waitWho, setWaitWho] = useState('')
+  const [waitDue, setWaitDue] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -71,9 +87,14 @@ export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; o
     let stopped = false
     const load = async () => {
       try {
-        const result = await (await store.ready()).call<{ tasks: BoardTask[] }>('boardTasks', {})
+        const client = await store.ready()
+        const [result, items] = await Promise.all([
+          client.call<{ tasks: BoardTask[] }>('boardTasks', {}),
+          client.call<{ items: WaitingItem[] }>('waitingItems', {}),
+        ])
         if (stopped) return
         setTasks(result.tasks)
+        setWaiting(items.items)
         setError(null)
       } catch (e) {
         if (!stopped && !store.isOffline) setError(errorText(e))
@@ -119,8 +140,65 @@ export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; o
 
   const reload = async () => {
     if (!store) return
-    const result = await (await store.ready()).call<{ tasks: BoardTask[] }>('boardTasks', {})
+    const client = await store.ready()
+    const [result, items] = await Promise.all([
+      client.call<{ tasks: BoardTask[] }>('boardTasks', {}),
+      client.call<{ items: WaitingItem[] }>('waitingItems', {}),
+    ])
     setTasks(result.tasks)
+    setWaiting(items.items)
+  }
+
+  const addWaiting = async () => {
+    if (!store || !waitTitle.trim()) return
+    let dueAt: number | null = null
+    if (waitDue.trim()) {
+      const at = new Date(`${waitDue.trim()}T12:00`).getTime()
+      if (!Number.isFinite(at)) {
+        setError('The due date is a day, like 2026-11-20.')
+        return
+      }
+      dueAt = at
+    }
+    setBusy(true)
+    try {
+      await (await store.ready()).call('saveWaitingItem', {
+        title: waitTitle.trim(),
+        counterpart: waitWho.trim(),
+        dueAt,
+      })
+      setWaitTitle('')
+      setWaitWho('')
+      setWaitDue('')
+      await reload()
+      setError(null)
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const finishWaiting = async (item: WaitingItem) => {
+    if (!store) return
+    setWaiting((list) => list.map((row) => (row.id === item.id ? { ...row, done: true } : row)))
+    try {
+      await (await store.ready()).call('setWaitingDone', { id: item.id, done: true })
+    } catch (e) {
+      setError(errorText(e))
+      await reload().catch(() => {})
+    }
+  }
+
+  const removeWaiting = async (item: WaitingItem) => {
+    if (!store) return
+    setWaiting((list) => list.filter((row) => row.id !== item.id))
+    try {
+      await (await store.ready()).call('deleteWaitingItem', { id: item.id })
+    } catch (e) {
+      setError(errorText(e))
+      await reload().catch(() => {})
+    }
   }
 
   const add = async () => {
@@ -368,6 +446,51 @@ export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; o
               </section>
             ))}
           </div>
+
+          <section className="board-waiting" aria-label={tr('Waiting on')}>
+            <HStack gap={8} align="center">
+              <Text size="callout" weight="semibold" grow>{tr('Waiting on')}</Text>
+              <Text size="caption" tone="tertiary">{waiting.filter((item) => !item.done).length}</Text>
+            </HStack>
+            <Text size="caption" tone="tertiary">
+              {tr('Replies, reviews and deliveries other people owe you. They show in the daily digest and a bot can list them.')}
+            </Text>
+            <HStack gap={8} align="end" className="board-waiting-add">
+              <VStack gap={4} grow>
+                <Text size="caption" tone="secondary">{tr('What are you waiting on?')}</Text>
+                <Field label="Waiting on" value={waitTitle} onChange={setWaitTitle} placeholder="A reply from Sam" />
+              </VStack>
+              <VStack gap={4} grow>
+                <Text size="caption" tone="secondary">{tr('From (optional)')}</Text>
+                <Field label="From" value={waitWho} onChange={setWaitWho} placeholder="Sam" />
+              </VStack>
+              <VStack gap={4}>
+                <Text size="caption" tone="secondary">{tr('Due (optional)')}</Text>
+                <Field label="Due" value={waitDue} onChange={setWaitDue} placeholder="2026-11-20" />
+              </VStack>
+              <Button disabled={busy || !waitTitle.trim()} onClick={() => void addWaiting()}>{tr('Add')}</Button>
+            </HStack>
+            {waiting.filter((item) => !item.done).map((item) => {
+              const due = dueText(item.dueAt)
+              return (
+                <HStack key={item.id} gap={8} align="center" className="board-waiting-row">
+                  <VStack gap={2} grow>
+                    <Text size="callout">{item.title}</Text>
+                    <HStack gap={6} align="center">
+                      {item.counterpart ? <Text size="caption" tone="secondary">{item.counterpart}</Text> : null}
+                      {due ? <Text size="caption" tone={due.late ? 'danger' : 'tertiary'}>{due.text}</Text> : null}
+                      {item.url ? <Text size="caption" tone="tertiary">{item.url}</Text> : null}
+                    </HStack>
+                  </VStack>
+                  <IconButton title={tr('Done')} icon="checkmark" onClick={() => void finishWaiting(item)} />
+                  <IconButton title={tr('Delete')} icon="trash" onClick={() => void removeWaiting(item)} />
+                </HStack>
+              )
+            })}
+            {waiting.every((item) => item.done) ? (
+              <Text size="caption" tone="tertiary">{tr('Nothing is waiting on anyone.')}</Text>
+            ) : null}
+          </section>
         </>
       )}
       <Dialog

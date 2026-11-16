@@ -69,6 +69,7 @@ mod tui;
 mod update;
 mod usage;
 mod voice;
+mod waiting;
 mod weather;
 mod whatsapp;
 

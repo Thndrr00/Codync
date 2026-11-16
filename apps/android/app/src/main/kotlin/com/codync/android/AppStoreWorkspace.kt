@@ -82,6 +82,46 @@ internal suspend fun AppStore.deleteBoardTask(id: String): Boolean =
     hostCall("deleteBoardTask", buildJsonObject { put("id", id) })
         .jsonObject["deleted"]?.jsonPrimitive?.booleanOrNull == true
 
+/** Something other people owe the person; kept on the computer and repeated in the daily digest. */
+internal data class WaitingItem(
+    val id: String,
+    val title: String,
+    val counterpart: String,
+    val url: String,
+    val note: String,
+    val dueAt: Long?,
+    val done: Boolean,
+)
+
+private fun waitingOf(json: JsonObject): WaitingItem = WaitingItem(
+    id = json.str("id") ?: "",
+    title = json.str("title") ?: "",
+    counterpart = json.str("counterpart") ?: "",
+    url = json.str("url") ?: "",
+    note = json.str("note") ?: "",
+    dueAt = json.num("dueAt"),
+    done = json.bool("done") ?: false,
+)
+
+internal suspend fun AppStore.waitingItems(): List<WaitingItem> =
+    (hostCall("waitingItems", buildJsonObject {}).jsonObject["items"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::waitingOf) } ?: emptyList()
+
+internal suspend fun AppStore.saveWaitingItem(title: String, counterpart: String, dueAt: Long?): WaitingItem =
+    waitingOf(hostCall("saveWaitingItem", buildJsonObject {
+        put("title", title)
+        put("counterpart", counterpart)
+        if (dueAt != null) put("dueAt", dueAt)
+    }).jsonObject["item"]?.jsonObject ?: buildJsonObject {})
+
+internal suspend fun AppStore.setWaitingDone(id: String, done: Boolean): Boolean =
+    hostCall("setWaitingDone", buildJsonObject { put("id", id); put("done", done) })
+        .jsonObject["item"]?.jsonObject?.let { it.bool("done") } == true
+
+internal suspend fun AppStore.deleteWaitingItem(id: String): Boolean =
+    hostCall("deleteWaitingItem", buildJsonObject { put("id", id) })
+        .jsonObject["deleted"]?.jsonPrimitive?.booleanOrNull == true
+
 internal suspend fun AppStore.teamTemplates(): List<TeamTemplate> =
     (hostCall("teamTemplates", buildJsonObject {}).jsonObject["templates"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::templateOf) } ?: emptyList()

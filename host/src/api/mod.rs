@@ -172,6 +172,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if crate::email::METHODS.contains(&method) {
         return crate::email::call(hub, method, &b).await;
     }
+    if crate::waiting::METHODS.contains(&method) {
+        return crate::waiting::call(hub, method, &b);
+    }
     if crate::mcp::policy_management::METHODS.contains(&method) {
         market::vault::unlock(hub.clone()).await?;
         return crate::mcp::policy_management::call(hub, method, &b);

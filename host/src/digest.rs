@@ -96,6 +96,13 @@ async fn digest(hub: &Hub) -> Result<Value> {
             text.push_str(&format!("\n- {}", event["title"].as_str().unwrap_or("Untitled")));
         }
     }
+    let waiting = crate::waiting::open(&hub.store);
+    if !waiting.is_empty() {
+        text.push_str(&format!("\nWaiting for: {}", waiting.len()));
+        for item in waiting.iter().take(5) {
+            text.push_str(&format!("\n- {}", item.title));
+        }
+    }
 
     Ok(json!({
         "text": text,
@@ -104,6 +111,7 @@ async fn digest(hub: &Hub) -> Result<Value> {
         "inProgress": doing.iter().take(20).map(|task| task.title.clone()).collect::<Vec<_>>(),
         "approvals": approvals,
         "events": events,
+        "waiting": waiting.iter().take(20).map(|item| item.title.clone()).collect::<Vec<_>>(),
     }))
 }
 

@@ -17,6 +17,7 @@ is bigger than one release.
 | Daily digest and a `daily_digest` tool for bots | done (host) |
 | Weather (`weather` tool, Open-Meteo) | done (host) |
 | Email accounts (IMAP/SMTP via the local Python bridge) | done (host; screens on desktop, iPhone and Android) |
+| Waiting-on tracker that feeds the daily digest | done (host; board section on desktop, iPhone and Android) |
 | Standup in a team chat (`/standup`) | done |
 | Task board that moves itself | done (desktop and phones) |
 | Handoff with context between bots | done |
@@ -143,7 +144,21 @@ to the signed installers.
 - Acceptance: a Google Calendar export URL answers "what's on my calendar this week", and a link in a
   chat is explained from its text.
 
-## Team meeting — done (text and voice)
+## Email and waiting on others — done
+
+- `host/src/email.rs` and `email_bridge.py`: IMAP inbox headers and SMTP sends through the account's
+  own servers. Accounts live in `email-accounts.v1`; passwords go to the encrypted vault. The bridge
+  uses only Python's standard library, so no mail crate or OAuth app is needed; it needs Python 3 on
+  the computer. API: `emailAccounts`, `saveEmailAccount`, `deleteEmailAccount`, `emailInbox`,
+  `emailSend`. Bots get `email_inbox` (read-only) and `email_send`. Desktop Settings › Email and the
+  Workspace sheet's Email tab on both phones add and remove accounts, read the newest headers and send
+  a short message.
+- `host/src/waiting.rs`: replies, reviews and deliveries other people owe the person, kept in
+  `waiting.v1`. API: `waitingItems`, `saveWaitingItem`, `setWaitingDone`, `deleteWaitingItem`. The
+  daily digest adds them, and bots can list them with the read-only `waiting_on` tool. The board on
+  desktop and both phones gains a Waiting on section with an add row, a done action and delete.
+
+## Team meeting - done (text and voice)
 
 - `/minutes` (or `/acta`) in a smart-mode team chat: the lead writes the meeting's decisions, owners
   and open items with `review_document`, then replies with a short summary.

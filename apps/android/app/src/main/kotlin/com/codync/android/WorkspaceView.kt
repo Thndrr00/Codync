@@ -34,6 +34,7 @@ import java.util.Locale
 internal fun WorkspaceSheet(store: AppStore) {
     var tab by remember { mutableStateOf(WorkspaceTab.Board) }
     var tasks by remember { mutableStateOf<List<BoardTask>>(emptyList()) }
+    var waiting by remember { mutableStateOf<List<WaitingItem>>(emptyList()) }
     var templates by remember { mutableStateOf<List<TeamTemplate>>(emptyList()) }
     var links by remember { mutableStateOf<List<SharedLink>>(emptyList()) }
     var feeds by remember { mutableStateOf<List<CalendarFeed>>(emptyList()) }
@@ -49,6 +50,7 @@ internal fun WorkspaceSheet(store: AppStore) {
         loading = true
         try {
             tasks = store.boardTasks()
+            waiting = store.waitingItems()
             templates = store.teamTemplates()
             links = store.sharedLinks()
             feeds = store.calendarFeeds()
@@ -89,6 +91,9 @@ internal fun WorkspaceSheet(store: AppStore) {
                     var title by remember { mutableStateOf("") }
                     var detail by remember { mutableStateOf("") }
                     var more by remember { mutableStateOf(false) }
+                    var waitTitle by remember { mutableStateOf("") }
+                    var waitWho by remember { mutableStateOf("") }
+                    var waitDue by remember { mutableStateOf("") }
                     CardSection("Add a card", "A card can name the bot that owns it; moving it is yours to do.") {
                         row {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -130,6 +135,49 @@ internal fun WorkspaceSheet(store: AppStore) {
                     }
                     if (tasks.isEmpty() && !loading) CardSection {
                         row { Text("Nothing on the board yet.", style = Type.body, color = Palette.secondary) }
+                    }
+                    CardSection("Waiting on", "Replies, reviews and deliveries other people owe you. They show in the daily digest and a bot can list them.") {
+                        row {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FieldBox(waitTitle, { waitTitle = it }, "What are you waiting on")
+                                FieldBox(waitWho, { waitWho = it }, "From (optional)")
+                                FieldBox(waitDue, { waitDue = it }, "Due (2026-11-20, optional)")
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    SecondaryButton("Add", enabled = waitTitle.isNotBlank()) {
+                                        val due = waitDue.trim()
+                                        val dueAt = if (due.isEmpty()) null else runCatching {
+                                            SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(due)?.time
+                                        }.getOrNull()
+                                        if (due.isNotEmpty() && dueAt == null) error = "The due date is a day, like 2026-11-20."
+                                        else run {
+                                            store.saveWaitingItem(waitTitle.trim(), waitWho.trim(), dueAt)
+                                            waiting = store.waitingItems()
+                                            waitTitle = ""; waitWho = ""; waitDue = ""
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        for (item in waiting.filter { !it.done }) row {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(item.title, style = Type.body, color = Palette.text)
+                                    val sub = listOf(item.counterpart, waitingDue(item)).filter { it.isNotEmpty() }.joinToString(" · ")
+                                    if (sub.isNotEmpty()) Text(sub, style = Type.footnote, color = Palette.secondary)
+                                }
+                                LinkButton("Done") { run {
+                                    store.setWaitingDone(item.id, true)
+                                    waiting = store.waitingItems()
+                                } }
+                                LinkButton("Delete") { run {
+                                    store.deleteWaitingItem(item.id)
+                                    waiting = store.waitingItems()
+                                } }
+                            }
+                        }
+                        if (waiting.all { it.done } && !loading) row {
+                            Text("Nothing is waiting on anyone.", style = Type.footnote, color = Palette.secondary)
+                        }
                     }
                 }
                 WorkspaceTab.Teams -> {
@@ -351,4 +399,7 @@ private fun eventTime(event: CalendarEvent): String {
     val day = SimpleDateFormat("d MMM", Locale.getDefault()).format(date)
     return if (event.allDay) day else "$day, " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
 }
+
+private fun waitingDue(item: WaitingItem): String =
+    item.dueAt?.let { SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(it)) } ?: ""
 
