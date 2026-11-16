@@ -45,7 +45,7 @@ pub(super) fn invalidate_link(hub: &Hub) -> Result<()> {
     result
 }
 
-/// Caller holds connector_lock when using this as a publication/turn-start fence.
+/// Caller holds `connector_lock` when using this as a publication/turn-start fence.
 pub(super) fn snapshot(hub: &Hub, event: &Value, me: &str) -> Result<Option<String>> {
     let Some(bot) = event["_codyncBotId"].as_str() else { return Ok(None) };
     let Some(row) = hub.store.bot(bot)?.filter(|row| {

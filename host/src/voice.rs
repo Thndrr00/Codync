@@ -235,10 +235,10 @@ pub fn status(store: &Store) -> Result<Value> {
 /// Text to speech with whatever this computer has: a keyed provider, else its own voice. `None`
 /// when neither can speak, so a meeting simply keeps its text.
 pub async fn speak_here(store: &Store, text: &str) -> Option<Value> {
-    if let Some((provider, model, voice)) = speech_defaults(store) {
-        if let Ok(answer) = speak(store, provider, &model, &voice, text).await {
-            return Some(answer);
-        }
+    if let Some((provider, model, voice)) = speech_defaults(store)
+        && let Ok(answer) = speak(store, provider, &model, &voice, text).await
+    {
+        return Some(answer);
     }
     let audio = local::speak(text).await.ok()?;
     Some(json!({"audio": STANDARD.encode(audio.bytes), "format": audio.format}))

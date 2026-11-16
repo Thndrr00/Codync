@@ -135,12 +135,11 @@ pub(crate) async fn append(
     if !authorized()? {
         return Ok(None);
     }
-    Ok(Some(match result {
-        Ok(Ok(transcript)) => format!("{text}\n\n[Voice note transcript]\n{transcript}"),
-        _ => {
-            tracing::warn!("Channel voice note could not be transcribed");
-            unavailable(text)
-        }
+    Ok(Some(if let Ok(Ok(transcript)) = result {
+        format!("{text}\n\n[Voice note transcript]\n{transcript}")
+    } else {
+        tracing::warn!("Channel voice note could not be transcribed");
+        unavailable(text)
     }))
 }
 

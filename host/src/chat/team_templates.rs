@@ -36,7 +36,7 @@ fn read(hub: &Hub) -> Result<Vec<TeamTemplate>> {
 
 /// The templates this computer keeps, newest first.
 pub fn list(hub: &Hub) -> Result<Vec<TeamTemplate>> {
-    Ok(read(hub)?)
+    read(hub)
 }
 
 /// Saves `group_id` as a template called `name` (or the group's name).

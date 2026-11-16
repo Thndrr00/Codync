@@ -1,4 +1,4 @@
-//! Source: Hermes cron/blueprint_catalog.py at 10d25f8a (MIT).
+//! Source: Hermes `cron/blueprint_catalog.py` at 10d25f8a (MIT).
 //! Adaptation: validated drafts for Codync's routine scheduler, without another job engine.
 
 use anyhow::{Context, Result, anyhow, ensure};

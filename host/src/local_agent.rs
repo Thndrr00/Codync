@@ -37,11 +37,13 @@ pub async fn run(model: Option<String>) -> Result<()> {
                 "agentCapabilities": {"loadSession": false, "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false}},
                 "authMethods": [],
             })),
-            "authenticate" => Ok(json!({})),
+            "authenticate"
+            | "session/cancel"
+            | "session/set_mode"
+            | "session/set_model"
+            | "unstable_setSessionModel" => Ok(json!({})),
             "session/new" => Ok(json!({"sessionId": format!("local-{}", uuid::Uuid::new_v4())})),
             "session/load" => Err(anyhow::anyhow!("a local model has no saved sessions")),
-            "session/cancel" => Ok(json!({})),
-            "session/set_mode" | "session/set_model" | "unstable_setSessionModel" => Ok(json!({})),
             "session/prompt" => {
                 let text = prompt_text(params);
                 if text.trim().is_empty() {

@@ -58,12 +58,14 @@ enum Runtime {
 impl Runtime {
     fn detect(preferred: Option<&str>) -> Result<Self> {
         let wanted = preferred.unwrap_or_default();
-        let found = match wanted {
-            "wasmer" if which("wasmer") => Some(Self::Wasmer),
-            "wasmtime" if which("wasmtime") => Some(Self::Wasmtime),
-            "" if which("wasmtime") => Some(Self::Wasmtime),
-            "" if which("wasmer") => Some(Self::Wasmer),
-            _ => None,
+        let found = if wanted == "wasmer" && which("wasmer") {
+            Some(Self::Wasmer)
+        } else if (wanted == "wasmtime" || wanted.is_empty()) && which("wasmtime") {
+            Some(Self::Wasmtime)
+        } else if wanted.is_empty() && which("wasmer") {
+            Some(Self::Wasmer)
+        } else {
+            None
         };
         found.ok_or_else(|| {
             let name = if wanted.is_empty() { "wasmtime or wasmer" } else { wanted };
@@ -137,9 +139,9 @@ fn installed() -> Vec<(String, Result<Manifest>)> {
     let mut found: Vec<(String, Result<Manifest>)> = entries
         .flatten()
         .filter(|entry| entry.path().is_dir())
-        .filter_map(|entry| {
+        .map(|entry| {
             let id = entry.file_name().to_string_lossy().into_owned();
-            Some((id.clone(), manifest(&id)))
+            (id.clone(), manifest(&id))
         })
         .collect();
     found.sort_by(|a, b| a.0.cmp(&b.0));
@@ -430,7 +432,7 @@ mod tests {
         let manifest = manifest_in(&base, &id).unwrap();
         assert_eq!(manifest.name, "Demo");
         assert_eq!(manifest.tools[0].name, "hello");
-        assert!(manifest_json(&manifest)["tools"][0]["name"] == "hello");
+        assert_eq!(manifest_json(&manifest)["tools"][0]["name"], "hello");
     }
 
     #[test]

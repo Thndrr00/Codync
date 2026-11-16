@@ -244,7 +244,7 @@ mod tests {
         assert_eq!(stage_budget(TOTAL_TIME + Duration::from_secs(1), ASK_TIMEOUT), None);
         assert_eq!(stage_budget(Duration::ZERO, Duration::from_secs(12)), Some(Duration::from_secs(12)));
         assert_eq!(
-            stage_budget(TOTAL_TIME - Duration::from_secs(5), Duration::from_secs(12)),
+            stage_budget(TOTAL_TIME.saturating_sub(Duration::from_secs(5)), Duration::from_secs(12)),
             Some(Duration::from_secs(5))
         );
     }

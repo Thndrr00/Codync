@@ -10,6 +10,7 @@ use crate::chat::{context, memory};
 use crate::store::{Lane, run_session_key};
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
 /// The session a scheduled check-in uses when the bot has a background model: the model is fixed when a session
@@ -239,7 +240,6 @@ impl Actor {
                 env.push(("CODYNC_HERMES_SETTINGS".into(), settings));
                 env.push(("CODYNC_BOT_ID".into(), self.cfg.id.clone()));
                 env.push(("CODYNC_HERMES_PROJECT_ROOT".into(), self.cfg.cwd.clone()));
-                use sha2::{Digest, Sha256};
                 let key = crate::chat::files::digest_hex(&Sha256::digest(self.cfg.id.as_bytes()));
                 env.push((
                     "CODYNC_HERMES_CHILD_SLOTS".into(),

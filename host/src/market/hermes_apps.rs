@@ -63,7 +63,7 @@ pub(super) fn prepare_client(c: &Connector, oauth: &mut super::oauth::OAuth, cal
     Ok(())
 }
 
-/// Keep the OpenBot card when it already names this service or endpoint. User connections
+/// Keep the `OpenBot` card when it already names this service or endpoint. User connections
 /// are marked installed by endpoint/name; their configuration and credentials are never changed.
 pub fn browse(store: &crate::store::Store, connectors: &[Connector], search: &str, port: u16) -> Vec<Value> {
     let query = search.trim().to_lowercase();

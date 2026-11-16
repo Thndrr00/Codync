@@ -1,4 +1,4 @@
-//! Source: Hermes tools/neutts_synth.py and tools/neutts_samples at 10d25f8a (MIT).
+//! Source: Hermes `tools/neutts_synth.py` and `tools/neutts_samples` at 10d25f8a (MIT).
 //! Adaptation: reuse its installed Python, own its process tree, and return bounded WAV clips.
 
 use crate::agent::hermes::Installation;
@@ -124,7 +124,7 @@ fn checked_wav(bytes: &[u8]) -> Result<()> {
                 && u32::from_le_bytes(bytes[start + 4..start + 8].try_into()?) == 24_000
                 && bytes[start + 14..start + 16] == [16, 0];
         } else if tag == b"data" {
-            data = size > 0 && size % 2 == 0;
+            data = size > 0 && size.is_multiple_of(2);
         }
         offset = end.checked_add(size % 2).context("NeuTTS WAV chunk is too large")?;
     }

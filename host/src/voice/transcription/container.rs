@@ -1,4 +1,4 @@
-//! Source: Hermes tools/audio_container.py at 10d25f8a (MIT).
+//! Source: Hermes `tools/audio_container.py` at 10d25f8a (MIT).
 //! Adaptation: typed containers and MIME names for the host's existing speech providers.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

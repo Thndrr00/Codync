@@ -38,24 +38,24 @@ pub(crate) fn snapshots(hub: &Hub) -> Result<Vec<Snapshot>> {
         .collect()
 }
 pub(crate) fn changed(hub: &Hub, previous: Option<Snapshot>) -> Result<()> {
-    if let Some(previous) = previous {
-        if !config::matches(&hub.store, &previous.connection)? {
-            revoke(hub, &previous.connection.id, previous.generation, None)?;
-        }
+    if let Some(previous) = previous
+        && !config::matches(&hub.store, &previous.connection)?
+    {
+        revoke(hub, &previous.connection.id, previous.generation.as_deref(), None)?;
     }
     Ok(())
 }
 
 /// Cancel only turns authenticated by this connection's previous identity.
-pub(crate) fn revoke(hub: &Hub, connection: &str, generation: Option<String>, user: Option<String>) -> Result<()> {
+pub(crate) fn revoke(hub: &Hub, connection: &str, generation: Option<&str>, user: Option<&str>) -> Result<()> {
     for bot in hub.store.bots()?.into_iter().filter(|b| !b.deleted && !b.config.is_group()) {
         // Stopped bots have no active turn; queued input remains fenced at actor start.
         if let Err(error) = hub.send_cmd(
             &bot.config.id,
             Cmd::NativeAuthorizationChanged {
                 connection: connection.into(),
-                generation: generation.clone(),
-                user: user.clone(),
+                generation: generation.map(str::to_owned),
+                user: user.map(str::to_owned),
             },
         ) {
             tracing::debug!(%error,bot=%bot.config.id,"Native actor already stopped");
@@ -88,7 +88,7 @@ pub(crate) fn call(hub: &Hub, method: &str, body: &Value) -> Result<Value> {
             let allowed = body["allowed"].as_bool().context("Allowed decision is required")?;
             hub.store.native_set_user(id, &generation, user, allowed)?;
             if !allowed {
-                revoke(hub, id, Some(generation), Some(user.into()))?;
+                revoke(hub, id, Some(&generation), Some(user))?;
             }
             Ok(json!({"ok":true}))
         }

@@ -217,7 +217,7 @@ pub(crate) async fn api(hub: &Arc<Hub>, method: &str, body: &Value) -> Result<Va
     } else {
         load(&hub.store, bot)?
     };
-    let mut result = json!({"revision":saved.as_ref().map(|s| &s.revision),"config":saved.as_ref().map(|s| s.config.clone()).unwrap_or_else(|| Settings {memory_provider:native(),..Settings::default()}),"applyAfterCurrentTurn":true});
+    let mut result = json!({"revision":saved.as_ref().map(|s| &s.revision),"config":saved.as_ref().map_or_else(|| Settings {memory_provider:native(),..Settings::default()}, |s| s.config.clone()),"applyAfterCurrentTurn":true});
     if method == "hermesRuntimeStatus" {
         let config = saved.map(|s| s.config).unwrap_or_default();
         result["installation"] = match super::Installation::resolve(&config).await {

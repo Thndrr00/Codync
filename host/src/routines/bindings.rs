@@ -10,14 +10,13 @@ impl Run {
         if !outputs.iter().any(|output| output.kind == "whatsapp") {
             return Ok(());
         }
-        let binding = match &self.whatsapp_binding {
-            Some(binding) => binding.clone(),
-            None => {
-                let captured = store.snapshot_whatsapp_output(&self.event)?;
-                let binding = captured["whatsappBinding"].clone();
-                self.whatsapp_binding = Some(binding.clone());
-                binding
-            }
+        let binding = if let Some(binding) = &self.whatsapp_binding {
+            binding.clone()
+        } else {
+            let captured = store.snapshot_whatsapp_output(&self.event)?;
+            let binding = captured["whatsappBinding"].clone();
+            self.whatsapp_binding = Some(binding.clone());
+            binding
         };
         if !self.event.is_object() {
             self.event = json!({"triggerData":self.event});

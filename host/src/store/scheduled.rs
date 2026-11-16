@@ -116,7 +116,7 @@ impl Store {
                 text.chars().count() <= MAX_TEXT_CHARS,
                 "a scheduled message is at most {MAX_TEXT_CHARS} characters"
             );
-            message.text = text.to_owned();
+            text.clone_into(&mut message.text);
         }
         if let Some(send_at) = send_at {
             ensure!(send_at >= now - GRACE_MS, "that time has already passed");

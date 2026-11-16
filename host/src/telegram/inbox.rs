@@ -13,7 +13,7 @@ fn prefix(name: &str) -> String {
     format!("telegram.inbox.{}.", crate::chat::files::digest_hex(&Sha256::digest(name.as_bytes())))
 }
 
-/// The configuration caller holds connector_lock while removing the connection.
+/// The configuration caller holds `connector_lock` while removing the connection.
 pub(super) fn forget(store: &crate::store::Store, name: &str) -> Result<()> {
     for key in store.kv_prefix(&prefix(name)) {
         store.kv_delete(&key)?;
@@ -129,16 +129,16 @@ impl Inbox {
             }
             worker::handle(hub, ep, name, shared, update, &self.tag).await;
             worker::checkpoint(hub, name, &bot.token, update)?;
-        } else if !self.push(hub, name, update)? {
-            if let Some(chat) = message["chat"]["id"].as_i64() {
-                worker::say(
-                    ep,
-                    &bot,
-                    chat,
-                    "The input queue is full or this message is too large. Please try again shortly.",
-                )
-                .await;
-            }
+        } else if !self.push(hub, name, update)?
+            && let Some(chat) = message["chat"]["id"].as_i64()
+        {
+            worker::say(
+                ep,
+                &bot,
+                chat,
+                "The input queue is full or this message is too large. Please try again shortly.",
+            )
+            .await;
         }
         Ok(())
     }

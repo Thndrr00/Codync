@@ -146,7 +146,7 @@ async fn a2a(
     }
     let task_id = format!("task-{}", uuid::Uuid::new_v4());
     let context_id =
-        params["contextId"].as_str().filter(|c| !c.is_empty()).map(str::to_owned).unwrap_or_else(|| task_id.clone());
+        params["contextId"].as_str().filter(|c| !c.is_empty()).map_or_else(|| task_id.clone(), str::to_owned);
     let result = match crate::chat::oneshot::one_shot(&hub, &row.config, A2A_SYSTEM, text).await {
         Ok(answer) => json!({
             "kind": "task",
@@ -536,7 +536,7 @@ async fn agui(
                 return events;
             }
         })
-        .flat_map(|events| futures::stream::iter(events))
+        .flat_map(futures::stream::iter)
     };
     Ok(Sse::new(started.chain(finished)).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }

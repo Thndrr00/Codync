@@ -242,8 +242,7 @@ impl Back {
     /// or the cloud assistant hears so, without a reply turn.
     fn cancelled(&self, hub: &Arc<Hub>, hops: u8) {
         match self {
-            Self::Openai => {}
-            Self::Local { .. } => {}
+            Self::Openai | Self::Local { .. } => {}
             Self::Remote(to) => remote::cancelled(hub, to, hops),
             Self::Assistant { request } => hub.assistant.cancelled(request),
         }
@@ -472,13 +471,19 @@ fn message_args(args: &Value) -> Result<(&str, String)> {
         if !summary.is_empty() || !files.is_empty() || !questions.is_empty() {
             let mut note = String::from("[Handoff from the bot that had this work before you]\n");
             if !summary.is_empty() {
-                note.push_str(&format!("What was done: {summary}\n"));
+                note.push_str("What was done: ");
+                note.push_str(summary);
+                note.push('\n');
             }
             if !files.is_empty() {
-                note.push_str(&format!("Files that matter: {}\n", files.join(", ")));
+                note.push_str("Files that matter: ");
+                note.push_str(&files.join(", "));
+                note.push('\n');
             }
             if !questions.is_empty() {
-                note.push_str(&format!("Still open: {}\n", questions.join("; ")));
+                note.push_str("Still open: ");
+                note.push_str(&questions.join("; "));
+                note.push('\n');
             }
             note.push_str("Do not repeat that work; start from it.\n\n");
             message = format!("{note}{message}");

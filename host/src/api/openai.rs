@@ -1,4 +1,4 @@
-//! Source reference: Hermes gateway/platforms/api_server_openai_routes.py (MIT, 10d25f8a).
+//! Source reference: Hermes `gateway/platforms/api_server_openai_routes.py` (MIT, 10d25f8a).
 //! Adaptation: local scoped authentication and completions through Codync's normal bot actor.
 
 use super::openai_keys::{self, Grant};
@@ -34,6 +34,7 @@ fn error(status: StatusCode, message: &str) -> Response {
         .into_response()
 }
 
+#[allow(clippy::result_large_err)]
 async fn authorized(hub: &Arc<Hub>, peer: SocketAddr, headers: &HeaderMap) -> std::result::Result<Grant, Response> {
     if !peer.ip().to_canonical().is_loopback() {
         return Err(error(StatusCode::UNAUTHORIZED, "Local API keys only work on this computer"));

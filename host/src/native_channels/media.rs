@@ -21,10 +21,10 @@ impl PublishedFiles {
 impl Drop for PublishedFiles {
     fn drop(&mut self) {
         for path in &self.paths {
-            if let Err(error) = std::fs::remove_file(path) {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    tracing::warn!(%error,"Native unpublished snapshot cleanup failed");
-                }
+            if let Err(error) = std::fs::remove_file(path)
+                && error.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(%error,"Native unpublished snapshot cleanup failed");
             }
         }
     }

@@ -1,4 +1,4 @@
-//! Source reference: Hermes cron/delivery_queue.py and delivery_outcome.py (MIT, 10d25f8a).
+//! Source reference: Hermes `cron/delivery_queue.py` and `delivery_outcome.py` (MIT, 10d25f8a).
 //! Adaptation: reuse host connections, bounded workers and never retry a possibly completed send.
 
 use super::{Status, outputs};

@@ -14,6 +14,7 @@ const KEY: &str = "notification-rules.v1";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct NotificationRules {
     /// A turn finished.
     pub done: bool,

@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -115,8 +116,10 @@ async fn contents(
                 tokio::time::timeout(Duration::from_secs(90), crate::voice::transcription::note(&hub.store, &bytes))
                     .await;
             match speech {
-                Ok(Ok(transcript))=>text.push_str(&format!("\n\n[Voice note transcript]\n{transcript}")),
-                _=>text.push_str("\n\n[Voice note could not be transcribed. Keep the original attachment and ask the sender to clarify.]"),
+                Ok(Ok(transcript)) => {
+                    let _ = write!(text, "\n\n[Voice note transcript]\n{transcript}");
+                }
+                _ => text.push_str("\n\n[Voice note could not be transcribed. Keep the original attachment and ask the sender to clarify.]"),
             }
         }
         let name = if name.starts_with('.') || name.len() > 200 || name.contains(['/', '\\', ':']) {
@@ -139,7 +142,7 @@ async fn contents(
     }
     if !files.is_empty() {
         let names = files.iter().filter_map(|f| f["name"].as_str()).collect::<Vec<_>>().join(", ");
-        text.push_str(&format!("\n\n[Attached files saved on this computer: {names}]"));
+        let _ = write!(text, "\n\n[Attached files saved on this computer: {names}]");
     }
     ensure!(!text.trim().is_empty() || !files.is_empty(), "Empty native message");
     Ok((text, files))

@@ -50,9 +50,11 @@ pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};
 pub use flow_steps::{FlowRun, FlowStep, NewStep, StepStatus};
 pub use flows::{FlowChange, FlowLink};
 pub use members::MemberRole;
+#[cfg(test)]
+pub use model::TeamMember;
 pub use model::{
     AVATAR_COLORS, AVATAR_SHAPES, ActionClass, BotConfig, BotKind, BotRow, Entry, EntryKind, Fallback, Lane,
-    Permission, ProactiveSettings, RulePolicy, TeamMember, TeamSettings, lane_key, message_text, run_session_key,
+    Permission, ProactiveSettings, RulePolicy, TeamSettings, lane_key, message_text, run_session_key,
 };
 pub use week::Week;
 

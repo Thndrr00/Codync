@@ -183,7 +183,7 @@ async fn create_team(
                 "role": team.roles.get(id).cloned().unwrap_or_default(),
                 "responsibility": "",
                 "reportsTo": if index == 0 { Value::Null } else { json!(created.first()) },
-                "x": 40.0 + (index as f64) * 300.0,
+                "x": 40.0 + f64::from(u32::try_from(index).unwrap_or(0)) * 300.0,
                 "y": if index == 0 { 40.0 } else { 216.0 },
             })).collect::<Vec<_>>(),
         },

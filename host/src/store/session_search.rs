@@ -1,4 +1,4 @@
-//! Session search corresponding to Hermes' runtime_session_store.py/session_persistence.py.
+//! Session search corresponding to Hermes' `runtime_session_store.py/session_persistence.py`.
 //! Adaptation: FTS5 candidates over Codync entries; existing visibility and substring rules stay authoritative.
 
 use super::entries::{ENTRY_COLS, row_entry};

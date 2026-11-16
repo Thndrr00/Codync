@@ -1,4 +1,4 @@
-//! Source reference: Hermes agent tool RPC / batch_runner.py (MIT, 10d25f8a).
+//! Source reference: Hermes agent tool RPC / `batch_runner.py` (MIT, 10d25f8a).
 //! Adaptation: scripts reuse the host's authenticated MCP call path without an LLM turn.
 
 use crate::mcp;

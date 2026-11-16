@@ -303,6 +303,7 @@ impl Store {
     }
 
     /// The kept revisions of a document, newest first.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn document_revisions(&self, id: &str) -> Result<Vec<DocumentRevision>> {
         let mut revisions: Vec<DocumentRevision> = self
             .kv_prefix(&format!("doc-revision:{id}:"))

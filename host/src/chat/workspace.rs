@@ -150,10 +150,7 @@ fn search(root: &Path, arguments: &Value) -> Result<Value> {
         if files >= MAX_FILES || matches.len() >= MAX_MATCHES {
             break;
         }
-        let meta = match std::fs::metadata(&path) {
-            Ok(meta) => meta,
-            Err(_) => continue,
-        };
+        let Ok(meta) = std::fs::metadata(&path) else { continue };
         if meta.is_dir() {
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
             if SKIP_DIRS.contains(&name) {
@@ -200,8 +197,8 @@ fn read(root: &Path, arguments: &Value) -> Result<Value> {
         bail!("that file is too large to read here (over 64 KB)");
     }
     let text = read_text(&path).context("that file is not text")?;
-    let offset = arguments["offset"].as_u64().unwrap_or(1).max(1) as usize;
-    let limit = arguments["limit"].as_u64().unwrap_or(200).clamp(1, 1000) as usize;
+    let offset = usize::try_from(arguments["offset"].as_u64().unwrap_or(1).max(1)).unwrap_or(1);
+    let limit = usize::try_from(arguments["limit"].as_u64().unwrap_or(200).clamp(1, 1000)).unwrap_or(200);
     let numbered: Vec<String> = text
         .lines()
         .enumerate()

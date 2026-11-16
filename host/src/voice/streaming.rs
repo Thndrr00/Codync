@@ -1,4 +1,4 @@
-//! Half-second PCM frames from native NeuTTS inference, wrapped as independently playable WAVs.
+//! Half-second PCM frames from native `NeuTTS` inference, wrapped as independently playable WAVs.
 use crate::agent::{hermes::Installation, process::Process};
 use anyhow::{Context, Result, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -93,7 +93,7 @@ pub(crate) async fn produce(installation: &Installation, text: &str, output: mps
             }
             anyhow::Ok(())
         };
-        let (_, _, status) = tokio::try_join!(read, errors, owned.wait_owned())?;
+        let ((), (), status) = tokio::try_join!(read, errors, owned.wait_owned())?;
         ensure!(status.success(), "NeuTTS streaming failed; check its prepared native environment");
         Ok(())
     };

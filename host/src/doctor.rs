@@ -169,8 +169,7 @@ pub fn report(hub: &Hub) -> anyhow::Result<Value> {
         stale_approval: &|bot| {
             hub.store
                 .pending_approvals(bot)
-                .ok()
-                .is_some_and(|cards| cards.iter().any(|card| now - card.created_at > 86_400_000))
+                .is_ok_and(|cards| cards.iter().any(|card| now - card.created_at > 86_400_000))
         },
     };
     let findings = inspect(&bots, &probe);

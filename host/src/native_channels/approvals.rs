@@ -2,6 +2,7 @@ use super::config;
 use crate::{agent::bot::Cmd, hub::Hub, market::Connector};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 
 pub(super) fn prepare(hub: &Hub, c: &Connector, generation: &str, item: &Value) -> Result<Option<Value>> {
     let mut user: Option<String> = None;
@@ -44,9 +45,9 @@ pub(super) fn prepare(hub: &Hub, c: &Connector, generation: &str, item: &Value) 
         if option["optionId"].as_str().is_none() {
             return Ok(None);
         }
-        text.push_str(&format!("\n{}. {}", i + 1, crate::agent::acp::truncate(name, 250)));
+        let _ = write!(text, "\n{}. {}", i + 1, crate::agent::acp::truncate(name, 250));
     }
-    text.push_str(&format!("\n\nReply /approve {code} <number>. Only the original sender may answer."));
+    let _ = write!(text, "\n\nReply /approve {code} <number>. Only the original sender may answer.");
     Ok(Some(
         json!({"id":item["id"],"chat":item["chat"],"replyTo":item["replyTo"],"user":user,"text":text,"files":[],"code":code,"bot":item["bot"],"options":options}),
     ))

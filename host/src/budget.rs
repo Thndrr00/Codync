@@ -160,6 +160,7 @@ impl Budgets {
     }
 
     /// Frees the room a finished (or failed) turn held.
+    #[allow(clippy::unused_self)]
     pub fn release(&self, bot: &str) {
         RESERVED.locked().remove(bot);
     }

@@ -1,6 +1,8 @@
 //! `codync-host`: runs coding-agent bots over ACP and serves the Codync apps.
 
 #![allow(dead_code, reason = "some host code is reached from clients and each other")]
+// Tests use `assert!(x.is_empty())` for its readable intent; the lint only changes failure output.
+#![allow(clippy::assert_is_empty)]
 
 mod agent;
 mod analytics;
@@ -269,7 +271,7 @@ enum Sub {
     /// A local Ollama model as an ACP agent (stdio), for a custom bot command.
     #[command(hide = true)]
     LocalAgent {
-        /// Model name as Ollama lists it (default from CODYNC_LOCAL_MODEL, else llama3.2).
+        /// Model name as Ollama lists it (default from `CODYNC_LOCAL_MODEL`, else llama3.2).
         #[arg(long)]
         model: Option<String>,
     },

@@ -114,10 +114,10 @@ pub(crate) fn prepare(c: &mut Connector) -> Result<()> {
             "Unexpected native messaging field"
         );
     }
-    if platform == "signal" {
-        if let Some(url) = c.env.get("SIGNAL_HTTP_URL").filter(|s| !s.trim().is_empty()) {
-            url_allowed(url)?;
-        }
+    if platform == "signal"
+        && let Some(url) = c.env.get("SIGNAL_HTTP_URL").filter(|s| !s.trim().is_empty())
+    {
+        url_allowed(url)?;
     }
     if platform == "homeassistant" {
         if let Some(url) = c.env.get("HASS_URL").filter(|s| !s.trim().is_empty()) {

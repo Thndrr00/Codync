@@ -1,4 +1,4 @@
-//! Outbound chat replies and approval cards stay bound to their original WhatsApp link.
+//! Outbound chat replies and approval cards stay bound to their original `WhatsApp` link.
 
 use super::{Arc, Hub, Result, WhatsApp, approvals, delivery, json};
 

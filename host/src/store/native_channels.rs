@@ -75,6 +75,7 @@ impl Store {
         Ok(self.db.locked().execute("UPDATE native_channel_inbox SET state='started',entry=?4 WHERE connection=?1 AND generation=?2 AND event=?3 AND state='queued'",params![connection,generation,event,entry])? == 1)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn native_route(
         &self,
         root: &str,

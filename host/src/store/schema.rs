@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 /// Current schema version (kv `schema`).
 /// 7: the account a device joined with (devices.account).
-/// 8: the member a device signed in as (devices.member_id).
+/// 8: the member a device signed in as (`devices.member_id`).
 const SCHEMA: i64 = 8;
 
 /// 3: authorized devices (keys, not push tickets) with their push and Live Activity

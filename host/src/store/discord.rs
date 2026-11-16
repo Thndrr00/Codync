@@ -41,22 +41,6 @@ pub struct DiscordDelivery {
     pub state: String,
 }
 
-#[cfg(test)]
-mod audio_migration_tests {
-    #[test]
-    fn old_pending_messages_survive_repeatable_audio_migration() {
-        let db = rusqlite::Connection::open_in_memory().unwrap();
-        db.execute_batch(include_str!("discord.sql")).unwrap();
-        db.execute("INSERT INTO discord_inbox(event_id,generation,bot_id,channel_id,entry_id,text,user_id,created_at) VALUES('event','g','bot','channel','entry','original text','user',1)", []).unwrap();
-        super::open(&db).unwrap();
-        super::open(&db).unwrap();
-        let row: (String, String, String) = db
-            .query_row("SELECT text,state,audio FROM discord_inbox", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-            .unwrap();
-        assert_eq!(row, ("original text".into(), "queued".into(), "null".into()));
-    }
-}
-
 impl Store {
     pub fn resume_discord_sign_in(&self, entry: &str) -> Result<bool> {
         Ok(self.db.locked().execute(
@@ -192,5 +176,21 @@ impl Store {
         )?;
         Ok(q.query_map([], |r| Ok(DiscordDelivery { id: r.get(0)?, state: r.get(1)? }))?
             .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+}
+
+#[cfg(test)]
+mod audio_migration_tests {
+    #[test]
+    fn old_pending_messages_survive_repeatable_audio_migration() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch(include_str!("discord.sql")).unwrap();
+        db.execute("INSERT INTO discord_inbox(event_id,generation,bot_id,channel_id,entry_id,text,user_id,created_at) VALUES('event','g','bot','channel','entry','original text','user',1)", []).unwrap();
+        super::open(&db).unwrap();
+        super::open(&db).unwrap();
+        let row: (String, String, String) = db
+            .query_row("SELECT text,state,audio FROM discord_inbox", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap();
+        assert_eq!(row, ("original text".into(), "queued".into(), "null".into()));
     }
 }

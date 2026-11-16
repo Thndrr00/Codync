@@ -29,12 +29,15 @@ pub async fn embed(text: &str) -> Option<Vec<f32>> {
         return None;
     }
     let value: serde_json::Value = response.json().await.ok()?;
-    let embedding: Vec<f32> = value["embedding"]
-        .as_array()?
-        .iter()
-        .filter_map(serde_json::Value::as_f64)
-        .map(|number| number as f32)
-        .collect();
+    let embedding: Vec<f32> = {
+        #[allow(clippy::cast_possible_truncation)]
+        value["embedding"]
+            .as_array()?
+            .iter()
+            .filter_map(serde_json::Value::as_f64)
+            .map(|number| number as f32)
+            .collect()
+    };
     (!embedding.is_empty()).then_some(embedding)
 }
 

@@ -1,4 +1,4 @@
-//! Incoming WhatsApp messages, routed through the host bot actor.
+//! Incoming `WhatsApp` messages, routed through the host bot actor.
 
 use super::{Arc, Hub, Value, WhatsApp, allowed, entry_id, inbox, json, save_media, voice_notes};
 

@@ -46,7 +46,7 @@ pub(crate) async fn run(hub: Arc<Hub>) {
                                 .ok()
                                 .flatten()
                                 .and_then(|s| s["generation"].as_str().map(str::to_owned));
-                            if let Err(error) = super::revoke(&hub, id, generation, None) {
+                            if let Err(error) = super::revoke(&hub, id, generation.as_deref(), None) {
                                 tracing::warn!(%error,"Native connection revocation was deferred");
                             }
                         }
@@ -220,9 +220,11 @@ async fn serve(hub: &Arc<Hub>, c: &Connector) -> Result<()> {
         Ok(())
     })?;
     let platform = config::kind(c).context("Unknown native platform")?;
-    let mut settings = Settings::default();
-    settings.root = c.env.get("CODYNC_CHANNEL_ROOT").cloned().unwrap_or_default();
-    settings.python = c.env.get("CODYNC_CHANNEL_PYTHON").cloned().unwrap_or_default();
+    let settings = Settings {
+        root: c.env.get("CODYNC_CHANNEL_ROOT").cloned().unwrap_or_default(),
+        python: c.env.get("CODYNC_CHANNEL_PYTHON").cloned().unwrap_or_default(),
+        ..Settings::default()
+    };
     let old = config::generation(&hub.store, c)?.unwrap_or_default();
     config::save_state(&hub.store, c, &old, "starting")?;
     let installation = Installation::resolve(&settings).await?;
@@ -273,7 +275,7 @@ async fn serve(hub: &Arc<Hub>, c: &Connector) -> Result<()> {
                         let native=frame["identity"].as_str().filter(|s|s.len()==64 && s.bytes().all(|b|b.is_ascii_hexdigit())).context("Native account identity is missing")?;
                         generation=config::digest(&format!("{}:{native}",config::fingerprint(c)));identity=true;
                         let _guard=hub.store.connector_lock.locked();ensure!(config::matches(&hub.store,c)?,"Native connection changed");
-                        if !old.is_empty() && old!=generation {super::revoke(hub,&c.id,Some(old.clone()),None)?;}
+                        if !old.is_empty() && old!=generation {super::revoke(hub,&c.id,Some(old.as_str()),None)?;}
                         hub.store.with_connection(|db| {
                             db.execute("UPDATE native_channel_webhooks SET state='done',raw='' WHERE connection=?1 AND generation<>?2",rusqlite::params![c.id,generation])?;
                             Ok(())
@@ -320,7 +322,7 @@ async fn serve(hub: &Arc<Hub>, c: &Connector) -> Result<()> {
                 if !config::matches(&hub.store,c)? {owned.kill().await;return Ok(())}
                 let current_bot=config::bot(hub,c).ok();
                 if current_bot!=bound_bot {
-                    if identity {super::revoke(hub,&c.id,Some(generation.clone()),None)?;}
+                    if identity {super::revoke(hub,&c.id,Some(generation.as_str()),None)?;}
                     bound_bot=current_bot;
                 }
                 ensure!(last.elapsed()<Duration::from_secs(90),"Native channel stopped responding");
@@ -334,10 +336,10 @@ async fn serve(hub: &Arc<Hub>, c: &Connector) -> Result<()> {
         task.abort();
     }
     for task in tasks.0.drain(..) {
-        if let Err(error) = task.await {
-            if !error.is_cancelled() {
-                tracing::warn!(%error,"Native processor shutdown failed");
-            }
+        if let Err(error) = task.await
+            && !error.is_cancelled()
+        {
+            tracing::warn!(%error,"Native processor shutdown failed");
         }
     }
     if let Err(error) = hub.store.with_connection(|db| {

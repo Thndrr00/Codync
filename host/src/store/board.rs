@@ -113,37 +113,33 @@ impl Store {
         let repeat = checked_repeat(repeat)?;
         let c = self.db.locked();
         let mut tasks = read(&c)?;
-        let task = match id {
-            Some(id) => {
-                let task =
-                    tasks.iter_mut().find(|task| task.id == id).ok_or_else(|| anyhow::anyhow!("no such task"))?;
-                task.title = title.to_owned();
-                task.detail = detail.to_owned();
-                task.status = status.to_owned();
-                task.bot_id = bot_id.map(str::to_owned);
-                task.routine_id = routine_id.map(str::to_owned);
-                task.due_at = due_at;
-                task.repeat = repeat.map(str::to_owned);
-                task.updated_at = now;
-                task.clone()
-            }
-            None => {
-                ensure!(tasks.len() < LIMIT, "the board holds at most {LIMIT} tasks; delete one first");
-                let task = BoardTask {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    title: title.to_owned(),
-                    detail: detail.to_owned(),
-                    status: status.to_owned(),
-                    bot_id: bot_id.map(str::to_owned),
-                    routine_id: routine_id.map(str::to_owned),
-                    due_at,
-                    repeat: repeat.map(str::to_owned),
-                    created_at: now,
-                    updated_at: now,
-                };
-                tasks.push(task.clone());
-                task
-            }
+        let task = if let Some(id) = id {
+            let task = tasks.iter_mut().find(|task| task.id == id).ok_or_else(|| anyhow::anyhow!("no such task"))?;
+            title.clone_into(&mut task.title);
+            detail.clone_into(&mut task.detail);
+            status.clone_into(&mut task.status);
+            task.bot_id = bot_id.map(str::to_owned);
+            task.routine_id = routine_id.map(str::to_owned);
+            task.due_at = due_at;
+            task.repeat = repeat.map(str::to_owned);
+            task.updated_at = now;
+            task.clone()
+        } else {
+            ensure!(tasks.len() < LIMIT, "the board holds at most {LIMIT} tasks; delete one first");
+            let task = BoardTask {
+                id: uuid::Uuid::new_v4().to_string(),
+                title: title.to_owned(),
+                detail: detail.to_owned(),
+                status: status.to_owned(),
+                bot_id: bot_id.map(str::to_owned),
+                routine_id: routine_id.map(str::to_owned),
+                due_at,
+                repeat: repeat.map(str::to_owned),
+                created_at: now,
+                updated_at: now,
+            };
+            tasks.push(task.clone());
+            task
         };
         write(&c, &tasks)?;
         Ok(task)
@@ -157,7 +153,7 @@ impl Store {
         let mut tasks = read(&c)?;
         let Some(task) = tasks.iter_mut().find(|task| task.id == id) else { return Ok(false) };
         let finished = status == "done" && task.status != "done";
-        task.status = status.to_owned();
+        status.clone_into(&mut task.status);
         task.updated_at = now;
         let repeat = task.repeat.clone();
         let next = if finished {

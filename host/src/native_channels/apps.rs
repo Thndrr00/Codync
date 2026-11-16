@@ -157,21 +157,24 @@ pub(crate) fn listings(store: &Store, search: &str) -> Result<Vec<Value>> {
     Ok(browse(store, search)?
         .into_iter()
         .map(|app| {
-            let mut card = server_card(app);
+            let mut card = server_card(&app);
             card["options"] = json!(options(&card));
             card
         })
         .collect())
 }
 
-fn server_card(app: Value) -> Value {
+fn server_card(app: &Value) -> Value {
     json!({"name":format!("codync-native/{}",app["id"].as_str().unwrap_or_default().trim_start_matches("hermes-channel-")),"title":app["name"],"description":app["description"],"version":"10d25f8a","websiteUrl":app["origin"],"installed":app["installed"],"codyncNativeApp":app})
 }
 
 pub(crate) fn server(name: &str) -> Result<Option<Value>> {
     let Some(kind) = name.strip_prefix("codync-native/") else { return Ok(None) };
     // Catalog construction needs no secrets; installed state is irrelevant to a registry lookup.
-    Ok(catalog(&[], "")?.into_iter().find(|app| app["id"] == format!("hermes-channel-{kind}")).map(server_card))
+    Ok(catalog(&[], "")?
+        .into_iter()
+        .find(|app| app["id"] == format!("hermes-channel-{kind}"))
+        .map(|app| server_card(&app)))
 }
 
 pub(crate) fn options(server: &Value) -> Vec<Value> {
@@ -187,7 +190,7 @@ pub(crate) async fn install(store: &Store, name: &str, option: &str, inputs: &Va
     for field in app["fields"].as_array().into_iter().flatten() {
         let key = field["id"].as_str().ok_or_else(|| anyhow::anyhow!("Native field ID missing"))?;
         let value = inputs[key].as_str().map(str::trim).unwrap_or_default();
-        anyhow::ensure!(!value.is_empty() || field["required"] != true, "{} is required", key);
+        anyhow::ensure!(!value.is_empty() || field["required"] != true, "{key} is required");
         env.insert(key.into(), value.into());
     }
     crate::market::add_custom_connector(
@@ -218,7 +221,7 @@ pub(crate) fn decorate(store: &Store, c: &Connector, value: &mut Value) -> Resul
     if status == "ready" {
         value.as_object_mut().map(|v| v.remove("lastFailure"));
     } else {
-        value["lastFailure"] = json!({"kind":"tool","message":format!("Native channel: {status}. Check its existing account and enable this connection for exactly one bot."),"at":state.as_ref().map(|s|s["updatedAt"].clone()).unwrap_or(Value::Null)});
+        value["lastFailure"] = json!({"kind":"tool","message":format!("Native channel: {status}. Check its existing account and enable this connection for exactly one bot."),"at":state.as_ref().map_or(Value::Null, |s|s["updatedAt"].clone())});
     }
     Ok(())
 }
@@ -242,7 +245,7 @@ mod tests {
             }
             super::super::prepare_connector(&mut c).unwrap();
             assert!(c.acp(std::path::Path::new("host"), 1).is_none());
-            let card = server_card(app);
+            let card = server_card(&app);
             let options = options(&card);
             assert_eq!(options[0]["id"], "native:0");
             assert!(!options[0]["inputs"].as_array().unwrap().is_empty());

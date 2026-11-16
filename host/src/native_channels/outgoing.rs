@@ -47,10 +47,10 @@ pub(super) async fn queue(hub: &Hub, c: &Connector, generation: &str, sends: &mp
             )? {
                 continue;
             }
-            if command.is_some() {
-                if let Ok(files) = &mut files {
-                    files.handoff();
-                }
+            if command.is_some()
+                && let Ok(files) = &mut files
+            {
+                files.handoff();
             }
             command
         };

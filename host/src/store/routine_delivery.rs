@@ -1,4 +1,4 @@
-//! Source reference: Hermes cron/delivery_queue.py (MIT, 10d25f8a).
+//! Source reference: Hermes `cron/delivery_queue.py` (MIT, 10d25f8a).
 //! Adaptation: transactional per-run destinations in the host database; ambiguous sends never retry.
 
 use super::Store;

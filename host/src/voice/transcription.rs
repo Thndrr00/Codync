@@ -70,10 +70,13 @@ impl SpeechRequest {
     }
 
     fn cache_key(&self, provider: Provider, model: &str, audio: &[u8]) -> String {
-        let endpoint = self.endpoint.as_ref().map(reqwest::Url::as_str).unwrap_or(match provider {
-            Provider::OpenAi => "https://api.openai.com",
-            Provider::Gemini => "https://generativelanguage.googleapis.com",
-        });
+        let endpoint = self.endpoint.as_ref().map_or(
+            match provider {
+                Provider::OpenAi => "https://api.openai.com",
+                Provider::Gemini => "https://generativelanguage.googleapis.com",
+            },
+            reqwest::Url::as_str,
+        );
         cache_key(&[provider.id(), model, &self.credential, endpoint, &names_hint(&self.names)], audio)
     }
 }

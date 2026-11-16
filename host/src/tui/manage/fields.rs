@@ -19,15 +19,15 @@ impl App {
             KeyCode::Esc => return None,
             KeyCode::Char('p') if ctrl(k) && matches!(f.submit, Submit::HermesRuntime { .. }) => {
                 if let Submit::HermesRuntime { bot, revision, config } = &f.submit {
-                    if config["enabled"] != true {
-                        f.error = Some("Apply an enabled runtime before checking its environment.".into());
-                    } else {
+                    if config["enabled"] == true {
                         self.sheet(
                             "hermesEnvironmentHealth",
                             json!({"botId":bot,"ifRevision":revision}),
                             Reply::HermesEnvironment { bot: bot.clone(), revision: revision.clone() },
                         );
                         f.saving = true;
+                    } else {
+                        f.error = Some("Apply an enabled runtime before checking its environment.".into());
                     }
                 }
             }

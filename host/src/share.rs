@@ -70,6 +70,8 @@ pub fn revoke(hub: &Hub, token: &str) -> Result<bool> {
 }
 
 /// Every link still valid, newest first. The API drops the page body before sending it.
+/// Sorts every link, newest first. Nothing here can fail; the `Result` keeps callers uniform.
+#[allow(clippy::unnecessary_wraps)]
 pub fn list(hub: &Hub) -> Result<Vec<ShareLink>> {
     prune(hub);
     let mut links: Vec<ShareLink> = hub

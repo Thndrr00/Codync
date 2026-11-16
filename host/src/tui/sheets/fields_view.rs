@@ -1,5 +1,8 @@
 //! Scrollable shared intent fields, keeping keyboard focus in view.
-use super::*;
+use super::{
+    Buffer, Editor, Fields, Modifier, Rect, Submit, centered, frame_box, hline, input_line, multiline, put, rput,
+    theme, tr, truncate, u,
+};
 
 pub fn fields(buf: &mut Buffer, area: Rect, f: &Fields) {
     let t = theme();

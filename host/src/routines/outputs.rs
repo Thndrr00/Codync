@@ -22,7 +22,7 @@ pub struct Output {
     pub kind: String,
     /// A channel id, a chat id, or (for GitHub) the repository, `owner/name`.
     pub target: String,
-    /// The Telegram bot name, or the linked WhatsApp account id to send as.
+    /// The Telegram bot name, or the linked `WhatsApp` account id to send as.
     #[serde(default)]
     pub account: Option<String>,
     /// Labels, reviewers, or the issue title; other kinds ignore it.
