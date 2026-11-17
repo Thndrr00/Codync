@@ -14,9 +14,10 @@ diseñar.
 El trabajo de los once patrones está escrito y sin verificar. Nada de lo demás debería empezar antes.
 
 **Estado:** 1–5 en verde. El host compila y pasa `fmt`, `clippy -D warnings` y 1286 pruebas de unidad;
-los e2e de integración pasan salvo dos fallos preexistentes en `tests/e2e.rs`: el snapshot de la forma
-del cable está desfasado (campos que añadieron otros bloques: brains, módulos, misiones, n8n, icons) y
-`phone_pairs_and_chats_over_the_direct_channel` da un `Protocol` intermitente en Windows. Se corrigieron
+los e2e de integración pasan salvo un fallo preexistente en `tests/e2e.rs`:
+`phone_pairs_and_chats_over_the_direct_channel` da `Protocol` de forma reproducible en Windows (capa de
+canal/cripto, sin relación con este cambio). El snapshot de la forma del cable se actualizó con los campos
+que añadieron otros bloques (brains, módulos, misiones, n8n, icons) y su test vuelve a pasar. Se corrigieron
 puentes que faltaban: permisos pedidos fuera de un turno y respuesta a la tarjeta al cerrarlo (ADR 0045),
 `send_message` tras un paro, el despachador `tasksAgenda`, el aislamiento de carpetas y el motivo de parada
 de los módulos, y el test de symlinks sin privilegio en Windows. 4–5: `typecheck` y 538 pruebas del
