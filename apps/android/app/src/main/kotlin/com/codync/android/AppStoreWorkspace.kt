@@ -328,6 +328,30 @@ internal suspend fun AppStore.newsItems(limit: Int = 60): List<NewsItem> =
     (hostCall("feedItems", buildJsonObject { put("limit", limit) }, 45_000).jsonObject["items"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::newsItemOf) } ?: emptyList()
 
+/** Current weather for a place, from Open-Meteo (no key). */
+internal data class WeatherReport(
+    val place: String,
+    val text: String,
+    val temperature: Double?,
+    val condition: String?,
+)
+
+private fun weatherOf(json: JsonObject): WeatherReport = WeatherReport(
+    place = json.str("place") ?: "",
+    text = json.str("text") ?: "",
+    temperature = (json["temperature"] as? JsonPrimitive)?.doubleOrNull,
+    condition = json.str("condition"),
+)
+
+internal suspend fun AppStore.weather(place: String? = null, save: Boolean = false): WeatherReport =
+    weatherOf(hostCall("weather", buildJsonObject {
+        if (!place.isNullOrBlank()) put("place", place.trim())
+        put("save", save)
+    }, 30_000).jsonObject)
+
+internal suspend fun AppStore.setWeatherPlace(place: String): WeatherReport =
+    weather(place = place, save = true)
+
 internal suspend fun AppStore.teamTemplates(): List<TeamTemplate> =
     (hostCall("teamTemplates", buildJsonObject {}).jsonObject["templates"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::templateOf) } ?: emptyList()

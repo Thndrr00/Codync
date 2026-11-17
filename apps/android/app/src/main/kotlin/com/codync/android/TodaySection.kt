@@ -2,6 +2,7 @@ package com.codync.android
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
@@ -24,6 +25,10 @@ import kotlinx.coroutines.launch
 internal fun TodaySection(store: AppStore, onError: (String?) -> Unit) {
     val scope = rememberCoroutineScope()
     var digest by remember { mutableStateOf<DailyDigest?>(null) }
+    var weather by remember { mutableStateOf<WeatherReport?>(null) }
+    var place by remember { mutableStateOf("") }
+    var editingPlace by remember { mutableStateOf(false) }
+    var weatherError by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     suspend fun load() {
@@ -35,8 +40,33 @@ internal fun TodaySection(store: AppStore, onError: (String?) -> Unit) {
             throw cancelled
         } catch (failure: Exception) {
             onError(failure.message)
-        } finally {
-            busy = false
+        }
+        try {
+            weather = store.weather()
+            weatherError = null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            weather = null
+            weatherError = failure.message
+        }
+        busy = false
+    }
+
+    fun savePlace() {
+        val wanted = place.trim()
+        if (wanted.isEmpty()) return
+        scope.launch {
+            try {
+                weather = store.setWeatherPlace(wanted)
+                place = ""
+                editingPlace = false
+                weatherError = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                weatherError = failure.message
+            }
         }
     }
 
@@ -57,6 +87,27 @@ internal fun TodaySection(store: AppStore, onError: (String?) -> Unit) {
             if (parts.isNotEmpty()) row {
                 Text(parts.joinToString(" · "), style = Type.footnote, color = Palette.secondary)
             }
+        }
+        weather?.let { current ->
+            row {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(current.text, style = Type.footnote, color = Palette.secondary, modifier = Modifier.weight(1f))
+                    LinkButton("Change place") { editingPlace = true }
+                }
+            }
+        }
+        if (weather == null || editingPlace) {
+            row {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FieldBox(place, { place = it }, "Weather place (Madrid)")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        SecondaryButton("Save place", enabled = place.isNotBlank()) { savePlace() }
+                    }
+                }
+            }
+        }
+        if (weatherError != null && weather == null) row {
+            Text(weatherError ?: "", style = Type.footnote, color = Palette.tertiary)
         }
         row {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

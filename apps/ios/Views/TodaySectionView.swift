@@ -6,6 +6,10 @@ import SwiftUI
 struct TodaySectionView: View {
     let store: BotStore
     @State private var digest: DailyDigest?
+    @State private var weather: WeatherReport?
+    @State private var place = ""
+    @State private var editingPlace = false
+    @State private var weatherError: String?
     @State private var busy = false
     @State private var error: String?
 
@@ -21,6 +25,28 @@ struct TodaySectionView: View {
                     .opacity(parts(digest).isEmpty ? 0 : 1)
             } else if !busy {
                 Text("Nothing to show yet.").font(.caption).foregroundStyle(Palette.secondary)
+            }
+            if let weather {
+                HStack(spacing: 8) {
+                    Text(weather.text).font(.caption).foregroundStyle(Palette.secondary)
+                    Spacer(minLength: 0)
+                    Button("Change place") { editingPlace = true }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(Palette.secondary)
+                }
+            }
+            if weather == nil || editingPlace {
+                TextField("Weather place (Madrid)", text: $place).plainTextInput()
+                HStack {
+                    Spacer()
+                    Button("Save place") { savePlace() }
+                        .buttonStyle(.secondary)
+                        .disabled(place.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            if let weatherError, weather == nil {
+                Text(weatherError).font(.caption).foregroundStyle(Palette.tertiary)
             }
             HStack {
                 Spacer()
@@ -42,7 +68,24 @@ struct TodaySectionView: View {
                 digest = try await store.dailyDigest()
                 error = nil
             } catch { self.error = message(error) }
+            do {
+                weather = try await store.weather()
+                weatherError = nil
+            } catch { weather = nil; weatherError = message(error) }
             busy = false
+        }
+    }
+
+    private func savePlace() {
+        let wanted = place.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !wanted.isEmpty else { return }
+        Task {
+            do {
+                weather = try await store.setWeatherPlace(wanted)
+                place = ""
+                editingPlace = false
+                weatherError = nil
+            } catch { weatherError = message(error) }
         }
     }
 
