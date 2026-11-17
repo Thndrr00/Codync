@@ -2,6 +2,7 @@
 //! apps and helpers (loopback + `Authorization: Bearer <token>`), and `GET /channel`, the
 //! direct end-to-end encrypted channel phones use (see `channel`).
 
+mod agenda;
 mod apps_bridge;
 pub mod apps_runtime;
 mod bots;
@@ -95,6 +96,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     }
     if missions::METHODS.contains(&method) {
         return missions::call(hub, method, &b);
+    }
+    if agenda::METHODS.contains(&method) {
+        return agenda::call(hub, method, &b).await;
     }
     if let Some(answer) = crate::modules::api::route(hub, caller, method, b.clone()).await? {
         return Ok(answer);
