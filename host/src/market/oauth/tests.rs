@@ -20,7 +20,7 @@ fn pend(state: &str) {
 #[tokio::test]
 async fn unknown_state_is_refused() {
     let store = Store::open(std::path::Path::new(":memory:")).unwrap();
-    let err = finish(&store, "nope", Some("code"), None).await.unwrap_err();
+    let err = finish(&store, "nope", Some("code"), None, None).await.unwrap_err();
     assert!(err.to_string().contains("expired"));
 }
 
@@ -35,7 +35,7 @@ async fn a_connector_replaced_during_sign_in_gets_no_code() {
     .unwrap();
     market::save_connectors(&store, &[c]).unwrap();
     pend("replaced");
-    let err = finish(&store, "replaced", Some("code"), None).await.unwrap_err();
+    let err = finish(&store, "replaced", Some("code"), None, None).await.unwrap_err();
     assert_eq!(err.to_string(), "unknown connector");
 }
 
@@ -188,10 +188,10 @@ async fn the_token_is_saved_only_while_the_connector_is_unchanged() {
     );
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
     pend("unchanged");
-    let saved = finish(&store, "unchanged", Some("code"), None).await.unwrap();
+    let saved = finish(&store, "unchanged", Some("code"), None, None).await.unwrap();
     assert_eq!(saved.oauth.unwrap().access_token, "notes-token");
     pend("replaced-mid-request");
-    let err = finish(&store, "replaced-mid-request", Some("code"), None).await.unwrap_err();
+    let err = finish(&store, "replaced-mid-request", Some("code"), None, None).await.unwrap_err();
     assert_eq!(err.to_string(), "unknown connector");
     let left = market::connectors(&store).unwrap();
     assert_eq!(left[0].url.as_deref(), Some("https://other.example/mcp"));

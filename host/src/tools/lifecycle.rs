@@ -94,7 +94,7 @@ impl Tools {
         let runner = self.runner(id)?;
         store.kv_set(&enabled_key(id), "0")?;
         runner.stop().await;
-        withdraw(store, id);
+        withdraw(store, id).await;
         Ok(())
     }
 
@@ -144,9 +144,9 @@ fn offer_to_bots(store: &Store) -> Result<()> {
 }
 
 /// A stopped tool has no tools to offer.
-fn withdraw(store: &Store, id: &str) {
+async fn withdraw(store: &Store, id: &str) {
     if id == COMFY.id
-        && let Err(e) = crate::market::remove_connector(store, CONNECTOR_ID)
+        && let Err(e) = crate::market::remove_connector(store, CONNECTOR_ID).await
     {
         tracing::warn!(error = format!("{e:#}"), "removing the ComfyUI connector");
     }
