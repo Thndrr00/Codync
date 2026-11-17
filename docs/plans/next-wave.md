@@ -75,6 +75,7 @@ is bigger than one release.
 | Share-to-bot on Android and iOS | done |
 | Real offline mode | done: text outbox and an encrypted per-computer cache (desktop, iPhone, Android) |
 | Marketplace reputation | done: stars, install counts, changelog and verified creators in the app page |
+| CopilotKit/OpenBot connector catalogue | done: reviewed apps ahead of the nightly list, installed by a host bridge |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
 | Multi-user server | done: workspace members with roles, enforced on every call |
 
