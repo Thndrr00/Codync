@@ -13,9 +13,16 @@ diseñar.
 
 El trabajo de los once patrones está escrito y sin verificar. Nada de lo demás debería empezar antes.
 
-**Estado:** 1–5 en verde (1215 pruebas del host pasan; la única roja es la de symlinks de Claude, sin
-privilegios en Windows), y 17–19 en este mismo cambio. 6–16 no se pudieron correr aquí: sin SDK de
-Android, sin Xcode y sin Computer Use en esta sesión; 20 es el merge y el borrado del worktree.
+**Estado:** 1–5 en verde. El host compila y pasa `fmt`, `clippy -D warnings` y 1286 pruebas de unidad;
+los e2e de integración pasan salvo dos fallos preexistentes en `tests/e2e.rs`: el snapshot de la forma
+del cable está desfasado (campos que añadieron otros bloques: brains, módulos, misiones, n8n, icons) y
+`phone_pairs_and_chats_over_the_direct_channel` da un `Protocol` intermitente en Windows. Se corrigieron
+puentes que faltaban: permisos pedidos fuera de un turno y respuesta a la tarjeta al cerrarlo (ADR 0045),
+`send_message` tras un paro, el despachador `tasksAgenda`, el aislamiento de carpetas y el motivo de parada
+de los módulos, y el test de symlinks sin privilegio en Windows. 4–5: `typecheck` y 538 pruebas del
+escritorio en verde. 17–19: notas 2.56.0 (zh-Hant + en-US) en las dos apps; versiones consistentes;
+`xcodegen` no está disponible en Windows. 6–16 no corridos: sin Computer Use, sin Xcode, sin emulador y
+sin compilación de Android en esta sesión; 20 es el push y el borrado del worktree.
 
 1. `cargo check --all-targets` en `host/` y corregir lo que salga.
 2. `cargo fmt --check` y `cargo clippy --all-targets -- -D warnings`.
