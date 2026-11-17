@@ -156,6 +156,12 @@ public struct AppLink: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// A newly issued capability and its complete host-provided URL.
+public struct CreatedAppLink: Codable, Hashable, Sendable {
+    public var link: AppLink
+    public var url: String
+}
+
 public struct BotAppCollectionSummary: Codable, Hashable, Sendable {
     public var collection: String
     public var count: Int

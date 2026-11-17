@@ -53,3 +53,12 @@ normalización del historial CDP, geometría de la pastilla y decodificación de
 
 La rama está pusheada como `feat/bdots-50-mejoras` y el PR es
 [Thndrr00/Codync#8](https://github.com/Thndrr00/Codync/pull/8) contra `main` (el fork no tiene rama `dev`).
+
+## Puente iOS
+
+`HostClient+Bdots.swift` reutiliza el único `HostClient.call` que ya usan las demás pantallas —no
+crea un segundo transporte— para `listBotApps`, `createAppLink`, `revokeAppLink`, `deleteBotApp`,
+`listOpenItems`, `listBookmarks`, `deleteBookmark` y `appRequest`. Android ya tenía el mismo puente
+en `AppStoreBots.kt`/`MiniAppBridge.kt`; el de iOS usa los modelos de `BdotsModels.swift` y conserva
+la CSP que devuelve el host para la vista web. Tests de decodificación en `BdotsBridgeTests.swift`
+(sin ejecutar aquí: no hay `xcodebuild` en Windows).
