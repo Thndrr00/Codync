@@ -12,6 +12,7 @@ import { errorText } from '../bots/drafts'
 import { Field } from '../marketplace/pieces'
 import { saveTextFile } from '../share-link'
 import { MeetingsPanel } from './MeetingsPanel'
+import { TodayPanel } from './TodayPanel'
 import './board.css'
 
 interface BoardTask {
@@ -361,6 +362,8 @@ export function BoardView({ stores, onOpen, memberIds }: { stores: BotStore[]; o
         <Text size="callout" tone="secondary">{tr('Start this computer’s host to use the board.')}</Text>
       ) : (
         <>
+          <TodayPanel store={store} />
+
           <HStack gap={8} className="board-add" align="end">
             <VStack gap={4} grow>
               <Text size="caption" tone="secondary">{tr('New card')}</Text>

@@ -70,6 +70,7 @@ struct WorkspaceSheet: View {
 
     private var board: some View {
         Group {
+            TodaySectionView(store: store)
             CardSection("Add a card", footer: "A card can name the bot that owns it; moving it is yours to do.") {
                 TextField("What needs doing", text: $title).plainTextInput().workspaceField()
                 if adding {

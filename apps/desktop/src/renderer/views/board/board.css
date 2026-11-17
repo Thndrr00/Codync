@@ -157,3 +157,18 @@
   overflow: auto;
 }
 
+
+/* The day at a glance, computed by the host from the board, approvals, calendars and waiting items. */
+.board-today {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.board-today-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+

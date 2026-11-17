@@ -253,6 +253,32 @@ internal suspend fun AppStore.runCloudBackup(): CloudBackupUpload {
     return CloudBackupUpload(json.str("name") ?: "", json.num("bytes") ?: 0)
 }
 
+/** The host's brief for today: board, approvals, calendar and waiting items; no model call. */
+internal data class DailyDigest(
+    val text: String,
+    val overdue: List<String>,
+    val dueToday: List<String>,
+    val approvals: List<String>,
+    val events: List<String>,
+    val waiting: List<String>,
+)
+
+private fun digestOf(json: JsonObject): DailyDigest {
+    fun strings(key: String): List<String> =
+        (json[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+    return DailyDigest(
+        text = json.str("text") ?: "",
+        overdue = strings("overdue"),
+        dueToday = strings("dueToday"),
+        approvals = (json["approvals"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.str("title") } ?: emptyList(),
+        events = (json["events"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.str("title") } ?: emptyList(),
+        waiting = strings("waiting"),
+    )
+}
+
+internal suspend fun AppStore.dailyDigest(): DailyDigest =
+    digestOf(hostCall("dailyDigest", buildJsonObject {}, 60_000).jsonObject)
+
 internal suspend fun AppStore.teamTemplates(): List<TeamTemplate> =
     (hostCall("teamTemplates", buildJsonObject {}).jsonObject["templates"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::templateOf) } ?: emptyList()

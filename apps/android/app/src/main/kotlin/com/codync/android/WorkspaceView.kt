@@ -88,6 +88,7 @@ internal fun WorkspaceSheet(store: AppStore) {
             SegmentedChoice(tab, WorkspaceTab.entries.map { it to it.label }, select = { tab = it })
             when (tab) {
                 WorkspaceTab.Board -> {
+                    TodaySection(store) { error = it }
                     var title by remember { mutableStateOf("") }
                     var detail by remember { mutableStateOf("") }
                     var more by remember { mutableStateOf(false) }
