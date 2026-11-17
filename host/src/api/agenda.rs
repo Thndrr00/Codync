@@ -12,7 +12,7 @@ use std::sync::Arc;
 /// The methods this group answers.
 pub const METHODS: [&str; 1] = ["tasksAgenda"];
 
-pub async fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
+pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
     match method {
         "tasksAgenda" => agenda(hub, b),
         other => anyhow::bail!("unknown agenda method {other}"),

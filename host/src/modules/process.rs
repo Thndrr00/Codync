@@ -135,7 +135,8 @@ impl Running {
                     pending.remove(&id);
                 }
                 let seconds = Duration::from_millis(self.limits.time_ms).as_secs_f32();
-                self.stop(format!("took longer than {seconds}s"));
+                let reason = format!("took longer than {seconds}s and was stopped");
+                self.stop(reason);
                 bail!("{} took longer than {seconds}s and was stopped", self.id)
             }
         }

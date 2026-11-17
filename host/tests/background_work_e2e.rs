@@ -34,6 +34,8 @@ async fn nth_answer(host: &Host, bot: &str, nth: usize) -> Value {
 async fn a_permission_asked_after_the_turn_gets_the_bots_automatic_answer() {
     let host = Host::start().await;
     let bot = host.fixture_bot("Hermes", "late_permission_agent.py", "").await;
+    // New bots start in Auto on this fork; this one has to ask first for the first two checks.
+    host.call("updateBot", json!({"id": bot, "permission": "ask"})).await;
 
     // A bot that asks first: no card waits for it, so it's declined (the way ACP says it), not refused as unsupported.
     let asked = answer_after(&host, &bot, "write the notes", 0).await;

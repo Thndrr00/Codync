@@ -59,12 +59,12 @@ impl Actor {
                 }
             }
             Some(Incoming::Request { id, method, params }) => {
-                let Some(conn) = &self.conn else { return };
-                let acp = conn.acp.clone();
                 if method == "session/request_permission" && self.turn.is_some() {
                     self.on_permission(id, params).await;
-                } else {
-                    let _ = acp.respond_error(id, -32601, &format!("{method} is not supported by Codync")).await;
+                } else if method == "session/request_permission" {
+                    self.answer_background(id, &params).await;
+                } else if let Some(conn) = &self.conn {
+                    let _ = conn.acp.respond_error(id, -32601, &format!("{method} is not supported by Codync")).await;
                 }
             }
         }
@@ -182,6 +182,41 @@ impl Actor {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// A permission request from work the agent goes on with after its turn ended (a background subagent): no
+    /// turn can show a card, so it gets the answer a turn would give without asking. Only one of this bot's own
+    /// sessions, and only while nobody stopped the turn; anything else is declined the way ACP expects.
+    pub(super) async fn answer_background(&mut self, rpc_id: Value, params: &Value) {
+        use crate::agent::approval_rules::{self, Decision, Outcome};
+        let options = params["options"].as_array().cloned().unwrap_or_default();
+        let tool = &params["toolCall"];
+        let title = tool["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Use a tool");
+        let kind = tool["kind"].as_str().unwrap_or("other");
+        let command = tool["rawInput"]["command"].as_str().map(str::to_owned);
+        let own = self.conn.as_ref().is_some_and(|conn| {
+            params["sessionId"].as_str().is_some_and(|sid| conn.loaded.contains_key(sid))
+        });
+        let quick = if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
+        let evaluation = approval_rules::evaluate(
+            &self.cfg.approval_rules,
+            &quick,
+            self.cfg.permission,
+            kind,
+            command.as_deref(),
+            title,
+        );
+        let allowed = own && !self.stop_requested && matches!(
+            evaluation.outcome,
+            Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
+        );
+        tracing::info!(bot = %self.cfg.id, allowed, title, "permission asked outside a turn");
+        if allowed && self.pick_option(&rpc_id, &options, &["allow_once", "allow_always"], false).await {
+            return;
+        }
+        if let Some(conn) = &self.conn {
+            let _ = conn.acp.respond(rpc_id, json!({"outcome": {"outcome": "cancelled"}})).await;
         }
     }
 
@@ -446,7 +481,11 @@ impl Actor {
     /// A `send_message`: the user's next bubble, in the turn's lane, right away. Only in the
     /// bot's own chat; a room, a bot request or a routine reads the turn's reply.
     pub(super) fn send_to_user(&mut self, text: String) -> anyhow::Result<()> {
-        let Some(turn) = self.turn else { anyhow::bail!("no turn is running") };
+        let Some(turn) = self.turn else {
+            // Work that goes on after the turn can't message a person who stopped that turn.
+            anyhow::ensure!(!self.stop_requested, "the user stopped you: send nothing until they write again");
+            anyhow::bail!("no turn is running");
+        };
         if self.active_request.is_some() {
             anyhow::bail!(
                 "send_message isn't available in a bot request: your final reply goes to the requesting bot, so put your answer there"

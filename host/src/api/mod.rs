@@ -98,7 +98,7 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         return missions::call(hub, method, &b);
     }
     if agenda::METHODS.contains(&method) {
-        return agenda::call(hub, method, &b).await;
+        return agenda::call(hub, method, &b);
     }
     if let Some(answer) = crate::modules::api::route(hub, caller, method, b.clone()).await? {
         return Ok(answer);

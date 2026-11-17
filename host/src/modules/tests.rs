@@ -32,7 +32,9 @@ pub(crate) fn signed_folder(name: &str, id: &str, key: &SigningKey, command: &st
 }
 
 fn store(name: &str) -> crate::store::Store {
-    crate::store::Store::open(&temp_dir(name).join("test.db")).unwrap()
+    // A different folder from the module's: `temp_dir` starts clean on every call, so reusing the
+    // module's name here would delete the manifest and signature a test just wrote there.
+    crate::store::Store::open(&temp_dir(&format!("{name}-db")).join("test.db")).unwrap()
 }
 
 fn modules(name: &str) -> (crate::store::Store, Modules) {

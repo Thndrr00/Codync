@@ -517,11 +517,17 @@ impl Actor {
         self.files.cancel();
         self.flush(true);
         self.seg = Seg::None;
-        let ids: Vec<String> = self.perms.drain().map(|(k, _)| k).collect();
-        for id in ids {
+        let client = self.conn.as_ref().map(|c| c.acp.clone());
+        for (id, answer) in self.perms.drain() {
             if let Some(mut e) = self.hub.store.entry(&id) {
                 e.data["status"] = "expired".into();
                 self.hub.set_entry(&id, &e.data);
+            }
+            // The agent would wait on a card no one can answer once the turn is over.
+            if let (super::updates::Answer::Agent(rpc_id), Some(client)) = (answer, client.clone()) {
+                tokio::spawn(async move {
+                    let _ = client.respond(rpc_id, json!({"outcome": {"outcome": "cancelled"}})).await;
+                });
             }
         }
         for entry_id in self.tools.values() {

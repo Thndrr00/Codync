@@ -84,12 +84,26 @@ fn skill_item(path: &Path, folder: &str) -> Option<Named> {
 mod tests {
     use super::*;
 
-    /// A directory link. Windows has no `std::os::unix`.
-    fn link_dir(target: &Path, link: &Path) {
+    /// A directory link. Windows has no `std::os::unix`, and needs developer mode or elevation to
+    /// create one: when the privilege is missing, the callers skip the link part of the test.
+    fn link_dir(target: &Path, link: &Path) -> bool {
         #[cfg(unix)]
-        std::os::unix::fs::symlink(target, link).expect("symlink");
+        {
+            std::os::unix::fs::symlink(target, link).expect("symlink");
+            true
+        }
         #[cfg(windows)]
-        std::os::windows::fs::symlink_dir(target, link).expect("symlink");
+        {
+            match std::os::windows::fs::symlink_dir(target, link) {
+                Ok(()) => true,
+                // ERROR_PRIVILEGE_NOT_HELD.
+                Err(error) if error.raw_os_error() == Some(1314) => {
+                    eprintln!("skipping symlink check: {error}");
+                    false
+                }
+                Err(error) => panic!("symlink: {error}"),
+            }
+        }
     }
 
     fn scratch() -> std::path::PathBuf {
@@ -110,7 +124,10 @@ mod tests {
             .expect("imported");
         std::fs::write(real.join("SKILL.md"), "---\nname: linked\ndescription: >\n  Review\n  a diff\n---\n# 说明\n")
             .expect("linked");
-        link_dir(&real, &home.join(".claude/skills/linked"));
+        if !link_dir(&real, &home.join(".claude/skills/linked")) {
+            let _ = std::fs::remove_dir_all(root);
+            return;
+        }
         let skills = list("claude", &home);
         assert_eq!(skills.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["linked"]);
         assert_eq!(skills[0].description, "Review a diff");

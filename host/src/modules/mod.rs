@@ -160,7 +160,13 @@ impl Modules {
 
     /// What the apps show, in the order they list them.
     pub fn rows(&self) -> Vec<Value> {
-        let running = self.running.lock().map(|r| r.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
+        // A process that stopped stays in the map until the next call replaces it, so its reason can
+        // still be shown. It is not "running" any more: only live processes count here.
+        let running = self
+            .running
+            .lock()
+            .map(|r| r.iter().filter(|(_, process)| process.alive()).map(|(id, _)| id.clone()).collect::<Vec<_>>())
+            .unwrap_or_default();
         let mut rows: Vec<Value> =
             self.installed.lock().map(|all| all.values().map(|m| self.row(m, &running)).collect()).unwrap_or_default();
         rows.sort_by_key(|row| row["name"].as_str().unwrap_or_default().to_lowercase());
@@ -349,7 +355,7 @@ impl Modules {
         let folder = (module.approved().files != Files::None).then(|| bot_folder(bot)).flatten();
         let manifest = module.manifest.as_ref().ok_or_else(|| anyhow!("this module can't run"))?;
         running.ready(manifest, folder.as_deref()).await?;
-        let answer = running
+        running
             .request(
                 "tool",
                 json!({
@@ -358,8 +364,7 @@ impl Modules {
                     "botFolder": folder.map(|p| p.to_string_lossy().into_owned()),
                 }),
             )
-            .await;
-        self.after_call(id, answer)
+            .await
     }
 
     /// One of a module's views, as rows the apps draw with their own components.
@@ -374,21 +379,10 @@ impl Modules {
         let answer = running
             .request("view", json!({"id": view, "botFolder": folder.map(|p| p.to_string_lossy().into_owned())}))
             .await;
-        match self.after_call(id, answer) {
+        match answer {
             Ok(result) => process::sections(&result),
             Err(error) => Err(error),
         }
-    }
-
-    /// A call that ended because the module died drops its process, so the next call starts a fresh one.
-    fn after_call(&self, id: &str, answer: Result<Value>) -> Result<Value> {
-        if answer.is_err()
-            && let Ok(mut running) = self.running.lock()
-            && running.get(id).is_some_and(|p| !p.alive())
-        {
-            running.remove(id);
-        }
-        answer
     }
 
     /// The running modules that asked to hear `name`.
