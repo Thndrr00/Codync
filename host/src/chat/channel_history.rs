@@ -18,13 +18,26 @@ const PAGE: i64 = 200;
 pub fn tool() -> Value {
     json!({
         "name": TOOL,
-        "description": "Read the messages that a connected Slack, Telegram, Discord or WhatsApp chat sent you, newest first: the text, who it was from, and when. Use it to summarize a channel or to check what was said before you answer. It sends nothing and reads only this bot's own chat.",
+        "description": "Read the messages that a connected Slack, Telegram, Discord or WhatsApp chat sent you, newest first: the text, who it was from, and when. Search them by words or find what came after a moment. Use it to summarize a channel, to find an earlier message, or to check what was said before you answer. It sends nothing and reads only this bot's own chat.",
         "inputSchema": {"type": "object", "properties": {
             "source": {"type": "string", "enum": ["slack", "telegram", "discord", "whatsapp"], "description": "Only this channel; leave it out for all four."},
+            "query": {"type": "string", "description": "Words to look for; every one of them has to appear in the message, in any case."},
+            "since": {"type": "integer", "description": "Only messages at or after this time, in Unix milliseconds."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 50}
         }},
         "annotations": {"readOnlyHint": true},
     })
+}
+
+/// The words of `query`, lowercased, all of which a message has to hold.
+fn words(query: &str) -> Vec<String> {
+    query.split_whitespace().map(str::to_lowercase).collect()
+}
+
+/// Whether `text` holds every word of `query` (an empty query holds for every message).
+fn holds(text: &str, query: &[String]) -> bool {
+    let text = text.to_lowercase();
+    query.iter().all(|word| text.contains(word.as_str()))
 }
 
 /// The most recent channel messages in `bot`'s chat, newest first.
@@ -33,6 +46,8 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     if !source.is_empty() && !SOURCES.contains(&source) {
         bail!("source must be slack, telegram, discord or whatsapp");
     }
+    let query = words(args["query"].as_str().unwrap_or_default());
+    let since = args["since"].as_i64().unwrap_or(0);
     let limit = usize::try_from(args["limit"].as_u64().unwrap_or(20).clamp(1, LIMIT as u64)).unwrap_or(LIMIT);
     let mut messages = Vec::with_capacity(limit);
     let mut before = i64::MAX;
@@ -41,12 +56,16 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         let Some(oldest) = page.last() else { break };
         before = oldest.seq;
         for entry in &page {
+            if since > 0 && entry.created_at < since {
+                // The chat is newest first: everything after this is too old.
+                break 'pages;
+            }
             let from = entry.data["source"].as_str().unwrap_or_default();
             if !SOURCES.contains(&from) || (!source.is_empty() && from != source) {
                 continue;
             }
             let text = entry.data["text"].as_str().unwrap_or_default().trim();
-            if text.is_empty() {
+            if text.is_empty() || !holds(text, &query) {
                 continue;
             }
             messages.push(json!({
@@ -68,4 +87,19 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
         }
     }
     Ok(json!({"messages": messages}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_word_of_the_query_has_to_appear_in_any_case() {
+        let query = words("  Invoice  PAID ");
+        assert!(holds("INVOICE 42 was paid today", &query));
+        assert!(!holds("Invoice 42 is due", &query), "an unpaid invoice is not the one asked for");
+        let none: Vec<String> = Vec::new();
+        assert!(holds("anything at all", &none), "an empty query matches every message");
+        assert!(words("").is_empty());
+    }
 }

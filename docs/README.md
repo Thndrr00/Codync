@@ -71,6 +71,7 @@ Source review, a passing build, local integration tests and production acceptanc
 - [OpenBot 0.70.0 on Codync](plans/openbot-0.70.0.md) (media from the agent's own tool, mute; what was taken and what was not)
 - [OpenBot 0.69.0 on Codync](plans/openbot-0.69.0.md) (pins, steering, the WhatsApp acknowledgement; what was taken and what was not)
 - [OpenBot 0.71.0 on Codync](plans/openbot-0.71.0.md) (a release of fixes; what applies, what is already here and what stays out)
+- [OpenBot 0.72.0 on Codync](plans/openbot-0.72.0.md) (channel search by words and time; the avatar-coloured bubbles are designed, not taken)
 - [OpenBot 0.66.0, 0.67.0 and 0.68.0 on Codync](plans/openbot-0.66-0.68.md) (three product releases; the one thing that maps, and why the rest does not)
 - [Windows remote screen](plans/windows-remote-screen.md) (a screen helper for Windows; planned)
 - [Android parity and acceptance](plans/android-app.md)
