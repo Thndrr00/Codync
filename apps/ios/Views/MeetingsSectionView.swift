@@ -88,6 +88,7 @@ struct MeetingsSectionView: View {
             }
         }
         .task { await load() }
+        .onDisappear { Task { await recorder.cancel(store: store) } }
     }
 
     private func load() async {

@@ -29,6 +29,14 @@ public struct CloudBackupUpload: Decodable, Sendable {
 }
 
 extension BotStore {
+    private struct SaveBody: Encodable {
+        var url: String
+        var username: String
+        var password: String
+        var enabled: Bool
+        var keep: Int
+    }
+
     public func cloudBackupStatus() async throws -> CloudBackupStatus {
         let client = try await ready()
         return try await client.call("cloudBackupStatus")
@@ -37,13 +45,11 @@ extension BotStore {
     @discardableResult
     public func saveCloudBackup(url: String, username: String, password: String, enabled: Bool, keep: Int) async throws -> CloudBackupStatus {
         let client = try await ready()
-        return try await client.call("saveCloudBackup", [
-            "url": url,
-            "username": username,
-            "password": password,
-            "enabled": enabled,
-            "keep": keep,
-        ], timeout: 120)
+        return try await client.call(
+            "saveCloudBackup",
+            SaveBody(url: url, username: username, password: password, enabled: enabled, keep: keep),
+            timeout: 120
+        )
     }
 
     @discardableResult

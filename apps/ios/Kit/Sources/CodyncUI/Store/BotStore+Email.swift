@@ -22,6 +22,10 @@ public struct EmailMessage: Decodable, Identifiable, Equatable, Sendable {
 }
 
 extension BotStore {
+    private struct InboxBody: Encodable {
+        var account: String
+        var limit: Int
+    }
     private struct AccountsWrap: Decodable { var accounts: [EmailAccount] }
     private struct MessagesWrap: Decodable { var messages: [EmailMessage] }
     private struct AccountWrap: Decodable { var account: EmailAccount }
@@ -58,7 +62,7 @@ extension BotStore {
 
     public func emailInbox(account: String, limit: Int = 20) async throws -> [EmailMessage] {
         let client = try await ready()
-        let wrap: MessagesWrap = try await client.call("emailInbox", ["account": account, "limit": limit], timeout: 60)
+        let wrap: MessagesWrap = try await client.call("emailInbox", InboxBody(account: account, limit: limit), timeout: 60)
         return wrap.messages
     }
 

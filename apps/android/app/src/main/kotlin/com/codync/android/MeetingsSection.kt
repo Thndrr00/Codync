@@ -1,5 +1,9 @@
 package com.codync.android
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,11 +16,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.codync.android.design.*
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -49,6 +55,7 @@ internal fun MeetingsSection(store: AppStore, onError: (String?) -> Unit) {
     val mic = remember { AndroidMic(context) }
     var pieces by remember { mutableStateOf(Channel<ByteArray>(Channel.UNLIMITED)) }
     var collector by remember { mutableStateOf<Job?>(null) }
+    val current = rememberUpdatedState(active)
 
     suspend fun load() {
         try {
@@ -72,10 +79,15 @@ internal fun MeetingsSection(store: AppStore, onError: (String?) -> Unit) {
     }
 
     DisposableEffect(Unit) {
-        onDispose { scope.launch { mic.stop() } }
+        onDispose {
+            scope.launch {
+                mic.stop()
+                current.value?.let { try { store.cancelMeeting(it.id) } catch (_: Exception) {} }
+            }
+        }
     }
 
-    fun start() {
+    fun begin() {
         if (active != null) return
         busy = true
         scope.launch {
@@ -117,6 +129,7 @@ internal fun MeetingsSection(store: AppStore, onError: (String?) -> Unit) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
+                active?.let { try { store.cancelMeeting(it.id) } catch (_: Exception) {} }
                 active = null
                 collector?.cancel()
                 collector = null
@@ -124,6 +137,19 @@ internal fun MeetingsSection(store: AppStore, onError: (String?) -> Unit) {
             } finally {
                 busy = false
             }
+        }
+    }
+
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) begin() else onError("Allow microphone access in Android settings to record a meeting.")
+    }
+
+    fun start() {
+        if (active != null) return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            begin()
+        } else {
+            permission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
