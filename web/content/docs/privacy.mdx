@@ -102,10 +102,11 @@ documents, routines, board and memory) under the host's data folder in `backups/
 file; keep it somewhere safe and restore by stopping the host and putting it back in place.
 
 **Settings › Backups** (and **Backups** in a computer's settings on a phone) can send an encrypted copy
-to your own WebDAV folder, such as Nextcloud, ownCloud, Box or pCloud. The computer seals the file with
-its vault key before uploading, so the server only sees ciphertext, and keeps the last 14 uploads by
-default. Backups run once a day while the host is running when **Back up every day** is on; **Back up
-now** always works. Restoring is still done by hand with the key available on that computer.
+to your own WebDAV folder, such as Nextcloud, ownCloud, Box or pCloud, or through an `rclone` remote you
+already configured (Google Drive, Dropbox, S3 and the rest). The computer seals the file with its vault
+key before uploading, so the server only sees ciphertext, and keeps the last 14 uploads by default.
+Backups run once a day while the host is running when **Back up every day** is on; **Back up now**
+always works. Restoring is still done by hand with the key available on that computer.
 
 ## Removing your data
 

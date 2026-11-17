@@ -169,10 +169,12 @@ to the signed installers.
   (1–100, default 14). A six-hour ticker uploads once a day while the schedule is on; **Back up now**
   always works.
 - Desktop Settings › Backups and the Backups sheet in each phone's computer settings configure the
-  folder, username, password and retention, show the last result and the uploaded files.
+  folder, username, password and retention, show the last result and the uploaded files. A second
+  backend reuses `rclone` when it is on `PATH`: the person names an existing remote
+  (`gdrive:Codync`) and the host runs `rclone copyto` and `rclone delete` on the sealed file, so the
+  same backup reaches Google Drive, Dropbox, S3 and any other remote they configured.
 - Restoring is a manual copy of the `.codync` file back into place, after the key is available on that
-  computer; a restore screen is a later step. Only WebDAV is supported for now (Nextcloud, ownCloud,
-  Box, pCloud and similar).
+  computer; a restore screen is a later step.
 
 ## Meeting notes — done (microphone; system audio is next)
 

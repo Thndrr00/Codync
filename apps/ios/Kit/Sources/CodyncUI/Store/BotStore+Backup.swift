@@ -13,6 +13,8 @@ public struct CloudBackupFile: Decodable, Identifiable, Equatable, Sendable {
 public struct CloudBackupStatus: Decodable, Equatable, Sendable {
     public var url: String
     public var username: String
+    public var backend: String
+    public var rclone: Bool
     public var enabled: Bool
     public var keep: Int
     public var lastAt: Int?
@@ -33,6 +35,7 @@ extension BotStore {
         var url: String
         var username: String
         var password: String
+        var backend: String
         var enabled: Bool
         var keep: Int
     }
@@ -43,11 +46,11 @@ extension BotStore {
     }
 
     @discardableResult
-    public func saveCloudBackup(url: String, username: String, password: String, enabled: Bool, keep: Int) async throws -> CloudBackupStatus {
+    public func saveCloudBackup(url: String, username: String, password: String, backend: String, enabled: Bool, keep: Int) async throws -> CloudBackupStatus {
         let client = try await ready()
         return try await client.call(
             "saveCloudBackup",
-            SaveBody(url: url, username: username, password: password, enabled: enabled, keep: keep),
+            SaveBody(url: url, username: username, password: password, backend: backend, enabled: enabled, keep: keep),
             timeout: 120
         )
     }

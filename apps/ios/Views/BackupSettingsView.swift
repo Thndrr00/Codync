@@ -9,6 +9,8 @@ struct BackupSettingsView: View {
     @State private var status: CloudBackupStatus?
     @State private var url = ""
     @State private var username = ""
+    @State private var backend = "webdav"
+    @State private var rclone = false
     @State private var password = ""
     @State private var keep = "14"
     @State private var enabled = false
@@ -26,12 +28,21 @@ struct BackupSettingsView: View {
             }
             CardForm {
                 CardSection("Cloud backup", footer: "Codync seals the database with this computer's vault key before uploading. The server only sees ciphertext.") {
-                    TextField("WebDAV folder (https://…)", text: $url)
+                    ValueRow("Where") {
+                        ChoicePicker(selection: $backend, options: [("webdav", "WebDAV folder"), ("rclone", "rclone remote")])
+                    }
+                    Text(backend == "rclone"
+                         ? (rclone ? "A remote you configured in rclone on this computer, like gdrive:Codync." : "rclone is not on this computer's PATH. Install it and configure a remote first.")
+                         : "A WebDAV folder, like Nextcloud, ownCloud, Box or pCloud.")
+                        .font(.caption).foregroundStyle(Palette.secondary)
+                    TextField(backend == "rclone" ? "rclone path (gdrive:Codync)" : "WebDAV folder (https://…)", text: $url)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput()
-                    TextField("Username", text: $username)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput()
-                    SecureField(status?.hasPassword == true ? "Password saved; leave empty to keep it" : "Password", text: $password)
-                        .plainTextInput()
+                    if backend == "webdav" {
+                        TextField("Username", text: $username)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled().plainTextInput()
+                        SecureField(status?.hasPassword == true ? "Password saved; leave empty to keep it" : "Password", text: $password)
+                            .plainTextInput()
+                    }
                     HStack {
                         Text("Keep").foregroundStyle(Palette.secondary)
                         Spacer(minLength: 0)
@@ -39,7 +50,7 @@ struct BackupSettingsView: View {
                     }
                     Toggle(isOn: $enabled) { Text("Back up every day") }
                         .toggleStyle(.codync)
-                    Text("A backup is uploaded only while the computer's host runs.")
+                    Text("A backup is uploaded only while the computer's host runs. The file is sealed before it leaves.")
                         .font(.caption).foregroundStyle(Palette.secondary)
                 }
                 CardSection {
@@ -86,6 +97,8 @@ struct BackupSettingsView: View {
                 status = next
                 url = next.url
                 username = next.username
+                backend = next.backend
+                rclone = next.rclone
                 keep = String(next.keep)
                 enabled = next.enabled
                 error = nil
@@ -107,6 +120,7 @@ struct BackupSettingsView: View {
                     url: url.trimmingCharacters(in: .whitespacesAndNewlines),
                     username: username.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: password,
+                    backend: backend,
                     enabled: enabled,
                     keep: count
                 )

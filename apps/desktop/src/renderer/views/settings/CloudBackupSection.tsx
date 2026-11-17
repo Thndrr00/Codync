@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, CardSection, Switch } from '../../components/Controls'
+import { Button, CardSection, ChoicePicker, Switch } from '../../components/Controls'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
@@ -14,6 +14,8 @@ interface BackupFile {
 interface BackupStatus {
   url: string
   username: string
+  backend: string
+  rclone: boolean
   enabled: boolean
   keep: number
   lastAt?: number
@@ -34,6 +36,8 @@ export function CloudBackupSection() {
   const [status, setStatus] = useState<BackupStatus | null>(null)
   const [url, setUrl] = useState('')
   const [username, setUsername] = useState('')
+  const [backend, setBackend] = useState('webdav')
+  const [rclone, setRclone] = useState(false)
   const [password, setPassword] = useState('')
   const [keep, setKeep] = useState('14')
   const [enabled, setEnabled] = useState(false)
@@ -49,6 +53,8 @@ export function CloudBackupSection() {
       setStatus(next)
       setUrl(next.url)
       setUsername(next.username)
+      setBackend(next.backend || 'webdav')
+      setRclone(next.rclone)
       setKeep(String(next.keep))
       setEnabled(next.enabled)
       setError(null)
@@ -76,6 +82,7 @@ export function CloudBackupSection() {
         url: url.trim(),
         username: username.trim(),
         password,
+        backend,
         enabled,
         keep: count,
       })
@@ -103,15 +110,36 @@ export function CloudBackupSection() {
       ) : (
         <VStack gap={12}>
           <VStack gap={6}>
-            <Text size="callout" weight="semibold">Folder address</Text>
-            <Field label="WebDAV folder" value={url} onChange={setUrl} placeholder="https://cloud.example.com/remote.php/dav/files/me/Codync" />
-            <HStack gap={8} align="end" wrap>
-              <VStack gap={4} grow><Text size="caption" tone="secondary">Username</Text><Field label="Username" value={username} onChange={setUsername} placeholder="me" /></VStack>
-              <VStack gap={4} grow><Text size="caption" tone="secondary">Password</Text><Field label="Password" value={password} onChange={setPassword} placeholder={status?.hasPassword ? 'Saved; leave empty to keep it' : 'App password'} secret /></VStack>
-              <VStack gap={4}><Text size="caption" tone="secondary">Keep</Text><Field label="Keep" value={keep} onChange={setKeep} placeholder="14" /></VStack>
-            </HStack>
+            <Text size="callout" weight="semibold">Where</Text>
+            <ChoicePicker
+              selection={backend}
+              options={[{ id: 'webdav', label: 'WebDAV folder' }, { id: 'rclone', label: 'rclone remote' }]}
+              onChange={setBackend}
+            />
+            <Text size="caption" tone="secondary">
+              {backend === 'rclone'
+                ? (rclone ? 'A remote you configured in rclone on this computer, like gdrive:Codync.' : 'rclone is not on this computer’s PATH. Install it and configure a remote first.')
+                : 'A WebDAV folder, like Nextcloud, ownCloud, Box or pCloud.'}
+            </Text>
+            <Field
+              label={backend === 'rclone' ? 'rclone path' : 'WebDAV folder'}
+              value={url}
+              onChange={setUrl}
+              placeholder={backend === 'rclone' ? 'gdrive:Codync' : 'https://cloud.example.com/remote.php/dav/files/me/Codync'}
+            />
+            {backend === 'webdav' ? (
+              <HStack gap={8} align="end" wrap>
+                <VStack gap={4} grow><Text size="caption" tone="secondary">Username</Text><Field label="Username" value={username} onChange={setUsername} placeholder="me" /></VStack>
+                <VStack gap={4} grow><Text size="caption" tone="secondary">Password</Text><Field label="Password" value={password} onChange={setPassword} placeholder={status?.hasPassword ? 'Saved; leave empty to keep it' : 'App password'} secret /></VStack>
+                <VStack gap={4}><Text size="caption" tone="secondary">Keep</Text><Field label="Keep" value={keep} onChange={setKeep} placeholder="14" /></VStack>
+              </HStack>
+            ) : (
+              <HStack gap={8} align="end" wrap>
+                <VStack gap={4}><Text size="caption" tone="secondary">Keep</Text><Field label="Keep" value={keep} onChange={setKeep} placeholder="14" /></VStack>
+              </HStack>
+            )}
             <Switch on={enabled} onChange={setEnabled} label="Back up every day">Back up every day</Switch>
-            <Text size="caption" tone="secondary">A backup is uploaded only while this computer’s host runs.</Text>
+            <Text size="caption" tone="secondary">A backup is uploaded only while this computer’s host runs. The file is sealed before it leaves.</Text>
           </VStack>
 
           <HStack gap={8} align="center">

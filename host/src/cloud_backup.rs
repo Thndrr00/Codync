@@ -26,6 +26,8 @@ struct Settings {
     url: String,
     #[serde(default)]
     username: String,
+    #[serde(default = "default_backend")]
+    backend: String,
     #[serde(default)]
     enabled: bool,
     #[serde(default = "default_keep")]
@@ -34,6 +36,10 @@ struct Settings {
     last_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_error: Option<String>,
+}
+
+fn default_backend() -> String {
+    "webdav".to_owned()
 }
 
 fn default_keep() -> usize {
@@ -45,6 +51,7 @@ impl Default for Settings {
         Self {
             url: String::new(),
             username: String::new(),
+            backend: default_backend(),
             enabled: false,
             keep: default_keep(),
             last_at: None,
@@ -79,10 +86,14 @@ fn save_files(store: &crate::store::Store, files: &[Remote]) -> Result<()> {
 fn status(store: &crate::store::Store) -> Value {
     let settings = settings(store);
     let password = vault::read(store, PASSWORD).ok().flatten().is_some_and(|password| !password.is_empty());
-    let ready = !settings.url.is_empty() && (settings.username.is_empty() || password);
+    let rclone = rclone_available();
+    let ready = !settings.url.is_empty()
+        && if settings.backend == "rclone" { rclone } else { settings.username.is_empty() || password };
     json!({
         "url": settings.url,
         "username": settings.username,
+        "backend": settings.backend,
+        "rclone": rclone,
         "enabled": settings.enabled,
         "keep": settings.keep,
         "lastAt": settings.last_at,
@@ -99,20 +110,28 @@ pub async fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Value> {
         "saveCloudBackup" => {
             let mut settings = settings(&hub.store);
             let url = b["url"].as_str().unwrap_or_default().trim().trim_end_matches('/');
+            let backend = b["backend"].as_str().unwrap_or(&settings.backend).to_owned();
+            ensure!(matches!(backend.as_str(), "webdav" | "rclone"), "unknown backup backend");
             if url.is_empty() {
                 settings.url = String::new();
+                settings.backend = backend.to_owned();
                 settings.enabled = false;
                 save_settings(&hub.store, &settings)?;
                 let _ = vault::write(&hub.store, PASSWORD, "");
                 return Ok(status(&hub.store));
             }
             ensure!(url.len() <= 1_000, "that address is too long");
-            let parsed = reqwest::Url::parse(url).context("that isn't a web address")?;
-            ensure!(
-                matches!(parsed.scheme(), "http" | "https"),
-                "the backup address must start with https:// or http://"
-            );
+            if backend == "rclone" {
+                ensure!(rclone_available(), "install rclone on this computer first");
+            } else {
+                let parsed = reqwest::Url::parse(url).context("that isn't a web address")?;
+                ensure!(
+                    matches!(parsed.scheme(), "http" | "https"),
+                    "the backup address must start with https:// or http://"
+                );
+            }
             settings.url = url.to_owned();
+            settings.backend = backend.to_owned();
             settings.username = b["username"].as_str().unwrap_or_default().trim().chars().take(200).collect();
             settings.enabled = b["enabled"].as_bool().unwrap_or(settings.enabled);
             settings.keep = b["keep"].as_u64().map_or(settings.keep, |keep| keep.clamp(1, 100) as usize);
@@ -156,6 +175,10 @@ async fn run(hub: &Arc<Hub>) -> Result<Value> {
 async fn run_inner(hub: &Arc<Hub>) -> Result<Value> {
     let settings = settings(&hub.store);
     ensure!(!settings.url.is_empty(), "add the folder address for your cloud first");
+    ensure!(
+        settings.backend != "rclone" || rclone_available(),
+        "install rclone on this computer and configure the remote first"
+    );
     let password = vault::read(&hub.store, PASSWORD)?.unwrap_or_default();
     ensure!(settings.username.is_empty() || !password.is_empty(), "add the password for that cloud account");
     let folder = crate::service::data_dir().join("backups");
@@ -177,29 +200,52 @@ async fn run_inner(hub: &Arc<Hub>) -> Result<Value> {
         .await
         .context("encrypting the backup")??;
     let name = backup_name();
-    let url = format!("{}/{name}", settings.url.trim_end_matches('/'));
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(180)).build().context("starting the upload")?;
+    let target = format!("{}/{name}", settings.url.trim_end_matches('/'));
     let size = sealed.len();
-    let mut request = client.put(&url).header("Content-Type", "application/octet-stream").body(sealed);
-    if !settings.username.is_empty() {
-        request = request.basic_auth(&settings.username, Some(&password));
-    }
-    let response = request.send().await.with_context(|| format!("uploading to {url}"))?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let detail = response.text().await.unwrap_or_default();
-        bail!("the cloud answered {status}: {}", response_text(&detail));
+    if settings.backend == "rclone" {
+        let sealed_path = folder.join(format!("sealed-{}.bin", uuid::Uuid::new_v4()));
+        tokio::fs::write(&sealed_path, &sealed).await.context("writing the sealed backup")?;
+        let output = tokio::process::Command::new("rclone")
+            .arg("copyto")
+            .arg(&sealed_path)
+            .arg(&target)
+            .output()
+            .await
+            .context("starting rclone")?;
+        let _ = tokio::fs::remove_file(&sealed_path).await;
+        ensure!(output.status.success(), "rclone failed: {}", String::from_utf8_lossy(&output.stderr).trim());
+    } else {
+        let client =
+            reqwest::Client::builder().timeout(Duration::from_secs(180)).build().context("starting the upload")?;
+        let mut request = client.put(&target).header("Content-Type", "application/octet-stream").body(sealed);
+        if !settings.username.is_empty() {
+            request = request.basic_auth(&settings.username, Some(&password));
+        }
+        let response = request.send().await.with_context(|| format!("uploading to {target}"))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let detail = response.text().await.unwrap_or_default();
+            bail!("the cloud answered {status}: {}", response_text(&detail));
+        }
     }
     let mut uploaded = files(&hub.store);
     uploaded.push(Remote { name: name.clone(), at: crate::store::now_ms() });
     let keep = settings.keep.max(1);
     while uploaded.len() > keep {
         let old = uploaded.remove(0);
-        let mut request = client.delete(format!("{}/{}", settings.url.trim_end_matches('/'), old.name));
-        if !settings.username.is_empty() {
-            request = request.basic_auth(&settings.username, Some(&password));
+        let old_target = format!("{}/{}", settings.url.trim_end_matches('/'), old.name);
+        if settings.backend == "rclone" {
+            let _ = tokio::process::Command::new("rclone").arg("delete").arg(&old_target).output().await;
+        } else {
+            let client = reqwest::Client::builder().timeout(Duration::from_secs(60)).build().ok();
+            if let Some(client) = client {
+                let mut request = client.delete(&old_target);
+                if !settings.username.is_empty() {
+                    request = request.basic_auth(&settings.username, Some(&password));
+                }
+                let _ = request.send().await;
+            }
         }
-        let _ = request.send().await;
     }
     save_files(&hub.store, &uploaded)?;
     Ok(json!({"name": name, "bytes": size, "at": crate::store::now_ms()}))
@@ -214,6 +260,17 @@ fn backup_name() -> String {
     let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
     let suffix = uuid::Uuid::new_v4().simple().to_string();
     format!("codync-{stamp}-{}.codync", &suffix[..8])
+}
+
+/// Whether a mature `rclone` is on PATH; when it is, the person can use any remote they configured
+/// there instead of a WebDAV URL.
+fn rclone_available() -> bool {
+    std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| {
+            let candidate = dir.join("rclone");
+            candidate.is_file() || candidate.with_extension("exe").is_file()
+        })
+    })
 }
 
 /// Called every few hours: one backup a day while the schedule is on.

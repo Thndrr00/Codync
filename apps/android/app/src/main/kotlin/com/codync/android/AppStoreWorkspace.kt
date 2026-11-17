@@ -211,6 +211,8 @@ internal data class CloudBackupFile(val name: String, val at: Long)
 internal data class CloudBackupStatus(
     val url: String,
     val username: String,
+    val backend: String,
+    val rclone: Boolean,
     val enabled: Boolean,
     val keep: Int,
     val lastAt: Long?,
@@ -225,6 +227,8 @@ internal data class CloudBackupUpload(val name: String, val bytes: Long)
 private fun backupStatusOf(json: JsonObject): CloudBackupStatus = CloudBackupStatus(
     url = json.str("url") ?: "",
     username = json.str("username") ?: "",
+    backend = json.str("backend") ?: "webdav",
+    rclone = json.bool("rclone") ?: false,
     enabled = json.bool("enabled") ?: false,
     keep = (json.num("keep") ?: 14).toInt(),
     lastAt = json.num("lastAt"),
@@ -239,11 +243,12 @@ private fun backupStatusOf(json: JsonObject): CloudBackupStatus = CloudBackupSta
 internal suspend fun AppStore.cloudBackupStatus(): CloudBackupStatus =
     backupStatusOf(hostCall("cloudBackupStatus", buildJsonObject {}).jsonObject)
 
-internal suspend fun AppStore.saveCloudBackup(url: String, username: String, password: String, enabled: Boolean, keep: Int): CloudBackupStatus =
+internal suspend fun AppStore.saveCloudBackup(url: String, username: String, password: String, backend: String, enabled: Boolean, keep: Int): CloudBackupStatus =
     backupStatusOf(hostCall("saveCloudBackup", buildJsonObject {
         put("url", url)
         put("username", username)
         put("password", password)
+        put("backend", backend)
         put("enabled", enabled)
         put("keep", keep)
     }, 120_000).jsonObject)

@@ -30,6 +30,8 @@ internal fun BackupSheet(store: AppStore) {
     var status by remember { mutableStateOf<CloudBackupStatus?>(null) }
     var url by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
+    var backend by remember { mutableStateOf("webdav") }
+    var rclone by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var keep by remember { mutableStateOf("14") }
     var enabled by remember { mutableStateOf(false) }
@@ -44,6 +46,8 @@ internal fun BackupSheet(store: AppStore) {
                 status = next
                 url = next.url
                 username = next.username
+                backend = next.backend
+                rclone = next.rclone
                 keep = next.keep.toString()
                 enabled = next.enabled
                 error = null
@@ -67,7 +71,7 @@ internal fun BackupSheet(store: AppStore) {
         notice = null
         scope.launch {
             try {
-                status = store.saveCloudBackup(url.trim(), username.trim(), password, enabled, count)
+                status = store.saveCloudBackup(url.trim(), username.trim(), password, backend, enabled, count)
                 password = ""
                 notice = if (runNow) {
                     val upload = store.runCloudBackup()
@@ -95,12 +99,25 @@ internal fun BackupSheet(store: AppStore) {
             ) {
                 row {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FieldBox(url, { url = it }, "WebDAV folder (https://…)")
-                        FieldBox(username, { username = it }, "Username")
-                        PlainInput(password, { password = it }, if (status?.hasPassword == true) "Password saved; leave empty to keep it" else "Password", secret = true)
+                        SegmentedChoice(backend, listOf("webdav" to "WebDAV", "rclone" to "rclone"), { backend = it })
+                        Text(
+                            if (backend == "rclone") {
+                                if (rclone) "A remote you configured in rclone on this computer, like gdrive:Codync."
+                                else "rclone is not on this computer's PATH. Install it and configure a remote first."
+                            } else {
+                                "A WebDAV folder, like Nextcloud, ownCloud, Box or pCloud."
+                            },
+                            style = Type.footnote,
+                            color = Palette.secondary,
+                        )
+                        FieldBox(url, { url = it }, if (backend == "rclone") "rclone path (gdrive:Codync)" else "WebDAV folder (https://…)")
+                        if (backend == "webdav") {
+                            FieldBox(username, { username = it }, "Username")
+                            PlainInput(password, { password = it }, if (status?.hasPassword == true) "Password saved; leave empty to keep it" else "Password", secret = true)
+                        }
                         FieldBox(keep, { keep = it }, "Keep (days)")
                         CodyncSwitch(enabled, { enabled = it }) { Text("Back up every day", style = Type.body, color = Palette.text) }
-                        Text("A backup is uploaded only while the computer's host runs.", style = Type.footnote, color = Palette.secondary)
+                        Text("A backup is uploaded only while the computer's host runs. The file is sealed before it leaves.", style = Type.footnote, color = Palette.secondary)
                     }
                 }
             }
