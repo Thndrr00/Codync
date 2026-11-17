@@ -1,6 +1,7 @@
 import CodyncKit
 import ImageIO
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// Files in messages: preparing picked, pasted and dropped files, and showing sent ones.
@@ -146,6 +147,8 @@ struct AttachmentList: View {
 struct AttachmentViewer: View {
     let name: String
     let image: AttachmentImage
+    @Environment(BotStore.self) private var model
+    @State private var note: String?
 
     init(file: Attachment, botId: String) {
         name = file.name
@@ -157,9 +160,27 @@ struct AttachmentViewer: View {
         image = AttachmentImage(shared: file, entryId: entryId, maxPixels: 4096)
     }
 
+    /// Ported from OpenBot 0.67.0: the picture goes on the clipboard as an image.
+    private func copy() async {
+        guard let data = await image.load(model), let picture = UIImage(data: data) else {
+            note = L10n.tr("The picture could not be copied")
+            return
+        }
+        UIPasteboard.general.image = picture
+        note = L10n.tr("Copied")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(name)
+            ModalHeader(name) {
+                Button(L10n.tr("Copy")) { Task { await copy() } }
+            }
+            if let note {
+                Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(Palette.secondary)
+                    .padding(.top, 8)
+            }
             image
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(12)
