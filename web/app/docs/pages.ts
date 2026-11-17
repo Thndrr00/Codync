@@ -128,6 +128,23 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
     ],
   },
   {
+    title: "Your day",
+    pages: [
+      {
+        slug: "email-and-calendars",
+        title: "Email and calendars",
+        description:
+          "Add your own IMAP and SMTP account and read-only .ics calendars on your computer, and let bots read them.",
+      },
+      {
+        slug: "meeting-notes",
+        title: "Meeting notes",
+        description:
+          "Record a meeting's microphone, keep its transcript on your computer and ask a bot for the minutes.",
+      },
+    ],
+  },
+  {
     title: "Your computer",
     pages: [
       {

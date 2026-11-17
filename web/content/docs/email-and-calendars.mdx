@@ -1,0 +1,37 @@
+These two accounts live on your computer, not in the cloud. Your bots can read and use them, and the
+apps only show what the computer returns.
+
+## Email
+
+Open **Settings › Email** on the desktop, or **Workspace › Email** on the iPhone and Android app, and
+add an account:
+
+- **Name** and **Address**: what the account is called and the address it sends from.
+- **Password**: your mail password or, where the provider requires one, an app password. It goes into
+  this computer's encrypted vault and is never shown again.
+- **IMAP server** and **SMTP server**: for example `imap.example.com` and `smtp.example.com`. IMAP uses
+  TLS on port 993; SMTP uses STARTTLS on 587.
+
+**Read inbox** shows the newest headers: sender, subject and date. **Send an email** sends a short
+plain-text message from the selected account. Sending is real and immediate; the bot asks first when a
+task needs it, unless you told it to send.
+
+The computer needs Python 3 (`python3`, `python` or `py` on `PATH`) for the small mail bridge. No mail
+account is created by Codync and nothing is stored outside the computer.
+
+Bots get two tools: `email_inbox` (read-only headers) and `email_send` (a real send).
+
+## Calendars
+
+Open **Settings › Calendars** on the desktop, or **Workspace › Calendar** on a phone, and paste the
+read-only `.ics` address of a calendar: Google, Apple, Outlook or any calendar that offers an export.
+Up to twenty feeds are kept. The computer refreshes a feed at most every ten minutes and shows the next
+two weeks, including all-day events.
+
+Calendars are read-only: Codync never edits or invites anyone. Bots get `calendar_agenda` to answer
+"what's on my calendar this week", and the daily digest includes today's events.
+
+## Removing an account
+
+**Remove account** forgets the server settings and deletes the password from the vault. The mail server
+itself is untouched.
