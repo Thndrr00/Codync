@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 /**
  * Files sent with a message, on the sender's side (iOS `AttachmentPreview`): pictures and clips as a
@@ -46,6 +48,7 @@ import kotlinx.coroutines.withContext
     val media = attachments.filter { it.isImage || it.isVideo }
     val files = attachments.filterNot { it.isImage || it.isVideo }
     var viewing by remember { mutableStateOf<Int?>(null) }
+    val scope = rememberCoroutineScope()
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (media.isNotEmpty()) MediaMosaic(media.map { MediaItem(it.id, it.name, it.isVideo) }, { viewing = it }) { item, modifier ->
             val file = media.first { it.id == item.key }
@@ -54,7 +57,13 @@ import kotlinx.coroutines.withContext
         }
         for (file in files) AttachmentCard(file)
     }
-    MediaViewerSheet(media.takeIf { viewing != null }, viewing ?: 0, { it.name }, { viewing = null }) { file, modifier, playing ->
+    MediaViewerSheet(media.takeIf { viewing != null }, viewing ?: 0, { it.name }, { viewing = null },
+        // Ported from OpenBot 0.67.0: another app can paste the picture.
+        trailing = { file ->
+            if (!file.isVideo) IconButton(tr("Copy"), "doc.on.doc") {
+                scope.launch { runCatching { store.attachments.copy(store.attachment(botId, file), file.name) } }
+            }
+        }) { file, modifier, playing ->
         if (file.isVideo) VideoPlayer({ store.attachment(botId, file) }, playing, modifier)
         else AttachmentImage(file, botId, 4096, state, store, modifier)
     }
@@ -65,6 +74,7 @@ import kotlinx.coroutines.withContext
     val media = files.filter { (it.isImage || it.isVideo) && (it.size <= 20L * 1024 * 1024 || entry.madeMedia != null) }
     val rest = files.filterNot { it in media }
     var viewing by remember { mutableStateOf<Int?>(null) }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (media.isNotEmpty()) MediaMosaic(media.map { MediaItem(it.id, it.name, it.isVideo) }, { viewing = it }) { item, modifier ->
             val file = media.first { it.id == item.key }
@@ -74,7 +84,12 @@ import kotlinx.coroutines.withContext
         for (file in rest) FileDownloadCard(entry, file, state, store)
     }
     MediaViewerSheet(media.takeIf { viewing != null }, viewing ?: 0, { it.name }, { viewing = null },
-        trailing = { file -> IconButton("Save " + file.name, "arrow.down.to.line") { store.saveFile(entry.id, entry.botId, file) } }) { file, modifier, playing ->
+        trailing = { file ->
+            if (!file.isVideo) IconButton(tr("Copy"), "doc.on.doc") {
+                scope.launch { runCatching { store.attachments.copy(store.sharedImage(entry.id, file), file.name) } }
+            }
+            IconButton("Save " + file.name, "arrow.down.to.line") { store.saveFile(entry.id, entry.botId, file) }
+        }) { file, modifier, playing ->
         if (file.isVideo) VideoPlayer({ store.sharedImage(entry.id, file) }, playing, modifier)
         else SharedImage(file, entry.id, 4096, state, store, modifier)
     }

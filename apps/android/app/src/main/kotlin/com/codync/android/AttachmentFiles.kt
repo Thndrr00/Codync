@@ -1,5 +1,7 @@
 package com.codync.android
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -104,6 +106,13 @@ class AttachmentFiles(private val context: Context, private val directory: File)
         val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(shared.extension.lowercase()) ?: "application/octet-stream"
         val intent = Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(Intent.createChooser(intent, "Share $name").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** Puts a file in a `shareFolder` on the clipboard, so another app can paste the picture. Ported from `OpenBot` 0.67.0. */
+    fun copy(shared: File, name: String) {
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", shared)
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, name, uri))
     }
 
     companion object {
