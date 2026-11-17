@@ -50,3 +50,6 @@ normalización del historial CDP, geometría de la pastilla y decodificación de
   simultáneos de otros agentes, así que la compilación se interrumpió sin mensaje de error. Queda
   pendiente ejecutar `cargo test` en un entorno con memoria suficiente.
 - iOS: `xcodebuild` no está disponible en Windows; los tests de CodyncKit no se ejecutaron aquí.
+
+La rama está pusheada como `feat/bdots-50-mejoras` y el PR es
+[Thndrr00/Codync#8](https://github.com/Thndrr00/Codync/pull/8) contra `main` (el fork no tiene rama `dev`).
