@@ -142,7 +142,8 @@ to the signed installers.
   `removeFeed` and `feedItems`; parses titles, links, dates (RFC 3339, RFC 2822, bare dates) and
   summaries, caches each feed for ten minutes and keeps at most thirty. Bots get `news_feed`, which
   lists the newest headlines with links the bot can read with `clip_page`.
-- Next: showing subscribed events beside routines in each client's calendar, and a feed editor page.
+- Next: a feed editor page is done; subscribed events now sit beside routines in the desktop routines
+  calendar, and the phones already show them in Workspace › Calendar.
 - Acceptance: a Google Calendar export URL answers "what's on my calendar this week", and a link in a
   chat is explained from its text.
 

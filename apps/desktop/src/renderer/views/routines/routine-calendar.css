@@ -68,6 +68,7 @@ button.cal-day:hover {
 }
 
 .cal-dot.upcoming { background: var(--accent); }
+.cal-dot.event { background: var(--warning); }
 .cal-dot.message { background: var(--text); }
 .cal-dot.done { background: var(--secondary); }
 .cal-dot.failed { background: var(--danger); }

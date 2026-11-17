@@ -19,9 +19,10 @@ interface DayMarks {
   skipped: number
   upcoming: number
   message: number
+  event: number
 }
 
-const emptyMarks = (): DayMarks => ({ done: 0, failed: 0, skipped: 0, upcoming: 0, message: 0 })
+const emptyMarks = (): DayMarks => ({ done: 0, failed: 0, skipped: 0, upcoming: 0, message: 0, event: 0 })
 
 /** A message this bot will send (or has scheduled) as the person's own. */
 interface ScheduledMessage {
@@ -29,6 +30,15 @@ interface ScheduledMessage {
   botId: string
   text: string
   sendAt: number
+}
+
+/** An event from a subscribed calendar, beside the routines on the same day. */
+interface CalendarEvent {
+  feed: string
+  title: string
+  start: number
+  end?: number | null
+  allDay: boolean
 }
 
 /**
@@ -45,6 +55,7 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
   const [selected, setSelected] = useState(() => new Date().setHours(0, 0, 0, 0))
   const [data, setData] = useState<RoutineCalendarListing | null>(null)
   const [messages, setMessages] = useState<ScheduledMessage[]>([])
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const from = new Date(month.getFullYear(), month.getMonth(), 1).getTime()
@@ -56,13 +67,16 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
     const tick = async () => {
       try {
         const client = await store.ready()
-        const [result, scheduled] = await Promise.all([
+        const days = Math.min(90, Math.max(1, Math.ceil((to - from + 1) / 86_400_000)))
+        const [result, scheduled, agenda] = await Promise.all([
           client.call<RoutineCalendarListing>('routineCalendar', { botId, from, to }),
           client.call<{ messages: ScheduledMessage[] }>('scheduledMessages', {}),
+          client.call<{ events: CalendarEvent[] }>('calendarAgenda', { from, days }),
         ])
         if (!stopped) {
           setData(result)
           setMessages(scheduled.messages.filter((message) => message.botId === botId))
+          setEvents(agenda.events)
           setError(null)
         }
       } catch (e) {
@@ -93,8 +107,9 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
     }
     for (const upcoming of data?.scheduled ?? []) add(dayKey(upcoming.at), { upcoming: 1 })
     for (const message of messages) add(dayKey(message.sendAt), { message: 1 })
+    for (const event of events) add(dayKey(event.start), { event: 1 })
     return map
-  }, [data, messages])
+  }, [data, messages, events])
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1)
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
@@ -133,8 +148,11 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
     const messageMoments = messages
       .filter((message) => dayKey(message.sendAt) === selectedKey)
       .map((message) => ({ at: message.sendAt, name: message.text.slice(0, 80), label: tr('Message'), tone: 'message' }))
-    return [...runs, ...upcoming, ...messageMoments].sort((a, b) => a.at - b.at)
-  }, [data, messages, selectedKey, nameOf, tr])
+    const eventMoments = events
+      .filter((event) => dayKey(event.start) === selectedKey)
+      .map((event) => ({ at: event.start, name: event.title, label: tr('Event'), tone: 'event' }))
+    return [...runs, ...upcoming, ...messageMoments, ...eventMoments].sort((a, b) => a.at - b.at)
+  }, [data, messages, events, selectedKey, nameOf, tr])
 
   const shift = (delta: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + delta, 1))
   const goToday = () => {
@@ -175,6 +193,7 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
                   <Text size="caption">{day.getDate()}</Text>
                   <span className="cal-dots">
                     {dot(marks.get(dayKey(day.getTime())), 'upcoming')}
+                    {dot(marks.get(dayKey(day.getTime())), 'event')}
                     {dot(marks.get(dayKey(day.getTime())), 'message')}
                     {dot(marks.get(dayKey(day.getTime())), 'done')}
                     {dot(marks.get(dayKey(day.getTime())), 'failed')}
@@ -186,6 +205,7 @@ export function RoutineCalendarView({ botId }: { botId: string }) {
           </div>
           <HStack gap={12} className="cal-legend">
             <span className="cal-legend-item"><span className="cal-dot upcoming" />{tr('Upcoming')}</span>
+            <span className="cal-legend-item"><span className="cal-dot event" />{tr('Event')}</span>
             <span className="cal-legend-item"><span className="cal-dot message" />{tr('Message')}</span>
             <span className="cal-legend-item"><span className="cal-dot done" />{tr('Ran')}</span>
             <span className="cal-legend-item"><span className="cal-dot failed" />{tr('Failed')}</span>
