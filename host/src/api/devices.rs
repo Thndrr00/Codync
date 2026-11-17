@@ -137,6 +137,7 @@ const VIEWER: &[&str] = &[
     "usage",
     "boardTasks",
     "waitingItems",
+    "dailyDigest",
     "meetingNotes",
     "meetingNote",
     "cloudBackupStatus",
