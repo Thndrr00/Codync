@@ -7,6 +7,14 @@ released version's section; a version without one gets the PRs' "What's New: And
 else a generic "Bug fixes and improvements" line. Delete old sections.
 -->
 
+## 2.56.0
+
+### zh-Hant
+- 例行工作的變更通知現在提供「復原」動作，你可以直接從聊天中撤回該變更。
+
+### en-US
+- A notice for a routine change now has an Undo action, so you can take a scheduled change back from the chat.
+
 ## 2.53.0
 
 ### zh-Hant
