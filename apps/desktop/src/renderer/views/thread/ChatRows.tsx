@@ -493,7 +493,14 @@ export function AgentBubble({ entry, openTrace, reply, forward, openFile, openAr
 export function NoticeRow({ entry, addFallback, undo }: { entry: Entry; addFallback?: () => void; undo?: () => void }) {
   if (window.codync.platform === 'win32' && entry.data.source === 'voice_receipt') return <VoiceReceipt entry={entry} />
   const tr = useTr()
+  const store = useStore()
   const text = tr(entry.data.text ?? '')
+  // Ported from OpenBot 0.70.0: the reason and its context go to the clipboard for a report.
+  const copyDetails = () => {
+    const agent = store.bots.get(entry.botId)?.name ?? entry.botId
+    const at = new Date(entry.createdAt).toLocaleString()
+    void window.codync.app.copy([text, `— ${agent} · ${at}`].join('\n\n'))
+  }
   if (entry.data.callSeconds !== undefined) {
     return (
       <HStack justify="center" gap={6}>
@@ -509,6 +516,7 @@ export function NoticeRow({ entry, addFallback, undo }: { entry: Entry; addFallb
           <Icon name="exclamationmark.triangle.fill" size={10} color="var(--danger)" />
           <VStack gap={10} align="flex-start">
             <Text size="footnote" tone="text" className="selectable">{text}</Text>
+            <Button kind="secondary" onClick={copyDetails}>{tr('Copy')}</Button>
             {addFallback ? <Button kind="secondary" onClick={addFallback}>{tr('Add a fallback')}</Button> : null}
             {undo ? <Button kind="secondary" onClick={undo}>Undo</Button> : null}
           </VStack>

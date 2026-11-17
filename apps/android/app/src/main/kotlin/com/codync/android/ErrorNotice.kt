@@ -26,6 +26,7 @@ import kotlinx.serialization.json.jsonPrimitive
 /** A failed turn can lead straight to the bot's fallback settings, including a group's author. */
 @Composable internal fun ErrorNotice(entry: Entry, state: AppState, store: AppStore) {
     var editing by remember(entry.id) { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val bot = state.bots.firstOrNull { it.id == (entry.data.text("author") ?: entry.botId) }
     Column(Modifier.fillMaxWidth().clip(RoundedRectangle(12.dp)).background(Palette.danger.copy(alpha = 0.12f))
         .padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -35,6 +36,14 @@ import kotlinx.serialization.json.jsonPrimitive
         }
         if (entry.data["addFallback"]?.jsonPrimitive?.booleanOrNull == true && bot != null) {
             SecondaryButton("Add a fallback") { editing = true }
+        }
+        // Ported from OpenBot 0.70.0: the reason and its context go to the clipboard for a report.
+        SecondaryButton(tr("Copy")) {
+            val agent = bot?.name ?: entry.botId
+            val at = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(entry.createdAt))
+            val details = entry.text + "\n\n— " + agent + " · " + at
+            val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Codync error", details))
         }
     }
     CodyncSheet(editing, { editing = false }) {

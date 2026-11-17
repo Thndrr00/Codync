@@ -1,5 +1,6 @@
 import CodyncKit
 import SwiftUI
+import UIKit
 
 /// The rows a conversation is made of.
 
@@ -297,6 +298,8 @@ struct NoticeRow: View {
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.danger)
                 }
+                // Ported from OpenBot 0.70.0: the reason and its context go to the clipboard for a report.
+                Button(L10n.tr("Copy"), action: copyDetails(text)).buttonStyle(.secondary)
                 if entry.data.addFallback == true, let addFallback {
                     Button(L10n.tr("Add a fallback"), action: addFallback).buttonStyle(.secondary)
                 }
@@ -310,6 +313,14 @@ struct NoticeRow: View {
                 .foregroundStyle(Palette.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func copyDetails(_ text: String) -> () -> Void {
+        {
+            let at = Date(timeIntervalSince1970: TimeInterval(entry.createdAt) / 1000)
+            let stamp = at.formatted(date: .abbreviated, time: .shortened)
+            UIPasteboard.general.string = L10n.tr(text) + "\n\n— " + (entry.data.author ?? entry.botId) + " · " + stamp
         }
     }
 }

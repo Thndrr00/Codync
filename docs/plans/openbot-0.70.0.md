@@ -62,13 +62,15 @@ Feature behavior is documented in [media](../features/media.md) and in the user 
 
 ### Two fixes that need nothing here
 
-- **Copy details on a turn that could not continue**: OpenBot's message hid the cause in a log. Codync's
-  failure notice carries the reason itself (`agent/bot/updates.rs` writes it), so there is no second
-  text to copy.
 - **Keep Running / Quit / Cancel when the window closes while agents work**: closing Codync's window
   hides it to the tray and the host keeps running as an installed service (`quit-lifecycle.ts`,
   `host-controller.ts`), so quitting the window never stops an agent. The app already asks before
   quitting when a draft is unsent.
+
+The third one, **Copy details on a turn that could not continue**, is in: the failure notice now copies
+its reason with the agent's name and the time on the desktop, Android and the iPhone (`ChatRows.tsx`,
+`ErrorNotice.kt`, `ChatRows.swift`), under the existing **Copy** label. OpenBot hid the cause in a log;
+Codync shows it, so what it copies is what the person reads plus who and when.
 
 ## Checks
 
