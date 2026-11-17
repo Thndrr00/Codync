@@ -389,6 +389,7 @@ struct WorkspaceSheet: View {
                     }
                 }
             }
+            WorkspaceNewsFeedsSection(store: store)
         }
     }
 

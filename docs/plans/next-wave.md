@@ -12,7 +12,7 @@ is bigger than one release.
 | Workspace search with citations | done (lexical + optional semantic rerank) |
 | Team meeting: minutes (`/minutes`) and text roundtable done; voice spoken by the host and played on the phones |
 | Calendar feeds (`.ics`) and a read-only agenda tool for bots | done (host; editor on desktop, iPhone and Android) |
-| RSS/Atom subscriptions and a `news_feed` tool for bots | done (host) |
+| RSS/Atom subscriptions and a `news_feed` tool for bots | done (host; editor on desktop, iPhone and Android) |
 | Web page clipper for bots (`clip_page`) | done (host) |
 | Daily digest and a `daily_digest` tool for bots | done (host) |
 | Weather (`weather` tool, Open-Meteo) | done (host) |

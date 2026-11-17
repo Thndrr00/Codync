@@ -279,6 +279,50 @@ private fun digestOf(json: JsonObject): DailyDigest {
 internal suspend fun AppStore.dailyDigest(): DailyDigest =
     digestOf(hostCall("dailyDigest", buildJsonObject {}, 60_000).jsonObject)
 
+/** An RSS or Atom feed this computer follows. */
+internal data class NewsFeed(val id: String, val name: String, val url: String, val items: Int, val fetchedAt: Long?)
+
+/** One headline from a feed. */
+internal data class NewsItem(
+    val feed: String,
+    val title: String,
+    val url: String?,
+    val published: Long?,
+    val summary: String,
+)
+
+private fun newsFeedOf(json: JsonObject): NewsFeed = NewsFeed(
+    id = json.str("id") ?: "",
+    name = json.str("name") ?: "Feed",
+    url = json.str("url") ?: "",
+    items = (json.num("items") ?: 0).toInt(),
+    fetchedAt = json.num("fetchedAt"),
+)
+
+private fun newsItemOf(json: JsonObject): NewsItem = NewsItem(
+    feed = json.str("feed") ?: "",
+    title = json.str("title") ?: "",
+    url = json.str("url"),
+    published = json.num("published"),
+    summary = json.str("summary") ?: "",
+)
+
+internal suspend fun AppStore.newsFeeds(): List<NewsFeed> =
+    (hostCall("feedSubscriptions", buildJsonObject {}).jsonObject["feeds"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::newsFeedOf) } ?: emptyList()
+
+internal suspend fun AppStore.addNewsFeed(name: String, url: String): Int =
+    (hostCall("addFeed", buildJsonObject { put("name", name); put("url", url) }, 45_000)
+        .jsonObject["items"]?.jsonPrimitive?.intOrNull) ?: 0
+
+internal suspend fun AppStore.removeNewsFeed(id: String): Boolean =
+    hostCall("removeFeed", buildJsonObject { put("id", id) })
+        .jsonObject["removed"]?.jsonPrimitive?.booleanOrNull == true
+
+internal suspend fun AppStore.newsItems(limit: Int = 60): List<NewsItem> =
+    (hostCall("feedItems", buildJsonObject { put("limit", limit) }, 45_000).jsonObject["items"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonObject)?.let(::newsItemOf) } ?: emptyList()
+
 internal suspend fun AppStore.teamTemplates(): List<TeamTemplate> =
     (hostCall("teamTemplates", buildJsonObject {}).jsonObject["templates"] as? JsonArray)
         ?.mapNotNull { (it as? JsonObject)?.let(::templateOf) } ?: emptyList()

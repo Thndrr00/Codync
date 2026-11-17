@@ -268,6 +268,7 @@ internal fun WorkspaceSheet(store: AppStore) {
                             }
                         }
                     }
+                    NewsFeedsSection(store) { error = it }
                 }
                 WorkspaceTab.Email -> {
                     var mailName by remember { mutableStateOf("") }

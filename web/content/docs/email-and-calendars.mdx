@@ -31,6 +31,15 @@ two weeks, including all-day events.
 Calendars are read-only: Codync never edits or invites anyone. Bots get `calendar_agenda` to answer
 "what's on my calendar this week", and the daily digest includes today's events.
 
+## News feeds
+
+**Settings › Feeds** on the desktop, or the same section under **Workspace › Calendar** on a phone,
+follows RSS and Atom feeds: blogs, news sites, podcasts. Paste the feed address and a name. Codync reads
+it at most every ten minutes, keeps the newest headlines and never writes to the site. **Only this**
+filters the list to one feed; **Remove** forgets it.
+
+Bots read the same items with the read-only `news_feed` tool and can open a link with `clip_page`.
+
 ## Removing an account
 
 **Remove account** forgets the server settings and deletes the password from the vault. The mail server
