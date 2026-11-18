@@ -41,6 +41,17 @@ normalización del historial CDP, geometría de la pastilla y decodificación de
   `Page.addScriptToEvaluateOnNewDocument` y `Runtime.evaluate` (solo Windows, donde existe el
   panel). Devuelve `recorderInstalled` para que el agente sepa si los eventos DOM estarán disponibles.
 
+## Catálogo ampliado de bdots
+
+Además de las 50, `ideas-30-por-repo-como-integrarlas-2026-10-28.md` lista 22 ideas de bdots.
+La mayoría ya están cubiertas (recordatorio de aprobaciones a 4 h y cierre a 24 h, `backgroundModel`,
+secretos atados a origen, grabador CDP, `ACTION_CLASSES`). La idea 23 —«en segundo plano solo
+herramientas de apps de solo lectura»— también quedó cerrada: `approval_gate.rs` rechaza cualquier
+llamada a apps conectadas que llegue a la puerta de permisos cuando `appsInBackground` está apagado.
+Las que siguen abiertas son el nodo de aprobación humana dentro de un flujo de rutina, una
+herramienta `ask_user` nativa con tarjeta de opciones, agrupar pasos de trabajo en un bloque
+colapsable, los skills de diseño y el correo entrante por bot.
+
 ## Verificación
 
 - Desktop: `npm run typecheck` limpio; `npm test` → 562 tests, 538 pasan, 0 fallan, 24 omitidos.

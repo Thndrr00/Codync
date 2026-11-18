@@ -1,11 +1,11 @@
-//! Approval guards for turns nobody can answer (Idea 44).
+//! Approval guards for turns nobody can answer (Idea 44 and bdots idea 23).
 //!
-//! A background routine or proactive check-in runs with no person at the keyboard.
-//! When `appsInBackground` is off, an external-app tool that would normally show an
-//! approval card is refused instead of leaving the run stuck waiting for a tap.
+//! A background routine or proactive check-in runs with no person at the keyboard. When
+//! `appsInBackground` is off, only read-only app tools may run: a connected-app call that
+//! reaches the permission gate is by definition one the agent did not auto-allow, so it is
+//! refused instead of leaving the turn stuck waiting for a tap.
 
-use super::approval_rules::{Decision, Evaluation, Outcome};
-use crate::store::Permission;
+use super::approval_rules::Evaluation;
 
 /// MCP title prefixes of connected apps and Composio tools. Those are the external
 /// effects (send mail, open an issue) the setting is about — local chat, memory and
@@ -23,18 +23,10 @@ pub(crate) fn is_app_tool(title: &str) -> bool {
 pub(crate) fn background_apps_reason(
     background: bool,
     apps_in_background: bool,
-    evaluation: &Evaluation,
+    _evaluation: &Evaluation,
     title: &str,
 ) -> Option<String> {
-    if !background || apps_in_background || !is_app_tool(title) {
-        return None;
-    }
-    let would_ask = match &evaluation.outcome {
-        Outcome::Rule { decision: Decision::Ask, .. } => true,
-        Outcome::Setting { permission: Permission::Ask } => true,
-        _ => false,
-    };
-    would_ask.then(|| {
+    (!background || apps_in_background || !is_app_tool(title)).then(|| {
         format!(
             "Blocked in a background run: \"{title}\" needs your approval, but connected apps in background work are off in this bot's settings."
         )
@@ -44,27 +36,27 @@ pub(crate) fn background_apps_reason(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::approval_rules::Outcome;
+    use crate::store::Permission;
 
     fn evaluation(permission: Permission) -> Evaluation {
         Evaluation { outcome: Outcome::Setting { permission }, chained: false, allow_passed_over: None }
     }
 
     #[test]
-    fn a_background_run_refuses_an_app_that_would_ask() {
-        let reason =
-            background_apps_reason(true, false, &evaluation(Permission::Ask), "mcp__codync-connectors__send_email");
-        assert!(reason.is_some_and(|r| r.contains("background") && r.contains("send_email")));
+    fn a_background_run_refuses_every_app_tool_reaching_the_gate() {
+        for permission in [Permission::Ask, Permission::Auto] {
+            let reason =
+                background_apps_reason(true, false, &evaluation(permission), "mcp__codync-connectors__send_email");
+            assert!(reason.is_some_and(|r| r.contains("background") && r.contains("send_email")));
+        }
     }
 
     #[test]
-    fn a_foreground_run_or_an_allowed_app_keeps_its_normal_flow() {
+    fn a_foreground_run_or_an_enabled_app_keeps_its_normal_flow() {
         let ask = evaluation(Permission::Ask);
         assert!(background_apps_reason(false, false, &ask, "mcp__codync-connectors__send_email").is_none());
         assert!(background_apps_reason(true, true, &ask, "mcp__codync-connectors__send_email").is_none());
-        assert!(
-            background_apps_reason(true, false, &evaluation(Permission::Auto), "mcp__codync-connectors__send_email")
-                .is_none()
-        );
     }
 
     #[test]
