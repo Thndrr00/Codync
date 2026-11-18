@@ -107,6 +107,6 @@
   "Save memory": "حفظ الذاكرة",
   "Drop to send to {name}": "أفلت للإرسال إلى {name}",
   "sub-tasks": "المهام الفرعية",
-  "this bot": "هذا الروبوت"
+  "this bot": "هذا الروبوت",
+  "{finished} of {total}": "{finished} من {total}"
 }
-  "{finished} of {total}": "{finished} من {total}",
