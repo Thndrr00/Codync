@@ -263,8 +263,18 @@ impl Routines {
             let (text, kind, added) = if let Some(text) = run.result {
                 (text, Some(AlertKind::Done), true)
             } else {
-                let failure =
-                    format!("Routine could not finish: {}", run.detail.as_deref().unwrap_or("inspect its run history"));
+                // Ported from OpenBot nightly (#11712): a run with no reason of its own still names the kind of
+                // failure, so the notice never leaves the person without a next step.
+                let detail = run
+                    .detail
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|detail| !detail.is_empty())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| {
+                        format!("the agent gave no reason ({})", run.failure_code.as_deref().unwrap_or("error"))
+                    });
+                let failure = format!("Routine could not finish: {detail}");
                 let (text, style, kind) = match run.retry_at {
                     Some(at) => {
                         let note = retry::retry_note(at - run.finished_at.unwrap_or(at));
