@@ -301,7 +301,15 @@ export function BotAvatar({ bot, size = 40, animated = true }: { bot: Bot; size?
  * A group chat's face, clustered like iMessage: two bots tucked diagonally, three in a
  * triangle, four in a 2×2 grid; past four the last cell counts the rest.
  */
-export function GroupAvatar({ members, size = 40, animated = true }: { members: Bot[]; size?: number; animated?: boolean }) {
+export function GroupAvatar({ members, size = 40, animated = true, photo = null }: { members: Bot[]; size?: number; animated?: boolean; photo?: string | null }) {
+  // A channel's own picture stands in for its members' faces.
+  if (photo) {
+    return (
+      <div aria-hidden className="avatar-frame" style={{ width: size, height: size }}>
+        <img src={photo} alt="" className="avatar-photo" style={{ width: size, height: size }} draggable={false} />
+      </div>
+    )
+  }
   const place = (bot: Bot, side: number, corner: CSSProperties) => (
     <div key={bot.id} className="avatar-slot" style={corner}>
       <BotAvatar bot={bot} size={side} animated={animated} />
@@ -350,7 +358,7 @@ export function GroupAvatar({ members, size = 40, animated = true }: { members: 
 export function AvatarWithStatus({ bot, members = [], size = 44 }: { bot: Bot; members?: Bot[]; size?: number }) {
   return (
     <div className={`avatar-frame ${bot.lead ? 'lead-avatar' : ''}`} style={{ width: size, height: size }}>
-      {isGroup(bot) && !bot.customIcon ? <GroupAvatar members={members} size={size} /> : <BotAvatar bot={bot} size={size} />}
+      {isGroup(bot) && !bot.customIcon ? <GroupAvatar members={members} size={size} photo={bot.avatarPhoto ?? null} /> : <BotAvatar bot={bot} size={size} />}
       {bot.lead ? <LeadAgentBadge size={Math.max(12, size * 0.34)} /> : null}
       {needsInput(bot) ? (
         <div className="avatar-badge needs-you" style={{ width: size * 0.36, height: size * 0.36 }}>

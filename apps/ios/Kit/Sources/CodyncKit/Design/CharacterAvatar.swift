@@ -1,4 +1,6 @@
+import ImageIO
 import SwiftUI
+import UIKit
 
 /// Grok-Bot-style character drawn like the app icon: an even grid of dots,
 /// shaded as if the silhouette were a ball, with the eyes left hollow (two
@@ -269,51 +271,88 @@ public struct CharacterShape: Shape {
 
 /// A group chat's face, clustered like iMessage: two bots tucked diagonally,
 /// three in a triangle, four in a 2×2 grid; past four the last cell counts the rest.
+/// A channel picture replaces the cluster when the group has one.
 public struct GroupAvatar: View {
     let members: [Bot]
     let size: CGFloat
     let animated: Bool
+    /// The channel picture, drawn instead of the members' faces.
+    let photo: String?
 
-    public init(members: [Bot], size: CGFloat = 40, animated: Bool = true) {
+    public init(members: [Bot], size: CGFloat = 40, animated: Bool = true, photo: String? = nil) {
         self.members = members
         self.size = size
         self.animated = animated
+        self.photo = photo
     }
 
     public var body: some View {
         ZStack {
-            switch members.count {
-            case 0:
-                Image(systemName: "person.2")
-                    .font(.system(size: size * 0.4))
-                    .foregroundStyle(.secondary)
-            case 1:
-                CharacterAvatar(bot: members[0], size: size, animated: animated)
-            case 2:
-                place(members[1], size * 0.66, .topTrailing)
-                place(members[0], size * 0.66, .bottomLeading)
-            case 3:
-                place(members[0], size * 0.55, .top)
-                place(members[1], size * 0.55, .bottomLeading)
-                place(members[2], size * 0.55, .bottomTrailing)
-            default:
-                place(members[0], size * 0.5, .topLeading)
-                place(members[1], size * 0.5, .topTrailing)
-                place(members[2], size * 0.5, .bottomLeading)
-                if members.count == 4 {
-                    place(members[3], size * 0.5, .bottomTrailing)
-                } else {
-                    Text(L10n.tr("+\(members.count - 3)"))
-                        .font(.system(size: size * 0.24, weight: .bold, design: .rounded))
+            if let photo, let image = Self.image(photo) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                switch members.count {
+                case 0:
+                    Image(systemName: "person.2")
+                        .font(.system(size: size * 0.4))
                         .foregroundStyle(.secondary)
-                        .frame(width: size * 0.5, height: size * 0.5)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                case 1:
+                    CharacterAvatar(bot: members[0], size: size, animated: animated)
+                case 2:
+                    place(members[1], size * 0.66, .topTrailing)
+                    place(members[0], size * 0.66, .bottomLeading)
+                case 3:
+                    place(members[0], size * 0.55, .top)
+                    place(members[1], size * 0.55, .bottomLeading)
+                    place(members[2], size * 0.55, .bottomTrailing)
+                default:
+                    place(members[0], size * 0.5, .topLeading)
+                    place(members[1], size * 0.5, .topTrailing)
+                    place(members[2], size * 0.5, .bottomLeading)
+                    if members.count == 4 {
+                        place(members[3], size * 0.5, .bottomTrailing)
+                    } else {
+                        Text(L10n.tr("+\(members.count - 3)"))
+                            .font(.system(size: size * 0.24, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(width: size * 0.5, height: size * 0.5)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    }
                 }
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
+
+    /// The picture's data URL as an image; one that no longer decodes falls back to the members' faces.
+    /// Decoded once per URL, like a custom icon, and never past 1024 pixels: the roster redraws its rows as it scrolls.
+    @MainActor private static func image(_ photo: String) -> UIImage? {
+        if let cached = decoded.object(forKey: photo as NSString) { return cached }
+        guard let comma = photo.firstIndex(of: ","),
+              let data = Data(base64Encoded: String(photo[photo.index(after: comma)...])),
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024,
+        ]
+        guard let bitmap = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let image = UIImage(cgImage: bitmap)
+        decoded.setObject(image, forKey: photo as NSString, cost: Int(image.size.width * image.size.height) * 4)
+        return image
+    }
+
+    @MainActor private static let decoded: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 64
+        cache.totalCostLimit = 8 * 1024 * 1024
+        return cache
+    }()
 
     private func place(_ bot: Bot, _ side: CGFloat, _ corner: Alignment) -> some View {
         CharacterAvatar(bot: bot, size: side, animated: animated)
@@ -336,7 +375,7 @@ public struct AvatarWithStatus: View {
 
     public var body: some View {
         Group {
-            if bot.isGroup && bot.customIcon == nil { GroupAvatar(members: members, size: size) } else { CharacterAvatar(bot: bot, size: size) }
+            if bot.isGroup && bot.customIcon == nil { GroupAvatar(members: members, size: size, photo: bot.avatarPhoto) } else { CharacterAvatar(bot: bot, size: size) }
         }
             .overlay(alignment: bot.lead ? .topTrailing : .bottomTrailing) {
                 if bot.needsInput {

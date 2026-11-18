@@ -1,7 +1,8 @@
 import CodyncKit
+import PhotosUI
 import SwiftUI
 
-/// Change a group chat's name, title, what it's for, its Chief of Staff, who's in it, and whether it is archived.
+/// Change a group chat's name, title, picture, what it's for, its Chief of Staff, who's in it, and whether it is archived.
 /// Bots are picked like recipients: chips on top, a search, and the bots not in it yet.
 public struct GroupEditorView: View {
     @Environment(BotStore.self) private var model
@@ -14,6 +15,10 @@ public struct GroupEditorView: View {
     @State private var team: TeamSettings
     @State private var chiefBotId: String?
     @State private var archived: Bool
+    @State private var photo: String?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var pickingPhoto = false
+    @State private var photoError: String?
     @State private var query = ""
     @State private var adding = false
     @State private var saving = false
@@ -31,6 +36,7 @@ public struct GroupEditorView: View {
         _team = State(initialValue: saved.reconciled(members: group.members, lead: lead))
         _chiefBotId = State(initialValue: [group.chiefBotId, lead].compactMap { $0 }.first { group.members.contains($0) })
         _archived = State(initialValue: group.archived ?? false)
+        _photo = State(initialValue: group.avatarPhoto)
     }
 
     private var picked: [Bot] { members.compactMap { model.bots[$0] } }
@@ -54,7 +60,7 @@ public struct GroupEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(spacing: 10) {
-                        GroupAvatar(members: picked, size: 84)
+                        GroupAvatar(members: picked, size: 84, photo: photo)
                             .animation(Motion.layout, value: members)
                         TextField(defaultName, text: $name)
                             .textFieldStyle(.plain)
@@ -75,7 +81,10 @@ public struct GroupEditorView: View {
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
-                    archivedRow
+                    VStack(alignment: .leading, spacing: 14) {
+                        pictureRow
+                        archivedRow
+                    }
                     DocumentsView(botId: groupId)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L10n.tr("Members"))
@@ -138,7 +147,58 @@ public struct GroupEditorView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .background(Palette.background)
+        .photosPicker(isPresented: $pickingPhoto, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task { await choosePhoto(item) }
+        }
         .deleteBotConfirmation($confirmDelete) { dismiss() }
+    }
+
+    /// The channel picture, chosen from the photos: a small data URL the roster draws instead of the
+    /// members' faces.
+    private var pictureRow: some View {
+        Field("Picture", detail: "Shown in the roster instead of the members' faces.") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Button(L10n.tr(photo == nil ? "Choose Picture" : "Change Picture")) { pickingPhoto = true }
+                        .buttonStyle(.secondary)
+                    if photo != nil {
+                        Button(L10n.tr("Remove Picture")) {
+                            withAnimation(Motion.layout) {
+                                photo = nil
+                                photoError = nil
+                            }
+                        }
+                        .buttonStyle(.secondary)
+                    }
+                }
+                if let photoError {
+                    Text(L10n.tr(photoError))
+                        .font(.caption)
+                        .foregroundStyle(Palette.danger)
+                        .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    /// A picked picture becomes the JPEG data URL the host keeps (at most 300 KB).
+    private func choosePhoto(_ item: PhotosPickerItem) async {
+        defer { photoItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let jpeg = ImageData.channelPicture(data) else {
+            withAnimation(Motion.fade) { photoError = "The picture could not be read." }
+            return
+        }
+        guard jpeg.count <= 300 * 1024 else {
+            withAnimation(Motion.fade) { photoError = "The picture must be 300 KB or smaller." }
+            return
+        }
+        withAnimation(Motion.layout) {
+            photo = "data:image/jpeg;base64," + jpeg.base64EncodedString()
+            photoError = nil
+        }
     }
 
     /// Whether the group is out of the open roster; its conversation stays.
@@ -287,6 +347,7 @@ public struct GroupEditorView: View {
                 draft.pinned = model.bots[groupId]?.pinned
                 draft.title = typedTitle.isEmpty ? nil : typedTitle
                 draft.archived = archived
+                draft.avatarPhoto = photo
                 draft.chiefBotId = chiefBotId
                 draft.team = team.reconciled(members: members, lead: chiefBotId)
                 try await model.updateGroup(draft)

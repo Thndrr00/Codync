@@ -72,6 +72,15 @@ enum ImageData {
         CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         return CGImageDestinationFinalize(dest) ? out as Data : nil
     }
+
+    /// A channel picture: 512 pixels on the long side, as JPEG (the host keeps at most 300 KB).
+    static func channelPicture(_ data: Data) -> Data? {
+        guard let image = thumbnail(data, maxPixels: 512) else { return nil }
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        return CGImageDestinationFinalize(dest) ? out as Data : nil
+    }
 }
 
 /// The symbol for a file by its extension.

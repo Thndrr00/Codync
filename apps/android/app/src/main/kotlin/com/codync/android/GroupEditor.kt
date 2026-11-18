@@ -1,5 +1,13 @@
 package com.codync.android
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -26,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -37,9 +46,15 @@ import com.codync.android.core.GroupDraft
 import com.codync.android.core.TeamMember
 import com.codync.android.core.TeamSettings
 import com.codync.android.design.*
+import java.io.ByteArrayOutputStream
+import kotlin.math.roundToInt
 
 /** A channel title's longest line, as the host keeps it. */
 private const val TITLE_MAX_CHARS = 120
+
+/** A channel picture's longest side and its encoded size, as the host keeps it. */
+private const val PICTURE_EDGE = 512
+private const val PICTURE_MAX_BYTES = 300 * 1024
 
 /**
  * Create a group chat, or change its name, what it's for and who's in it (iOS `GroupEditorView`).
@@ -53,6 +68,20 @@ private const val TITLE_MAX_CHARS = 120
     var adding by remember { mutableStateOf(initial.id == null && initial.members.isEmpty()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val saving = "editor" in state.busy
+    val context = LocalContext.current
+    val translate = translator()
+    var pictureError by remember(initial.id) { mutableStateOf<String?>(null) }
+    val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            val picture = channelPicture(context, uri)
+            if (picture != null) {
+                pictureError = null
+                draft = draft.copy(avatarPhoto = picture)
+            } else {
+                pictureError = translate("Use a PNG, JPEG or WebP image of at most 300 KB.")
+            }
+        }
+    }
     val picked = draft.members.mapNotNull { id -> state.bots.firstOrNull { it.id == id } }
     val candidates = roster(state.bots).filter { it.kind != "group" && it.id !in draft.members && it.name.contains(query.trim(), ignoreCase = true) }
     val defaultName = picked.joinToString(", ") { it.name }.ifEmpty { "Name" }
@@ -70,13 +99,27 @@ private const val TITLE_MAX_CHARS = 120
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp)) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                GroupAvatar(picked.map { AvatarFace(it.avatarShape, it.avatarColor, it.status) }, 84.dp)
+                GroupAvatar(picked.map { AvatarFace(it.avatarShape, it.avatarColor, it.status) }, 84.dp, photo = draft.avatarPhoto)
                 PlainTextField(draft.name, { draft = draft.copy(name = it) }, Modifier.fillMaxWidth().padding(top = 6.dp), defaultName, singleLine = true,
                     style = Type.title2.semibold.copy(textAlign = TextAlign.Center))
                 FieldBox(draft.title.orEmpty(), { draft = draft.copy(title = it.take(TITLE_MAX_CHARS)) },
                     tr("A short line under the name"), style = Type.subheadline.copy(textAlign = TextAlign.Center, color = Palette.secondary))
                 PlainTextField(draft.description, { draft = draft.copy(description = it) }, Modifier.fillMaxWidth(), "What this group works on",
                     style = Type.subheadline.copy(textAlign = TextAlign.Center, color = Palette.secondary), maxLines = 4)
+            }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Field("Picture", "Shown in the roster instead of the members' faces.") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SecondaryButton(if (draft.avatarPhoto == null) tr("Choose Picture") else tr("Change Picture")) {
+                            pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                        if (draft.avatarPhoto != null) SecondaryButton(tr("Remove Picture")) {
+                            draft = draft.copy(avatarPhoto = null)
+                            pictureError = null
+                        }
+                    }
+                }
+                pictureError?.let { Text(it, style = Type.caption, color = Palette.danger) }
             }
             SwitchRow(tr("Archived"), tr("Archived groups leave the open roster; their conversation stays."),
                 draft.archived, { draft = draft.copy(archived = it) })
@@ -191,3 +234,33 @@ private const val TITLE_MAX_CHARS = 120
         trailing()
     }
 }
+
+/** A picked PNG, JPEG or WebP as a channel picture: 512 pixels on the long side, a JPEG data URL at most 300 KB. */
+private fun channelPicture(context: Context, uri: Uri): String? {
+    val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() ?: return null
+    if (!isPicture(bytes)) return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= PICTURE_EDGE) sample *= 2
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        ?: return null
+    val scale = minOf(PICTURE_EDGE.toFloat() / bitmap.width, PICTURE_EDGE.toFloat() / bitmap.height, 1f)
+    val picture = if (scale < 1f)
+        Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).roundToInt().coerceAtLeast(1),
+            (bitmap.height * scale).roundToInt().coerceAtLeast(1), true)
+    else bitmap
+    for (quality in listOf(80, 70, 60, 50)) {
+        val out = ByteArrayOutputStream()
+        if (!picture.compress(Bitmap.CompressFormat.JPEG, quality, out)) return null
+        if (out.size() <= PICTURE_MAX_BYTES) return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
+    return null
+}
+
+/** PNG, JPEG or WebP, from its signature (`getType` is unreliable across photo providers). */
+private fun isPicture(bytes: ByteArray): Boolean =
+    (bytes.size >= 4 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()) ||
+        (bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()) ||
+        (bytes.size >= 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP")

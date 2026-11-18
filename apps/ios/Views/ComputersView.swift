@@ -62,7 +62,7 @@ struct ComputersView: View {
                     ForEach(archivedGroups) { item in
                         let store = item.store, bot = item.bot
                         HStack {
-                            GroupAvatar(members: store.members(of: bot), size: 28, animated: false)
+                            GroupAvatar(members: store.members(of: bot), size: 28, animated: false, photo: bot.avatarPhoto)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(bot.name)
                                 Text(bot.title ?? store.hostName).font(.caption).foregroundStyle(Palette.tertiary)

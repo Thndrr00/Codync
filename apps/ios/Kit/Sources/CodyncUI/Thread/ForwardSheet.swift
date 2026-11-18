@@ -66,7 +66,7 @@ struct ForwardSheet: View {
     private func row(_ bot: Bot) -> some View {
         HStack(spacing: 12) {
             if bot.isGroup {
-                GroupAvatar(members: model.members(of: bot), size: 32, animated: false)
+                GroupAvatar(members: model.members(of: bot), size: 32, animated: false, photo: bot.avatarPhoto)
             } else {
                 CharacterAvatar(bot: bot, size: 32, animated: false)
             }

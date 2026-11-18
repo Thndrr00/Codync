@@ -20,6 +20,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var description: String
     public var avatarColor: String
     public var avatarShape: String
+    /// The channel picture as a data URL, drawn instead of the members' faces; nil for none.
+    public var avatarPhoto: String?
     public var customIcon: CustomIcon?
     public var backend: String
     public var command: String?
@@ -133,6 +135,7 @@ extension Bot {
         description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
         avatarColor = try c.decodeIfPresent(String.self, forKey: .avatarColor) ?? "blue"
         avatarShape = try c.decodeIfPresent(String.self, forKey: .avatarShape) ?? "blob"
+        avatarPhoto = try c.decodeIfPresent(String.self, forKey: .avatarPhoto)
         customIcon = try c.decodeIfPresent(CustomIcon.self, forKey: .customIcon)
         backend = try c.decodeIfPresent(String.self, forKey: .backend) ?? "custom"
         command = try c.decodeIfPresent(String.self, forKey: .command)

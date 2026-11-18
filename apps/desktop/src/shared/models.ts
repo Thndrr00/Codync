@@ -932,6 +932,8 @@ export interface GroupDraft {
   title?: string | null
   /** A group taken out of the open roster; its conversation stays and it can be restored. */
   archived?: boolean
+  /** The channel picture as a data URL, instead of the members' faces. */
+  avatarPhoto?: string | null
   /** How the group works as a team: one voice with a hierarchy, or the classic round table. */
   team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon

@@ -16,7 +16,7 @@ export function ArchivedGroupsSection() {
       <CardSection title="Archived groups">
         {archived.map(({ ref, bot, store }) => (
           <div key={refKey(ref)} className="settings-row">
-            <GroupAvatar members={store.members(bot)} size={28} animated={false} />
+            <GroupAvatar members={store.members(bot)} size={28} animated={false} photo={bot.avatarPhoto ?? null} />
             <VStack grow className="settings-stack">
               <Text truncate>{bot.name}</Text>
               <Text size="caption" tone="tertiary">{bot.title || store.hostName}</Text>

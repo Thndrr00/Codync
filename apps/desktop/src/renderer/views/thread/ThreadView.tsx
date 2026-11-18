@@ -210,7 +210,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
           {/* The call bar takes the pill's place; its frosted glass would show the name blurred. */}
           <button className={`title-pill ${calling ? 'hidden-by-call' : ''}`} inert={calling} onClick={toggleDetails} aria-label={`${bot?.name ?? 'Conversation'}, view details`} title="View conversation details">
             <HStack as="span" gap={7}>
-              {bot ? isGroup(bot) ? <GroupAvatar members={store.members(bot)} size={22} /> : <BotAvatar bot={bot} size={22} /> : null}
+              {bot ? isGroup(bot) ? <GroupAvatar members={store.members(bot)} size={22} photo={bot.avatarPhoto ?? null} /> : <BotAvatar bot={bot} size={22} /> : null}
               <Text size="body" weight="medium" tone="text" truncate>{bot?.name ?? ''}</Text>
               {/* Grok Bot's hint on hover: the pill opens the details. */}
               <span className="title-pill-chevron">
@@ -548,7 +548,7 @@ function GroupIntroCard({ group }: { group: Bot }) {
   const names = members.map((m) => m.name)
   return (
     <div className="intro-card">
-      <GroupAvatar members={members} size={72} />
+      <GroupAvatar members={members} size={72} photo={group.avatarPhoto ?? null} />
       <Text as="div" size="title2" weight="semibold" tone="text">{group.name}</Text>
       {group.name !== names.join(', ') ? <Text as="div" size="subheadline" tone="secondary">{names.join(' · ')}</Text> : null}
       {group.description ? <Text as="div" size="subheadline" tone="secondary">{group.description}</Text> : null}

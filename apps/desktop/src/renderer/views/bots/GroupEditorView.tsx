@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { isGroup, type ActionClass, type Bot, type RulePolicy, type TeamSettings } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { Button, ChoicePicker, IconButton, Spinner, Switch, ValueRow } from '../../components/Controls'
@@ -44,6 +44,9 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [members, setMembers] = useState<string[]>(group.members)
   const [chiefBotId, setChiefBotId] = useState<string | null>(group.chiefBotId ?? null)
   const [archived, setArchived] = useState(group.archived === true)
+  const [photo, setPhoto] = useState<string | null>(group.avatarPhoto ?? null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
   const [team, setTeam] = useState<TeamSettings>(() => reconcileTeam(group.team, group.members, group.chiefBotId ?? null))
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -122,7 +125,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
     setError(null)
     const effectiveTeam = reconcileTeam(team, members, chiefBotId)
     try {
-      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam, title: title.trim() || null, archived })
+      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam, title: title.trim() || null, archived, avatarPhoto: photo })
       // Each role's rules reach every member with that role; the bot's own rules keep the rest.
       // Only roles whose pickers were touched are written, so opening and saving a group changes
       // nothing about approval by itself.
@@ -141,18 +144,41 @@ export function GroupEditorView({ group }: { group: Bot }) {
     }
   }
 
+  /** The picture is a small data URL, as a bot's photo is: the same 300 KB. */
+  const choosePhoto = (file: File | undefined) => {
+    if (!file) return
+    if (file.size > 300 * 1024) {
+      setPhotoError(tr('The picture must be 300 KB or smaller.'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPhotoError(null)
+      setPhoto(typeof reader.result === 'string' ? reader.result : null)
+    }
+    reader.onerror = () => setPhotoError(tr('The picture could not be read.'))
+    reader.readAsDataURL(file)
+  }
+
   return (
     <SheetPage>
       <ModalHeader icon="person.2" title={tr(`Group chat`)} trailing={saving ? <Spinner /> : <IconButton title="Save" icon="checkmark" disabled={!canSave} onClick={save} />} />
       <div className="group-scroll">
         <div className="group-form">
           <div className="group-identity">
-            <GroupAvatar members={picked} size={84} />
+            <GroupAvatar members={picked} size={84} photo={photo} />
             <input className="group-name" value={name} placeholder={defaultName} aria-label="Name" onChange={(e) => setName(e.target.value)} />
             <input className="group-about" value={title} placeholder="A short line under the name" aria-label="Title" maxLength={120} onChange={(e) => setTitle(e.target.value)} />
             <AutoTextArea className="group-about" value={about} placeholder="What this group works on" minRows={1} maxRows={4} onChange={setAbout} />
           </div>
           <VStack>
+            <ValueRow label={tr('Picture')} detail={tr("Shown in the roster instead of the members' faces.")}>
+              <Button kind="secondary" onClick={() => photoInput.current?.click()}>{tr('Choose Picture')}</Button>
+              {photo ? <Button kind="secondary" onClick={() => setPhoto(null)}>{tr('Remove Picture')}</Button> : null}
+              <input ref={photoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden
+                onChange={(e) => { choosePhoto(e.target.files?.[0]); e.target.value = '' }} />
+              {photoError ? <Text size="caption" tone="danger">{photoError}</Text> : null}
+            </ValueRow>
             <ValueRow label="Archived" detail="Archived groups leave the open roster; their conversation stays.">
               <Switch on={archived} onChange={setArchived} label="Archived" />
             </ValueRow>

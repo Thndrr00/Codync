@@ -1,14 +1,21 @@
 package com.codync.android.design
 
 import android.animation.ValueAnimator
+import android.graphics.BitmapFactory
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Region
+import android.util.Base64
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -106,27 +113,51 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
     }
 }
 
-@Composable fun GroupAvatar(faces: List<AvatarFace>, size: Dp = 40.dp) {
+/** A group's members, or its channel picture ([photo]) instead of their faces. */
+@Composable fun GroupAvatar(faces: List<AvatarFace>, size: Dp = 40.dp, photo: String? = null) {
+    val picture = channelPictureBitmap(photo)
     Box(Modifier.size(size).clearAndSetSemantics { }) {
-        fun side(fraction: Float) = size * fraction
-        @Composable fun place(index: Int, fraction: Float, align: Alignment) {
-            val face = faces[index]
-            Box(Modifier.align(align)) { CharacterAvatar(face.shape, face.color, side(fraction), face.status) }
-        }
-        when (faces.size) {
-            0 -> Symbol("person.2", Modifier.align(Alignment.Center), size = size * 0.4f, tint = Palette.secondary)
-            1 -> place(0, 1f, Alignment.Center)
-            2 -> { place(1, .66f, Alignment.TopEnd); place(0, .66f, Alignment.BottomStart) }
-            3 -> { place(0, .55f, Alignment.TopCenter); place(1, .55f, Alignment.BottomStart); place(2, .55f, Alignment.BottomEnd) }
-            else -> {
-                place(0, .5f, Alignment.TopStart); place(1, .5f, Alignment.TopEnd); place(2, .5f, Alignment.BottomStart)
-                if (faces.size == 4) place(3, .5f, Alignment.BottomEnd)
-                else Box(Modifier.size(size * .5f).align(Alignment.BottomEnd), contentAlignment = Alignment.Center) {
-                    Text("+${faces.size - 3}", style = Type.system(size.value * 0.24f, FontWeight.Bold), color = Palette.secondary)
+        if (picture != null) {
+            Image(picture, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+        } else {
+            fun side(fraction: Float) = size * fraction
+            @Composable fun place(index: Int, fraction: Float, align: Alignment) {
+                val face = faces[index]
+                Box(Modifier.align(align)) { CharacterAvatar(face.shape, face.color, side(fraction), face.status) }
+            }
+            when (faces.size) {
+                0 -> Symbol("person.2", Modifier.align(Alignment.Center), size = size * 0.4f, tint = Palette.secondary)
+                1 -> place(0, 1f, Alignment.Center)
+                2 -> { place(1, .66f, Alignment.TopEnd); place(0, .66f, Alignment.BottomStart) }
+                3 -> { place(0, .55f, Alignment.TopCenter); place(1, .55f, Alignment.BottomStart); place(2, .55f, Alignment.BottomEnd) }
+                else -> {
+                    place(0, .5f, Alignment.TopStart); place(1, .5f, Alignment.TopEnd); place(2, .5f, Alignment.BottomStart)
+                    if (faces.size == 4) place(3, .5f, Alignment.BottomEnd)
+                    else Box(Modifier.size(size * .5f).align(Alignment.BottomEnd), contentAlignment = Alignment.Center) {
+                        Text("+${faces.size - 3}", style = Type.system(size.value * 0.24f, FontWeight.Bold), color = Palette.secondary)
+                    }
                 }
             }
         }
     }
+}
+
+/** The channel picture formats the host accepts. */
+private val PICTURE_PREFIXES = listOf("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")
+
+/** A channel picture's data URL (PNG, JPEG or WebP, up to 300 KB) decoded once per URL; null when missing or damaged. */
+@Composable private fun channelPictureBitmap(dataUrl: String?): ImageBitmap? = remember(dataUrl) {
+    val photo = dataUrl ?: return@remember null
+    val prefix = PICTURE_PREFIXES.firstOrNull { photo.startsWith(it) } ?: return@remember null
+    if (photo.length > 420_000) return@remember null
+    val bytes = runCatching { Base64.decode(photo.substring(prefix.length), Base64.NO_WRAP) }.getOrNull() ?: return@remember null
+    // A picture is 512 px from our clients, but another one may be larger: never decode past 1024 px.
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@remember null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1024) sample *= 2
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
 }
 
 private fun eyeColumns(cells: Int) = when (cells) { 7 -> listOf(2, 4); 9 -> listOf(3, 6); else -> listOf(4, 8) }
