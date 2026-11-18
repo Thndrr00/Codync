@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 use serde_json::Value;
 
 use super::super::app::App;
-use super::super::l10n::tr;
+use super::super::l10n::{reset_line, tr};
 use super::super::md::truncate;
 use super::buffer::{centered, frame_box, put, rput, u};
 use super::filled;
@@ -96,6 +96,41 @@ pub(super) fn usage(buf: &mut Buffer, area: Rect, app: &App, scroll: usize) {
     put(buf, inner.x, inner.bottom() - 1, inner.width, footer, t.dim.patch(t.panel));
 }
 
+/// The spent plan window that stops `backend`'s models, until its reset comes: the readings the
+/// Usage sheet already has, so no agent is asked anything.
+pub(in crate::tui) fn spent_window<'a>(app: &'a App, backend: &str) -> Option<&'a Value> {
+    let now = now_ms();
+    app.usage["providers"]
+        .as_array()?
+        .iter()
+        .filter(|p| {
+            // An account's provider id carries its account after a colon; `source` names the reader.
+            p["id"].as_str().is_some_and(|id| id.split(':').next() == Some(backend))
+                || p["source"].as_str() == Some(backend)
+        })
+        .flat_map(|p| p["windows"].as_array().into_iter().flatten())
+        .filter(|w| w["text"].as_str().is_none_or(str::is_empty))
+        .filter(|w| w["percent"].as_f64().unwrap_or(0.0) >= 100.0)
+        .filter(|w| w["resetsAt"].as_i64().is_none_or(|at| at > now))
+        .max_by(|a, b| {
+            let percent = |w: &Value| w["percent"].as_f64().unwrap_or(0.0);
+            percent(a).total_cmp(&percent(b))
+        })
+}
+
+/// "Usage limit reached · resets 3h 20m" when a spent window stops this agent's models.
+pub(in crate::tui) fn spent_note(app: &App, backend: &str) -> Option<String> {
+    let window = spent_window(app, backend)?;
+    let reset = window["resetsAt"].as_i64().map(|ms| format!("resets {}", when_future(ms))).or_else(|| {
+        // "Sep 26 at 11:59am (Asia/Taipei)": the zone is this computer's own.
+        window["resetsText"].as_str().map(|s| format!("resets {}", s.split(" (").next().unwrap_or(s)))
+    });
+    Some(match reset {
+        Some(reset) => tr("Usage limit reached · {reset}").replace("{reset}", &reset_line(&reset)),
+        None => tr("Usage limit reached").into_owned(),
+    })
+}
+
 /// "Your week: …" from the host's `weekSummary`; nothing for a week without activity or a host that lacks it.
 fn week_line(week: &Value) -> Option<String> {
     if week["activeBots"].as_i64().unwrap_or(0) == 0 {
@@ -167,8 +202,29 @@ pub(in crate::tui) fn when_future(ms: i64) -> String {
 mod tests {
     use super::super::super::app::App;
     use super::super::super::net::Client;
-    use super::{usage_scroll_max, week_line};
+    use super::{now_ms, spent_window, usage_scroll_max, week_line};
     use serde_json::{Value, json};
+
+    #[tokio::test]
+    async fn a_spent_cap_stops_its_agent_until_the_reset_and_a_balance_stops_nothing() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = App::new(Client::new("http://127.0.0.1:1", None), tx, String::new());
+        let reset = now_ms() + 3_600_000;
+        app.usage = json!({"providers": [
+            {"id": "claude:acc_one", "name": "Claude · One", "source": "claude", "windows": [
+                {"label": "Session", "percent": 100, "resetsAt": reset},
+                {"label": "Weekly", "percent": 40, "resetsAt": reset}]},
+            {"id": "codex", "name": "Codex", "source": "codex", "windows": [
+                {"label": "Balance", "percent": 100, "text": "$4.20"},
+                {"label": "Weekly", "percent": 100, "resetsAt": 1}]}
+        ]});
+        // An account's provider id carries its account after a colon; the spent cap is the Session.
+        let window = spent_window(&app, "claude").expect("a spent cap");
+        assert_eq!(window["label"].as_str(), Some("Session"));
+        // A balance isn't a cap, and a window whose reset already came stops nothing.
+        assert!(spent_window(&app, "codex").is_none());
+        assert!(spent_window(&app, "gemini").is_none());
+    }
 
     #[test]
     fn the_week_line_counts_and_hides_for_an_empty_week() {

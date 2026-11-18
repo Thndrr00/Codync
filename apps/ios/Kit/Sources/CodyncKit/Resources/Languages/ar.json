@@ -65,6 +65,8 @@
   "Time zone": "المنطقة الزمنية",
   "Unpin": "إلغاء التثبيت",
   "Usage": "الاستخدام",
+  "Usage limit reached": "بلغت حد الاستخدام",
+  "Usage limit reached · {reset}": "بلغت حد الاستخدام · {reset}",
   "Voice": "الصوت",
   "W stops": "W يوقف",
   "Waiting for sub-tasks": "في انتظار المهام الفرعية",
