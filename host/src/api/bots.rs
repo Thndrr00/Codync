@@ -102,6 +102,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::teach::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::apps::TOOLS.contains(&name) {
                 crate::chat::apps::call(hub, bot, name, &b["arguments"])?
+            } else if crate::chat::ask_user::TOOLS.contains(&name) {
+                crate::chat::ask_user::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::open_items::TOOLS.contains(&name) {
                 crate::chat::open_items::call(hub, bot, name, &b["arguments"])?
             } else if crate::chat::skills::TOOLS.contains(&name) {
@@ -645,6 +647,37 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 bail!("That isn't an approval card");
             }
             let option_id = b["optionId"].as_str().map(str::to_owned);
+            // A question isn't an approval: the chosen option becomes the bot's next message.
+            // The card keeps the same shape every client already renders for AskUserQuestion.
+            if e.data["question"] == true {
+                match e.data["status"].as_str() {
+                    Some("pending") => {}
+                    Some("answered") if e.data["selected"].as_str() == option_id.as_deref() => {
+                        return Ok(ControlFlow::Break(json!({"entry": e})));
+                    }
+                    _ => bail!("This question is closed"),
+                }
+                let index = option_id
+                    .as_deref()
+                    .and_then(|id| id.parse::<usize>().ok())
+                    .filter(|i| e.data["options"][*i]["name"].is_string())
+                    .ok_or_else(|| anyhow!("Choose one of the question's options"))?;
+                let label = e.data["options"][index]["name"].as_str().unwrap_or_default().to_owned();
+                let question = e.data["title"].as_str().unwrap_or("Question").to_owned();
+                let mut answered = e.clone();
+                answered.data["status"] = "answered".into();
+                answered.data["selected"] = option_id.map(Value::String).unwrap_or(Value::Null);
+                answered.data["answer"] = label.clone().into();
+                hub.set_entry(&answered.id, &answered.data);
+                let bot_id = e.data["author"].as_str().unwrap_or(&e.bot_id);
+                super::apps_runtime::dispatch_bot_turn(
+                    hub,
+                    bot_id,
+                    &format!("[User answered \"{question}\": {label}]"),
+                    "user",
+                )?;
+                return Ok(ControlFlow::Break(json!({"entry": answered})));
+            }
             // The card is the effect's key: the first decision is the one that happens. The same
             // answer again (another device, a retry) gets the card back; a different one is refused.
             match e.data["status"].as_str() {
