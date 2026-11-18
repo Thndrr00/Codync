@@ -113,6 +113,11 @@ public final class BotStore {
     var retired = false
     /// Files of messages not delivered yet (by client nonce), kept for a retry.
     @ObservationIgnored var outgoingFiles: [String: [OutgoingFile]] = [:]
+    /// Files in a message box on their way to the computer, by the attached file's id (`BotStore+Uploads`).
+    var fileUploads: [UUID: FileUpload] = [:]
+    @ObservationIgnored var uploadTasks: [UUID: Task<Void, Never>] = [:]
+    /// The sends waiting for a file to reach the computer (`BotStore+Uploads`).
+    @ObservationIgnored var uploadWaiters: [UUID: [CheckedContinuation<String, Error>]] = [:]
     /// Files shared from another app, waiting for the bot's composer to take them.
     @ObservationIgnored var sharedFiles: [String: [OutgoingFile]] = [:]
     /// Section moves shown but not answered yet, oldest first.

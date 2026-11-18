@@ -72,12 +72,42 @@ public struct EntryData: Codable, Hashable, Sendable {
     /// user: sent on from another chat ("Send to a channel"), with its files copied along. The copy is
     /// this chat's own message; this says where it came from.
     public var forwardedFrom: ForwardedFrom?
+    /// subagents: the subagents this turn started, in the order they started.
+    public var subagents: [EntrySubagent]?
 
     public init(text: String? = nil, status: String? = nil, clientNonce: String? = nil) {
         self.text = text
         self.status = status
         self.clientNonce = clientNonce
     }
+}
+
+/// One subagent an agent started in a turn (`kind: "subagents"`): its task, state, newest step and time.
+public struct EntrySubagent: Codable, Hashable, Sendable, Identifiable {
+    public var id: String
+    public var task: String
+    /// running | done | failed | stopped
+    public var state: String
+    /// What it does now, as its tool call named it.
+    public var step: String
+    public var startedAt: Int64
+    public var endedAt: Int64?
+
+    /// A partial subagent still decodes, so the card always shows the rest of the list.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        task = try c.decodeIfPresent(String.self, forKey: .task) ?? ""
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? ""
+        step = try c.decodeIfPresent(String.self, forKey: .step) ?? ""
+        startedAt = try c.decodeIfPresent(Int64.self, forKey: .startedAt) ?? 0
+        endedAt = try c.decodeIfPresent(Int64.self, forKey: .endedAt)
+    }
+
+    /// Whether it still works: only then does its card's header follow the reader (`SubagentDock`).
+    public var isRunning: Bool { state == "running" || state.isEmpty }
+    /// The state as the card shows it, where a host older than the card never sends one.
+    public var shownState: String { isRunning ? "running" : state }
 }
 
 /// Where a forwarded copy came from: the chat and message, and who wrote it there. A partial

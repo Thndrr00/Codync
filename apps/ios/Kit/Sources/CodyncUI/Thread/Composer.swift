@@ -44,8 +44,10 @@ struct Composer: View {
     private var isEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty }
 
     private var canSend: Bool {
+        // A file still on its way (or one that failed) holds the send until it arrives or is removed.
+        let uploaded = files.allSatisfy { model.fileUploads[$0.id]?.status == .uploaded }
         // Offline computers still take messages when the relay can hold them for it (text only).
-        !isEmpty && (model.connection == .online || (model.canQueue && files.isEmpty))
+        return !isEmpty && uploaded && (model.connection == .online || (model.canQueue && files.isEmpty))
     }
 
     private var canAttach: Bool { bot != nil }
@@ -286,8 +288,8 @@ struct Composer: View {
         }
         // Another chat in the same view never inherits the reply.
         .onChange(of: botId) { replyingTo = nil }
-        .onAppear { files.append(contentsOf: model.takeSharedFiles(for: botId)) }
-        .onChange(of: botId) { _, new in files.append(contentsOf: model.takeSharedFiles(for: new)) }
+        .onAppear { append(model.takeSharedFiles(for: botId)) }
+        .onChange(of: botId) { _, new in append(model.takeSharedFiles(for: new)) }
         .onChange(of: replyingTo?.id) { if replyingTo != nil { focused = true } }
         .onDisappear { dictation.stop() }
         .onChange(of: draft) { _, value in
@@ -336,10 +338,15 @@ struct Composer: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(files) { file in
-                    ComposerAttachment(file: file) {
+                    ComposerAttachment(file: file, upload: model.fileUploads[file.id]) {
+                        model.forgetUpload(file.id)
                         withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
                             files.removeAll { $0.id == file.id }
                         }
+                    } cancel: {
+                        model.cancelUpload(file)
+                    } retry: {
+                        model.retryUpload(file)
                     }
                 }
             }
@@ -364,6 +371,7 @@ struct Composer: View {
                 continue
             }
             files.append(file)
+            model.startUpload(file, for: botId)
         }
     }
 

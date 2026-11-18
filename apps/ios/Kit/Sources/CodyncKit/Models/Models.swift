@@ -16,7 +16,7 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
     /// The chat it's in: a bot's, or a group's.
     public var botId: String
     public var rev: Int64
-    /// user | agent | thought | tool | plan | permission | notice
+    /// user | agent | thought | tool | plan | permission | notice | subagents
     public var kind: String
     public var turn: Int64
     public var data: EntryData
@@ -44,6 +44,7 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
         guard !isInternal else { return false }
         return switch kind {
         case "user", "permission": true
+        case "subagents": true
         case "notice": data.memory == nil && data.memoryFile == nil && data.compaction == nil && data.handoff?.status != "kept"
         case "agent": data.final == true
         default: false

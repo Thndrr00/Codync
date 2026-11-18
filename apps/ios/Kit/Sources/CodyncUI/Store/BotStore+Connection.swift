@@ -13,6 +13,13 @@ extension BotStore {
         retired = true
         fileDownloads.retire()
         for call in calls { call.end() }
+        for task in uploadTasks.values { task.cancel() }
+        uploadTasks.removeAll()
+        for waiters in uploadWaiters.values {
+            for waiter in waiters { waiter.resume(throwing: FileUploadError.cancelled) }
+        }
+        uploadWaiters.removeAll()
+        fileUploads.removeAll()
         saveTask?.cancel()
         dropTimer?.cancel()
         onConnected = nil
