@@ -34,6 +34,8 @@ fun AppStore.addDraftFiles(botId: String, thread: String?, files: List<OutgoingF
     check(!state.value.loading) { "Wait for the account to finish opening before adding files." }
     val current = state.value.drafts[draftKey] ?: ComposerDraft(botId, thread, draftKey = draftKey.takeUnless { it == ComposerDraft.lane(botId, thread) })
     updateDraft(current.copy(files = current.files + files))
+    // Each uploads now, so its ring shows before Send names it.
+    for (file in files) startUpload(botId, file)
 }
 
 /** A shared text and files at once: the draft is validated before either is applied, so a failure changes nothing. */
@@ -45,10 +47,12 @@ internal fun AppStore.addShareToDraft(botId: String, text: String, files: List<O
         text = if (text.isBlank()) current.text else ShareIntake.merge(current.text, text),
         files = current.files + files,
     ))
+    for (file in files) startUpload(botId, file)
 }
 
 fun AppStore.removeDraftFile(botId: String, thread: String?, file: OutgoingFile, draftKey: String = ComposerDraft.lane(botId, thread)) = action("draft-file:" + file.path) {
     val current = state.value.drafts[draftKey] ?: return@action
+    forgetUpload(file)
     updateDraft(current.copy(files = current.files - file))
     draftWriter?.join()
     check(savedDrafts.values.none { draft -> draft.files.any { it.path == file.path } }) { "Couldn't save the attachment removal. Retry before leaving this chat." }

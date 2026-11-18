@@ -137,8 +137,15 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     } }
     val online = state.actualConnection is LinkState.Ready
     val empty = text.text.isBlank() && files.isEmpty()
+    // A file still on its way, or one that failed, holds Send until it arrives, is retried or is removed.
+    // A file with no upload yet (a draft brought back from an earlier session) uploads when Send starts it.
+    val waiting = files.any { file ->
+        val upload = state.fileUploads[file.path]
+        upload != null && upload.status != UploadStatus.Uploaded
+    }
     // Offline computers still take text when the relay can hold it; files need the computer.
-    val canSend = !terminal && !empty && !importing && !queuing && (online || state.actualConnection is LinkState.ComputerOffline && files.isEmpty())
+    val canSend = !terminal && !empty && !importing && !queuing && !waiting &&
+        (online || state.actualConnection is LinkState.ComputerOffline && files.isEmpty())
     val working = bot.isWorking(bot.id)
     val bare = text.text.isEmpty() && files.isEmpty()
     val trailing = when {
@@ -221,7 +228,12 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         Column(Modifier.weight(1f).glass(RoundedRectangle(24.dp)).animateContentSize(Motion.layoutSize)) {
             if (files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 10.dp, end = 10.dp, top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (file in files) ComposerAttachment(file) { store.removeDraftFile(bot.id, thread, file, draftKey) }
+                for (file in files) ComposerAttachment(
+                    file = file,
+                    upload = state.fileUploads[file.path],
+                    cancel = { store.cancelUpload(file) },
+                    retry = { store.retryUpload(file) },
+                ) { store.removeDraftFile(bot.id, thread, file, draftKey) }
             }
             Row(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {

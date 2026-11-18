@@ -160,6 +160,11 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>): List<C
                 store.respond(entry, it)
             }
         }
+        "subagents" -> Column(Modifier.padding(top = if (groupStart) topGroupGap else topSameGap),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (group) AuthorLabel(entry.data.text("author"), state)
+            SubagentCard(entry)
+        }
         else -> if (entry.data["memberQuestion"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
             MemberQuestionCard(entry, state, reply)
         } else if (entry.data["takeoverRequest"] is JsonObject) Box(Modifier.padding(top = topGroupGap)) {
@@ -285,7 +290,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 }
 
 /** A message this phone is still delivering: the same bubble, with how far it got. */
-@Composable internal fun PendingBubble(send: PendingSend, groupStart: Boolean, state: AppState, store: AppStore) {
+@Composable internal fun PendingBubble(send: PendingSend, groupStart: Boolean, store: AppStore) {
     val compact = LocalUiDensity.current == UiDensity.Compact
     Column(Modifier.fillMaxWidth().padding(top = if (groupStart) (if (compact) 8.dp else 12.dp) else (if (compact) 2.dp else 4.dp)).padding(start = 56.dp),
         horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -293,7 +298,7 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
             .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.chatFootnote, color = Palette.text)
         if (send.text.isNotEmpty()) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text) }
         when (send.status) {
-            SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files · $it%" } ?: "Sending…",
+            SendStatus.Sending -> Text(if (send.files.isEmpty()) "Sending…" else "Sending files…",
                 style = Type.caption2, color = Palette.tertiary)
             SendStatus.Delivering -> Text("Delivered to the computer", style = Type.caption2, color = Palette.tertiary)
             SendStatus.Waiting -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -41,6 +41,12 @@ class HostFiles(private val call: suspend (String, JsonObject, Long) -> JsonElem
         }
     }
 
+    /** Drops a file the user stopped uploading: the computer deletes its partial chunks. */
+    suspend fun cancelUpload(botId: String, id: String) = withContext(Dispatchers.IO) {
+        call("cancelUpload", buildJsonObject { put("botId", botId); put("uploadId", id) }, 20_000)
+        Unit
+    }
+
     suspend fun download(botId: String, file: Attachment, destination: File) = withContext(Dispatchers.IO) {
         require(file.size in 0..MAX_FILE_BYTES)
         val partial = File(destination.parentFile, destination.name + ".partial")

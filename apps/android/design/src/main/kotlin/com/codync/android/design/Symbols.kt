@@ -118,6 +118,7 @@ import androidx.annotation.DrawableRes
     "mic" -> R.drawable.sf_mic
     "mic.fill" -> R.drawable.sf_mic_fill
     "mic.slash" -> R.drawable.sf_mic_slash
+    "minus.circle" -> R.drawable.sf_minus_circle
     "moon.zzz.fill" -> R.drawable.sf_moon_zzz_fill
     "move" -> R.drawable.sf_move
     "music.note" -> R.drawable.sf_music_note

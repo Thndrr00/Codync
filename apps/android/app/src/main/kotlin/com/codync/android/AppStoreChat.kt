@@ -104,6 +104,7 @@ fun AppStore.send(text: String, files: List<OutgoingFile> = emptyList()) {
 fun AppStore.retry(send: PendingSend) = action("send:" + send.nonce) { deliver(send.copy(status = SendStatus.Sending, error = null)) }
 fun AppStore.discard(send: PendingSend) = action("discard:" + send.nonce) {
     require(send.status == SendStatus.Failed) { "Cancel a queued message before discarding it." }
+    releaseUploads(send.files)
     withContext(Dispatchers.IO) { requireNotNull(database).discard(send.nonce) }
     refresh()
 }
@@ -131,22 +132,15 @@ internal suspend fun AppStore.deliver(send: PendingSend) {
             }
         }
         val connection = ready()
-        val ids = mutableListOf<String>()
-        var completed = 0L
-        val total = send.files.sumOf { it.size }
-        for (file in send.files) {
-            val id = UUID.randomUUID().toString()
-            HostFiles(connection).upload(send.botId, id, file) { offset ->
-                val percent = if (total == 0L) 100 else ((completed + offset) * 100 / total).toInt()
-                mutableState.update { it.copy(uploadProgress = it.uploadProgress + (send.nonce to percent)) }
-            }
-            completed += file.size
-            ids.add(id)
+        // Every file uploads as it is attached; sending waits for the ones still on their way.
+        val ids = uploadIds(send.botId, send.files)
+        for ((file, id) in send.files.zip(ids)) {
             withContext(Dispatchers.IO) { attachments.cache(id, file) }
         }
         val result = connection.call("send", send.body(ids))
         val entry = Entry.decode(result.jsonObject.getValue("entry").jsonObject)
         withContext(Dispatchers.IO) { requireNotNull(database).receive(listOf(entry)) }
+        releaseUploads(send.files)
         refresh()
         val bot = state.value.bots.firstOrNull { it.id == send.botId }
         if (bot != null && PushPreferences.tasks(getApplication()) && getApplication<Application>().getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled()) {
@@ -161,7 +155,6 @@ internal suspend fun AppStore.deliver(send: PendingSend) {
         savePending(send.copy(status = SendStatus.Failed, error = error.message ?: "Couldn't send."))
     } finally {
         sends.remove(send.nonce)
-        mutableState.update { it.copy(uploadProgress = it.uploadProgress - send.nonce) }
     }
 }
 

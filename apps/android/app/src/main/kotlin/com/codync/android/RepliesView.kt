@@ -81,7 +81,7 @@ import com.codync.android.design.*
                 items(items.filter { it !is ChatItem.Separator }, key = { it.id }) { item ->
                     when (item) {
                         is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = openTrace, reply = null, connect = connect, thread = rootId)
-                        is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, state, store)
+                        is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, store)
                         is ChatItem.Separator, is ChatItem.Exchanges -> {}
                     }
                 }

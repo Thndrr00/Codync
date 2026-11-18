@@ -39,11 +39,15 @@ data class Entry(
     val status: String? get() = data.text("status")
     /** Files the bot shared in this message. */
     val files: List<SharedFile> get() = data["files"]?.let { WireJson.decodeFromJsonElement<List<SharedFile>>(it) }.orEmpty()
+    /** The subagents this turn started (`kind: "subagents"`), oldest first, read leniently: a card this app can't
+     *  read never costs the conversation a message. */
+    val subagents: List<EntrySubagent>
+        get() = data["subagents"]?.let { runCatching { WireJson.decodeFromJsonElement<List<EntrySubagent>>(it) }.getOrNull() }.orEmpty()
     /** The artifact a bot published in this message (an artifact card), read leniently: its text stands in for it. */
     val artifact: ArtifactCard? get() = (data["artifact"] as? JsonObject)?.let { runCatching { WireJson.decodeFromJsonElement<ArtifactCard>(it) }.getOrNull() }
     /** Of memory and context, only a fresh conversation gets a line: memory lives in the bot's memory settings, a
      *  summary keeps the same conversation going, and a kept handoff changed nothing. */
-    val isChat: Boolean get() = !isInternal && (kind in listOf("user", "permission") ||
+    val isChat: Boolean get() = !isInternal && (kind in listOf("user", "permission", "subagents") ||
         kind == "notice" && "memory" !in data && "memoryFile" !in data && "compaction" !in data &&
             (data["handoff"] as? JsonObject)?.text("status") != "kept" ||
         kind == "agent" && data["final"]?.jsonPrimitive?.booleanOrNull == true)
@@ -124,6 +128,26 @@ private fun isImageName(name: String) = name.substringAfterLast('.', "").lowerca
 
 /** Unicode control and format characters, which a file name may not contain. */
 private val CONTROLS = setOf(Character.CONTROL, Character.FORMAT)
+
+/** One subagent an agent started in a turn (`kind: "subagents"`): its task, state, newest step and time. */
+@Serializable
+data class EntrySubagent(
+    val id: String,
+    val task: String = "",
+    /** running | done | failed | stopped */
+    val state: String = "running",
+    /** What it does now, as its tool call named it. */
+    val step: String = "",
+    /** Epoch milliseconds, as the host sends them. */
+    val startedAt: Long = 0,
+    val endedAt: Long? = null,
+) {
+    /** Whether it still works: only then does its card's header follow the reader. A host older than the card sends
+     *  no state, and then the subagent is one that never reported its end. */
+    val isRunning: Boolean get() = state == "running" || state.isEmpty()
+    /** The state as the card shows it, where no state reads as running. */
+    val shownState: String get() = if (isRunning) "running" else state
+}
 
 @Serializable
 enum class SendStatus { Sending, Waiting, Delivering, Failed }

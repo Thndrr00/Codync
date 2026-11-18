@@ -41,6 +41,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import com.codync.android.core.*
@@ -202,37 +204,51 @@ import com.kyant.shapes.RoundedRectangle
     val working = bot.isWorking(bot.id) && state.connection is LinkState.Ready
     val more = bot.id !in state.historyComplete
     val details by ThinkingDetails.enabled.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     // Pull to refresh reconnects, like Reconnect in the title menu, until the link is back.
-    ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
-        if (more) item("earlier") {
-            Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
-                contentAlignment = Alignment.Center) { Spinner(14.dp) }
-            // A chat shorter than the screen never scrolls, so showing the row is the trigger.
-            LaunchedEffect(Unit) { if ("history" !in state.busy) store.loadHistory() }
-        }
-        if (items.isEmpty() && !more) item("intro") { IntroCard(bot, state) }
-        items(items, key = { it.id }) { item ->
-            when (item) {
-                is ChatItem.Separator -> TimeSeparator(item.at)
-                is ChatItem.Message -> {
-                    val routine = item.entry.data.text("routineId").takeIf { item.entry.kind == "notice" }
-                    if (routine != null) RoutineNotice(item.entry) { openRoutine(routine) }
-                    else if (item.entry.kind == "notice" && item.entry.call != null) Box(Modifier.padding(top = 6.dp)) {
-                        Column {
-                            CallLineRow(item.entry) { openCall(item.entry.id) }
-                            if (item.entry.data.text("source") == "voice_receipt") {
-                                val seconds = item.entry.data["callSeconds"]?.jsonPrimitive?.longOrNull ?: 0
-                                VoiceReceipt(item.entry, store, seconds, item.entry.data.text("voiceTranscriptText") ?: "No transcript was captured. Confirm only decisions you personally remember.")
+    Box(Modifier.fillMaxSize()) {
+        ConversationList(scroll, entries.map { it.id }, items.lastOrNull()?.id, entries.lastOrNull()?.rev, working, padding, store::refreshConnection, indicatorTop) {
+            if (more) item("earlier") {
+                Box(Modifier.fillMaxWidth().padding(vertical = 14.dp).clearAndSetSemantics { contentDescription = "Loading earlier messages" },
+                    contentAlignment = Alignment.Center) { Spinner(14.dp) }
+                // A chat shorter than the screen never scrolls, so showing the row is the trigger.
+                LaunchedEffect(Unit) { if ("history" !in state.busy) store.loadHistory() }
+            }
+            if (items.isEmpty() && !more) item("intro") { IntroCard(bot, state) }
+            items(items, key = { it.id }) { item ->
+                when (item) {
+                    is ChatItem.Separator -> TimeSeparator(item.at)
+                    is ChatItem.Message -> {
+                        val routine = item.entry.data.text("routineId").takeIf { item.entry.kind == "notice" }
+                        if (routine != null) RoutineNotice(item.entry) { openRoutine(routine) }
+                        else if (item.entry.kind == "notice" && item.entry.call != null) Box(Modifier.padding(top = 6.dp)) {
+                            Column {
+                                CallLineRow(item.entry) { openCall(item.entry.id) }
+                                if (item.entry.data.text("source") == "voice_receipt") {
+                                    val seconds = item.entry.data["callSeconds"]?.jsonPrimitive?.longOrNull ?: 0
+                                    VoiceReceipt(item.entry, store, seconds, item.entry.data.text("voiceTranscriptText") ?: "No transcript was captured. Confirm only decisions you personally remember.")
+                                }
                             }
                         }
+                        else ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = { store.showTrace(true) },
+                            reply = { reply(item.entry) }, connect = connect, openArtifact = openArtifact)
                     }
-                    else ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = { store.showTrace(true) },
-                        reply = { reply(item.entry) }, connect = connect, openArtifact = openArtifact)
+                    is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, store)
+                    is ChatItem.Exchanges -> BotMessageRow(item.group, state) { openPeer(item.group.peerId) }
                 }
-                is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, state, store)
-                is ChatItem.Exchanges -> BotMessageRow(item.group, state) { openPeer(item.group.peerId) }
+            }
+            if (working) item("working") { WorkingIndicator(bot, workingSteps(state.entries.filter { it.botId == bot.id && it.threadId == null }), details) }
+        }
+        // The newest turn whose subagents still work: their header hangs under the chat header while their card is
+        // scrolled away, and a tap brings the card back.
+        SubagentDockHost(entries, isVisible = { id -> scroll.list.layoutInfo.visibleItemsInfo.any { it.key == id } },
+            modifier = Modifier.padding(top = padding.calculateTopPadding())) { id ->
+            val at = items.indexOfFirst { it.id == id }
+            if (at >= 0) {
+                // The reader is going to the card, not following the newest message.
+                scroll.following.value = false
+                scope.launch { scroll.list.animateScrollToItem(at + (if (more) 1 else 0)) }
             }
         }
-        if (working) item("working") { WorkingIndicator(bot, workingSteps(state.entries.filter { it.botId == bot.id && it.threadId == null }), details) }
     }
 }
