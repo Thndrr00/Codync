@@ -107,6 +107,13 @@ extension BotStore {
         }
     }
 
+    /// Sends a message on to another chat; the host copies its files and marks it forwarded there. The
+    /// target's events carry the new message.
+    func forward(_ entry: Entry, to botId: String) async throws {
+        let sent = try await withLink(replay: true) { try await $0.forward(entryId: entry.id, botId: botId) }
+        upsert(sent)
+    }
+
     /// A card's button: `entry` shows `choice` as answering (its spinner) while `op` runs.
     private func answer(_ entry: Entry, _ choice: String, _ op: @escaping @MainActor (HostClient) async throws -> Void) {
         guard answering[entry.id] == nil else { return }

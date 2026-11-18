@@ -78,6 +78,7 @@ is bigger than one release.
 | CopilotKit/OpenBot connector catalogue | done: reviewed apps ahead of the nightly list, installed by a host bridge |
 | OpenBot channel title and archive | done (desktop, iPhone, Android and terminal); picture and agent channel tools next |
 | OpenBot channel tools (`create_channel`, `update_channel`) | done (host; Manage the team, Ask approval) |
+| OpenBot `send_to_channel` | done (host; bots post work into a channel) |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
 | Multi-user server | done: workspace members with roles, enforced on every call |
 

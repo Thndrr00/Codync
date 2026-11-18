@@ -16,6 +16,8 @@ public struct ThreadView: View {
     @State var botChat: BotChatTarget?
     @State var openArtifact: ArtifactTarget?
     @State var openCall: Entry?
+    /// The message the "Send to a channel" sheet is sending on.
+    @State var forwardEntry: Entry?
     @State var editingGroup = false
     @State var details: DetailsRequest?
     @State var calling = false
@@ -71,7 +73,8 @@ public struct ThreadView: View {
             }
             .readingConversation(botId)
             .reviewReading(botId: botId, unobscured: following && !calling && !showTrace && botChat == nil
-                           && openArtifact == nil && openCall == nil && details == nil && !editingGroup
+                           && openArtifact == nil && openCall == nil && forwardEntry == nil && details == nil
+                           && !editingGroup
                            && model.composerDraft(for: botId).isEmpty && model.fileDownloads.export == nil)
             .onChange(of: model.voiceCallRequest, initial: true) { _, _ in
                 if model.takeVoiceCallRequest(for: botId) { startShortcutCall() }
@@ -84,6 +87,7 @@ public struct ThreadView: View {
             .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
             .codyncSheet(item: $openArtifact) { ArtifactView(target: $0) }
             .codyncSheet(item: $openCall) { CallConversationView(line: $0) }
+            .codyncSheet(item: $forwardEntry) { ForwardSheet(entry: $0) }
             .codyncSheet(item: $details) { request in
                 BotDetailsView(botId: request.botId ?? botId, request: request) { artifact in
                     details = nil
@@ -124,6 +128,8 @@ public struct ThreadView: View {
                 ChatRow(entry: e, groupStart: groupStart, chat: bot, openTrace: { showTrace = true },
                         // An update card takes the composer's place, so there's nothing to reply with.
                         reply: e.isReplyable && model.mismatch == nil ? { reply(to: e) } : nil,
+                        // The message menu's "Send to a channel".
+                        forward: { forwardEntry = e },
                         // In a group, the bot whose agent failed.
                         addFallback: { details = DetailsRequest(botId: e.data.author ?? e.botId) },
                         openArtifact: { openArtifact = ArtifactTarget(botId: e.botId, id: $0.id, title: $0.title) },

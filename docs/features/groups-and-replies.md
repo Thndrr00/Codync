@@ -33,6 +33,7 @@ quotes itself.
 | Method | Body | Notes |
 |---|---|---|
 | `send` | `botId, text, clientNonce, replyTo?` | `botId` is a bot or a group. `replyTo`: the id of a user message or final reply in that chat; anything else is refused. Works in the relay mailbox too. |
+| `forward` | `entryId, botId` | Sends one message on to another chat, the menu's **Send to a channel** (`host/src/chat/forward.rs`). Its text, files, attachments and who wrote it are copied, so the target keeps them even if the source chat is deleted; the copy is the user's message there and starts a turn as `send` does. Only messages (user messages, final replies) can be sent on; cards and notices are refused. |
 | `createBot` | `{kind:"group", name, description?, members}` | Returns the existing group when these exact bots already share one. |
 | `updateBot` | `{id, name?, members?, pinned?, hidden?, section?}` | A group can't become a bot or the reverse. `section`: a name, or `null` for none. |
 | `deleteBot` | `botId` | A group's bots stay. A deleted bot leaves its groups. |

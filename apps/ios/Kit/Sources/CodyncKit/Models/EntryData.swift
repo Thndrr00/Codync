@@ -69,11 +69,29 @@ public struct EntryData: Codable, Hashable, Sendable {
     public var transcript: [CallLine]?
     /// agent: an artifact card, the bot's artifact as published then (the newest version shows).
     public var artifact: ArtifactRef?
+    /// user: sent on from another chat ("Send to a channel"), with its files copied along. The copy is
+    /// this chat's own message; this says where it came from.
+    public var forwardedFrom: ForwardedFrom?
 
     public init(text: String? = nil, status: String? = nil, clientNonce: String? = nil) {
         self.text = text
         self.status = status
         self.clientNonce = clientNonce
+    }
+}
+
+/// Where a forwarded copy came from: the chat and message, and who wrote it there. A partial
+/// object still decodes, so the message itself always shows.
+public struct ForwardedFrom: Codable, Hashable, Sendable {
+    public var botId: String?
+    public var entryId: String?
+    /// The author as the source chat named it: a bot's name, or "You" for the user.
+    public var author: String?
+
+    public init(botId: String? = nil, entryId: String? = nil, author: String? = nil) {
+        self.botId = botId
+        self.entryId = entryId
+        self.author = author
     }
 }
 

@@ -12,6 +12,8 @@ struct ChatRow: View {
     let openTrace: () -> Void
     /// Quotes this message in the composer; nil where it can't be.
     var reply: (() -> Void)?
+    /// Sends this message on to another chat; nil where it can't be.
+    var forward: (() -> Void)?
     /// A failure notice's "Add a fallback": the bot's details.
     var addFallback: (() -> Void)?
     /// An artifact card's artifact, full size.
@@ -25,7 +27,7 @@ struct ChatRow: View {
         switch entry.kind {
         case "user":
             VStack(alignment: .trailing, spacing: 4) {
-                UserBubble(entry: entry, botWorking: chat?.isWorking == true, reply: reply)
+                UserBubble(entry: entry, botWorking: chat?.isWorking == true, reply: reply, forward: forward)
                 ReactionsRow(entry: entry)
             }
             .animation(Motion.reduced(Motion.layout, reduceMotion), value: entry.data.reactions)
@@ -34,7 +36,8 @@ struct ChatRow: View {
         case "agent":
             VStack(alignment: .leading, spacing: 4) {
                 if chat?.isGroup == true, groupStart { AuthorLabel(botId: entry.data.author) }
-                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, openArtifact: openArtifact)
+                AgentBubble(entry: entry, openTrace: openTrace, reply: reply, forward: forward,
+                            openArtifact: openArtifact)
                 ReactionsRow(entry: entry)
                     .padding(.leading, chat?.isGroup == true ? 34 : 0)
             }
@@ -114,10 +117,31 @@ struct QuoteLine: View {
     }
 }
 
+/// A copy sent on from another chat: who wrote it there, above the message.
+struct ForwardedLine: View {
+    let forwarded: ForwardedFrom
+
+    var body: some View {
+        if let author = forwarded.author, !author.isEmpty {
+            Label {
+                Text("\(L10n.tr("Forwarded from")) \(author)").lineLimit(1)
+            } icon: {
+                Image(systemName: "arrowshape.turn.up.right")
+            }
+            .font(.caption)
+            .foregroundStyle(Palette.secondary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(L10n.tr("Forwarded from")) \(author)")
+        }
+    }
+}
+
 struct UserBubble: View {
     let entry: Entry
     let botWorking: Bool
     var reply: (() -> Void)?
+    /// Sends this message on to another chat; nil where it can't be.
+    var forward: (() -> Void)?
     @Environment(BotStore.self) private var model
 
     var body: some View {
@@ -125,7 +149,11 @@ struct UserBubble: View {
             if let attachments = entry.data.attachments, !attachments.isEmpty {
                 AttachmentList(attachments: attachments, botId: entry.botId)
             }
-            if !(entry.data.text ?? "").isEmpty || entry.data.replyTo != nil { text }
+            // A forwarded copy of a bot reply brings that reply's files with it.
+            if let files = entry.data.files, !files.isEmpty {
+                ForEach(files) { file in FileDownloadCard(entry: entry, file: file) }
+            }
+            if !(entry.data.text ?? "").isEmpty || entry.data.replyTo != nil || entry.data.forwardedFrom != nil { text }
                 status
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -134,6 +162,7 @@ struct UserBubble: View {
 
     private var text: some View {
             VStack(alignment: .leading, spacing: 4) {
+                if let forwarded = entry.data.forwardedFrom { ForwardedLine(forwarded: forwarded) }
                 if let quote = entry.data.replyTo { QuoteLine(text: quote.text) }
                 if let text = entry.data.text, !text.isEmpty {
                     Text(text)
@@ -148,6 +177,9 @@ struct UserBubble: View {
                 .contextActions(reactions: model.reactionPick(entry)) {
                     var items = [MenuItem("Copy", icon: "square.on.square") { Pasteboard.copy(entry.data.text) }]
                     if let reply { items.append(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply)) }
+                    if let forward {
+                        items.append(MenuItem("Send to a channel", icon: "arrowshape.turn.up.right", action: forward))
+                    }
                     return items
                 }
     }
@@ -192,11 +224,14 @@ struct AgentBubble: View {
     let entry: Entry
     let openTrace: () -> Void
     var reply: (() -> Void)?
+    /// Sends this message on to another chat; nil where it can't be.
+    var forward: (() -> Void)?
     var openArtifact: ((ArtifactRef) -> Void)?
     @Environment(BotStore.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if let forwarded = entry.data.forwardedFrom { ForwardedLine(forwarded: forwarded) }
             Group {
                 if let artifact = entry.data.artifact {
                     ArtifactCard(botId: entry.botId, ref: artifact) { openArtifact?(artifact) }
@@ -215,6 +250,9 @@ struct AgentBubble: View {
                         MenuItem("Show what it did", icon: "list.bullet", action: openTrace),
                     ]
                     if let reply { items.insert(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply), at: 1) }
+                    if let forward {
+                        items.append(MenuItem("Send to a channel", icon: "arrowshape.turn.up.right", action: forward))
+                    }
                     return items
                 }
         }
@@ -412,5 +450,6 @@ extension ChatRow: @MainActor Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.entry == b.entry && a.groupStart == b.groupStart && a.chat?.isGroup == b.chat?.isGroup
             && a.chat?.isWorking == b.chat?.isWorking && (a.reply == nil) == (b.reply == nil)
+            && (a.forward == nil) == (b.forward == nil)
     }
 }

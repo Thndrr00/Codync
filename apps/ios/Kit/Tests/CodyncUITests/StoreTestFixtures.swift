@@ -4,6 +4,12 @@ import Testing
 @testable import CodyncKit
 @testable import CodyncUI
 
+/// One `forward` the app asked for: the message sent on and the chat it goes to.
+struct ForwardCall: Equatable, Sendable {
+    let entryId: String
+    let botId: String
+}
+
 /// A scripted transport: tests set its link state and push events; it records what the store asked.
 actor FakeRemote: RemoteTransport {
     enum Checkpoint: Equatable, Sendable {
@@ -18,6 +24,8 @@ actor FakeRemote: RemoteTransport {
     private(set) var sent: [String] = []
     /// Each `send`'s quoted message, in order.
     private(set) var replyTos: [String?] = []
+    /// Each `forward`'s source message and target chat, in order.
+    private(set) var forwards: [ForwardCall] = []
     private(set) var readReceipts: [Data] = []
     private var failReadReceipts = false
     private(set) var readAttempts = 0
@@ -94,6 +102,11 @@ actor FakeRemote: RemoteTransport {
             sent.append(b["text"] ?? "")
             replyTos.append(b["replyTo"])
             let entry = #"{"id":"e\#(sent.count)","seq":\#(sent.count),"botId":"\#(b["botId"] ?? "")","rev":\#(sent.count),"kind":"user","turn":1,"data":{"text":"\#(b["text"] ?? "")","clientNonce":"\#(b["clientNonce"] ?? "")"},"createdAt":1,"updatedAt":1}"#
+            return Data(#"{"entry":\#(entry)}"#.utf8)
+        case "forward":
+            let b = (try JSONSerialization.jsonObject(with: body) as? [String: String]) ?? [:]
+            forwards.append(ForwardCall(entryId: b["entryId"] ?? "", botId: b["botId"] ?? ""))
+            let entry = #"{"id":"f\#(forwards.count)","seq":\#(forwards.count),"botId":"\#(b["botId"] ?? "")","rev":1,"kind":"user","turn":1,"data":{"text":"Forwarded"},"createdAt":1,"updatedAt":1}"#
             return Data(#"{"entry":\#(entry)}"#.utf8)
         case "startCall":
             // A fresh credential per provider session, so a test can tell a replaced session from the first.
