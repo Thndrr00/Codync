@@ -76,7 +76,7 @@ is bigger than one release.
 | Real offline mode | done: text outbox and an encrypted per-computer cache (desktop, iPhone, Android) |
 | Marketplace reputation | done: stars, install counts, changelog and verified creators in the app page |
 | CopilotKit/OpenBot connector catalogue | done: reviewed apps ahead of the nightly list, installed by a host bridge |
-| OpenBot channel title and archive | done (desktop, iPhone, Android and terminal); picture and agent channel tools next |
+| OpenBot channel title, picture and archive | done (desktop, iPhone, Android and terminal); sub-tasks, drop and channel memory next |
 | OpenBot channel tools (`create_channel`, `update_channel`) | done (host; Manage the team, Ask approval) |
 | OpenBot `send_to_channel` | done (host; bots post work into a channel) |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
