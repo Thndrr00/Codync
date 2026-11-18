@@ -5,6 +5,7 @@
     "event:bot.bot": "object",
     "event:bot.bot.actionRulesOn": "bool",
     "event:bot.bot.activity": "string",
+    "event:bot.bot.archived": "bool",
     "event:bot.bot.agentStep": "null",
     "event:bot.bot.autoName": "bool",
     "event:bot.bot.avatarColor": "string",
