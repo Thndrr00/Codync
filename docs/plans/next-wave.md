@@ -79,6 +79,9 @@ is bigger than one release.
 | OpenBot channel title and archive | done (desktop, iPhone, Android and terminal); picture on desktop, iPhone and Android |
 | OpenBot channel memory (`channel_remember`, keep memories) | done (host; editor list on desktop, iPhone, Android and terminal) |
 | OpenBot channel sub-tasks and drop | done (host; desktop, iPhone, Android and terminal) |
+| OpenBot uploads (ring, cancel, retry) | done (desktop, iPhone, Android and terminal) |
+| OpenBot subagent cards | done (desktop, iPhone, Android and terminal) |
+| OpenBot usage-limit chip in the model picker | done (desktop, iPhone, Android and terminal) |
 | OpenBot channel tools (`create_channel`, `update_channel`) | done (host; Manage the team, Ask approval) |
 | OpenBot `send_to_channel` | done (host; bots post work into a channel) |
 | WhatsApp pairing codes, photos and person facts | done (host; sheet on desktop and Android) |

@@ -13,6 +13,15 @@ Files travel in both directions: users attach inputs, and bots explicitly share 
 - Upload: `upload {botId, uploadId, name, offset, data (base64), done}`, 384 KiB per call so each
   stays under the channel's 1 MiB message limit. A repeated chunk is accepted (retry); anything out
   of order is refused. Then `send {…, attachments: [uploadId]}`; the text may be empty.
+- Every file starts uploading **when it is attached**, under its own upload id, so the message box
+  shows what the computer has before Send names it. Each attachment draws a ring of the bytes the
+  computer holds; a click (or tap) on the ring cancels that upload with
+  `cancelUpload {botId, uploadId}`, which deletes its partial folder
+  (`chat::uploads::cancel`). One file failing or being cancelled never stops the others.
+- A failed upload stays in the box with its reason and **Retry**, which drops the partial and starts
+  that file again only. Send waits while a file is on its way, failed or cancelled: it goes once the
+  file arrives, is retried successfully, or is removed. Removing an attachment from the box before
+  Send cancels its upload too.
 - Storage (`host/src/chat/uploads.rs`): `<workspace>/uploads/<uploadId>/<name>` for a personal
   workspace (so reading needs no extra approval), otherwise
   `~/.codync/bots/<bot>/uploads/<uploadId>/<name>`. Only UUID ids and plain file names are accepted.
