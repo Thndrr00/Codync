@@ -25,6 +25,12 @@ internal fun AppStore.hideBotFromRoster(bot: Bot) {
     command("updateBot", buildJsonObject { put("id", bot.id); put("hidden", true) }, "roster:" + bot.id)
 }
 
+/** Takes a group out of the open roster, or brings it back, keeping its conversation. */
+internal fun AppStore.setGroupArchived(bot: Bot, archived: Boolean) {
+    if (bot.kind != "group") return
+    command("updateBot", buildJsonObject { put("id", bot.id); put("archived", archived) }, "roster:" + bot.id)
+}
+
 /**
  * Stops an active bot execution without faking local idle state; keeps `"stop:${bot.id}"` in `busy`
  * until the host confirms the command.

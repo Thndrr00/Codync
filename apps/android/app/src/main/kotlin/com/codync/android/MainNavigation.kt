@@ -81,7 +81,7 @@ internal data class NavigationBadges(
  * offline state never announces live work or pending approvals.
  */
 internal fun navigationBadges(state: AppState): NavigationBadges {
-    val visible = state.bots.filter { !it.deleted && !it.hidden }
+    val visible = roster(state.bots)
     val unread = visible.sumOf { it.unread.coerceAtLeast(0) }
     val botsBadge = if (unread > 0) {
         TabBadge(

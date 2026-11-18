@@ -35,7 +35,13 @@ pub enum RosterLine<'a> {
 impl Bot {
     /// The section the roster shows it in: none while pinned (it stays on top, outside sections).
     pub fn shown_section(&self) -> Option<&str> {
-        if self.pinned { None } else { self.section.as_deref() }
+        if self.archived {
+            Some("Archived")
+        } else if self.pinned {
+            None
+        } else {
+            self.section.as_deref()
+        }
     }
 
     /// The bots it shows among and reorders with: its band (`Bot::band`), and for the rest its section
@@ -159,7 +165,7 @@ impl App {
             let section = b.shown_section().map(section_key);
             let name = b.shown_section().unwrap_or("");
             let order = self.section_order.iter().position(|s| s == name).unwrap_or(self.section_order.len());
-            (b.band(), order, section.is_none(), section, b.position, Reverse(b.last_at), b.name.clone())
+            (b.archived, b.band(), order, section.is_none(), section, b.position, Reverse(b.last_at), b.name.clone())
         });
         v
     }

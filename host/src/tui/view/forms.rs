@@ -400,11 +400,11 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
 pub(super) fn group_view(buf: &mut Buffer, area: Rect, app: &App, g: &GroupForm) {
     let t = theme();
     let bots = app.group_candidates(&g.members);
-    // A new group gets its About afterwards, in the editor.
-    let about = g.group_id.is_some();
-    let top = if about { 4 } else { 2 };
-    let r = centered(area, 74, u(bots.len() + 8).saturating_add(top).max(16));
-    let title = tr(if about { "Group chat" } else { "New group chat" });
+    // A new group gets its About and Archived state afterwards, in the editor.
+    let existing = g.group_id.is_some();
+    let top = if existing { 8 } else { 4 };
+    let r = centered(area, 74, u(bots.len() + 10).saturating_add(top).max(18));
+    let title = tr(if existing { "Group chat" } else { "New group chat" });
     let inner = frame_box(buf, r, t.text, t.panel, Some((title.as_ref(), t.text)));
     let label = |on: bool| if on { t.bold } else { t.secondary }.patch(t.panel);
     let on_bots = g.field == GroupField::Bots;
@@ -421,16 +421,35 @@ pub(super) fn group_view(buf: &mut Buffer, area: Rect, app: &App, g: &GroupForm)
         g.field == GroupField::Name,
         false,
     );
-    if about {
-        put(buf, inner.x, inner.y + 2, 8, "About", label(g.field == GroupField::About));
+    put(buf, inner.x, inner.y + 2, 8, "Title", label(g.field == GroupField::Title));
+    input_line(
+        buf,
+        Rect::new(inner.x + 8, inner.y + 2, inner.width.saturating_sub(8), 1),
+        inner.y + 2,
+        &g.title,
+        "A short line under the name (optional)",
+        g.field == GroupField::Title,
+        false,
+    );
+    if existing {
+        put(buf, inner.x, inner.y + 4, 8, "About", label(g.field == GroupField::About));
         input_line(
             buf,
-            Rect::new(inner.x + 8, inner.y + 2, inner.width.saturating_sub(8), 1),
-            inner.y + 2,
+            Rect::new(inner.x + 8, inner.y + 4, inner.width.saturating_sub(8), 1),
+            inner.y + 4,
             &g.about,
             "What this group works on (optional)",
             g.field == GroupField::About,
             false,
+        );
+        put(buf, inner.x, inner.y + 6, 8, "Archived", label(g.field == GroupField::Archived));
+        put(
+            buf,
+            inner.x + 8,
+            inner.y + 6,
+            inner.width.saturating_sub(8),
+            if g.archived { "☑ archived (space toggles)" } else { "☐ archived (space toggles)" },
+            if g.field == GroupField::Archived { t.bold } else { t.dim }.patch(t.panel),
         );
     }
     put(buf, inner.x, inner.y + top, inner.width, &format!("Bots · {}", g.members.len()), label(on_bots));
@@ -478,7 +497,7 @@ pub(super) fn group_view(buf: &mut Buffer, area: Rect, app: &App, g: &GroupForm)
     }
     let save = if g.saving {
         " … Saving "
-    } else if about {
+    } else if existing {
         " ↵ Save "
     } else {
         " ↵ Create "

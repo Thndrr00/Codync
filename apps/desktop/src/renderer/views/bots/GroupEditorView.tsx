@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isGroup, type ActionClass, type Bot, type RulePolicy, type TeamSettings } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
-import { Button, ChoicePicker, IconButton, Spinner, ValueRow } from '../../components/Controls'
+import { Button, ChoicePicker, IconButton, Spinner, Switch, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { Dialog, ModalHeader, Sheet, SheetPage, useDismiss } from '../../components/Overlay'
 import { VStack } from '../../components/Stack'
@@ -39,9 +39,11 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const store = useStore()
   const dismiss = useDismiss()
   const [name, setName] = useState(group.name)
+  const [title, setTitle] = useState(group.title ?? '')
   const [about, setAbout] = useState(group.description)
   const [members, setMembers] = useState<string[]>(group.members)
   const [chiefBotId, setChiefBotId] = useState<string | null>(group.chiefBotId ?? null)
+  const [archived, setArchived] = useState(group.archived === true)
   const [team, setTeam] = useState<TeamSettings>(() => reconcileTeam(group.team, group.members, group.chiefBotId ?? null))
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -120,7 +122,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
     setError(null)
     const effectiveTeam = reconcileTeam(team, members, chiefBotId)
     try {
-      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam })
+      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam, title: title.trim() || null, archived })
       // Each role's rules reach every member with that role; the bot's own rules keep the rest.
       // Only roles whose pickers were touched are written, so opening and saving a group changes
       // nothing about approval by itself.
@@ -147,9 +149,13 @@ export function GroupEditorView({ group }: { group: Bot }) {
           <div className="group-identity">
             <GroupAvatar members={picked} size={84} />
             <input className="group-name" value={name} placeholder={defaultName} aria-label="Name" onChange={(e) => setName(e.target.value)} />
+            <input className="group-about" value={title} placeholder="A short line under the name" aria-label="Title" maxLength={120} onChange={(e) => setTitle(e.target.value)} />
             <AutoTextArea className="group-about" value={about} placeholder="What this group works on" minRows={1} maxRows={4} onChange={setAbout} />
           </div>
           <VStack>
+            <ValueRow label="Archived" detail="Archived groups leave the open roster; their conversation stays.">
+              <Switch on={archived} onChange={setArchived} label="Archived" />
+            </ValueRow>
             <div className="group-section-title">Members</div>
             {picked.map((bot) => (
               <div key={bot.id} className="member-row fade-in">

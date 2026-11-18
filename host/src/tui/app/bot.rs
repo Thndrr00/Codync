@@ -92,6 +92,10 @@ pub struct Bot {
     pub last_at: i64,
     /// A group chat: several bots and the user, no agent of its own.
     pub group: bool,
+    /// A group's short line under its name; empty for none.
+    pub title: String,
+    /// A group taken out of the open roster; it shows under ARCHIVED.
+    pub archived: bool,
     pub members: Vec<String>,
     /// Where the running turn talks: a chat (`None` = its own).
     pub working_chat: Option<String>,
@@ -242,6 +246,8 @@ impl Bot {
             last_message: s("lastMessage"),
             last_at: v["lastAt"].as_i64().unwrap_or(0),
             group: v["kind"] == "group",
+            title: s("title"),
+            archived: v["archived"].as_bool().unwrap_or(false),
             members: strs(&v["members"]),
             working_chat: v["workingChat"].as_str().map(str::to_owned),
         })

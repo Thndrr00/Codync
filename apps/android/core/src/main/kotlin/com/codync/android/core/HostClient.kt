@@ -95,6 +95,10 @@ data class Bot(
     val account: String? = null,
     val isChief: Boolean = false,
     val chiefBotId: String? = null,
+    /** A group's short line under its name in the roster. */
+    val title: String? = null,
+    /** A group taken out of the open roster; its conversation stays and it can be restored. */
+    val archived: Boolean = false,
     /** Groups only: how the group works as a team, with its hierarchy. */
     val team: TeamSettings? = null,
     /** Agents that carry on, in order, when its own can't answer (out of usage, rate limited, signed out…); null from an older host. */

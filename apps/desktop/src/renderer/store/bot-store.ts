@@ -522,6 +522,17 @@ export class BotStore extends BotSync {
     this.patchBot(bot, { hidden })
   }
 
+  /** Takes a group out of the open roster, or brings it back; the conversation stays. */
+  setArchived(bot: Bot, archived: boolean) {
+    this.bots.set(bot.id, { ...bot, archived })
+    this.changed()
+    const draft: GroupDraft = {
+      id: bot.id, kind: 'group', name: bot.name, description: bot.description, members: bot.members,
+      pinned: bot.pinned, chiefBotId: bot.chiefBotId ?? null, title: bot.title ?? null, archived,
+    }
+    this.perform((c) => c.call('updateBot', draft), true)
+  }
+
   setFastMode(bot: Bot, fastMode: boolean) {
     this.patchBot(bot, { fastMode })
   }

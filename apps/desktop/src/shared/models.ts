@@ -31,6 +31,10 @@ export interface Bot {
   kind: string
   members: string[]
   chiefBotId?: string | null
+  /** A group's short line under its name in the roster. */
+  title?: string | null
+  /** A group taken out of the open roster; its conversation stays and it can be restored. */
+  archived?: boolean
   /** Groups only: how the group works as a team, with its hierarchy. */
   team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon
@@ -193,6 +197,8 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     memoryRev: raw.memoryRev ?? 0,
     isChief: raw.isChief ?? false,
     chiefBotId: raw.chiefBotId ?? null,
+    title: raw.title ?? null,
+    archived: raw.archived ?? false,
     team: raw.team ?? null,
     autoName: raw.autoName ?? false,
     createdAt,
@@ -826,6 +832,10 @@ export interface BotDraft {
   harnessMemory?: boolean
   isChief?: boolean
   chiefBotId?: string | null
+  /** A group's short line under its name in the roster. */
+  title?: string | null
+  /** A group taken out of the open roster; its conversation stays and it can be restored. */
+  archived?: boolean
   /** Groups only: how the group works as a team, with its hierarchy. */
   team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon
@@ -918,6 +928,10 @@ export interface GroupDraft {
   description: string
   members: string[]
   chiefBotId?: string | null
+  /** A group's short line under its name in the roster. */
+  title?: string | null
+  /** A group taken out of the open roster; its conversation stays and it can be restored. */
+  archived?: boolean
   /** How the group works as a team: one voice with a hierarchy, or the classic round table. */
   team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon

@@ -38,6 +38,7 @@ import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
+import { ArchivedGroupsSection } from './ArchivedGroupsSection'
 import { MembersSection } from './MembersSection'
 import { CalendarFeedsSection } from './CalendarFeedsSection'
 import { NewsFeedsSection } from './NewsFeedsSection'
@@ -303,6 +304,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <AgentImportSection />
       <DemoSection />
       <HiddenBotsSection />
+      <ArchivedGroupsSection />
     </CardForm>
   )
 }

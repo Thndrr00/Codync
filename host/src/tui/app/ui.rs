@@ -332,24 +332,34 @@ impl Form {
 pub enum GroupField {
     Name,
     About,
+    Title,
+    Archived,
     Bots,
 }
 
 impl GroupField {
-    /// The field after this one; a new group has no About (it is written afterwards, in the editor).
-    pub(super) fn next(self, about: bool) -> Self {
+    /// The field after this one; a new group has no About or Archived (they are set afterwards, in
+    /// the editor).
+    pub(super) fn next(self, existing: bool) -> Self {
         match self {
-            Self::Name if about => Self::About,
-            Self::Name | Self::About => Self::Bots,
+            Self::Name if existing => Self::About,
+            Self::Name | Self::About => Self::Title,
+            Self::Title if existing => Self::Archived,
+            Self::Title => Self::Bots,
+            Self::Archived => Self::Bots,
             Self::Bots => Self::Name,
         }
     }
 
-    pub(super) fn prev(self, about: bool) -> Self {
+    pub(super) fn prev(self, existing: bool) -> Self {
         match self {
             Self::Name => Self::Bots,
-            Self::Bots if about => Self::About,
-            Self::About | Self::Bots => Self::Name,
+            Self::Bots if existing => Self::Archived,
+            Self::Bots => Self::Title,
+            Self::Archived => Self::Title,
+            Self::Title if existing => Self::About,
+            Self::Title => Self::Name,
+            Self::About => Self::Name,
         }
     }
 }
@@ -362,6 +372,10 @@ pub struct GroupForm {
     /// What the group is for; sent as `description`, shown to its members. Edited only:
     /// a new group starts without one.
     pub about: Editor,
+    /// The short line under the name in the roster; empty for none.
+    pub title: Editor,
+    /// Whether the group shows under ARCHIVED.
+    pub archived: bool,
     /// Picked bot ids, in the order they were picked.
     pub members: Vec<String>,
     pub field: GroupField,

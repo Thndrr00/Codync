@@ -23,6 +23,8 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 
 const MAX_ROUNDS: usize = 3;
+/// A channel title's longest line.
+pub const MAX_TITLE_CHARS: usize = 120;
 /// A member's turn that runs longer counts as a pass.
 const MEMBER_TIMEOUT: Duration = Duration::from_mins(10);
 /// Replies per room turn, across all rounds.
@@ -32,6 +34,15 @@ const HISTORY_LINES: i64 = 24;
 /// A bot's line in another member's prompt is clipped (the user's never is).
 const LINE_CHARS: usize = 2000;
 const PASS: &str = "(pass)";
+
+/// A channel title, trimmed and checked; `None` for an empty one.
+pub fn checked_title(raw: &str) -> Result<Option<String>> {
+    let title = raw.trim();
+    if title.chars().count() > MAX_TITLE_CHARS {
+        bail!("a channel's title is at most {MAX_TITLE_CHARS} characters");
+    }
+    Ok((!title.is_empty()).then(|| title.to_owned()))
+}
 
 /// One member's turn in a room, queued on its actor like any other turn.
 pub struct GroupTurn {

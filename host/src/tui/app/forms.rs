@@ -21,6 +21,8 @@ impl App {
             group_id: None,
             name: Editor::default(),
             about: Editor::default(),
+            title: Editor::default(),
+            archived: false,
             members: vec![],
             field: GroupField::Bots,
             cursor: 0,
@@ -45,18 +47,19 @@ impl App {
     pub(super) fn group_key(&mut self, mut g: GroupForm, k: KeyEvent) -> Option<Overlay> {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let n = self.group_candidates(&g.members).len();
-        let about = g.group_id.is_some();
+        let existing = g.group_id.is_some();
         match k.code {
             KeyCode::Esc => return None,
             KeyCode::Enter => self.save_group(&mut g),
             KeyCode::Char('s') if ctrl => self.save_group(&mut g),
-            KeyCode::Tab => g.field = g.field.next(about),
-            KeyCode::BackTab => g.field = g.field.prev(about),
-            KeyCode::Down if g.field != GroupField::Bots => g.field = g.field.next(about),
+            KeyCode::Tab => g.field = g.field.next(existing),
+            KeyCode::BackTab => g.field = g.field.prev(existing),
+            KeyCode::Down if g.field != GroupField::Bots => g.field = g.field.next(existing),
             KeyCode::Down => g.cursor = (g.cursor + 1).min(n.saturating_sub(1)),
-            KeyCode::Up if g.field == GroupField::About => g.field = GroupField::Name,
-            KeyCode::Up if g.field == GroupField::Bots && g.cursor == 0 => g.field = g.field.prev(about),
+            KeyCode::Up if g.field != GroupField::Bots => g.field = g.field.prev(existing),
+            KeyCode::Up if g.field == GroupField::Bots && g.cursor == 0 => g.field = g.field.prev(existing),
             KeyCode::Up if g.field == GroupField::Bots => g.cursor -= 1,
+            KeyCode::Char(' ') if g.field == GroupField::Archived => g.archived = !g.archived,
             KeyCode::Char(' ') if g.field == GroupField::Bots => {
                 let id = self.group_candidates(&g.members).get(g.cursor).map(|b| b.id.clone());
                 if let Some(id) = id {
@@ -74,6 +77,9 @@ impl App {
             _ if g.field == GroupField::About => {
                 g.about.key(k);
             }
+            _ if g.field == GroupField::Title => {
+                g.title.key(k);
+            }
             _ => {}
         }
         Some(Overlay::Group(g))
@@ -89,11 +95,20 @@ impl App {
         }
         let typed = g.name.text.trim();
         let name = if typed.is_empty() { self.group_default_name(&g.members) } else { typed.to_owned() };
-        let mut body = json!({"name": name, "members": g.members, "description": g.about.text.trim()});
+        let mut body = json!({"name": name, "members": g.members, "description": g.about.text.trim(),
+            "archived": g.archived});
+        let title = g.title.text.trim();
+        if !title.is_empty() {
+            body["title"] = title.into();
+        }
         g.saving = true;
         g.error = None;
         if let Some(id) = &g.group_id {
             body["id"] = id.clone().into();
+            // An empty title clears it.
+            if title.is_empty() {
+                body["title"] = Value::Null;
+            }
             self.call("updateBot", body, After::Saved);
         } else {
             body["id"] = "".into();
@@ -116,6 +131,8 @@ impl App {
                 group_id: Some(b.id.clone()),
                 name: Editor::with(&b.name),
                 about: Editor::with(&b.description),
+                title: Editor::with(b.title.as_str()),
+                archived: b.archived,
                 members: b.members.clone(),
                 field: GroupField::Name,
                 cursor: 0,
@@ -547,21 +564,22 @@ mod tests {
             g = next;
             fields.push(g.field);
         }
-        let (n, b) = (GroupField::Name, GroupField::Bots);
-        assert_eq!(fields, [n, b, n, b, n], "creating skips About");
+        let (n, t, b) = (GroupField::Name, GroupField::Title, GroupField::Bots);
+        assert_eq!(fields, [n, t, n, t, n], "creating skips About and Archived");
         let Some(Overlay::Group(g)) = app.group_key(g, KeyEvent::from(KeyCode::Char('x'))) else { panic!("stays") };
         assert_eq!(g.name.text, "x");
-        let group = json!({"id": "g", "kind": "group", "name": "Team", "members": ["a"]});
+        let group = json!({"id": "g", "kind": "group", "name": "Team", "members": ["a"], "title": "Ships it", "archived": true});
         app.bots.insert("g".into(), Bot::parse(&group).expect("a group"));
         app.selected = Some("g".into());
         app.edit_bot();
         let Some(Overlay::Group(mut g)) = app.overlays.pop() else { panic!("the group editor opens") };
+        assert_eq!((g.title.text.as_str(), g.archived), ("Ships it", true));
         let mut fields = vec![];
-        for _ in 0..3 {
+        for _ in 0..5 {
             let Some(Overlay::Group(next)) = app.group_key(g, KeyEvent::from(KeyCode::Tab)) else { panic!("stays") };
             g = next;
             fields.push(g.field);
         }
-        assert_eq!(fields, [GroupField::About, b, n]);
+        assert_eq!(fields, [GroupField::About, t, GroupField::Archived, b, n]);
     }
 }

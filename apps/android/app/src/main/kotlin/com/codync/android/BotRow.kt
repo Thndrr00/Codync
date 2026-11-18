@@ -233,8 +233,8 @@ import kotlinx.coroutines.launch
         )
         else -> Text(
             messagePreview(
-                // The agent and folder already show in the badges above.
-                bot.lastMessage ?: if (bot.kind == "group") "${bot.members.size} bots" else "No messages yet",
+                // The agent and folder already show in the badges above; a group's title stands in for its member count.
+                bot.lastMessage ?: if (bot.kind == "group") bot.title?.takeIf { it.isNotBlank() } ?: "${bot.members.size} bots" else "No messages yet",
             ),
             style = Type.subheadline,
             color = Palette.secondary,

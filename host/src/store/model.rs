@@ -282,6 +282,12 @@ pub struct BotConfig {
     /// How a group works as a team: one voice with a hierarchy, or the classic round table.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamSettings>,
+    /// A group's short line under its name in the roster; empty for none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// A group taken out of the open roster; its conversation stays and it can be restored.
+    #[serde(default)]
+    pub archived: bool,
     #[serde(default)]
     pub created_at: i64,
 }

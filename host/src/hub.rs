@@ -327,6 +327,14 @@ impl Hub {
             }
         }
         crate::agent::fallback::tidy(&mut cfg);
+        if cfg.is_group() {
+            if let Some(title) = cfg.title.as_deref() {
+                cfg.title = crate::chat::group::checked_title(title)?;
+            }
+        } else {
+            cfg.title = None;
+            cfg.archived = false;
+        }
         cfg.section = sections::normalize_section(cfg.section.as_deref())?;
         validate(&cfg)?;
         crate::agent::workspace::prepare(&mut cfg)?;
@@ -376,6 +384,12 @@ impl Hub {
         }
         if cfg.is_group() {
             cfg.members = crate::chat::group::valid_members(&self.store, &cfg.id, &cfg.members)?;
+            if let Some(title) = cfg.title.as_deref() {
+                cfg.title = crate::chat::group::checked_title(title)?;
+            }
+        } else {
+            cfg.title = None;
+            cfg.archived = false;
         }
         crate::agent::fallback::tidy(&mut cfg);
         validate(&cfg)?;
@@ -397,6 +411,10 @@ impl Hub {
             return Err(error);
         }
         crate::network::publish(self);
+        // An archived channel stops its work, as the channel settings do.
+        if cfg.is_group() && cfg.archived && !before.archived {
+            self.groups.stop(self, &id);
+        }
         if !cfg.is_group() {
             if crate::chat::memory::shared(&cfg) != crate::chat::memory::shared(&before) {
                 crate::chat::memory::changed(self, Some(&id));

@@ -12,6 +12,8 @@ data class GroupDraft(
     val members: List<String> = emptyList(),
     val pinned: Boolean = false,
     val chiefBotId: String? = null,
+    val title: String? = null,
+    val archived: Boolean = false,
     val team: TeamSettings? = null,
 ) {
     fun body(roster: List<Bot>): JsonObject {
@@ -29,6 +31,8 @@ data class GroupDraft(
             put("members", JsonArray(picked.map { JsonPrimitive(it.id) }))
             put("pinned", pinned)
             put("chiefBotId", chiefBotId?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("title", title?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("archived", archived)
             put("team", team?.let { settings ->
                 buildJsonObject {
                     put("mode", settings.mode)
@@ -51,7 +55,7 @@ data class GroupDraft(
     companion object {
         fun from(bot: Bot): GroupDraft {
             require(bot.kind == "group")
-            return GroupDraft(bot.id, bot.name, bot.description, bot.members, bot.pinned, bot.chiefBotId, bot.team)
+            return GroupDraft(bot.id, bot.name, bot.description, bot.members, bot.pinned, bot.chiefBotId, bot.title, bot.archived, bot.team)
         }
     }
 }

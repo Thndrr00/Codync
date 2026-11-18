@@ -38,6 +38,9 @@ import com.codync.android.core.TeamMember
 import com.codync.android.core.TeamSettings
 import com.codync.android.design.*
 
+/** A channel title's longest line, as the host keeps it. */
+private const val TITLE_MAX_CHARS = 120
+
 /**
  * Create a group chat, or change its name, what it's for and who's in it (iOS `GroupEditorView`).
  * Bots are picked like recipients: members on top, a search, and the bots not in it yet.
@@ -70,9 +73,13 @@ import com.codync.android.design.*
                 GroupAvatar(picked.map { AvatarFace(it.avatarShape, it.avatarColor, it.status) }, 84.dp)
                 PlainTextField(draft.name, { draft = draft.copy(name = it) }, Modifier.fillMaxWidth().padding(top = 6.dp), defaultName, singleLine = true,
                     style = Type.title2.semibold.copy(textAlign = TextAlign.Center))
+                FieldBox(draft.title.orEmpty(), { draft = draft.copy(title = it.take(TITLE_MAX_CHARS)) },
+                    tr("A short line under the name"), style = Type.subheadline.copy(textAlign = TextAlign.Center, color = Palette.secondary))
                 PlainTextField(draft.description, { draft = draft.copy(description = it) }, Modifier.fillMaxWidth(), "What this group works on",
                     style = Type.subheadline.copy(textAlign = TextAlign.Center, color = Palette.secondary), maxLines = 4)
             }
+            SwitchRow(tr("Archived"), tr("Archived groups leave the open roster; their conversation stays."),
+                draft.archived, { draft = draft.copy(archived = it) })
             Column(Modifier.fillMaxWidth().animateContentSize(Motion.layoutSize)) {
                 Text("Members", Modifier.padding(bottom = 4.dp), style = Type.subheadline.semibold, color = Palette.secondary)
                 for (bot in picked) MemberRow(bot, state.bots) { IconButton("Remove ${bot.name}", "xmark") { toggle(bot.id) } }
