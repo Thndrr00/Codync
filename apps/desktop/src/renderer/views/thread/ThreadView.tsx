@@ -26,6 +26,7 @@ import { ChatRow, TimeSeparator } from './ChatRows'
 import { WorkingTransition } from './WorkingTransition'
 import { RoutineNotice } from './RoutineNotice'
 import { Composer } from './Composer'
+import { GroupTasks } from './GroupTasks'
 import { ChatSidePanel } from './ChatSidePanel'
 import { DetailsPanel, type DetailsTab } from './DetailsPanel'
 import { useNewMessageCount } from './new-message-counter'
@@ -227,6 +228,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         <Transcript botId={botId} openTrace={openTrace} onReply={store.mismatch ? undefined : setReplyTo} openForward={store.mismatch ? undefined : openForward} openFile={openFile} openRoutine={presentRoutine} openAgent={presentAgent} openBotChat={setBotChat} openApp={setActiveApp} openArtifact={openArtifact} openCall={setCallLine} openThread={setThreadRoot} />
         <div className="composer-dock" ref={dock}>
           <div className="composer-fade" />
+          {bot && !store.mismatch && !activeArtifact ? <GroupTasks bot={bot} /> : null}
           {store.mismatch ? (
             <div className="composer-update-needed">
               <UpdateNeededCard />

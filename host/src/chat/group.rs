@@ -23,6 +23,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::oneshot;
 
+pub mod drop;
+pub mod tasks;
+
 pub mod send;
 pub mod tools;
 
@@ -62,6 +65,8 @@ pub struct GroupTurn {
     pub late: bool,
     /// The reply the room sees, or `None` for a pass.
     pub reply: oneshot::Sender<Result<Option<String>>>,
+    /// The row of the request's task tree this turn answers, for its state.
+    pub task: Option<String>,
     /// The user's message the room turn answers: one a voice call carried makes the reply the call's (`chat::calls`).
     pub answers: Vec<String>,
 }
@@ -94,7 +99,6 @@ impl Rooms {
         }
     }
 }
-
 /// Existing, distinct agent bots (not groups, not the group itself).
 pub fn valid_members(store: &Store, group_id: &str, ids: &[String]) -> Result<Vec<String>> {
     let mut out: Vec<String> = vec![];
@@ -145,6 +149,21 @@ pub fn start(hub: &Arc<Hub>, group: &BotConfig, lane: Lane) {
         };
         if let Err(error) = result {
             tracing::warn!(group = group_id, error = format!("{error:#}"), "room turn failed");
+        }
+    });
+}
+
+/// Continue or Reassign in `group`: a new room turn asks the rows that were waiting.
+pub(super) fn resume(hub: &Arc<Hub>, group: &str, lane: &Lane) {
+    let Ok(cfg) = group(hub, group) else { return };
+    if cfg.archived {
+        return;
+    }
+    let epoch = hub.groups.next(lane);
+    let (hub, group_id, lane) = (hub.clone(), group.to_owned(), lane.clone());
+    tokio::spawn(async move {
+        if let Err(error) = run(&hub, &group_id, &lane, epoch).await {
+            tracing::warn!(group = group_id, error = format!("{error:#}"), "resumed room turn failed");
         }
     });
 }
@@ -455,8 +474,16 @@ async fn ask_once(
     }
     let since_user = since_last_request(hub, lane)?;
     let (reply, answer) = oneshot::channel();
-    let turn =
-        GroupTurn { lane: lane.clone(), prompt, shown, epoch, late: false, reply, answers: answers(&since_user) };
+    let turn = GroupTurn {
+        lane: lane.clone(),
+        prompt,
+        shown,
+        epoch,
+        late: false,
+        reply,
+        task: None,
+        answers: answers(&since_user),
+    };
     if hub.send_cmd(&member.id, Cmd::Group(turn)).is_err() {
         return Ok(None);
     }
@@ -563,20 +590,42 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
     let mut later: Vec<String> = vec![];
     // The newest message each member was shown when last asked: what it passed on, it has seen.
     let mut asked: HashMap<String, i64> = HashMap::new();
+    // The request's task tree: the room asks no member whose branch was stopped, and a resumed turn asks
+    // only the rows that waited.
+    let opening = group(hub, group_id)?;
+    let opening_since = since_last_request(hub, lane)?;
+    let request = opening_since.first().filter(|e| e.kind == EntryKind::User.as_str() || is_channel_request(e));
+    let tree = request.map(|request| tasks::open(hub, &opening, lane, request, true, false)).transpose()?;
     'rounds: for round in 0..MAX_ROUNDS {
         let group = group(hub, group_id)?;
         let members = members(hub, &group);
         let since_user = since_last_request(hub, lane)?;
-        let mut speakers =
-            if round == 0 { responders(&members, &since_user) } else { cited(&members, &since_user, &asked) };
+        // The rows that waited (a resumed branch) are asked first, whatever the room's mentions say.
+        let queued = match &tree {
+            Some(tree) => tasks::waiting(hub, tree)?,
+            None => vec![],
+        };
+        let mut speakers: Vec<&BotConfig> =
+            queued.iter().filter_map(|id| members.iter().find(|m| &m.id == id)).collect();
+        let resumed_rows = !speakers.is_empty();
+        if !resumed_rows {
+            speakers =
+                if round == 0 { responders(&members, &since_user) } else { cited(&members, &since_user, &asked) };
+        }
         // A bot's `send_to_channel` request asks the members it names, and its lead when it names nobody.
         let channel_request = since_user.first().filter(|e| is_channel_request(e));
-        if round == 0
+        if !resumed_rows
+            && round == 0
             && let Some(request) = channel_request
         {
             speakers = requested(&group, &members, request);
         }
-        if round == 0 && channel_request.is_none() && speakers.len() == members.len() && members.len() > 1 {
+        if !resumed_rows
+            && round == 0
+            && channel_request.is_none()
+            && speakers.len() == members.len()
+            && members.len() > 1
+        {
             let candidates: Vec<crate::chat::decider::BotCandidate> = members
                 .iter()
                 .map(|m| crate::chat::decider::BotCandidate {
@@ -610,11 +659,19 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
             }
         }
         // Each round starts one member later, so the same bot doesn't always speak first.
-        if !speakers.is_empty() {
+        if !resumed_rows && !speakers.is_empty() {
             let offset = round % speakers.len();
             speakers.rotate_left(offset);
         }
         let mut spoke = 0;
+        if let Some(tree) = &tree {
+            // The round's members enter the tree before any of them speaks: Stop can pause them all at once.
+            let planned: Vec<(String, Option<String>)> = speakers
+                .iter()
+                .map(|m| Ok((m.id.clone(), tasks::parent_for(hub, tree, &members, &since_user, &m.id)?)))
+                .collect::<Result<Vec<_>>>()?;
+            tasks::plan(hub, tree, &planned, round)?;
+        }
         for member in &speakers {
             if !hub.groups.current(lane, epoch) {
                 return Ok(());
@@ -626,6 +683,19 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
             if later.contains(&member.id) {
                 continue;
             }
+            // The tree comes first: a stopped branch (or a request that was cancelled or dropped) never speaks.
+            let parent = match &tree {
+                Some(tree) => tasks::parent_for(hub, tree, &members, &since_user, &member.id)?,
+                None => None,
+            };
+            let task = match &tree {
+                Some(tree) => match tasks::next(hub, tree, &member.id, parent.as_deref(), round)? {
+                    tasks::Gate::Start(task) => Some(task),
+                    tasks::Gate::Paused | tasks::Gate::Done => continue,
+                    tasks::Gate::Ended => return Ok(()),
+                },
+                None => None,
+            };
             let (prompt, shown) = ask(hub, &group, &members, member, lane)?;
             asked.insert(member.id.clone(), shown);
             let (reply, answer) = oneshot::channel();
@@ -637,6 +707,7 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
                 epoch,
                 late: busy,
                 reply,
+                task: task.clone(),
                 answers: answers(&since_user),
             };
             if hub.send_cmd(&member.id, Cmd::Group(turn)).is_err() {
@@ -649,24 +720,44 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
                 let data = serde_json::json!({"text": text, "style": NoticeStyle::Info});
                 hub.add_entry(lane, EntryKind::Notice, hub.store.max_turn(group_id), &data);
                 later.push(member.id.clone());
-                tokio::spawn(answer_later(hub.clone(), group_id.to_owned(), (*member).clone(), answer));
+                tokio::spawn(answer_later(hub.clone(), group_id.to_owned(), (*member).clone(), answer, task));
                 continue;
             }
             // A failed, cancelled or overdue member turn counts as a pass; its error shows in the room.
-            if let Ok(Ok(Ok(Some(text)))) = tokio::time::timeout(MEMBER_TIMEOUT, answer).await {
-                spoke += 1;
-                replies += 1;
-                last_reply = Some((member.id.clone(), member.name.clone(), text));
+            match tokio::time::timeout(MEMBER_TIMEOUT, answer).await {
+                Ok(Ok(Ok(Some(text)))) => {
+                    spoke += 1;
+                    replies += 1;
+                    settle(hub, group_id, &task, tasks::Outcome::Spoke);
+                    last_reply = Some((member.id.clone(), member.name.clone(), text));
+                }
+                Ok(Ok(Ok(None))) => settle(hub, group_id, &task, tasks::Outcome::Passed),
+                Ok(Ok(Err(error))) => {
+                    settle(hub, group_id, &task, tasks::Outcome::Failed(&format!("{error:#}")));
+                }
+                // Its turn was dropped (Stop, Cancel or a newer request): the action set the row's state.
+                Ok(Err(_)) | Err(_) => {}
             }
         }
         if spoke == 0 {
             break;
         }
     }
+    if let Some(tree) = &tree {
+        tasks::settled(hub, tree)?;
+    }
     if let Some((from, name, text)) = last_reply {
         alert(hub, group_id, &from, &name, &text)?;
     }
     Ok(())
+}
+
+/// Records how a member's turn came out on the request's tree.
+fn settle(hub: &Hub, group: &str, task: &Option<String>, outcome: tasks::Outcome<'_>) {
+    let Some(task) = task.as_deref() else { return };
+    if let Err(error) = tasks::finish(hub, group, task, outcome) {
+        tracing::warn!(group, error = format!("{error:#}"), "sub-task state not recorded");
+    }
 }
 
 /// A busy member's reply, after the room turn moved on: it alerts like the room's last reply. Dropping the member's
@@ -676,8 +767,23 @@ async fn answer_later(
     group_id: String,
     member: BotConfig,
     answer: oneshot::Receiver<Result<Option<String>>>,
+    task: Option<String>,
 ) {
-    if let Ok(Ok(Some(text))) = answer.await
+    let answer = answer.await;
+    if let Some(task) = task.as_deref() {
+        let outcome = match &answer {
+            Ok(Ok(Some(_))) => Some(tasks::Outcome::Spoke),
+            Ok(Ok(None)) => Some(tasks::Outcome::Passed),
+            // A dropped turn belongs to the action that dropped it; it isn't a failure.
+            Ok(Err(_)) | Err(_) => None,
+        };
+        if let Some(outcome) = outcome
+            && let Err(error) = tasks::finish(&hub, &group_id, task, outcome)
+        {
+            tracing::warn!(group = group_id, error = format!("{error:#}"), "sub-task state not recorded");
+        }
+    }
+    if let Ok(Ok(Some(text))) = answer
         && let Err(error) = alert(&hub, &group_id, &member.id, &member.name, &text)
     {
         tracing::warn!(group = group_id, error = format!("{error:#}"), "late room reply not pushed");
@@ -709,7 +815,7 @@ pub fn refresh(hub: &Hub, turn: &mut GroupTurn, me: &BotConfig) -> Result<()> {
     Ok(())
 }
 
-fn group(hub: &Hub, id: &str) -> Result<BotConfig> {
+pub(super) fn group(hub: &Hub, id: &str) -> Result<BotConfig> {
     Ok(hub.store.bot(id)?.filter(|r| !r.deleted).ok_or_else(|| anyhow!("group deleted"))?.config)
 }
 
@@ -803,12 +909,12 @@ fn cited<'a>(members: &'a [BotConfig], messages: &[Entry], asked: &HashMap<Strin
 }
 
 /// `@all` or `@everyone` in `text`.
-fn names_everyone(text: &str) -> bool {
+pub(super) fn names_everyone(text: &str) -> bool {
     mentions(text, "all") || mentions(text, "everyone")
 }
 
 /// `member` @-mentioned in `text`.
-fn names(text: &str, member: &BotConfig) -> bool {
+pub(super) fn names(text: &str, member: &BotConfig) -> bool {
     handles(&member.name).iter().any(|h| mentions(text, h))
 }
 
@@ -862,6 +968,14 @@ fn member_prompt(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotCo
          never to a question or a request, `to` naming whose newest message (\"user\" or a participant). With \
          nothing to add, a reaction and \"{PASS}\" agrees without a message."
     ));
+    if group.chief_bot_id.as_deref() == Some(me.id.as_str()) {
+        out.push(
+            "You lead this channel. When the user asks you to drop the request it is working on, for example \
+             because a newer one replaces it, call drop_request: its whole run ends, with the running and \
+             queued sub-tasks, and the channel keeps its messages."
+                .into(),
+        );
+    }
     if let Some(memory) = crate::chat::memory::channel::block(hub, group, &me.id)? {
         out.push(memory);
     }
@@ -918,6 +1032,8 @@ pub fn is_pass(text: &str) -> bool {
     t.is_empty() || t == PASS || t == "pass"
 }
 
+#[cfg(test)]
+mod tasks_tests;
 #[cfg(test)]
 mod team_tests;
 #[cfg(test)]
