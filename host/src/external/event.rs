@@ -17,7 +17,10 @@ pub struct Event {
     pub input: Value,
     pub tool_use_id: String,
     pub prompt: String,
-    /// The agent's last reply, on `Stop`.
+    /// `SubagentStart`/`SubagentStop`: the subagent's id (Claude Code's task id) and its type.
+    pub agent_id: String,
+    pub agent_type: String,
+    /// The agent's last reply, on `Stop`, or a subagent's report, on `SubagentStop`.
     pub message: String,
     /// The hook had to cut an edit's text: its line counts cannot be trusted.
     pub truncated: bool,
@@ -56,6 +59,8 @@ impl Event {
             input: payload.get("tool_input").cloned().unwrap_or(Value::Null),
             tool_use_id: text(payload, "tool_use_id"),
             prompt: text(payload, "prompt"),
+            agent_id: text(payload, "agent_id"),
+            agent_type: text(payload, "agent_type"),
             message: text(payload, "last_assistant_message"),
             truncated: payload.get("diffTruncated").and_then(Value::as_bool).unwrap_or(false),
         })

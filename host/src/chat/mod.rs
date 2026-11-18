@@ -35,6 +35,7 @@ pub mod schedule;
 pub mod scratchpad;
 pub mod skill_proposals;
 pub mod skills;
+pub mod subagents;
 pub mod takeover;
 pub mod teach;
 pub mod team;

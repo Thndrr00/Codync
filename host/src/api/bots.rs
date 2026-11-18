@@ -514,6 +514,15 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                     .await??;
             json!({"data": base64::engine::general_purpose::STANDARD.encode(data), "size": size})
         }
+        // Drops a file the user stopped uploading: its partial chunks leave the computer, and the
+        // upload's id can never reach a `send`.
+        "cancelUpload" => {
+            let row = hub.store.bot(str_arg(&b, "botId")?)?.filter(|r| !r.deleted);
+            let root = crate::chat::uploads::root(&row.ok_or_else(|| anyhow!("unknown bot"))?.config);
+            let id = str_arg(&b, "uploadId")?.to_owned();
+            let removed = tokio::task::spawn_blocking(move || crate::chat::uploads::cancel(&root, &id)).await??;
+            json!({"removed": removed})
+        }
         // Messages the person wrote now for later: listed with their times, cancelled by id.
         "scheduledMessages" => {
             let messages: Vec<Value> = hub

@@ -13,6 +13,8 @@ const EVENTS: &[&str] = &[
     "PostToolUse",
     "PostToolUseFailure",
     "PermissionRequest",
+    "SubagentStart",
+    "SubagentStop",
     "Stop",
     "SessionEnd",
 ];
