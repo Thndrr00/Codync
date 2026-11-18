@@ -39,6 +39,18 @@ and a handful of things Codync can hold today.
 - **`@` mentions finding threads by their messages, avatar tooltips in a narrow sidebar, the Guides
   articles**: product surfaces Codync does not have in that shape; each would be its own change.
 
+## From the unreleased nightly (268 commits after `v0.72.0`, no changelog yet)
+
+| Nightly commit | Codync shape |
+| --- | --- |
+| `#11712` a failed routine run gets a reason when the provider sends none | **Taken**: an empty detail now says the agent gave no reason and names the kind of failure from the run's own code (`host/src/routines/runner.rs`). |
+| `#11674` do not report a routine run as failed when the user stopped it | Already here: a stopped or missed run is `Status::Cancelled`, and only `Failed` or `Interrupted` publish a notice (`Routines::publish`). |
+| `#11672` tell the agent that asked when a restart stops a teammate request | Codync's team replies fail with the reason and the sender reads it with `read_replies`; a restart's own wording is part of its recovery path. |
+| `#11484` keep the read-aloud voice from stopping between parts | Written against OpenBot's speech engine; Codync's chunking is its own (`views/call/voice.ts`), so it needs its own pass. |
+| `#10907` routine buttons in one bar under the Active switch | Codync's routine editor has its own layout, already a single bar. |
+
+The remaining commits are provider and page-driver fixes (OpenCode, Azure image limits, Kimi, ChatGPT start, Linux island shape): they live in OpenBot's clients and browser, as recorded in [0.71.0](openbot-0.71.0.md).
+
 ## Checks
 
 Host `cargo fmt --check` (through `rustfmt --check`) is clean on the changed file, and the module has
