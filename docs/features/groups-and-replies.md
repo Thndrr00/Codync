@@ -62,12 +62,36 @@ A bot the user lets **Manage the team** also gets `create_channel` and `update_c
   under Auto it applies at once. Either way a notice in the caller's chat records it.
 - A channel a bot makes records it as `createdBy`, so it can still change it after leaving.
 
+## A bot posts work into a channel (`host/src/chat/group/send.rs`)
+
+A bot can also hand work to a channel from its own chat. Every bot has `send_to_channel` in the
+`codync-chat` MCP server (listed in `host/src/mcp.rs`, dispatched by `chatCall` in
+`host/src/api/bots.rs`):
+
+| Tool | Fields | Notes |
+|---|---|---|
+| `send_to_channel` | `channel` (an id or a name), `request` (at most 8,000 characters), `members?` (ids or names) | Posts the request into the channel as the asking bot's message (`kind: "agent"`, `author`, `final`) and starts a room turn there. The named members answer it; with none, its lead routes it; with no lead, the first member. Returns the channel id. |
+
+- It works only in the bot's own chat: in a channel turn it is refused, with the @-mention to use
+  instead, so a room can't recurse into another room.
+- The channel must be one the bot can see (a member, its creator or its lead), and not archived,
+  through the same `tools::find_channel` check `update_channel` uses; anything else is refused with
+  what to do.
+- Under Ask the post waits on the card `chat::manage::approve` uses (`Send to <channel>`, listing
+  the members asked and the request); under Auto it applies at once. Either way a notice in the
+  caller's chat says where the request went.
+- The room derives the request from the entry (`data.channelRequest {from, members}`):
+  `since_last_request` starts at the last user message or channel request, and `requested` asks the
+  names in `data.channelRequest.members` (or the lead) in the first round instead of everyone.
+  Later rounds and late answers work as usual.
+
 ## How a group answers (`host/src/chat/group.rs`, Grok Bot's design)
 
 - The user's message starts a *room turn* in the group: up to 3 rounds, 10 replies in all.
 - Who answers the first round: the members the user @-mentioned (full name, name without
   spaces, or first word; `@all` / `@everyone`) or replied to, or everyone if none is. A reply to
-  a member's message counts like `@`-mentioning it.
+  a member's message counts like `@`-mentioning it. A request a bot posts with
+  `send_to_channel` asks the members it named, or the channel's lead.
 - Who answers a later round: only the members another member @-mentioned in this room turn
   (a member's `@all` / `@everyone`: all the others) and who haven't spoken or been asked since
   (one that passed after seeing the mention isn't asked again). Nobody named,

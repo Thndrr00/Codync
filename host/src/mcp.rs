@@ -105,6 +105,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::email::tools().as_array().into_iter().flatten().cloned());
                 list.extend(crate::waiting::tools().as_array().into_iter().flatten().cloned());
                 list.extend(crate::meetings::tools().as_array().into_iter().flatten().cloned());
+                list.push(crate::chat::group::send::tool());
             }
             ("codync-chat", crate::chat::outbox::INSTRUCTIONS, tools)
         }
@@ -212,6 +213,10 @@ pub(crate) async fn call(port: u16, token: &str, bot: &str, params: &Value, serv
         Server::Computer => ("computerCall", Duration::from_mins(1)),
         Server::Chat if params["name"] == "review_document" => ("chatCall", crate::documents::REVIEW_TIMEOUT),
         Server::Chat if params["name"] == "research_sources" => ("chatCall", Duration::from_secs(60)),
+        // Posting a request into a channel waits on the same approval card the team changes use.
+        Server::Chat if params["name"] == crate::chat::group::send::TOOL => {
+            ("chatCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(25))
+        }
         Server::Chat => ("chatCall", Duration::from_secs(if params["name"] == "send_file" { 70 } else { 30 })),
         Server::Team => ("teamCall", crate::chat::team::tool_timeout(params["name"].as_str().unwrap_or_default())),
         Server::Manage => ("manageCall", crate::chat::manage::APPROVAL_TIMEOUT + Duration::from_secs(30)),

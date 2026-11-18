@@ -1,8 +1,9 @@
 //! Group chats (Grok Bot's design): several bots and the user in one conversation.
 //!
 //! A group is a roster row (`BotKind::Group`) with a member list and its own
-//! transcript, but no agent. When the user writes, the group runs a *room turn*:
-//! up to [`MAX_ROUNDS`] rounds in which the members answer one at a time, each in
+//! transcript, but no agent. When the user writes, or a bot posts a channel
+//! request with `send_to_channel` (`send`), the group runs a *room turn*: up to
+//! [`MAX_ROUNDS`] rounds in which the members answer one at a time, each in
 //! its **own** session (a member's history is unified across its chats), told
 //! what was said since it last spoke. In the first round everyone answers unless
 //! the user @-mentions someone; later rounds only ask the members another member
@@ -22,6 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::oneshot;
 
+pub mod send;
 pub mod tools;
 
 const MAX_ROUNDS: usize = 3;
@@ -342,7 +344,7 @@ async fn run_smart(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> R
     if members.is_empty() {
         bail!("the group has no members");
     }
-    let since = since_last_user_message(hub, lane)?;
+    let since = since_last_request(hub, lane)?;
     let text = since.first().and_then(|e| e.data["text"].as_str()).unwrap_or_default().to_owned();
     // An @mention is already a direct address.
     let mentioned = responders(&members, &since);
@@ -411,7 +413,7 @@ async fn run_team(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Re
         bail!("the group has no members");
     }
     let lead = lead_of(&group, &members).ok_or_else(|| anyhow!("the group has no lead"))?;
-    let since_user = since_last_user_message(hub, lane)?;
+    let since_user = since_last_request(hub, lane)?;
     // A person who names one member talks to that member, not to the team's voice.
     let responders = responders(&members, &since_user);
     if responders.len() == 1 && responders[0].id != lead.id {
@@ -451,7 +453,7 @@ async fn ask_once(
     if busy_elsewhere(hub, &member.id, lane) {
         return Ok(None);
     }
-    let since_user = since_last_user_message(hub, lane)?;
+    let since_user = since_last_request(hub, lane)?;
     let (reply, answer) = oneshot::channel();
     let turn =
         GroupTurn { lane: lane.clone(), prompt, shown, epoch, late: false, reply, answers: answers(&since_user) };
@@ -466,7 +468,7 @@ async fn ask_once(
 
 /// Members the lead named in its answer, in mention order, without the lead.
 fn hand_raisers(hub: &Hub, members: &[BotConfig], lead: &BotConfig, lane: &Lane) -> Result<Vec<BotConfig>> {
-    let since = since_last_user_message(hub, lane)?;
+    let since = since_last_request(hub, lane)?;
     let mut out: Vec<BotConfig> = vec![];
     for entry in since.iter().rev() {
         if entry.kind != EntryKind::Agent.as_str() || entry.data["author"].as_str() != Some(lead.id.as_str()) {
@@ -564,10 +566,17 @@ async fn run(hub: &Arc<Hub>, group_id: &str, lane: &Lane, epoch: u64) -> Result<
     'rounds: for round in 0..MAX_ROUNDS {
         let group = group(hub, group_id)?;
         let members = members(hub, &group);
-        let since_user = since_last_user_message(hub, lane)?;
+        let since_user = since_last_request(hub, lane)?;
         let mut speakers =
             if round == 0 { responders(&members, &since_user) } else { cited(&members, &since_user, &asked) };
-        if round == 0 && speakers.len() == members.len() && members.len() > 1 {
+        // A bot's `send_to_channel` request asks the members it names, and its lead when it names nobody.
+        let channel_request = since_user.first().filter(|e| is_channel_request(e));
+        if round == 0
+            && let Some(request) = channel_request
+        {
+            speakers = requested(&group, &members, request);
+        }
+        if round == 0 && channel_request.is_none() && speakers.len() == members.len() && members.len() > 1 {
             let candidates: Vec<crate::chat::decider::BotCandidate> = members
                 .iter()
                 .map(|m| crate::chat::decider::BotCandidate {
@@ -696,7 +705,7 @@ pub fn refresh(hub: &Hub, turn: &mut GroupTurn, me: &BotConfig) -> Result<()> {
         bail!("no longer in the group");
     }
     (turn.prompt, turn.shown) = ask(hub, &group, &members(hub, &group), me, &turn.lane)?;
-    turn.answers = answers(&since_last_user_message(hub, &turn.lane)?);
+    turn.answers = answers(&since_last_request(hub, &turn.lane)?);
     Ok(())
 }
 
@@ -710,7 +719,7 @@ fn ask(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotConfig, lane
     Ok((member_prompt(hub, group, members, me, lane)?, shown))
 }
 
-fn members(hub: &Hub, group: &BotConfig) -> Vec<BotConfig> {
+pub(super) fn members(hub: &Hub, group: &BotConfig) -> Vec<BotConfig> {
     group
         .members
         .iter()
@@ -720,16 +729,42 @@ fn members(hub: &Hub, group: &BotConfig) -> Vec<BotConfig> {
         .collect()
 }
 
-/// The lane's messages since the user last wrote there, that message included.
-fn since_last_user_message(hub: &Hub, lane: &Lane) -> Result<Vec<Entry>> {
+/// The lane's messages since the user last wrote there or a bot posted a channel request, that message included.
+fn since_last_request(hub: &Hub, lane: &Lane) -> Result<Vec<Entry>> {
     let recent = hub.store.messages_after(lane, 0, HISTORY_LINES)?;
-    let start = recent.iter().rposition(|e| e.kind == EntryKind::User.as_str()).unwrap_or(0);
+    let start = recent.iter().rposition(|e| e.kind == EntryKind::User.as_str() || is_channel_request(e)).unwrap_or(0);
     Ok(recent[start..].to_vec())
 }
 
-/// The user's message a room turn answers: the first of `since` (see [`since_last_user_message`]).
+/// The message a room turn answers: the first of `since` (see [`since_last_request`]).
 fn answers(since: &[Entry]) -> Vec<String> {
-    since.first().filter(|e| e.kind == EntryKind::User.as_str()).map(|e| e.id.clone()).into_iter().collect()
+    since
+        .first()
+        .filter(|e| e.kind == EntryKind::User.as_str() || is_channel_request(e))
+        .map(|e| e.id.clone())
+        .into_iter()
+        .collect()
+}
+
+/// A bot's `send_to_channel` request in the room (`chat::group::send`): the room shows it as that bot's message,
+/// and it starts a room turn like the user's own request.
+pub fn is_channel_request(entry: &Entry) -> bool {
+    entry.kind == EntryKind::Agent.as_str() && entry.data["channelRequest"].is_object()
+}
+
+/// Who a channel request asks in its first round: the members it names, or its lead when it names nobody.
+fn requested<'a>(group: &BotConfig, members: &'a [BotConfig], request: &Entry) -> Vec<&'a BotConfig> {
+    let ids: Vec<&str> = request.data["channelRequest"]["members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    if ids.is_empty() {
+        let lead = group.chief_bot_id.as_deref().or_else(|| group.members.first().map(String::as_str));
+        return members.iter().filter(|member| Some(member.id.as_str()) == lead).collect();
+    }
+    ids.iter().filter_map(|id| members.iter().find(|member| member.id == *id)).collect()
 }
 
 /// Who answers the user: the members @-mentioned or replied to since the user's last message, or

@@ -178,7 +178,7 @@ async fn update(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
 }
 
 /// The channel `key` names (its id, or its name, case aside) when `source` can see it.
-fn find_channel(hub: &Hub, source: &BotConfig, key: &str) -> Result<BotConfig> {
+pub(super) fn find_channel(hub: &Hub, source: &BotConfig, key: &str) -> Result<BotConfig> {
     let groups: Vec<BotConfig> =
         hub.store.bots()?.into_iter().filter(|r| !r.deleted && r.config.is_group()).map(|r| r.config).collect();
     let wanted = key.to_lowercase();

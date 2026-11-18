@@ -140,6 +140,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::waiting::tool_call(&hub.store, name)?
             } else if name == "meeting_notes" || name == "read_meeting_note" {
                 crate::meetings::tool_call(&hub.store, name, arguments)?
+            } else if name == crate::chat::group::send::TOOL {
+                crate::chat::group::send::call(hub, bot, arguments).await?
             } else {
                 crate::chat::outbox::call(hub, bot, name, arguments).await?
             };
