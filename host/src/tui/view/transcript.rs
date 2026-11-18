@@ -19,6 +19,9 @@ pub(super) struct Built {
     pub(super) buttons: Vec<(usize, u16, u16, Click)>,
     /// Each message's (entry id, first line, end line), for picking one to reply to.
     pub(super) messages: Vec<(String, usize, usize)>,
+    /// Each subagents card: its id, whether one of its subagents still works, its first and end
+    /// line, and the line its header shows under the chat header while it is out of view.
+    pub(super) subagents: Vec<(String, bool, usize, usize, Line<'static>)>,
 }
 
 struct TurnInfo {
@@ -62,7 +65,7 @@ pub(super) fn name_style(color: &str) -> Style {
 
 pub(super) fn build_chat(app: &App, b: &Bot, width: usize) -> Built {
     let t = theme();
-    let mut out = Built { lines: vec![], buttons: vec![], messages: vec![] };
+    let mut out = Built { lines: vec![], buttons: vec![], messages: vec![], subagents: vec![] };
     let entries = app.lane(&b.id);
     let info = turn_info(&entries);
     if entries.is_empty() {
@@ -229,6 +232,7 @@ fn entry_lines(out: &mut Built, app: &App, b: &Bot, e: &Entry, info: &HashMap<i6
                 )));
             }
         }
+        Kind::Subagents => super::subagents::card(out, e, width),
         Kind::Permission => {
             gap(out);
             if e.pending() {

@@ -22,6 +22,27 @@ pub enum Msg {
     Rewind,
     /// A setup terminal's output or exit.
     Term(String, Value),
+    /// A draft file's upload: bytes the computer has so far.
+    Upload {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+        sent: u64,
+        total: u64,
+    },
+    /// The computer has the whole file; `id` names it in `send`.
+    Uploaded {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+    },
+    /// The upload stopped: the reason states it (the user cancelled it, or the link failed).
+    UploadFailed {
+        key: String,
+        path: std::path::PathBuf,
+        id: String,
+        error: String,
+    },
 }
 
 /// What to do with a command's reply.
@@ -114,6 +135,8 @@ pub enum Kind {
     Plan,
     Permission,
     Notice,
+    /// The subagents an agent started in one turn (`chat::subagents`).
+    Subagents,
     Other,
 }
 
@@ -140,6 +163,7 @@ impl Entry {
             "plan" => Kind::Plan,
             "permission" => Kind::Permission,
             "notice" => Kind::Notice,
+            "subagents" => Kind::Subagents,
             _ => Kind::Other,
         };
         Some((
@@ -278,7 +302,16 @@ mod tests {
 
     #[test]
     fn internal_activity_is_not_a_message_step_approval_or_reply_target() {
-        for kind in [Kind::User, Kind::Agent, Kind::Thought, Kind::Tool, Kind::Plan, Kind::Permission, Kind::Notice] {
+        for kind in [
+            Kind::User,
+            Kind::Agent,
+            Kind::Thought,
+            Kind::Tool,
+            Kind::Plan,
+            Kind::Permission,
+            Kind::Notice,
+            Kind::Subagents,
+        ] {
             let entry = Entry {
                 id: "internal".into(),
                 seq: 1,
@@ -293,6 +326,18 @@ mod tests {
             assert!(!entry.takes_reply());
             assert!(!entry.pending());
         }
+    }
+
+    #[test]
+    fn a_subagents_entry_parses_as_its_card() {
+        let (bot, e) = Entry::parse(&json!({
+            "id": "s", "botId": "b", "seq": 1, "turn": 1, "kind": "subagents",
+            "data": {"subagents": [{"id": "t1", "task": "Read the tests", "state": "running", "startedAt": 1_000}]},
+        }))
+        .expect("a subagents entry parses");
+        assert_eq!(bot, "b");
+        assert_eq!(e.kind, Kind::Subagents);
+        assert!(!e.is_message() && !e.is_working_step() && !e.takes_reply());
     }
 
     #[test]

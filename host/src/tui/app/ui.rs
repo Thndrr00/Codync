@@ -454,6 +454,8 @@ pub enum Click {
     Steps,
     /// A bot-message row (entry id): opens the conversation.
     BotChat(String),
+    /// The docked subagent header (its card's entry id): scrolls the chat back to the card.
+    Subagents(String),
 }
 
 #[derive(Default)]

@@ -492,7 +492,9 @@ impl Actor {
         if self.subagents.is_empty() {
             return;
         }
-        let data = self.subagents.data();
+        let mut data = self.subagents.data();
+        // The card updates replace the entry's data: say again whose turn it is.
+        data["author"] = self.cfg.id.clone().into();
         match self.subagents.entry().map(str::to_owned) {
             Some(id) if self.hub.store.entry(&id).is_some() => self.hub.set_entry(&id, &data),
             _ => {

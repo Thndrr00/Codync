@@ -33,6 +33,7 @@ impl App {
                 self.entries.clear();
                 self.history_done.clear();
                 self.floors.clear();
+                self.uploads.clear();
             }
             Msg::Connected { since } => {
                 self.stream_since = since;
@@ -49,6 +50,34 @@ impl App {
                 }
             }
             Msg::Term(id, v) => self.on_term(&id, &v),
+            Msg::Upload { key, path, id, sent, total } => {
+                self.on_upload(&key, &path, |upload| {
+                    if upload.id == id && upload.state == super::uploads::UploadState::Uploading {
+                        upload.sent = sent;
+                        upload.total = total;
+                    }
+                });
+            }
+            Msg::Uploaded { key, path, id } => {
+                self.on_upload(&key, &path, |upload| {
+                    if upload.id == id {
+                        upload.sent = upload.total;
+                        upload.state = super::uploads::UploadState::Done;
+                    }
+                });
+            }
+            Msg::UploadFailed { key, path, id, error } => {
+                let reason = error.clone();
+                let marked = self.on_upload(&key, &path, |upload| {
+                    // A cancel the person made keeps its own state.
+                    if upload.id == id && upload.state == super::uploads::UploadState::Uploading {
+                        upload.state = super::uploads::UploadState::Failed(error);
+                    }
+                });
+                if marked && !reason.is_empty() {
+                    self.flash(&format!("Upload failed: {reason} · ctrl+r retries, ⌫ removes it"));
+                }
+            }
         }
     }
 
@@ -112,6 +141,7 @@ impl App {
             self.floors.remove(id);
             self.drafts.remove(id);
             self.files.remove(id);
+            self.uploads.remove(id);
             if self.selected.as_deref() == Some(id) {
                 self.selected = None;
                 self.reply = None;
@@ -363,6 +393,7 @@ impl App {
                 {
                     self.drafts.remove(key);
                     self.files.remove(key);
+                    self.uploads.remove(key);
                     self.pasted.remove(key);
                 }
                 self.sends.remove(key);

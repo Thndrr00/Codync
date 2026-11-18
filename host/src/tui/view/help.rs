@@ -10,7 +10,7 @@ use super::buffer::{centered, frame_box, put, u};
 use super::overlay::field_line;
 use super::style::theme;
 
-const HELP: [(&str, &str, &str); 74] = [
+const HELP: [(&str, &str, &str); 75] = [
     ("MOVE", "j k  ↑ ↓", "next / previous bot"),
     ("MOVE", "[ ]", "previous / next bot"),
     ("MOVE", "1…9", "jump to bot 1–9"),
@@ -50,6 +50,7 @@ const HELP: [(&str, &str, &str); 74] = [
     ("CHAT", "esc", "cancel the reply"),
     ("TYPE", "↵", "send"),
     ("TYPE", "⇧↵ alt↵ ^j", "new line"),
+    ("TYPE", "^x ^r", "cancel upload · retry a failed file"),
     ("TYPE", "esc", "back to NAV"),
     ("TYPE", "^c", "clear the message"),
     ("TYPE", "^a ^e", "line start / end"),
