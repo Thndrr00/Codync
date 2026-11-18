@@ -2,14 +2,27 @@
 
 use crate::LockExt;
 use anyhow::{Result, bail};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 use super::MAX_PENDING_MESSAGES;
 
 const MAX_REQUEST_HOPS: u8 = 8;
 pub(super) const MAX_PENDING_MESSAGES_PER_SENDER: usize = 16;
+
+/// A note with the same text to the same bot within this long is a loop (agentes.chat ADR 0048,
+/// `NOTE_DEDUPE_MS` in `packages/engine/src/consultations.ts`).
+const NOTE_DEDUPE: Duration = Duration::from_secs(60 * 60);
+const MAX_TRACKED_NOTES: usize = 64;
+
+/// A note's text as compared for repeats: case, spacing and trailing punctuation don't count.
+/// The original also strips accents with Unicode NFD; keeping the plain form is enough here and
+/// avoids a normalizer dependency in the host.
+pub(super) fn normalize_note(text: &str) -> String {
+    text.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ").trim_end_matches(['.', '!', '?']).to_owned()
+}
 
 /// Deferred messages use capacity and hop limits; synchronous asks also reserve a wait-graph edge.
 #[derive(Default)]
@@ -39,9 +52,35 @@ pub(super) struct RequestState {
     pub(super) pending: HashMap<String, Request>,
     pub(super) messages: usize,
     pub(super) messages_by_sender: HashMap<String, usize>,
+    /// Recent notes by (sender, recipient), newest last: normalized text and when it was sent.
+    pub(super) notes: HashMap<(String, String), VecDeque<(String, Instant)>>,
 }
 
 impl Requests {
+    /// Whether this bot already sent that note to that recipient in the last hour (agentes.chat
+    /// ADR 0048). Called before sending; a note that fails to get out is remembered only if it works.
+    pub(super) fn note_is_repeat(&self, from: &str, to: &str, text: &str) -> bool {
+        let normalized = normalize_note(text);
+        let mut state = self.0.locked();
+        let now = Instant::now();
+        let notes = state.notes.entry((from.to_owned(), to.to_owned())).or_default();
+        notes.retain(|(_, at)| now.duration_since(*at) < NOTE_DEDUPE);
+        notes.iter().any(|(note, _)| note == &normalized)
+    }
+
+    /// Remembers a note that was sent, keeping the list bounded and pruned of old ones.
+    pub(super) fn remember_note(&self, from: &str, to: &str, text: &str) {
+        let normalized = normalize_note(text);
+        let mut state = self.0.locked();
+        let now = Instant::now();
+        let notes = state.notes.entry((from.to_owned(), to.to_owned())).or_default();
+        notes.retain(|(_, at)| now.duration_since(*at) < NOTE_DEDUPE);
+        notes.push_back((normalized, now));
+        while notes.len() > MAX_TRACKED_NOTES {
+            notes.pop_front();
+        }
+    }
+
     pub(super) fn reserve_message(&self, from: &str) -> Result<u8> {
         let mut state = self.0.locked();
         let hops = state.next_hop(from)?;
@@ -278,5 +317,20 @@ mod tests {
             requests.release_message("a");
         }
         assert!(requests.0.locked().messages_by_sender.is_empty());
+    }
+
+    #[test]
+    fn a_repeated_note_to_the_same_bot_is_a_loop_but_a_different_one_is_not() {
+        assert_eq!(normalize_note("  Please   review the diff.  "), "please review the diff");
+        assert_eq!(normalize_note("Please review the diff!"), "please review the diff");
+
+        let requests = Requests::default();
+        assert!(!requests.note_is_repeat("a", "b", "Please review the diff."));
+        requests.remember_note("a", "b", "Please review the diff.");
+        assert!(requests.note_is_repeat("a", "b", "please review the diff!"));
+        // The same text to another bot, or from another bot, isn't a repeat.
+        assert!(!requests.note_is_repeat("a", "c", "Please review the diff."));
+        assert!(!requests.note_is_repeat("c", "b", "Please review the diff."));
+        assert!(!requests.note_is_repeat("a", "b", "Something else"));
     }
 }

@@ -404,10 +404,18 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
         }
         "message_bot" => {
             let (to, message) = message_args(args)?;
-            match hub.network.recipient(to)? {
+            // A note already sent to this bot in the last hour is a loop (agentes.chat ADR 0048).
+            if hub.team.note_is_repeat(from, to, message) {
+                bail!("the same note was already sent to {to} in the last hour");
+            }
+            let sent = match hub.network.recipient(to)? {
                 Recipient::There(target) => remote::message(hub, &visible_bot(hub, from)?, &target, message).await,
                 Recipient::Here(_) => call(hub, from, name, args),
+            };
+            if sent.is_ok() {
+                hub.team.remember_note(from, to, message);
             }
+            sent
         }
         "ask_member" => {
             let source = visible_bot(hub, from)?;

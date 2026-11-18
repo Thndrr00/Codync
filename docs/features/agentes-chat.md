@@ -31,6 +31,7 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | A12 A run at the token limit | Holds (`wait`) or skips per the routine's `limit_policy`; test runs are exempt | `routines/runner.rs` |
 | Search over what a bot knows | One index, two kinds (message, document), keys masked, internal entries out, resumable backfill | `store/search.rs`, `chat/recall.rs` |
 | A person waiting goes first (ADR 0046) | A bot's queue keeps the three urgency levels (person, agent, background) and inserts a new turn ahead of lower ones, stable within a level; a burst of routines never overtakes a person's message | `agent/bot/cmd.rs`, `agent/bot/queue.rs` |
+| Notes don't loop (ADR 0048) | `message_bot` drops a note whose normalized text was already sent to the same bot in the last hour; only notes that got out are remembered | `chat/team/requests.rs`, `chat/team.rs` |
 
 ## Not taken
 
