@@ -1,3 +1,4 @@
+import CryptoKit
 import ImageIO
 import SwiftUI
 import UIKit
@@ -332,10 +333,12 @@ public struct GroupAvatar: View {
     /// The picture's data URL as an image; one that no longer decodes falls back to the members' faces.
     /// Decoded once per URL, like a custom icon, and never past 1024 pixels: the roster redraws its rows as it scrolls.
     @MainActor private static func image(_ photo: String) -> UIImage? {
-        if let cached = decoded.object(forKey: photo as NSString) { return cached }
         guard let comma = photo.firstIndex(of: ","),
-              let data = Data(base64Encoded: String(photo[photo.index(after: comma)...])),
-              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+              let data = Data(base64Encoded: String(photo[photo.index(after: comma)...])) else { return nil }
+        // The digest keys the cache, so a 400 KB data URL isn't held in memory for every picture.
+        let key = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() as NSString
+        if let cached = decoded.object(forKey: key) { return cached }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
@@ -343,7 +346,7 @@ public struct GroupAvatar: View {
         ]
         guard let bitmap = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         let image = UIImage(cgImage: bitmap)
-        decoded.setObject(image, forKey: photo as NSString, cost: Int(image.size.width * image.size.height) * 4)
+        decoded.setObject(image, forKey: key, cost: Int(image.size.width * image.size.height) * 4)
         return image
     }
 
