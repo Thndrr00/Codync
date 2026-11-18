@@ -108,3 +108,30 @@ pub(super) enum Queued {
     },
     Group(GroupTurn),
 }
+
+impl Queued {
+    /// A person waiting goes first (agentes.chat ADR 0046, adapted to this per-bot queue):
+    /// 0 for a person's turn, 1 for work another agent asked for, 2 for background work.
+    pub(super) fn priority(&self) -> u8 {
+        match self {
+            Queued::User { .. } | Queued::Group(_) => 0,
+            Queued::BotRequest(_) | Queued::BotReply(_) | Queued::Prompt { .. } => 1,
+            Queued::Routine(_) | Queued::Compact { .. } => 2,
+        }
+    }
+}
+
+#[cfg(test)]
+mod priority_tests {
+    use super::*;
+
+    #[test]
+    fn a_person_goes_before_an_agent_and_background_work() {
+        let user =
+            Queued::User { lane: Lane::main("b"), entry_id: "e".into(), text: "hi".into(), queued_at: Instant::now() };
+        assert_eq!(user.priority(), 0);
+        assert_eq!(Queued::Prompt { text: "x".into(), call: None }.priority(), 1);
+        assert_eq!(Queued::Compact { idle: false }.priority(), 2);
+        assert_eq!(Queued::Routine("r".into()).priority(), 2);
+    }
+}

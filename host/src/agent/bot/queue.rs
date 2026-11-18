@@ -8,8 +8,16 @@ use crate::market::agent_sign_in;
 use crate::store::{Lane, now_ms};
 use anyhow::{Result, anyhow};
 use serde_json::json;
+use std::collections::VecDeque;
 use std::time::Instant;
 use tokio::sync::mpsc;
+
+/// Inserts before the first item of lower urgency, keeping arrival order within a level.
+pub(super) fn insert_ordered(queue: &mut VecDeque<Queued>, item: Queued) {
+    let priority = item.priority();
+    let at = queue.iter().position(|q| q.priority() > priority).unwrap_or(queue.len());
+    queue.insert(at, item);
+}
 
 impl Actor {
     pub(super) async fn on_cmd(&mut self, cmd: Cmd, done_tx: &mpsc::UnboundedSender<Done>) -> bool {
@@ -140,9 +148,11 @@ impl Actor {
         true
     }
 
-    /// Queues `item`, and starts it right away when the bot is free (and no takeover holds it).
+    /// Queues `item` and starts it right away when the bot is free (and no takeover holds it).
+    /// A person's turn is inserted ahead of agent work and background work (agentes.chat ADR 0046);
+    /// within one level the arrival order is kept, so a burst of routines never overtakes a message.
     async fn enqueue(&mut self, item: Queued, done_tx: &mpsc::UnboundedSender<Done>) {
-        self.queue.push_back(item);
+        insert_ordered(&mut self.queue, item);
         if self.turn.is_none() {
             self.next_in_queue(done_tx).await;
         }
@@ -165,7 +175,7 @@ impl Actor {
         // told this member answers there once free, and only the group's Stop drops it.
         for queued in std::mem::take(&mut self.queue) {
             match queued {
-                Queued::Group(turn) if turn.late => self.queue.push_back(Queued::Group(turn)),
+                Queued::Group(turn) if turn.late => insert_ordered(&mut self.queue, Queued::Group(turn)),
                 Queued::User { entry_id, .. } => {
                     if let Some(mut e) = self.hub.store.entry(&entry_id) {
                         e.data["status"] = "cancelled".into();
@@ -583,5 +593,42 @@ impl Actor {
         if let Err(error) = self.hub.store.set_turn_marker(&self.cfg.id, &value, sources.as_ref()) {
             tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "couldn't record the running turn");
         }
+    }
+}
+
+#[cfg(test)]
+mod priority_tests {
+    use super::*;
+
+    fn prompt(text: &str) -> Queued {
+        Queued::Prompt { text: text.into(), call: None }
+    }
+
+    fn user(id: &str) -> Queued {
+        Queued::User { lane: Lane::main("b"), entry_id: id.into(), text: "hi".into(), queued_at: Instant::now() }
+    }
+
+    fn labels(queue: &VecDeque<Queued>) -> Vec<String> {
+        queue
+            .iter()
+            .map(|item| match item {
+                Queued::User { entry_id, .. } => format!("user:{entry_id}"),
+                Queued::Prompt { text, .. } => format!("prompt:{text}"),
+                Queued::Routine(id) => format!("routine:{id}"),
+                Queued::Compact { .. } => "compact".into(),
+                _ => "other".into(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_person_waiting_goes_first_and_the_arrival_order_inside_a_level_stays() {
+        let mut queue = VecDeque::new();
+        insert_ordered(&mut queue, Queued::Routine("r".into()));
+        insert_ordered(&mut queue, prompt("agent"));
+        insert_ordered(&mut queue, user("u2"));
+        insert_ordered(&mut queue, Queued::Compact { idle: false });
+        insert_ordered(&mut queue, user("u1"));
+        assert_eq!(labels(&queue), ["user:u2", "user:u1", "prompt:agent", "routine:r", "compact"]);
     }
 }
