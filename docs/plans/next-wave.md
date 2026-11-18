@@ -78,7 +78,7 @@ is bigger than one release.
 | CopilotKit/OpenBot connector catalogue | done: reviewed apps ahead of the nightly list, installed by a host bridge |
 | OpenBot channel title and archive | done (desktop, iPhone, Android and terminal); picture on desktop, iPhone and Android |
 | OpenBot channel memory (`channel_remember`, keep memories) | done (host; editor list on desktop, iPhone, Android and terminal) |
-| OpenBot channel sub-tasks and drop | done (host; desktop and Android; iPhone and terminal next) |
+| OpenBot channel sub-tasks and drop | done (host; desktop, iPhone, Android and terminal) |
 | OpenBot channel tools (`create_channel`, `update_channel`) | done (host; Manage the team, Ask approval) |
 | OpenBot `send_to_channel` | done (host; bots post work into a channel) |
 | WhatsApp pairing codes, photos and person facts | done (host; sheet on desktop and Android) |
