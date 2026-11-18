@@ -444,6 +444,12 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
         <CardSection title="Activity">
           <SwitchRow title="Notifications" detail="Get notified when this bot finishes or needs you" on={draft.notify ?? true} onChange={(on) => set('notify', on)} />
           <SwitchRow
+            title="Learn skills on its own"
+            detail="After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens."
+            on={draft.learnSkills ?? false}
+            onChange={(on) => set('learnSkills', on)}
+          />
+          <SwitchRow
             title="Chief of Staff (Coordinator)"
             detail="Supervises stalled or failing bots in teams and groups, with automatic triage and up to 2 retries per incident."
             on={draft.isChief ?? false}

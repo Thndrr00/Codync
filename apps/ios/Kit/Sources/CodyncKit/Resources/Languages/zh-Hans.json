@@ -843,6 +843,8 @@
   "Nothing yet. Claude Code's notes show up here once it saves some.": "还没有。Claude Code 存了笔记之后，会显示在这里。",
   "Nothing yet. What this bot learns about you shows up here.": "还没有。这个 Bot 了解到的关于你会显示在这里。",
   "Notifications": "通知",
+"Learn skills on its own": "Learn skills on its own",
+"After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.": "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
   "Nova by Compass AI - a fully-fledged software engineer at your command": "Compass AI 的 Nova，一位听你调遣的软件工程师",
   "OK": "好",
   "Off": "关",

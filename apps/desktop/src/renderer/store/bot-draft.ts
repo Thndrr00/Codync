@@ -7,7 +7,7 @@ export function updatePayload(bot: Bot): BotDraft {
     avatarLook: bot.avatarLook ?? null, actionRules: bot.actionRules ?? {}, proactive: bot.proactive,
     backend: bot.backend, command: bot.command ?? null, cwd: bot.managedWorkspace ? '' : bot.cwd, permission: bot.permission,
     model: bot.model ?? null, pinned: bot.pinned, hidden: bot.hidden, notify: bot.notify ?? null,
-    connectors: bot.connectors, skills: bot.skills, computer: bot.computer, computerPermissions: bot.computerPermissions, fastMode: bot.fastMode,
+    connectors: bot.connectors, skills: bot.skills, computer: bot.computer, computerPermissions: bot.computerPermissions, fastMode: bot.fastMode, learnSkills: bot.learnSkills,
     isChief: bot.isChief, chiefBotId: bot.chiefBotId ?? null,
   }
 }

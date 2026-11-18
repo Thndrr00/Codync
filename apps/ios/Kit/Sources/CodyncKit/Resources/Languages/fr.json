@@ -843,6 +843,8 @@
   "Nothing yet. Claude Code's notes show up here once it saves some.": "Rien pour le moment. Les notes de Claude Code apparaîtront ici après leur enregistrement.",
   "Nothing yet. What this bot learns about you shows up here.": "Rien pour le moment. Ce que ce bot apprend sur vous apparaît ici.",
   "Notifications": "Notifications",
+"Learn skills on its own": "Learn skills on its own",
+"After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.": "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
   "Nova by Compass AI - a fully-fledged software engineer at your command": "Nova by Compass AI - un ingénieur logiciel à part entière à votre service",
   "OK": "OK",
   "Off": "Désactivé",

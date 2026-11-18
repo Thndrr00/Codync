@@ -58,6 +58,8 @@ export interface Bot {
   modelOptions: Record<string, string>
   /** The agent's Fast mode (Claude Code, Codex): faster replies for more usage. */
   fastMode: boolean
+  /** The bot learns skills by itself from its background review (learnSkills on the wire). */
+  learnSkills: boolean
   /** What the agent says about Fast mode: `unknown` (no session yet), `offered`, `unsupported`,
    *  or `refused` (it turned it off; `fastModeIssue` says why). */
   fastModeSupport: string
@@ -161,6 +163,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     model: raw.model ?? null,
     modelOptions: raw.modelOptions ?? {},
     fastMode: raw.fastMode ?? false,
+    learnSkills: raw.learnSkills ?? false,
     fastModeSupport: raw.fastModeSupport ?? 'unknown',
     fastModeIssue: raw.fastModeIssue ?? null,
     account: raw.account ?? null,
@@ -947,6 +950,8 @@ export interface BotDraft {
   pinned?: boolean
   hidden?: boolean
   notify?: boolean | null
+  /** Turned on, the bot learns skills from its background review. */
+  learnSkills?: boolean
   connectors?: string[]
   skills?: string[]
   computer?: boolean

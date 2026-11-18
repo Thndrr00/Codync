@@ -843,6 +843,8 @@
   "Nothing yet. Claude Code's notes show up here once it saves some.": "아직 없습니다. Claude Code가 메모를 저장하면 여기에 표시됩니다.",
   "Nothing yet. What this bot learns about you shows up here.": "아직 없습니다. 이 봇이 나에 대해 배운 내용이 여기에 표시됩니다.",
   "Notifications": "알림",
+"Learn skills on its own": "Learn skills on its own",
+"After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.": "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
   "Nova by Compass AI - a fully-fledged software engineer at your command": "Nova by Compass AI - 귀하의 명령에 맞는 완전한 소프트웨어 엔지니어",
   "OK": "확인",
   "Off": "꺼짐",

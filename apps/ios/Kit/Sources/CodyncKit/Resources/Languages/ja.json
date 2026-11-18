@@ -843,6 +843,8 @@
   "Nothing yet. Claude Code's notes show up here once it saves some.": "まだ何もありません。 Claude Code's notes show up here once it saves some.",
   "Nothing yet. What this bot learns about you shows up here.": "まだ何もありません。このボットがあなたについて学習した内容がここに表示されます。",
   "Notifications": "通知",
+"Learn skills on its own": "Learn skills on its own",
+"After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.": "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
   "Nova by Compass AI - a fully-fledged software engineer at your command": "Nova by Compass AI - 本格的なソフトウェア エンジニアを思いのままに",
   "OK": "OK",
   "Off": "オフ",
