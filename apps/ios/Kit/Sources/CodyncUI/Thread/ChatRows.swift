@@ -123,15 +123,16 @@ struct ForwardedLine: View {
 
     var body: some View {
         if let author = forwarded.author, !author.isEmpty {
+            let line = "\(L10n.tr("Forwarded from")) \(author)"
             Label {
-                Text("\(L10n.tr("Forwarded from")) \(author)").lineLimit(1)
+                Text(verbatim: line).lineLimit(1)
             } icon: {
                 Image(systemName: "arrowshape.turn.up.right")
             }
             .font(.caption)
             .foregroundStyle(Palette.secondary)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(L10n.tr("Forwarded from")) \(author)")
+            .accessibilityLabel(Text(verbatim: line))
         }
     }
 }
