@@ -66,6 +66,11 @@ test('a kept handoff leaves no line; a fresh conversation does', () => {
   assert.equal(isChat(notice('draft')), true)
 })
 
+test("a turn's subagent card is a chat line", () => {
+  const card = { id: 's', botId: 'b', kind: 'subagents', rev: 1, turn: 1, createdAt: 0, data: { subagents: [] } } as Entry
+  assert.equal(isChat(card), true)
+})
+
 const message = (kind: string, data: Entry['data'], id = 'e1'): Entry => ({ id, seq: 1, botId: 'b', rev: 1, kind, turn: 1, createdAt: 0, updatedAt: 0, data })
 
 test('the user and final bot replies can be quoted, once the computer has them', () => {

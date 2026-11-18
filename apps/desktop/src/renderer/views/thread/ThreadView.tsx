@@ -28,6 +28,8 @@ import { RoutineNotice } from './RoutineNotice'
 import { Composer } from './Composer'
 import { GroupTasks } from './GroupTasks'
 import { ChatSidePanel } from './ChatSidePanel'
+import { activeSubagentCard } from './subagent-card'
+import { SubagentDock } from './Subagents'
 import { DetailsPanel, type DetailsTab } from './DetailsPanel'
 import { useNewMessageCount } from './new-message-counter'
 import { TraceView } from './TraceView'
@@ -408,6 +410,36 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
   const arrivals = useArrivals([...items.map((i) => i.id), ...(live ? ['working'] : [])], following)
   const newCount = useNewMessageCount(items.map((i) => i.id), following)
 
+  /** The newest turn whose subagents still work; its header hangs under the chat header while out of view. */
+  const subagentCard = useMemo(() => activeSubagentCard(entries), [entries])
+  const [dockAway, setDockAway] = useState(false)
+  const updateDock = useCallback(() => {
+    const box = scroller.current
+    const id = subagentCard?.id
+    if (!box || !id) {
+      setDockAway(false)
+      return
+    }
+    const header = box.querySelector<HTMLElement>(`[data-entry-id="${id}"] .subagent-card-header`)
+    if (!header) {
+      setDockAway(false)
+      return
+    }
+    const view = box.getBoundingClientRect()
+    const place = header.getBoundingClientRect()
+    setDockAway(place.bottom <= view.top || place.top >= view.bottom)
+  }, [subagentCard?.id])
+  useEffect(() => {
+    updateDock()
+  }, [updateDock, subagentCard?.rev, subagentCard?.updatedAt, following, items.length])
+  const revealSubagents = () => {
+    const id = subagentCard?.id
+    const target = id ? scroller.current?.querySelector<HTMLElement>(`[data-entry-id="${id}"]`) : null
+    if (!target) return
+    setFollowing(false)
+    target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
+
   const toBottom = (smooth = false) => {
     const el = scroller.current
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
@@ -464,6 +496,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
 
   return (
     <div className="transcript-frame">
+      {dockAway && subagentCard ? <SubagentDock card={subagentCard} onReveal={revealSubagents} /> : null}
       <div
         className="transcript"
         style={bot?.chatColor ? { background: `color-mix(in srgb, ${bot.chatColor} 10%, var(--background))` } : undefined}
@@ -477,6 +510,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
           else if (atEnd) setFollowing(true)
           lastScrollTop.current = el.scrollTop
           if (more && el.scrollTop < 200 && !loadingEarlier) void showEarlier()
+          updateDock()
         }}
       >
         <div className="transcript-content">
@@ -487,7 +521,7 @@ const Transcript = memo(function Transcript({ botId, openTrace, onReply, openFor
           ) : null}
           {items.length === 0 && bot ? <div className="transcript-intro">{isGroup(bot) ? <GroupIntroCard group={bot} /> : <IntroCard bot={bot} />}</div> : null}
           {items.map((item) => (
-            <div key={item.id} className={arrivals.has(item.id) ? rowIn(item) : undefined}>
+            <div key={item.id} data-entry-id={item.kind === 'entry' ? item.entry.id : undefined} className={arrivals.has(item.id) ? rowIn(item) : undefined}>
               <Row item={item} chat={bot} openTrace={openTrace} onReply={onReply} openForward={openForward} openFile={openFile} openRoutine={openRoutine} openAgent={openAgent} openBotChat={openBotChat} openApp={openApp} openArtifact={openArtifact} openCall={openCall} openThread={openThread} />
             </div>
           ))}

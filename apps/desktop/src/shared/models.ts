@@ -517,6 +517,33 @@ export interface EntryData {
   from?: string
   /** notice: what was said on a realtime call, oldest first. */
   transcript?: CallLine[]
+  /** subagents: the subagents this turn started, in the order they started (`SubagentCard`). */
+  subagents?: Subagent[]
+}
+
+/** One subagent an agent started in a turn (`kind: 'subagents'`): its task, state, newest step and time. */
+export interface Subagent {
+  id: string
+  task: string
+  /** running | done | failed | stopped */
+  state: string
+  /** What it does now, as its tool call named it. */
+  step: string
+  /** Epoch milliseconds. */
+  startedAt: number
+  /** When it ended, epoch milliseconds; absent while it runs. */
+  endedAt?: number | null
+}
+
+/**
+ * What a `subagents` entry carries (`SubagentCard`): the subagents one turn started, in the order
+ * they started. The host also sends `author` (a group chat's bot) and one line of their tasks as
+ * `text`; the card reads the list.
+ */
+export interface SubagentsData {
+  subagents: Subagent[]
+  author?: string
+  text?: string
 }
 
 export interface Entry {
@@ -524,7 +551,7 @@ export interface Entry {
   seq: number
   botId: string
   rev: number
-  /** user | agent | thought | tool | plan | permission | notice */
+  /** user | agent | thought | tool | plan | permission | notice | subagents */
   kind: string
   turn: number
   data: EntryData
@@ -542,6 +569,8 @@ export function isChat(e: Entry): boolean {
   switch (e.kind) {
     case 'user':
     case 'permission':
+      return true
+    case 'subagents':
       return true
     case 'notice':
       // Only a fresh conversation gets a line: memory lives in the bot's memory settings, a summary keeps the same
