@@ -106,6 +106,53 @@ export function avatarColor(id: string) {
   return (AVATAR_COLORS.find((c) => c.id === id) ?? AVATAR_COLORS[7]!).hex
 }
 
+/** How the person's own bubbles take an agent's avatar colour (`Settings › Appearance › Your bubbles`). */
+export type YourBubbles = 'solid' | 'tint' | 'classic'
+
+export const YOUR_BUBBLE_STYLES: { id: YourBubbles; label: string }[] = [
+  { id: 'solid', label: 'Solid' },
+  { id: 'tint', label: 'Tint' },
+  { id: 'classic', label: 'Classic' },
+]
+
+/** WCAG relative luminance of an `#RRGGBB` colour (0 black … 1 white). */
+function luminance(hex: string) {
+  const n = parseInt(hex.slice(1), 16)
+  const channel = (value: number) => {
+    const c = value / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255)
+}
+
+/** WCAG contrast between two `#RRGGBB` colours (1 … 21). */
+export function contrastRatio(first: string, second: string) {
+  const a = luminance(first)
+  const b = luminance(second)
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
+/** The ink that reads best on `fill`: the theme's near-black, or white. */
+export function inkOn(fill: string) {
+  return contrastRatio('#ffffff', fill) >= contrastRatio('#141414', fill) ? '#ffffff' : '#141414'
+}
+
+/** `fill` nudged away from its ink until that ink reads at 4.5:1, so a Solid bubble stays legible on every avatar colour. */
+export function readableFill(fill: string) {
+  const ink = inkOn(fill)
+  // Away from the ink (toward white for dark ink, black for white ink): the fill keeps its hue and grows readable.
+  const away = ink === '#141414' ? '#ffffff' : '#000000'
+  const n = parseInt(fill.slice(1), 16)
+  const a = parseInt(away.slice(1), 16)
+  for (let step = 0; step <= 20; step++) {
+    const t = step / 20
+    const channel = (shift: number) => Math.round(((n >> shift) & 255) * (1 - t) + ((a >> shift) & 255) * t)
+    const mixed = rgbHex([channel(16), channel(8), channel(0)])
+    if (contrastRatio(ink, mixed) >= 4.5) return mixed
+  }
+  return away
+}
+
 /** `[r, g, b]` → `#RRGGBB`. */
 export const rgbHex = (rgb: number[]) => `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`
 

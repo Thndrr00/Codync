@@ -31,7 +31,7 @@ struct ChatRow: View {
         case "user":
             VStack(alignment: .trailing, spacing: 4) {
                 if let person = entry.data.person, person.key != model.myKey, groupStart { PersonLabel(person: person) }
-                UserBubble(entry: entry, botWorking: chat?.isWorking == true, reply: reply, branch: branch)
+                UserBubble(entry: entry, chat: chat, reply: reply, branch: branch)
                 ReactionsRow(entry: entry)
                 if let summary = entry.data.thread, let openThread {
                     ThreadChip(summary: summary, open: openThread)
@@ -137,6 +137,8 @@ private func pinItem(_ entry: Entry, _ model: BotStore) -> MenuItem {
 
 /// The message a reply quotes, as its first line without Markdown markers.struct QuoteLine: View {
     let text: String
+    /// Its ink: the bubble's own on a Solid fill, the theme's secondary otherwise.
+    var color: Color = Palette.secondary
 
     var body: some View {
         Label {
@@ -145,7 +147,7 @@ private func pinItem(_ entry: Entry, _ model: BotStore) -> MenuItem {
             Image(systemName: "text.bubble")
         }
         .font(.subheadline)
-        .foregroundStyle(Palette.secondary)
+        .foregroundStyle(color)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Replying to \(text)")
     }
@@ -153,10 +155,18 @@ private func pinItem(_ entry: Entry, _ model: BotStore) -> MenuItem {
 
 struct UserBubble: View {
     let entry: Entry
+    /// The bot or group this chat belongs to: its avatar colour fills the person's bubbles.
+    let chat: Bot?
     var reply: (() -> Void)?
     /// Starts a thread branched from this message; nil in a thread.
     var branch: (() -> Void)?
     @Environment(BotStore.self) private var model
+    @AppStorage(YourBubbleStyle.storageKey) private var yourBubbles = YourBubbleStyle.solid
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Settings › Appearance › Your bubbles for this chat; nil keeps the Classic look.
+    private var look: YourBubbleLook? { yourBubbles.look(for: chat, dark: colorScheme == .dark) }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -168,22 +178,23 @@ struct UserBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 56)
+        .animation(Motion.reduced(Motion.morph, reduceMotion), value: yourBubbles)
     }
 
     private var text: some View {
             VStack(alignment: .leading, spacing: 4) {
-                if let quote = entry.data.replyTo { QuoteLine(text: quote.text) }
+                if let quote = entry.data.replyTo { QuoteLine(text: quote.text, color: look?.secondaryInk ?? Palette.secondary) }
                 if let text = entry.data.text, !text.isEmpty {
                     Text(text)
                         .font(.body)
-                        .foregroundStyle(Palette.text)
+                        .foregroundStyle(look?.ink ?? Palette.text)
                         .textSelection(.enabled)
                         .paragraphDirection(of: text)
                 }
             }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(look?.fill ?? Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .contextActions(reactions: model.reactionPick(entry)) {
                     var items = [MenuItem("Copy", icon: "square.on.square") { Pasteboard.copy(entry.data.text) }]
                     if let reply { items.append(MenuItem("Reply", icon: "arrowshape.turn.up.left", action: reply)) }

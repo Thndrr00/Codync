@@ -347,6 +347,17 @@
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  transition: background-color var(--morph), color var(--morph);
+}
+/* Settings › Appearance › Your bubbles: Tint mixes the agent's avatar colour (set as --your-bubble) into
+   the chat's own bubble; Solid's fill and ink come from the chat row itself. */
+.bubble.user.tint {
+  background: color-mix(in srgb, var(--your-bubble, var(--chat-user)) 14%, var(--chat-user));
+}
+@media (prefers-color-scheme: dark) {
+  .bubble.user.tint {
+    background: color-mix(in srgb, var(--your-bubble, var(--chat-user)) 22%, var(--chat-user));
+  }
 }
 .bubble.agent {
   background: var(--chat-agent);

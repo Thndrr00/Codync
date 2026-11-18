@@ -1,6 +1,6 @@
 import { FileDownloadCard } from './FileDownloadCard'
 import { ArtifactCard } from '../library/ArtifactCard'
-import { memo, useRef, useState } from 'react'
+import { memo, useRef, useState, type CSSProperties } from 'react'
 import { groupBotReactions, isGroup, isReplyable, type Bot, type BotApp, type Entry, type Person, type ReplyQuote } from '@shared/models'
 import { BotAvatar } from '../../components/Avatar'
 import { ComputerCard } from '../../components/ComputerCard'
@@ -12,7 +12,8 @@ import { Text } from '../../components/Text'
 import { messagePreview } from '../../lib/message-preview'
 import { MemberQuestionCard } from './MemberQuestionCard'
 import { useTr } from '../../lib/use-language'
-import { avatarColor } from '../../lib/theme'
+import { avatarColor, inkOn, readableFill, type YourBubbles } from '../../lib/theme'
+import { prefs, usePref } from '../../lib/prefs'
 import { useStore as useLiveStore, useStoreRef as useStore } from '../../store/context'
 import { QUICK_REACTIONS, type BotStore } from '../../store/bot-store'
 import { AttachmentList } from './Attachments'
@@ -78,7 +79,7 @@ export const ChatRow = memo(function ChatRow({ entry, groupStart, chat, openTrac
       return (
         <VStack align="flex-end" gap={4} className={groupStart ? 'chat-row group-start' : 'chat-row'}>
           {entry.data.person && groupStart ? <PersonLabel person={entry.data.person} /> : null}
-          <UserBubble entry={entry} reply={reply} forward={forward} branch={branch} />
+          <UserBubble entry={entry} chat={chat} reply={reply} forward={forward} branch={branch} />
           {entry.data.routineThread && openThread ? (
             <button className="thread-link press" onClick={() => openThread(entry.id)}>
               {entry.threadUnread ? <span className="thread-dot" aria-hidden /> : null}
@@ -372,11 +373,11 @@ function ForwardedRow({ forwarded }: { forwarded: NonNullable<Entry['data']['for
 }
 
 /** A message's text with a right-click menu (with quick reactions on top). */
-export function Bubble({ className, items, reactions, children }: { className: string; items: () => MenuItem[]; reactions?: ReactionPick; children: React.ReactNode }) {
+export function Bubble({ className, style, items, reactions, children }: { className: string; style?: CSSProperties; items: () => MenuItem[]; reactions?: ReactionPick; children: React.ReactNode }) {
   const menu = useContextMenu()
   return (
     <>
-      <div className={className} dir="auto" onContextMenu={menu.onContextMenu}>
+      <div className={className} style={style} dir="auto" onContextMenu={menu.onContextMenu}>
         {children}
       </div>
       <AnchoredMenu open={menu.open} onClose={menu.close} point={menu.point} items={items} reactions={reactions} />
@@ -392,18 +393,33 @@ export function TimeSeparator({ date }: { date: number }) {
 
 const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-export function UserBubble({ entry, reply, forward, branch }: { entry: Entry; reply?: () => void; forward?: () => void; branch?: () => void }) {
+/** Settings › Appearance › Your bubbles for this chat: Solid's fill and the ink that reads on it, Tint's avatar
+ *  colour, or nothing for Classic. A group, a bot with its own picture and a chat with no avatar keep Classic. */
+function yourBubble(chat: Bot | null, style: YourBubbles): { className: string; style?: CSSProperties } {
+  const tint = chat && chat.kind === 'agent' && !chat.avatarPhoto ? avatarColor(chat.avatarColor) : null
+  if (!tint || style === 'classic') return { className: '' }
+  if (style === 'tint') return { className: 'tint', style: { '--your-bubble': tint } as CSSProperties }
+  const fill = readableFill(tint)
+  const ink = inkOn(fill)
+  // The quote and its icon keep the bubble's ink: a faded one would fall below 4.5:1 on some avatar colours.
+  return { className: 'solid', style: { background: fill, color: ink, '--secondary': ink } as CSSProperties }
+}
+
+export function UserBubble({ entry, chat, reply, forward, branch }: { entry: Entry; chat: Bot | null; reply?: () => void; forward?: () => void; branch?: () => void }) {
   const store = useStore()
+  const [yourBubbles] = usePref(prefs.yourBubbles)
   const [hovering, setHovering] = useState(false)
   const status = entry.data.status
   const copy = () => entry.data.text && window.codync.app.copy(entry.data.text)
+  const bubble = yourBubble(chat, yourBubbles)
   return (
     <div className="message user" title={fullDate.format(entry.createdAt)} onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}>
       <div className="message-body">
         {entry.data.attachments?.length ? <AttachmentList attachments={entry.data.attachments} botId={entry.botId} /> : null}
         {entry.data.text || entry.data.replyTo ? (
           <Bubble
-            className="bubble user selectable"
+            className={`bubble user selectable${bubble.className ? ` ${bubble.className}` : ''}`}
+            style={bubble.style}
             reactions={reactionPick(store, entry)}
             items={() => [
               { title: 'Copy', icon: 'square.on.square', action: copy },

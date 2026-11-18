@@ -3,7 +3,7 @@ import type { Screen } from '@shared/analytics'
 import { APPEARANCES, type Appearance } from '@shared/appearance'
 import { islandLabel } from '@shared/island'
 import { VOICE_SHORTCUTS, type VoiceShortcut } from '@shared/voice-shortcut'
-import { Button, CardForm, CardSection, ChoicePicker, IconButton, ProgressBar, Switch, ValueRow } from '../../components/Controls'
+import { Button, CardForm, CardSection, ChoicePicker, IconButton, ProgressBar, SegmentedChoice, Switch, ValueRow } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { useDismiss } from '../../components/Overlay'
 import { HStack, IconSlot, Spacer, VStack } from '../../components/Stack'
@@ -12,6 +12,7 @@ import { useModel } from '../../lib/observable'
 import { appLanguages, languageTitle } from '../../lib/l10n'
 import { useTr } from '../../lib/use-language'
 import { DEFAULT_TEXT_SIZE, prefs, TEXT_SIZES, usePref } from '../../lib/prefs'
+import { YOUR_BUBBLE_STYLES } from '../../lib/theme'
 import { useAccount } from '../../store/account'
 import { useScreenViewed } from '../../store/analytics'
 import { StoreContext, useApp } from '../../store/context'
@@ -150,6 +151,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   const systemLanguage = typeof navigator === 'undefined' ? 'en' : navigator.language
   const [usageIconStyle, setUsageIconStyle] = usePref(prefs.usageIconStyle)
   const [avatarStyle, setAvatarStyle] = usePref(prefs.avatarStyle)
+  const [yourBubbles, setYourBubbles] = usePref(prefs.yourBubbles)
   const [compact, setCompact] = usePref(prefs.sidebarCompact)
   const [agentLogos, setAgentLogos] = usePref(prefs.agentLogos)
   const [thinkingDetails, setThinkingDetails] = usePref(prefs.thinkingDetails)
@@ -212,6 +214,9 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
         </ValueRow>
         <ValueRow label="Bot avatars">
           <ChoicePicker selection={avatarStyle} options={[{ id: 'plush', label: tr('Plush') }, { id: 'flat', label: tr('Flat') }]} onChange={setAvatarStyle} />
+        </ValueRow>
+        <ValueRow label="Your bubbles">
+          <SegmentedChoice selection={yourBubbles} options={YOUR_BUBBLE_STYLES} onChange={setYourBubbles} />
         </ValueRow>
         <Switch on={compact} onChange={setCompact}>
           Compact sidebar

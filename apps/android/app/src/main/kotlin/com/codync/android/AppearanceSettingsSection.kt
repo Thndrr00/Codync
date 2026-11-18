@@ -25,9 +25,11 @@ import com.codync.android.design.ChatTextScale
 import com.codync.android.design.ChoicePicker
 import com.codync.android.design.LocalAppearancePreferences
 import com.codync.android.design.SurfaceStyle
+import com.codync.android.design.SegmentedChoice
 import com.codync.android.design.ThemeMode
 import com.codync.android.design.UiDensity
 import com.codync.android.design.ValueRow
+import com.codync.android.design.YourBubbleStyle
 import com.codync.android.design.rememberAppearancePreferences
 import com.codync.android.design.semibold
 
@@ -110,6 +112,16 @@ import com.codync.android.design.semibold
             }
         }
         row {
+            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(tr("Your bubbles"), style = Type.body, color = Palette.text)
+                SegmentedChoice(
+                    selection = settings.yourBubbles,
+                    options = YourBubbleStyle.entries.map { it to tr(it.label) },
+                    select = prefs::setYourBubbles,
+                )
+            }
+        }
+        row {
             SwitchRow(
                 title = "Haptic feedback",
                 isOn = settings.hapticsEnabled,
@@ -141,6 +153,7 @@ import com.codync.android.design.semibold
                         prefs.setDensity(def.density)
                         prefs.setHapticsEnabled(def.hapticsEnabled)
                         prefs.setAvatarStyle(def.avatarStyle)
+                        prefs.setYourBubbles(def.yourBubbles)
                     }
                 }
             }

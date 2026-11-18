@@ -3,6 +3,7 @@ package com.codync.android
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -177,7 +178,7 @@ internal fun chatItems(entries: List<Entry>, pending: List<PendingSend>, busy: B
         "user" -> Column(Modifier.fillMaxWidth().padding(top = if (groupStart) topGroupGap else topSameGap).animateContentSize(Motion.layoutSize),
             horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (groupStart) entry.person?.takeIf { it.key != store.myKey }?.let { PersonLabel(it) }
-            UserBubble(entry, state, store, reply, forward, thread, speeds, branch)
+            UserBubble(entry, chat, state, store, reply, forward, thread, speeds, branch)
             ReactionsRow(entry, store)
             ThreadChip(entry, state) { store.openBot(entry.botId, entry.id) }
             RoutineThreadChip(entry, store)
@@ -302,19 +303,29 @@ private fun reactionPick(entry: Entry, store: AppStore) = ReactionPick(quickReac
 
 internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
 
-@Composable private fun UserBubble(entry: Entry, state: AppState, store: AppStore, reply: (() -> Unit)?, forward: (() -> Unit)?, thread: String?, speeds: (() -> Unit)?, branch: (() -> Unit)?) {
+/** The person's bubbles in this chat (Settings › Appearance › Your bubbles). A group and a bot with its own picture keep Classic. */
+@Composable private fun yourBubbleColors(chat: Bot?): YourBubbleColors =
+    LocalPalette.current.yourBubbles(
+        LocalAppearance.current.yourBubbles,
+        chat?.takeIf { it.kind != "group" && it.avatarPhoto == null }?.avatarColor,
+    )
+
+@Composable private fun UserBubble(entry: Entry, chat: Bot?, state: AppState, store: AppStore, reply: (() -> Unit)?, forward: (() -> Unit)?, thread: String?, speeds: (() -> Unit)?, branch: (() -> Unit)?) {
     val context = LocalContext.current
     val focus = LocalFocusManager.current
     val attachments = entry.data["attachments"]?.jsonArray?.map { WireJson.decodeFromJsonElement<Attachment>(it) }.orEmpty()
+    val colors = yourBubbleColors(chat)
+    val fill by animateColorAsState(colors.fill, Motion.morph(), label = "Your bubbles")
+    val look = colors.copy(fill = fill)
     Column(Modifier.fillMaxWidth().padding(start = 56.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (attachments.isNotEmpty()) AttachmentList(attachments, entry.botId, state, store)
         ForwardedLabel(entry)
         val quote = entry.replyTo
-        if (entry.text.isNotEmpty() || quote != null) Box(Modifier.clip(RoundedRectangle(18.dp)).background(Palette.bubbleUser).swipeToReply(reply)
-            .contextActions(reactions = reactionPick(entry, store), onClick = { focus.clearFocus() }, preview = { SelectionContainer { UserText(entry.text, quote) } }) {
+        if (entry.text.isNotEmpty() || quote != null) Box(Modifier.clip(RoundedRectangle(18.dp)).background(fill).swipeToReply(reply)
+            .contextActions(reactions = reactionPick(entry, store), onClick = { focus.clearFocus() }, preview = { SelectionContainer { UserText(entry.text, quote, look) } }) {
                 messageMenu(context, entry, reply, null, store, quote = { store.quoteMessage(entry, thread) }, forward = forward, speeds = speeds,
                     branch = branch)
-            }) { UserText(entry.text, quote) }
+            }) { UserText(entry.text, quote, look) }
         SendStatusLine(entry.status, state.bots.firstOrNull { it.id == entry.botId }?.status == "working")
     }
 }
@@ -330,20 +341,20 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
     }
 }
 
-@Composable private fun UserText(text: String, quote: ReplyQuote? = null) {
+@Composable private fun UserText(text: String, quote: ReplyQuote? = null, colors: YourBubbleColors? = null) {
     val compact = LocalUiDensity.current == UiDensity.Compact
-    Column(Modifier.background(Palette.bubbleUser).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp),
+    Column(Modifier.background(colors?.fill ?: Palette.bubbleUser).padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (quote != null) QuoteLine(quote.text)
-        if (text.isNotEmpty()) Text(text, style = Type.chatBody.copy(textDirection = TextDirection.Content), color = Palette.text)
+        if (quote != null) QuoteLine(quote.text, color = colors?.secondaryInk ?: Palette.secondary)
+        if (text.isNotEmpty()) Text(text, style = Type.chatBody.copy(textDirection = TextDirection.Content), color = colors?.ink ?: Palette.text)
     }
 }
 
 /** The message a reply quotes, as its first line without Markdown markers: in its bubble, and in the composer while replying. */
-@Composable internal fun QuoteLine(text: String, modifier: Modifier = Modifier) {
+@Composable internal fun QuoteLine(text: String, modifier: Modifier = Modifier, color: Color = Palette.secondary) {
     Row(modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Symbol("text.bubble", size = 14.dp, tint = Palette.secondary)
-        Text("\u201c${messagePreview(text)}\u201d", style = Type.subheadline, color = Palette.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Symbol("text.bubble", size = 14.dp, tint = color)
+        Text("\u201c${messagePreview(text)}\u201d", style = Type.subheadline, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -360,11 +371,12 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 /** A message this phone is still delivering: the same bubble, with how far it got. */
 @Composable internal fun PendingBubble(send: PendingSend, groupStart: Boolean, state: AppState, store: AppStore) {
     val compact = LocalUiDensity.current == UiDensity.Compact
+    val colors = yourBubbleColors(state.bots.firstOrNull { it.id == send.botId })
     Column(Modifier.fillMaxWidth().padding(top = if (groupStart) (if (compact) 8.dp else 12.dp) else (if (compact) 2.dp else 4.dp)).padding(start = 56.dp),
         horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (file in send.files) Text(file.name + " · " + formatBytes(file.size), Modifier.clip(RoundedRectangle(14.dp))
             .background(Palette.surface).padding(horizontal = 12.dp, vertical = 8.dp), style = Type.chatFootnote, color = Palette.text)
-        if (send.text.isNotEmpty() || send.replyTo != null) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text, send.replyTo) }
+        if (send.text.isNotEmpty() || send.replyTo != null) Box(Modifier.clip(RoundedRectangle(18.dp))) { UserText(send.text, send.replyTo, colors) }
         when (send.status) {
             SendStatus.Sending -> Text(state.uploadProgress[send.nonce]?.let { "Uploading files · $it%" } ?: "Sending…",
                 style = Type.caption2, color = Palette.tertiary)

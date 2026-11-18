@@ -281,4 +281,12 @@ The terminal's `Ctrl+K` actions offer the same three choices, saved in the local
 uses `COLORFGBG` for accent contrast. `CODYNC_THEME` supplies the initial choice
 when none is saved; `NO_COLOR` continues to disable color output.
 
+**Your bubbles** (desktop Settings → Appearance, phone settings → Appearance) is the
+same kind of device preference: **Solid** (the default) fills the person's own bubbles
+with the avatar colour of the agent they talk to, **Tint** mixes 14% of it into the
+chat's bubble (22% in dark), and **Classic** keeps the chat's bubble as it stands. A
+group, a bot with its own picture and a channel keep Classic. A Solid fill takes the
+ink that reads best on it, and the fill moves away from that ink until it reads at
+4.5:1; only the device that chose it sees the change.
+
 Roster section headings and the Bots label move whole groups within a computer: drag on desktop, touch and hold then drag on phones. Section order is per computer and per device. Pinned bots remain above all groups. Terminal Alt+Up/Down moves the selected bot's group for that run.

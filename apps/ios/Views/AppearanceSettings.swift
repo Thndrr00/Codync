@@ -6,6 +6,7 @@ import UIKit
 struct AppearanceSettings: View {
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
     @AppStorage(AvatarStyle.storageKey, store: UserDefaults(suiteName: SharedStore.appGroup)) private var avatarStyle = AvatarStyle.plush
+    @AppStorage(YourBubbleStyle.storageKey) private var yourBubbles = YourBubbleStyle.solid
 
     var body: some View {
         CardSection("Appearance", footer: "Only changes appearance on this device.") {
@@ -14,6 +15,11 @@ struct AppearanceSettings: View {
             }
             ValueRow("Bot avatars") {
                 ChoicePicker(selection: $avatarStyle, options: AvatarStyle.allCases.map { (id: $0, label: $0.label) })
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.tr("Your bubbles"))
+                    .foregroundStyle(Palette.text)
+                SegmentedChoice(selection: $yourBubbles, options: YourBubbleStyle.allCases.map { (id: $0, label: $0.label) })
             }
             AgentLogosToggle()
         }

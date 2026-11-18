@@ -3,6 +3,7 @@ import { resolvedLanguage } from './l10n.ts'
 import { useSyncExternalStore } from 'react'
 import type { StarAsk } from './star-ask'
 import type { KofiInvite } from './kofi-invite'
+import type { YourBubbles } from './theme'
 
 /** A stored value, or the fallback when it's missing, unreadable or of another kind (a `null` where a string
  * belongs crashed the chat window). A `null` fallback takes any value. */
@@ -87,6 +88,8 @@ export const prefs = {
   usageIconStyle: pref<'character' | 'original'>('usageIconStyle', 'character'),
   /** Bot characters are shaded (plush) or even dots (flat), as the phones draw them. */
   avatarStyle: pref<'plush' | 'flat'>('avatarStyle', 'plush'),
+  /** Your bubbles take the agent's avatar colour: Solid fills them, Tint mixes a little in, Classic keeps the chat's grey. */
+  yourBubbles: pref<YourBubbles>('yourBubbles', 'solid'),
   /** The roster marks each bot with its agent's logo while the bots run more than one agent. */
   agentLogos: pref('showAgentLogos', true),
   onboardingDone: pref('macAccountOnboardingCompleted', false),

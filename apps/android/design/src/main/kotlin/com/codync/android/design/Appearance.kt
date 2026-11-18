@@ -82,6 +82,20 @@ enum class AvatarStyle(val id: String, val label: String) {
     }
 }
 
+/**
+ * How the person's own bubbles take an agent's avatar colour (Settings › Appearance › Your bubbles):
+ * Solid fills them with it, Tint mixes a little into the chat's own bubble, Classic keeps today's look.
+ */
+enum class YourBubbleStyle(val id: String, val label: String) {
+    Solid("solid", "Solid"),
+    Tint("tint", "Tint"),
+    Classic("classic", "Classic");
+
+    companion object {
+        fun fromId(id: String?): YourBubbleStyle = entries.firstOrNull { it.id == id } ?: Solid
+    }
+}
+
 /** Discrete chat text scale options aligned with the desktop app's `TEXT_SIZES` semantics. */
 object ChatTextScale {
     const val MIN = 0.85f
@@ -119,6 +133,7 @@ data class AppearanceSettings(
     val density: UiDensity = UiDensity.Standard,
     val hapticsEnabled: Boolean = true,
     val avatarStyle: AvatarStyle = AvatarStyle.Plush,
+    val yourBubbles: YourBubbleStyle = YourBubbleStyle.Solid,
 )
 
 /** Observable device-scoped appearance preferences, persisted in SharedPreferences. */
@@ -137,6 +152,7 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
             density = UiDensity.fromId(p.getString("density", UiDensity.Standard.id)),
             hapticsEnabled = p.getBoolean("hapticsEnabled", true),
             avatarStyle = AvatarStyle.fromId(p.getString("avatarStyle", AvatarStyle.Plush.id)),
+            yourBubbles = YourBubbleStyle.fromId(p.getString("yourBubbles", YourBubbleStyle.Solid.id)),
         )
     }
 
@@ -152,6 +168,7 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
             ?.putString("density", next.density.id)
             ?.putBoolean("hapticsEnabled", next.hapticsEnabled)
             ?.putString("avatarStyle", next.avatarStyle.id)
+            ?.putString("yourBubbles", next.yourBubbles.id)
             ?.apply()
     }
 
@@ -163,6 +180,7 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
     fun setDensity(density: UiDensity) = update { it.copy(density = density) }
     fun setHapticsEnabled(enabled: Boolean) = update { it.copy(hapticsEnabled = enabled) }
     fun setAvatarStyle(style: AvatarStyle) = update { it.copy(avatarStyle = style) }
+    fun setYourBubbles(style: YourBubbleStyle) = update { it.copy(yourBubbles = style) }
 
     companion object {
         @Volatile private var instance: AppearancePreferences? = null
@@ -230,6 +248,43 @@ fun ensureReadableAccent(candidate: Color, ground: Color, dark: Boolean, minRati
         if (contrastRatio(mixed, ground) >= minRatio) return mixed
     }
     return target
+}
+
+/** [a] mixed toward [b] by [amount] in sRGB, as the desktop and iOS apps mix their colours. */
+private fun mixRgb(a: Color, b: Color, amount: Float): Color = Color(
+    red = a.red * (1 - amount) + b.red * amount,
+    green = a.green * (1 - amount) + b.green * amount,
+    blue = a.blue * (1 - amount) + b.blue * amount,
+    alpha = a.alpha * (1 - amount) + b.alpha * amount,
+)
+
+/** [fill] nudged away from its ink until that ink reads at [minRatio], so a Solid bubble stays legible on every avatar colour. */
+private fun readableFill(fill: Color, minRatio: Float = 4.5f): Color {
+    val ink = readableOn(fill)
+    // Away from the ink (toward white for dark ink, black for white ink): the fill keeps its hue and grows readable.
+    val away = if (ink == Color(0xFF141414)) Color.White else Color.Black
+    for (step in 0..20) {
+        val mixed = mixRgb(fill, away, step / 20f)
+        if (contrastRatio(ink, mixed) >= minRatio) return mixed
+    }
+    return away
+}
+
+/** The colours the person's own bubble takes in a chat (`YourBubbleStyle`): its fill, its text and its secondary ink. */
+data class YourBubbleColors(val fill: Color, val ink: Color, val secondaryInk: Color)
+
+/**
+ * The person's own bubble in this chat (Settings › Appearance › Your bubbles): Solid fills it with the
+ * agent's avatar colour, Tint mixes a little of it into the chat's own bubble, Classic keeps today's look.
+ */
+fun ResolvedPalette.yourBubbles(style: YourBubbleStyle, avatarColor: String?): YourBubbleColors {
+    if (style == YourBubbleStyle.Classic || avatarColor.isNullOrBlank()) return YourBubbleColors(bubbleUser, text, secondary)
+    val tint = AvatarPalette.tint(avatarColor)
+    if (style == YourBubbleStyle.Tint) return YourBubbleColors(mixRgb(bubbleUser, tint, if (isDark) 0.22f else 0.14f), text, secondary)
+    val fill = readableFill(tint)
+    val ink = readableOn(fill)
+    // The quote and its icon keep the bubble's ink: a faded one would drop below 4.5:1 on some avatar colours.
+    return YourBubbleColors(fill, ink, ink)
 }
 
 private fun curatedAccentColor(style: AccentStyle): Color? = when (style) {
