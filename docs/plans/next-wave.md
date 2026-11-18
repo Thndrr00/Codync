@@ -80,6 +80,7 @@ is bigger than one release.
 | OpenBot channel sub-tasks, drop and memory | next |
 | OpenBot channel tools (`create_channel`, `update_channel`) | done (host; Manage the team, Ask approval) |
 | OpenBot `send_to_channel` | done (host; bots post work into a channel) |
+| WhatsApp pairing codes, photos and person facts | done (host; sheet on desktop and Android) |
 | Skills that improve themselves | done for proposals after turns; review UI exists |
 | Multi-user server | done: workspace members with roles, enforced on every call |
 

@@ -114,6 +114,42 @@ import kotlinx.coroutines.launch
                     }
                 }
             }
+            val waiting = current?.requests.orEmpty()
+            if (waiting.isNotEmpty()) {
+                CardSection(tr("Waiting to write"),
+                    footer = tr("Someone new wrote to this number. Approve them to let them talk to the bot; deny them and they hear nothing.")) {
+                    waiting.forEach { request ->
+                        row {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(request.name ?: request.sender, style = Type.body, color = Palette.text)
+                                Text(request.code, style = Type.caption.monospaced, color = Palette.secondary)
+                            }
+                            SecondaryButton(tr("Deny"), enabled = !busy) {
+                                act { store.whatsappAnswerRequest(request.code, false); link = store.whatsapp() }
+                            }
+                            PrimaryButton(tr("Approve"), enabled = !busy) {
+                                act { store.whatsappAnswerRequest(request.code, true); link = store.whatsapp() }
+                            }
+                        }
+                    }
+                }
+            }
+            val people = current?.people.orEmpty()
+            if (people.isNotEmpty()) {
+                CardSection(tr("Saved facts"),
+                    footer = tr("Each person's facts are read only in their own conversations. The bot saves and forgets them with its memory tools.")) {
+                    people.forEach { person ->
+                        row {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(person.name ?: person.sender, style = Type.body, color = Palette.text)
+                                person.facts.forEach { fact ->
+                                    Text(fact, style = Type.caption, color = Palette.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             error?.let { Text(it, style = Type.caption, color = Palette.danger) }
         }
     }

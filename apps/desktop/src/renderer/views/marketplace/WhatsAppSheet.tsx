@@ -21,12 +21,16 @@ export function WhatsAppSheet() {
   const app = useApp()
   const [qrImage, setQrImage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const state = store.whatsapp
   const selected = state?.bot ?? app.selection?.botId ?? null
   const bots = [...store.bots.values()]
 
   useEffect(() => {
     void store.refreshWhatsApp()
+    // People can ask to write while the sheet is open, so it is read again until it closes.
+    const timer = window.setInterval(() => void store.refreshWhatsApp(), 4000)
+    return () => window.clearInterval(timer)
   }, [store])
 
   useEffect(() => {
@@ -36,11 +40,25 @@ export function WhatsAppSheet() {
 
   // A bot is chosen for the link, not by opening its chat first.
   const chosen = useMemo(() => bots.find((bot) => bot.id === selected), [bots, selected])
+  const requests = state?.requests ?? []
+  const people = state?.people ?? []
 
   const connect = async () => {
     setError(null)
     try {
       await store.whatsappConnect()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  // Approves or denies a person who asked to write on a restricted number.
+  const answerRequest = async (code: string, approve: boolean) => {
+    setError(null)
+    setNotice(null)
+    try {
+      await store.whatsappAnswerRequest(code, approve)
+      setNotice(approve ? tr('Approved. The person can write now.') : tr('Denied.'))
     } catch (e) {
       setError((e as Error).message)
     }
@@ -91,8 +109,39 @@ export function WhatsAppSheet() {
             </ValueRow>
             {state?.error ? <Text size="caption" tone="attention">{state.error}</Text> : null}
             {error ? <ErrorText text={error} /> : null}
+            {notice ? <Text size="caption" tone="secondary">{notice}</Text> : null}
           </VStack>
         </CardSection>
+        {requests.length ? (
+          <CardSection
+            title="Waiting to write"
+            footer="Someone new wrote to this number. Approve them to let them talk to the bot; deny them and they hear nothing."
+          >
+            {requests.map((request) => (
+              <HStack key={request.code} gap={8}>
+                <VStack gap={2} grow>
+                  <Text size="caption" tone="text">{request.name || request.sender}</Text>
+                  <Text size="caption" tone="secondary" mono>{request.code}</Text>
+                </VStack>
+                <Button kind="secondary" onClick={() => void answerRequest(request.code, false)}>{tr('Deny')}</Button>
+                <Button onClick={() => void answerRequest(request.code, true)}>{tr('Approve')}</Button>
+              </HStack>
+            ))}
+          </CardSection>
+        ) : null}
+        {people.length ? (
+          <CardSection
+            title="Saved facts"
+            footer="Each person's facts are read only in their own conversations. The bot saves and forgets them with its memory tools."
+          >
+            {people.map((person) => (
+              <VStack key={person.sender} gap={4}>
+                <Text size="caption" tone="text" weight="medium">{person.name || person.sender}</Text>
+                {person.facts.map((fact) => <Text key={fact} size="caption" tone="secondary">{fact}</Text>)}
+              </VStack>
+            ))}
+          </CardSection>
+        ) : null}
       </CardForm>
     </SheetPage>
   )
