@@ -43,6 +43,25 @@ quotes itself.
 | `respondPermission` | `entryId, optionId?` | Routed to `data.author`, so cards in a group reach the bot that asked. |
 | `markRead` | `botId` | Reads the chat. A no-op when nothing there is unread, so clients call it whenever a chat is on screen. `send` marks its chat read. |
 
+## Channels from a bot (`host/src/chat/group/tools.rs`)
+
+A bot the user lets **Manage the team** also gets `create_channel` and `update_channel` on its
+`manage` server, beside `create_bot` and `update_bot` (`host/src/chat/manage.rs` `tools()`):
+
+- `create_channel`: `name` and `memberAgentIds` (ids from `list_team`), optionally `title`,
+  `instructions` (the group's About line), `leadAgentId` (defaults to the first member) and
+  `archived`. An open channel with those exact bots is refused: the bot changes it instead.
+- `update_channel`: `channelId` (the id, or the name, case aside), then any of `name`, `title`,
+  `instructions`, `addMemberAgentIds`, `removeMemberAgentIds`, `leadAgentId` (null for none),
+  `archived`. A channel needs at least one bot and the lead must stay a member; a lead that
+  leaves becomes none.
+- The caller must manage the team and must see the channel (be a member, have made it, or lead
+  it); otherwise the call is refused with the reason. Both go through `Hub::create_bot` /
+  `Hub::update_bot`, so the same title, member and archive checks apply as for a client.
+- Under Ask the call waits on the approval card bot management uses (`chat::manage::approve`);
+  under Auto it applies at once. Either way a notice in the caller's chat records it.
+- A channel a bot makes records it as `createdBy`, so it can still change it after leaving.
+
 ## How a group answers (`host/src/chat/group.rs`, Grok Bot's design)
 
 - The user's message starts a *room turn* in the group: up to 3 rounds, 10 replies in all.

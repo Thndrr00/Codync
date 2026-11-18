@@ -22,6 +22,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::oneshot;
 
+pub mod tools;
+
 const MAX_ROUNDS: usize = 3;
 /// A channel title's longest line.
 pub const MAX_TITLE_CHARS: usize = 120;
@@ -110,15 +112,22 @@ pub fn valid_members(store: &Store, group_id: &str, ids: &[String]) -> Result<Ve
     Ok(out)
 }
 
-/// A group whose members are exactly `members`.
+/// A group whose members are exactly `members`, out of the open list (an archived one stays archived).
 pub fn with_members(store: &Store, members: &[String]) -> Result<Option<String>> {
     let mut wanted = members.to_vec();
     wanted.sort();
     Ok(store.bots()?.into_iter().find_map(|row| {
         let mut have = row.config.members.clone();
         have.sort();
-        (!row.deleted && row.config.is_group() && have == wanted).then_some(row.config.id)
+        (!row.deleted && !row.config.archived && row.config.is_group() && have == wanted).then_some(row.config.id)
     }))
+}
+
+/// Whether `bot` may see (and so change) `group`: it is a member, made it, or leads it.
+pub fn visible_to(group: &BotConfig, bot: &str) -> bool {
+    group.members.iter().any(|m| m == bot)
+        || group.created_by.as_deref() == Some(bot)
+        || group.chief_bot_id.as_deref() == Some(bot)
 }
 
 /// The user wrote in a group lane: start a room turn there (ending one still running).
@@ -875,3 +884,5 @@ pub fn is_pass(text: &str) -> bool {
 mod team_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tools_tests;
