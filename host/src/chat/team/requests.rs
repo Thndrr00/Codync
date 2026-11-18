@@ -14,7 +14,7 @@ pub(super) const MAX_PENDING_MESSAGES_PER_SENDER: usize = 16;
 
 /// A note with the same text to the same bot within this long is a loop (agentes.chat ADR 0048,
 /// `NOTE_DEDUPE_MS` in `packages/engine/src/consultations.ts`).
-const NOTE_DEDUPE: Duration = Duration::from_secs(60 * 60);
+const NOTE_DEDUPE: Duration = Duration::from_hours(1);
 const MAX_TRACKED_NOTES: usize = 64;
 
 /// A note's text as compared for repeats: case, spacing and trailing punctuation don't count.

@@ -26,10 +26,11 @@ escritorio en verde. 17–19: notas 2.56.0 (zh-Hant + en-US) en las dos apps; ve
 sin compilación de Android en esta sesión; 20 es el push y el borrado del worktree.
 
 Después de este estado se trajeron dos patrones nuevos del repo original de agentes.chat, reutilizando
-sus estructuras: ADR 0046 (una persona esperando va primero, en la cola por bot) y ADR 0048 (una nota
-repetida al mismo bot en la última hora se descarta). Ambos están pusheados pero **sin compilar ni
-testear**: `rustfmt --check` pasa, y el disco libre no alcanza para otro `cargo test`. El bump de versión
-no procede: `MARKETING_VERSION` 2.56.0 ya va por delante del último tag (`v2.47.0`), así que se deja
+sus estructuras: ADR 0046 (una persona esperando va primero, en la cola por bot, con aging de un
+nivel cada dos minutos) y ADR 0048 (una nota repetida al mismo bot en la última hora se descarta).
+`cargo fmt --check` y `cargo clippy --all-targets -- -D warnings` pasan con ambos; la suite completa
+se lanzó pero se interrumpió al moverse la sesión, así que queda por correr. El bump de versión no
+procede: `MARKETING_VERSION` 2.56.0 ya va por delante del último tag (`v2.47.0`), así que se deja
 como está según la regla de versionado.
 
 1. `cargo check --all-targets` en `host/` y corregir lo que salga.

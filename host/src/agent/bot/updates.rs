@@ -195,10 +195,12 @@ impl Actor {
         let title = tool["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Use a tool");
         let kind = tool["kind"].as_str().unwrap_or("other");
         let command = tool["rawInput"]["command"].as_str().map(str::to_owned);
-        let own = self.conn.as_ref().is_some_and(|conn| {
-            params["sessionId"].as_str().is_some_and(|sid| conn.loaded.contains_key(sid))
-        });
-        let quick = if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
+        let own = self
+            .conn
+            .as_ref()
+            .is_some_and(|conn| params["sessionId"].as_str().is_some_and(|sid| conn.loaded.contains_key(sid)));
+        let quick =
+            if self.cfg.action_rules_on { approval_rules::quick_rules(&self.cfg.action_rules) } else { Vec::new() };
         let evaluation = approval_rules::evaluate(
             &self.cfg.approval_rules,
             &quick,
@@ -207,10 +209,12 @@ impl Actor {
             command.as_deref(),
             title,
         );
-        let allowed = own && !self.stop_requested && matches!(
-            evaluation.outcome,
-            Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
-        );
+        let allowed = own
+            && !self.stop_requested
+            && matches!(
+                evaluation.outcome,
+                Outcome::Rule { decision: Decision::Allow, .. } | Outcome::Setting { permission: Permission::Auto }
+            );
         tracing::info!(bot = %self.cfg.id, allowed, title, "permission asked outside a turn");
         if allowed && self.pick_option(&rpc_id, &options, &["allow_once", "allow_always"], false).await {
             return;

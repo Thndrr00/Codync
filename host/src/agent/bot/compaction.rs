@@ -7,6 +7,7 @@ use crate::chat::{context, handoff, memory};
 use crate::store::{EntryKind, Lane, now_ms};
 use codync_mem::compaction::{self as rules, CacheLife, Conversation, Decision};
 use serde_json::{Value, json};
+use std::time::Instant;
 
 /// Context use below which a fall isn't read as a compaction: a short session has little to summarize.
 const COMPACTED_FROM: u64 = 20_000;
@@ -186,7 +187,10 @@ impl Actor {
         self.save_conversation(&sid, &c);
         match rules::at_turn_end(&c, now) {
             Decision::Compact if self.compact_command().is_some() => {
-                self.queue.push_back(Queued::Compact { idle: false });
+                super::queue::insert_ordered(
+                    &mut self.queue,
+                    Queued::Compact { idle: false, queued_at: Instant::now() },
+                );
             }
             Decision::Rollover => self.draft_handoff(&sid, handoff::Reason::Full),
             _ => {}
@@ -204,7 +208,7 @@ impl Actor {
         let now = now_ms();
         let life = self.cache_life();
         if rules::while_idle(&c, life, now) == Decision::Compact && self.compact_command().is_some() {
-            self.queue.push_back(Queued::Compact { idle: true });
+            super::queue::insert_ordered(&mut self.queue, Queued::Compact { idle: true, queued_at: Instant::now() });
         } else if rules::rollover_due(&c, life, now) && handoff::pending(&self.hub.store, &self.cfg.id).is_none() {
             let reason = if now - c.last_turn >= life.ms() { handoff::Reason::Cold } else { handoff::Reason::Away };
             self.draft_handoff(&sid, reason);

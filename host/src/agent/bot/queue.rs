@@ -14,8 +14,9 @@ use tokio::sync::mpsc;
 
 /// Inserts before the first item of lower urgency, keeping arrival order within a level.
 pub(super) fn insert_ordered(queue: &mut VecDeque<Queued>, item: Queued) {
-    let priority = item.priority();
-    let at = queue.iter().position(|q| q.priority() > priority).unwrap_or(queue.len());
+    let now = Instant::now();
+    let priority = item.effective_priority(now);
+    let at = queue.iter().position(|q| q.effective_priority(now) > priority).unwrap_or(queue.len());
     queue.insert(at, item);
 }
 
@@ -26,7 +27,7 @@ impl Actor {
                 self.tools_changed = true;
             }
             Cmd::FreeMemory => self.free_memory().await,
-            Cmd::Routine(id) => self.enqueue(Queued::Routine(id), done_tx).await,
+            Cmd::Routine(id) => self.enqueue(Queued::Routine(id, Instant::now()), done_tx).await,
             Cmd::Send { lane, entry_id, text } => {
                 if self.hub.store.entry(&entry_id).is_some_and(|e| {
                     e.data["source"] == "slack"
@@ -224,8 +225,10 @@ impl Actor {
         let main = Lane::main(&self.cfg.id);
         while self.turn.is_none() && self.routine_completion.is_none() && !self.queue.is_empty() && !self.held() {
             match self.queue.front() {
-                Some(Queued::Routine(_)) => {
-                    let Some(Queued::Routine(id)) = self.queue.pop_front() else { unreachable!("front is a routine") };
+                Some(Queued::Routine(_, _)) => {
+                    let Some(Queued::Routine(id, _)) = self.queue.pop_front() else {
+                        unreachable!("front is a routine")
+                    };
                     self.active_routine = Some(id.clone());
                     self.routine_timed_out = false;
                     match self.hub.routines.begin(&self.hub, &self.cfg.id, &id) {
@@ -322,7 +325,7 @@ impl Actor {
                     continue;
                 }
                 Some(Queued::Compact { .. }) => {
-                    let Some(Queued::Compact { idle }) = self.queue.pop_front() else {
+                    let Some(Queued::Compact { idle, .. }) = self.queue.pop_front() else {
                         unreachable!("front is a compaction")
                     };
                     self.start_compaction(idle, done_tx).await;
@@ -614,7 +617,7 @@ mod priority_tests {
             .map(|item| match item {
                 Queued::User { entry_id, .. } => format!("user:{entry_id}"),
                 Queued::Prompt { text, .. } => format!("prompt:{text}"),
-                Queued::Routine(id) => format!("routine:{id}"),
+                Queued::Routine(id, _) => format!("routine:{id}"),
                 Queued::Compact { .. } => "compact".into(),
                 _ => "other".into(),
             })
@@ -624,10 +627,10 @@ mod priority_tests {
     #[test]
     fn a_person_waiting_goes_first_and_the_arrival_order_inside_a_level_stays() {
         let mut queue = VecDeque::new();
-        insert_ordered(&mut queue, Queued::Routine("r".into()));
+        insert_ordered(&mut queue, Queued::Routine("r".into(), Instant::now()));
         insert_ordered(&mut queue, prompt("agent"));
         insert_ordered(&mut queue, user("u2"));
-        insert_ordered(&mut queue, Queued::Compact { idle: false });
+        insert_ordered(&mut queue, Queued::Compact { idle: false, queued_at: Instant::now() });
         insert_ordered(&mut queue, user("u1"));
         assert_eq!(labels(&queue), ["user:u2", "user:u1", "prompt:agent", "routine:r", "compact"]);
     }

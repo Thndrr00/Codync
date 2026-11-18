@@ -88,7 +88,7 @@ pub enum Cmd {
 }
 
 pub(super) enum Queued {
-    Routine(String),
+    Routine(String, Instant),
     User {
         lane: Lane,
         entry_id: String,
@@ -105,6 +105,7 @@ pub(super) enum Queued {
     /// A compaction the host decided on (see `compaction`); `idle` while the user is away.
     Compact {
         idle: bool,
+        queued_at: Instant,
     },
     Group(GroupTurn),
 }
@@ -116,14 +117,32 @@ impl Queued {
         match self {
             Queued::User { .. } | Queued::Group(_) => 0,
             Queued::BotRequest(_) | Queued::BotReply(_) | Queued::Prompt { .. } => 1,
-            Queued::Routine(_) | Queued::Compact { .. } => 2,
+            Queued::Routine(_, _) | Queued::Compact { .. } => 2,
         }
+    }
+
+    /// When this item was queued, for aging. A room turn and an agent's work inherit the call time.
+    pub(super) fn queued_at(&self) -> Instant {
+        match self {
+            Queued::User { queued_at, .. } | Queued::Routine(_, queued_at) | Queued::Compact { queued_at, .. } => {
+                *queued_at
+            }
+            _ => Instant::now(),
+        }
+    }
+
+    /// A level every two minutes waited, as in agentes.chat ADR 0046, so background work is delayed
+    /// under load but never starves.
+    pub(super) fn effective_priority(&self, now: Instant) -> u8 {
+        let waited = now.saturating_duration_since(self.queued_at()).as_secs();
+        self.priority().saturating_sub((waited / 120) as u8)
     }
 }
 
 #[cfg(test)]
 mod priority_tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn a_person_goes_before_an_agent_and_background_work() {
@@ -131,7 +150,17 @@ mod priority_tests {
             Queued::User { lane: Lane::main("b"), entry_id: "e".into(), text: "hi".into(), queued_at: Instant::now() };
         assert_eq!(user.priority(), 0);
         assert_eq!(Queued::Prompt { text: "x".into(), call: None }.priority(), 1);
-        assert_eq!(Queued::Compact { idle: false }.priority(), 2);
-        assert_eq!(Queued::Routine("r".into()).priority(), 2);
+        assert_eq!(Queued::Compact { idle: false, queued_at: Instant::now() }.priority(), 2);
+        assert_eq!(Queued::Routine("r".into(), Instant::now()).priority(), 2);
+    }
+
+    #[test]
+    fn waiting_loses_one_urgency_level_every_two_minutes() {
+        let now = Instant::now();
+        let routine = Queued::Routine("r".into(), now);
+        assert_eq!(routine.effective_priority(now), 2);
+        assert_eq!(routine.effective_priority(now + Duration::from_secs(119)), 2);
+        assert_eq!(routine.effective_priority(now + Duration::from_secs(120)), 1);
+        assert_eq!(routine.effective_priority(now + Duration::from_secs(240)), 0);
     }
 }

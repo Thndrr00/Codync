@@ -30,16 +30,16 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | A11 A rule learned from two refusals | Two identical denials propose one deny rule, never applied by itself | `agent/approval_lessons.rs` |
 | A12 A run at the token limit | Holds (`wait`) or skips per the routine's `limit_policy`; test runs are exempt | `routines/runner.rs` |
 | Search over what a bot knows | One index, two kinds (message, document), keys masked, internal entries out, resumable backfill | `store/search.rs`, `chat/recall.rs` |
-| A person waiting goes first (ADR 0046) | A bot's queue keeps the three urgency levels (person, agent, background) and inserts a new turn ahead of lower ones, stable within a level; a burst of routines never overtakes a person's message | `agent/bot/cmd.rs`, `agent/bot/queue.rs` |
+| A person waiting goes first (ADR 0046) | A bot's queue keeps the three urgency levels (person, agent, background), inserts a new turn ahead of lower ones (stable within a level), and drops one level for every two minutes an item waited so background work is delayed but never starves | `agent/bot/cmd.rs`, `agent/bot/queue.rs` |
 | Notes don't loop (ADR 0048) | `message_bot` drops a note whose normalized text was already sent to the same bot in the last hour; only notes that got out are remembered | `chat/team/requests.rs`, `chat/team.rs` |
 
 ## Not taken
 
 - **Embeddings**, organization permissions and the other search filters: no provider in the host and
   no organization model.
-- From ADR 0046, **aging and reserved slots**: Codync queues turns per bot, not jobs in one global
-  outbox, so there are no shared slots to reserve and no enqueue time on background items to age.
-  The three priority levels and the "person first" order are kept.
+- From ADR 0046, **reserved slots**: Codync queues turns per bot, not jobs in one global outbox, so
+  there are no shared slots to reserve. The three priority levels, the "person first" order and the
+  two-minute aging are kept.
 
 Built since this report was written: **missions** are their own feature now
 ([missions](../features/missions.md), block 1), GitHub pull-request work runs from a **GitHub App**
