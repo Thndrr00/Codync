@@ -299,6 +299,8 @@ public struct GroupDraft: Codable, Hashable, Sendable {
     public var title: String?
     /// A group taken out of the open roster; its conversation stays and it can be restored.
     public var archived: Bool?
+    /// Keeps what its members learn in the channel; their own chats don't get it.
+    public var keepMemories = false
     /// The channel picture as a data URL, instead of the members' faces.
     public var avatarPhoto: String?
     /// How the group works as a team: one voice with a hierarchy, or the classic round table.
@@ -319,12 +321,13 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         team = group.team
         title = group.title
         archived = group.archived
+        keepMemories = group.keepMemories
         avatarPhoto = group.avatarPhoto
         chiefBotId = group.chiefBotId ?? group.team?.members.first(where: { $0.reportsTo == nil })?.botId
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, name, description, members, pinned, chiefBotId, title, archived, avatarPhoto, team
+        case id, kind, name, description, members, pinned, chiefBotId, title, archived, keepMemories, avatarPhoto, team
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -338,6 +341,7 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         try c.encode(chiefBotId, forKey: .chiefBotId)
         try c.encode(title, forKey: .title)
         try c.encodeIfPresent(archived, forKey: .archived)
+        try c.encode(keepMemories, forKey: .keepMemories)
         try c.encode(avatarPhoto, forKey: .avatarPhoto)
         // Left out when unset, so an update that doesn't touch the team keeps the saved one.
         try c.encodeIfPresent(team, forKey: .team)

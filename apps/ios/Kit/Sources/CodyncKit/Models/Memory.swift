@@ -53,6 +53,8 @@ public struct MemoryView: Decodable, Hashable, Sendable {
     public var shared: Bool
     public var yours: MemoryLayer
     public var bot: MemoryLayer
+    /// A group's own layer, which every member reads in the room; nil for a bot.
+    public var channel: MemoryLayer?
     public var dreams: [DreamRun]
     /// Claude Code's own notes for the bot's project folder, read-only.
     public var projectMemory: Project?

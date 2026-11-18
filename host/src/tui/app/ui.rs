@@ -334,19 +334,21 @@ pub enum GroupField {
     About,
     Title,
     Archived,
+    KeepMemories,
     Bots,
 }
 
 impl GroupField {
-    /// The field after this one; a new group has no About or Archived (they are set afterwards, in
-    /// the editor).
+    /// The field after this one; a new group has no About, Archived or Channel memory (they are set
+    /// afterwards, in the editor).
     pub(super) fn next(self, existing: bool) -> Self {
         match self {
             Self::Name if existing => Self::About,
             Self::Name | Self::About => Self::Title,
             Self::Title if existing => Self::Archived,
             Self::Title => Self::Bots,
-            Self::Archived => Self::Bots,
+            Self::Archived => Self::KeepMemories,
+            Self::KeepMemories => Self::Bots,
             Self::Bots => Self::Name,
         }
     }
@@ -354,8 +356,9 @@ impl GroupField {
     pub(super) fn prev(self, existing: bool) -> Self {
         match self {
             Self::Name => Self::Bots,
-            Self::Bots if existing => Self::Archived,
+            Self::Bots if existing => Self::KeepMemories,
             Self::Bots => Self::Title,
+            Self::KeepMemories => Self::Archived,
             Self::Archived => Self::Title,
             Self::Title if existing => Self::About,
             Self::Title => Self::Name,
@@ -376,6 +379,8 @@ pub struct GroupForm {
     pub title: Editor,
     /// Whether the group shows under ARCHIVED.
     pub archived: bool,
+    /// Keeps what its members learn in the channel; their own chats don't get it.
+    pub keep_memories: bool,
     /// Picked bot ids, in the order they were picked.
     pub members: Vec<String>,
     pub field: GroupField,

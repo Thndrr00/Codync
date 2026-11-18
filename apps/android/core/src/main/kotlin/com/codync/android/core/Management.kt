@@ -14,6 +14,8 @@ data class GroupDraft(
     val chiefBotId: String? = null,
     val title: String? = null,
     val archived: Boolean = false,
+    /** Keeps what its members learn in the channel; their own chats don't get it. */
+    val keepMemories: Boolean = false,
     val avatarPhoto: String? = null,
     val team: TeamSettings? = null,
 ) {
@@ -34,6 +36,7 @@ data class GroupDraft(
             put("chiefBotId", chiefBotId?.let { JsonPrimitive(it) } ?: JsonNull)
             put("title", title?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull)
             put("archived", archived)
+            put("keepMemories", keepMemories)
             put("avatarPhoto", avatarPhoto?.let { JsonPrimitive(it) } ?: JsonNull)
             put("team", team?.let { settings ->
                 buildJsonObject {
@@ -57,7 +60,7 @@ data class GroupDraft(
     companion object {
         fun from(bot: Bot): GroupDraft {
             require(bot.kind == "group")
-            return GroupDraft(bot.id, bot.name, bot.description, bot.members, bot.pinned, bot.chiefBotId, bot.title, bot.archived, bot.avatarPhoto, bot.team)
+            return GroupDraft(bot.id, bot.name, bot.description, bot.members, bot.pinned, bot.chiefBotId, bot.title, bot.archived, bot.keepMemories, bot.avatarPhoto, bot.team)
         }
     }
 }

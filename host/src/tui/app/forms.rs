@@ -23,6 +23,7 @@ impl App {
             about: Editor::default(),
             title: Editor::default(),
             archived: false,
+            keep_memories: false,
             members: vec![],
             field: GroupField::Bots,
             cursor: 0,
@@ -60,6 +61,7 @@ impl App {
             KeyCode::Up if g.field == GroupField::Bots && g.cursor == 0 => g.field = g.field.prev(existing),
             KeyCode::Up if g.field == GroupField::Bots => g.cursor -= 1,
             KeyCode::Char(' ') if g.field == GroupField::Archived => g.archived = !g.archived,
+            KeyCode::Char(' ') if g.field == GroupField::KeepMemories => g.keep_memories = !g.keep_memories,
             KeyCode::Char(' ') if g.field == GroupField::Bots => {
                 let id = self.group_candidates(&g.members).get(g.cursor).map(|b| b.id.clone());
                 if let Some(id) = id {
@@ -96,7 +98,7 @@ impl App {
         let typed = g.name.text.trim();
         let name = if typed.is_empty() { self.group_default_name(&g.members) } else { typed.to_owned() };
         let mut body = json!({"name": name, "members": g.members, "description": g.about.text.trim(),
-            "archived": g.archived});
+            "archived": g.archived, "keepMemories": g.keep_memories});
         let title = g.title.text.trim();
         if !title.is_empty() {
             body["title"] = title.into();
@@ -133,6 +135,7 @@ impl App {
                 about: Editor::with(&b.description),
                 title: Editor::with(b.title.as_str()),
                 archived: b.archived,
+                keep_memories: b.keep_memories,
                 members: b.members.clone(),
                 field: GroupField::Name,
                 cursor: 0,
@@ -568,18 +571,19 @@ mod tests {
         assert_eq!(fields, [n, t, n, t, n], "creating skips About and Archived");
         let Some(Overlay::Group(g)) = app.group_key(g, KeyEvent::from(KeyCode::Char('x'))) else { panic!("stays") };
         assert_eq!(g.name.text, "x");
-        let group = json!({"id": "g", "kind": "group", "name": "Team", "members": ["a"], "title": "Ships it", "archived": true});
+        let group = json!({"id": "g", "kind": "group", "name": "Team", "members": ["a"], "title": "Ships it",
+            "archived": true, "keepMemories": true});
         app.bots.insert("g".into(), Bot::parse(&group).expect("a group"));
         app.selected = Some("g".into());
         app.edit_bot();
         let Some(Overlay::Group(mut g)) = app.overlays.pop() else { panic!("the group editor opens") };
-        assert_eq!((g.title.text.as_str(), g.archived), ("Ships it", true));
+        assert_eq!((g.title.text.as_str(), g.archived, g.keep_memories), ("Ships it", true, true));
         let mut fields = vec![];
-        for _ in 0..5 {
+        for _ in 0..6 {
             let Some(Overlay::Group(next)) = app.group_key(g, KeyEvent::from(KeyCode::Tab)) else { panic!("stays") };
             g = next;
             fields.push(g.field);
         }
-        assert_eq!(fields, [GroupField::About, t, GroupField::Archived, b, n]);
+        assert_eq!(fields, [GroupField::About, t, GroupField::Archived, GroupField::KeepMemories, b, n]);
     }
 }

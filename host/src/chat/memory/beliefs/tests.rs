@@ -42,7 +42,7 @@ fn note(f: &Fixture, name: &str, content: &str) {
         name,
         Some(content),
         None,
-        Writer { author: Author::User, bot: None, cause: Cause::Edit, message: None },
+        Writer { author: Author::User, bot: None, cause: Cause::Edit, message: None, channel: false },
     )
     .expect("written");
 }

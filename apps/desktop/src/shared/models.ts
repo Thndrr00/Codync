@@ -35,6 +35,8 @@ export interface Bot {
   title?: string | null
   /** A group taken out of the open roster; its conversation stays and it can be restored. */
   archived?: boolean
+  /** A group that keeps what its members learn in it: their own chats don't get those memories. */
+  keepMemories?: boolean
   /** Groups only: how the group works as a team, with its hierarchy. */
   team?: TeamSettings | null
   customIcon?: import('./custom-icons').CustomIcon
@@ -199,6 +201,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     chiefBotId: raw.chiefBotId ?? null,
     title: raw.title ?? null,
     archived: raw.archived ?? false,
+  keepMemories: raw.keepMemories ?? false,
     team: raw.team ?? null,
     autoName: raw.autoName ?? false,
     createdAt,
@@ -952,6 +955,8 @@ export interface GroupDraft {
   title?: string | null
   /** A group taken out of the open roster; its conversation stays and it can be restored. */
   archived?: boolean
+  /** Keeps what its members learn in the channel; their own chats don't get it. */
+  keepMemories?: boolean
   /** The channel picture as a data URL, instead of the members' faces. */
   avatarPhoto?: string | null
   /** How the group works as a team: one voice with a hierarchy, or the classic round table. */

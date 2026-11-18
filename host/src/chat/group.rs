@@ -862,6 +862,9 @@ fn member_prompt(hub: &Hub, group: &BotConfig, members: &[BotConfig], me: &BotCo
          never to a question or a request, `to` naming whose newest message (\"user\" or a participant). With \
          nothing to add, a reaction and \"{PASS}\" agrees without a message."
     ));
+    if let Some(memory) = crate::chat::memory::channel::block(hub, group, &me.id)? {
+        out.push(memory);
+    }
     out.push(String::new());
 
     let seen = hub.store.last_spoke(lane, &me.id);

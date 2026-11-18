@@ -8,6 +8,7 @@ mod api;
 mod beliefs;
 #[allow(dead_code, unused_imports, reason = "OpenMausBot scaffolding, not wired into the host yet")]
 pub mod budget;
+pub mod channel;
 mod dates;
 mod dream;
 mod file_api;

@@ -111,7 +111,7 @@ export function MemoryCard({ botId }: { botId: string }) {
   </>
 }
 
-function EntryRow({ entry }: { entry: MemoryEntry }) {
+export function EntryRow({ entry }: { entry: MemoryEntry }) {
   const host = useStore()
   const tr = useTr()
   const archived = entry.state === 'archived'

@@ -15,6 +15,8 @@ public struct GroupEditorView: View {
     @State private var team: TeamSettings
     @State private var chiefBotId: String?
     @State private var archived: Bool
+    @State private var keepMemories: Bool
+    @State private var memory: MemoryStore?
     @State private var photo: String?
     @State private var photoItem: PhotosPickerItem?
     @State private var pickingPhoto = false
@@ -36,6 +38,7 @@ public struct GroupEditorView: View {
         _team = State(initialValue: saved.reconciled(members: group.members, lead: lead))
         _chiefBotId = State(initialValue: [group.chiefBotId, lead].compactMap { $0 }.first { group.members.contains($0) })
         _archived = State(initialValue: group.archived ?? false)
+        _keepMemories = State(initialValue: group.keepMemories)
         _photo = State(initialValue: group.avatarPhoto)
     }
 
@@ -84,7 +87,9 @@ public struct GroupEditorView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         pictureRow
                         archivedRow
+                        keepMemoriesRow
                     }
+                    channelMemorySection
                     DocumentsView(botId: groupId)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L10n.tr("Members"))
@@ -152,6 +157,11 @@ public struct GroupEditorView: View {
             guard let item else { return }
             Task { await choosePhoto(item) }
         }
+        .task(id: "\(groupId)-\(model.bots[groupId]?.memoryRev ?? 0)") {
+            let store = memory ?? MemoryStore(botId: groupId) { try await model.ready() }
+            memory = store
+            await store.load()
+        }
         .deleteBotConfirmation($confirmDelete) { dismiss() }
     }
 
@@ -207,6 +217,58 @@ public struct GroupEditorView: View {
             Toggle("", isOn: $archived)
                 .toggleStyle(.codync)
                 .accessibilityLabel(L10n.tr("Archived"))
+        }
+    }
+
+    /// Whether what its members learn while answering here stays in the channel.
+    private var keepMemoriesRow: some View {
+        ValueRow(
+            "Keep memories in this channel",
+            detail: "What its members learn here stays in this channel; their other chats don't get it."
+        ) {
+            Toggle("", isOn: $keepMemories)
+                .toggleStyle(.codync)
+                .accessibilityLabel(L10n.tr("Keep memories in this channel"))
+        }
+    }
+
+    /// The channel's memories, read-only: its members change them from a turn in the room.
+    private var channelMemorySection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L10n.tr("Memory"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.secondary)
+                .padding(.bottom, 4)
+            Text(L10n.tr("Every member reads these here. To change one, ask a member to remember or forget it."))
+                .font(.caption)
+                .foregroundStyle(Palette.tertiary)
+            if let entries = memory?.view?.channel?.entries, !entries.isEmpty {
+                ForEach(entries) { entry in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.text).foregroundStyle(Palette.text)
+                        Text("\(author(entry)) · \(Date(milliseconds: entry.updatedAt).formatted(.relative(presentation: .named)))")
+                            .font(.caption)
+                            .foregroundStyle(Palette.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                }
+            } else {
+                Text(L10n.tr("Nothing yet. What the channel learns shows up here."))
+                    .font(.caption)
+                    .foregroundStyle(Palette.tertiary)
+                    .padding(.vertical, 6)
+            }
+        }
+    }
+
+    /// Who wrote a channel memory, as the memory screen says it.
+    private func author(_ entry: MemoryEntry) -> String {
+        switch entry.author {
+        case "user": return L10n.tr("You wrote it")
+        case "bot": return "\(model.bots[entry.authorBot ?? ""]?.name ?? "A bot") remembered it"
+        case "dream": return L10n.tr("Dreaming")
+        default: return L10n.tr("Moved from the old memory")
         }
     }
 
@@ -347,6 +409,7 @@ public struct GroupEditorView: View {
                 draft.pinned = model.bots[groupId]?.pinned
                 draft.title = typedTitle.isEmpty ? nil : typedTitle
                 draft.archived = archived
+                draft.keepMemories = keepMemories
                 draft.avatarPhoto = photo
                 draft.chiefBotId = chiefBotId
                 draft.team = team.reconciled(members: members, lead: chiefBotId)

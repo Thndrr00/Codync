@@ -24,6 +24,10 @@ Open the group's settings to change it:
 
 In the editor you can rename the group, add or remove members, and fill in **What this group works on**. Every member reads that line, so use it to say what the room is for. A **title** is the short line under the group's name in the roster. **Archived** takes the group out of the open roster while its conversation and members stay; restore it from the archived groups list in settings. The iPhone and desktop editors also choose the member that leads the team and can set a picture (PNG, JPEG or WebP up to 300 KB) shown instead of the members' faces.
 
+**Keep memories in this channel** keeps what its members learn while answering here in the channel itself: their own chats don't get those memories. Each member still has its own memory, and everything [shared by all your bots](/docs/memory) still reaches every chat. The editor also lists the channel's memories, read-only; to change one, ask a member to remember or forget it.
+
+A channel's memory is one shared layer beside each member's own: every member reads it when it answers in the room, and its own chats never do. A member adds to it with `channel_remember` ("Remember that our releases ship on Fridays") and removes one with `channel_forget_memory`. A memory holds up to 500 characters, the channel keeps its full list within the usual memory limit, and saving the same text again keeps one memory instead of two.
+
 **Delete group chat** removes the group and its conversation. Its bots stay. If you delete a bot, it leaves every group it was in.
 
 ## Let a bot create and change groups
@@ -108,6 +112,7 @@ Sending a new message also ends the running exchange before the next member is a
 - **What it's shown.** On each turn, a member reads the room's messages since it last spoke there, the most recent ones if there are many, plus who's in the room and what the group is for.
 - **Private chats.** Members are told not to reveal what you discussed with them one-on-one. That's only an instruction to the agent: the same session holds both conversations.
 - **Long-term memory.** In a group, a bot can add to its [memory](/docs/memory) but can't change or remove what's there. Group chats don't feed dreaming, and a bot's history search covers only its own chat.
+- **The channel's memory.** What the channel keeps with `channel_remember` is listed in every member's turn there, and in none of their own chats. With **Keep memories in this channel** on, a member's ordinary memory writes in the room go to the channel too.
 
 ## Notifications
 

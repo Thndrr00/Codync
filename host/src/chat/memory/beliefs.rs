@@ -98,8 +98,8 @@ fn write(
     let expected = before.as_deref().map(mf::hash);
     let message = hub.runtime(&cfg.id).message;
     let writer = match by {
-        By::Person => Writer { author: Author::User, bot: None, cause, message: None },
-        By::Bot => Writer { author: Author::Bot, bot: Some(cfg), cause, message: message.as_deref() },
+        By::Person => Writer { author: Author::User, bot: None, cause, message: None, channel: false },
+        By::Bot => Writer { author: Author::Bot, bot: Some(cfg), cause, message: message.as_deref(), channel: false },
     };
     files::write(hub, layer, name, content, expected.as_deref(), writer)
 }

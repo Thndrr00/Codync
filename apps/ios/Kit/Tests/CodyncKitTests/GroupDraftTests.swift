@@ -7,20 +7,23 @@ import Testing
 @Test func aGroupDraftEncodesItsTitleLeadArchiveAndPicture() throws {
     let bot = try JSONDecoder().decode(Bot.self, from: Data(#"""
     {"id":"g","kind":"group","name":"Crew","members":["a"],"title":"Ships 2.0","archived":true,"chiefBotId":"a",
-     "avatarPhoto":"data:image/png;base64,AA=="}
+     "keepMemories":true,"avatarPhoto":"data:image/png;base64,AA=="}
     """#.utf8))
     #expect(bot.title == "Ships 2.0")
     #expect(bot.archived == true)
+    #expect(bot.keepMemories == true)
     #expect(bot.chiefBotId == "a")
     #expect(bot.avatarPhoto == "data:image/png;base64,AA==")
 
     var draft = GroupDraft(bot)
     draft.archived = false
+    draft.keepMemories = false
     var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(draft))
     var json = try #require(object as? [String: Any])
     #expect(json["title"] as? String == "Ships 2.0")
     #expect(json["chiefBotId"] as? String == "a")
     #expect(json["archived"] as? Bool == false)
+    #expect(json["keepMemories"] as? Bool == false)
     #expect(json["avatarPhoto"] as? String == "data:image/png;base64,AA==")
 
     draft.title = nil

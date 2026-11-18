@@ -400,10 +400,10 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
 pub(super) fn group_view(buf: &mut Buffer, area: Rect, app: &App, g: &GroupForm) {
     let t = theme();
     let bots = app.group_candidates(&g.members);
-    // A new group gets its About and Archived state afterwards, in the editor.
+    // A new group gets its About, memory switch and Archived state afterwards, in the editor.
     let existing = g.group_id.is_some();
-    let top = if existing { 8 } else { 4 };
-    let r = centered(area, 74, u(bots.len() + 10).saturating_add(top).max(18));
+    let top = if existing { 10 } else { 4 };
+    let r = centered(area, 74, u(bots.len() + 12).saturating_add(top).max(18));
     let title = tr(if existing { "Group chat" } else { "New group chat" });
     let inner = frame_box(buf, r, t.text, t.panel, Some((title.as_ref(), t.text)));
     let label = |on: bool| if on { t.bold } else { t.secondary }.patch(t.panel);
@@ -450,6 +450,15 @@ pub(super) fn group_view(buf: &mut Buffer, area: Rect, app: &App, g: &GroupForm)
             inner.width.saturating_sub(8),
             if g.archived { "☑ archived (space toggles)" } else { "☐ archived (space toggles)" },
             if g.field == GroupField::Archived { t.bold } else { t.dim }.patch(t.panel),
+        );
+        put(buf, inner.x, inner.y + 8, 8, "Memory", label(g.field == GroupField::KeepMemories));
+        put(
+            buf,
+            inner.x + 8,
+            inner.y + 8,
+            inner.width.saturating_sub(8),
+            if g.keep_memories { "☑ its members' memories stay here" } else { "☐ space toggles" },
+            if g.field == GroupField::KeepMemories { t.bold } else { t.dim }.patch(t.panel),
         );
     }
     put(buf, inner.x, inner.y + top, inner.width, &format!("Bots · {}", g.members.len()), label(on_bots));

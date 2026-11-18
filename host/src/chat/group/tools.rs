@@ -22,6 +22,7 @@ pub fn tools() -> Value {
         "instructions": {"type": "string", "description": format!("What the channel is for and how its members work; every member reads it, at most {MAX_INSTRUCTIONS_CHARS} characters.")},
         "leadAgentId": {"type": "string", "description": "The member that routes requests naming nobody. Omit it for the first member; null leaves no lead."},
         "archived": {"type": "boolean", "description": "true archives the channel and takes it out of the open roster; false brings it back."},
+        "keepMemories": {"type": "boolean", "description": "true keeps what its members learn here in the channel: their own chats don't get those memories."},
     });
     let mut create = fields.clone();
     create["memberAgentIds"] = json!({"type": "array", "items": {"type": "string"}, "description": "Ids from list_team of the bots in the channel."});
@@ -93,6 +94,9 @@ async fn create(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
         // Kept as the bot that made it: it still reaches the channel after leaving or handing the lead over.
         "createdBy": source.id.clone(),
     });
+    if let Some(keep) = args["keepMemories"].as_bool() {
+        body["keepMemories"] = keep.into();
+    }
     if let Some(title) = title {
         body["title"] = title.into();
     }
@@ -109,6 +113,9 @@ async fn create(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
     }
     if cfg.archived {
         shown.insert("archived".into(), true.into());
+    }
+    if cfg.keep_memories {
+        shown.insert("keepMemories".into(), true.into());
     }
     if !cfg.description.is_empty() {
         shown.insert("description".into(), cfg.description.clone().into());
@@ -164,8 +171,12 @@ async fn update(hub: &Arc<Hub>, source: &BotConfig, args: &Value) -> Result<Valu
         let archived = args["archived"].as_bool().context("archived must be true or false")?;
         patch.insert("archived".into(), archived.into());
     }
+    if !args["keepMemories"].is_null() {
+        let keep = args["keepMemories"].as_bool().context("keepMemories must be true or false")?;
+        patch.insert("keepMemories".into(), keep.into());
+    }
     if patch.len() == 1 {
-        bail!("nothing to change: pass a name, title, instructions, members, lead or archived");
+        bail!("nothing to change: pass a name, title, instructions, members, lead, archived or keepMemories");
     }
     approve(hub, source, format!("Change channel {}", stored.name), describe(hub, &stored, &patch)).await?;
     let shown = patch.get("name").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(|| stored.name.clone());
@@ -207,6 +218,7 @@ fn channel_value(hub: &Hub, id: &str) -> Result<Value> {
         "id": cfg.id, "name": cfg.name, "title": cfg.title, "instructions": cfg.description,
         "members": cfg.members.iter().map(|m| json!({"agentId": m, "name": hub.bot_name(m)})).collect::<Vec<_>>(),
         "leadAgentId": cfg.chief_bot_id, "archived": cfg.archived,
+        "keepMemories": cfg.keep_memories,
     }))
 }
 
@@ -305,6 +317,9 @@ fn describe(hub: &Hub, cfg: &BotConfig, patch: &Map<String, Value>) -> String {
     if let Some(value) = patch.get("archived") {
         lines.push(format!("Archived: {}", if value == true { "yes" } else { "no" }));
     }
+    if let Some(value) = patch.get("keepMemories") {
+        lines.push(format!("Keeps memories in this channel: {}", if value == true { "yes" } else { "no" }));
+    }
     if let Some(Value::String(instructions)) = patch.get("description") {
         lines.push(format!("Instructions:\n{}", if instructions.is_empty() { "(none)" } else { instructions }));
     }
@@ -323,6 +338,7 @@ fn changed_names(patch: &Value) -> Vec<String> {
         ("members", "members"),
         ("chiefBotId", "lead"),
         ("archived", "archived"),
+        ("keepMemories", "channel memory"),
     ];
     labels.iter().filter(|(key, _)| patch.get(*key).is_some()).map(|(_, label)| (*label).to_owned()).collect()
 }

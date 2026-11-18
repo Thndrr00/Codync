@@ -35,7 +35,7 @@ quotes itself.
 | `send` | `botId, text, clientNonce, replyTo?` | `botId` is a bot or a group. `replyTo`: the id of a user message or final reply in that chat; anything else is refused. Works in the relay mailbox too. |
 | `forward` | `entryId, botId` | Sends one message on to another chat, the menu's **Send to a channel** (`host/src/chat/forward.rs`). Its text, files, attachments and who wrote it are copied, so the target keeps them even if the source chat is deleted; the copy is the user's message there and starts a turn as `send` does. Only messages (user messages, final replies) can be sent on; cards and notices are refused. |
 | `createBot` | `{kind:"group", name, description?, members}` | Returns the existing group when these exact bots already share one. |
-| `updateBot` | `{id, name?, members?, pinned?, hidden?, section?}` | A group can't become a bot or the reverse. `section`: a name, or `null` for none. |
+| `updateBot` | `{id, name?, members?, pinned?, hidden?, archived?, keepMemories?, section?}` | A group can't become a bot or the reverse. `archived`: out of the open roster, `false` restores. `keepMemories`: its members' memory writes in the room stay in the channel. `section`: a name, or `null` for none. |
 | `deleteBot` | `botId` | A group's bots stay. A deleted bot leaves its groups. |
 | `reorderBots` | `ids` | The roster as the user dragged it, top first; groups count as rows. See [bot order](computer-order.md#bot-order). |
 | `renameSection` | `from, to` | Every row in section `from` moves to `to`, groups too; an existing name merges them, `null` removes the section. See [bot order](computer-order.md#bot-order). |
@@ -50,12 +50,13 @@ A bot the user lets **Manage the team** also gets `create_channel` and `update_c
 `manage` server, beside `create_bot` and `update_bot` (`host/src/chat/manage.rs` `tools()`):
 
 - `create_channel`: `name` and `memberAgentIds` (ids from `list_team`), optionally `title`,
-  `instructions` (the group's About line), `leadAgentId` (defaults to the first member) and
-  `archived`. An open channel with those exact bots is refused: the bot changes it instead.
+  `instructions` (the group's About line), `leadAgentId` (defaults to the first member),
+  `archived` and `keepMemories`. An open channel with those exact bots is refused: the bot changes
+  it instead.
 - `update_channel`: `channelId` (the id, or the name, case aside), then any of `name`, `title`,
   `instructions`, `addMemberAgentIds`, `removeMemberAgentIds`, `leadAgentId` (null for none),
-  `archived`. A channel needs at least one bot and the lead must stay a member; a lead that
-  leaves becomes none.
+  `archived`, `keepMemories`. A channel needs at least one bot and the lead must stay a member; a
+  lead that leaves becomes none.
 - The caller must manage the team and must see the channel (be a member, have made it, or lead
   it); otherwise the call is refused with the reason. Both go through `Hub::create_bot` /
   `Hub::update_bot`, so the same title, member and archive checks apply as for a client.
@@ -85,6 +86,30 @@ A bot can also hand work to a channel from its own chat. Every bot has `send_to_
   `since_last_request` starts at the last user message or channel request, and `requested` asks the
   names in `data.channelRequest.members` (or the lead) in the first round instead of everyone.
   Later rounds and late answers work as usual.
+
+## A channel's memory (`host/src/chat/memory/channel.rs`)
+
+A group keeps a memory layer of its own, beside each member's own and the shared one
+(`files::folder(Some(group))`). Its `MEMORY.md` is what every member reads in the room; a member's
+own chats never see it.
+
+| Tool (memory MCP server) | Fields | Notes |
+|---|---|---|
+| `channel_remember` | `text` (at most 500 characters) | Adds one line to the channel's `MEMORY.md`, or corrects the line with the same text (case aside) instead of adding a second. Refuses over the per-memory limit or when the layer's `MEMORY.md` is full, naming the limit. |
+| `channel_forget_memory` | `text` | Removes the line with that text (exactly, else case aside); an unmatched text is refused with what to try. |
+
+- Both work only in a turn of a channel the caller is a member of; the channel is
+  `hub.runtime(bot).lane.chat`. Elsewhere they are refused with the actionable reason.
+- Writes go through `files::write` with `Writer { channel: true }`: the usual checks still run
+  (`check_change`), the "only in the user's own chat" rule doesn't apply, and the change is
+  recorded against the channel layer, not the member's.
+- A member's prompt gains the list (`channel::block`) before the room history, once per session
+  and again when the channel's memory revision changes.
+- With `keepMemories` on, an ordinary `edit_memory` of the member's own layer made in a channel
+  turn goes to the channel layer instead (`file_tools::edit`), so its other chats don't get it.
+  `remember_for_all_bots` and shared memory are unaffected.
+- `memory {botId}` accepts a group and returns its layer as `channel` (`yours` and `bot` empty),
+  which the group settings show read-only on every client and in the terminal's memory sheet.
 
 ## How a group answers (`host/src/chat/group.rs`, Grok Bot's design)
 

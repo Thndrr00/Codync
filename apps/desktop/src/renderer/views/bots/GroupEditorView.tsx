@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { isGroup, type ActionClass, type Bot, type RulePolicy, type TeamSettings } from '@shared/models'
 import { BotAvatar, GroupAvatar } from '../../components/Avatar'
 import { Button, ChoicePicker, IconButton, Spinner, Switch, ValueRow } from '../../components/Controls'
@@ -7,6 +7,9 @@ import { Dialog, ModalHeader, Sheet, SheetPage, useDismiss } from '../../compone
 import { VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
+import { useModel } from '../../lib/observable'
+import { MemoryStore } from '../../store/memory-store'
+import { EntryRow } from './MemoryView'
 import { errorText } from './drafts'
 import { AutoTextArea } from './parts'
 import { Field } from './parts'
@@ -44,6 +47,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
   const [members, setMembers] = useState<string[]>(group.members)
   const [chiefBotId, setChiefBotId] = useState<string | null>(group.chiefBotId ?? null)
   const [archived, setArchived] = useState(group.archived === true)
+  const [keepMemories, setKeepMemories] = useState(group.keepMemories === true)
   const [photo, setPhoto] = useState<string | null>(group.avatarPhoto ?? null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -86,6 +90,10 @@ export function GroupEditorView({ group }: { group: Bot }) {
   // "Alice, Bob" when no name is typed.
   const defaultName = picked.length ? picked.map((b) => b.name).join(', ') : 'Name'
   const current = store.bots.get(group.id)
+  const memory = useModel(useMemo(() => new MemoryStore(group.id, () => store.ready()), [group.id, store]))
+  // A memory changes anywhere moves the bot's `memoryRev`: read the channel's again.
+  useEffect(() => { void memory.load() }, [memory, current?.memoryRev])
+  const channel = memory.view?.channel
 
   const saveTemplate = async () => {
     setTemplateNotice(null)
@@ -125,7 +133,7 @@ export function GroupEditorView({ group }: { group: Bot }) {
     setError(null)
     const effectiveTeam = reconcileTeam(team, members, chiefBotId)
     try {
-      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam, title: title.trim() || null, archived, avatarPhoto: photo })
+      await store.updateGroup({ id: group.id, kind: 'group', name: name.trim() || defaultName, description: about.trim(), members, pinned: store.bots.get(group.id)?.pinned, chiefBotId, team: effectiveTeam, title: title.trim() || null, archived, keepMemories, avatarPhoto: photo })
       // Each role's rules reach every member with that role; the bot's own rules keep the rest.
       // Only roles whose pickers were touched are written, so opening and saving a group changes
       // nothing about approval by itself.
@@ -182,6 +190,14 @@ export function GroupEditorView({ group }: { group: Bot }) {
             <ValueRow label="Archived" detail="Archived groups leave the open roster; their conversation stays.">
               <Switch on={archived} onChange={setArchived} label="Archived" />
             </ValueRow>
+            <ValueRow label={tr('Keep memories in this channel')} detail={tr("What its members learn here stays in this channel; their other chats don't get it.")}>
+              <Switch on={keepMemories} onChange={setKeepMemories} label={tr('Keep memories in this channel')} />
+            </ValueRow>
+            <div className="group-section-title">{tr('Memory')}</div>
+            <Text size="caption" tone="tertiary">{tr('Every member reads these here. To change one, ask a member to remember or forget it.')}</Text>
+            {channel?.entries.length
+              ? channel.entries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
+              : <Text size="caption" tone="tertiary">{tr('Nothing yet. What the channel learns shows up here.')}</Text>}
             <div className="group-section-title">Members</div>
             {picked.map((bot) => (
               <div key={bot.id} className="member-row fade-in">
