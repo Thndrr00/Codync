@@ -98,9 +98,41 @@ pub struct Bot {
     pub archived: bool,
     /// A group that keeps what its members learn in it; their own chats don't get it.
     pub keep_memories: bool,
+    /// A group's request tree: what waits, and the controls on each row (host `bot.tasks`).
+    pub tasks: Vec<Task>,
     pub members: Vec<String>,
     /// Where the running turn talks: a chat (`None` = its own).
     pub working_chat: Option<String>,
+}
+
+/// One row of a group's request tree: the request, or a member's assignment under it.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Task {
+    pub id: String,
+    /// What the row is about: the request's text, or a line for its assignment.
+    pub instruction: String,
+    #[serde(default)]
+    pub owner_name: Option<String>,
+    /// queued, running, completed, failed, paused or cancelled.
+    pub state: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl Task {
+    pub fn parse(v: &Value) -> Option<Self> {
+        serde_json::from_value(v.clone()).ok()
+    }
+
+    /// Stopped or failed: it offers Continue, Reassign and Cancel.
+    pub fn stopped(&self) -> bool {
+        self.state == "paused" || self.state == "failed"
+    }
+
+    pub fn open(&self) -> bool {
+        matches!(self.state.as_str(), "queued" | "running" | "paused" | "failed")
+    }
 }
 
 /// An agent of a bot's chain that rests (`agent::fallback::resting`) until `until` (epoch ms).
@@ -251,6 +283,7 @@ impl Bot {
             title: s("title"),
             archived: v["archived"].as_bool().unwrap_or(false),
             keep_memories: v["keepMemories"].as_bool().unwrap_or(false),
+            tasks: v["tasks"].as_array().into_iter().flatten().filter_map(Task::parse).collect(),
             members: strs(&v["members"]),
             working_chat: v["workingChat"].as_str().map(str::to_owned),
         })

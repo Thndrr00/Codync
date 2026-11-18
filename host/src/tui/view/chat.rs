@@ -172,8 +172,11 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
         set_cursor(Position::new(r.x + 3 + u(cursor.0), cy.min(comp_top + ch)));
     }
 
+    // A channel's request tree shows over the composer: what waits for the members, and the keys that act on it.
+    let strip_top = super::tasks::tasks_band(buf, r, app, &b, box_top, typing);
+
     // Transcript.
-    let body = Rect::new(r.x, top + 1, r.width, box_top.saturating_sub(top + 1));
+    let body = Rect::new(r.x, top + 1, r.width, strip_top.saturating_sub(top + 1));
     app.chat_height = usize::from(body.height);
     let built = build_chat(app, &b, usize::from(body.width.saturating_sub(1)));
     let total = built.lines.len();
@@ -208,7 +211,7 @@ pub(super) fn chat(buf: &mut Buffer, r: Rect, app: &mut App, narrow: bool) {
     }
     if app.chat_scroll > 0 {
         let s = format!(" ↓ {} more ", app.chat_scroll);
-        rput(buf, r.right() - 1, box_top.saturating_sub(1), &s, t.btn);
+        rput(buf, r.right() - 1, strip_top.saturating_sub(1), &s, t.btn);
     }
     if typing {
         command_menu(buf, body, app);

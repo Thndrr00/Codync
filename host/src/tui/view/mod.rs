@@ -31,6 +31,7 @@ mod roster_tools;
 mod rules;
 mod skill;
 mod style;
+mod tasks;
 mod time;
 mod trace;
 mod transcript;
