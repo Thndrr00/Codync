@@ -14,6 +14,7 @@ mod file_api;
 mod file_tools;
 pub mod files;
 mod import;
+mod skill_review;
 mod tools;
 pub mod turns;
 

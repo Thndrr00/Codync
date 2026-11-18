@@ -203,6 +203,11 @@ pub struct BotConfig {
     /// Skill ids the bot is told about; see `market`.
     #[serde(default)]
     pub skills: Vec<String>,
+    /// The bot learns skills by itself: after a chat where the person corrected it or a method clearly worked, its
+    /// background review saves what it learned as a skill of its own (`chat::memory::skill_review`). Off unless the
+    /// person turns it on: it spends the bot's tokens in the background, and its save_skill way of asking stays.
+    #[serde(default)]
+    pub learn_skills: bool,
     /// The bot gets the built-in `computer` MCP server (see `screen`).
     #[serde(default)]
     pub computer: bool,
@@ -434,5 +439,17 @@ mod tests {
         assert_eq!(cfg.proactive.quiet_end, 7);
         assert_eq!(cfg.proactive.max_per_day, 2);
         assert!(!cfg.proactive.apps_in_background);
+    }
+
+    #[test]
+    fn a_bot_learns_skills_on_its_own_only_when_the_person_turns_it_on() {
+        let older: BotConfig = serde_json::from_value(serde_json::json!({"id": "b1", "name": "Bot"})).unwrap();
+        assert!(!older.learn_skills, "a config from before the setting loads with it off");
+        let mut cfg = older;
+        cfg.learn_skills = true;
+        let wire = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(wire["learnSkills"], true, "clients read the setting as learnSkills");
+        let back: BotConfig = serde_json::from_value(wire).unwrap();
+        assert!(back.learn_skills, "the setting round-trips");
     }
 }

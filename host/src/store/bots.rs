@@ -278,6 +278,7 @@ mod tests {
             notify: None,
             connectors: vec![],
             skills: vec![],
+            learn_skills: false,
             computer: false,
             approval_rules: vec![],
             computer_permissions: crate::computer::Permissions::default(),

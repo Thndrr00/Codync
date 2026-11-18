@@ -1,5 +1,6 @@
 //! Dreaming in the host: when a bot's run starts, what it reads, and running its model on the bot's own harness.
-//! What a run may change is the crate's decision (`codync_mem::dream`).
+//! What a run may change is the crate's decision (`codync_mem::dream`); after that, a second review may teach the bot a
+//! skill of its own (`skill_review`).
 
 use crate::chat::{naming, oneshot};
 use crate::hub::Hub;
@@ -203,7 +204,7 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
         return Ok(Ran::Later);
     }
     let shared = super::shared(&cfg);
-    let _turn = if shared { Some(SHARED.lock().await) } else { None };
+    let shared_turn = if shared { Some(SHARED.lock().await) } else { None };
     let after = bookmark(&hub.store, bot_id);
     let entries = hub.store.conversation_since(bot_id, after, READ_LIMIT)?;
     let read = within_batch(&entries);
@@ -244,6 +245,13 @@ async fn run(hub: &Arc<Hub>, bot_id: &str) -> Result<Ran> {
     // A run that moved lines out changed MEMORY.md, so the next one tidies on; one that moved none waits for a change.
     for layer in &snapshot.layers {
         mark_tidied(&hub.store, snapshot.layer_bot(layer.shared), layer.content.as_deref().unwrap_or_default())?;
+    }
+    // What these turns taught the bot, as a skill of its own: last, and only when the bot learns skills, so a slow or
+    // failing review holds back neither memory nor the next run. Memory's own files are written, so the shared lock
+    // goes before the review thinks: it reads and writes skills only.
+    drop(shared_turn);
+    if let Err(error) = super::skill_review::review(hub, &cfg, read).await {
+        tracing::warn!(bot = %bot_id, error = format!("{error:#}"), "learning a skill failed; dreaming carries on");
     }
     Ok(Ran::Done { more })
 }
@@ -313,7 +321,7 @@ fn within_batch(entries: &[Entry]) -> &[Entry] {
 /// in the user's place (`from: host`) isn't the user's words, nor one a call's voice model wrote (`from: voice`, it
 /// may rephrase or translate: the call's transcript holds what the user said). A call's line gives its transcript,
 /// line by line: the user's lines are their own words, the voice's are context.
-fn messages(e: &Entry) -> Vec<Message> {
+pub(super) fn messages(e: &Entry) -> Vec<Message> {
     let clip = |text: &str| crate::agent::acp::truncate(text, MESSAGE_CHARS);
     let said: Vec<(bool, Vec<String>)> = if e.kind == EntryKind::Notice.as_str() {
         e.data["transcript"]
