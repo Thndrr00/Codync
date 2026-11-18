@@ -108,15 +108,15 @@ async fn run(
             );
         }
         lease.check()?;
-        let mut step = step.clone();
-        step.snapshot = false;
-        step.timeout = step.timeout.min(left);
-        if let Err(error) = step(hub, bot, lease, &step).await {
+        let mut current = step.clone();
+        current.snapshot = false;
+        current.timeout = current.timeout.min(left);
+        if let Err(error) = step(hub, bot, lease, &current).await {
             bail!(
                 "Step {} of {} ({}) failed and the run stopped: {error:#}. The steps before it stay done; take a snapshot to see the page.",
                 index + 1,
                 steps.len(),
-                step.kind.name()
+                current.kind.name()
             );
         }
     }

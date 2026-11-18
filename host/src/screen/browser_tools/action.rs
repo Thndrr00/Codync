@@ -293,6 +293,7 @@ impl Key {
     }
 
     /// The Enter key, for a `type` that submits.
+    #[must_use]
     pub(crate) fn enter() -> Self {
         Self {
             key: "Enter".to_owned(),
@@ -359,36 +360,28 @@ fn named_key(name: &str) -> Option<NamedKey> {
 fn kind_of(name: &str, args: &Value) -> Result<Kind> {
     Ok(match name {
         "navigate" => {
-            let url = match args.get("url").filter(|value| !value.is_null()) {
-                Some(value) => {
-                    Some(normalize_url(value.as_str().context("`url` is the address to open, as a string.")?)?)
-                }
-                None => None,
-            };
-            let direction = match args.get("direction").filter(|value| !value.is_null()) {
-                Some(value) => Some(Direction::parse(value)?),
-                None => None,
-            };
+            let url = optional(args.get("url"), |value| {
+                normalize_url(value.as_str().context("`url` is the address to open, as a string.")?)
+            })?;
+            let direction = optional(args.get("direction"), Direction::parse)?;
             ensure!(
-                url.is_some() != direction.is_some(),
-                "Name a url to open, or a direction (back, forward, reload), not both."
+                url.is_some() || direction.is_some(),
+                "Name a url to open, or a direction: back, forward or reload."
             );
+            ensure!(!(url.is_some() && direction.is_some()), "Name a url or a direction, not both.");
             Kind::Navigate { url, direction }
         }
         "snapshot" => Kind::Snapshot,
         "click" => Kind::Click {
             target: target_arg(args)?,
-            button: match args.get("button").filter(|value| !value.is_null()) {
-                Some(value) => Button::parse(value)?,
-                None => Button::Left,
-            },
-            count: match args.get("clickCount").filter(|value| !value.is_null()) {
-                Some(value) => u8::try_from(value.as_u64().context("`clickCount` is 1 or 2.")?)
+            button: optional(args.get("button"), Button::parse)?.unwrap_or(Button::Left),
+            count: optional(args.get("clickCount"), |value| {
+                u8::try_from(value.as_u64().context("`clickCount` is 1 or 2.")?)
                     .ok()
                     .filter(|count| (1..=2).contains(count))
-                    .context("`clickCount` is 1 or 2.")?,
-                None => 1,
-            },
+                    .context("`clickCount` is 1 or 2.")
+            })?
+            .unwrap_or(1),
             modifiers: modifiers(args.get("modifiers"))?,
         },
         "type" => {
@@ -445,18 +438,13 @@ fn kind_of(name: &str, args: &Value) -> Result<Kind> {
             checked: args.get("checked").and_then(Value::as_bool).context("`checked` is true or false.")?,
         },
         "wait_for" => {
-            let text = match args.get("text").filter(|value| !value.is_null()) {
-                Some(value) => Some(non_blank(value, "`text` is the text to wait for.", MAX_WAIT_TEXT_CHARS)?),
-                None => None,
-            };
-            let url = match args.get("url").filter(|value| !value.is_null()) {
-                Some(value) => Some(non_blank(value, "`url` is the part of the address to wait for.", MAX_URL_CHARS)?),
-                None => None,
-            };
-            let state = match args.get("state").filter(|value| !value.is_null()) {
-                Some(value) => Some(Load::parse(value)?),
-                None => None,
-            };
+            let text = optional(args.get("text"), |value| {
+                non_blank(value, "`text` is the text to wait for.", MAX_WAIT_TEXT_CHARS)
+            })?;
+            let url = optional(args.get("url"), |value| {
+                non_blank(value, "`url` is the part of the address to wait for.", MAX_URL_CHARS)
+            })?;
+            let state = optional(args.get("state"), Load::parse)?;
             ensure!(
                 text.is_some() || url.is_some() || state.is_some(),
                 "wait_for waits for text, an address or a load state; name one."
@@ -503,6 +491,11 @@ fn steps_of(args: &Value) -> Result<Vec<Action>> {
             Action::parse(action, step).with_context(|| format!("Step {number} ({action}) is not valid"))
         })
         .collect()
+}
+
+/// A field the call left out, or parsed when it named one.
+fn optional<T>(value: Option<&Value>, parse: impl FnOnce(&Value) -> Result<T>) -> Result<Option<T>> {
+    value.filter(|value| !value.is_null()).map(parse).transpose()
 }
 
 /// The ref of the element a tool acts on.

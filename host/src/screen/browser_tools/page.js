@@ -430,7 +430,6 @@
   }
 
   return {
-    version: 1,
     snapshot: snapshot,
     box: box,
     center: center,

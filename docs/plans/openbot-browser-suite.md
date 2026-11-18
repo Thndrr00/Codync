@@ -1,43 +1,101 @@
-# The browser tools on Codync: what was taken
+# OpenBot's browser tool suite on Codync: what was taken
 
-Reviewed 2026-11-18 against Codync `2.47.0`, from OpenBot nightly's `src/backend/browser-tools.ts`,
-`browser-host.ts` and the page-side driver they carry. Same rule as [0.70.0](openbot-0.70.0.md):
-behavior, action names and wording are copied, and the file that holds a piece names where it came
-from.
+Reviewed 2026-11-18 against Codync `2.47.0`, from the OpenBot nightly copy at
+`C:/Users/Edwin Villeda/Documents/openbot-nightly`: `src/backend/browser-tools.ts` (the tool
+definitions), `src/backend/browser-host.ts` (the host behind each action), `src/backend/browser-cdp.ts`
+(the page-side engine and snapshot text) and `src/backend/browser-script.ts` (the `run_script`
+sandbox). Same rule as [0.69.0](openbot-0.69.0.md) and [0.72.0](openbot-0.72.0.md): behavior, field
+names, defaults and text are copied and adapted to Codync's own host, and every file that holds a
+piece names where it came from.
 
-OpenBot's agents drive an embedded Chromium through a tool per action, and through one `run` tool that
-executes a short JavaScript program with the same actions as helpers. Codync's agents had no browser
-tools at all: the protected browser (`screen/protected_browser.rs`) exists for the person's sign-ins,
-and the panel (`screen/browser_panel.rs`) for browsing, both over a private CDP pipe.
+Codync already had the browser: a Codync-owned Chrome/Edge over an inherited CDP pipe with tabs
+(`host/src/screen/browser_panel.rs`), used by the protected-entry flow and by the teaching recorder.
+What it did not have was the model-facing suite: a bot could not open a page, read it, or act on it.
+This change adds that suite on the same pipe, with a browser of the bot's own.
 
 ## Landed
 
 | OpenBot item | Codync shape | Files |
 | --- | --- | --- |
-| A tool per browser action, with `snapshot` numbering the page's elements | `navigate`, `snapshot`, `click`, `type`, `press`, `hover`, `scroll`, `select_option`, `set_checked`, `wait_for`, `evaluate` and `run`, as the chat server's tools for a bot | `host/src/screen/browser_tools.rs`, `browser_tools/tools.rs`, `browser_tools/action.rs` |
-| `run`: a short program with the actions as helpers, capped | The same program, with `sleep`, at most 200 steps and 25 seconds; each step is one of the tools, so a failure names the step | `browser_tools/action.rs`, `browser_tools/cdp.rs` |
-| The page's half: find an element, describe the page, wait for a condition | `page.js`, injected once per document | `browser_tools/page.js` |
-| A snapshot the model can act on | A compact tree with numbered refs, the URL and the title, capped at 400 elements and 40 000 characters | `browser_tools/snapshot.rs` |
+| `navigate` (an address, `back`/`forward`/`reload`, `timeoutMs`), waiting for the page before it answers | `navigate` opens the bot's browser on its first call, then `Page.navigate`, `Page.reload` or `Page.getNavigationHistory` + `Page.navigateToHistoryEntry`, polling `document.readyState` until it is `complete` twice in a row (the pipe drops CDP events, so there is no load event to wait for) | `host/src/screen/browser_tools.rs`, `host/src/screen/browser_tools/cdp.rs` |
+| `snapshot`: refs, role, name, `<tag>`, value, states, bounded output | `snapshot` walks the page (and open shadow roots), numbers up to 400 visible elements, keeps the refs in the document, and prints a depth-indented tree plus the page's visible text, cut at 40000 characters | `host/src/screen/browser_tools/page.js`, `host/src/screen/browser_tools/snapshot.rs` |
+| `click`, `hover`, `scroll` with trusted CDP pointer input | Resolve the ref, scroll it into view, take its centre, then `Input.dispatchMouseEvent` (`mouseMoved`, `mousePressed`, `mouseReleased`; `mouseWheel` for a scroll) | `cdp.rs` |
+| `type` (replace/append, optional submit), `press` (a key or a shortcut) | Focus by ref with `Runtime.evaluate`, then `Input.insertText`; Enter for a submit; `Input.dispatchKeyEvent` for `press`, with the key table (`Enter`, `Tab`, arrows, F1–F12, one character, `Control+A` and friends) | `cdp.rs`, `host/src/screen/browser_tools/action.rs` (`Key`) |
+| `select_option`, `set_checked` | The page's own `<select>`/checkbox change through the injected script, with `input` and `change` dispatched, so a framework sees the change | `page.js` |
+| `wait_for` (text, url, load state, DOM quiet) | Polls a page probe every 150 ms: visible text, the address, `document.readyState`, and a `MutationObserver` that has seen nothing for half a second; answers with a fresh snapshot | `page.js`, `cdp.rs` |
+| `evaluate` (`awaitPromise`, 64 KB answer) | `(0, eval)` inside the page's own context, JSON-encoded there, cut at 64000 characters; a page whose CSP forbids `eval` falls back to `Runtime.evaluate` of the expression itself | `page.js`, `cdp.rs` |
+| `run_script` with the helpers bound to the same actions, at most 200 steps | `run`: the same steps as a JSON list (see below), each parsed exactly as its tool, one shared time limit, one final snapshot | `browser_tools.rs`, `action.rs` |
+| Limits and readable failures | Each limit is a named constant; a page that lost an element answers `The page has no element 7; take a new snapshot.` | `action.rs`, `snapshot.rs`, `cdp.rs` |
 
-The bridge is Codync's own: the tools use the private CDP pipe (`browser_tools/cdp.rs`) on a browser
-context and one tab that belong to the bot, instead of OpenBot's Electron views. Every bot reaches
-them through the same gate as the computer tools: its `Browser` permission
-(`computer::begin(hub, bot, Capability::Browser)`). Off Windows no CDP browser runs, so nothing is
-listed there rather than a set of tools that always refuse.
+The bot-facing surface is described in [browser tools](../features/browser-tools.md).
 
-Limits, all explicit: 20 seconds for one action, 25 seconds and 200 steps for a `run`, 20 000
-characters typed, 64 000 evaluated, 400 elements and 40 000 characters of snapshot.
+## Adaptations, and why
+
+- **One bot, one browser, one tab.** OpenBot's tools take a `tabId` and manage tabs (`open`,
+  `list_tabs`, `status`, `close_tab`). Codync's browser panel is the owner's, and bots must not fight
+  over its active tab, so a bot gets its own Chrome/Edge process, in a browser context Codync created
+  (`Target.createBrowserContext`), with one tab that every call acts on. `navigate` opens that
+  browser; with none open, the other tools say so (`This bot has no browser open yet. Open a page with
+  the navigate tool first.`). No tab tools, so the tab cannot be lost or multiplied by the model.
+- **Refs, not OpenBot's target union.** `click`, `type`, `press`, `hover`, `scroll`, `select_option`
+  and `set_checked` take a ref from the last snapshot (a number; `"7"`, `"#7"`, `"[7]"` and
+  `{"ref": 7}` are accepted too). Role, text, CSS and point targets, and `nth`, are not ported: a
+  snapshot plus a ref covers them, and one target shape is what a model gets right. A ref lives in the
+  page, so it dies with a navigation or the next snapshot, as OpenBot's `revision` does.
+- **`run` is a step list, not a JavaScript sandbox.** OpenBot runs the program in an embedded
+  sandbox. Codync's host has no JavaScript engine and the scope of this change allows no new
+  dependency, so `run` takes the same steps as the tools (`action` plus that tool's fields, with
+  `sleep`), at most 200 of them and one time limit. A sequential sequence and a paging loop written
+  out step by step are covered; arbitrary program logic, `try/catch` and `log` are not. The tool
+  description says so, so a model does not write JavaScript into it.
+- **No vault, cards, takeover, screenshots, recording, uploads, environments or dialogs.** Those need
+  the password vault, the payment flow, the owner's hands or an Electron viewport, none of which a
+  bot's own hidden browser has. `evaluate` and the snapshot text are the whole reading surface.
+- **Windows, like the rest of the CDP browser.** `protected_browser` and `browser_panel` are
+  `#[cfg(windows)]` (the broker is a Node child with inherited pipes and Windows creation flags), so
+  `cdp.rs` is too. Off Windows the tools are not listed in the chat server at all; the argument layer,
+  the snapshot formatter and their tests build and run on every platform.
+- **Time limits under the MCP bridge's 30 s.** A chat tool call has 30 s in `host/src/mcp.rs`, so one
+  action waits at most 20 s and a whole `run` at most 25 s; a longer wait would answer the agent with a
+  dead call while the page work went on.
+
+## Limits, in one place
+
+| What | Limit |
+| --- | --- |
+| One action's wait (`timeoutMs`) | 15 s default, 20 s most |
+| One `run` | 25 s, and 200 steps most |
+| One `run` step's `sleep` | 25 s |
+| Text one `type` enters | 20000 characters |
+| JavaScript one `evaluate` takes, and answers | 64000 characters |
+| Address one `navigate` opens | 2048 characters |
+| Option values one `select_option` selects | 100, each 1000 characters |
+| Snapshot | 400 elements, 40000 characters, text block 4000 characters |
+| Page elements visited for one snapshot | 4000 |
+| Scroll | 100000 pixels either way |
 
 ## Not ported, and why
 
-- **OpenBot's browser tabs, takeover cards and live view**: Codync's panel and the person's own
-  browser already cover them, in their own shape.
-- **The upload tool and file pickers**: Codync has no per-tab upload store; a file reaches the page
-  through its own change if it is needed.
-- **Downloads and dialogs**: they belong to the browser window Codync starts, and the person sees it.
+- **`open`, `list_tabs`, `status`, `close_tab`, popup handling**: one bot, one tab (above).
+- **`submit_secret`, `list_logins`, `list_vault_items`, `save_vault_item`, `request_vault_item`,
+  `delete_vault_item`, `fill_card`, `request_link_payment`**: Codync's vault and its payment flow,
+  with their own approval cards and the protected browser's secret delivery. A model driving a bot
+  browser must not receive secrets, and none of this change touches `host/src/chat/teach.rs` or the
+  vault.
+- **`request_takeover`, `handle_dialog`, `screenshot`, `recording_start`/`recording_stop`,
+  `upload_files`, `drag`, `set_environment`, `act`**: each depends on an owner-facing view, a file
+  chooser, a dialog queue or a legacy action union that Codync's browser does not expose.
+- **`fill_fields`, the OpenBot input repair (`browser-tool-input.ts`) and its advertised-schema
+  merge**: Codync's tools take flat arguments, so a malformed call is read by one parser with one
+  error, not repaired heuristically.
 
 ## Checks
 
-`rustfmt --check` is clean on every file of the module, and the pure half (ref parsing, the step cap,
-the snapshot formatter, the argument checks) is unit-tested. The module has not been compiled with
-cargo on this machine yet; that is the branch's next gate.
+`rustfmt --check --edition 2024` is clean on every changed and added host file. The host's
+`cargo build`, `cargo clippy` and `cargo test` were not run in this checkout: three foreign builds
+were already running there and each takes 5–10 minutes, so the suite's unit tests (ref parsing, key
+parsing, the step cap, the snapshot formatter, the run's argument checks, the cut helper, the profile
+folder name) are written but their run is pending on a quiet machine. The Windows CDP bridge cannot
+run in the unit tests at all: it needs Chrome or Edge, so its first end-to-end check is a bot opening a
+page on a Windows host. No client changed: this is a host tool surface, so the desktop, iPhone,
+Android and terminal clients render nothing new.

@@ -67,7 +67,7 @@ fn click() -> Value {
 fn type_text() -> Value {
     json!({
         "name": "type",
-        "description": format!("Enter text with real keyboard input into the element whose ref the last snapshot printed, or into whatever the page has focused when no ref is given. mode replace (the default) replaces the field's text and append adds to the end; submit presses Enter afterwards. {ACTION_RESULT}"),
+        "description": format!("Enter text with real keyboard input into the element whose ref the last snapshot printed, or into whatever the page has focused when no ref is given. mode replace (the default) replaces the field's text and append adds to the end, for a ref only; submit presses Enter afterwards. {ACTION_RESULT}"),
         "inputSchema": {"type": "object", "properties": {
             "ref": reference("The field's ref from the last snapshot. Leave it out to type into the focused control."),
             "text": {"type": "string", "description": "The text to enter, at most 20000 characters. Newlines work in a textarea."},
