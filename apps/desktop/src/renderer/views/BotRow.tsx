@@ -16,8 +16,13 @@ import { RosterElapsed } from './RosterElapsed'
 export const BotRow = memo(function BotRow({ bot, store, compact, usingComputer, members, agent }: { bot: Bot; store: BotStore; compact: boolean; usingComputer: boolean; members: Bot[]; agent: string | null }) {
   // The cached roster paints before hello names the agents. Follow the store so that arrival replaces "Custom agent".
   useModel(store)
+  // Ported from OpenBot 0.72.0: with only the avatars showing, the pointer names the agent, its purpose and
+  // what it said last, and a reader hears the same. A waiting line says what it needs.
+  const compactLabel = compact
+    ? [bot.name, bot.description, bot.activity || messagePreview(bot.lastMessage ?? '')].filter((part) => part && part.trim()).join(' · ')
+    : undefined
   return (
-    <HStack gap={compact ? 0 : 10} justify={compact ? 'center' : 'flex-start'} className="bot-row">
+    <HStack gap={compact ? 0 : 10} justify={compact ? 'center' : 'flex-start'} className="bot-row" title={compactLabel} aria-label={compactLabel}>
       <AvatarWithStatus bot={bot} members={members} size={30} agent={agent ? store.agentRegistry(agent) : null} />
       <VStack gap={2} className={`bot-row-text ${compact ? 'collapsed' : ''}`} aria-hidden={compact}>
         <HStack align="baseline" gap={4} shrink>
