@@ -27,7 +27,7 @@ pub(super) fn format(page: &Value, max: usize) -> String {
         text.push_str(&title);
         text.push('\n');
     }
-    let elements = page["elements"].as_array().map_or(&[][..], Vec::as_slice);
+    let elements: &[Value] = page["elements"].as_array().map_or(&[], Vec::as_slice);
     if elements.is_empty() {
         text.push_str("(no elements)\n");
     }
