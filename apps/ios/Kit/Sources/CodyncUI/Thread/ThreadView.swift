@@ -45,6 +45,10 @@ public struct ThreadView: View {
                         .padding(.bottom, 8)
                         .transition(.opacity)
                 } else {
+                    // A channel's request tree: Stop, Continue, Reassign and Cancel its sub-tasks.
+                    if let bot, bot.isGroup {
+                        GroupTasksCard(group: bot)
+                    }
                     Composer(botId: botId, replyingTo: $replyingTo,
                              onCall: !calling && bot != nil ? { calling = true } : nil,
                              onInterrupt: callSpeaking ? interruptCall : nil)

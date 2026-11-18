@@ -254,6 +254,17 @@ public extension HostClient {
         return res.entry
     }
 
+    /// A channel sub-task: stop it, let it go on, give it another member, or cancel its branch.
+    func groupTask(_ botId: String, taskId: String, action: String, ownerId: String? = nil) async throws {
+        struct Body: Encodable {
+            var botId: String
+            var taskId: String
+            var action: String
+            var ownerId: String?
+        }
+        let _: Empty = try await call("groupTask", Body(botId: botId, taskId: taskId, action: action, ownerId: ownerId))
+    }
+
     /// `replyTo`: the chat message this one quotes.
     /// `pasted`: what the user pasted rather than typed, which memory never takes as their own words.
     /// `call`: the voice call it was said in (on-device or speech to text).
