@@ -18,6 +18,12 @@ suspend fun AppStore.agentAuthenticate(backend: String, method: String): AgentAu
     refreshBackends()
     return WireJson.decodeFromJsonElement(response)
 }
+
+/** Deletes the build Codync downloaded for an agent; accounts, sign-ins, bots and chats stay. */
+suspend fun AppStore.deleteAgentDownload(backend: String) {
+    hostQuery("deleteAgentDownload", body("backend" to backend), 120_000)
+    refreshBackends()
+}
 suspend fun AppStore.setAgentEnv(backend: String, values: Map<String, String>): AgentAuth {
     val response = hostQuery("setAgentEnv", buildJsonObject { put("backend", backend); put("vars", WireJson.encodeToJsonElement(values)) }, 300_000)
     refreshBackends()

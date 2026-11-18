@@ -52,6 +52,7 @@ struct AgentSheet: View {
     @State private var auth: AgentAuth?
     @State private var checking = false
     @State private var authenticating: String?
+    @State private var confirmDelete = false
     @State private var error: String?
 
     /// Live: an install or sign-in updates the host's list.
@@ -82,6 +83,10 @@ struct AgentSheet: View {
         .onChange(of: route) { old, new in
             // Back from a terminal or key form: see what changed.
             if new == nil, old != nil { Task { await check() } }
+        }
+        .codyncDialog("Delete \(backend.name)'s downloaded build?", isPresented: $confirmDelete,
+                      message: "Accounts, sign-ins, bots and chats stay. Install it again to use the agent.") {
+            [DialogAction("Delete", destructive: true) { removeDownload() }]
         }
     }
 
@@ -143,8 +148,35 @@ struct AgentSheet: View {
             }
             signInSection
             AgentBrings(backendId: backend.id)
+            if backend.downloaded == true {
+                CardSection(footer: "Accounts, sign-ins, bots and chats stay. Install it again to use the agent.") {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Downloaded build").font(.body.weight(.medium)).foregroundStyle(Palette.text)
+                            Text("Codync keeps this agent's runtime under its data folder.")
+                                .font(.caption).foregroundStyle(Palette.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Button("Delete build") { confirmDelete = true }
+                            .buttonStyle(.secondary)
+                    }
+                }
+            }
             if let error {
                 CardSection { Text(L10n.tr(error)).foregroundStyle(Palette.danger).textSelection(.enabled) }
+            }
+        }
+    }
+
+    private func removeDownload() {
+        Task {
+            do {
+                try await model.deleteAgentDownload(backend: backend.id)
+                auth = nil
+                error = nil
+                await check()
+            } catch {
+                self.error = error.localizedDescription
             }
         }
     }

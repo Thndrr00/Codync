@@ -3,7 +3,7 @@ import type { Backend } from '@shared/models'
 import { AgentIcon } from '../../components/AgentIcon'
 import { Button, CardForm, CardSection, IconButton, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
-import { ModalHeader, SheetPage } from '../../components/Overlay'
+import { Dialog, ModalHeader, SheetPage } from '../../components/Overlay'
 import { HStack, IconSlot, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { ThinkingOrb } from '../../components/ThinkingOrb'
@@ -76,6 +76,7 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
   const [auth, setAuth] = useState<AgentAuth | null>(null)
   const [checking, setChecking] = useState(false)
   const [authenticating, setAuthenticating] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const checkingRef = useRef(false)
 
@@ -134,6 +135,17 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
   }, [route])
 
   const back = () => setRoute(null)
+  const removeDownload = async () => {
+    setConfirmDelete(false)
+    try {
+      await store.deleteAgentDownload(backend.id)
+      setAuth(null)
+      setError(null)
+      await check()
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
   const routed = route === null ? null
     : route.kind === 'install' ? <SetupTerminalView backend={backend} step="install" back={back} />
     : route.kind === 'node' ? <SetupTerminalView backend={backend} step="node" back={back} />
@@ -238,8 +250,25 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
         </CardSection>
         {backend.accounts ? <AgentAccounts backend={backend} onChanged={() => void check()} /> : null}
         <AgentBrings backendId={backend.id} />
+        {backend.downloaded ? (
+          <CardSection footer="Accounts, sign-ins, bots and chats stay. Install it again to use the agent.">
+            <HStack gap={8} align="center">
+              <VStack gap={2} grow>
+                <Text size="body" weight="medium" tone="text">Downloaded build</Text>
+                <Text size="caption" tone="secondary">Codync keeps this agent’s runtime under its data folder.</Text>
+              </VStack>
+              <Button kind="secondary" onClick={() => setConfirmDelete(true)}>Delete build</Button>
+            </HStack>
+          </CardSection>
+        ) : null}
         {error ? <CardSection><ErrorText text={error} /></CardSection> : null}
       </CardForm>
+      <Dialog
+        open={confirmDelete}
+        title={`Delete ${backend.name}’s downloaded build?`}
+        onClose={() => setConfirmDelete(false)}
+        actions={[{ title: 'Delete', destructive: true, action: () => void removeDownload() }]}
+      />
     </SheetPage>
   )
 

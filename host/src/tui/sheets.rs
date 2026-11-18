@@ -347,6 +347,9 @@ pub fn agent(buf: &mut Buffer, area: Rect, app: &App, a: &AgentSetup) {
                 "Set up".to_owned(),
                 format!("Downloads {name} on {} if it needs to, then checks its sign-in.", app.host),
             ),
+            SetupRow::Delete => {
+                ("⌫", "Delete downloaded build".to_owned(), "Accounts, sign-ins, bots and chats stay.".to_owned())
+            }
             SetupRow::Check => ("↻", "Check again".to_owned(), String::new()),
         };
         let title = tr(&title);

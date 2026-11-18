@@ -107,6 +107,8 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
 @Composable private fun Overview(backend: AgentBackend, auth: AgentAuth?, checking: Boolean, authenticating: String?, error: String?, state: AppState, store: AppStore,
     go: (SetupRoute) -> Unit, check: () -> Unit, authenticate: (AgentAuthMethod) -> Unit) {
     val host = state.hostName
+    val scope = rememberCoroutineScope()
+    var confirmDelete by remember { mutableStateOf(false) }
     val signedIn = auth?.signedIn ?: backend.signedIn
     val curated = backend.curated
     val setUp = setUp(backend, auth)
@@ -177,7 +179,27 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
             }
         }
         if (backend.accounts == true) AgentAccountsSection(backend, state, store, check)
+        if (backend.downloaded) CardSection("Downloaded build", "Accounts, sign-ins, bots and chats stay. Install it again to use the agent.") {
+            row {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Codync keeps this agent's runtime under its data folder.", style = Type.footnote, color = Palette.secondary)
+                    }
+                    SecondaryButton("Delete build") { confirmDelete = true }
+                }
+            }
+        }
         error?.let { CardSection { row { SelectionContainer { ErrorRow(it) } } } }
+    }
+    CodyncDialog("Delete ${backend.name}'s downloaded build?", confirmDelete, { confirmDelete = false },
+        "Accounts, sign-ins, bots and chats stay. Install it again to use the agent.") {
+        listOf(DialogAction("Delete", destructive = true) {
+            scope.launch {
+                try { store.deleteAgentDownload(backend.id); check() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) { /* the sheet's error line shows it on the next check */ }
+            }
+        })
     }
 }
 

@@ -74,6 +74,18 @@ extension BotStore {
         await refreshBackends()
     }
 
+    /// Deletes the build Codync downloaded for an agent; accounts, sign-ins, bots and chats stay.
+    func deleteAgentDownload(backend: String) async throws {
+        let computerID = computer.id
+        let accountID = storage.id
+        let client = try await ready()
+        let host = hostId
+        try checkAgentAccountContext(computer: computerID, account: accountID, host: host)
+        let _: EmptyReply = try await client.call("deleteAgentDownload", ["backend": backend], timeout: 120)
+        try checkAgentAccountContext(computer: computerID, account: accountID, host: host)
+        await refreshBackends()
+    }
+
     private func checkAgentAccountContext(computer computerID: String, account accountID: String, host: String?) throws {
         try Task.checkCancellation()
         guard !retired, computer.id == computerID, storage.id == accountID, hostId == host,

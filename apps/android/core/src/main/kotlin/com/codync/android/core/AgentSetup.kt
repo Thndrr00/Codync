@@ -15,7 +15,11 @@ import kotlinx.serialization.json.*
     /** Keeps isolated accounts beside the computer's own sign-in. */
     val accounts: Boolean? = null,
     /** The computer's own sign-in can be removed. */
-    val signOut: Boolean? = null) {
+    val signOut: Boolean? = null,
+    /** Codync downloaded this agent's build under its data folder. */
+    val downloaded: Boolean = false,
+    /** The user deleted that build; install it again to use the agent. */
+    val turnedOff: Boolean = false) {
     /** Runs on Node.js and the computer has none yet. */
     val needsNode: Boolean get() = node == "missing"
 }

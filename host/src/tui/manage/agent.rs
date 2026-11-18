@@ -57,6 +57,9 @@ impl App {
                 rows.push(SetupRow::Method(m.clone()));
             }
         }
+        if b.is_some_and(|b| b["downloaded"] == true) {
+            rows.push(SetupRow::Delete);
+        }
         rows.push(SetupRow::Check);
         rows
     }
@@ -106,6 +109,10 @@ impl App {
                         a.busy = true;
                         a.error = None;
                         self.sheet("agentAuth", json!({"backend": backend}), Reply::Auth(backend.clone()));
+                    }
+                    Some(SetupRow::Delete) => {
+                        self.flash("Deleting the downloaded build…");
+                        self.sheet("deleteAgentDownload", json!({"backend": backend}), Reply::AgentDownload);
                     }
                 }
             }

@@ -83,6 +83,8 @@ pub fn harness(id: &str) -> Option<&'static Harness> {
 /// Every harness the phone can pick, installed ones first.
 pub fn list() -> Vec<Value> {
     let registry = registry::agents();
+    // Read once: an agent whose downloaded build was deleted stays off until a build is back.
+    let off = registry::turned_off_ids();
     let mut out: Vec<Value> = HARNESSES
         .iter()
         .filter(|h| workbuddy::offered(h.id))
@@ -92,6 +94,8 @@ pub fn list() -> Vec<Value> {
             let reg = h.registry.and_then(|id| registry.iter().find(|a| a["id"] == id));
             let native = path.is_some() && h.local.is_some();
             let runnable = native || reg.is_some_and(|a| registry::launch_kind(a).is_some());
+            let downloaded = reg.is_some_and(registry::downloaded);
+            let turned_off = path.is_none() && !downloaded && off.iter().any(|id| id.as_str() == h.id);
             let needs_node = if native { workbuddy::runs_on_node(h.id) } else { reg.is_some_and(registry::needs_node) };
             let node = if needs_node { node::state() } else { None };
             let signed_in = if h.signed_in.is_some() {
@@ -102,8 +106,8 @@ pub fn list() -> Vec<Value> {
             json!({
                 "id": h.id,
                 "name": h.name,
-                "installed": path.is_some(),
-                "available": path.is_some() && runnable,
+                "installed": path.is_some() || downloaded,
+                "available": (path.is_some() || downloaded) && runnable && !turned_off,
                 "path": path.map(|p| p.to_string_lossy().into_owned()),
                 "description": reg.and_then(|a| a["description"].as_str()).unwrap_or_default(),
                 "installHint": h.setup,
@@ -116,6 +120,8 @@ pub fn list() -> Vec<Value> {
                 "curated": true,
                 "accounts": profile_home(h.id).is_some(),
                 "signOut": sign_out_available(h.id),
+                "downloaded": downloaded,
+                "turnedOff": turned_off,
             })
         })
         .collect();
@@ -126,11 +132,13 @@ pub fn list() -> Vec<Value> {
         if id.is_empty() || known.contains(id) || id == "github-copilot" {
             continue;
         }
+        let downloaded = registry::downloaded(a);
+        let turned_off = !downloaded && off.iter().any(|known| known.as_str() == id);
         out.push(json!({
             "id": id,
             "name": a["name"],
-            "installed": false,
-            "available": registry::launch_kind(a).is_some(),
+            "installed": downloaded,
+            "available": registry::launch_kind(a).is_some() && !turned_off,
             "path": null,
             "description": a["description"],
             "installHint": format!("Codync installs it automatically. Sign in to {} on this computer first if it needs an account.", a["name"].as_str().unwrap_or(id)),
@@ -142,10 +150,22 @@ pub fn list() -> Vec<Value> {
             "curated": false,
             "accounts": false,
             "signOut": false,
+            "downloaded": downloaded,
+            "turnedOff": turned_off,
         }));
     }
     out.sort_by_key(|v| (!v["installed"].as_bool().unwrap_or(false), !v["curated"].as_bool().unwrap_or(false)));
     out
+}
+
+/// Deletes the build Codync downloaded for `id` and turns the agent off, so its bots show as not
+/// installed until it is installed again. Its accounts, sign-ins, bots and chats stay.
+pub fn remove_download(id: &str) -> anyhow::Result<bool> {
+    let agent = harness(id).and_then(|h| h.registry).and_then(registry::agent).or_else(|| registry::agent(id));
+    let Some(agent) = agent else { anyhow::bail!("unknown agent {id}") };
+    let removed = registry::remove_download(&agent)?;
+    registry::set_turned_off(id, true)?;
+    Ok(removed)
 }
 
 /// `program` is some other harness's CLI (not `backend`'s own).

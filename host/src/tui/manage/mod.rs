@@ -90,6 +90,8 @@ pub enum Reply {
     /// A skill's instructions, for the details sheet with that id.
     SkillDetails(String),
     Auth(String),
+    /// The downloaded build was deleted; the reply carries the refreshed backends.
+    AgentDownload,
     HermesRuntime(String),
     HermesEnvironment {
         bot: String,
@@ -231,6 +233,7 @@ pub enum SetupRow {
     Node,
     Login,
     Method(Value),
+    Delete,
     Check,
 }
 

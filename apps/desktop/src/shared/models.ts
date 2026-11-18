@@ -566,6 +566,10 @@ export interface Backend {
   accounts?: boolean
   /** Whether the computer's own sign-in can be removed (a logout command or its credential files). */
   signOut?: boolean
+  /** Codync downloaded this agent's build under its data folder. */
+  downloaded?: boolean
+  /** The user deleted that build; install it again to use the agent. */
+  turnedOff?: boolean
 }
 
 export interface ScreenDisplay {

@@ -819,6 +819,12 @@ export class BotStore extends BotSync {
     await this.refreshBackends()
   }
 
+  /** Deletes the build Codync downloaded for an agent; accounts, sign-ins, bots and chats stay. */
+  async deleteAgentDownload(backend: string): Promise<void> {
+    await (await this.ready()).call('deleteAgentDownload', { backend }, 120_000)
+    await this.refreshBackends()
+  }
+
   /** Removes the computer's own sign-in for an agent, without touching its isolated accounts. */
   async signOutAgent(backend: string): Promise<void> {
     await (await this.ready()).call('agentSignOut', { backend }, 60_000)

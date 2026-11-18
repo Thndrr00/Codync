@@ -184,6 +184,16 @@ impl App {
                 }
                 self.call("refreshBackends", json!({}), After::Nothing);
             }
+            Reply::AgentDownload => {
+                self.backends = v["backends"].as_array().cloned().unwrap_or_default();
+                for o in &mut self.overlays {
+                    if let Overlay::Agent(a) = o {
+                        a.busy = false;
+                        a.cursor = 0;
+                    }
+                }
+                self.flash("Deleted the downloaded build");
+            }
             Reply::Setup => {
                 let Some(id) = v["term"].as_str() else { return };
                 let backend = match self.overlays.last() {

@@ -46,6 +46,59 @@ pub fn agent(id: &str) -> Option<Value> {
     agents().into_iter().find(|a| a["id"] == id)
 }
 
+/// The folder of this agent's downloaded build (`~/.codync/agents/<id>/<version>`).
+fn binary_dir(agent: &Value) -> Result<PathBuf> {
+    let id = agent["id"].as_str().and_then(safe_component).ok_or_else(|| anyhow!("registry entry has a bad id"))?;
+    let version = agent["version"].as_str().and_then(safe_component).unwrap_or("latest");
+    Ok(crate::service::data_dir().join("agents").join(id).join(version))
+}
+
+/// This agent's build is unpacked under `~/.codync/agents` and marked installed.
+pub fn downloaded(agent: &Value) -> bool {
+    binary_dir(agent).is_ok_and(|dir| dir.join(".installed").exists())
+}
+
+/// Removes every build Codync downloaded for `agent` (`~/.codync/agents/<id>`): a bot's account,
+/// sign-in and files live elsewhere and stay. `false` when there was nothing to remove.
+pub fn remove_download(agent: &Value) -> Result<bool> {
+    let dir = binary_dir(agent)?;
+    let Some(agent_dir) = dir.parent() else { return Ok(false) };
+    if !agent_dir.is_dir() {
+        return Ok(false);
+    }
+    std::fs::remove_dir_all(agent_dir).with_context(|| format!("removing {}", agent_dir.display()))?;
+    Ok(true)
+}
+
+/// The agents whose downloaded build the user deleted, kept apart from the builds themselves so an
+/// agent is still known to be off after its folder is gone.
+fn off_file() -> PathBuf {
+    crate::service::data_dir().join("agents-off.json")
+}
+
+static OFF: Mutex<()> = Mutex::new(());
+
+/// The agents the user turned off by deleting their build, as last saved.
+pub fn turned_off_ids() -> Vec<String> {
+    std::fs::read(off_file()).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
+}
+
+/// Records that `id` is off, or that installing it again turned it on.
+pub fn set_turned_off(id: &str, off: bool) -> Result<()> {
+    let Some(id) = safe_component(id) else { bail!("invalid agent id") };
+    let _one_at_a_time = OFF.locked();
+    let mut ids = turned_off_ids();
+    ids.retain(|known| known != id);
+    if off {
+        ids.push(id.to_owned());
+    }
+    if ids.is_empty() {
+        let _ = std::fs::remove_file(off_file());
+        return Ok(());
+    }
+    std::fs::write(off_file(), serde_json::to_vec(&ids)?).context("saving the deleted agents")
+}
+
 /// Replaces the registry for a test, which serializes on `TestSearchPath` and puts `None` back.
 #[cfg(test)]
 pub(crate) fn set_cache(registry: Option<Value>) {

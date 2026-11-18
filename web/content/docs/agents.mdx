@@ -81,6 +81,8 @@ When Hermes asks you to choose between answers, Codync shows the choices for you
 
 Codync also lists every other agent in the ACP registry, about 40 more. These need no install: Codync fetches one the first time a bot uses it, through `npx`, `uvx` or a build for your platform, which it keeps in `~/.codync/agents`. Codync refreshes its copy of the registry once a day.
 
+If Codync downloaded a build and you want the space back, open the agent's setup sheet and choose **Delete build**. The runtime under `~/.codync/agents` is removed and the agent reads as not installed until you set it up again; its accounts, sign-ins, bots and chats stay.
+
 Codync doesn't know these agents' own sign-in commands. If one needs an account, sign in to it on the computer first, or use a sign-in option the agent offers in its setup sheet.
 
 ## A custom command
