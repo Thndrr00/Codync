@@ -195,7 +195,7 @@ internal fun agentRegistry(state: AppState, agent: String) = agentBackends(state
         "Accounts, sign-ins, bots and chats stay. Install it again to use the agent.") {
         listOf(DialogAction("Delete", destructive = true) {
             scope.launch {
-                try { store.deleteAgentDownload(backend.id); check() }
+                try { store.deleteAgentDownload(backend.id) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (failure: Exception) { /* the sheet's error line shows it on the next check */ }
             }

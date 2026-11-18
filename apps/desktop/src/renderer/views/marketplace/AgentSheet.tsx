@@ -141,7 +141,6 @@ export function AgentSheet({ initial, recheck = false }: { initial: Backend; rec
       await store.deleteAgentDownload(backend.id)
       setAuth(null)
       setError(null)
-      await check()
     } catch (e) {
       setError(errorText(e))
     }

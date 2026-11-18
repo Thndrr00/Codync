@@ -174,7 +174,6 @@ struct AgentSheet: View {
                 try await model.deleteAgentDownload(backend: backend.id)
                 auth = nil
                 error = nil
-                await check()
             } catch {
                 self.error = error.localizedDescription
             }
