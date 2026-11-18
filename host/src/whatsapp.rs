@@ -6,6 +6,7 @@
 
 mod approvals;
 pub(crate) mod delivery;
+pub(crate) mod history;
 mod incoming;
 mod outgoing;
 mod receipts;
@@ -194,6 +195,10 @@ impl WhatsApp {
             self.transport_epoch.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
         let invalidated = inbox::invalidate_link(hub);
+        // Unlinking the number deletes what it kept (OpenBot 0.72.0).
+        if let Err(error) = history::forget(&hub.store) {
+            tracing::warn!(%error, "couldn't delete the kept WhatsApp messages");
+        }
         self.send(&json!({"type": "logout"})).await.ok();
         {
             let mut link = self.link.lock().await;

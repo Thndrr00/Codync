@@ -86,6 +86,22 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
             break;
         }
     }
+    // Ported from `OpenBot` 0.72.0: the number keeps what it received for 90 days, so older lines and
+    // the group messages that never reached the bot are only in that store.
+    if source.is_empty() || source == "whatsapp" {
+        let kept = crate::whatsapp::history::search(&hub.store, &query, since, i64::MAX, limit).unwrap_or_default();
+        for hit in kept {
+            messages.push(json!({
+                "source": "whatsapp",
+                "at": hit["at"].clone(),
+                "from": hit["from"].clone(),
+                "text": hit["text"].clone(),
+            }));
+        }
+        messages.sort_by_key(|message| std::cmp::Reverse(message["at"].as_i64().unwrap_or_default()));
+        messages.dedup_by(|a, b| a["at"] == b["at"] && a["text"] == b["text"]);
+        messages.truncate(limit);
+    }
     Ok(json!({"messages": messages}))
 }
 

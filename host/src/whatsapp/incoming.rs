@@ -11,6 +11,16 @@ impl WhatsApp {
         let Some(chat) = event["chat"].as_str().filter(|c| !c.is_empty()) else { return };
         let sender = event["sender"].as_str().unwrap_or_default();
         let group = event["group"].as_bool().unwrap_or(false);
+        // Ported from `OpenBot` 0.72.0: the number keeps what it received for 90 days, also the group
+        // lines that do not mention it, so an agent can read them back later.
+        let _ = super::history::remember(
+            &hub.store,
+            chat,
+            sender,
+            event["name"].as_str().unwrap_or_default(),
+            &text,
+            crate::store::now_ms(),
+        );
         if group && !event["mentioned"].as_bool().unwrap_or(false) && !event["quoted"].as_bool().unwrap_or(false) {
             return;
         }
