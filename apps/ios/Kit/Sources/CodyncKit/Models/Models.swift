@@ -283,7 +283,8 @@ public struct DirItem: Codable, Hashable, Sendable, Identifiable {
     public var id: String { path }
 }
 
-/// Create / update payload for a group chat.
+/// Create / update payload for a group chat. Optional setup is encoded as null when it is nil, so
+/// emptying the title or the lead in the editor clears it on the host.
 public struct GroupDraft: Codable, Hashable, Sendable {
     public var id: String?
     public var kind = "group"
@@ -294,6 +295,10 @@ public struct GroupDraft: Codable, Hashable, Sendable {
     public var pinned: Bool?
     /// The member that leads the team; nil keeps the first member.
     public var chiefBotId: String?
+    /// A group's short line under its name in the roster.
+    public var title: String?
+    /// A group taken out of the open roster; its conversation stays and it can be restored.
+    public var archived: Bool?
     /// How the group works as a team: one voice with a hierarchy, or the classic round table.
     public var team: TeamSettings?
 
@@ -310,7 +315,28 @@ public struct GroupDraft: Codable, Hashable, Sendable {
         members = group.members
         pinned = group.pinned
         team = group.team
-        chiefBotId = group.team?.members.first(where: { $0.reportsTo == nil })?.botId
+        title = group.title
+        archived = group.archived
+        chiefBotId = group.chiefBotId ?? group.team?.members.first(where: { $0.reportsTo == nil })?.botId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, name, description, members, pinned, chiefBotId, title, archived, team
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(name, forKey: .name)
+        try c.encode(description, forKey: .description)
+        try c.encode(members, forKey: .members)
+        try c.encodeIfPresent(pinned, forKey: .pinned)
+        try c.encode(chiefBotId, forKey: .chiefBotId)
+        try c.encode(title, forKey: .title)
+        try c.encodeIfPresent(archived, forKey: .archived)
+        // Left out when unset, so an update that doesn't touch the team keeps the saved one.
+        try c.encodeIfPresent(team, forKey: .team)
     }
 }
 

@@ -1,17 +1,19 @@
 import CodyncKit
 import SwiftUI
 
-/// Change a group chat's name, what it's for and who's in it. Bots are picked like
-/// recipients: chips on top, a search, and the bots not in it yet.
+/// Change a group chat's name, title, what it's for, its Chief of Staff, who's in it, and whether it is archived.
+/// Bots are picked like recipients: chips on top, a search, and the bots not in it yet.
 public struct GroupEditorView: View {
     @Environment(BotStore.self) private var model
     @Environment(\.dismissModal) private var dismiss
     let groupId: String
     @State private var name: String
+    @State private var title: String
     @State private var about: String
     @State private var members: [String]
     @State private var team: TeamSettings
     @State private var chiefBotId: String?
+    @State private var archived: Bool
     @State private var query = ""
     @State private var adding = false
     @State private var saving = false
@@ -21,11 +23,14 @@ public struct GroupEditorView: View {
     public init(group: Bot) {
         groupId = group.id
         _name = State(initialValue: group.name)
+        _title = State(initialValue: group.title ?? "")
         _about = State(initialValue: group.description)
         _members = State(initialValue: group.members)
         let saved = group.team ?? TeamSettings()
-        _team = State(initialValue: saved.reconciled(members: group.members, lead: saved.members.first(where: { $0.reportsTo == nil })?.botId))
-        _chiefBotId = State(initialValue: saved.members.first(where: { $0.reportsTo == nil })?.botId)
+        let lead = saved.members.first(where: { $0.reportsTo == nil })?.botId
+        _team = State(initialValue: saved.reconciled(members: group.members, lead: lead))
+        _chiefBotId = State(initialValue: [group.chiefBotId, lead].compactMap { $0 }.first { group.members.contains($0) })
+        _archived = State(initialValue: group.archived ?? false)
     }
 
     private var picked: [Bot] { members.compactMap { model.bots[$0] } }
@@ -57,6 +62,11 @@ public struct GroupEditorView: View {
                             .foregroundStyle(Palette.text)
                             .multilineTextAlignment(.center)
                             .padding(.top, 6)
+                        TextField(L10n.tr("A short line under the name"), text: titleText)
+                            .textFieldStyle(.plain)
+                            .font(.subheadline)
+                            .foregroundStyle(Palette.secondary)
+                            .multilineTextAlignment(.center)
                         TextField("What this group works on", text: $about, axis: .vertical)
                             .textFieldStyle(.plain)
                             .lineLimit(1...4)
@@ -65,6 +75,7 @@ public struct GroupEditorView: View {
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
+                    archivedRow
                     DocumentsView(botId: groupId)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L10n.tr("Members"))
@@ -109,6 +120,7 @@ public struct GroupEditorView: View {
                             .padding(.top, 10)
                     }
                     .animation(Motion.layout, value: members)
+                    chiefSection
                     teamSection
                     if let error {
                         Text(L10n.tr(error)).font(.footnote).foregroundStyle(Palette.danger).transition(.opacity)
@@ -127,6 +139,33 @@ public struct GroupEditorView: View {
         }
         .background(Palette.background)
         .deleteBotConfirmation($confirmDelete) { dismiss() }
+    }
+
+    /// Whether the group is out of the open roster; its conversation stays.
+    private var archivedRow: some View {
+        ValueRow("Archived", detail: "Archived groups leave the open roster; their conversation stays.") {
+            Toggle("", isOn: $archived)
+                .toggleStyle(.codync)
+                .accessibilityLabel(L10n.tr("Archived"))
+        }
+    }
+
+    /// The member that leads the group, when there is anyone to lead it.
+    @ViewBuilder private var chiefSection: some View {
+        if !picked.isEmpty {
+            ValueRow("Chief of Staff", detail: "Coordinates delegated assignments and automatically intervenes if a member stalls or fails.") {
+                ChoicePicker(
+                    selection: Binding(get: { chiefBotId ?? "" }, set: { chiefBotId = $0.isEmpty ? nil : $0 }),
+                    options: [(id: "", label: L10n.tr("None (auto-detect Chief)"))]
+                        + picked.map { (id: $0.id, label: $0.name) }
+                )
+            }
+        }
+    }
+
+    /// The title keeps to the host's one line under the name (`MAX_TITLE_CHARS`).
+    private var titleText: Binding<String> {
+        Binding(get: { title }, set: { title = String($0.prefix(120)) })
     }
 
     /// The team's structure: one voice or round table, who may speak, and each member's role and manager.
@@ -211,7 +250,13 @@ public struct GroupEditorView: View {
 
     private func toggle(_ id: String) {
         withAnimation(Motion.layout) {
-            if members.contains(id) { members.removeAll { $0 == id } } else { members.append(id) }
+            if members.contains(id) {
+                members.removeAll { $0 == id }
+                // The lead leaves with the member it led.
+                if chiefBotId == id { chiefBotId = nil }
+            } else {
+                members.append(id)
+            }
         }
         query = ""
     }
@@ -234,11 +279,14 @@ public struct GroupEditorView: View {
         let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = typed.isEmpty ? defaultName : typed
         let about = about.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
                 var draft = GroupDraft(name: finalName, description: about, members: members)
                 draft.id = groupId
                 draft.pinned = model.bots[groupId]?.pinned
+                draft.title = typedTitle.isEmpty ? nil : typedTitle
+                draft.archived = archived
                 draft.chiefBotId = chiefBotId
                 draft.team = team.reconciled(members: members, lead: chiefBotId)
                 try await model.updateGroup(draft)

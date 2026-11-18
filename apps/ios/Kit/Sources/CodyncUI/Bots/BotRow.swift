@@ -82,11 +82,19 @@ public struct BotRow: View {
                 .foregroundStyle(Palette.danger)
                 .lineLimit(1)
         } else {
-            Text(MessagePreview.text(bot.lastMessage ?? (bot.isGroup ? "\(bot.members.count) bots" : "\(model.backendName(bot.backend)) · \(bot.managedWorkspace ? L10n.tr("Personal workspace") : bot.folderName)")))
+            Text(MessagePreview.text(bot.lastMessage ?? idleDetail))
                 .font(.subheadline)
                 .foregroundStyle(Palette.secondary)
                 .lineLimit(1)
         }
+    }
+
+    /// Under the name when nothing newer is there: a group's title (else its member count), or a bot's setup.
+    private var idleDetail: String {
+        if bot.isGroup {
+            return bot.title.flatMap { $0.isEmpty ? nil : $0 } ?? "\(bot.members.count) bots"
+        }
+        return "\(model.backendName(bot.backend)) · \(bot.managedWorkspace ? L10n.tr("Personal workspace") : bot.folderName)"
     }
 }
 

@@ -57,6 +57,30 @@ struct ComputersView: View {
                     }
                 }
             }
+            if !archivedGroups.isEmpty {
+                CardSection("Archived groups") {
+                    ForEach(archivedGroups) { item in
+                        let store = item.store, bot = item.bot
+                        HStack {
+                            GroupAvatar(members: store.members(of: bot), size: 28, animated: false)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(bot.name)
+                                Text(bot.title ?? store.hostName).font(.caption).foregroundStyle(Palette.tertiary)
+                            }
+                            Spacer()
+                            IconButton("Restore", systemImage: "tray.and.arrow.up") {
+                                Task {
+                                    do {
+                                        try await store.setGroupArchived(bot, archived: false)
+                                    } catch {
+                                        accounts.lastError = error.localizedDescription
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             CardSection(footer: app.account.isSignedIn
                         ? "Computers in your account need your OK on the computer before this iPhone can use them."
                         : "Each bot runs on its own computer. Sign in to see the computers in your account.") {
@@ -117,15 +141,22 @@ struct ComputersView: View {
         accounts.cloudComputers.filter { c in !accounts.computers.contains { $0.id == c.computerId } }
     }
 
-    private struct HiddenBot: Identifiable {
+    private struct RosterBot: Identifiable {
         let store: BotStore
         let bot: Bot
         let id: String
     }
 
-    private var hiddenBots: [HiddenBot] {
+    private var hiddenBots: [RosterBot] {
         accounts.computers.compactMap { accounts.store(for: $0.id) }.flatMap { store in
-            store.hiddenBots.map { HiddenBot(store: store, bot: $0, id: "\(store.computer.id)/\($0.id)") }
+            store.hiddenBots.map { RosterBot(store: store, bot: $0, id: "\(store.computer.id)/\($0.id)") }
+        }
+    }
+
+    /// Groups taken out of the open roster, on every computer.
+    private var archivedGroups: [RosterBot] {
+        accounts.computers.compactMap { accounts.store(for: $0.id) }.flatMap { store in
+            store.archivedGroups.map { RosterBot(store: store, bot: $0, id: "\(store.computer.id)/\($0.id)") }
         }
     }
 
