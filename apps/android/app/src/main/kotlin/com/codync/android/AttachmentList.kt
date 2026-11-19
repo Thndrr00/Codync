@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,7 @@ import com.codync.android.design.*
 import com.kyant.shapes.RoundedRectangle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Files sent with a message, on the sender's side (iOS `AttachmentList`): images as pictures (tap for full size), other files as cards. */
@@ -51,19 +53,44 @@ import kotlinx.coroutines.withContext
 
 /** A sent image full size, in a sheet while `file` is set. */
 @Composable internal fun AttachmentImageSheet(file: Attachment?, botId: String, state: AppState, store: AppStore, dismiss: () -> Unit) {
-    ImageSheet(file, { it.name }, dismiss) { shown, modifier -> AttachmentImage(shown, botId, 4096, state, store, modifier) }
+    ImageSheet(file, { it.name }, dismiss, copy = { shown -> store.attachments.copyImage(store.attachment(botId, shown), shown.name) }) { shown, modifier ->
+        AttachmentImage(shown, botId, 4096, state, store, modifier)
+    }
 }
 
 /** An image a bot shared full size, in a sheet while `file` is set. */
 @Composable internal fun SharedImageSheet(file: SharedFile?, entryId: String, state: AppState, store: AppStore, dismiss: () -> Unit) {
-    ImageSheet(file, { it.name }, dismiss) { shown, modifier -> SharedImage(shown, entryId, 4096, state, store, modifier) }
+    ImageSheet(file, { it.name }, dismiss, copy = { shown -> store.attachments.copyImage(store.sharedImage(entryId, shown), shown.name) }) { shown, modifier ->
+        SharedImage(shown, entryId, 4096, state, store, modifier)
+    }
 }
 
 /** A picture full size (iOS `AttachmentViewer`), in a sheet while `item` is set. */
-@Composable private fun <T : Any> ImageSheet(item: T?, name: (T) -> String, dismiss: () -> Unit, image: @Composable (T, Modifier) -> Unit) {
+@Composable private fun <T : Any> ImageSheet(
+    item: T?,
+    name: (T) -> String,
+    dismiss: () -> Unit,
+    copy: (suspend (T) -> Unit)? = null,
+    image: @Composable (T, Modifier) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var note by remember(item) { mutableStateOf<String?>(null) }
     CodyncSheet(item, dismiss) { shown ->
         Column(Modifier.fillMaxSize().background(Palette.background)) {
-            ModalHeader(name(shown))
+            ModalHeader(name(shown)) {
+                if (copy != null) SecondaryButton("Copy") {
+                    note = null
+                    scope.launch {
+                        try {
+                            copy(shown)
+                            note = "Copied"
+                        } catch (error: Exception) {
+                            note = error.message ?: "The picture could not be copied"
+                        }
+                    }
+                }
+            }
+            note?.let { Text(it, Modifier.padding(horizontal = 20.dp), style = Type.caption, color = Palette.secondary) }
             Box(Modifier.weight(1f).padding(12.dp), contentAlignment = Alignment.Center) { image(shown, Modifier.fillMaxSize()) }
         }
     }

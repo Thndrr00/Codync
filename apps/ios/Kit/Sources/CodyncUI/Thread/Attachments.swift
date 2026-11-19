@@ -150,25 +150,46 @@ struct AttachmentList: View {
 struct AttachmentViewer: View {
     let name: String
     let image: AttachmentImage
+    /// The picture's own bytes, for Copy.
+    let load: @MainActor (BotStore) async -> Data?
+    @Environment(BotStore.self) private var model
+    @State private var note: String?
 
     init(file: Attachment, botId: String) {
         name = file.name
         image = AttachmentImage(file: file, botId: botId, maxPixels: 4096)
+        load = { await $0.attachmentData(file, bot: botId) }
     }
 
     init(shared file: SharedFile, entryId: String) {
         name = file.name
         image = AttachmentImage(shared: file, entryId: entryId, maxPixels: 4096)
+        load = { await $0.sharedFileData(file, entryId: entryId) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(name)
+            ModalHeader(name) {
+                Button(L10n.tr("Copy")) { copy() }.buttonStyle(.secondary)
+            }
+            if let note {
+                Text(L10n.tr(note)).font(.caption).foregroundStyle(Palette.secondary)
+            }
             image
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(12)
         }
         .background(Palette.background)
+    }
+
+    private func copy() {
+        Task {
+            guard let data = await load(model) else {
+                note = "The picture could not be copied"
+                return
+            }
+            note = ImageClipboard.copy(data) ? "Copied" : "The picture could not be copied"
+        }
     }
 }
 

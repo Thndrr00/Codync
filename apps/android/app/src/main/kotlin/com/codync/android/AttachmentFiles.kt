@@ -88,6 +88,16 @@ class AttachmentFiles(private val context: Context, private val directory: File)
         for (file in files) if (bytes > 512L * 1024 * 1024) { bytes -= file.length(); file.delete() }
     }
 
+    /** Copies a picture to the clipboard as a content link; the receiver reads it from the share folder. */
+    suspend fun copyImage(file: File, name: String) = withContext(Dispatchers.IO) {
+        val folder = shareFolder().apply { mkdirs() }
+        val copy = File(folder, cleanName(name))
+        file.copyTo(copy, overwrite = true)
+        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", copy)
+        val clip = android.content.ClipData.newUri(context.contentResolver, name, uri)
+        context.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(clip)
+    }
+
     /**
      * A new folder for one file the share sheet hands out. The receiving app reads it after the sheet
      * closes, so folders are cleared only once they're a day old.
