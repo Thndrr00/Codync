@@ -552,7 +552,7 @@ mod tests {
             Verdict::Learn(Lesson {
                 skill: None,
                 name: "Test runs".into(),
-                lesson: "Run with the dev profile.".into()
+                lesson_text: "Run with the dev profile.".into()
             })
         );
         for label in ["m2", "m9", "", "the chat"] {
@@ -611,7 +611,7 @@ mod tests {
         assert!(material.contains("[m1] User") && material.contains("[m2] Bot"), "{material}");
         assert!(material.contains("Use the dev profile."), "{material}");
 
-        let lesson = Lesson { skill: None, name: "Test runs".into(), lesson: "Use it.".into() };
+        let lesson = Lesson { skill: None, name: "Test runs".into(), lesson_text: "Use it.".into() };
         let (system, material) = write_prompt(None, &lesson, &steps, &messages);
         assert!(system.contains("a new skill \"Test runs\""), "{system}");
         assert!(system.contains(&format!("at most {DESCRIPTION_CHARS} characters")), "{system}");

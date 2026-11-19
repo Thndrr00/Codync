@@ -124,7 +124,7 @@ impl Actor {
 
     /// A picture cut to the middle of the asked shape and scaled to its pixels, written beside the
     /// original as a PNG; the path of the new file. Ported from `OpenBot` 0.73.0.
-    fn resize_on_disk(source: &str, size: crate::media::size::Size) -> anyhow::Result<String> {
+    fn resize_on_disk(source: &str, size: crate::media::size::Size) -> Result<String> {
         let bytes = std::fs::read(source)?;
         let sized = crate::media::size::apply(&bytes, size)?;
         let folder = crate::service::data_dir().join("media");

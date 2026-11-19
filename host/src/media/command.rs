@@ -95,7 +95,6 @@ pub fn parse(kind: Kind, backend: &str, text: &str) -> Result<Request> {
                 frames.references.push(path_arg(word, &take(&mut words, word)?)?);
             }
             "--size" => size = Some(super::size::parse(&take(&mut words, word)?)?),
-            "--size" => size = Some(super::size::parse(&take(&mut words, word)?)?),
             "--transparent" => transparent = true,
             _ => {
                 rest.push(word);
