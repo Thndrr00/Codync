@@ -35,6 +35,11 @@ fn claude_options(cfg: &BotConfig) -> Value {
         settings["autoMemoryEnabled"] = false.into();
         settings["autoDreamEnabled"] = false.into();
     }
+    // OpenBot 0.74.0: with "Use my Claude Code setup" off, the user's own CLAUDE.md and rules are
+    // not loaded as project files; the switch lives in the bot's harness-memory setting.
+    if let Some(excludes) = crate::agent::own_memory::claude_setup_excludes(cfg) {
+        settings["claudeMdExcludes"] = excludes;
+    }
     json!({"options": {"settings": settings, "extraArgs": {"thinking-display": "summarized"}}})
 }
 

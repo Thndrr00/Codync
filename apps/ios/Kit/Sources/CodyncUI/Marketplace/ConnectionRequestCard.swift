@@ -190,6 +190,7 @@ struct CredentialsView: View {
                 }
                 LoginsSection()
                 if !AppVersion.isBelow(model.hello?.version ?? "", BotSecret.minHost) { BotSecretsSection() }
+                if !AppVersion.isBelow(model.hello?.version ?? "", BotSecret.minHost) { BotLoginsSection() }
                 CardSection("1Password", footer: "Use a service account with read access only to a dedicated shared vault. The 1Password CLI must be installed on the computer.") {
                     Text(L10n.tr(status?.onePasswordConnected == true ? "Connected" : "Connect a shared vault"))
                     CredentialFieldRow("Service account token") {
@@ -292,6 +293,93 @@ private struct LoginsSection: View {
         Task {
             do {
                 try await client.removeLogin(login.id)
+                withAnimation(Motion.layout) { logins.removeAll { $0.id == login.id } }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
+/// Website logins in the bots' own encrypted vault; passwords and 2FA seeds stay on the computer.
+private struct BotLoginsSection: View {
+    @Environment(BotStore.self) private var model
+    @State private var logins: [BotSecret] = []
+    @State private var botId = ""
+    @State private var name = ""
+    @State private var username = ""
+    @State private var origin = ""
+    @State private var password = ""
+    @State private var totp = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    private var bots: [(id: String, label: String)] {
+        model.bots.values.filter { !$0.isGroup }.sorted { $0.name < $1.name }.map { ($0.id, $0.name) }
+    }
+
+    var body: some View {
+        CardSection("Bot logins", footer: "Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.") {
+            ForEach(logins) { login in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(login.name)
+                        Text("\(login.botName ?? "A removed bot") · \(login.username ?? "") · \(login.origin ?? "")")
+                            .font(.caption).foregroundStyle(Palette.secondary)
+                    }
+                    Spacer()
+                    Text(login.hasTotp == true ? L10n.tr("2FA set") : L10n.tr("No 2FA"))
+                        .font(.caption).foregroundStyle(Palette.secondary)
+                    IconButton("Remove", systemImage: "trash") { remove(login) }
+                }
+            }
+            if logins.isEmpty {
+                Text(L10n.tr("No bot logins yet.")).font(.caption).foregroundStyle(Palette.secondary)
+            }
+            ChoicePicker(selection: $botId, options: bots)
+            CredentialFieldRow("Name") { TextField("github", text: $name).plainTextInput() }
+            CredentialFieldRow("Username") { TextField("name@example.com", text: $username).plainTextInput() }
+            CredentialFieldRow("Origin") { TextField("https://github.com", text: $origin).plainTextInput() }
+            CredentialFieldRow("Password") {
+                SecureField(L10n.tr("Password or op:// reference"), text: $password).plainTextInput()
+            }
+            CredentialFieldRow("2FA secret (optional)") {
+                SecureField(L10n.tr("Base32 secret"), text: $totp).plainTextInput()
+            }
+            Button(L10n.tr("Save login")) { save() }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(busy || botId.isEmpty || name.isEmpty || username.isEmpty || origin.isEmpty || password.isEmpty)
+            if let error { Text(L10n.tr(error)).font(.footnote).foregroundStyle(Palette.danger) }
+        }
+        .task { await load() }
+        .onDisappear { password = ""; totp = "" }
+    }
+
+    private func load() async {
+        do { logins = try await model.client?.botSecrets().filter { $0.username != nil } ?? [] }
+        catch { self.error = error.localizedDescription }
+    }
+
+    private func save() {
+        guard let client = model.client else { return }
+        busy = true
+        error = nil
+        Task {
+            defer { busy = false }
+            do {
+                try await client.saveBotLogin(
+                    botId: botId, name: name, username: username, origin: origin, password: password,
+                    totp: totp.isEmpty ? nil : totp
+                )
+                name = ""; username = ""; origin = ""; password = ""; totp = ""
+                await load()
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func remove(_ login: BotSecret) {
+        guard let client = model.client else { return }
+        Task {
+            do {
+                try await client.removeBotLogin(login.id)
                 withAnimation(Motion.layout) { logins.removeAll { $0.id == login.id } }
             } catch { self.error = error.localizedDescription }
         }

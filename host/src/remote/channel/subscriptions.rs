@@ -98,6 +98,15 @@ impl Channel {
                     }
                     event = stream.next() => { let Some(event) = event else { break }; event }
                 };
+                // OpenBot 0.74.0: the app log records the candidate types of a remote connection's
+                // path, never the addresses. An ICE candidate is only logged as `type/protocol`.
+                if screen_subscription && ev["type"] == "candidate" {
+                    if let Some(line) = ev["candidate"]["candidate"].as_str()
+                        && let Some(kind) = crate::remote::ice_diagnostics::sdp_candidate_kind(line)
+                    {
+                        crate::remote::ice_diagnostics::log_route(Some(kind), None);
+                    }
+                }
                 let packet = json!({"id": id, "ev": ev});
                 let sent = if screen_subscription {
                     send_screen_event(&hub, &owner, &mut auth, &tx, packet).await

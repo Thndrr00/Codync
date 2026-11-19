@@ -100,6 +100,8 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.push(crate::chat::channel_history::tool());
                 list.push(crate::chat::browser_profile::tool());
                 list.push(crate::chat::discord_embed::tool());
+                // OpenBot 0.74.0: a bot sends bug reports and ideas in English, after approval.
+                list.push(crate::market::feedback::tool());
                 list.extend(crate::screen::browser_tools::tools());
                 list.extend(crate::chat::skills::tools());
                 list.push(crate::chat::skills::tool());

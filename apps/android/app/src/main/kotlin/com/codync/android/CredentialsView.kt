@@ -75,6 +75,7 @@ private const val BOT_SECRETS_HOST = "2.20.0"
             }
             LoginsSection(store)
             if (!AppVersion.isBelow(state.hello?.text("version") ?: "", BOT_SECRETS_HOST)) BotSecretsSection(store)
+            if (!AppVersion.isBelow(state.hello?.text("version") ?: "", BOT_SECRETS_HOST)) BotLoginsSection(state, store)
             CardSection("1Password", "Use a service account with read access only to a dedicated shared vault. The 1Password CLI must be installed on the computer.") {
                 row { Text(tr(if (status?.onePasswordConnected == true) "Connected" else "Connect a shared vault"), style = Type.body, color = Palette.text) }
                 row { FieldRow("Service account token") { PlainInput(token, { token = it }, "Paste your token", secret = true) } }
@@ -171,6 +172,73 @@ private const val BOT_SECRETS_HOST = "2.20.0"
             }
         }
         if (secrets.isEmpty()) row { Text("No bot secrets yet.", style = Type.caption, color = Palette.secondary) }
+        error?.let { row { Text(it, style = Type.footnote, color = Palette.danger) } }
+    }
+}
+
+/** Saved logins in the bots' own vault (iOS `BotLoginsSection`); values stay hidden. */
+@Composable private fun BotLoginsSection(state: AppState, store: AppStore) {
+    val scope = rememberCoroutineScope()
+    var logins by remember { mutableStateOf(emptyList<BotSecret>()) }
+    var botId by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var origin by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var totp by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val bots = state.bots.filter { it.kind != "group" }
+    suspend fun load() {
+        try { logins = store.botSecrets().filter { it.username != null } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { error = failure.message ?: "Couldn't load bot logins." }
+    }
+    LaunchedEffect(Unit) { load() }
+    fun run(work: suspend () -> Unit) {
+        busy = true; error = null
+        scope.launch {
+            try { work() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { error = failure.message ?: "That didn't go through." }
+            finally { busy = false }
+        }
+    }
+    CardSection("Bot logins", "Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.") {
+        for (login in logins) row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(login.name, style = Type.body, color = Palette.text)
+                    Text("${login.botName ?: "A removed bot"} · ${login.username.orEmpty()} · ${login.origin.orEmpty()}",
+                        style = Type.caption, color = Palette.secondary)
+                }
+                Text(tr(if (login.hasTotp == true) "2FA set" else "No 2FA"), style = Type.caption, color = Palette.secondary)
+                IconButton("Remove", "trash", enabled = !busy) { run { store.removeBotLogin(login.id); logins = logins - login } }
+            }
+        }
+        if (logins.isEmpty()) row { Text(tr("No bot logins yet."), style = Type.caption, color = Palette.secondary) }
+        row {
+            DropdownMenu(items = {
+                bots.map { bot -> MenuItem(bot.name, verbatim = true, selected = bot.id == botId) { botId = bot.id } }
+            }) {
+                Text(tr(bots.firstOrNull { it.id == botId }?.name ?: "Choose a bot"), style = Type.body, color = Palette.text)
+            }
+        }
+        row { FieldRow("Name") { PlainInput(name, { name = it }, "github") } }
+        row { FieldRow("Username") { PlainInput(username, { username = it }, "name@example.com") } }
+        row { FieldRow("Origin") { PlainInput(origin, { origin = it }, "https://github.com") } }
+        row { FieldRow("Password") { PlainInput(password, { password = it }, "Password or op:// reference", secret = true) } }
+        row { FieldRow("2FA secret (optional)") { PlainInput(totp, { totp = it }, "Base32 secret", secret = true) } }
+        row {
+            PrimaryButton(tr("Save login"), enabled = !busy && botId.isNotEmpty() && name.isNotEmpty()
+                && username.isNotEmpty() && origin.isNotEmpty() && password.isNotEmpty()) {
+                run {
+                    store.saveBotLogin(botId, name, username, origin, password, totp.ifEmpty { null })
+                    name = ""; username = ""; origin = ""; password = ""; totp = ""
+                    load()
+                }
+            }
+        }
         error?.let { row { Text(it, style = Type.footnote, color = Palette.danger) } }
     }
 }

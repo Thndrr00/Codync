@@ -121,6 +121,14 @@ doesn't keep a set of MCP servers alive per run, except on Codex while another s
 is open: it keeps a closed session's until the agent stops. A successful run alerts with its
 reply through normal encrypted push delivery; a failed or interrupted one leaves a
 "Routine could not finish" notice. Returning `(pass)` or no text completes silently.
+
+A routine's workflow can hand its reply to teammate bots. The answer posted to "Send
+answers to" waits for the last teammate's reply rather than going out with only the text the
+routine's own agent wrote first; a handoff waits no longer than a day (OpenBot 0.74.0).
+A one-off `run_routine` call can also carry `caseText` for the single case it is for: the
+first steps of the workflow get that text, later steps see only what those steps handed on,
+and the saved routine is not changed.
+
 Replying to a run's result goes to the bot's main session, with the result quoted. A test run can run a paused routine. Pausing or
 deleting cancels pending runs; work already running can finish. Deleting a bot
 cancels its pending work. Missed intervals coalesce rather than replaying a backlog.

@@ -60,6 +60,41 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             market::bot_secrets::remove(&hub.store, str_arg(&b, "id")?)?;
             json!({})
         }
+        "credentialBotLogins" => market::bot_secrets::logins(&hub.store)?,
+        "credentialSaveBotLogin" => {
+            let saved = market::bot_secrets::save_login(
+                &hub.store,
+                str_arg(&b, "botId")?,
+                str_arg(&b, "name")?,
+                str_arg(&b, "username")?,
+                str_arg(&b, "origin")?,
+                str_arg(&b, "password")?,
+                b["totp"].as_str().filter(|s| !s.is_empty()),
+            )?;
+            json!({"secret": saved.public()})
+        }
+        "credentialUpdateBotLogin" => {
+            let seed = b.get("totp").map(|v| v.as_str().filter(|s| !s.is_empty()));
+            let saved = market::bot_secrets::update_login(
+                &hub.store,
+                str_arg(&b, "id")?,
+                b["username"].as_str(),
+                b["origin"].as_str(),
+                b["password"].as_str(),
+                seed,
+            )?;
+            json!({"secret": saved.public()})
+        }
+        "credentialRemoveBotLogin" => {
+            market::bot_secrets::remove(&hub.store, str_arg(&b, "id")?)?;
+            json!({})
+        }
+        "credentialBotLoginCode" => {
+            let secret = market::bot_secrets::find_by_id(&hub.store, str_arg(&b, "id")?)?;
+            let seed = secret.totp().ok_or_else(|| anyhow!("That login has no 2FA secret"))?;
+            let (code, remaining) = market::totp::code_for(seed, market::totp::unix_seconds())?;
+            json!({"code": code, "secondsRemaining": remaining})
+        }
         "credentialSetOnePassword" => {
             market::passwords::set_token(&hub.store, b["token"].as_str().unwrap_or_default()).await?
         }

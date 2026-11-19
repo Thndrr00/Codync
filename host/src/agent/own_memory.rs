@@ -44,6 +44,18 @@ pub fn kept(cfg: &BotConfig) -> bool {
     cfg.harness_memory && switchable(cfg)
 }
 
+/// The Claude Code `claudeMdExcludes` for one launch. OpenBot 0.74.0: with "Use my Claude Code setup" off, the
+/// home `CLAUDE.md` and rules must not load as project files; Codync's switch is `harnessMemory`. The launch merges
+/// this into its `_meta.claudeCode.options.settings`. Turn the switch on for the user's own setup and exclusions.
+#[allow(dead_code, reason = "the Claude launch that merges these settings is outside this change")]
+pub fn claude_setup_excludes(cfg: &BotConfig) -> Option<Value> {
+    if cfg.backend != "claude" {
+        return None;
+    }
+    let home = dirs::home_dir()?;
+    crate::agent::config::claude_md_excludes(&home, kept(cfg))
+}
+
 /// Fits the switch to an edited bot: it was turned on for one harness, so another harness (unless the edit sets it
 /// too), or a bot where there is no switch, has it off.
 pub fn settle(cfg: &mut BotConfig, before: &BotConfig, patch: &Value) {

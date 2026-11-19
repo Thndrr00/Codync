@@ -63,7 +63,7 @@ pub fn tools() -> Value {
     create["folder"] = json!({"type": "string", "description": "Absolute path of a project folder it starts in; leave out for a workspace of its own."});
     setup["botId"] = json!({"type": "string", "description": "The bot's id from list_team."});
     setup["hidden"] = json!({"type": "boolean", "description": "Hide it from the user's bot list, or show it again."});
-    json!([
+    let mut all = json!([
         {
             "name": "list_team",
             "description": "List the user's bots, you (marked you) and hidden ones included, with their full setup and routines.",
@@ -82,7 +82,12 @@ pub fn tools() -> Value {
             "inputSchema": {"type": "object", "properties": setup, "required": ["botId"]},
             "annotations": {"readOnlyHint": false, "idempotentHint": true},
         },
-    ])
+    ]);
+    if let Some(list) = all.as_array_mut() {
+        // OpenBot 0.74.0: deleting other agents needs one owner-approved card.
+        list.push(crate::market::bot_deletion::tool());
+    }
+    all
 }
 
 pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
@@ -107,6 +112,7 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
         }
         "create_bot" => create(hub, &source, args).await,
         "update_bot" => update(hub, &source, args).await,
+        crate::market::bot_deletion::TOOL => crate::market::bot_deletion::perform(hub, &source, args).await,
         _ => bail!("unknown manage tool: {name}"),
     }
 }

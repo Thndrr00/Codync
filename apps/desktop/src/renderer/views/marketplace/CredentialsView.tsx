@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Button, CardForm, CardSection, IconButton, Spinner } from '../../components/Controls'
+import { Button, CardForm, CardSection, ChoicePicker, IconButton, Spinner } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
 import { ModalHeader, SheetPage, useDismiss } from '../../components/Overlay'
 import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { useStore } from '../../store/context'
 import { isBelow } from '@shared/compat'
+import { isGroup } from '@shared/models'
 import {
   BOT_SECRETS_HOST, errorText, market,
   type BotSecret, type CredentialStatus, type InstalledConnector, type SavedLogin,
@@ -72,6 +73,7 @@ export function CredentialsView({ onBack }: { onBack: () => void }) {
         </CardSection>
         <LoginsSection />
         {isBelow(store.hello?.version ?? '', BOT_SECRETS_HOST) ? null : <BotSecretsSection />}
+        {isBelow(store.hello?.version ?? '', BOT_SECRETS_HOST) ? null : <BotLoginsSection />}
         <CardSection title="1Password" footer="Use a service account with read access only to a dedicated shared vault. The 1Password CLI must be installed on the computer.">
           <span>{tr(status?.onePasswordConnected ? 'Connected' : 'Connect a shared vault')}</span>
           <CredentialField label="Service account token" value={token} onChange={setToken} placeholder="Paste your token" secret />
@@ -200,6 +202,89 @@ function BotSecretsSection() {
         </HStack>
       ))}
       {secrets.length === 0 ? <Text size="caption" tone="secondary">No bot secrets yet.</Text> : null}
+      {error ? <Text size="footnote" tone="danger">{error}</Text> : null}
+    </CardSection>
+  )
+}
+
+/** Saved logins in the bots' own encrypted vault; passwords and 2FA seeds stay on this computer. */
+function BotLoginsSection() {
+  const store = useStore()
+  const tr = useTr()
+  const [logins, setLogins] = useState<BotSecret[]>([])
+  const [botId, setBotId] = useState('')
+  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [origin, setOrigin] = useState('')
+  const [password, setPassword] = useState('')
+  const [totp, setTotp] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const bots = [...store.bots.values()].filter((bot) => !isGroup(bot))
+
+  const load = async () => {
+    const client = store.client
+    try {
+      setLogins(client ? (await market.botSecrets(client)).filter((s) => s.username !== undefined) : [])
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [store])
+
+  const save = async () => {
+    const client = store.client
+    if (!client || !botId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await market.saveBotLogin(client, botId, name, username, origin, password, totp || undefined)
+      setName('')
+      setUsername('')
+      setOrigin('')
+      setPassword('')
+      setTotp('')
+      await load()
+    } catch (e) {
+      setError(errorText(e))
+    }
+    setBusy(false)
+  }
+
+  const remove = async (login: BotSecret) => {
+    const client = store.client
+    if (!client) return
+    try {
+      await market.removeBotLogin(client, login.id)
+      setLogins((old) => old.filter((s) => s.id !== login.id))
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
+
+  return (
+    <CardSection title="Bot logins" footer="Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.">
+      {logins.map((login) => (
+        <HStack key={login.id}>
+          <VStack gap={2} grow>
+            <span>{login.name}</span>
+            <Text size="caption" tone="secondary">{`${login.botName ?? 'A removed bot'} · ${login.username ?? ''} · ${login.origin ?? ''}`}</Text>
+          </VStack>
+          <Text size="caption" tone="secondary">{login.hasTotp ? tr('2FA set') : tr('No 2FA')}</Text>
+          <IconButton title="Remove" icon="trash" onClick={() => void remove(login)} />
+        </HStack>
+      ))}
+      {logins.length === 0 ? <Text size="caption" tone="secondary">{tr('No bot logins yet.')}</Text> : null}
+      <ChoicePicker selection={botId} options={bots.map((bot) => ({ id: bot.id, label: bot.name }))} onChange={setBotId} />
+      <CredentialField label="Name" value={name} onChange={setName} placeholder="github" />
+      <CredentialField label="Username" value={username} onChange={setUsername} placeholder="name@example.com" />
+      <CredentialField label="Origin" value={origin} onChange={setOrigin} placeholder="https://github.com" />
+      <CredentialField label="Password" value={password} onChange={setPassword} placeholder="Password or op:// reference" secret />
+      <CredentialField label="2FA secret (optional)" value={totp} onChange={setTotp} placeholder="Base32 secret" secret />
+      <div><Button disabled={busy || !botId || !name || !username || !origin || !password} onClick={() => void save()}>{tr('Save login')}</Button></div>
       {error ? <Text size="footnote" tone="danger">{error}</Text> : null}
     </CardSection>
   )

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-pub const INSTRUCTIONS: &str = "Connect external services with search_connectors, list_connectors and request_connection. To update an installed connector's key use request_secret. To set a remote MCP server's headers with a key the user gives you in this chat, use set_mcp_headers: it only works in the user's local chat, the approval names the headers, and the value is masked everywhere. To sign in to a website or app on the screen, check list_logins, ask with request_login if it's missing, then type it with the computer tool type_login. For an API key of your own, ask with request_api_key and call the service with api_request; for a secret a shell command needs, ask with request_command_variable and run it with run_with_secrets (list_secrets shows what you keep). Requests appear as secure cards in the user's conversation. Never ask for passwords or keys in ordinary chat or tool arguments. After requesting, finish your turn and wait; Codync resumes you after the user completes setup.";
+pub const INSTRUCTIONS: &str = "Connect external services with search_connectors, list_connectors and request_connection. To update an installed connector's key use request_secret. To set a remote MCP server's headers with a key the user gives you in this chat, use set_mcp_headers: it only works in the user's local chat, the approval names the headers, and the value is masked everywhere. To sign in to a website or app on the screen, check list_logins, ask with request_login if it's missing, then type it with the computer tool type_login. For a saved login in your vault, ask with request_bot_login, list them with list_bot_logins and get the current two-factor code with two_factor_code; the password and 2FA seed are never returned to you. For an API key of your own, ask with request_api_key and call the service with api_request; for a secret a shell command needs, ask with request_command_variable and run it with run_with_secrets (list_secrets shows what you keep). Requests appear as secure cards in the user's conversation. Never ask for passwords or keys in ordinary chat or tool arguments. After requesting, finish your turn and wait; Codync resumes you after the user completes setup.";
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(super) enum RequestKind {
@@ -49,6 +49,9 @@ pub fn tools() -> Value {
         json!({"name":"list_logins","description":"List saved website and app logins (site and username; never passwords).","inputSchema":{"type":"object","properties":{}}}),
         json!({"name":"request_login","description":"Ask the user to save a login for a website or app, e.g. github.com. They fill it in on a secure card; you never see the password. Then use the computer tool type_login.","inputSchema":{"type":"object","properties":{"site":{"type":"string","description":"The website's domain, or the app's name."},"reason":{"type":"string"}},"required":["site","reason"]}}),
         json!({"name":"request_secret","description":"Ask the user to securely provide a credential for an installed connector. The value goes directly to that connector and is never returned to you.","inputSchema":{"type":"object","properties":{"connectorId":{"type":"string"},"field":{"type":"string"},"location":{"type":"string","enum":["env","header"]},"reason":{"type":"string"}},"required":["connectorId","field","location","reason"]}}),
+        json!({"name":"list_bot_logins","description":"List the logins you keep in the vault: name, username, origin and whether 2FA is set. Passwords and 2FA seeds are never returned.","inputSchema":{"type":"object","properties":{}}}),
+        json!({"name":"request_bot_login","description":"Ask the user to save a website login in your vault. They enter the password on a secure card; you never see it. Add a 2FA seed later in Credentials, then use two_factor_code for the current code.","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"A short name, letters, digits, - or _ (e.g. github)."},"origin":{"type":"string","description":"The site's https origin, e.g. https://github.com"},"username":{"type":"string"},"reason":{"type":"string"}},"required":["name","origin","reason"]}}),
+        json!({"name":"two_factor_code","description":"The current six-digit 2FA code for a saved login and the seconds until it changes. The 2FA secret is never returned.","inputSchema":{"type":"object","properties":{"secret":{"type":"string","description":"The login's name from list_bot_logins or list_secrets."}},"required":["secret"]}}),
         super::mcp_headers::tool(),
     ];
     tools.extend(super::secret_tools::tools());
@@ -92,6 +95,25 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
         "search_connectors" => super::browse_connectors(&hub.store, text(args, "query")?, "").await,
         "list_connectors" => super::list_connectors(&hub.store),
         "list_logins" => super::logins::list(&hub.store),
+        "list_bot_logins" => super::bot_secrets::logins_for_bot(&hub.store, bot),
+        "two_factor_code" => {
+            let secret = super::bot_secrets::find(&hub.store, bot, text(args, "secret")?)?;
+            let seed =
+                secret.totp().ok_or_else(|| anyhow!("`{}` has no 2FA secret; add one in Credentials", secret.name))?;
+            let (code, remaining) = super::totp::code_for(seed, super::totp::unix_seconds())?;
+            Ok(json!({"code": code, "secondsRemaining": remaining}))
+        }
+        "request_bot_login" => {
+            let name = text(args, "name")?;
+            super::bot_secrets::check_name(name)?;
+            let origin = super::bot_secrets::origin(text(args, "origin")?)?;
+            let username = args["username"].as_str().unwrap_or_default().trim().to_owned();
+            let usage = super::bot_secrets::Usage::Login { username, origin: origin.clone(), totp: None };
+            let title = origin.trim_start_matches("https://").to_owned();
+            let request = json!({"kind":RequestKind::Login,"status":RequestStatus::Pending,"title":title,"site":title,
+                "field":name,"location":usage.destination(name),"botSecret":serde_json::to_value(&usage)?,"botId":bot});
+            post(hub, bot, text(args, "reason")?, &request)
+        }
         "request_login" => {
             let site = super::logins::normalize_site(text(args, "site")?);
             if site.is_empty() || site.len() > 200 {
@@ -212,6 +234,31 @@ pub async fn finish(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
         return complete(hub, &e, id, note);
     }
     if kind == RequestKind::Login {
+        // A bot's own login carries a `botSecret` destination; it goes into the same encrypted
+        // vault as its API keys, not into the computer-use sign-ins. The card holds no secret.
+        if request["botSecret"].is_object() {
+            let usage: super::bot_secrets::Usage = serde_json::from_value(request["botSecret"].clone())?;
+            let super::bot_secrets::Usage::Login { username, origin, .. } = usage else {
+                bail!("This login request has an invalid destination");
+            };
+            let username = args["username"].as_str().filter(|s| !s.is_empty()).unwrap_or(&username);
+            let saved = super::bot_secrets::save_login(
+                &hub.store,
+                text(request, "botId")?,
+                text(request, "field")?,
+                username,
+                &origin,
+                text(args, "value")?,
+                args["totp"].as_str().filter(|s| !s.is_empty()),
+            )?;
+            let note = format!(
+                "[Login `{}` for {} saved securely; its password and 2FA seed are never shown to you. If a 2FA seed was saved in Credentials, use two_factor_code with secret `{}` for the current code. Continue the task.]",
+                saved.name,
+                saved.usage.destination(&saved.name),
+                saved.name
+            );
+            return complete(hub, &e, id, note);
+        }
         let login = super::logins::save(
             &hub.store,
             text(request, "site")?,
@@ -395,6 +442,48 @@ pub(super) mod tests {
         let history = hub.store.history("bot", i64::MAX, 100).unwrap();
         let history = serde_json::to_string(&history).unwrap();
         assert!(history.contains("type_login") && !history.contains("hunter2-private"));
+        hub.shutdown().await;
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn a_bot_login_card_saves_a_code_without_its_password() {
+        let (hub, dir) = fixture();
+        let asked = call(
+            &hub,
+            "bot",
+            "request_bot_login",
+            &json!({"name":"github","origin":"https://github.com/login","username":"ada","reason":"Sign in"}),
+        )
+        .await
+        .unwrap();
+        let id = asked["requestId"].as_str().unwrap();
+        let card = hub.store.entry(id).unwrap().data["connectionRequest"].clone();
+        assert_eq!(card["kind"], "login");
+        assert_eq!(card["field"], "github");
+        assert!(card["botSecret"]["totp"].is_null());
+        let done = finish(&hub, &json!({"entryId":id,"username":"ada","value":"hunter2"})).await.unwrap();
+        assert_eq!(done["entry"]["data"]["connectionRequest"]["status"], "ready");
+        let listed = call(&hub, "bot", "list_bot_logins", &json!({})).await.unwrap();
+        assert_eq!(listed["items"][0]["username"], "ada");
+        assert_eq!(listed["items"][0]["origin"], "https://github.com");
+        assert!(!listed.to_string().contains("hunter2"));
+        assert!(call(&hub, "bot", "two_factor_code", &json!({"secret":"github"})).await.is_err());
+        let saved = super::bot_secrets::find(&hub.store, "bot", "github").unwrap();
+        super::bot_secrets::update_login(
+            &hub.store,
+            &saved.id,
+            None,
+            None,
+            None,
+            Some(Some("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")),
+        )
+        .unwrap();
+        let code = call(&hub, "bot", "two_factor_code", &json!({"secret":"github"})).await.unwrap();
+        assert_eq!(code["code"].as_str().unwrap().len(), 6);
+        assert!(code["secondsRemaining"].as_u64().unwrap() <= 30);
+        let history = serde_json::to_string(&hub.store.history("bot", i64::MAX, 100).unwrap()).unwrap();
+        assert!(!history.contains("hunter2"));
         hub.shutdown().await;
         let _ = std::fs::remove_dir_all(dir);
     }

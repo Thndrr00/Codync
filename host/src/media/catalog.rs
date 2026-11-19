@@ -5,6 +5,17 @@
 use super::Kind;
 use serde_json::{Value, json};
 
+/// OpenBot 0.74.0: a Mistral model's Effort menu shows the thinking levels that model has, such as
+/// None, Low, High and Max, instead of one "Medium" that did nothing. Codync keeps the list in the
+/// model catalog so every client can offer the same levels; it is data for the picker, not a change
+/// to a saved workflow.
+pub const MISTRAL_THINKING_LEVELS: [&str; 4] = ["None", "Low", "High", "Max"];
+
+/// The thinking levels a backend's models offer, empty where the backend has no such setting.
+pub fn thinking_levels(backend: &str) -> &'static [&'static str] {
+    if backend.eq_ignore_ascii_case("mistral") { &MISTRAL_THINKING_LEVELS } else { &[] }
+}
+
 /// One model a bot may ask for.
 #[derive(Debug)]
 pub struct Model {
@@ -121,6 +132,7 @@ pub fn json(model: &Model) -> Value {
         "aspects": aspects(model),
         "transparent": model.transparent,
         "voices": model.voices,
+        "thinkingLevels": thinking_levels(model.backend),
         "capabilities": super::capabilities(model),
     })
 }
@@ -135,6 +147,16 @@ mod tests {
         assert!(valid_duration(7), "a length between the presets is allowed (OpenBot 0.74.0)");
         assert!(valid_duration(60));
         assert!(!valid_duration(61));
+    }
+
+    #[test]
+    fn mistral_lists_its_thinking_levels_and_other_backends_list_none() {
+        assert_eq!(thinking_levels("mistral"), ["None", "Low", "High", "Max"]);
+        assert_eq!(thinking_levels("MISTRAL"), ["None", "Low", "High", "Max"]);
+        assert!(thinking_levels("codex").is_empty());
+        assert!(thinking_levels("claude").is_empty());
+        // The levels travel with the catalog entry, so a client can fill its Effort menu.
+        assert_eq!(json(model("gpt-image").unwrap())["thinkingLevels"], json!([]));
     }
 
     #[test]

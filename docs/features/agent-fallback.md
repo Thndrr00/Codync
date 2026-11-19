@@ -11,6 +11,12 @@ another.
 Code: `host/src/agent/fallback/` (the chain, `reason`, `rest`, `carry`), `host/src/agent/bot/fallback.rs` (the
 actor's side; each agent's parked session in `fallback/park.rs`), `host/src/chat/fallbacks.rs` (the bot's own tools).
 
+Two per-agent settings are the same on every step of a chain (OpenBot 0.74.0). With a Claude bot's
+"own setup" switch off, its launch excludes the user's `~/.claude/CLAUDE.md` and `~/.claude/rules`
+from the project files Claude Code loads; with the switch on, the user's own exclusions apply. A
+Mistral model's Effort menu lists the thinking levels in the model catalog (None, Low, High, Max)
+instead of one level that does nothing. Neither changes which agent takes the turn.
+
 ## What other projects taught
 
 Read from their source on 2026-10-21. They all chain models inside one agent:

@@ -116,6 +116,12 @@ suspend fun AppStore.botSecrets(): List<BotSecret> {
     return WireJson.decodeFromJsonElement(response.jsonObject.getValue("items"))
 }
 suspend fun AppStore.removeBotSecret(id: String) { hostQuery("credentialRemoveBotSecret", body("id" to id), 60_000) }
+/** A login's password and base32 2FA seed are sent once and kept only in the encrypted vault. */
+suspend fun AppStore.saveBotLogin(botId: String, name: String, username: String, origin: String, password: String, totp: String?) {
+    hostQuery("credentialSaveBotLogin", body("botId" to botId, "name" to name, "username" to username,
+        "origin" to origin, "password" to password, "totp" to totp), 60_000)
+}
+suspend fun AppStore.removeBotLogin(id: String) { hostQuery("credentialRemoveBotLogin", body("id" to id), 60_000) }
 suspend fun AppStore.onePasswordToken(token: String): CredentialStatus {
     val response = hostQuery("credentialSetOnePassword", body("token" to token), 60_000)
     return WireJson.decodeFromJsonElement(response)

@@ -19,10 +19,12 @@
 //! computer, remote connectors' secrets are its keeper's: see `connector_keeper`.
 
 pub mod agent_sign_in;
+pub mod bot_deletion;
 pub mod bot_secrets;
 pub mod catalog;
 pub mod composio;
 pub mod connector_update;
+pub mod feedback;
 pub mod github_skill;
 pub mod hermes;
 pub mod hermes_apps;
@@ -48,6 +50,7 @@ mod secret_tools;
 pub mod skill_history;
 mod skill_usage;
 mod skills;
+pub mod totp;
 mod updates;
 
 pub use custom::add_custom_connector;

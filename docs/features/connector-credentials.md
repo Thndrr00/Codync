@@ -192,6 +192,21 @@ destination}`) and removes one with `credentialRemoveBotSecret {id}`; the next u
 fails. The terminal UI completes the card but has no Credentials screen, as with
 sign-ins.
 
+A login is another use of that one encrypted record: the password is the record's
+`value` and an optional base32 2FA seed sits with the username and HTTPS origin in
+its `use`. A bot asks with `request_bot_login` (the existing login card takes the
+password, so no client card changes), sees them with `list_bot_logins`, and calls
+`two_factor_code {secret}` for the current six-digit RFC 6238/SHA-256 code and
+`secondsRemaining` in its 30-second step, cached per seed and step. Neither the
+password nor the seed appears in a tool answer, a listing or a log, and a malformed
+seed is refused when saved. Credentials → **Bot logins** shows each login's name,
+username, origin and whether 2FA is set; it lists them through the existing
+`credentialBotSecrets` (or `credentialBotLogins`) and adds, updates or removes one
+with `credentialSaveBotLogin`, `credentialUpdateBotLogin` and
+`credentialRemoveBotLogin`. `credentialBotLoginCode` serves the same code to a
+client. Only that form, not the chat card, can hold a 2FA seed.
+The terminal UI has no Credentials screen, as above.
+
 Idea from rakazo's `docs/bot-secrets.md` (Apache-2.0); see
 [upstream attribution](../reference/upstream-attribution.md).
 

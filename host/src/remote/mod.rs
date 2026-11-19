@@ -8,6 +8,7 @@ pub mod cloud;
 mod cloud_url;
 pub mod crypto;
 pub mod discovery;
+pub mod ice_diagnostics;
 pub mod identity;
 pub mod managed;
 pub mod owner;

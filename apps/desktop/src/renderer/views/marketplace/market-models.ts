@@ -218,7 +218,7 @@ export interface SavedLogin {
   username: string
 }
 
-/** A secret a bot keeps for API calls or commands; the value never leaves the host. */
+/** A secret a bot keeps for API calls, commands or a login; the value never leaves the host. */
 export interface BotSecret {
   id: string
   botId: string
@@ -226,6 +226,10 @@ export interface BotSecret {
   name: string
   /** Where it goes, worded by the host (`https://api.example.com · bearer token`). */
   destination: string
+  /** Set on a saved login: neither the password nor the 2FA seed is ever returned. */
+  username?: string
+  origin?: string
+  hasTotp?: boolean
 }
 
 /** The first host that keeps bot secrets. */
@@ -326,6 +330,10 @@ export const market = {
   removeLogin: (c: HostClient, id: string) => c.call('credentialRemoveLogin', { id }, s(60)),
   botSecrets: async (c: HostClient) => (await c.call<{ items: BotSecret[] }>('credentialBotSecrets', {}, s(60))).items,
   removeBotSecret: (c: HostClient, id: string) => c.call('credentialRemoveBotSecret', { id }, s(60)),
+  /** A login's password and base32 2FA seed are sent once and kept only in the encrypted vault. */
+  saveBotLogin: (c: HostClient, botId: string, name: string, username: string, origin: string, password: string, totp?: string) =>
+    c.call('credentialSaveBotLogin', { botId, name, username, origin, password, totp: totp ?? null }, s(60)),
+  removeBotLogin: (c: HostClient, id: string) => c.call('credentialRemoveBotLogin', { id }, s(60)),
   credentialStatus: (c: HostClient) => c.call<CredentialStatus>('credentialStatus', {}, s(60)),
   setOnePasswordToken: (c: HostClient, token: string) => c.call<CredentialStatus>('credentialSetOnePassword', { token }, s(60)),
   updateConnectorCredentials: (c: HostClient, id: string, fields: Record<string, string>) => c.call('credentialUpdateConnector', { id, fields }, s(120)),

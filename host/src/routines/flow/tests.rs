@@ -75,6 +75,7 @@ impl Fixture {
             timeout: Duration::from_secs(20),
             max_depth: 5,
             instruction: "Make the digest".into(),
+            case_text: None,
             outputs: Vec::new(),
             event: Value::Null,
             root,

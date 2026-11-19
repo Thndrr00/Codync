@@ -18,6 +18,24 @@ use tokio::task::JoinSet;
 /// Why a step after a cancelled flow never ran.
 const CANCELLED_BEFORE: &str = "The flow was cancelled before this step started";
 
+/// OpenBot 0.74.0: a routine result that waits on a teammate's answer is posted with that answer,
+/// and never waits longer than a day for it. In Codync a teammate the routine handed work to is a
+/// flow step: the post below waits for the last step's reply, and each handoff is bounded by this
+/// day limit as well as the run's own timeout.
+pub const TEAMMATE_ANSWER_WAIT: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// How long to wait for one teammate's reply: the run's timeout, capped at a day.
+fn teammate_wait(timeout: Duration) -> Duration {
+    timeout.min(TEAMMATE_ANSWER_WAIT)
+}
+
+/// The answer posted to "Send answers to": the final teammates' replies, not the text the routine's
+/// own agent wrote before it asked them. Empty replies are left out, so a step with nothing to say
+/// doesn't push the real answer away.
+fn final_answer(replies: &[&str]) -> String {
+    replies.iter().map(|reply| reply.trim()).filter(|reply| !reply.is_empty()).collect::<Vec<_>>().join("\n\n---\n\n")
+}
+
 /// How the routine's own run ended.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Root {
@@ -41,6 +59,10 @@ pub struct Start {
     pub max_depth: usize,
     /// The routine's instruction, the root step's input.
     pub instruction: String,
+    /// OpenBot 0.74.0: text for one case of a one-off workflow run. It goes to the first steps only;
+    /// the saved routine and its links never change. Kept with the pending flow across a restart.
+    #[serde(default)]
+    pub case_text: Option<String>,
     /// Where the last reply goes.
     pub outputs: Vec<crate::routines::Output>,
     /// The delivery that started the run, for outputs that answer it.
@@ -224,15 +246,15 @@ async fn run_flow(hub: &Arc<Hub>, start: Arc<Start>) -> Result<()> {
         let mut final_bots: Vec<&String> =
             results.keys().filter(|bot| !links.iter().any(|link| &link.from_bot_id == *bot)).collect();
         final_bots.sort();
-        let text = final_bots
+        let replies = final_bots
             .iter()
             .filter_map(|bot| match results.get(*bot) {
                 Some(Outcome::Replied(text)) => Some(text.as_str()),
                 _ => None,
             })
-            .collect::<Vec<_>>()
-            .join("\n\n---\n\n");
-        if !text.trim().is_empty() {
+            .collect::<Vec<_>>();
+        let text = final_answer(&replies);
+        if !text.is_empty() {
             hub.routines.queue_flow_outputs(&hub.store, &start, &text)?;
         }
     }
@@ -299,7 +321,7 @@ fn begin(
         .iter()
         .map(|(link, text)| (node_name(hub, &link.from_bot_id), *text, link.instruction.as_str()))
         .collect();
-    let body = handoff_text(&start.routine_name, &names);
+    let body = handoff_body(&start.routine_name, &names, start.case_text.as_deref(), depth);
     // A fan-in is one step: the first incoming link's model and options win, as its instruction leads the task.
     let model = inputs.iter().find_map(|(link, _)| override_of(link));
     match record(hub, &new_step(start, bot, &body, StepStatus::Running))? {
@@ -413,7 +435,7 @@ async fn send(hub: &Arc<Hub>, start: &Start, pending: Pending, cancel: watch::Re
         body: &pending.body,
         model: pending.model.clone(),
         hops: pending.hops,
-        timeout: start.timeout,
+        timeout: teammate_wait(start.timeout),
         cancel,
     };
     let attach = |delivery: &str| {
@@ -465,6 +487,23 @@ fn handoff_text(routine: &str, inputs: &[(String, &str, &str)]) -> String {
     format!("The routine \"{routine}\" continues with you.\n\n{}\n\n{task}", answers.join("\n\n---\n\n"))
 }
 
+/// OpenBot 0.74.0: a one-off run can carry the text of the one case it is for (a document, an
+/// order…). Only the first steps, the ones next to the routine's own bot, get it; later steps read
+/// only what those steps handed on. The routine's saved instruction and links stay as they are.
+fn handoff_body(routine: &str, inputs: &[(String, &str, &str)], case: Option<&str>, depth: usize) -> String {
+    let body = handoff_text(routine, inputs);
+    let case = case.map(str::trim).filter(|case| !case.is_empty());
+    match (depth, case) {
+        (1, Some(case)) => format!("Case for this run:\n\n{case}\n\n{body}"),
+        _ => body,
+    }
+}
+
+/// The case text an agent gave the `run_routine` call for one run, if any.
+fn run_case_text(event: &serde_json::Value) -> Option<String> {
+    event["caseText"].as_str().map(str::trim).filter(|text| !text.is_empty()).map(str::to_owned)
+}
+
 /// The flow to run for a routine run that just ended: none when the routine is gone or the run
 /// replied with nothing to pass on.
 pub fn start_for(
@@ -490,6 +529,7 @@ pub fn start_for(
         timeout: Duration::from_secs(routine.timeout_seconds),
         max_depth: super::max_depth(),
         instruction: routine.instruction.clone(),
+        case_text: run_case_text(&run.event),
         outputs: routine.outputs.clone(),
         event: run.event.clone(),
         root,
@@ -500,5 +540,47 @@ pub fn start_for(
 pub fn spawn(hub: &Arc<Hub>, start: Start) {
     if tokio::runtime::Handle::try_current().is_ok() {
         tokio::spawn(execute(hub.clone(), start));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_one_case_run_gives_its_case_text_to_the_first_steps_only() {
+        let inputs = [("a".to_owned(), "a's answer", "Do the next part")];
+        let first = handoff_body("Digest", &inputs, Some(" order 42 "), 1);
+        assert!(first.contains("Case for this run:\n\norder 42"), "{first}");
+        assert!(first.contains("a answered:\n\na's answer"), "the saved handoff is still there");
+        assert!(first.contains("Do the next part"), "the link's instruction is unchanged");
+
+        // Later steps see only what the first step handed on, never the case text again.
+        let later = handoff_body("Digest", &inputs, Some("order 42"), 2);
+        assert_eq!(later, handoff_text("Digest", &inputs));
+        assert!(!later.contains("order 42"));
+        // No case text, or a blank one, changes nothing at any depth.
+        assert_eq!(handoff_body("Digest", &inputs, None, 1), handoff_text("Digest", &inputs));
+        assert_eq!(handoff_body("Digest", &inputs, Some("  "), 1), handoff_text("Digest", &inputs));
+    }
+
+    #[test]
+    fn the_post_waits_for_the_teammates_answer_at_most_a_day() {
+        // The posted answer is what the last teammate replied, not the routine's own earlier text.
+        assert_eq!(final_answer(&["  ", "the teammate's final answer", " "]), "the teammate's final answer");
+        assert_eq!(final_answer(&["first", "second"]), "first\n\n---\n\nsecond");
+        assert_eq!(final_answer(&[]), "");
+        // A run may ask for less than a day, but never more.
+        assert_eq!(teammate_wait(Duration::from_secs(30)), Duration::from_secs(30));
+        assert_eq!(teammate_wait(Duration::from_secs(48 * 60 * 60)), TEAMMATE_ANSWER_WAIT);
+        assert_eq!(TEAMMATE_ANSWER_WAIT, Duration::from_secs(24 * 60 * 60));
+    }
+
+    #[test]
+    fn the_case_text_is_read_from_the_one_off_run_event() {
+        let event = serde_json::json!({"source": "test", "caseText": " invoice 7 "});
+        assert_eq!(run_case_text(&event).as_deref(), Some("invoice 7"));
+        assert_eq!(run_case_text(&serde_json::json!({"source": "test"})), None);
+        assert_eq!(run_case_text(&serde_json::json!({"caseText": "   "})), None);
     }
 }

@@ -346,6 +346,7 @@ fn test(hub: &Arc<Hub>, routine: &Routine, reply: String) -> Result<String> {
         }),
         max_depth: super::max_depth(),
         instruction: routine.instruction.clone(),
+        case_text: None,
         outputs: routine.outputs.clone(),
         event: if routine.outputs.iter().any(|output| output.kind == "whatsapp") {
             hub.store.snapshot_whatsapp_output(&json!({"source":"test"}))?

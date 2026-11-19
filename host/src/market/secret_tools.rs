@@ -31,7 +31,7 @@ pub fn tools() -> Vec<Value> {
         crate::shell::var_ref("NETBIRD_SETUP_KEY")
     );
     vec![
-        json!({"name":"list_secrets","description":"List the secrets you keep for API calls and commands (names and where they go; never values).","inputSchema":{"type":"object","properties":{}}}),
+        json!({"name":"list_secrets","description":"List the secrets you keep for API calls, commands and logins (names and where they go; never values).","inputSchema":{"type":"object","properties":{}}}),
         json!({"name":"request_api_key","description":"Ask the user for an API key or token for one HTTPS service. They enter it on a secure card; you never see it. Then call that service with api_request.","inputSchema":{"type":"object","properties":{
             "name":{"type":"string","description":"A short name, letters, digits, - or _ (e.g. openweather)."},
             "origin":{"type":"string","description":"The service's https origin, e.g. https://api.openweathermap.org"},
@@ -110,7 +110,7 @@ fn ask(hub: &Hub, bot: &str, name: &str, usage: &Usage, args: &Value) -> Result<
     bot_secrets::check_name(name)?;
     // The card's title: the service for a key, the variable for a command secret.
     let title = match usage {
-        Usage::Http { origin, .. } => origin.trim_start_matches("https://").to_owned(),
+        Usage::Http { origin, .. } | Usage::Login { origin, .. } => origin.trim_start_matches("https://").to_owned(),
         Usage::Command => bot_secrets::env_name(name),
     };
     let destination = usage.destination(name);
@@ -127,6 +127,7 @@ pub fn save_from_card(hub: &Hub, request: &Value, value: &str) -> Result<String>
     let saved = bot_secrets::save(&hub.store, bot, name, usage, value)?;
     let how = match saved.usage {
         Usage::Http { .. } => format!("Use it with api_request (secret `{}`)", saved.name),
+        Usage::Login { .. } => format!("Use two_factor_code with secret `{}` for its code", saved.name),
         Usage::Command => {
             format!(
                 "Run your command with run_with_secrets; it is {}",

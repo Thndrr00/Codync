@@ -1,6 +1,9 @@
 //! The built-in `routines` MCP server, scoped to one bot: its tools and instructions.
 use super::{Arc, Context, Hub, Result, Value, bail, json, required};
 
+/// One case's text is prompt data for the first steps, not a new routine: keep it bounded.
+const MAX_CASE_TEXT_CHARS: usize = 4_000;
+
 pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "list_routine_templates" => Ok(super::blueprints::list()),
@@ -22,7 +25,13 @@ pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value
                      it with its own run_routine"
                 );
             }
-            hub.routines.enqueue(&hub.store, bot, id, json!({"source":"test"}), None, true)
+            // OpenBot 0.74.0: for a run over one case, the agent can hand that case's text to the
+            // run. The flow gives it to its first steps only; the saved workflow is untouched.
+            let mut event = json!({"source":"test"});
+            if let Some(case) = args["caseText"].as_str().map(str::trim).filter(|text| !text.is_empty()) {
+                event["caseText"] = json!(case.chars().take(MAX_CASE_TEXT_CHARS).collect::<String>());
+            }
+            hub.routines.enqueue(&hub.store, bot, id, event, None, true)
         }
         "routine_webhook" => {
             hub.routines.credentials(hub, bot, required(args, "id")?, args["rotate"].as_bool().unwrap_or(false))
@@ -53,7 +62,11 @@ pub fn tools() -> Value {
     for (name, description) in [
         ("set_routine_enabled", "Pause or resume a routine; enabled boolean is required."),
         ("delete_routine", "Delete a routine and cancel pending runs."),
-        ("run_routine", "Start a test run of one of your routines, including a paused one."),
+        (
+            "run_routine",
+            "Start a test run of one of your routines, including a paused one. caseText is the text of the single case \
+             to run it over: the first steps of the routine's workflow get it, the workflow itself is not changed.",
+        ),
         (
             "routine_webhook",
             "Get the routine's webhook: its public url (through the Codync cloud; null when the cloud is off, then only localUrl on this computer works), localUrl and per-routine key. Senders POST with Authorization: Bearer <key>; for GitHub, set the webhook's content type to application/json and its secret to the key (deliveries are verified by X-Hub-Signature-256) and they become events {source:github, event:<event>.<action>, repo, sender, text, url, payload} that event triggers can filter. Deliveries made while the computer is offline wait up to 72 hours in the cloud, which sees their contents (not end-to-end encrypted). rotate:true replaces the key; the old one stops working at once. This doesn't register a provider subscription: set that up with the user, and report the webhook as awaiting connection until then.",
@@ -67,6 +80,9 @@ pub fn tools() -> Value {
         let mut properties = json!({"id": id});
         match name {
             "set_routine_enabled" => properties["enabled"] = json!({"type":"boolean"}),
+            "run_routine" => {
+                properties["caseText"] = json!({"type":"string", "description":"The one case to run over, given to the first workflow steps only."})
+            }
             "routine_webhook" => properties["rotate"] = json!({"type":"boolean"}),
             _ => {}
         }

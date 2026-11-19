@@ -460,7 +460,7 @@ public struct SavedLogin: Codable, Hashable, Sendable, Identifiable {
     public var username: String
 }
 
-/// A secret a bot keeps for API calls or commands; the value stays on the computer.
+/// A secret a bot keeps for API calls, commands or a login; the value stays on the computer.
 public struct BotSecret: Decodable, Hashable, Sendable, Identifiable {
     public var id: String
     public var botId: String
@@ -468,6 +468,10 @@ public struct BotSecret: Decodable, Hashable, Sendable, Identifiable {
     public var name: String
     /// Where it goes, worded by the host (`https://api.example.com · bearer token`).
     public var destination: String
+    /// Set on a saved login. Neither the password nor the 2FA seed is ever returned.
+    public var username: String?
+    public var origin: String?
+    public var hasTotp: Bool?
 
     /// The first host that keeps bot secrets.
     public static let minHost = "2.20.0"
@@ -515,6 +519,27 @@ public extension HostClient {
 
     func removeBotSecret(_ id: String) async throws {
         let _: Empty = try await call("credentialRemoveBotSecret", ["id": id], timeout: 60)
+    }
+
+    /// A login's password and base32 2FA seed are sent once and kept only in the encrypted vault.
+    func saveBotLogin(botId: String, name: String, username: String, origin: String, password: String, totp: String?) async throws {
+        struct Body: Encodable {
+            var botId: String
+            var name: String
+            var username: String
+            var origin: String
+            var password: String
+            var totp: String?
+        }
+        let _: Empty = try await call(
+            "credentialSaveBotLogin",
+            Body(botId: botId, name: name, username: username, origin: origin, password: password, totp: totp),
+            timeout: 60
+        )
+    }
+
+    func removeBotLogin(_ id: String) async throws {
+        let _: Empty = try await call("credentialRemoveBotLogin", ["id": id], timeout: 60)
     }
 
     func credentialStatus() async throws -> CredentialStatus { try await call("credentialStatus", timeout: 60) }

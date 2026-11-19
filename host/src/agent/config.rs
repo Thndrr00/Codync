@@ -2,6 +2,22 @@
 //! OpenAI-compatible endpoint gets.
 
 use serde_json::{Value, json};
+use std::path::Path;
+
+/// OpenBot 0.74.0: with "Use my Claude Code setup" off, Claude agents must not load the user's
+/// `~/.claude/CLAUDE.md` or the rules in `~/.claude/rules` as project files on each turn (even the
+/// ones the user excluded with `claudeMdExcludes`). Codync's switch is the bot's `harnessMemory`
+/// (`agent::own_memory::kept`); when it is off these are the exclusions the launch's Claude Code
+/// settings need. Turn the switch on to load the files, with the user's own exclusions applying.
+#[allow(dead_code, reason = "the Claude launch that merges these settings is outside this change")]
+pub fn claude_md_excludes(home: &Path, use_setup: bool) -> Option<Value> {
+    (!use_setup).then(|| {
+        json!([
+            home.join(".claude").join("CLAUDE.md").to_string_lossy(),
+            home.join(".claude").join("rules").join("**").to_string_lossy(),
+        ])
+    })
+}
 
 /// A custom endpoint a bot points at, as far as request building is concerned. The key is only a
 /// flag here: it is sent as a header by the agent CLI, never in a request body or a log.
@@ -160,6 +176,21 @@ mod tests {
         let no_effort = custom_request(&openai, "gpt-6-astra", None, &tools);
         assert_eq!(no_effort["tools"], json!(tools));
         assert!(no_effort.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn claude_setup_off_excludes_the_home_instruction_files() {
+        let home = Path::new("/home/someone");
+        let off = claude_md_excludes(home, false).expect("switch off excludes files");
+        let list = off.as_array().expect("a list of paths");
+        assert_eq!(list.len(), 2);
+        assert!(
+            list[0].as_str().unwrap().ends_with(".claude/CLAUDE.md")
+                || list[0].as_str().unwrap().ends_with(".claude\\CLAUDE.md")
+        );
+        let rules = list[1].as_str().unwrap();
+        assert!(rules.ends_with("rules/**") || rules.ends_with("rules\\**"), "{rules}");
+        assert_eq!(claude_md_excludes(home, true), None, "switch on loads the user's own setup");
     }
 
     #[test]
