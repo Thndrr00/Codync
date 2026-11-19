@@ -31,6 +31,7 @@ On macOS and Windows, updating the app also updates this computer's host: the ap
 On Linux, and on a Mac or server where you installed only `codync-host`, the host updates separately from any app.
 
 - **Installed with the install script** and running as the background service: the host updates itself. It checks once a day while no bot is working, checks that the download is signed, and keeps your data. If the new version doesn't start, it puts the previous one back.
+- **In a container** such as a Proxmox LXC container: the same update works. If the container can't load AppArmor profiles, the host skips that step, restarts, and still puts the previous version back if the new one doesn't answer.
 - **Installed with Homebrew:** run `brew upgrade leepokai/codync/codync-host`, then `codync-host install`.
 - **Re-running the install script** also upgrades the host and restarts its service.
 

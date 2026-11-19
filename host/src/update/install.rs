@@ -51,14 +51,21 @@ pub async fn health(port: u16) -> Option<serde_json::Value> {
         .ok()
 }
 
+/// Whether the previous binary must come back after the restarted service answered: no answer
+/// at all, another version, another binary, or another computer. Extracted so the rule is
+/// tested without a service.
+pub fn should_roll_back(reply: Option<&serde_json::Value>, version: &str, hash: &str, identity: Option<&str>) -> bool {
+    reply.is_none_or(|reply| {
+        reply["version"] != version
+            || reply["binaryHash"] != hash
+            || identity.is_some_and(|id| reply["computerId"] != id)
+    })
+}
+
 async fn verify_running(port: u16, version: &str, hash: &str, identity: Option<&str>) -> Result<()> {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     loop {
-        if let Some(health) = health(port).await
-            && health["version"] == version
-            && health["binaryHash"] == hash
-            && identity.is_none_or(|id| health["computerId"] == id)
-        {
+        if !should_roll_back(health(port).await.as_ref(), version, hash, identity) {
             return Ok(());
         }
         ensure!(tokio::time::Instant::now() < deadline, "the updated host did not become healthy within 30 seconds");
@@ -168,6 +175,9 @@ pub async fn apply(release: &release::Release, target: &Path, port: u16, force: 
             },
             || async {
                 if managed {
+                    // A profile attaches to the binary's path; a container that cannot load one
+                    // skips only this step, so the restart below still happens.
+                    tokio::task::spawn_blocking(service::reload_profile).await?;
                     tokio::task::spawn_blocking(service::start).await??;
                     verify_running(port, &release.version, &new_hash, identity).await?;
                 }
