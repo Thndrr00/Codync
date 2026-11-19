@@ -329,6 +329,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var pinned: Bool?
     public var hidden: Bool?
     public var notify: Bool?
+    /// It learns skills from its background review (`learnSkills` on the wire).
+    public var learnSkills: Bool = false
     public var connectors: [String]?
     public var skills: [String]?
     public var computer: Bool?
@@ -379,6 +381,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         pinned = bot.pinned
         hidden = bot.hidden
         notify = bot.notify
+        learnSkills = bot.learnSkills
         connectors = bot.connectors
         skills = bot.skills
         computer = bot.computer

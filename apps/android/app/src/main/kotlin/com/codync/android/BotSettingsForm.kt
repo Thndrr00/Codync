@@ -210,8 +210,11 @@ private fun CardRows.placeRows(state: AppState, store: AppStore, draft: BotDraft
     approvalRulesRows(state, store, draft, savedProfile, change)
 }
 
-private fun CardRows.notifyRow(draft: BotDraft, change: (BotDraft) -> Unit) =
+private fun CardRows.notifyRow(draft: BotDraft, change: (BotDraft) -> Unit) {
     row { SwitchRow("Notifications", "Get notified when this bot finishes or needs you", draft.notify != false, { change(draft.copy(notify = it)) }) }
+    // The host's learnSkills: a switch a person can reach (OpenBot 0.66.0).
+    row { SwitchRow("Learn skills on its own", "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.", draft.learnSkills, { change(draft.copy(learnSkills = it)) }) }
+}
 
 private fun CardRows.computerUseRow(state: AppState, store: AppStore, draft: BotDraft, change: (BotDraft) -> Unit) {
     val screen = state.screen ?: return

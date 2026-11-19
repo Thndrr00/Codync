@@ -37,6 +37,8 @@ data class Bot(
     val fastModeSupport: String = "unknown",
     val fastModeIssue: String? = null,
     val notify: Boolean? = null,
+    /** It learns skills from its background review (learnSkills on the wire). */
+    val learnSkills: Boolean = false,
     val connectors: List<String> = emptyList(),
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,

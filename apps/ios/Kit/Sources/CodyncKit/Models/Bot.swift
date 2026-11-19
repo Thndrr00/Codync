@@ -48,6 +48,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var section: String?
     public var hidden: Bool
     public var notify: Bool?
+    /// It learns skills from its background review (`learnSkills` on the wire).
+    public var learnSkills: Bool = false
     /// Installed connector / skill ids this bot uses (see `Market.swift`).
     public var connectors: [String]
     public var skills: [String]

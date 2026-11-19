@@ -301,6 +301,8 @@ struct BotSettingsForm: View {
             CardSection("Activity") {
                 SwitchRow("Notifications", detail: "Get notified when this bot finishes or needs you",
                           isOn: Binding(get: { draft.notify ?? true }, set: { draft.notify = $0 }))
+                SwitchRow("Learn skills on its own", detail: "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
+                          isOn: Binding(get: { draft.learnSkills }, set: { draft.learnSkills = $0 }))
                 if model.screen != nil, part == .all {
                     SwitchRow("Use the computer", detail: model.screen?.controlReady != true
                         ? "Let this bot use apps. On that computer, open Codync → Settings → Computer access to set up permissions first."

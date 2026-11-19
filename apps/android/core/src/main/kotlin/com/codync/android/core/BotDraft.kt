@@ -30,6 +30,8 @@ data class BotDraft(
     val pinned: Boolean = false,
     val hidden: Boolean = false,
     val notify: Boolean? = null,
+    /** It learns skills from its background review (host learnSkills). */
+    val learnSkills: Boolean = false,
     val connectors: List<String>? = null,
     /** Unset on a new bot, like [connectors]: the host turns on every installed one. */
     val skills: List<String>? = null,
@@ -107,7 +109,7 @@ data class BotDraft(
         fun from(bot: Bot): BotDraft = BotDraft(bot.id, bot.name, bot.description, bot.avatarColor, bot.avatarShape,
             bot.avatarLook, bot.actionRules, bot.proactive,
             bot.backend, bot.command, if (bot.managedWorkspace) "" else bot.cwd, bot.permission, bot.mode, bot.customIcon, bot.model,
-            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.connectors, bot.skills, bot.computer, bot.account,
+            bot.modelOptions, bot.fastMode, bot.pinned, bot.hidden, bot.notify, bot.learnSkills, bot.connectors, bot.skills, bot.computer, bot.account,
             bot.manageTeam ?: false, bot.isChief, bot.chiefBotId, bot.computerPermissions, bot.fallbacks, bot.selfFallbacks,
             bot.verifyCommand, bot.backgroundModel, bot.browserProfile, bot.chatColor, bot.saver, bot.personality, bot.offeredToNetwork, bot.reachableByAssistants, bot.approvalRules, bot.actionRulesOn, bot.securityProfile, bot.compaction)
     }
