@@ -60,7 +60,7 @@ private data class Removal(val id: String, val name: String, val skill: Boolean)
             Modifier.weight(1f),
             padding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         ) {
-            if (connectors.isEmpty() && skills.isEmpty()) MarketEmpty("shippingbox", "Nothing installed", "Connectors and skills you add show up here.")
+            if (connectors.isEmpty() && skills.isEmpty()) MarketEmpty(tr("Nothing installed"), tr("Connectors and skills you add show up here."))
             if (connectors.isNotEmpty()) CardSection("Connectors") {
                 for (c in connectors) row {
                     InstalledRow(c.name, if (c.needsSignIn) "Sign in so bots can use it" else c.command ?: c.url ?: c.description, icon = {
