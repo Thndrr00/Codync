@@ -78,6 +78,38 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "botPresence" => match b["status"].as_str() {
+            Some(status) => {
+                crate::chat::presence::set(&hub.store, str_arg(&b, "botId")?, Some(status), b["until"].as_i64())
+            }
+            None => Ok(json!({
+                "status": crate::chat::presence::get(&hub.store, str_arg(&b, "botId")?, crate::store::now_ms())
+            })),
+        },
+        "botSetup" => {
+            let bot = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
+            Ok(crate::chat::setup::checklist(&serde_json::to_value(&bot.config)?))
+        }
+        "stretchCard" => Ok(crate::chat::stretch::paused_card(
+            b["agent"].as_str().unwrap_or("the bot"),
+            b["reason"].as_str().unwrap_or("runs"),
+        )),
+        "agentApproval" => match b["op"].as_str().unwrap_or("card") {
+            "decide" => crate::chat::agent_request::decide(
+                serde_json::from_value(b["card"].clone()).map_err(|_| anyhow!("invalid card"))?,
+                str_arg(&b, "option")?,
+            ),
+            _ => crate::chat::agent_request::card(
+                b["agent"].as_str().unwrap_or("the bot"),
+                str_arg(&b, "reason")?,
+                b["requestId"].as_str().unwrap_or("request"),
+            ),
+        },
+        "vaultMask" => Ok(crate::chat::vault::entry(
+            str_arg(&b, "name")?,
+            b["source"].as_str().unwrap_or("keychain"),
+            &crate::chat::vault::mask(str_arg(&b, "secret")?),
+        )),
         "choiceCard" => match b["op"].as_str().unwrap_or("get") {
             "create" => {
                 crate::chat::choices::create(&hub.store, str_arg(&b, "id")?, str_arg(&b, "question")?, &b["options"])

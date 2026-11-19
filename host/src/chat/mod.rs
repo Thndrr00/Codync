@@ -1,6 +1,7 @@
 //! Conversation features on top of bots: messages to the user, reactions and quote replies, group room turns,
 //! bot-to-bot requests, artifacts and the Library, team management, a bot's own fallbacks, prompt snapshots, long-term memory, automatic bot names and the lead bot.
 
+pub mod agent_request;
 pub mod apps;
 pub mod artifacts;
 pub mod calls;
@@ -26,6 +27,7 @@ pub mod oneshot;
 pub mod open_items;
 pub mod outbox;
 pub mod person;
+pub mod presence;
 pub mod profile;
 pub mod prompt;
 pub mod reactions;
@@ -33,11 +35,14 @@ pub mod recall;
 pub mod recap;
 pub mod replies;
 pub mod scratchpad;
+pub mod setup;
 pub mod skill_proposals;
 pub mod skills;
+pub mod stretch;
 pub mod takeover;
 pub mod teach;
 pub mod team;
 pub mod toolset;
 pub mod uploads;
+pub mod vault;
 pub mod voice;

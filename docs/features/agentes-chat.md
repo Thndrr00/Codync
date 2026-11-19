@@ -39,6 +39,11 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Choice cards (ADR 0124) | A bounded question with 2–8 labeled options, answered once through `choiceCard`; a later answer cannot change the first | `chat/choices.rs`, `api/bots.rs` |
 | Message links (ADR 0138) | One permalink per message (`codync://message/<bot>/<entry>`) and a structured cite so clients draw a pill and agents point to where they were asked | `chat/message_link.rs`, `api/bots.rs` |
 | How agents talk (ADR 0147) | A per-bot voice, simple by default or technical by choice, that only changes the wording line through `agentVoice` | `chat/voice.rs`, `api/bots.rs` |
+| Presence and written status (ADR 0084) | A bounded, expiring status a person writes for a bot, shown next to its runtime status through `botPresence` | `chat/presence.rs`, `api/bots.rs` |
+| Setup checklist (ADR 0155/0164) | A new bot's chat shows only what is missing — agent, instructions, folder — through `botSetup` | `chat/setup.rs`, `api/bots.rs` |
+| Stretches (ADR 0089) | Work agents do on their own is bounded by runs and budget share, with one `Continuar` card through `stretchCard`; Codync keeps its own hop limits | `chat/stretch.rs`, `api/bots.rs` |
+| Approval requests by agents (ADR 0126) | A bounded request with who asked, why and two options, answered once through `agentApproval` | `chat/agent_request.rs`, `api/bots.rs` |
+| Local vault (ADR 0144) | An index of secret names, sources and masked hints; the value stays in the OS Keychain, never in the index, through `vaultMask` | `chat/vault.rs`, `api/bots.rs` |
 
 ## Not taken
 
