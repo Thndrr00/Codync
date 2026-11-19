@@ -884,6 +884,8 @@ export interface WhatsAppState {
   allowed?: string[]
   /** Answer each request with a "Working on it…" line (missing: on). Off sends only the answer. */
   workingMessage?: boolean
+  /** React with 👀 on arrival and ✅ / ❌ / 🫡 at the end (missing: on). Off sends no status reactions. */
+  statusReactions?: boolean
 }
 
 export interface CloudStatus {

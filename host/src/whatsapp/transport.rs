@@ -200,8 +200,9 @@ impl WhatsApp {
             self.receipts.disconnect();
         }
         let mut view = next.view();
-        // The number's own switch, so a state event never shows it as on again behind its owner's back.
+        // The number's own switches, so a state event never shows them as on again behind their owner's back.
         view["workingMessage"] = json!(super::working_message(&hub.store));
+        view["statusReactions"] = json!(super::status_reactions(&hub.store));
         *self.state.lock().await = next;
         let _ = hub.events.send(json!({"type":"whatsapp","whatsapp":view}));
     }

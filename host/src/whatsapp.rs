@@ -13,7 +13,9 @@ mod receipts;
 mod settings;
 mod transport;
 mod voice_notes;
-pub(crate) use settings::{set_allowed, set_bot, set_working_message, working_message};
+pub(crate) use settings::{
+    set_allowed, set_bot, set_status_reactions, set_working_message, status_reactions, working_message,
+};
 mod inbox;
 pub(crate) use inbox::claim_prompt;
 

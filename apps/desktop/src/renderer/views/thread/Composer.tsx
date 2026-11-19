@@ -305,6 +305,13 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
                     cancelReply?.()
                     return
                   }
+                  // Return sends a dictation still recording or transcribing too (OpenBot 0.74.0): before it
+                  // did nothing after the mic was clicked. An input method's Return still picks its candidate.
+                  if (dictation.busy && e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.repeat && !inInputMethod) {
+                    e.preventDefault()
+                    dictation.finish(submit)
+                    return
+                  }
                   // Return sends, Shift-Return adds a line; an input method's Return picks its candidate.
                   const action = composerEnter({ key: e.key, shiftKey: e.shiftKey, altKey: e.altKey, repeat: e.repeat, isComposing: composing.current || e.nativeEvent.isComposing, keyCode: e.keyCode })
                   if (e.key === 'Enter' && e.repeat && !e.shiftKey && !e.altKey) e.preventDefault()
@@ -336,7 +343,7 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
               />
             ) : dictation.available ? (
               <HStack as="span" gap={0} className="composer-mic-group">
-                <button className="press composer-mic" aria-label="Dictate" title="Dictate" onClick={() => dictation.start(draft)}>
+                <button className="press composer-mic" aria-label="Dictate" title="Dictate" onClick={() => { field.current?.focus(); dictation.start(draft) }}>
                   <Icon name="mic" size={13} weight="medium" />
                 </button>
                 <DictationEngineMenu />

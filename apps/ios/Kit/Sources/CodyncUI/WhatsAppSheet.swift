@@ -97,6 +97,16 @@ public struct WhatsAppSheet: View {
                               } }
                           ))
                     .disabled(busy)
+                SwitchRow("Status reactions",
+                          detail: "A request gets 👀 when it arrives and ✅, ❌ or 🫡 when it ends. Off sends no reactions; the answer and errors stay.",
+                          isOn: Binding(
+                              get: { link?.statusReactions ?? true },
+                              set: { on in act {
+                                  try await store.whatsappSetStatusReactions(on)
+                                  link = try? await store.whatsapp()
+                              } }
+                          ))
+                    .disabled(busy)
             }
             if link?.state != "starting", link?.state != "connected", link?.state != "qr", link?.state != "pairing" {
                 VStack(alignment: .leading, spacing: 8) {

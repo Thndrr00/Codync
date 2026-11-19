@@ -77,6 +77,19 @@ pub(crate) fn set_working_message(hub: &Hub, on: bool) -> Result<bool> {
     Ok(on)
 }
 
+/// Status reactions (👀 on arrival, then ✅ / ❌ / 🫡 at the end) are on unless this number's owner
+/// turned them off. The answers and error messages are not reactions and never depend on this.
+pub(crate) fn status_reactions(store: &crate::store::Store) -> bool {
+    store.kv_get("whatsapp.statusReactions").is_none_or(|value| value != "0")
+}
+
+/// Turns the number's status reactions on or off.
+pub(crate) fn set_status_reactions(hub: &Hub, on: bool) -> Result<bool> {
+    let _guard = crate::LockExt::locked(&hub.store.connector_lock);
+    publish(hub, "whatsapp.statusReactions", if on { "1" } else { "0" }, "whatsapp.statusReactions.generation")?;
+    Ok(on)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,6 +110,17 @@ mod tests {
         assert!(!working_message(&hub.store));
         assert!(set_working_message(&hub, true).unwrap());
         assert!(working_message(&hub.store));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_status_reactions_are_on_until_their_owner_turns_them_off() {
+        let (hub, dir) = hub();
+        assert!(status_reactions(&hub.store));
+        assert!(!set_status_reactions(&hub, false).unwrap());
+        assert!(!status_reactions(&hub.store));
+        assert!(set_status_reactions(&hub, true).unwrap());
+        assert!(status_reactions(&hub.store));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

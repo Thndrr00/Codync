@@ -122,6 +122,17 @@ import kotlinx.coroutines.launch
                                 }
                             }
                         }
+                        row {
+                            CodyncSwitch(current.statusReactions, { on ->
+                                act { store.whatsappSetStatusReactions(on); link = store.whatsapp() }
+                            }, Modifier.fillMaxWidth()) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    RowLabel(tr("Status reactions"), "eye")
+                                    Text(tr("A request gets 👀 when it arrives and ✅, ❌ or 🫡 when it ends. Off sends no reactions; the answer and errors stay."),
+                                        style = Type.caption, color = Palette.secondary)
+                                }
+                            }
+                        }
                     }
                     current?.state != "starting" -> {
                         row {

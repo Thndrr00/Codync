@@ -807,6 +807,12 @@ export class BotStore extends BotSync {
     this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), workingMessage: result.workingMessage }
     this.changed()
   }
+  /** Whether a request gets the number's 👀 / ✅ / ❌ / 🫡 status reactions (on unless turned off). */
+  async whatsappSetStatusReactions(on: boolean) {
+    const result = await (await this.ready()).call<{ statusReactions: boolean }>('whatsappSetStatusReactions', { enabled: on })
+    this.whatsapp = { ...(this.whatsapp ?? { state: 'disconnected' }), statusReactions: result.statusReactions }
+    this.changed()
+  }
   /** Lets a chat or person write, or takes them out; an empty list lets anyone in. */
   async whatsappSetAllowed(jid: string, allowed: boolean) {
     const result = await (await this.ready()).call<{ allowed: string[] }>('whatsappSetAllowed', { jid, allowed })

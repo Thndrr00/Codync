@@ -134,4 +134,11 @@ public extension HostClient {
         struct Answer: Decodable { var workingMessage: Bool }
         return try await call("whatsappSetWorkingMessage", Body(enabled: on)).workingMessage
     }
+
+    /// Whether a request gets the number's 👀 / ✅ / ❌ / 🫡 status reactions; false sends none.
+    func whatsappSetStatusReactions(_ on: Bool) async throws -> Bool {
+        struct Body: Encodable { var enabled: Bool }
+        struct Answer: Decodable { var statusReactions: Bool }
+        return try await call("whatsappSetStatusReactions", Body(enabled: on)).statusReactions
+    }
 }

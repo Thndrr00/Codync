@@ -2,6 +2,17 @@
 
 use super::{Arc, Hub, Value, WhatsApp, allowed, entry_id, inbox, json, save_media, voice_notes};
 
+/// OpenBot 0.74.0: the status reactions a number puts on a person's message — 👀 when it arrives,
+/// then ✅ / ❌ / 🫡 when the request ends. Replies and error messages are not reactions and are
+/// never held back by the number's switch.
+const STATUS_REACTIONS: [&str; 4] = ["👀", "✅", "❌", "🫡"];
+
+/// Whether `emoji` goes out with this number's status-reactions switch in `on`. Pure so the
+/// decision is testable without a link: only the four status emoji depend on the switch.
+fn status_reaction_allowed(on: bool, emoji: &str) -> bool {
+    on || !STATUS_REACTIONS.contains(&emoji)
+}
+
 impl WhatsApp {
     pub(super) async fn on_message(&self, hub: &Arc<Hub>, event: &Value, expected: &str) {
         let text = event["text"].as_str().unwrap_or_default().trim().to_owned();
@@ -186,7 +197,9 @@ impl WhatsApp {
     }
 
     /// Tells the sender that the request arrived: a 👀 reaction on their message, then, unless the
-    /// number's owner turned it off, a "Working on it…" line. The answer itself follows.
+    /// number's owner turned it off, a "Working on it…" line. The answer itself follows. The 👀 is
+    /// a status reaction (OpenBot 0.74.0), so the number's switch can drop it without dropping the
+    /// working line or the answer.
     async fn acknowledge(&self, hub: &Hub, chat: &str, sender: &str, group: bool, from_me: bool, message_id: &str) {
         if message_id.is_empty() {
             return;
@@ -196,17 +209,38 @@ impl WhatsApp {
         let account = binding[0].as_str().unwrap_or_default();
         // A group reaction names its author; in a direct chat the chat itself is the author.
         let participant = if group { sender } else { "" };
-        if let Err(error) =
-            self.send_bound_react(&hub.store, account, &binding, chat, message_id, participant, from_me, "👀").await
-        {
-            tracing::debug!(%error, "WhatsApp could not acknowledge a message");
-            return;
+        if status_reaction_allowed(super::settings::status_reactions(&hub.store), "👀") {
+            if let Err(error) =
+                self.send_bound_react(&hub.store, account, &binding, chat, message_id, participant, from_me, "👀").await
+            {
+                tracing::debug!(%error, "WhatsApp could not acknowledge a message");
+                return;
+            }
         }
         if !crate::whatsapp::working_message(&hub.store) {
             return;
         }
         if let Err(error) = self.send_bound_text(&hub.store, account, &binding, chat, "Trabajando en ello…").await {
             tracing::debug!(%error, "WhatsApp could not post the working line");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn turning_status_reactions_off_drops_only_the_status_emoji() {
+        // The four OpenBot status reactions go out when the switch is on and stop when it is off.
+        for emoji in STATUS_REACTIONS {
+            assert!(status_reaction_allowed(true, emoji), "{emoji} goes out with the switch on");
+            assert!(!status_reaction_allowed(false, emoji), "{emoji} stops with the switch off");
+        }
+        // Answers, error messages and a person's own reactions never depend on the switch.
+        for emoji in ["👍", "❤️", "🎉", "💔"] {
+            assert!(status_reaction_allowed(true, emoji));
+            assert!(status_reaction_allowed(false, emoji), "{emoji} is not a status reaction");
         }
     }
 }

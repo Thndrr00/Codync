@@ -69,6 +69,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
             view["workingMessage"] = json!(crate::whatsapp::working_message(&hub.store));
+            view["statusReactions"] = json!(crate::whatsapp::status_reactions(&hub.store));
             view
         }
         "whatsappConnect" => {
@@ -84,6 +85,7 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             }
             view["allowed"] = serde_json::to_value(crate::whatsapp::allowed(hub))?;
             view["workingMessage"] = json!(crate::whatsapp::working_message(&hub.store));
+            view["statusReactions"] = json!(crate::whatsapp::status_reactions(&hub.store));
             view
         }
         "whatsappSetWorkingMessage" => {
@@ -92,6 +94,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 b["enabled"].as_bool().context("enabled must be a boolean")?,
             )?;
             json!({"workingMessage": on})
+        }
+        "whatsappSetStatusReactions" => {
+            let on = crate::whatsapp::set_status_reactions(
+                hub,
+                b["enabled"].as_bool().context("enabled must be a boolean")?,
+            )?;
+            json!({"statusReactions": on})
         }
         "whatsappLogout" => {
             hub.whatsapp.logout(hub).await?;

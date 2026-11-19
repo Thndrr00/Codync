@@ -239,6 +239,8 @@ struct Composer: View {
             } else {
                 HStack(spacing: 0) {
                     Button {
+                        // Keep the field first responder so a hardware Return reaches onSubmit while recording.
+                        focused = true
                         Task {
                             await dictation.start(after: draft, model: model) { change in draft = change(draft) }
                         }
@@ -272,8 +274,11 @@ struct Composer: View {
                 .font(.body)
                 .textFieldStyle(.plain)
                 .focused($focused)
-                // A hardware keyboard's Return (⌘↩ too) submits the field and ends editing.
-                .onSubmit(newline)
+                // A hardware keyboard's Return (⌘↩ too) submits the field and ends editing. While dictation
+                // records or transcribes it sends instead (OpenBot 0.74.0); before, Return did nothing there.
+                .onSubmit {
+                    if dictation.listening || dictation.transcribing { submit() } else { newline() }
+                }
                 .padding(.vertical, fieldPadding)
             micButton
                 .padding(.bottom, max(0, (textLineHeight + 2 * fieldPadding - buttonSize) / 2))
@@ -408,8 +413,8 @@ struct Composer: View {
         focused = true
     }
 
-    /// Return on a hardware keyboard: a new line at the cursor, and the field keeps the keyboard.
-    /// An empty box gets none, also right after ⌘↩ sent it (the field submits after the shortcut).
+    /// Return on a hardware keyboard with no dictation running: a new line at the cursor, and the field
+    /// keeps the keyboard. An empty box gets none, also right after ⌘↩ sent it (the field submits after the shortcut).
     private func newline() {
         focused = true
         input.insertNewline()

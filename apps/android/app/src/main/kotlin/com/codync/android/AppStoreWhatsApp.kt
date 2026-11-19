@@ -31,3 +31,7 @@ suspend fun AppStore.whatsappSetAllowed(jid: String, allowed: Boolean): List<Str
 /** Whether a request gets the "Working on it…" line before its answer; false sends only the answer. */
 suspend fun AppStore.whatsappSetWorkingMessage(on: Boolean): Boolean =
     WhatsApp.decode(hostQuery("whatsappSetWorkingMessage", buildJsonObject { put("enabled", on) })).workingMessage
+
+/** Whether a request gets the number's 👀 / ✅ / ❌ / 🫡 status reactions; false sends none. */
+suspend fun AppStore.whatsappSetStatusReactions(on: Boolean): Boolean =
+    WhatsApp.decode(hostQuery("whatsappSetStatusReactions", buildJsonObject { put("enabled", on) })).statusReactions

@@ -76,6 +76,13 @@ starting a call or switching chats drops a dictation still recording or transcri
 recording's length counts toward the provider's minutes this month. The island's mic stays
 on-device (its window doesn't reach the host).
 
+Press Enter while a dictation is still recording or transcribing to send it (OpenBot 0.74.0):
+the mic has turned into the recording pill, and Return now takes the place of the send button,
+waiting for the last words on the desktop and sending the box as it is on the phones. Without a
+recording, Enter keeps its usual behavior (send on the desktop, a new line on the phones), and a
+text input method's Return still picks its candidate. The terminal UI has no microphone, so this
+does not apply there.
+
 - Desktop (`views/thread/dictation.ts`, the model, tested with a stub platform; the helper,
   microphone and host wired in `dictation-platform.ts`; pieces in `dictation-pieces.ts`; menu in
   `DictationEngineMenu.tsx`): on-device speech is the speech helper, macOS only. Linux and Windows

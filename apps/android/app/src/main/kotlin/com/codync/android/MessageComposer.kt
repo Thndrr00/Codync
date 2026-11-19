@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -109,6 +115,9 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
     val context = LocalContext.current
     val clips = context.getSystemService(ClipboardManager::class.java)
     val scope = rememberCoroutineScope()
+    // Dictation stops with its chat or draft (another chat, an artifact's box) and when the box goes.
+    val dictation = remember(draftKey) { Dictation(context, scope) }
+    DisposableEffect(dictation) { onDispose { dictation.stop() } }
     val photos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
         if (uris.isNotEmpty()) store.importFiles(uris) { store.addDraftFiles(bot.id, thread, it, draftKey) }
     }
@@ -184,6 +193,16 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
             else -> { store.command("updateBot", buildJsonObject { put("id", bot.id); put("fastMode", !bot.fastMode) }, "roster:" + bot.id); clear() }
         }
     }
+    fun send() {
+        // Words still on their way would land in the emptied box.
+        dictation.stop()
+        val command = if (files.isEmpty()) SlashCommands.builtIn(bot, typed) else null
+        if (command != null) run(command) else store.sendDraft(bot.id, thread, typed, replyQuote, draftKey) {
+            haptics.perform(CodyncHaptic.MessageSent)
+            clear()
+            cancelReply()
+        }
+    }
     // The messages waiting behind the running turn, with what can be done with the next one.
     val queued = state.queuedMessages(bot.id, thread)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -233,25 +252,30 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (file in files) ComposerAttachment(file) { store.removeDraftFile(bot.id, thread, file, draftKey) }
             }
-            Row(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom,
+            // Enter sends a dictation still recording or transcribing (OpenBot 0.74.0); before, a hardware
+            // Return did nothing after the mic was tapped. With no recording, Enter behaves as before.
+            val recordingKey = Modifier.onPreviewKeyEvent { e ->
+                val enter = e.type == KeyEventType.KeyDown && e.key == Key.Enter
+                if (enter && (dictation.listening || dictation.transcribing)) { send(); true } else false
+            }
+            Row(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp).then(recordingKey),
+                verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BasicTextField(state = text, enabled = !queuing && !terminal, modifier = Modifier.weight(1f).contentReceiver(receiver).padding(vertical = 10.dp),
                     textStyle = Type.chatBody.copy(color = Palette.text), cursorBrush = SolidColor(Palette.accent),
                     lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
                     decorator = { input -> Box { if (text.text.isEmpty()) Text(placeholder, style = Type.chatBody, color = Palette.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis); input() } })
+                Box(Modifier.padding(bottom = 4.dp)) {
+                    DictationButton(dictation, state, store, 34.dp, { text.text.toString() }) { change ->
+                        text.setTextAndPlaceCursorAtEnd(change(text.text.toString()))
+                    }
+                }
                 TrailingButton(trailing, canSend, Modifier.padding(bottom = 4.dp)) {
                     when (trailing) {
                         Trailing.Interrupt -> onInterrupt?.invoke()
                         Trailing.Stop -> store.command("stop", body("botId" to bot.id))
-                        Trailing.Call -> onCall?.invoke()
-                        Trailing.Send -> {
-                            val command = if (files.isEmpty()) SlashCommands.builtIn(bot, typed) else null
-                            if (command != null) run(command) else store.sendDraft(bot.id, thread, typed, replyQuote, draftKey) {
-                                haptics.perform(CodyncHaptic.MessageSent)
-                                clear()
-                                cancelReply()
-                            }
-                        }
+                        Trailing.Call -> { dictation.stop(); onCall?.invoke() }
+                        Trailing.Send -> send()
                     }
                 }
             }

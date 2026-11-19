@@ -107,6 +107,12 @@ export function WhatsAppSheet() {
                     detail="A request gets it while the bot works, then the answer. Off sends only the answer."
                   />
                 </Switch>
+                <Switch on={state.statusReactions !== false} onChange={(on) => void store.whatsappSetStatusReactions(on)}>
+                  <RowLabel
+                    label="Status reactions"
+                    detail="A request gets 👀 when it arrives and ✅, ❌ or 🫡 when it ends. Off sends no reactions; the answer and errors stay."
+                  />
+                </Switch>
                 <HStack gap={8}>
                   <Button kind="secondary" onClick={() => void store.whatsappLogout()}>{tr('Unlink')}</Button>
                 </HStack>

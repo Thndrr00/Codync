@@ -79,4 +79,9 @@ extension BotStore {
     public func whatsappSetWorkingMessage(_ on: Bool) async throws {
         _ = try await ready().whatsappSetWorkingMessage(on)
     }
+
+    /// Whether a request gets the number's 👀 / ✅ / ❌ / 🫡 status reactions.
+    public func whatsappSetStatusReactions(_ on: Bool) async throws {
+        _ = try await ready().whatsappSetStatusReactions(on)
+    }
 }
