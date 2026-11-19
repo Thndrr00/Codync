@@ -25,6 +25,7 @@ mod computer;
 mod diagnostics;
 mod digest;
 mod discord;
+mod docs;
 mod doctor;
 mod documents;
 mod egress;
@@ -377,6 +378,13 @@ enum McpServer {
         #[arg(long, default_value_t = service::DEFAULT_PORT)]
         port: u16,
     },
+    /// Search this computer's documentation and code, with file and line citations.
+    Docs {
+        #[arg(long)]
+        bot: String,
+        #[arg(long, default_value_t = service::DEFAULT_PORT)]
+        port: u16,
+    },
     /// For a Claude Code, Codex or other agent session on this computer that isn't a Codync bot:
     /// list the user's bots (here and on their other computers), message one, read its reply.
     /// Add it to the agent, for example `claude mcp add codync -- codync-host mcp network --name "Claude Code"`.
@@ -649,6 +657,7 @@ async fn main() -> Result<()> {
         Sub::Mcp { server: McpServer::Team { bot, port } } => mcp::serve(bot, port, mcp::Server::Team).await,
         Sub::Mcp { server: McpServer::Manage { bot, port } } => mcp::serve(bot, port, mcp::Server::Manage).await,
         Sub::Mcp { server: McpServer::Memory { bot, port } } => mcp::serve(bot, port, mcp::Server::Memory).await,
+        Sub::Mcp { server: McpServer::Docs { bot, port } } => mcp::serve(bot, port, mcp::Server::Docs).await,
         Sub::Mcp { server: McpServer::Comfy { bot, port } } => mcp::serve(bot, port, mcp::Server::Comfy).await,
         Sub::Mcp { server: McpServer::Composio { bot, port } } => mcp::serve(bot, port, mcp::Server::Composio).await,
         Sub::Mcp { server: McpServer::Network { name, port } } => mcp::serve(name, port, mcp::Server::Network).await,

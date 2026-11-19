@@ -110,6 +110,14 @@ On a Codex bot, a connector named like an MCP server in your own Codex config (f
 
 What that agent already brings is on its own page, not the bot's. Open **Extensions → Agents**, choose the agent, and look under **Sign in**. **Skills**, **Connectors**, **Rules** and **Plugins** each show a count and open to the list. The section is left out when the agent has none of them. Those rows are read only. In the terminal, the same lists open from **What the agent brings** on the agent's sign-in sheet.
 
+## Documentation and code search
+
+Every bot also gets a built-in MCP server, **codync-docs**, with three tools: `docs_search` finds documentation, `code_search` finds source, and `docs_read` returns numbered lines of one indexed file. Each answer names the file and line, so a bot can cite `docs/features/chat-messages.md:12` instead of guessing.
+
+The index is the bot's working folder, or a folder you name for that bot with the `setDocsFolder` call. Hidden files and generated trees are skipped, `.gitignore` is respected, and the walk stops at 4,000 files or 24 MiB, so searching a large repository stays quick and offline. The index is cached on the computer for ten minutes. `docsStatus` reports what was indexed and whether a limit cut it short.
+
+This is Codync's own index, not [Pathfinder](https://github.com/CopilotKit/pathfinder): Pathfinder is source-available under the Elastic License 2.0 (with an Additional Use Grant) and needs PostgreSQL with pgvector plus an embedding provider, so it can't be bundled or used offline for exact citations.
+
 ## Skills
 
 A skill is a folder with a `SKILL.md` file: a name, a line saying when to use it, and the instructions. A bot with a skill on is told its name, its description and where its instructions are, so it can read them when a task calls for it.

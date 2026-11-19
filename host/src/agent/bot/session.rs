@@ -140,6 +140,7 @@ impl Actor {
             self.cfg.manage_team.then_some("manage"),
             Some("memory"),
             Some("routines"),
+            Some("docs"),
             self.cfg.computer.then_some("computer"),
             self.cfg.connectors.iter().any(|c| c == crate::tools::comfy::CONNECTOR_ID).then_some("comfy"),
             composio.then_some("composio"),
