@@ -33,6 +33,12 @@ export const docSections: { title: string; pages: DocPage[] }[] = [
           "Chatting with a bot: messages and files, approval cards, stopping, replies, reactions, commands, fresh conversations and notifications.",
       },
       {
+        slug: "browser",
+        title: "The bot's browser",
+        description:
+          "What a bot can do on a web page by itself, how it reads and moves through a page, its limits, and how to watch it work.",
+      },
+      {
         slug: "channels",
         title: "Messaging channels",
         description:

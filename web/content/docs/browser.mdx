@@ -1,0 +1,27 @@
+Bots can drive a browser of their own on the computer. Ask for it in a chat — "open example.com and find the pricing page", "sign in and download the invoice", "check that the sign-up form says the right thing" — and the bot uses the page like a person would, then tells you what it found.
+
+The browser is separate from yours: its own window and its own sign-ins, so what you are doing in Chrome or Edge is untouched. It runs on the computer that hosts the bot, on Windows, where Codync's controlled browser lives.
+
+## What a bot can do
+
+- **Go to a page**, and go **back**, **forward** or **reload**.
+- **Read the page**: its address, title and text, and a numbered list of the controls it can use, with their labels, values and whether they are checked or disabled. It takes a new list after the page changes.
+- **Click** a control by its number, **type** into a field (replacing or adding to what is there, and sending the form if you ask), **press** a key such as Enter, Tab or an arrow, **hover**, **scroll**, **choose** an option and **tick** a box.
+- **Wait** for the page to finish loading, for its content to settle, or for a piece of text to appear.
+- **Run a short program** of those steps in one call, up to 200 steps, when a task has many small movements.
+
+It does not type into a password box or take over a sign-in: those stay behind Codync's own protected sign-in, which keeps the secret on the computer.
+
+## What it will not do
+
+- It cannot use your browser profile, your cookies or your sign-ins.
+- It stops after 20 seconds on one action and 25 seconds on a program of steps, and it says which step stopped and what it was doing.
+- A page that opens a browser dialog (an alert, a file picker) needs you: the bot says so instead of guessing.
+
+## Watching it work
+
+The browser window is on the computer's screen while the bot uses it, so you can watch it there. The computer's own browser panel (the **Browser** control in a bot's chat on the desktop) is a different thing: that one is for you to browse, and the bot does not touch it.
+
+## When it goes wrong
+
+A failed call reads like "The page has no element 7; take a new snapshot." That means the page changed since the bot last read it, and it takes a new list and tries again. If the browser closed, opening the page again with a new request is enough; nothing is lost.
