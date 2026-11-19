@@ -22,6 +22,8 @@ use std::time::{Duration, Instant};
 mod action;
 #[cfg(windows)]
 mod cdp;
+#[cfg(windows)]
+mod live;
 mod snapshot;
 mod tools;
 
@@ -142,6 +144,23 @@ async fn perform(_hub: &Hub, bot: &str, action: &Action) -> Result<Value> {
         let _ = (bot, action);
         bail!(
             "The browser tools drive Chrome or Edge on Windows; this computer's host runs on {}.",
+            std::env::consts::OS
+        )
+    }
+}
+
+/// Dispatches a `browserLive*` method for the desktop's live tab. Like `chatCall`, it is local only:
+/// the stream is a picture of this computer's own bot tab, never sent over the phone channel.
+pub async fn live_call(hub: &Hub, method: &str, body: &Value) -> Result<Value> {
+    #[cfg(windows)]
+    {
+        live::call(hub, method, body).await
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (hub, method, body);
+        bail!(
+            "A live browser tab needs Chrome or Edge on Windows; this computer's host runs on {}.",
             std::env::consts::OS
         )
     }

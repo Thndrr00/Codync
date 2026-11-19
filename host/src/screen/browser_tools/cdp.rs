@@ -57,8 +57,9 @@ const AGENT_SCRIPTED_TABS_NOTE: &str = "A script you ran with evaluate can still
 /// The page-side helpers, evaluated with each call: an expression that builds the page's API.
 const PAGE: &str = include_str!("page.js");
 
-/// One bot's browser, or `None` while it has none.
-type Slot = Arc<AsyncMutex<Option<Session>>>;
+/// One bot's browser, or `None` while it has none. The live tab shares this slot with the tools:
+/// there is still one browser per bot, and each CDP call briefly borrows the pipe.
+pub(super) type Slot = Arc<AsyncMutex<Option<Session>>>;
 static SESSIONS: LazyLock<Mutex<HashMap<String, Slot>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 struct Session {
@@ -616,6 +617,166 @@ fn expression(op: &str, args: &Value) -> String {
     )
 }
 
+// --- The live tab: watching and taking over one of the bot's open tabs -------------------------
+//
+// These reuse the same CDP pipe, the same per-bot browser slot and the same input path (`mouse` and
+// `press_key`) as the tools. A live view attaches once to the tab the tools use, and every frame or
+// input event briefly borrows the pipe, so the bot's own tools and a person's take-over cannot send
+// CDP commands at the same time. No frame, title or address is logged here.
+
+/// The furthest a pointer or wheel value may be from the page's origin, in CSS pixels.
+const MAX_COORD: f64 = 100_000.0;
+
+/// One input event a person sends to a taken-over tab. Parsed and bounded here, before it reaches
+/// CDP: a pointer action or one key, never page text or a free-form payload.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum Input {
+    Move { x: f64, y: f64, buttons: u8 },
+    Down { x: f64, y: f64, button: Button, buttons: u8, count: u8 },
+    Up { x: f64, y: f64, button: Button, count: u8 },
+    Wheel { x: f64, y: f64, dx: f64, dy: f64 },
+    Key(Key),
+}
+
+impl Input {
+    /// Parses `{kind, x, y, …}` (a pointer event) or `{kind: "key", key}` into a bounded event.
+    pub(super) fn parse(value: &Value) -> Result<Self> {
+        let coord = |key: &str| -> Result<f64> {
+            let number = value.get(key).and_then(Value::as_f64).context(format!("`{key}` is a number"))?;
+            ensure!(number.is_finite() && number.abs() <= MAX_COORD, "`{key}` is out of range");
+            Ok(number)
+        };
+        let delta = |key: &str| -> Result<f64> {
+            let Some(value) = value.get(key).filter(|value| !value.is_null()) else { return Ok(0.0) };
+            let number = value.as_f64().context(format!("`{key}` is a number"))?;
+            ensure!(number.is_finite() && number.abs() <= MAX_COORD, "`{key}` is out of range");
+            Ok(number)
+        };
+        let button = || -> Result<Button> {
+            match value.get("button").filter(|value| !value.is_null()) {
+                None => Ok(Button::Left),
+                Some(name) => Button::parse(name),
+            }
+        };
+        let buttons = |default: u8| -> Result<u8> {
+            let Some(value) = value.get("buttons").filter(|value| !value.is_null()) else { return Ok(default) };
+            let mask = value.as_u64().context("`buttons` is a mouse button mask")?;
+            u8::try_from(mask).ok().filter(|mask| *mask <= 7).context("`buttons` is out of range")
+        };
+        let count = || -> Result<u8> {
+            let Some(value) = value.get("clickCount").filter(|value| !value.is_null()) else { return Ok(1) };
+            let count = value.as_u64().context("`clickCount` is 1 or 2.")?;
+            u8::try_from(count).ok().filter(|count| (1..=2).contains(count)).context("`clickCount` is 1 or 2.")
+        };
+        Ok(match value["kind"].as_str() {
+            Some("mouseMove") => Self::Move { x: coord("x")?, y: coord("y")?, buttons: buttons(0)? },
+            Some("mouseDown") => {
+                let button = button()?;
+                Self::Down {
+                    x: coord("x")?,
+                    y: coord("y")?,
+                    button,
+                    buttons: buttons(button.buttons())?,
+                    count: count()?,
+                }
+            }
+            Some("mouseUp") => Self::Up { x: coord("x")?, y: coord("y")?, button: button()?, count: count()? },
+            Some("wheel") => {
+                let (dx, dy) = (delta("deltaX")?, delta("deltaY")?);
+                ensure!(dx.abs() > f64::EPSILON || dy.abs() > f64::EPSILON, "A wheel needs deltaX or deltaY.");
+                Self::Wheel { x: coord("x")?, y: coord("y")?, dx, dy }
+            }
+            Some("key") => {
+                let key = value.get("key").context("`key` names the key to press, such as Enter.")?;
+                Self::Key(Key::parse(key)?)
+            }
+            _ => bail!("An input event is a mouseMove, mouseDown, mouseUp, wheel or key."),
+        })
+    }
+}
+
+/// Attaches a live view to the tab the bot's tools act on, returning the shared slot and the CDP
+/// session id. The session stays attached; later calls reuse it instead of re-attaching each frame.
+pub(super) async fn live_attach(bot: &str) -> Result<(Slot, String)> {
+    let slot =
+        existing(bot).await.context("This bot has no browser open yet. Open a page with the navigate tool first.")?;
+    let mut guard = slot.lock().await;
+    let session =
+        guard.as_mut().context("This bot has no browser open yet. Open a page with the navigate tool first.")?;
+    ensure!(!session.process.exited()?, "The browser closed. Open the page again with navigate.");
+    ensure_target(session).await?;
+    let tab = attach(session).await?;
+    Ok((slot.clone(), tab))
+}
+
+/// One bounded JPEG frame and the tab's title and address, from the live session's tab.
+pub(super) async fn live_frame(slot: &Slot, session: &str) -> Result<Value> {
+    let mut guard = slot.lock().await;
+    let state = guard.as_mut().context("The browser closed. Reopen the live tab.")?;
+    ensure!(!state.process.exited()?, "The browser closed. Reopen the live tab.");
+    let image = rpc(
+        &mut state.pipe,
+        "Page.captureScreenshot",
+        json!({"format": "jpeg", "quality": 45, "captureBeyondViewport": false}),
+        Some(session),
+    )
+    .await?;
+    let data = image["data"].as_str().context("The tab gave no image")?;
+    // The frame is captured from the same tab the tools drive; only its browser-level target list
+    // gives the title and address, so no page content is read just to label a frame.
+    let targets = rpc(&mut state.pipe, "Target.getTargets", json!({}), None).await?;
+    let info = targets["targetInfos"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|target| target["targetId"] == state.target.as_str());
+    Ok(json!({
+        "image": format!("data:image/jpeg;base64,{data}"),
+        "title": info.and_then(|target| target["title"].as_str()).unwrap_or_default(),
+        "url": info.and_then(|target| target["url"].as_str()).unwrap_or_default(),
+    }))
+}
+
+/// Sends a validated pointer or key event down the same CDP input path the tools use.
+pub(super) async fn live_input(slot: &Slot, session: &str, event: Input) -> Result<()> {
+    let mut guard = slot.lock().await;
+    let state = guard.as_mut().context("The browser closed. Reopen the live tab.")?;
+    ensure!(!state.process.exited()?, "The browser closed. Reopen the live tab.");
+    match event {
+        Input::Move { x, y, buttons } => {
+            mouse(state, session, json!({"type": "mouseMoved", "x": x, "y": y, "button": "none", "buttons": buttons})).await
+        }
+        Input::Down { x, y, button, buttons, count } => {
+            mouse(
+                state,
+                session,
+                json!({"type": "mousePressed", "x": x, "y": y, "button": button.name(), "buttons": buttons, "clickCount": count}),
+            )
+            .await
+        }
+        Input::Up { x, y, button, count } => {
+            mouse(
+                state,
+                session,
+                json!({"type": "mouseReleased", "x": x, "y": y, "button": button.name(), "buttons": 0, "clickCount": count}),
+            )
+            .await
+        }
+        Input::Wheel { x, y, dx, dy } => {
+            mouse(state, session, json!({"type": "mouseWheel", "x": x, "y": y, "deltaX": dx, "deltaY": dy})).await
+        }
+        Input::Key(key) => press_key(state, session, &key).await,
+    }
+}
+
+/// Detaches the live session. A closed browser or a stale session is not an error here.
+pub(super) async fn live_detach(slot: &Slot, session: String) {
+    let mut guard = slot.lock().await;
+    if let Some(state) = guard.as_mut() {
+        rpc(&mut state.pipe, "Target.detachFromTarget", json!({"sessionId": session}), None).await.ok();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -645,5 +806,46 @@ mod tests {
         assert!(text.contains("reach an address with \"/mail\""), "{text}");
         assert!(text.contains("finish loading"), "{text}");
         assert!(text.contains("within 15 seconds"), "{text}");
+    }
+
+    #[test]
+    fn a_taken_over_pointer_or_key_is_bounded_before_it_reaches_cdp() {
+        assert_eq!(
+            Input::parse(&json!({"kind": "mouseMove", "x": 12, "y": 30, "buttons": 1})).unwrap(),
+            Input::Move { x: 12.0, y: 30.0, buttons: 1 }
+        );
+        assert_eq!(
+            Input::parse(&json!({"kind": "mouseDown", "x": 1, "y": 2, "button": "right", "clickCount": 2})).unwrap(),
+            Input::Down { x: 1.0, y: 2.0, button: Button::Right, buttons: 2, count: 2 }
+        );
+        assert_eq!(
+            Input::parse(&json!({"kind": "mouseUp", "x": 1, "y": 2, "button": "middle"})).unwrap(),
+            Input::Up { x: 1.0, y: 2.0, button: Button::Middle, count: 1 }
+        );
+        assert_eq!(
+            Input::parse(&json!({"kind": "wheel", "x": 5, "y": 6, "deltaY": -120})).unwrap(),
+            Input::Wheel { x: 5.0, y: 6.0, dx: 0.0, dy: -120.0 }
+        );
+        assert_eq!(
+            Input::parse(&json!({"kind": "key", "key": "Control+A"})).unwrap(),
+            Input::Key(Key::parse(&json!("Control+A")).unwrap())
+        );
+        for refused in [
+            json!({"kind": "mouseMove", "x": 1}),
+            json!({"kind": "mouseMove", "x": -100_001, "y": 0}),
+            json!({"kind": "mouseMove", "x": 1, "y": 200_000}),
+            json!({"kind": "mouseDown", "x": 1, "y": 2, "button": "side"}),
+            json!({"kind": "mouseDown", "x": 1, "y": 2, "buttons": 9}),
+            json!({"kind": "mouseDown", "x": 1, "y": 2, "clickCount": 0}),
+            json!({"kind": "mouseUp", "x": 1, "y": 2, "clickCount": 3}),
+            json!({"kind": "wheel", "x": 1, "y": 2}),
+            json!({"kind": "wheel", "x": 1, "y": 2, "deltaX": 100_001}),
+            json!({"kind": "key", "key": "Control+"}),
+            json!({"kind": "key"}),
+            json!({"kind": "teleport", "x": 1, "y": 2}),
+            json!({}),
+        ] {
+            assert!(Input::parse(&refused).is_err(), "{refused} is not a live input event");
+        }
     }
 }

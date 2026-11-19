@@ -125,7 +125,7 @@ pub(crate) enum Button {
 }
 
 impl Button {
-    fn parse(value: &Value) -> Result<Self> {
+    pub(super) fn parse(value: &Value) -> Result<Self> {
         match value.as_str().map(str::trim).map(str::to_ascii_lowercase).as_deref() {
             Some("left") => Ok(Self::Left),
             Some("middle") => Ok(Self::Middle),

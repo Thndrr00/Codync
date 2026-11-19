@@ -57,6 +57,13 @@ const LOCAL_ONLY: &[&str] = &[
     "pairing",
     "computerCall",
     "computerTools",
+    // A live tab streams this computer's own bot browser; phones cannot watch or drive it.
+    "browserLiveStart",
+    "browserLiveFrame",
+    "browserLiveTakeover",
+    "browserLiveInput",
+    "browserLiveRelease",
+    "browserLiveStop",
     "chatCall",
     "teamCall",
     "agentCall",

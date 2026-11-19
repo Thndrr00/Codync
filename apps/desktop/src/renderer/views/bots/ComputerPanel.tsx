@@ -6,6 +6,7 @@ import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
 import { useApp, useStore } from '../../store/context'
 import { ComputerPanelStore } from '../../store/computer-panel-store'
+import { LiveTabSheet } from './LiveTabSheet'
 import { Field, ErrorText } from '../marketplace/pieces'
 import '../marketplace/mcp-tools.css'
 
@@ -22,6 +23,7 @@ export function ComputerPanel({ botId }: { botId: string }) {
   const [login, setLogin] = useState('')
   const [code, setCode] = useState('')
   const [confirm, setConfirm] = useState<{ model: ComputerPanelStore; command: string } | null>(null)
+  const [liveOpen, setLiveOpen] = useState(false)
   useEffect(() => {
     setTab('status')
     setPath('')
@@ -29,6 +31,7 @@ export function ComputerPanel({ botId }: { botId: string }) {
     setSite('')
     setLogin(''); setCode('')
     setConfirm(null)
+    setLiveOpen(false)
     model.resume()
     void model.load()
     const timer = setInterval(() => void model.load(), 5_000)
@@ -37,6 +40,7 @@ export function ComputerPanel({ botId }: { botId: string }) {
   const state = model.state
   const canFiles = !!state?.enabled && state.permissions.files
   const canShell = !!state?.enabled && state.permissions.shell
+  const canBrowser = !!state?.enabled && state.permissions.browser
   return <CardForm>
     <TabChoice label="Computer panel" selection={tab} onChange={setTab} options={[{ id: 'status', label: 'Status' }, { id: 'files', label: 'Files' }, { id: 'terminal', label: 'Terminal' }, { id: 'activity', label: 'Activity' }]} />
     <Button kind="secondary" disabled={model.loading} onClick={() => void model.load(true)}>Refresh computer</Button>
@@ -47,6 +51,7 @@ export function ComputerPanel({ botId }: { botId: string }) {
       <SwitchRow title="Use the computer" on={state.enabled} onChange={(enabled) => void model.setPermissions(enabled, state.permissions)} disabled={model.busy} />
       {(['browser', 'files', 'shell'] as const).map((capability) => <SwitchRow key={capability} title={{ browser: 'Desktop and browser', files: 'Workspace files', shell: 'Shell commands' }[capability]}
         on={state.permissions[capability]} disabled={model.busy || !state.enabled} onChange={(enabled) => void model.setPermissions(state.enabled, { ...state.permissions, [capability]: enabled })} />)}
+        <Button kind="secondary" disabled={!canBrowser} onClick={() => setLiveOpen(true)}>Watch this bot's browser tab</Button>
         <Text weight="semibold">Connected services</Text>
         <Text tone="secondary">Research: {serviceLabel(state.services?.research)} · Slack: {serviceLabel(state.services?.slack)}. Configure research in Windows Settings; Slack setup is local to the host.</Text>
         <Text weight="semibold">Passwords and codes</Text>
@@ -91,6 +96,7 @@ export function ComputerPanel({ botId }: { botId: string }) {
     </CardSection>}
     {model.error && <ErrorText text={model.error} />}
     {model.notice && <Text as="div" role="status">{model.notice}</Text>}
+    <LiveTabSheet botId={botId} open={liveOpen} close={() => setLiveOpen(false)} />
     <Dialog open={confirm?.model === model} title="Run on the real host?" message={confirm?.command} onClose={() => setConfirm(null)} actions={[{ title: 'Run command', action: () => { if (confirm?.model === model) void model.run(confirm.command) } }]} />
   </CardForm>
 }

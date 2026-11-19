@@ -93,6 +93,8 @@ pub enum Event {
     SkillLearned,
     /// One browser action a bot ran (	ool), never the page or the text.
     BrowserTool,
+    /// A person opened the live view of a bot's browser tab (`action`: opened/taken_over), never the page.
+    BrowserLiveViewed,
     /// A bot's `publish_artifact`.
     ArtifactPublished,
     CredentialSaved,
@@ -217,6 +219,7 @@ impl Event {
             Self::SkillWritten => "skill_written",
             Self::SkillLearned => "skill_learned",
             Self::BrowserTool => "browser_tool",
+            Self::BrowserLiveViewed => "browser_live_viewed",
             Self::ArtifactPublished => "artifact_published",
             Self::CredentialSaved => "credential_saved",
             Self::AgentSetupStarted => "agent_setup_started",

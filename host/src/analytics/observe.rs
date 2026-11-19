@@ -138,6 +138,15 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("seconds".into(), b["seconds"].as_u64().unwrap_or(0).into());
             Event::VoiceCallFinished
         }
+        "browserLiveStart" => {
+            // Only the action, never the tab's title, address or picture.
+            p.insert("action".into(), "opened".into());
+            Event::BrowserLiveViewed
+        }
+        "browserLiveTakeover" => {
+            p.insert("action".into(), "taken_over".into());
+            Event::BrowserLiveViewed
+        }
         "screenPrepare" => Event::RemoteScreenOpened,
         // Handing the screen back is not a takeover.
         "screenTakeover" if b["on"] == true => Event::ScreenTakenOver,

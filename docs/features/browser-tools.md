@@ -36,6 +36,20 @@ next reply starts.
 With no browser open, everything but `navigate` answers: *This bot has no browser open yet. Open a page
 with the navigate tool first.*
 
+## Watching a tab live and taking control
+
+The owner can open **Watch this bot's browser tab** from the bot's Computer panel to see the tab the
+tools are driving, without opening a second browser of its own. The host
+attaches to that tab over the same CDP pipe (`browser_tools/live.rs` and `cdp.rs`), captures at most
+two bounded JPEG frames a second together with the tab's title and address, and stops when the sheet
+closes or nobody is watching. Until someone presses **Take control** the view is read-only; while
+control is held the desk's pointer and key events go down the same `Input.dispatchMouseEvent` and
+`Input.dispatchKeyEvent` path the `click` and `press` tools use, and a badge shows that a person is in
+control. **Release** gives the tab back. Watching and controlling use the same computer-access and
+browser-permission gate as every other tool, re-checked on each frame and input; a protected entry or
+a turned-off permission stops the view, and the methods are local to this computer. Frames, titles,
+addresses and input values are never logged or sent to analytics.
+
 ## Refs and snapshots
 
 `snapshot` numbers the elements of the page and prints one line each:

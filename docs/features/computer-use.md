@@ -6,6 +6,18 @@ Bots with **Use the computer** on get the built-in `computer` MCP server (`codyn
 - `type_login` types a saved login only into its own site or app, and a password only into a password field. The agent never sees the value.
 - The harness's own approval rules still apply to each call.
 
+## Taking over a bot's browser tab
+
+A person can also take over the browser tab a bot's browser tools drive, from the bot's Computer
+panel: **Watch this bot's browser tab** shows a live, bounded frame of that tab (at most twice a
+second) and its title and address, and **Take control** forwards the desk's own pointer and key
+events to it until **Release**. This is the same browser capability as the tools, not a new
+permission: it is checked when the view opens and again on every frame and input, so turning browser
+access off or starting a protected entry stops a person's control just as it stops a bot's, and a
+badge marks the tab as controlled while someone holds it. The view reuses the host's existing CDP
+input path and is local to this computer; no frame, title, address or typed value is logged or sent
+to analytics.
+
 ## Host activity history
 
 The host retains the latest 1,000 completed computer calls per bot in SQLite,
