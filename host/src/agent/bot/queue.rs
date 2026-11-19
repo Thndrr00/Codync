@@ -625,13 +625,13 @@ mod priority_tests {
     }
 
     #[test]
-    fn a_person_waiting_goes_first_and_the_arrival_order_inside_a_level_stays() {
+    fn interactive_turns_keep_fifo_and_background_goes_behind() {
         let mut queue = VecDeque::new();
         insert_ordered(&mut queue, Queued::Routine("r".into(), Instant::now()));
         insert_ordered(&mut queue, prompt("agent"));
         insert_ordered(&mut queue, user("u2"));
         insert_ordered(&mut queue, Queued::Compact { idle: false, queued_at: Instant::now() });
         insert_ordered(&mut queue, user("u1"));
-        assert_eq!(labels(&queue), ["user:u2", "user:u1", "prompt:agent", "routine:r", "compact"]);
+        assert_eq!(labels(&queue), ["prompt:agent", "user:u2", "user:u1", "routine:r", "compact"]);
     }
 }

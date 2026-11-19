@@ -26,12 +26,14 @@ escritorio en verde. 17–19: notas 2.56.0 (zh-Hant + en-US) en las dos apps; ve
 sin compilación de Android en esta sesión; 20 es el push y el borrado del worktree.
 
 Después de este estado se trajeron dos patrones nuevos del repo original de agentes.chat, reutilizando
-sus estructuras: ADR 0046 (una persona esperando va primero, en la cola por bot, con aging de un
-nivel cada dos minutos) y ADR 0048 (una nota repetida al mismo bot en la última hora se descarta).
-`cargo fmt --check` y `cargo clippy --all-targets -- -D warnings` pasan con ambos; la suite completa
-se lanzó pero se interrumpió al moverse la sesión, así que queda por correr. El bump de versión no
-procede: `MARKETING_VERSION` 2.56.0 ya va por delante del último tag (`v2.47.0`), así que se deja
-como está según la regla de versionado.
+sus estructuras: ADR 0046 (trabajo de fondo detrás de los turnos interactivos, con aging de dos
+minutos; los turnos de persona y de bot mantienen el FIFO que Codync promete) y ADR 0048 (una nota
+repetida al mismo bot en la última hora se descarta). La suite reveló que la primera versión del 0046
+rompía el FIFO entre remitentes; se corrigió a dos carriles. **1290 tests unitarios pasan** (0 fallos).
+Los e2e que fallan son de entorno: `phone_pairs` (`Protocol` de Windows), `wire_shape` (un aviso de
+salud aparece solo con la memoria al 96 %, así que sus campos no se graban) y `compaction`/`memory`
+(el host bloquea turnos sobre el 85 % de memoria). El bump de versión no procede: `MARKETING_VERSION`
+2.56.0 ya va por delante del último tag (`v2.47.0`).
 
 1. `cargo check --all-targets` en `host/` y corregir lo que salga.
 2. `cargo fmt --check` y `cargo clippy --all-targets -- -D warnings`.

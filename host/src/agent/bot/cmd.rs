@@ -112,12 +112,17 @@ pub(super) enum Queued {
 
 impl Queued {
     /// A person waiting goes first (agentes.chat ADR 0046, adapted to this per-bot queue):
-    /// 0 for a person's turn, 1 for work another agent asked for, 2 for background work.
+    /// interactive turns — a person's or another bot's — share one FIFO lane, and background work
+    /// (routines, compactions) goes behind it. Codync promises FIFO across senders, so a bot's
+    /// message must not overtake a person's, unlike the three global job priorities of the ADR.
     pub(super) fn priority(&self) -> u8 {
         match self {
-            Queued::User { .. } | Queued::Group(_) => 0,
-            Queued::BotRequest(_) | Queued::BotReply(_) | Queued::Prompt { .. } => 1,
-            Queued::Routine(_, _) | Queued::Compact { .. } => 2,
+            Queued::User { .. }
+            | Queued::Group(_)
+            | Queued::BotRequest(_)
+            | Queued::BotReply(_)
+            | Queued::Prompt { .. } => 0,
+            Queued::Routine(_, _) | Queued::Compact { .. } => 1,
         }
     }
 
@@ -145,22 +150,21 @@ mod priority_tests {
     use std::time::Duration;
 
     #[test]
-    fn a_person_goes_before_an_agent_and_background_work() {
+    fn interactive_turns_share_one_lane_and_background_goes_behind() {
         let user =
             Queued::User { lane: Lane::main("b"), entry_id: "e".into(), text: "hi".into(), queued_at: Instant::now() };
         assert_eq!(user.priority(), 0);
-        assert_eq!(Queued::Prompt { text: "x".into(), call: None }.priority(), 1);
-        assert_eq!(Queued::Compact { idle: false, queued_at: Instant::now() }.priority(), 2);
-        assert_eq!(Queued::Routine("r".into(), Instant::now()).priority(), 2);
+        assert_eq!(Queued::Prompt { text: "x".into(), call: None }.priority(), 0);
+        assert_eq!(Queued::Compact { idle: false, queued_at: Instant::now() }.priority(), 1);
+        assert_eq!(Queued::Routine("r".into(), Instant::now()).priority(), 1);
     }
 
     #[test]
     fn waiting_loses_one_urgency_level_every_two_minutes() {
         let now = Instant::now();
         let routine = Queued::Routine("r".into(), now);
-        assert_eq!(routine.effective_priority(now), 2);
-        assert_eq!(routine.effective_priority(now + Duration::from_secs(119)), 2);
-        assert_eq!(routine.effective_priority(now + Duration::from_secs(120)), 1);
-        assert_eq!(routine.effective_priority(now + Duration::from_secs(240)), 0);
+        assert_eq!(routine.effective_priority(now), 1);
+        assert_eq!(routine.effective_priority(now + Duration::from_secs(119)), 1);
+        assert_eq!(routine.effective_priority(now + Duration::from_secs(120)), 0);
     }
 }
