@@ -209,7 +209,7 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
 /// not a new one, a message names its bot's agent, an edit the settings it changes, a
 /// permission answer the kind of option picked, and a phone its platform.
 pub fn observe_call(hub: &Hub, caller: &Caller, method: &str, b: &Value) -> Option<(Event, Map<String, Value>)> {
-    let (event, mut p) = observe(caller, method, b)?;
+    let (mut event, mut p) = observe(caller, method, b)?;
     match event {
         Event::MessageSent => {
             let bot = b["botId"].as_str().unwrap_or_default();
@@ -237,7 +237,13 @@ pub fn observe_call(hub: &Hub, caller: &Caller, method: &str, b: &Value) -> Opti
         }
         Event::PermissionAnswered => {
             let card = hub.store.entry(b["entryId"].as_str().unwrap_or_default());
-            p.insert("choice".into(), choice(card.as_ref().map(|e| &e.data), &b["optionId"]).into());
+            if card.as_ref().is_some_and(|e| e.data["askUserTool"] == true) {
+                // A question is not an approval: report its outcome, never the chosen label.
+                event = Event::UserQuestionAnswered;
+                p.insert("outcome".into(), (if b["optionId"].is_string() { "answered" } else { "skipped" }).into());
+            } else {
+                p.insert("choice".into(), choice(card.as_ref().map(|e| &e.data), &b["optionId"]).into());
+            }
         }
         _ => {}
     }

@@ -91,6 +91,8 @@ pub enum Event {
     MiniAppRequested,
     /// A bot's `ask_user` showed a question with choices (`options`: how many).
     UserQuestionAsked,
+    /// The person answered or left a `ask_user` card (`outcome`).
+    UserQuestionAnswered,
     CredentialSaved,
     AgentSetupStarted,
     AgentSignedIn,

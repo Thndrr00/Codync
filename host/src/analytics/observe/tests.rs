@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::{Device, DeviceAccount, DeviceSource, Store};
+use crate::store::{Device, DeviceAccount, DeviceSource, EntryKind, Lane, Store};
 use serde_json::json;
 
 fn temp_hub() -> (std::sync::Arc<Hub>, std::path::PathBuf) {
@@ -12,6 +12,29 @@ fn temp_hub() -> (std::sync::Arc<Hub>, std::path::PathBuf) {
 
 fn props(method: &str, b: &Value) -> Option<(Event, Value)> {
     observe(&Caller::Local, method, b).map(|(e, p)| (e, Value::Object(p)))
+}
+
+#[test]
+fn a_question_card_reports_its_outcome_not_the_chosen_label() {
+    let (hub, dir) = temp_hub();
+    let card = hub
+        .add_entry(
+            &Lane::main("b1"),
+            EntryKind::Permission,
+            0,
+            &json!({"title": "Which database?", "askUserTool": true, "question": true}),
+        )
+        .expect("the card was saved");
+    let answer = json!({"entryId": card.id, "optionId": "1"});
+    let (event, p) = observe_call(&hub, &Caller::Local, "respondPermission", &answer).expect("tracked");
+    assert_eq!(event, Event::UserQuestionAnswered);
+    assert_eq!(serde_json::Value::Object(p), json!({"client": "local", "outcome": "answered"}));
+
+    let skipped = json!({"entryId": card.id, "optionId": serde_json::Value::Null});
+    let (event, p) = observe_call(&hub, &Caller::Local, "respondPermission", &skipped).expect("tracked");
+    assert_eq!(event, Event::UserQuestionAnswered);
+    assert_eq!(p["outcome"], json!("skipped"));
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
