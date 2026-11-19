@@ -73,6 +73,15 @@ ruta ni token) y `user_question_asked` (número de opciones, nunca la pregunta).
 `analytics/event.rs`, mapeados en `analytics/observe.rs` y documentados en
 `docs/reference/analytics-events.md`.
 
+## Lo más nuevo del repo fuente
+
+El checkout actual de bdots está en `Documents/ref-repos/bdots` y va por delante del commit
+`ce94160` con el que se escribió el doc de las 50. De sus commits recientes se portó el enlace
+**submit** de `agents/app-access.ts`: un formulario público puede añadir items a colecciones
+elegidas y leer solo las suyas por un recibo de 128 bits. Vive en `host/src/apps_access.rs`, se
+guarda junto al app (o al crear el enlace), y `apps_runtime.rs` aplica la autorización. El tipo
+`AppLinkMode` incluye `submit` en Rust, Desktop e iOS.
+
 ## Verificación
 
 - Desktop: `npm run typecheck` limpio; `npm test` → 834 tests, 806 pasan, 4 fallan, 24 omitidos.

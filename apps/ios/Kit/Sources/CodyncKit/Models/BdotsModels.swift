@@ -122,7 +122,7 @@ public struct ProactiveSettings: Codable, Hashable, Sendable {
 // MARK: - Mini-apps and capability links (Ideas 1, 7, 47, 48)
 
 public enum AppLinkMode: String, Codable, Hashable, Sendable {
-    case view, edit
+    case view, edit, submit
 }
 
 public struct AppLink: Codable, Identifiable, Hashable, Sendable {

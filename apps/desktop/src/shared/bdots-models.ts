@@ -85,7 +85,7 @@ export function defaultProactiveSettings(): ProactiveSettings {
   return { ...DEFAULT_PROACTIVE_SETTINGS }
 }
 
-export type AppLinkMode = 'view' | 'edit'
+export type AppLinkMode = 'view' | 'edit' | 'submit'
 
 export interface AppLink {
   token: string

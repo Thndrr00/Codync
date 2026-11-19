@@ -23,7 +23,12 @@ pub fn tools() -> [Value; 6] {
                     "slug": {"type": "string", "description": "Folder name under apps/, e.g. split-bill."},
                     "title": {"type": "string", "description": "Display title of the mini-app."},
                     "description": {"type": "string", "description": "Short summary of what the app does."},
-                    "entry": {"type": "string", "description": "Entry HTML file relative to apps/<slug>/ (default index.html)."}
+                    "entry": {"type": "string", "description": "Entry HTML file relative to apps/<slug>/ (default index.html)."},
+                    "access": {"type": "object", "description": "Optional public form access: {read:[collections], submit:[collections], wake:boolean}. A submit link can then be shared for a form.", "properties": {
+                        "read": {"type": "array", "items": {"type": "string"}},
+                        "submit": {"type": "array", "items": {"type": "string"}},
+                        "wake": {"type": "boolean"}
+                    }}
                 },
                 "required": ["slug", "title"]
             }
@@ -105,6 +110,11 @@ pub fn call(hub: &Hub, bot_id: &str, name: &str, args: &Value) -> Result<Value> 
                 bail!(
                     "Entry file apps/{slug}/{entry} does not exist yet. Write the HTML file inside apps/{slug}/ first, then call save_app."
                 );
+            }
+            if let Some(raw) = args.get("access").filter(|a| a.is_object()) {
+                let access =
+                    crate::apps_access::validate(&serde_json::from_value::<crate::apps_access::Access>(raw.clone())?)?;
+                hub.store.kv_set(&crate::apps_access::access_key(bot_id, &slug), &serde_json::to_string(&access)?)?;
             }
             let saved = hub.store.save_bot_app(bot_id, &slug, title, description, Some(entry))?;
             let token = saved.owner_token.clone().unwrap_or_default();
@@ -223,6 +233,11 @@ pub fn api_call(hub: &Hub, method: &str, b: &Value) -> Result<Value> {
             let slug = b["slug"].as_str().context("`slug` is required")?;
             let label = b["label"].as_str().unwrap_or("Shared link");
             let mode = AppLinkMode::parse(b["mode"].as_str().unwrap_or("view"));
+            if mode == AppLinkMode::Submit {
+                let raw = serde_json::from_value::<crate::apps_access::Access>(b["access"].clone()).unwrap_or_default();
+                let access = crate::apps_access::validate(&raw)?;
+                hub.store.kv_set(&crate::apps_access::access_key(bot_id, slug), &serde_json::to_string(&access)?)?;
+            }
             let link = hub.store.create_app_link(bot_id, slug, label, mode)?;
             let url = app_url(hub, bot_id, slug, &link.token);
             Ok(json!({"link": link, "url": url}))

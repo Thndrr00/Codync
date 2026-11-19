@@ -14,6 +14,14 @@ Apps run in an isolated origin: they cannot read your Codync cookies, local stor
 
 A bot's app card has **Share link**. Make a link that can **view** or **edit**, then send it to someone. A view link can read the app and its data; an edit link can change them. Sharing never needs the other person to sign in to Codync. You can revoke a link from the app's list.
 
+## Public forms
+
+A bot can make an app a form. It names which collections the public may write to (`submit`) and which it may read (`read`), then shares a **submit** link. Someone who opens it can add an item, but cannot change or delete anything, and cannot read other people's submissions. Each submission gets a private receipt they can use to read back just their own entry.
+
+Ask the bot for one:
+
+> Make a sign-up form where people can add their name, and give me a public link.
+
 ## Ask the bot a question with choices
 
 When a bot needs a decision, it can put a card in the chat with two to four options:
