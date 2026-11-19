@@ -117,9 +117,29 @@ import com.codync.android.design.semibold
                 SegmentedChoice(
                     selection = settings.yourBubbles,
                     options = YourBubbleStyle.entries.map { it to tr(it.label) },
-                    select = prefs::setYourBubbles,
+                    select = { style ->
+                        if (style != settings.yourBubbles) Analytics.capture(AnalyticsEvent.BubbleStyleChanged(style))
+                        prefs.setYourBubbles(style)
+                    },
                 )
             }
+        }
+        row {
+            Text(tr("Motion"), style = Type.caption.semibold, color = Palette.secondary)
+        }
+        row {
+            SwitchRow(
+                title = "Background blur",
+                isOn = settings.backgroundBlur,
+                onChange = prefs::setBackgroundBlur,
+            )
+        }
+        row {
+            SwitchRow(
+                title = "Moving agent faces",
+                isOn = settings.movingAgentFaces,
+                onChange = prefs::setMovingAgentFaces,
+            )
         }
         row {
             SwitchRow(
@@ -154,6 +174,8 @@ import com.codync.android.design.semibold
                         prefs.setHapticsEnabled(def.hapticsEnabled)
                         prefs.setAvatarStyle(def.avatarStyle)
                         prefs.setYourBubbles(def.yourBubbles)
+                        prefs.setBackgroundBlur(def.backgroundBlur)
+                        prefs.setMovingAgentFaces(def.movingAgentFaces)
                     }
                 }
             }

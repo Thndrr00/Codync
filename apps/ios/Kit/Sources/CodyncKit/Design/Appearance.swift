@@ -15,6 +15,15 @@ public enum Appearance: String, CaseIterable, Sendable {
     }
 }
 
+/// Device-local motion choices in Settings › Appearance › Motion, both on by default.
+/// They only change this device's rendering; no host or other client is involved.
+public enum MotionPreference {
+    /// Frost the glass and material surfaces that float above app content.
+    public static let backgroundBlurKey = "backgroundBlur"
+    /// Move bot characters' faces and drift group avatars while bots work.
+    public static let movingAgentFacesKey = "movingAgentFaces"
+}
+
 /// How a bot's character is drawn: plush (shaded dots under a light) or flat (even dots, no light).
 /// A device preference like the theme; the App Group store carries it to the widgets too.
 public enum AvatarStyle: String, CaseIterable, Sendable {

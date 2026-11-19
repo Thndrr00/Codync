@@ -7,6 +7,8 @@ struct AppearanceSettings: View {
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
     @AppStorage(AvatarStyle.storageKey, store: UserDefaults(suiteName: SharedStore.appGroup)) private var avatarStyle = AvatarStyle.plush
     @AppStorage(YourBubbleStyle.storageKey) private var yourBubbles = YourBubbleStyle.solid
+    @AppStorage(MotionPreference.backgroundBlurKey) private var backgroundBlur = true
+    @AppStorage(MotionPreference.movingAgentFacesKey) private var movingAgentFaces = true
 
     var body: some View {
         CardSection("Appearance", footer: "Only changes appearance on this device.") {
@@ -20,8 +22,25 @@ struct AppearanceSettings: View {
                 Text(L10n.tr("Your bubbles"))
                     .foregroundStyle(Palette.text)
                 SegmentedChoice(selection: $yourBubbles, options: YourBubbleStyle.allCases.map { (id: $0, label: $0.label) })
+                    .onChange(of: yourBubbles) { _, style in Analytics.shared.capture(.bubbleStyleChanged(style)) }
             }
             AgentLogosToggle()
+        }
+        CardSection("Motion", footer: "Only changes appearance on this device.") {
+            HStack {
+                Text(L10n.tr("Background blur")).foregroundStyle(Palette.text)
+                Spacer()
+                Toggle(isOn: $backgroundBlur) { EmptyView() }
+                    .toggleStyle(.codync)
+                    .accessibilityLabel(L10n.tr("Background blur"))
+            }
+            HStack {
+                Text(L10n.tr("Moving agent faces")).foregroundStyle(Palette.text)
+                Spacer()
+                Toggle(isOn: $movingAgentFaces) { EmptyView() }
+                    .toggleStyle(.codync)
+                    .accessibilityLabel(L10n.tr("Moving agent faces"))
+            }
         }
     }
 }

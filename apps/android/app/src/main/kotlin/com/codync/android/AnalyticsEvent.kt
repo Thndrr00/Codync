@@ -5,6 +5,7 @@ import android.os.Build
 import com.codync.android.core.CloudError
 import com.codync.android.core.HostError
 import com.codync.android.core.PairingProblem
+import com.codync.android.design.YourBubbleStyle
 import java.io.IOException
 import java.io.InterruptedIOException
 import kotlinx.coroutines.TimeoutCancellationException
@@ -103,6 +104,10 @@ internal sealed class AnalyticsEvent(val name: String) {
     }
     data class SettingChanged(val setting: PhoneSetting, val on: Boolean) : AnalyticsEvent("setting_changed") {
         override val properties get() = mapOf("setting" to setting.json, "on" to JsonPrimitive(on))
+    }
+    /** Settings › Appearance › Your bubbles: reports only the style id (`solid`, `tint`, `classic`). */
+    data class BubbleStyleChanged(val style: YourBubbleStyle) : AnalyticsEvent("setting_changed") {
+        override val properties get() = mapOf("setting" to JsonPrimitive("your_bubbles"), "value" to JsonPrimitive(style.id))
     }
     data class LinkOpened(val link: OutboundLink) : AnalyticsEvent("link_opened") {
         override val properties get() = mapOf("link" to link.json)

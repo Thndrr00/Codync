@@ -79,6 +79,8 @@ struct DottedBody: View {
     let paused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(AvatarStyle.storageKey, store: UserDefaults(suiteName: SharedStore.appGroup)) private var avatarStyle = AvatarStyle.plush
+    /// Settings › Appearance › Motion: off rests the face on one still frame instead of a TimelineView.
+    @AppStorage(MotionPreference.movingAgentFacesKey) private var movingAgentFaces = true
 
     /// Flat drops the light: every dot the same size and ink, no tint.
     private var flat: Bool { avatarStyle == .flat }
@@ -117,7 +119,7 @@ struct DottedBody: View {
         let grid = DotGrid(size: size)
         let step = size / CGFloat(grid.cells)
         let dots = Self.grid(shape: shape, size: size, step: step, cells: grid.cells)
-        if paused {
+        if paused || !movingAgentFaces {
             // One view per dot (not a Canvas), so the system interpolates each dot's size and
             // color between two poses, also inside a Live Activity.
             ZStack(alignment: .topLeading) {
@@ -282,6 +284,8 @@ public struct GroupAvatar: View {
     let size: CGFloat
     let animated: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Settings › Appearance › Motion: off stops the members' gentle drift.
+    @AppStorage(MotionPreference.movingAgentFacesKey) private var movingAgentFaces = true
 
     public init(members: [Bot], size: CGFloat = 40, animated: Bool = true) {
         self.members = members
@@ -291,7 +295,7 @@ public struct GroupAvatar: View {
 
     public var body: some View {
         Group {
-            if animated && members.count > 1 && !reduceMotion {
+            if animated && members.count > 1 && !reduceMotion && movingAgentFaces {
                 TimelineView(.animation) { timeline in
                     cluster(timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 3600))
                 }

@@ -116,7 +116,7 @@ public struct ScreenView: View {
                     .lineLimit(1)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .frosted(in: Capsule())
                     .transition(.opacity)
             }
             Spacer()
@@ -193,13 +193,13 @@ public struct ScreenView: View {
             if screen?.input != true {
                 Text(L10n.tr("View only. To allow control, open Codync → Settings → Computer access on the computer."))
                     .font(.caption).padding(12)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .frosted(in: RoundedRectangle(cornerRadius: 12))
                     .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 24)
             } else if let error = session.lastError {
                 Text(L10n.tr(error))
                     .font(.caption)
                     .padding(8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .frosted(in: RoundedRectangle(cornerRadius: 8))
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 24)
             }
@@ -270,7 +270,7 @@ private struct IconLabel: View {
         Image(systemName: icon)
             .font(.system(size: 15, weight: .semibold))
             .frame(width: 36, height: 36)
-            .background(.ultraThinMaterial, in: Circle())
+            .frosted(in: Circle())
             .foregroundStyle(.white)
             .accessibilityLabel(label)
     }

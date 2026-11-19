@@ -85,7 +85,7 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    val time = if (active && status in listOf("working", "needsInput") && ValueAnimator.areAnimatorsEnabled()) {
+    val time = if (active && status in listOf("working", "needsInput") && ValueAnimator.areAnimatorsEnabled() && movingAgentFacesEnabled()) {
         val transition = rememberInfiniteTransition(label = "Character activity")
         val seconds by transition.animateFloat(0f, 3600f, infiniteRepeatable(tween(3_600_000, easing = LinearEasing)), label = "Character light and eyes")
         seconds.toDouble()
@@ -131,7 +131,7 @@ fun characterAvatarBitmap(shape: String, color: String, pixels: Int, ink: Int, h
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     // Members drift up and down a little, each on its own beat, so a group reads as several people.
-    val float = if (active && faces.size > 1 && ValueAnimator.areAnimatorsEnabled()) {
+    val float = if (active && faces.size > 1 && ValueAnimator.areAnimatorsEnabled() && movingAgentFacesEnabled()) {
         val transition = rememberInfiniteTransition(label = "Group float")
         transition.animateFloat(0f, 3600f, infiniteRepeatable(tween(3_600_000, easing = LinearEasing)), label = "Group float clock")
     } else null

@@ -55,7 +55,7 @@ val LocalBackdrop = staticCompositionLocalOf<Backdrop> { emptyBackdrop() }
     chrome: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal) {
+    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal || !backgroundBlurEnabled()) {
         Box(modifier) {
             Box(Modifier.fillMaxSize(), content = content)
             CompositionLocalProvider(LocalBackdrop provides emptyBackdrop()) {
@@ -84,7 +84,7 @@ enum class Edge { Top, Bottom }
 @Composable fun ScrollEdge(edge: Edge, height: Dp, modifier: Modifier = Modifier) {
     val ground = Palette.background
     val top = edge == Edge.Top
-    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal) {
+    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal || !backgroundBlurEnabled()) {
         val stops = if (top) {
             arrayOf(0f to ground.copy(alpha = 0.96f), 0.7f to ground.copy(alpha = 0.68f), 1f to Color.Transparent)
         } else {
@@ -139,7 +139,7 @@ internal fun resolveTonalSurface(
     shadow: Boolean = true,
 ): Modifier {
     val swell by animateFloatAsState(if (pressed) 1.04f else 1f, Motion.layout(), label = "Surface press")
-    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal) {
+    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal || !backgroundBlurEnabled()) {
         val palette = LocalPalette.current
         val fill = resolveTonalSurface(style, tint, palette)
         val elevation = if (!shadow) 0.dp else if (style == GlassStyle.Menu) 12.dp else 4.dp
@@ -180,7 +180,7 @@ internal fun resolveTonalSurface(
 
 /** A frosted layer over the stage (a context menu's backdrop); uses a tonal scrim in [SurfaceStyle.Tonal]. */
 @Composable fun Modifier.frost(radius: Dp, tint: Color): Modifier {
-    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal) {
+    if (LocalSurfaceStyle.current == SurfaceStyle.Tonal || !backgroundBlurEnabled()) {
         val dark = LocalDark.current
         return background(if (dark) Color.Black.copy(alpha = 0.48f) else Color.Black.copy(alpha = 0.24f))
     }

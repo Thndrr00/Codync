@@ -41,6 +41,8 @@ public enum AnalyticsEvent: Equatable, Sendable {
     case notificationsAnswered(granted: Bool, source: PromptSource)
     case notificationOpened(NotificationKind)
     case settingChanged(Setting, on: Bool)
+    /// Settings › Appearance › Your bubbles: only the chosen style id is reported, never chat content.
+    case bubbleStyleChanged(YourBubbleStyle)
     case linkOpened(Link)
     case voiceCallStarted(VoiceEngine)
     /// How one engine of a call fared, when it's replaced or the call ends: milliseconds until it was ready (nil:
@@ -65,8 +67,7 @@ public enum AnalyticsEvent: Equatable, Sendable {
     public enum PromptSource: String, Sendable { case settings, widgets }
     public enum Setting: String, Sendable { case push, liveActivities = "live_activities" }
     public enum Link: String, Sendable {
-        case github, issues, discord, appStore = "app_store", demo, tailscale, privacy, installCommand = "install_command"
-        case github, issues, appStore = "app_store", demo, tailscale, privacy, installCommand = "install_command", installLink = "install_link"
+        case github, issues, discord, appStore = "app_store", demo, tailscale, privacy, installCommand = "install_command", installLink = "install_link"
     }
     public enum DevServerUse: String, Sendable { case open, copy }
     public enum VoiceEngine: String, Sendable { case onDevice = "on_device", openai, gemini, cloud }
@@ -210,6 +211,7 @@ public enum AnalyticsEvent: Equatable, Sendable {
         case .notificationsAnswered: "notifications_answered"
         case .notificationOpened: "notification_opened"
         case .settingChanged: "setting_changed"
+        case .bubbleStyleChanged: "setting_changed"
         case .linkOpened: "link_opened"
         case .voiceCallStarted: "voice_call_started"
         case .voiceCallQuality: "voice_call_quality"
@@ -250,6 +252,7 @@ public enum AnalyticsEvent: Equatable, Sendable {
         case let .notificationsAnswered(granted, source): return ["granted": .bool(granted), "source": .string(source.rawValue)]
         case let .notificationOpened(kind): return ["kind": .string(kind.rawValue)]
         case let .settingChanged(setting, on): return ["setting": .string(setting.rawValue), "on": .bool(on)]
+        case let .bubbleStyleChanged(style): return ["setting": .string("your_bubbles"), "value": .string(style.rawValue)]
         case let .linkOpened(link): return ["link": .string(link.rawValue)]
         case let .voiceCallStarted(engine): return ["engine": .string(engine.rawValue)]
         case let .voiceCallQuality(engine, readyMs, reconnects, stuck, failure):

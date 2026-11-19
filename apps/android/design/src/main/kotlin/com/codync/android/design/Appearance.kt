@@ -134,6 +134,9 @@ data class AppearanceSettings(
     val hapticsEnabled: Boolean = true,
     val avatarStyle: AvatarStyle = AvatarStyle.Plush,
     val yourBubbles: YourBubbleStyle = YourBubbleStyle.Solid,
+    /** Settings › Appearance › Motion. Both are device-local and on by default. */
+    val backgroundBlur: Boolean = true,
+    val movingAgentFaces: Boolean = true,
 )
 
 /** Observable device-scoped appearance preferences, persisted in SharedPreferences. */
@@ -153,6 +156,8 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
             hapticsEnabled = p.getBoolean("hapticsEnabled", true),
             avatarStyle = AvatarStyle.fromId(p.getString("avatarStyle", AvatarStyle.Plush.id)),
             yourBubbles = YourBubbleStyle.fromId(p.getString("yourBubbles", YourBubbleStyle.Solid.id)),
+            backgroundBlur = p.getBoolean("backgroundBlur", true),
+            movingAgentFaces = p.getBoolean("movingAgentFaces", true),
         )
     }
 
@@ -169,6 +174,8 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
             ?.putBoolean("hapticsEnabled", next.hapticsEnabled)
             ?.putString("avatarStyle", next.avatarStyle.id)
             ?.putString("yourBubbles", next.yourBubbles.id)
+            ?.putBoolean("backgroundBlur", next.backgroundBlur)
+            ?.putBoolean("movingAgentFaces", next.movingAgentFaces)
             ?.apply()
     }
 
@@ -181,6 +188,8 @@ class AppearancePreferences(private val prefs: SharedPreferences?) {
     fun setHapticsEnabled(enabled: Boolean) = update { it.copy(hapticsEnabled = enabled) }
     fun setAvatarStyle(style: AvatarStyle) = update { it.copy(avatarStyle = style) }
     fun setYourBubbles(style: YourBubbleStyle) = update { it.copy(yourBubbles = style) }
+    fun setBackgroundBlur(enabled: Boolean) = update { it.copy(backgroundBlur = enabled) }
+    fun setMovingAgentFaces(enabled: Boolean) = update { it.copy(movingAgentFaces = enabled) }
 
     companion object {
         @Volatile private var instance: AppearancePreferences? = null
@@ -397,6 +406,15 @@ fun resolvePalette(
 }
 
 val LocalAppearancePreferences = staticCompositionLocalOf<AppearancePreferences?> { null }
+
+/** One hook for "Background blur": every glass surface reads the device pref here, default on. */
+@Composable fun backgroundBlurEnabled(): Boolean =
+    LocalAppearancePreferences.current?.settings?.backgroundBlur ?: true
+
+/** One hook for "Moving agent faces": every bot face and group avatar reads the device pref here. */
+@Composable fun movingAgentFacesEnabled(): Boolean =
+    LocalAppearancePreferences.current?.settings?.movingAgentFaces ?: true
+
 val LocalAppearance = staticCompositionLocalOf { AppearanceSettings() }
 val LocalSurfaceStyle = staticCompositionLocalOf { SurfaceStyle.Glass }
 val LocalUiDensity = staticCompositionLocalOf { UiDensity.Standard }

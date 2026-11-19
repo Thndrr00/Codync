@@ -45,7 +45,7 @@ fun RobotAvatar(
     size: Dp = 40.dp,
     working: Boolean = false,
 ) {
-    val animEnabled = ValueAnimator.areAnimatorsEnabled()
+    val animEnabled = ValueAnimator.areAnimatorsEnabled() && movingAgentFacesEnabled()
     val workingProgress by animateFloatAsState(
         targetValue = if (working && animEnabled) 1f else 0f,
         animationSpec = tween(durationMillis = 220),
