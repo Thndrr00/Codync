@@ -51,3 +51,18 @@ existing Antigravity account selection and does not add or remove accounts.
 
 Host methods: `listAccounts`, `accountAuthenticate`, `deleteAccount` and
 `agentSignOut` (returns the refreshed `auth` check).
+
+## Rotation
+
+A provider may keep at most 20 isolated accounts. `account/rotation.rs` keeps one
+stamped kv blob per provider (`account.rotation.<backend>`) with a mode —
+`manual` (the default, so behaviour is unchanged), `roundRobin` (next account
+each turn) or `onRateLimit` (change only once the active account runs out or is
+rate limited) — a manually chosen account and a cursor. A turn reuses the same
+profile environment path: a bot's pinned account always wins; otherwise the
+policy picks an eligible account, skipping signed-out and resting ones through
+the existing `fallback::rest` helpers, and advances the cursor only when it
+changes. The host exposes `accountRotation`, `setAccountRotation` and
+`accountStates` (state only — never tokens); the account sections on desktop,
+iPhone and Android use the shared segmented control to set the mode, and the bot
+account pickers show that a chosen account is pinned and ignores rotation.

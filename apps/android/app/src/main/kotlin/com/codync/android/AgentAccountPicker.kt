@@ -110,7 +110,7 @@ import kotlin.coroutines.coroutineContext
         if (!selection.isNullOrEmpty() && accounts.none { it.id == selection }) listOf(selection to "Saved account (not loaded)") else emptyList()
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Account", style = Type.body, color = Palette.text)
+            Text("Account (pinned to this bot)", style = Type.body, color = Palette.text)
             Box(Modifier.weight(1f))
             Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
                 if (busy) Spinner(12.dp)
@@ -159,6 +159,8 @@ import kotlin.coroutines.coroutineContext
         if (note != null) Text(note, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             style = Type.caption, color = if (failure == null) Palette.secondary else Palette.warning)
         Text("Each account keeps its own sign-in on this computer. Changing accounts starts a new agent session; chat history is kept.",
+            style = Type.caption, color = Palette.secondary)
+        Text("A chosen account is pinned to this bot and ignores rotation. Default uses the computer's sign-in or the provider's rotation setting.",
             style = Type.caption, color = Palette.secondary)
     }
     val pendingRemoval = confirmRemove

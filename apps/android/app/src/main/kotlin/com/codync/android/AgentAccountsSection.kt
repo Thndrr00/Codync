@@ -19,11 +19,27 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.codync.android.core.AgentAccount
 import com.codync.android.core.AgentBackend
+import com.codync.android.core.WireJson
 import com.codync.android.design.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+
+@Serializable private data class AccountRotation(
+    val mode: String = "manual",
+    val accountId: String? = null,
+    val cursor: Int = 0,
+    val rev: Int = 0,
+)
+
+@Serializable private data class AccountStateRow(
+    val id: String,
+    val name: String,
+    val email: String? = null,
+    val state: String = "ready",
+    val restingReason: String? = null,
+)
 
 /**
  * The accounts an agent keeps on this computer (iOS `AgentAccountsSection`): the computer's
@@ -32,21 +48,26 @@ import kotlinx.coroutines.launch
 @Composable internal fun AgentAccountsSection(backend: AgentBackend, state: AppState, store: AppStore, onChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
     val host = state.hostName
-    var accounts by remember { mutableStateOf(emptyList<AgentAccount>()) }
+    var rows by remember { mutableStateOf(emptyList<AccountStateRow>()) }
+    var rotation by remember { mutableStateOf(AccountRotation()) }
     var loading by remember { mutableStateOf(true) }
     var adding by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<String?>(null) }
     var disconnecting by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
-    var confirmRemove by remember { mutableStateOf<AgentAccount?>(null) }
+    var confirmRemove by remember { mutableStateOf<AccountStateRow?>(null) }
     var confirmSignOut by remember { mutableStateOf(false) }
-    val busy = loading || adding || removing != null || disconnecting
+    val busy = loading || adding || removing != null || disconnecting || saving
     LaunchedEffect(backend.id, retry) {
         loading = true
         failure = null
         try {
-            accounts = store.agentAccounts(backend.id)
+            val states = store.hostQuery("accountStates", body("backend" to backend.id))
+            val policy = store.hostQuery("accountRotation", body("backend" to backend.id))
+            rows = WireJson.decodeFromJsonElement(states.jsonObject.getValue("accounts"))
+            rotation = WireJson.decodeFromJsonElement(policy.jsonObject.getValue("rotation"))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -55,10 +76,32 @@ import kotlinx.coroutines.launch
             loading = false
         }
     }
+    fun saveRotation(mode: String, accountId: String?) {
+        saving = true
+        failure = null
+        scope.launch {
+            try {
+                val reply = store.hostQuery("setAccountRotation", body("backend" to backend.id, "mode" to mode, "accountId" to accountId))
+                rotation = WireJson.decodeFromJsonElement(reply.jsonObject.getValue("rotation"))
+                onChanged()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                failure = "Couldn't save the rotation: ${error.message ?: "Try again."}"
+            } finally {
+                saving = false
+            }
+        }
+    }
     val defaultDetail = when (backend.signedIn) {
         true -> backend.email?.let { "Signed in as $it on $host." } ?: "Signed in on $host."
         false -> "Not signed in on $host."
         null -> "Couldn't tell whether $host is signed in."
+    }
+    val rotationDetail = when (rotation.mode) {
+        "roundRobin" -> "A bot without a pinned account uses the next available account each turn."
+        "onRateLimit" -> "A bot without a pinned account changes accounts only when its current one runs out or is rate limited."
+        else -> "Bots use the account chosen below or their own pinned account."
     }
     CardSection("Accounts", footer = "Each account keeps its own sign-in on $host. Bots can use the default account or any isolated one.") {
         row {
@@ -72,20 +115,41 @@ import kotlinx.coroutines.launch
                 }
             }
         }
+        row {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Account rotation", style = Type.body.medium, color = Palette.text)
+                Text(rotationDetail, style = Type.subheadline, color = Palette.secondary)
+                SegmentedChoice(rotation.mode, listOf(
+                    "manual" to "Manual",
+                    "roundRobin" to "Each turn",
+                    "onRateLimit" to "On limit",
+                ), { saveRotation(it, rotation.accountId) })
+                if (rotation.mode == "manual") {
+                    ChoicePicker(rotation.accountId.orEmpty(),
+                        listOf("" to "Default account") + rows.map { it.id to it.name },
+                        { saveRotation(rotation.mode, it.ifEmpty { null }) }, label = "Rotation account")
+                }
+            }
+        }
         if (loading) row {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Spinner(12.dp)
                 Text("Loading accounts…", style = Type.subheadline, color = Palette.secondary)
             }
         }
-        for ((index, account) in accounts.withIndex()) row {
+        for (account in rows) row {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("${backend.name} ${index + 2}", style = Type.body.medium, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(account.email?.let { "Signed in as $it on $host." } ?: "Isolated account on $host.",
-                        style = Type.subheadline, color = Palette.secondary)
+                    Text(account.name, style = Type.body.medium, color = Palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val detail = account.email?.let { "Signed in as $it on $host. " } ?: "Isolated account on $host. "
+                    val stateText = when (account.state) {
+                        "signedOut" -> "Signed out."
+                        "resting" -> "Resting."
+                        else -> "Ready."
+                    }
+                    Text(detail + stateText, style = Type.subheadline, color = Palette.secondary)
                 }
-                IconButton("Remove ${backend.name} ${index + 2}", "trash", enabled = !busy) { confirmRemove = account }
+                IconButton("Remove ${account.name}", "trash", enabled = !busy) { confirmRemove = account }
             }
         }
         row {
@@ -102,7 +166,8 @@ import kotlinx.coroutines.launch
                     scope.launch {
                         try {
                             val account = store.authenticateAgentAccount(backend.id)
-                            accounts = accounts.filterNot { it.id == account.id } + account
+                            rows = rows.filterNot { it.id == account.id } +
+                                AccountStateRow(account.id, account.name, account.email, "ready")
                             onChanged()
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -139,7 +204,8 @@ import kotlinx.coroutines.launch
                     scope.launch {
                         try {
                             store.deleteAgentAccount(account.id)
-                            accounts = accounts.filterNot { it.id == account.id }
+                            rows = rows.filterNot { it.id == account.id }
+                            if (rotation.accountId == account.id) saveRotation(rotation.mode, null)
                             onChanged()
                         } catch (cancelled: CancellationException) {
                             throw cancelled

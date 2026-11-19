@@ -324,6 +324,21 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let backend = b["backend"].as_str();
             json!({"accounts": crate::agent::account::list(backend)?})
         }
+        "accountRotation" => {
+            let backend = str_arg(&b, "backend")?;
+            let rotation = crate::agent::account::rotation::load(&hub.store, backend)?;
+            json!({"rotation": crate::agent::account::rotation::wire(&rotation)})
+        }
+        "setAccountRotation" => {
+            let backend = str_arg(&b, "backend")?;
+            let mode = crate::agent::account::rotation::Mode::parse(str_arg(&b, "mode")?)?;
+            let policy = crate::agent::account::rotation::set(&hub.store, backend, mode, b["accountId"].as_str())?;
+            json!({"rotation": crate::agent::account::rotation::wire(&policy)})
+        }
+        "accountStates" => {
+            let backend = str_arg(&b, "backend")?;
+            json!({"accounts": crate::agent::account::rotation::states(&hub.store, backend)?})
+        }
         "accountAuthenticate" => {
             let backend = str_arg(&b, "backend")?;
             let name = b["name"].as_str().map(str::to_owned);

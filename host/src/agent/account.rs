@@ -15,6 +15,8 @@ use std::{
 };
 use tokio::sync::mpsc;
 
+pub mod rotation;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentAccount {
@@ -129,6 +131,15 @@ pub fn list(backend: Option<&str>) -> Result<Vec<AgentAccount>> {
 pub fn env(id: &str, backend: &str) -> Result<Vec<(String, String)>> {
     validate(id, backend)?;
     Ok(profile_env(backend, &profile_dir(&accounts_dir(), id)?))
+}
+
+/// The profile environment for one bot turn: its pinned account, or the provider's rotation pick.
+/// No variables means the computer's own sign-in, as before rotation was added.
+pub fn for_turn(store: &Store, backend: &str, pinned: Option<&str>) -> Result<Vec<(String, String)>> {
+    match rotation::select(store, backend, pinned)? {
+        Some(id) => env(&id, backend),
+        None => Ok(Vec::new()),
+    }
 }
 
 /// The environment that points `backend` at `path` instead of the computer's own sign-in.
@@ -317,6 +328,9 @@ async fn authenticate_profile(store: &Store, backend: &str, name: Option<String>
     let label = backends::harness(backend).map_or(backend, |h| h.name);
     if !supports(backend) {
         bail!("{label} doesn't support extra accounts on this computer.");
+    }
+    if list(Some(backend))?.len() >= rotation::MAX_ACCOUNTS_PER_PROVIDER {
+        bail!("{label} already has the maximum of {} accounts on this computer.", rotation::MAX_ACCOUNTS_PER_PROVIDER);
     }
     let id = format!("acc_{}", uuid::Uuid::new_v4());
     let root = accounts_dir();

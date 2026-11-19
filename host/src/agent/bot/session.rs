@@ -239,12 +239,13 @@ impl Actor {
             // Keys saved from an "environment variable" sign-in, what the harness needs to start, and the account's.
             let (mut env, grants) =
                 crate::agent::auth::launch_env(&self.hub.store, &self.cfg.backend, Some(&self.cfg.id))?;
-            if let Some(ref account_id) = self.cfg.account {
-                let acc_env = crate::agent::account::env(account_id, &self.cfg.backend)?;
-                for (k, v) in acc_env {
-                    env.retain(|(ek, _)| ek != &k);
-                    env.push((k, v));
-                }
+            // A pinned account wins; otherwise the provider's rotation picks one for this turn.
+            // This is still the single profile-env path — only the account id is chosen now.
+            let acc_env =
+                crate::agent::account::for_turn(&self.hub.store, &self.cfg.backend, self.cfg.account.as_deref())?;
+            for (k, v) in acc_env {
+                env.retain(|(ek, _)| ek != &k);
+                env.push((k, v));
             }
             if self.cfg.backend == "codex" && !env.iter().any(|(k, _)| k == "CODEX_CONFIG") {
                 // Codex's `/compact` takes no instructions: the keep-list is its config's `compact_prompt`.

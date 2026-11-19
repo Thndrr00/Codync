@@ -1,29 +1,86 @@
 import CodyncKit
 import SwiftUI
 
+private enum RotationMode: String, Codable, Sendable {
+    case manual
+    case roundRobin
+    case onRateLimit
+}
+
+private struct AccountRotation: Codable, Sendable {
+    var mode: RotationMode = .manual
+    var accountId: String?
+    var cursor: Int = 0
+    var rev: Int = 0
+}
+
+private struct AccountStateRow: Codable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let email: String?
+    let state: String
+    let restingReason: String?
+}
+
+private struct RotationRequest: Encodable, Sendable {
+    let backend: String
+    let mode: String
+    let accountId: String?
+}
+
 /// The accounts an agent keeps on this computer: the computer's own sign-in and the isolated
 /// profiles bots can pick. Account sign-in can take a few minutes; the host call waits for it.
 struct AgentAccountsSection: View {
     let backend: Backend
     var onChanged: () -> Void = {}
     @Environment(BotStore.self) private var model
-    @State private var accounts: [AgentAccount] = []
+    @State private var rows: [AccountStateRow] = []
+    @State private var rotation = AccountRotation()
     @State private var loading = true
     @State private var adding = false
     @State private var removing: String?
     @State private var disconnecting = false
+    @State private var saving = false
     @State private var failure: String?
-    @State private var confirmRemove: AgentAccount?
+    @State private var confirmRemove: AccountStateRow?
     @State private var confirmSignOut = false
 
     private var host: String { model.hostName }
-    private var busy: Bool { loading || adding || removing != nil || disconnecting }
+    private var busy: Bool { loading || adding || removing != nil || disconnecting || saving }
 
     private var defaultDetail: String {
         switch backend.signedIn {
         case true?: backend.email.map { "Signed in as \($0) on \(host)." } ?? "Signed in on \(host)."
         case false?: "Not signed in on \(host)."
         case nil: "Couldn't tell whether \(host) is signed in."
+        }
+    }
+
+    private var rotationDetail: String {
+        switch rotation.mode {
+        case .roundRobin: "A bot without a pinned account uses the next available account each turn."
+        case .onRateLimit: "A bot without a pinned account changes accounts only when its current one runs out or is rate limited."
+        case .manual: "Bots use the account chosen below or their own pinned account."
+        }
+    }
+
+    private var mode: Binding<RotationMode> {
+        Binding(get: { rotation.mode }, set: { newValue in
+            Task { await save(newValue, rotation.accountId) }
+        })
+    }
+
+    private var chosenAccount: Binding<String> {
+        Binding(get: { rotation.accountId ?? "" }, set: { newValue in
+            Task { await save(rotation.mode, newValue.isEmpty ? nil : newValue) }
+        })
+    }
+
+    private func stateDetail(_ row: AccountStateRow) -> String {
+        switch row.state {
+        case "signedOut": "Signed out."
+        case "resting": "Resting."
+        default: "Ready."
         }
     }
 
@@ -42,6 +99,20 @@ struct AgentAccountsSection: View {
                 }
             }
             .padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Account rotation").font(.body.weight(.medium)).foregroundStyle(Palette.text)
+                Text(rotationDetail).font(.subheadline).foregroundStyle(Palette.secondary)
+                SegmentedChoice(selection: mode, options: [
+                    (.manual, "Manual"),
+                    (.roundRobin, "Each turn"),
+                    (.onRateLimit, "On limit"),
+                ])
+                if rotation.mode == .manual {
+                    ChoicePicker(selection: chosenAccount, options: [("", "Default account")] + rows.map { ($0.id, $0.name) },
+                                 fitsAvailableWidth: true)
+                }
+            }
+            .padding(.vertical, 2)
             if loading {
                 HStack(spacing: 8) {
                     Spinner(size: 12)
@@ -49,14 +120,15 @@ struct AgentAccountsSection: View {
                 }
                 .padding(.vertical, 2)
             } else {
-                ForEach(accounts) { account in
+                ForEach(rows) { row in
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(account.name).font(.body.weight(.medium)).foregroundStyle(Palette.text)
-                            Text("Isolated account on \(host).").font(.subheadline).foregroundStyle(Palette.secondary)
+                            Text(row.name).font(.body.weight(.medium)).foregroundStyle(Palette.text)
+                            let detail = row.email.map { "Signed in as \($0) on \(host). " } ?? "Isolated account on \(host). "
+                            Text(detail + stateDetail(row)).font(.subheadline).foregroundStyle(Palette.secondary)
                         }
                         Spacer(minLength: 8)
-                        IconButton("Remove \(account.name)", systemImage: "trash") { confirmRemove = account }
+                        IconButton("Remove \(row.name)", systemImage: "trash") { confirmRemove = row }
                             .disabled(busy)
                     }
                     .padding(.vertical, 2)
@@ -106,11 +178,34 @@ struct AgentAccountsSection: View {
         loading = true
         failure = nil
         do {
-            accounts = try await model.loadAgentAccounts(backend: backend.id)
+            struct States: Decodable, Sendable { let accounts: [AccountStateRow] }
+            struct Policy: Decodable, Sendable { let rotation: AccountRotation }
+            let client = try await model.ready()
+            let states: States = try await client.call("accountStates", ["backend": backend.id], timeout: 30)
+            let policy: Policy = try await client.call("accountRotation", ["backend": backend.id], timeout: 30)
+            try Task.checkCancellation()
+            rows = states.accounts
+            rotation = policy.rotation
         } catch {
             failure = "Couldn't load accounts: \(error.localizedDescription)"
         }
         loading = false
+    }
+
+    @MainActor private func save(_ mode: RotationMode, _ accountId: String?) async {
+        saving = true
+        failure = nil
+        do {
+            struct Reply: Decodable, Sendable { let rotation: AccountRotation }
+            let client = try await model.ready()
+            let request = RotationRequest(backend: backend.id, mode: mode.rawValue, accountId: accountId)
+            let reply: Reply = try await client.call("setAccountRotation", request, timeout: 30)
+            rotation = reply.rotation
+            onChanged()
+        } catch {
+            failure = "Couldn't save the rotation: \(error.localizedDescription)"
+        }
+        saving = false
     }
 
     @MainActor private func add() {
@@ -120,8 +215,9 @@ struct AgentAccountsSection: View {
         Task {
             do {
                 let account = try await model.authenticateAgentAccount(backend: backend.id)
-                accounts.removeAll { $0.id == account.id }
-                accounts.append(account)
+                let row = AccountStateRow(id: account.id, name: account.name, email: nil, state: "ready", restingReason: nil)
+                rows.removeAll { $0.id == account.id }
+                rows.append(row)
                 onChanged()
             } catch {
                 failure = "Couldn't add the account: \(error.localizedDescription)"
@@ -130,13 +226,14 @@ struct AgentAccountsSection: View {
         }
     }
 
-    @MainActor private func remove(_ account: AgentAccount) {
+    @MainActor private func remove(_ account: AccountStateRow) {
         removing = account.id
         failure = nil
         Task {
             do {
                 try await model.deleteAgentAccount(id: account.id)
-                accounts.removeAll { $0.id == account.id }
+                rows.removeAll { $0.id == account.id }
+                if rotation.accountId == account.id { await save(rotation.mode, nil) }
                 onChanged()
             } catch {
                 failure = "Couldn't remove the account: \(error.localizedDescription)"

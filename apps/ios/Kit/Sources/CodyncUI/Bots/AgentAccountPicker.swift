@@ -56,7 +56,7 @@ struct AgentAccountPicker: View {
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ValueRow("Account", detail: selection == nil
+            ValueRow("Account (pinned to this bot)", detail: selection == nil
                      ? "Uses this computer's default account."
                      : "Uses a dedicated account. Changing it starts a new agent session; chat history is kept.") {
                 ChoicePicker(selection: value, options: choices, fitsAvailableWidth: true)
@@ -94,6 +94,8 @@ struct AgentAccountPicker: View {
                         .disabled(loading || signingIn || removing != nil || signingOut || store.connection != .online)
                 }
             }
+            Text("A chosen account is pinned to this bot and ignores rotation. Default uses the computer's sign-in or the provider's rotation setting.")
+                .font(.caption).foregroundStyle(Palette.secondary)
             if let failure {
                 Text(failure).font(.caption).foregroundStyle(Palette.warning)
                 Button("Retry loading accounts") { retry += 1 }

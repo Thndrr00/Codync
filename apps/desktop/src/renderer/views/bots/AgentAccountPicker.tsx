@@ -119,7 +119,7 @@ function AccountPicker({ backend, name: backendName, selection, online, load, au
   return (
     <VStack gap={6}>
       <HStack gap={8}>
-        <Text tone="text">Account</Text>
+        <Text tone="text">Account (pinned to this bot)</Text>
         <Spacer />
         {busy ? <Spinner size={12} /> : (
           <IconButton title={failure ? 'Retry account list' : 'Refresh account list'} icon="arrow.clockwise" disabled={!online} onClick={() => setRetry((value) => value + 1)} />
@@ -149,6 +149,7 @@ function AccountPicker({ backend, name: backendName, selection, online, load, au
         ) : null}
       </div>
       <Text size="caption" tone="secondary">Each account keeps its own sign-in on this computer. Changing accounts starts a new agent session; chat history is kept.</Text>
+      <Text size="caption" tone="secondary">A chosen account is pinned to this bot and ignores rotation. Default uses the computer&apos;s sign-in or the provider&apos;s rotation setting.</Text>
       <Dialog
         open={confirmRemove !== null}
         title="Remove account?"
