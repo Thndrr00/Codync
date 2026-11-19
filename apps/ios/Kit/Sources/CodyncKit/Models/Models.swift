@@ -331,6 +331,8 @@ public struct BotDraft: Codable, Hashable, Sendable {
     public var notify: Bool?
     /// It learns skills from its background review (`learnSkills` on the wire).
     public var learnSkills: Bool = false
+    /// It may hand a bounded task to a short-lived child turn (`subagents` on the wire).
+    public var subagents: Bool = false
     public var connectors: [String]?
     public var skills: [String]?
     public var computer: Bool?
@@ -382,6 +384,7 @@ public struct BotDraft: Codable, Hashable, Sendable {
         hidden = bot.hidden
         notify = bot.notify
         learnSkills = bot.learnSkills
+        subagents = bot.subagents
         connectors = bot.connectors
         skills = bot.skills
         computer = bot.computer

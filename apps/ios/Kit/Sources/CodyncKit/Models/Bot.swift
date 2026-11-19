@@ -50,6 +50,8 @@ public struct Bot: Codable, Identifiable, Hashable, Sendable {
     public var notify: Bool?
     /// It learns skills from its background review (`learnSkills` on the wire).
     public var learnSkills: Bool = false
+    /// It may hand a bounded task to a short-lived child turn (`subagents` on the wire).
+    public var subagents: Bool = false
     /// Installed connector / skill ids this bot uses (see `Market.swift`).
     public var connectors: [String]
     public var skills: [String]
@@ -152,6 +154,8 @@ extension Bot {
         section = try c.decodeIfPresent(String.self, forKey: .section)
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify)
+        learnSkills = try c.decodeIfPresent(Bool.self, forKey: .learnSkills) ?? false
+        subagents = try c.decodeIfPresent(Bool.self, forKey: .subagents) ?? false
         connectors = try c.decodeIfPresent([String].self, forKey: .connectors) ?? []
         skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
         computer = try c.decodeIfPresent(Bool.self, forKey: .computer) ?? false

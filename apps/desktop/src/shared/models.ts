@@ -60,6 +60,8 @@ export interface Bot {
   fastMode: boolean
   /** The bot learns skills by itself from its background review (learnSkills on the wire). */
   learnSkills: boolean
+  /** The bot may hand a bounded task to a short-lived child turn (subagents on the wire). */
+  subagents: boolean
   /** What the agent says about Fast mode: `unknown` (no session yet), `offered`, `unsupported`,
    *  or `refused` (it turned it off; `fastModeIssue` says why). */
   fastModeSupport: string
@@ -164,6 +166,7 @@ export function normalizeBot(raw: Partial<Bot> & { id: string }): Bot {
     modelOptions: raw.modelOptions ?? {},
     fastMode: raw.fastMode ?? false,
     learnSkills: raw.learnSkills ?? false,
+    subagents: raw.subagents ?? false,
     fastModeSupport: raw.fastModeSupport ?? 'unknown',
     fastModeIssue: raw.fastModeIssue ?? null,
     account: raw.account ?? null,
@@ -954,6 +957,8 @@ export interface BotDraft {
   notify?: boolean | null
   /** Turned on, the bot learns skills from its background review. */
   learnSkills?: boolean
+  /** Turned on, the bot may hand a bounded task to a short-lived child turn. */
+  subagents?: boolean
   connectors?: string[]
   skills?: string[]
   computer?: boolean
@@ -998,6 +1003,7 @@ export function draftOf(bot: Bot): BotDraft {
     model: bot.model ?? null,
     modelOptions: bot.modelOptions,
     fastMode: bot.fastMode,
+    subagents: bot.subagents,
     account: bot.account ?? null,
     fallbacks: bot.fallbacks,
     selfFallbacks: bot.selfFallbacks ?? undefined,

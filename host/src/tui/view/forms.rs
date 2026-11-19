@@ -84,6 +84,10 @@ fn field_help(app: &App, f: &Form, agent_name: &str) -> Option<(String, Style)> 
             tr("After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.")
                 .into_owned()
         }
+        Field::Subagents => {
+            tr("Let this bot hand a bounded task to a short-lived child turn. The child has no chat of its own and spends this bot's tokens.")
+                .into_owned()
+        }
         _ => return None,
     };
     Some((line, t.dim))
@@ -139,6 +143,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Compaction => "Summarize",
             Field::Notify => "Notify",
             Field::LearnSkills => "Learn skills on its own",
+            Field::Subagents => "Subagents",
             Field::Computer => "Use computer",
             Field::Team => "Manage team",
             Field::Network => "Network",
@@ -376,6 +381,10 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
                 let s = if f.learn_skills { "◉ On   ○ Off" } else { "○ On   ◉ Off" };
                 put(buf, vx, y, vw, s, t.text.patch(base));
             }
+            Field::Subagents => {
+                let s = if f.subagents { "◉ On   ○ Off" } else { "○ On   ◉ Off" };
+                put(buf, vx, y, vw, s, t.text.patch(base));
+            }
             Field::Color => {
                 let mut x = vx;
                 for (ci, c) in COLORS.iter().enumerate() {
@@ -439,6 +448,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         | Field::Compaction
         | Field::Notify
         | Field::LearnSkills
+        | Field::Subagents
         | Field::Saver
         | Field::Computer
         | Field::Team

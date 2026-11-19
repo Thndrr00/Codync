@@ -39,6 +39,8 @@ data class Bot(
     val notify: Boolean? = null,
     /** It learns skills from its background review (learnSkills on the wire). */
     val learnSkills: Boolean = false,
+    /** The bot may hand a bounded task to a short-lived child turn (`subagents` on the wire). */
+    val subagents: Boolean = false,
     val connectors: List<String> = emptyList(),
     val skills: List<String> = emptyList(),
     val computer: Boolean = false,

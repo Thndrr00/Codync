@@ -303,6 +303,8 @@ struct BotSettingsForm: View {
                           isOn: Binding(get: { draft.notify ?? true }, set: { draft.notify = $0 }))
                 SwitchRow("Learn skills on its own", detail: "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
                           isOn: Binding(get: { draft.learnSkills }, set: { draft.learnSkills = $0 }))
+                SwitchRow("Subagents", detail: "Let this bot hand a bounded task to a short-lived child turn. The child has no chat of its own and spends this bot's tokens.",
+                          isOn: Binding(get: { draft.subagents }, set: { draft.subagents = $0 }))
                 if model.screen != nil, part == .all {
                     SwitchRow("Use the computer", detail: model.screen?.controlReady != true
                         ? "Let this bot use apps. On that computer, open Codync → Settings → Computer access to set up permissions first."

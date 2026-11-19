@@ -207,6 +207,7 @@ pub enum Field {
     Compaction,
     Notify,
     LearnSkills,
+    Subagents,
     Computer,
     Team,
     Network,
@@ -217,7 +218,7 @@ pub enum Field {
     Skills,
 }
 
-pub const FIELDS: [Field; 28] = [
+pub const FIELDS: [Field; 29] = [
     Field::Name,
     Field::Instructions,
     Field::Check,
@@ -238,6 +239,7 @@ pub const FIELDS: [Field; 28] = [
     Field::Approvals,
     Field::Notify,
     Field::LearnSkills,
+    Field::Subagents,
     Field::Computer,
     Field::Team,
     Field::Network,
@@ -281,6 +283,8 @@ pub struct Form {
     pub notify: bool,
     /// It learns skills from its own background review; off until it is turned on.
     pub learn_skills: bool,
+    /// It can hand a bounded task to a short-lived child turn; off until it is turned on.
+    pub subagents: bool,
     pub computer: bool,
     /// `None`: the host has no Manage the team.
     pub manage_team: Option<bool>,

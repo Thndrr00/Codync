@@ -450,6 +450,12 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             onChange={(on) => set('learnSkills', on)}
           />
           <SwitchRow
+            title="Subagents"
+            detail="Let this bot hand a bounded task to a short-lived child turn. The child has no chat of its own and spends this bot's tokens."
+            on={draft.subagents ?? false}
+            onChange={(on) => set('subagents', on)}
+          />
+          <SwitchRow
             title="Chief of Staff (Coordinator)"
             detail="Supervises stalled or failing bots in teams and groups, with automatic triage and up to 2 retries per incident."
             on={draft.isChief ?? false}

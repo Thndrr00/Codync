@@ -48,6 +48,8 @@ pub struct Bot {
     pub notify: bool,
     /// It learns skills from its own background review (`learnSkills`); off until the person turns it on.
     pub learn_skills: bool,
+    /// It may hand a bounded task to a short-lived child turn (`subagents`); off until the person turns it on.
+    pub subagents: bool,
     pub computer: bool,
     /// It creates bots and changes any bot's setup (`chat::manage`); `None` from a host without it.
     pub manage_team: Option<bool>,
@@ -214,6 +216,7 @@ impl Bot {
             hidden: v["hidden"].as_bool().unwrap_or(false),
             notify: v["notify"].as_bool().unwrap_or(true),
             learn_skills: v["learnSkills"].as_bool().unwrap_or(false),
+            subagents: v["subagents"].as_bool().unwrap_or(false),
             computer: v["computer"].as_bool().unwrap_or(false),
             manage_team: v["manageTeam"].as_bool(),
             offered_to_network: v["offeredToNetwork"].as_bool(),
