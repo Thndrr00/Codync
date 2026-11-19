@@ -628,6 +628,8 @@ export interface UsageWindow {
   percent: number
   resetsAt?: number | null
   resetsText?: string | null
+  /** How long one period of the limit lasts, in seconds, when the provider says or its label implies it. */
+  windowSeconds?: number | null
   /** A reading that isn't a share of a cap. Shown instead of the percent, and never the tightest limit. */
   text?: string | null
 }

@@ -25,3 +25,26 @@
   background: var(--bubble-agent);
   mask: radial-gradient(circle at 2px 2px, #000 1.25px, transparent 1.5px) 0 0 / 4px 4px;
 }
+
+/* The pace mark: where an even spend would be by now (OpenBot 0.72.0). */
+.usage-bar-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.usage-pace {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.usage-pace[data-ahead='true'] {
+  background: var(--danger);
+  opacity: 0.8;
+}

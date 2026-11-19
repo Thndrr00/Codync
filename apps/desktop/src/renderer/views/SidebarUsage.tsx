@@ -7,6 +7,7 @@ import { Text } from '../components/Text'
 import { prefs, usePref } from '../lib/prefs'
 import { useResetLine, useTr } from '../lib/use-language'
 import { ProviderMascot } from './usage/ProviderMascot'
+import { pacePercent } from '../lib/usage-pace'
 import { UsageBar } from './usage/UsageBar'
 import { providerTintCSS, resetDescription, usageStatus, windowReading, windowTitle } from './usage/usage-model'
 import './sidebar-usage.css'
@@ -75,7 +76,7 @@ export function SidebarUsage({ usage, onRefresh }: { usage: Usage; onRefresh?: (
                     </div>
                     {w.text ? null : (
                       <>
-                        <UsageBar percent={w.percent} tint={providerTintCSS(provider.id)} />
+                        <UsageBar percent={w.percent} tint={providerTintCSS(provider.id)} pace={pacePercent(w, Date.now())} />
                         {resetDescription(w) ? (
                           <Text tone="tertiary" size="caption2" truncate>{resetLine(resetDescription(w)!)}</Text>
                         ) : null}

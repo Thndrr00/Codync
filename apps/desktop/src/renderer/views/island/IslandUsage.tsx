@@ -6,6 +6,7 @@ import { Icon } from '../../components/Icon'
 import { prefs, usePref } from '../../lib/prefs'
 import { usePixelRatio } from '../../lib/theme'
 import { useResetLine, useTr } from '../../lib/use-language'
+import { pacePercent } from '../../lib/usage-pace'
 import { UsageBar } from '../usage/UsageBar'
 import { mascotDataURL } from '../usage/ProviderMascot'
 import { providerTintCSS, resetDescription, tightest, usageStatus, usedText, windowReading, windowTitle } from '../usage/usage-model'
@@ -57,7 +58,7 @@ export function UsageMeter({ model }: { model: IslandModel }) {
     >
       <Mascot provider={provider} size={15} />
       <span className="island-meter-bar">
-        <UsageBar percent={window.percent} tint={providerTintCSS(provider.id)} />
+        <UsageBar percent={window.percent} tint={providerTintCSS(provider.id)} pace={pacePercent(window, Date.now())} />
       </span>
       <span className="island-meter-value">{`${Math.round(usagePercent(window.percent))}%`}</span>
     </button>
@@ -154,7 +155,7 @@ function WindowUsage({ window: w, tint, providerId }: { window: UsageWindow; tin
       {w.text ? <span className="island-usage-note">{w.text}</span> : (
         <>
           <span className="island-usage-value">{windowReading(w, tr)}</span>
-          <UsageBar percent={w.percent} tint={tint} />
+          <UsageBar percent={w.percent} tint={tint} pace={pacePercent(w, Date.now())} />
           {reset ? <span className="island-usage-reset">{line(reset)}</span> : null}
         </>
       )}

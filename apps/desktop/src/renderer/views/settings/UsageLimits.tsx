@@ -6,6 +6,7 @@ import { Text } from '../../components/Text'
 import { prefs, usePref } from '../../lib/prefs'
 import { useResetLine, useTr } from '../../lib/use-language'
 import { ProviderMascot } from '../usage/ProviderMascot'
+import { pacePercent } from '../../lib/usage-pace'
 import { UsageBar } from '../usage/UsageBar'
 import { providerTintCSS, resetDescription, usageStatus, windowReading, windowTitle } from '../usage/usage-model'
 import { UsageChooser } from './UsageChooser'
@@ -100,7 +101,7 @@ function WindowLimit({ window: w, providerId }: { window: UsageWindow; providerI
           </>
         )}
       </HStack>
-      {w.text ? null : <UsageBar percent={w.percent} tint={providerTintCSS(providerId)} />}
+      {w.text ? null : <UsageBar percent={w.percent} tint={providerTintCSS(providerId)} pace={pacePercent(w, Date.now())} />}
     </VStack>
   )
 }
