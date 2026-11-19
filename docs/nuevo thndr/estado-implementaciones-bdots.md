@@ -64,7 +64,10 @@ ruta ni token) y `user_question_asked` (número de opciones, nunca la pregunta).
 
 ## Verificación
 
-- Desktop: `npm run typecheck` limpio; `npm test` → 562 tests, 538 pasan, 0 fallan, 24 omitidos.
+- Desktop: `npm run typecheck` limpio; `npm test` → 834 tests, 806 pasan, 4 fallan, 24 omitidos.
+  Los 4 fallos son de idioma del sistema (cadenas en español frente a las esperadas en inglés:
+  `En cola`/`Queued`, `En marcha`/`Running`, `Escrito`/`Messaged` y un mensaje de timeout), no del
+  código cambiado: se ejecutó con el locale español de esta máquina.
 - Android: `:design:test :core:test` → BUILD SUCCESSFUL; `TabPillGeometryTest` 2/2.
 - Host: `cargo fmt --check` limpio. `cargo test` no pudo completarse en este equipo: `aws-lc-sys`
   necesita NASM (se usó `AWS_LC_SYS_PREBUILT_NASM=1`) y el equipo tenía 0,45 GB libres por builds
@@ -74,12 +77,13 @@ ruta ni token) y `user_question_asked` (número de opciones, nunca la pregunta).
 
 La rama está pusheada como `feat/bdots-50-mejoras` y el PR es
 [Thndrr00/Codync#8](https://github.com/Thndrr00/Codync/pull/8) contra `main` (el fork no tiene rama `dev`).
-El branch se fusionó con `main` (commit de merge `0f5e747fb`): los 16 conflictos se resolvieron
-conservando las versiones nuevas de `main` en los archivos que esta rama no tocaba y las firmas del
-pruner en `mcp.rs`, donde `call` se mantuvo de cinco argumentos para el CLI y se añadió
-`call_with_pruner` para el puente MCP. La tarjeta de `ask_user` lleva `askUserTool` para no
-confundirse con las tarjetas `question` que `main` ya usa en `external/question.rs`. El PR pasó de
-`DIRTY` a `UNSTABLE` (sin conflictos; checks pendientes).
+El primer merge con `main` produjo un árbol híbrido inconsistente (el typecheck de Desktop fallaba
+porque `main` y esta rama venían de linajes distintos). Se descartó ese merge y se rehízo la rama
+como `main` + los commits de esta rama aplicados uno a uno: el PR quedó limpio, sin conflictos, y
+`npm run typecheck` vuelve a pasar. En `mcp.rs`, `call` conserva sus cinco argumentos para el CLI y
+`call_with_pruner` sirve al puente MCP. La tarjeta de `ask_user` lleva `askUserTool` para no
+confundirse con las tarjetas `question` que `main` ya usa en `external/question.rs`. El PR sigue en
+`UNSTABLE` (sin conflictos; checks pendientes).
 
 Sobre más adiciones: el nodo de aprobación humana en flujos y el correo entrante por bot son
 demasiado grandes para escribirlos sin poder compilar el host aquí; los skills de diseño son solo
