@@ -45,6 +45,10 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Approval requests by agents (ADR 0126) | A bounded request with who asked, why and two options, answered once through `agentApproval` | `chat/agent_request.rs`, `api/bots.rs` |
 | Local vault (ADR 0144) | An index of secret names, sources and masked hints; the value stays in the OS Keychain, never in the index, through `vaultMask` | `chat/vault.rs`, `api/bots.rs` |
 
+The clients reach all of these through typed bridges that only call the host and decode its answer:
+`apps/desktop/src/renderer/client/agentes-chat.ts`, `CodyncKit/Client/HostClient+AgentesChat.swift`,
+`core/.../AgentesChat.kt` and `host/src/tui/net/agentes_chat.rs`. The host still owns the logic.
+
 ## Not taken
 
 - **Embeddings**, organization permissions and the other search filters: no provider in the host and
