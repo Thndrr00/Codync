@@ -262,6 +262,13 @@ pub fn render(store: &Store, cfg: &BotConfig) -> String {
             .to_owned(),
     );
     lines.push(String::new());
+    // A New chat is a new, empty context window, not a deleted history: the earlier messages stay in Codync's
+    // store and the history tools read them on demand, so they are never sent in every turn.
+    lines.push(
+        "Past chats: starting a New chat gives you a new, empty conversation, but it does not erase what was said before. When the user asks about an earlier message, call search_history (and read_history for the messages around one) to find it on demand; older messages are not repeated in every turn."
+            .to_owned(),
+    );
+    lines.push(String::new());
     lines.push(format!("Workspace: your default working directory is {}. {} Keep your own files and outputs there. For another project, use explicit paths or change directory for that command; don't change your bot configuration to work elsewhere. This directory is not a sandbox or a grant of access: follow the user's instructions and your permissions, and don't assume other bots' files are yours.", cfg.cwd, if crate::agent::workspace::is_managed(cfg) { "Codync allocated it for you alone." } else { "The user chose this project folder." }));
     lines.push(String::new());
     lines.push(crate::dev_servers::BRIEF.to_owned());
@@ -392,6 +399,14 @@ mod tests {
         assert!(system.contains("requests from other bots, send_message isn't available"));
         assert!(system.contains("Replies to your own message_bot requests arrive as a turn of their own"));
         assert!(system.contains("These rules apply to the current turn"));
+    }
+
+    #[test]
+    fn instructions_say_past_chats_stay_searchable_after_a_new_chat() {
+        let system = render(&store(), &cfg("Worker", ""));
+        assert!(system.contains("New chat"), "{system}");
+        assert!(system.contains("search_history"), "{system}");
+        assert!(system.contains("on demand"), "{system}");
     }
 
     #[test]

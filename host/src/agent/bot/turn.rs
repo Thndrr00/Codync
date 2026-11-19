@@ -134,6 +134,11 @@ impl Actor {
         self.turn = Some(turn);
         // Only the user's own words feed memory: not another bot's, a room's or a routine's.
         let from_user = !hidden && self.source() == TurnSource::User;
+        // A new request starts its own bounded chain of completion checks.
+        if from_user {
+            self.self_checks = 0;
+            self.self_check_request = None;
+        }
         self.turn_text = from_user.then(|| text.to_owned());
         self.turn_entries = if from_user { entry_ids.to_vec() } else { Vec::new() };
         // A room turn answers the user's message in the room; another turn, the messages it was given.
@@ -262,7 +267,9 @@ impl Actor {
         }
         let raw = std::mem::take(&mut self.raw_prompt);
         let prompt = if raw { text.to_owned() } else { self.compose(&snapshot, text)? };
-        self.hub.set_runtime(&self.id(), |r| r.activity = "Thinking…".into());
+        // OpenBot 0.74.0: with the Natural response style this stays next to the avatar until the agent's
+        // first text or first step (the first message or tool update below replaces it).
+        self.hub.set_runtime(&self.id(), |r| r.activity = "Thinking it through…".into());
         let acp = self.conn.as_ref().ok_or_else(|| anyhow!("agent not running"))?.acp.clone();
         let params = json!({
             "sessionId": sid,
@@ -303,6 +310,9 @@ impl Actor {
             *used = Instant::now();
         }
         let stopped = self.stop_requested || matches!(&done, Ok(v) if v["stopReason"] == "cancelled");
+        // Captured before `close_attempt` drains the cards and `set_runtime` clears NeedsInput: a question,
+        // approval or permission card still waiting wins over a completion check.
+        let pending_input = !self.perms.is_empty() || self.hub.runtime(&self.id()).status == BotStatus::NeedsInput;
         self.close_attempt(stopped || done.is_err());
         let mut final_text = None;
         let routine = self.active_routine.is_some();
@@ -347,6 +357,26 @@ impl Actor {
             Err(_) => "error".into(),
         };
         let verdict = super::verdict::TurnVerdict::of(&stop_reason);
+        // OpenBot 0.74.0: a finished turn that used tools and answered gets one bounded check that the work
+        // covered the whole request. The check runs as the next hidden turn on this session (see `on_turn_done`).
+        let has_answer = done.is_ok()
+            && stop_reason == "end_turn"
+            && !stopped
+            && final_text.as_ref().is_some_and(|text| !text.trim().is_empty());
+        if !grouped
+            && !delegated
+            && !self.proactive_turn
+            && super::self_check::may_check(
+                self.watchdog.tool_calls() > 0,
+                has_answer,
+                stopped,
+                pending_input,
+                self.self_checks,
+            )
+        {
+            let request = self.turn_text.clone().unwrap_or_default();
+            self.schedule_self_check(request);
+        }
         // A turn that went well and used several kinds of tool may become a proposed skill (it waits in an inbox).
         if !stopped
             && done.is_ok()

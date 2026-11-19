@@ -8,6 +8,7 @@
 use super::Actor;
 use super::background_work::background_work;
 use crate::analytics::Retired;
+use crate::store::now_ms;
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -17,6 +18,16 @@ use std::time::{Duration, Instant};
 const IDLE: Duration = Duration::from_mins(30);
 /// How often an idle bot looks for something to give back.
 const CHECK_EVERY: Duration = Duration::from_mins(1);
+
+/// OpenBot 0.74.0: while a Claude agent waits for its background work, its chat shows the wait and for how long.
+fn background_activity(waited_ms: i64) -> String {
+    let secs = (waited_ms.max(0) / 1000).clamp(0, 99 * 60 * 60);
+    if secs < 60 {
+        format!("Waiting for background work… {secs}s")
+    } else {
+        format!("Waiting for background work… {}m {}s", secs / 60, secs % 60)
+    }
+}
 
 /// What a keeper restart does to an agent, whose grants went with the keeper that gave them.
 #[derive(Debug, PartialEq)]
@@ -173,6 +184,22 @@ impl Actor {
         }
     }
 
+    /// After a Claude turn that left detached work running, the chat says why the agent stays and for how long,
+    /// until the next turn replaces the line. Other backends, turns still running and agents that left nothing
+    /// running say nothing.
+    pub(super) async fn note_background_wait(&self, since: Option<i64>) {
+        if self.cfg.backend != "claude" || self.turn.is_some() {
+            return;
+        }
+        let Some(conn) = &self.conn else { return };
+        if !background_work(&conn.acp).await {
+            return;
+        }
+        let waited = since.map_or(0, |at| now_ms() - at);
+        let activity = background_activity(waited);
+        self.hub.set_runtime(&self.cfg.id, |r| r.activity = activity);
+    }
+
     /// Stops the agent with everything it started, to give that back; the next turn starts it again and reopens its
     /// session.
     async fn retire(&mut self, reason: Retired) {
@@ -261,6 +288,14 @@ mod tests {
         let now = Instant::now();
         let used = HashMap::from([("main".to_owned(), now), ("run".to_owned(), now)]);
         assert_eq!(plan(&used, now, false, true, now, IDLE), Release::Agent(Retired::SessionNotClosed));
+    }
+
+    #[test]
+    fn background_wait_shows_how_long_it_has_been_waiting() {
+        assert_eq!(background_activity(-5), "Waiting for background work… 0s");
+        assert_eq!(background_activity(0), "Waiting for background work… 0s");
+        assert_eq!(background_activity(9_999), "Waiting for background work… 9s");
+        assert_eq!(background_activity(65_000), "Waiting for background work… 1m 5s");
     }
 
     #[test]

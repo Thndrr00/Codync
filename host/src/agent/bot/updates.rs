@@ -112,7 +112,7 @@ impl Actor {
             "agent_thought_chunk" => {
                 let t = acp::content_text(&u["content"]);
                 self.append(SegKind::Thought, &t);
-                self.set_activity("Thinking…");
+                // A thought is neither the first text nor a step: keep "Thinking it through…" until one of them.
             }
             "tool_call" => {
                 self.close_seg();

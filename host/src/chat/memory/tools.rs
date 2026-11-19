@@ -41,7 +41,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "search_history",
-            "description": "Read your full chat history with the user, newest first: messages containing every given word (case-insensitive), or without a query, every message. Returns dated messages with ids, and next: pass it as from for the page before.",
+            "description": "Read your full chat history with the user, newest first: messages containing every given word (case-insensitive), or without a query, every message. This is the whole stored chat, including messages from before a New chat or a fresh conversation; those older messages are only read when you call this, never sent in every turn. Returns dated messages with ids, and next: pass it as from for the page before.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -56,7 +56,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "read_history",
-            "description": "Read the conversation window surrounding a specific message id (from search_history) in chronological order.",
+            "description": "Read the conversation window surrounding a specific message id (from search_history) in chronological order, including messages from before a New chat.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

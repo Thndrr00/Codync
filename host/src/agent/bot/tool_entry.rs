@@ -71,6 +71,13 @@ fn sends_message(title: &str) -> bool {
     ["mcp__chat__send_message", "chat.send_message"].iter().any(|name| title.starts_with(name))
 }
 
+/// Reading the bot's stored past chats (`memory`'s history tools), by the call's title (OpenBot 0.74.0 activity).
+fn searches_history(title: &str) -> bool {
+    ["mcp__memory__search_history", "memory.search_history", "mcp__memory__read_history", "memory.read_history"]
+        .iter()
+        .any(|name| title.starts_with(name))
+}
+
 /// Keeping the bot's memory: a call of the `memory` MCP server, or one that names a file in a memory folder the
 /// bot sees (in its `locations` or diffs, as `chat::memory::turns::touched` reads them).
 fn keeps_memory(cfg: &BotConfig, data: &Value) -> bool {
@@ -102,6 +109,8 @@ pub(super) fn activity(data: &Value) -> &str {
     let title = data["title"].as_str().unwrap_or("Tool");
     if sends_message(title) {
         "Typing…"
+    } else if searches_history(title) {
+        "Searching its past chats…"
     } else if data["bookkeeping"] == true {
         "Thinking…"
     } else {
@@ -161,6 +170,16 @@ mod tests {
         assert_eq!(activity(&marked(json!({"title": "mcp__memory__edit_memory"}))), "Thinking…");
         assert_eq!(activity(&marked(json!({"title": "Read src/memory.rs"}))), "Read src/memory.rs");
         assert_eq!(activity(&marked(json!({"title": "Terminal"}))), "Terminal");
+    }
+
+    #[test]
+    fn reading_past_chats_says_so() {
+        for title in
+            ["mcp__memory__search_history", "memory.search_history", "mcp__memory__read_history", "memory.read_history"]
+        {
+            assert_eq!(activity(&marked(json!({"title": title}))), "Searching its past chats…", "{title}");
+        }
+        assert_ne!(activity(&marked(json!({"title": "memory.search_memory"}))), "Searching its past chats…");
     }
 
     #[test]

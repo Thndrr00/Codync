@@ -43,6 +43,7 @@ mod reconfigure;
 mod refuse;
 mod request_control;
 mod results;
+mod self_check;
 mod session;
 mod skill_use;
 mod spend;
@@ -171,6 +172,9 @@ fn spawn_inner(hub: Arc<Hub>, base: BotConfig, resume: bool) -> BotHandle {
         perms: HashMap::new(),
         waiting: approval_age::Waiting::default(),
         continuation: 0,
+        self_checks: 0,
+        self_check_request: None,
+        self_check: None,
         stop_requested: false,
         cancel_deadline: None,
         exit_tail: None,
@@ -385,6 +389,12 @@ struct Actor {
     waiting: approval_age::Waiting,
     /// Continuations from a pause card in a row, counting the running turn (0 for any other turn).
     continuation: u32,
+    /// Bounded completion checks already run for the current request (OpenBot 0.74.0).
+    self_checks: u32,
+    /// The person's request, carried unchanged through the checks of one request.
+    self_check_request: Option<String>,
+    /// A check to run as the next hidden turn once this one has finished (`self_check`).
+    self_check: Option<self_check::SelfCheck>,
     stop_requested: bool,
     /// A cancelled turn still running past this stops its agent process.
     cancel_deadline: Option<Instant>,
@@ -433,7 +443,13 @@ impl Actor {
         }
         let (session, routine) = (self.turn_session.clone(), self.active_routine.is_some());
         let failed = done.as_ref().is_err_and(acp::may_end_session);
+        // Kept while `finish_turn` clears the runtime, for the time a Claude agent waits on background work.
+        let started = self.hub.runtime(&self.id()).started_at;
         self.finish_turn(&done);
+        // A tool-using turn with an answer may be checked once more for unfinished parts of the request.
+        if let Some(check) = self.self_check.take() {
+            self.start_self_check(check, done_tx).await;
+        }
         match session {
             Some(sid) if routine => self.release_spent(&sid).await,
             Some(sid) if failed => self.close_reopenable(&sid).await,
@@ -441,6 +457,7 @@ impl Actor {
         }
         self.stop_spent().await;
         self.next_in_queue(done_tx).await;
+        self.note_background_wait(started).await;
     }
 
     /// `interrupted`: the previous host process stopped a turn in the bot's chat; resume it first.

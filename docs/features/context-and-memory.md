@@ -223,6 +223,14 @@ Claude Code's own memory; the rules live in the `codync-mem` crate, and `chat/me
   start resumes that session with a hidden "you were interrupted, don't repeat finished steps" prompt. If the
   session can't be resumed, or the turn started over an hour ago, it does nothing.
 
+Following OpenBot 0.74.0, a finished turn in the bot's own chat that used tools and gave an answer gets one short
+hidden prompt on the same session asking the model to compare the request with the work and answer and finish any
+part still missing; the chain is capped at three checks per request and stops at once for a question, approval or
+permission card or a Stop. The host also sends the activities "Thinking it through…" (until the first text or step),
+"Waiting for background work…" with a Claude agent's elapsed wait, and "Searching its past chats…" while the history
+tools run. A New chat opens an empty context window but keeps the chat in SQLite: `search_history` and `read_history`
+read those earlier messages on demand when asked, never in every turn.
+
 ## Limits
 
 - An agent without ACP `systemPrompt` gets the instructions as a user message, which models follow less firmly
