@@ -2526,5 +2526,17 @@
   "Renamed folder to {folder}": "Renamed folder to {folder}",
   "Moved folder {folder}": "Moved folder {folder}",
   "Deleted folder {folder}": "Deleted folder {folder}",
-  "Connect to this computer to change its library": "Connect to this computer to change its library"
+  "Connect to this computer to change its library": "Connect to this computer to change its library",
+  "Status reactions": "Status reactions",
+  "A request gets 👀 when it arrives and ✅, ❌ or 🫡 when it ends. Off sends no reactions; the answer and errors stay.": "A request gets 👀 when it arrives and ✅, ❌ or 🫡 when it ends. Off sends no reactions; the answer and errors stay.",
+  "Bot logins": "Bot logins",
+  "Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.": "Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.",
+  "2FA set": "2FA set",
+  "No 2FA": "No 2FA",
+  "No bot logins yet.": "No bot logins yet.",
+  "Username": "Username",
+  "2FA secret (optional)": "2FA secret (optional)",
+  "Base32 secret": "Base32 secret",
+  "Save login": "Save login",
+  "Couldn't load bot logins.": "Couldn't load bot logins."
 }

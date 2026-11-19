@@ -2526,5 +2526,17 @@
   "Renamed folder to {folder}": "Carpeta renombrada a {folder}",
   "Moved folder {folder}": "Carpeta {folder} movida",
   "Deleted folder {folder}": "Carpeta {folder} eliminada",
-  "Connect to this computer to change its library": "Conéctate a este ordenador para cambiar su biblioteca"
+  "Connect to this computer to change its library": "Conéctate a este ordenador para cambiar su biblioteca",
+  "Status reactions": "Reacciones de estado",
+  "A request gets 👀 when it arrives and ✅, ❌ or 🫡 when it ends. Off sends no reactions; the answer and errors stay.": "Una petición recibe 👀 al llegar y ✅, ❌ o 🫡 cuando termina. Al desactivarlas no se envían reacciones; la respuesta y los errores siguen.",
+  "Bot logins": "Inicios de sesión de bots",
+  "Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.": "Los bots los usan para iniciar sesión y para los códigos de dos pasos. Las contraseñas y las claves 2FA se quedan en este ordenador; el bot nunca las ve.",
+  "2FA set": "2FA configurada",
+  "No 2FA": "Sin 2FA",
+  "No bot logins yet.": "Aún no hay inicios de sesión de bots.",
+  "Username": "Usuario",
+  "2FA secret (optional)": "Clave 2FA (opcional)",
+  "Base32 secret": "Clave Base32",
+  "Save login": "Guardar inicio de sesión",
+  "Couldn't load bot logins.": "No se pudieron cargar los inicios de sesión de bots."
 }
