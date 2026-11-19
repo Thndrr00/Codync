@@ -21,6 +21,17 @@ fn said(text: &str) -> Entry {
 }
 
 #[test]
+fn a_typo_in_an_agent_id_names_the_almost_equal_agent() {
+    let right = "9f8b7c6d-5e4f-3a2b-1c0d-eeddccbbaa99";
+    let wrong = "9f8b7c6d-5e4f-3a2b-1c0d-eeddccbbaa98";
+    let agents = [(right, "Research"), ("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Other")];
+    let found = nearest(wrong, agents.iter().map(|(id, name)| (*id, *name)));
+    assert_eq!(found, Some((right, "Research")));
+    assert!(nearest("completely-different-id", agents.iter().map(|(id, name)| (*id, *name))).is_none());
+    assert!(nearest("short", agents.iter().map(|(id, name)| (*id, *name))).is_none());
+}
+
+#[test]
 fn mentions_pick_responders_and_no_mention_means_everyone() {
     let members = [bot("a", "Alice Chen"), bot("b", "Bob"), bot("c", "尼采課")];
     let ids = |m: &[BotConfig], text: &str| -> Vec<String> {

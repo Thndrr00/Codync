@@ -23,6 +23,16 @@ pub(super) fn routine() -> Routine {
     }
 }
 #[test]
+fn the_secret_key_name_is_a_valid_vault_name() {
+    // The agent's copy of a webhook secret is a normal vault key, so its name must pass the same
+    // rules `request_api_key` uses (letters, digits, `-`/`_`, starting with a letter).
+    let name = webhook_secret_name("9f8b7c6d-5e4f-3a2b-1c0d-eeddccbbaa99");
+    assert_eq!(name, "webhook_9f8b7c6d_5e4f_3a2b_1c0d_eeddccbbaa99");
+    assert!(crate::market::bot_secrets::check_name(&name).is_ok());
+    assert!(crate::market::bot_secrets::check_name(&webhook_secret_name("routine")).is_ok());
+}
+
+#[test]
 fn a_channel_mention_queues_only_the_event_routines_that_match() {
     let store = Store::open(std::path::Path::new(":memory:")).unwrap();
     let routines = Routines::default();

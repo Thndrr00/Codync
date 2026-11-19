@@ -28,6 +28,7 @@ pub use schedule::{Trigger, local_zone};
 use crate::{
     LockExt,
     hub::Hub,
+    market::bot_secrets,
     store::{EntryKind, Lane, Store, now_ms},
 };
 use anyhow::{Context, Result, bail};
@@ -225,6 +226,12 @@ fn hook_set(state: &State) -> Vec<Hook> {
 
 fn webhook_key() -> String {
     format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple())
+}
+
+/// The name of the API key in the routine owner's vault that holds this routine's signing secret.
+/// Routine ids are UUIDs, so replacing `-` with `_` keeps the name valid for `bot_secrets`.
+pub fn webhook_secret_name(routine_id: &str) -> String {
+    format!("webhook_{}", routine_id.replace('-', "_"))
 }
 
 impl Routines {
@@ -568,21 +575,46 @@ impl Routines {
         })
     }
 
+    /// Rotates `id`'s signing secret, cutting off the old one. When the routine's secret has already
+    /// been given to `bot` as a vault key, refresh that key too so the agent always uses the current
+    /// secret. Ported from OpenBot 0.74.0 ("when you regenerate the secret … the agent gets the new
+    /// one too"), in Codync's terms: the agent's key is a `bot_secrets` record.
+    fn rotate_webhook(&self, hub: &Hub, bot: &str, id: &str, sync_key: bool) -> Result<String> {
+        let had_key = sync_key && bot_secrets::find(&hub.store, bot, &webhook_secret_name(id)).is_ok();
+        let key = self.change(&hub.store, |s| {
+            let r = s
+                .routines
+                .iter_mut()
+                .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
+                .context("routine not found")?;
+            r.webhook_key = webhook_key();
+            r.updated_at = now_ms();
+            Ok(r.webhook_key.clone())
+        })?;
+        if had_key {
+            // The value never goes into a card, log or tool result: only the encrypted vault holds it.
+            bot_secrets::save(&hub.store, bot, &webhook_secret_name(id), bot_secrets::Usage::Command, &key)?;
+        }
+        Ok(key)
+    }
+
+    /// Gives the routine's signing secret to its agent as one of the agent's own vault keys, so the
+    /// agent can add it to the sender without the value appearing in chat, logs or analytics. The
+    /// secret is rotated first: the old one stops working. The agent uses the key with
+    /// `run_with_secrets` (as `$WEBHOOK_<ID>`) and `list_secrets` shows only its name and destination.
+    /// Ported from OpenBot 0.74.0's "Give the signing secret to <agent>" action.
+    pub fn give_webhook_secret(&self, hub: &Hub, bot: &str, id: &str) -> Result<Value> {
+        let key = self.rotate_webhook(hub, bot, id, false)?;
+        let saved = bot_secrets::save(&hub.store, bot, &webhook_secret_name(id), bot_secrets::Usage::Command, &key)?;
+        Ok(saved.public())
+    }
+
     /// The routine's webhook: the public URL through the Codync cloud (when it's on; a private
     /// relay doesn't deliver them), the local one, and the key. `rotate` replaces the key first,
     /// cutting off the old one.
     pub fn credentials(&self, hub: &Hub, bot: &str, id: &str, rotate: bool) -> Result<Value> {
         if rotate {
-            self.change(&hub.store, |s| {
-                let r = s
-                    .routines
-                    .iter_mut()
-                    .find(|r| r.id == id && r.bot_id == bot && !r.deleted)
-                    .context("routine not found")?;
-                r.webhook_key = webhook_key();
-                r.updated_at = now_ms();
-                Ok(())
-            })?;
+            self.rotate_webhook(hub, bot, id, true)?;
         }
         let key = {
             let s = self.state.locked();

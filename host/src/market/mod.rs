@@ -41,6 +41,7 @@ mod connector_keeper;
 mod custom;
 mod discovery;
 mod install;
+mod mcp_headers;
 mod registry;
 mod runtime_identity;
 mod secret_tools;

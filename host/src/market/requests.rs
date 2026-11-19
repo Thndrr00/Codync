@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-pub const INSTRUCTIONS: &str = "Connect external services with search_connectors, list_connectors and request_connection. To update an installed connector's key use request_secret. To sign in to a website or app on the screen, check list_logins, ask with request_login if it's missing, then type it with the computer tool type_login. For an API key of your own, ask with request_api_key and call the service with api_request; for a secret a shell command needs, ask with request_command_variable and run it with run_with_secrets (list_secrets shows what you keep). Requests appear as secure cards in the user's conversation. Never ask for passwords or keys in ordinary chat or tool arguments. After requesting, finish your turn and wait; Codync resumes you after the user completes setup.";
+pub const INSTRUCTIONS: &str = "Connect external services with search_connectors, list_connectors and request_connection. To update an installed connector's key use request_secret. To set a remote MCP server's headers with a key the user gives you in this chat, use set_mcp_headers: it only works in the user's local chat, the approval names the headers, and the value is masked everywhere. To sign in to a website or app on the screen, check list_logins, ask with request_login if it's missing, then type it with the computer tool type_login. For an API key of your own, ask with request_api_key and call the service with api_request; for a secret a shell command needs, ask with request_command_variable and run it with run_with_secrets (list_secrets shows what you keep). Requests appear as secure cards in the user's conversation. Never ask for passwords or keys in ordinary chat or tool arguments. After requesting, finish your turn and wait; Codync resumes you after the user completes setup.";
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(super) enum RequestKind {
@@ -19,6 +19,8 @@ pub(super) enum RequestKind {
     Secret,
     App,
     Login,
+    /// MCP server headers from a key given in the local chat (`mcp_headers`).
+    Headers,
     /// The bot's own agent (Claude Code…) needs signing in; posted by the host, not a tool.
     Agent,
 }
@@ -47,13 +49,14 @@ pub fn tools() -> Value {
         json!({"name":"list_logins","description":"List saved website and app logins (site and username; never passwords).","inputSchema":{"type":"object","properties":{}}}),
         json!({"name":"request_login","description":"Ask the user to save a login for a website or app, e.g. github.com. They fill it in on a secure card; you never see the password. Then use the computer tool type_login.","inputSchema":{"type":"object","properties":{"site":{"type":"string","description":"The website's domain, or the app's name."},"reason":{"type":"string"}},"required":["site","reason"]}}),
         json!({"name":"request_secret","description":"Ask the user to securely provide a credential for an installed connector. The value goes directly to that connector and is never returned to you.","inputSchema":{"type":"object","properties":{"connectorId":{"type":"string"},"field":{"type":"string"},"location":{"type":"string","enum":["env","header"]},"reason":{"type":"string"}},"required":["connectorId","field","location","reason"]}}),
+        super::mcp_headers::tool(),
     ];
     tools.extend(super::secret_tools::tools());
     Value::Array(tools)
 }
 
 /// Posts `request` as a secure card in `bot`'s current lane, with `reason` as its text.
-fn post(hub: &Hub, bot: &str, reason: &str, request: &Value) -> Result<Value> {
+pub(super) fn post(hub: &Hub, bot: &str, reason: &str, request: &Value) -> Result<Value> {
     let lane = hub.runtime(bot).lane.unwrap_or_else(|| Lane::main(bot));
     let reason: String = reason.chars().take(400).collect();
     let entry = hub
@@ -146,6 +149,14 @@ pub async fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result
                 "location":if secret {args["location"].clone()} else {Value::Null}});
             post(hub, bot, text(args, "reason")?, &request)
         }
+        name if name == super::mcp_headers::TOOL => {
+            // A key from Telegram, Slack, Discord or WhatsApp is never a safe way to change a
+            // server's credentials; the pure gate lives with the tool that stores it.
+            super::mcp_headers::local_chat(hub, bot)?;
+            let connector = text(args, "connectorId")?.to_owned();
+            let (real, masked) = super::mcp_headers::prepare(&args["headers"])?;
+            super::mcp_headers::request(hub, bot, &connector, text(args, "reason")?, real, masked)
+        }
         name if super::secret_tools::handles(name) => super::secret_tools::call(hub, bot, name, args).await,
         _ => bail!("Unknown connection tool"),
     }
@@ -182,6 +193,8 @@ pub async fn finish(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
     let request = &e.data["connectionRequest"];
     let kind: RequestKind = serde_json::from_value(request["kind"].clone())?;
     if args["cancel"] == true {
+        // Drop the encrypted value of an unapproved header request with the card.
+        super::mcp_headers::forget(hub, id)?;
         let mut data = e.data.clone();
         data["connectionRequest"]["status"] = serde_json::to_value(RequestStatus::Cancelled)?;
         return Ok(json!({"entry":hub.set_entry(id, &data).ok_or_else(|| anyhow!("Could not cancel request"))?}));
@@ -217,6 +230,24 @@ pub async fn finish(hub: &Arc<Hub>, args: &Value) -> Result<Value> {
         .as_str()
         .or(args["connectorId"].as_str())
         .ok_or_else(|| anyhow!("Choose a connector"))?;
+    if kind == RequestKind::Headers {
+        // The card held only masked values; the real ones come from the encrypted pending vault.
+        super::mcp_headers::apply(hub, id)?;
+        super::verify::verify(&hub.store, connector_id, hub.port).await?;
+        let bot = text(request, "botId")?;
+        let row = hub.store.bot(bot)?.ok_or_else(|| anyhow!("Unknown bot"))?;
+        let mut enabled = row.config.connectors;
+        if !enabled.iter().any(|s| s == connector_id) {
+            enabled.push(connector_id.to_owned());
+        }
+        hub.update_bot(&json!({"id":bot,"connectors":enabled}))?;
+        hub.send_cmd(bot, Cmd::RefreshTools)?;
+        let note = format!(
+            "[Headers for {} were saved securely. Credentials are not in this conversation. Continue the task.]",
+            request["title"].as_str().unwrap_or("Connector")
+        );
+        return complete(hub, &e, id, note);
+    }
     if kind != RequestKind::App {
         super::update_connectors(&hub.store, |all| {
             let c = all.iter_mut().find(|c| c.id == connector_id).ok_or_else(|| anyhow!("Unknown connector"))?;

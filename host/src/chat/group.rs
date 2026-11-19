@@ -56,6 +56,48 @@ pub struct GroupTurn {
     pub answers: Vec<String>,
 }
 
+/// Edit distance, used only to suggest an id that differs by a wrong character or two.
+fn distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut previous = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let old = row[j + 1];
+            row[j + 1] = (row[j + 1] + 1).min(row[j] + 1).min(previous + usize::from(ca != *cb));
+            previous = old;
+        }
+    }
+    row[b.len()]
+}
+
+/// The agent whose id is nearly the same as a mistyped one. Ported from OpenBot 0.74.0: naming the
+/// almost-equal agent lets an agent that got a character wrong try again instead of guessing which
+/// of its listed agents could not be added.
+fn nearest<'a>(id: &str, agents: impl Iterator<Item = (&'a str, &'a str)>) -> Option<(&'a str, &'a str)> {
+    if id.len() < 3 {
+        return None;
+    }
+    agents
+        .filter(|(other, _)| other.len() == id.len())
+        .map(|(other, name)| (distance(id, other), other, name))
+        .filter(|(d, _, _)| *d > 0 && *d <= 2)
+        .min_by_key(|(d, _, _)| *d)
+        .map(|(_, other, name)| (other, name))
+}
+
+fn near_agent(store: &Store, id: &str) -> Result<Option<(String, String)>> {
+    let agents: Vec<(String, String)> = store
+        .bots()?
+        .into_iter()
+        .filter(|row| !row.deleted && row.config.kind == BotKind::Agent)
+        .map(|row| (row.config.id, row.config.name))
+        .collect();
+    Ok(nearest(id, agents.iter().map(|(id, name)| (id.as_str(), name.as_str())))
+        .map(|(id, name)| (id.to_owned(), name.to_owned())))
+}
+
 /// Existing, distinct agent bots (not groups, not the group itself).
 pub fn valid_members(store: &Store, group_id: &str, ids: &[String]) -> Result<Vec<String>> {
     let mut out: Vec<String> = vec![];
@@ -66,7 +108,11 @@ pub fn valid_members(store: &Store, group_id: &str, ids: &[String]) -> Result<Ve
         match store.bot(id)? {
             Some(row) if !row.deleted && row.config.kind == BotKind::Agent => out.push(id.to_owned()),
             Some(row) if row.config.is_group() => bail!("a group can't be a member of another group"),
-            _ => {}
+            _ => {
+                if let Some((near_id, near_name)) = near_agent(store, id)? {
+                    bail!("No agent with id `{id}`. Did you mean {near_name} (`{near_id}`)?");
+                }
+            }
         }
     }
     if out.is_empty() {

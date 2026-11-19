@@ -345,3 +345,9 @@ interval and expired one-shot preservation, and next occurrences across month
 boundaries. An isolated HTTP integration test previews, saves and reloads the same
 form and verifies direct saves reject invalid drafts. Swift tests cover wire DTO
 decoding and millisecond date binding; there is no Swift cron implementation.
+
+A webhook routine's owner can give its signing secret to that routine's agent with the
+`give_webhook_secret` action (OpenBot 0.74.0). The host rotates the key first, so the old one stops
+working, and saves the new value only in the agent's encrypted vault under `webhook_<routine-id>`.
+The agent uses it with `run_with_secrets` and sees only the key's name, never its value; later
+rotations refresh the saved key. A channel routine has no owner to approve this.

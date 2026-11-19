@@ -219,3 +219,9 @@ session on Linux or the macOS login keychain.
 For isolated real-process installation, credential recovery, OAuth protocol,
 remote tool calls and live provider checks, see
 [Connector live verification](../guides/connector-verification.md).
+
+An agent can set HTTP headers on an installed remote MCP server with `set_mcp_headers` when the
+person gives it the key in the local chat (OpenBot 0.74.0). The approval card names only the headers
+and a masked value; the real value is kept encrypted until the person approves. Keys received from
+Telegram, Slack, Discord, WhatsApp or a native channel are refused. Host and transport headers such
+as `Host` and `Cookie` cannot be overwritten.

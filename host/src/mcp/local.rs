@@ -62,6 +62,9 @@ pub(super) async fn serve(connector: String, port: u16) -> Result<()> {
     let writer = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
         while let Some(reply) = reply_rx.recv().await {
+            // A tool's boolean fields must reach the agent as JSON Schema `boolean`, or the
+            // server test fails with "Invalid input" (OpenBot 0.74.0 fix).
+            let reply = super::schema::normalize_tools_reply(&reply);
             seen.observe(&reply).await;
             writer_cancel.finish(&reply["id"]);
             let mut line = serde_json::to_vec(&reply)?;

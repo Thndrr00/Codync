@@ -15,6 +15,7 @@ pub(crate) mod policy;
 pub(crate) mod policy_management;
 mod proxy_replies;
 mod remote;
+mod schema;
 mod tasks;
 pub use remote::serve_remote;
 

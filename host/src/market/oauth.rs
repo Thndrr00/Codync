@@ -162,7 +162,8 @@ pub async fn start(hub: &Arc<Hub>, id: &str, callback: Callback, shows_code: boo
     if !registered {
         let register = text(&meta["registration_endpoint"]).ok_or_else(|| {
             anyhow!(
-                "{} doesn't let new apps sign in on their own. Add it as a custom connector with a token header.",
+                "{} doesn't let new apps sign in on their own. Save that server in Marketplace, Apps, then add a \
+                 sign-in app to it.",
                 c.name
             )
         })?;
@@ -181,8 +182,15 @@ pub async fn start(hub: &Arc<Hub>, id: &str, callback: Callback, shows_code: boo
             .with_context(|| format!("registering with {}", c.name))?;
         let status = res.status();
         let v: Value = res.json().await.unwrap_or(Value::Null);
-        oauth.client_id =
-            text(&v["client_id"]).ok_or_else(|| anyhow!("{} refused the registration ({status})", c.name))?;
+        // OpenBot 0.74.0: a sign-in server that refuses to register the client needs a pre-registered
+        // app, not a different way to connect. Point the person at Marketplace's sign-in app.
+        oauth.client_id = text(&v["client_id"]).ok_or_else(|| {
+            anyhow!(
+                "{} refused the registration ({status}). Save that server in Marketplace, Apps, then add a sign-in \
+                 app to it.",
+                c.name
+            )
+        })?;
         oauth.client_secret = text(&v["client_secret"]);
         oauth.redirect_uris = wanted;
     }
