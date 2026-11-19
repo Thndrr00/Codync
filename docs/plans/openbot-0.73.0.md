@@ -13,6 +13,9 @@ workflow canvas that several people edit at once on a joined server.
 | 0.73.0 item | Codync shape | Files |
 | --- | --- | --- |
 | An image step can use the 4:5 ratio (a social post) and the 5:4 ratio (a print) | Both are in the host's own list (`ASPECTS`), so `/image --aspect 4:5`, a flow's picture step and every client's picker have them without a change there: the clients read `mediaModels` | `host/src/media/mod.rs`, `docs/features/media.md` |
+| An image step can be asked for an exact size (64 to 4096 a side), cut to its middle and scaled as a PNG | `/image --size 1024x1280`: the note asks for the nearest aspect ratio and the host crops and scales the file when it comes back; a picture that cannot be read keeps its own | `host/src/media/size.rs`, `command.rs`, `agent/bot/files.rs` |
+| A filter beside New in the sidebar: agents or channels, unread, working, chosen folders, and a sort | A filter beside the roster search with the same choices plus needs attention and pinned, a dot when set, the open chat kept, and drag off while filtered. Desktop only: the roster is a desktop surface | `lib/roster-view-filter.ts` and its tests, `views/RosterControls.tsx`, `store/computer-roster.ts` |
+| Settings › Appearance › Motion: Background blur and Moving agent faces | The same two switches, per device: blur drops every backdrop-filter through one body attribute, faces rest on their still frame and the group drift stops | `views/settings/SettingsView.tsx`, `lib/prefs.ts`, `lib/use-agent-faces.ts`, `components/Avatar.tsx` |
 
 ## Not ported, and why
 
@@ -24,9 +27,8 @@ workflow canvas that several people edit at once on a joined server.
   accounts; Codync's media use the agent's own subscription tools, with no marketplace sign-in.
 - **Hosted storage, discount links, EU VAT withdrawal wording, the pricing page**: the hosted product.
 - **The web client's storage offer and the web app's settings**: Codync has no web client.
-- **The sidebar's filter button and the side threads under an agent row**: Codync's roster has its
-  own sections, selection and a search, and its threads live in the chat's drawer and chips with
-  their own states; both are desktop-UX changes of their own, not a copy of OpenBot's sidebar.
+- **The sidebar's side threads under an agent row**: Codync's threads live in the chat's drawer and
+  chips with their own states; bringing them into the roster is a desktop change of its own.
 - **Several people editing one workflow at once, and the workflow cache**: Codync's flow is edited
   through the host, one writer at a time; there is no second editor to merge.
 - **The WhatsApp link wording** (what an unknown person gets on each number kind): a copy change in
