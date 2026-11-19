@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use tokio::sync::watch;
 
 use super::MAX_PENDING_MESSAGES;
+use crate::chat::subagents::Budget;
 
 const MAX_REQUEST_HOPS: u8 = 8;
 pub(super) const MAX_PENDING_MESSAGES_PER_SENDER: usize = 16;
@@ -40,6 +41,8 @@ pub(super) struct RequestState {
     pub(super) pending: HashMap<String, Request>,
     pub(super) messages: usize,
     pub(super) messages_by_sender: HashMap<String, usize>,
+    /// Child turns each bot has started in its current turn, for the `delegate` tool's caps.
+    pub(super) delegations: HashMap<String, Budget>,
 }
 
 impl Requests {
@@ -128,13 +131,25 @@ impl Requests {
     }
 
     pub fn start_turn(&self, bot: &str, turn: Turn) {
-        self.0.locked().active.insert(bot.to_owned(), turn);
+        let mut state = self.0.locked();
+        state.active.insert(bot.to_owned(), turn);
+        state.delegations.insert(bot.to_owned(), Budget::default());
+    }
+
+    /// This turn's subagent budget, keyed by the calling bot. Absent means no active turn.
+    pub fn delegation(&self, bot: &str) -> Budget {
+        self.0.locked().delegations.get(bot).copied().unwrap_or_default()
+    }
+
+    pub fn set_delegation(&self, bot: &str, budget: Budget) {
+        self.0.locked().delegations.insert(bot.to_owned(), budget);
     }
 
     /// `bot`'s turn ended (or it was deleted): it can't send more until its next turn.
     pub fn end_turn(&self, bot: &str) {
         let mut state = self.0.locked();
         state.active.remove(bot);
+        state.delegations.remove(bot);
         for request in state.pending.values().filter(|r| r.from == bot) {
             request.cancel.send_replace(true);
         }
@@ -353,6 +368,19 @@ mod tests {
         requests.release_message("a");
         requests.reserve_message("e").unwrap();
         assert_eq!(requests.0.locked().messages, MAX_PENDING_MESSAGES);
+    }
+
+    #[test]
+    fn a_delegation_budget_is_scoped_to_one_turn() {
+        let requests = Requests::default();
+        assert_eq!(requests.delegation("a"), Budget::default(), "no active turn, no budget");
+        requests.start_turn("a", Turn::Chat(0));
+        let mut budget = requests.delegation("a");
+        assert_eq!(budget.admit(0), crate::chat::subagents::Outcome::Ok);
+        requests.set_delegation("a", budget);
+        assert_eq!(requests.delegation("a").children, 1);
+        requests.end_turn("a");
+        assert_eq!(requests.delegation("a"), Budget::default(), "a new turn starts fresh");
     }
 
     #[test]

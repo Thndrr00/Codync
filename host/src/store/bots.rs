@@ -283,6 +283,7 @@ mod tests {
             approval_rules: vec![],
             computer_permissions: crate::computer::Permissions::default(),
             manage_team: false,
+            subagents: false,
             offered_to_network: true,
             reachable_by_assistants: true,
             created_by: None,

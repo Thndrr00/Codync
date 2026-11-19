@@ -253,6 +253,11 @@ pub struct BotConfig {
     /// created (see `chat::manage`). The user turns it on; the bots such a bot creates have it too.
     #[serde(default)]
     pub manage_team: bool,
+    /// The bot may call the `delegate` tool to hand a bounded task to short-lived child turns on its
+    /// own agent (or a chosen one). Off until the owner turns it on: a child spends this bot's tokens
+    /// (see `chat::subagents` and docs/features/subagents.md).
+    #[serde(default)]
+    pub subagents: bool,
     /// Other computers in the user's network list this bot and may message it (`network::publish`).
     #[serde(default = "yes")]
     pub offered_to_network: bool,

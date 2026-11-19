@@ -49,8 +49,11 @@ several bots to have them work in parallel. It works only in your own chat: in a
 room's members instead, and while answering another bot's request, say in your reply what you need from \
 others. Provide a self-contained request: the recipient has its own \
 conversation, working directory, tools and permissions, not your context. Coordinate file ownership before \
-asking for edits in a shared project. Native subagents are managed by your own harness; these tools are for \
-collaborating with the user's existing bots. Use ask_bot for a bounded task whose reply you need in this turn, \
+asking for edits in a shared project. When your owner turned subagents on, use delegate for a private child \
+turn on your own agent (or a chosen one): its final reply comes back in this turn, it has no chat of its own and \
+cannot message the user, and it is not one of the user's other bots. Native subagents are otherwise managed by \
+your own harness; the other tools here are for collaborating with the user's existing bots. Use ask_bot for a \
+bounded task whose reply you need in this turn, \
 delegate_batch for several typed tasks and one digest, and run_pipeline for ordered stages. Do not ask a bot \
 that is waiting for you; stopping you cancels synchronous asks, batches and pipelines.";
 
@@ -86,6 +89,7 @@ pub fn tools() -> Value {
             "annotations": {"readOnlyHint": false, "idempotentHint": false},
         },
         blocking::tool(),
+        crate::chat::subagents::tool(),
         members::tool(),
         batch::tool(),
         crate::chat::pins::tool(),
@@ -452,6 +456,10 @@ pub async fn call_async(hub: &Arc<Hub>, from: &str, name: &str, args: &Value) ->
                 "delegate_batch" => batch::run(hub, &source, args).await,
                 _ => pipeline::run(hub, &source, args).await,
             }
+        }
+        crate::chat::subagents::TOOL => {
+            let source = visible_bot(hub, from)?;
+            crate::chat::subagents::call(hub, &source, args).await
         }
         _ => call(hub, from, name, args),
     }

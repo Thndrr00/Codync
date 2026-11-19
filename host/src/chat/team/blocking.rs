@@ -31,6 +31,8 @@ pub(super) fn task_timeout(args: &Value) -> Result<Duration> {
 pub(crate) fn tool_timeout(name: &str) -> Duration {
     let work = match name {
         "ask_bot" | "delegate_batch" | "ask_member" => ASK_TIMEOUT,
+        // A subagent runs a full throwaway turn with its own (shorter) deadline, far above the short default.
+        crate::chat::subagents::TOOL => ASK_TIMEOUT,
         "run_pipeline" => super::pipeline::TOTAL_TIME,
         _ => return Duration::from_secs(30),
     };
