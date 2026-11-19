@@ -263,6 +263,11 @@ height, with a capsule enclosing both the computer glyph and its chevron. This
 applies in expanded and compact sidebars. iOS retains native toolbar treatment;
 terminal computer selection has no corresponding icon button.
 
+The desktop roster's filter button beside its search narrows the list to agents, channels, unread,
+working, or the sections picked; a dot marks an active filter, the sort stays Manual, and the open
+bot keeps its row even when it stops matching. Both save together on the device, and iOS and the
+terminal keep their existing roster search and filters.
+
 Dialog scrims cover the entire presentation surface, including the iPhone status-bar and home-indicator safe areas, throughout opening and closing. The shared iPhone overlay fades a full-screen canvas without scaling its backdrop; root in-place dialogs also extend the canvas beyond container safe areas. Desktop dialogs keep their viewport-sized backdrop fixed and scale only the card. Terminal dialogs already dim the complete terminal buffer.
 
 ## Appearance preference
@@ -280,6 +285,10 @@ The terminal's `Ctrl+K` actions offer the same three choices, saved in the local
 `tui-appearance` file. System retains the terminal's foreground/background and
 uses `COLORFGBG` for accent contrast. `CODYNC_THEME` supplies the initial choice
 when none is saved; `NO_COLOR` continues to disable color output.
+
+**Background blur** and **Moving agent faces** (desktop Settings → Appearance) are
+device switches, on by default: off drops every frosted surface's backdrop filter through one
+body-level attribute rule, and keeps bot faces at their still frame.
 
 **Your bubbles** (desktop Settings → Appearance, phone settings → Appearance) is the
 same kind of device preference: **Solid** (the default) fills the person's own bubbles

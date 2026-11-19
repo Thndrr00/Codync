@@ -81,8 +81,8 @@ export function Switch({ on, onChange, children, label, disabled, className }: {
   )
 }
 
-/** A button that opens a Codync menu. */
-export function DropdownMenu({ items, children, className, style, title, disabled, search }: { items: () => MenuItem[]; children: ReactNode; className?: string; style?: CSSProperties; title?: string; disabled?: boolean; search?: { value: string; onChange: (v: string) => void; placeholder?: string } }) {
+/** A button that opens a Codync menu. `label` names an icon-only button; `live` keeps reading `items` while open. */
+export function DropdownMenu({ items, children, className, style, title, label, disabled, search, live }: { items: () => MenuItem[]; children: ReactNode; className?: string; style?: CSSProperties; title?: string; label?: string; disabled?: boolean; search?: { value: string; onChange: (v: string) => void; placeholder?: string }; live?: boolean }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLButtonElement>(null)
   // A menu opens unfiltered: a query left over from the last open would hide choices at rest.
@@ -92,10 +92,10 @@ export function DropdownMenu({ items, children, className, style, title, disable
   }
   return (
     <>
-      <button ref={ref} className={className} style={style} title={title} disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
+      <button ref={ref} className={className} style={style} title={title} aria-label={label} disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
         {children}
       </button>
-      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={ref} items={items} search={search} />
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={ref} items={items} search={search} live={live} />
     </>
   )
 }

@@ -310,3 +310,12 @@ h3 {
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* Settings › Appearance › Background blur off (lib/prefs.ts marks the body): every frosted
+   surface turns flat here, so no view's CSS needs its own copy of the setting. */
+body[data-blur='off'] *,
+body[data-blur='off'] *::before,
+body[data-blur='off'] *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

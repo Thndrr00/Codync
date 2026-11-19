@@ -1,30 +1,103 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChoicePicker, Button, IconButton } from '../components/Controls'
+import { ChoicePicker, Button, DropdownMenu, IconButton } from '../components/Controls'
+import { Icon } from '../components/Icon'
+import type { MenuItem } from '../components/Menu'
 import { ModalHeader, Sheet } from '../components/Overlay'
 import { HStack, VStack } from '../components/Stack'
 import { Text } from '../components/Text'
 import { useModel } from '../lib/observable'
-import { rosterFilters, type RosterFilter, type RosterGrouping } from '../lib/roster-query'
+import type { RosterGrouping } from '../lib/roster-query'
+import {
+  NO_ROSTER_VIEW_FILTER, rosterSectionMark, rosterSectionTree, rosterViewFilterIsSet, toggleRosterSection,
+  type RosterSectionNode, type RosterViewFilter,
+} from '../lib/roster-view-filter'
+import { useTr } from '../lib/use-language'
 import type { RosterItem } from '../store/app-model'
 import { RosterQuery, openRosterHit } from '../store/roster-query'
 import './roster-controls.css'
 import { SavedHistorySearches } from './SavedHistorySearches'
 import type { SearchScope } from '../store/search-shortcuts'
 
-export function RosterControls({ query, setQuery, filter, setFilter, grouping, setGrouping, attention, active, stopAll }: {
-  query: string; setQuery: (value: string) => void; filter: RosterFilter; setFilter: (value: RosterFilter) => void
-  grouping: RosterGrouping; setGrouping: (value: RosterGrouping) => void; attention: number
+export function RosterControls({ query, setQuery, viewFilter, setViewFilter, grouping, setGrouping, active, stopAll, allItems }: {
+  query: string; setQuery: (value: string) => void
+  viewFilter: RosterViewFilter; setViewFilter: (value: RosterViewFilter) => void
+  grouping: RosterGrouping; setGrouping: (value: RosterGrouping) => void
   /** Bots working or waiting on the user, across the computers shown. */
   active: number; stopAll: () => void
+  /** Every bot the roster can show, for the filter's sections. */
+  allItems: RosterItem[]
 }) {
   return <VStack gap={8} className="roster-controls">
-    <input className="roster-search" aria-label="Filter bots by name, project or agent" placeholder="Name, project or agent" value={query} onChange={(event) => setQuery(event.target.value)} />
+    <HStack gap={6} className="roster-search-row">
+      <input className="roster-search" aria-label="Filter bots by name, project or agent" placeholder="Name, project or agent" value={query} onChange={(event) => setQuery(event.target.value)} />
+      <RosterFilterButton filter={viewFilter} onChange={setViewFilter} items={allItems} />
+    </HStack>
     <HStack gap={8}>
-      <ChoicePicker selection={filter} options={rosterFilters.map((f) => ({ ...f, label: f.id === 'attention' ? `${f.label} (${attention})` : f.label }))} onChange={setFilter} />
       <ChoicePicker selection={grouping} options={[{ id: 'manual', label: 'Manual order' }, { id: 'project', label: 'By project' }]} onChange={setGrouping} />
       {active ? <IconButton title={`Stop all (${active})`} icon="stop.fill" onClick={stopAll} /> : null}
     </HStack>
   </VStack>
+}
+
+/** The filter beside the search (OpenBot 0.73.0's sidebar filter): a dot shows that one is set. */
+function RosterFilterButton({ filter, onChange, items }: { filter: RosterViewFilter; onChange: (value: RosterViewFilter) => void; items: RosterItem[] }) {
+  const tr = useTr()
+  const sectionKey = items.map((item) => item.bot.section ?? '').join('\u0000')
+  const roots = useMemo(() => rosterSectionTree(items.map((item) => item.bot)), [sectionKey])
+  const set = rosterViewFilterIsSet(filter)
+  const label = set ? tr('Filter bots, a filter is set') : tr('Filter bots')
+  return <DropdownMenu
+    className={`roster-filter-button${set ? ' set' : ''}`}
+    style={{ width: 38, height: 38, borderRadius: 12 }}
+    title={label}
+    label={label}
+    live
+    items={() => rosterFilterItems(filter, onChange, roots)}
+  >
+    <Icon name="slider.horizontal.3" size={13} weight="medium" />
+    {set ? <span className="roster-filter-dot" aria-hidden /> : null}
+  </DropdownMenu>
+}
+
+/** The filter's rows: the kind, the states, the sections (nested ones open their own menu) and the sort. */
+function rosterFilterItems(filter: RosterViewFilter, onChange: (value: RosterViewFilter) => void, roots: RosterSectionNode[]): MenuItem[] {
+  const set = (patch: Partial<RosterViewFilter>) => onChange({ ...filter, ...patch })
+  const rows: MenuItem[] = [
+    { title: 'All', selected: filter.show === 'all', keepsOpen: true, action: () => set({ show: 'all' }) },
+    { title: 'Agents', selected: filter.show === 'agents', keepsOpen: true, action: () => set({ show: 'agents' }) },
+    { title: 'Channels', selected: filter.show === 'channels', keepsOpen: true, action: () => set({ show: 'channels' }) },
+    { title: 'Only with unread', divider: true, selected: filter.unread, keepsOpen: true, action: () => set({ unread: !filter.unread }) },
+    { title: 'Only working', selected: filter.working, keepsOpen: true, action: () => set({ working: !filter.working }) },
+    { title: 'Only needs attention', selected: filter.attention, keepsOpen: true, action: () => set({ attention: !filter.attention }) },
+    { title: 'Only pinned', selected: filter.pinned, keepsOpen: true, action: () => set({ pinned: !filter.pinned }) },
+  ]
+  if (roots.length) rows.push({ title: 'Sections', icon: 'folder', divider: true, submenu: sectionRows(roots, filter, set) })
+  rows.push({ title: 'Sort', detail: 'Manual order', divider: true, disabled: true, action: () => {} })
+  if (rosterViewFilterIsSet(filter)) rows.push({ title: 'Clear filters', icon: 'xmark', divider: true, action: () => onChange(NO_ROSTER_VIEW_FILTER) })
+  return rows
+}
+
+/** Every section, with "All sections" first; picking one keeps the menu open for the next. */
+function sectionRows(roots: RosterSectionNode[], filter: RosterViewFilter, set: (patch: Partial<RosterViewFilter>) => void): MenuItem[] {
+  const all: MenuItem = { title: 'All sections', selected: filter.sections.length === 0, keepsOpen: true, action: () => set({ sections: [] }) }
+  return [all, ...roots.map((node, index) => ({ ...sectionRow(node, filter, roots, set), ...(index === 0 ? { divider: true } : {}) }))]
+}
+
+function sectionRow(node: RosterSectionNode, filter: RosterViewFilter, roots: RosterSectionNode[], set: (patch: Partial<RosterViewFilter>) => void): MenuItem {
+  const mark = rosterSectionMark(node, filter.sections)
+  const toggle = () => set({ sections: toggleRosterSection(node, roots, filter.sections) })
+  if (!node.children.length) {
+    return { title: node.label, verbatim: node.name !== '', selected: mark === 'on', keepsOpen: true, action: toggle }
+  }
+  return {
+    title: node.label,
+    verbatim: node.name !== '',
+    leading: mark === 'off' ? undefined : <Icon name={mark === 'on' ? 'checkmark' : 'minus.circle'} size={10} weight="semibold" />,
+    submenu: [
+      { title: node.label, verbatim: node.name !== '', selected: mark === 'on', keepsOpen: true, action: toggle },
+      ...node.children.map((child) => sectionRow(child, filter, roots, set)),
+    ],
+  }
 }
 
 export function RosterHistory({ items, onPick, onClose }: { items: RosterItem[]; onPick: (item: RosterItem) => void; onClose: () => void }) {

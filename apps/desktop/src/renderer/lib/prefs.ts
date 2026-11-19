@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react'
 import type { StarAsk } from './star-ask'
 import type { KofiInvite } from './kofi-invite'
 import type { YourBubbles } from './theme'
+import { NO_ROSTER_VIEW_FILTER, type RosterViewFilter } from './roster-view-filter.ts'
 
 /** A stored value, or the fallback when it's missing, unreadable or of another kind (a `null` where a string
  * belongs crashed the chat window). A `null` fallback takes any value. */
@@ -88,6 +89,12 @@ export const prefs = {
   usageIconStyle: pref<'character' | 'original'>('usageIconStyle', 'character'),
   /** Bot characters are shaded (plush) or even dots (flat), as the phones draw them. */
   avatarStyle: pref<'plush' | 'flat'>('avatarStyle', 'plush'),
+  /** Frosted layers keep their backdrop blur; off drops every one of them (a slower computer, sharper text). */
+  backgroundBlur: pref('backgroundBlur', true),
+  /** Bot faces blink, look around and breathe; off keeps their still frame. */
+  movingAgentFaces: pref('movingAgentFaces', true),
+  /** The roster's filter and sort, saved together on this device. */
+  rosterViewFilter: pref<RosterViewFilter>('rosterViewFilter', NO_ROSTER_VIEW_FILTER),
   /** Your bubbles take the agent's avatar colour: Solid fills them, Tint mixes a little in, Classic keeps the chat's grey. */
   yourBubbles: pref<YourBubbles>('yourBubbles', 'solid'),
   /** The roster marks each bot with its agent's logo while the bots run more than one agent. */
@@ -119,6 +126,19 @@ export function applyTextSize(size: number) {
 }
 
 prefs.textSize.subscribe(() => applyTextSize(prefs.textSize.get()))
+
+/**
+ * Background blur off marks the body, and one rule in `styles/theme.css` drops every frosted
+ * surface's backdrop filter, so no CSS file keeps its own copy of the setting.
+ */
+export function applyBackgroundBlur(on: boolean) {
+  if (typeof document === 'undefined' || !document.body) return
+  if (on) delete document.body.dataset.blur
+  else document.body.dataset.blur = 'off'
+}
+
+prefs.backgroundBlur.subscribe(() => applyBackgroundBlur(prefs.backgroundBlur.get()))
+applyBackgroundBlur(prefs.backgroundBlur.get())
 
 /** The window mirrors for Arabic; paragraphs still follow their own text. */
 export function applyDirection(language: AppLanguage) {

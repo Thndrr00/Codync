@@ -154,6 +154,8 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   const [yourBubbles, setYourBubbles] = usePref(prefs.yourBubbles)
   const [compact, setCompact] = usePref(prefs.sidebarCompact)
   const [agentLogos, setAgentLogos] = usePref(prefs.agentLogos)
+  const [backgroundBlur, setBackgroundBlur] = usePref(prefs.backgroundBlur)
+  const [movingAgentFaces, setMovingAgentFaces] = usePref(prefs.movingAgentFaces)
   const [thinkingDetails, setThinkingDetails] = usePref(prefs.thinkingDetails)
   const [showInDock, setShowInDock] = useState(true)
   useEffect(() => void window.codync.app.showInDock().then(setShowInDock), [])
@@ -222,6 +224,8 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
           Compact sidebar
         </Switch>
         <SwitchRow title="Show agent logos" detail="Marks each bot with its agent's logo when your bots use more than one agent." on={agentLogos} onChange={setAgentLogos} />
+        <SwitchRow title="Background blur" detail="Frosts what sits behind the sidebar and floating controls. Turn it off to save power or if text under them reads better sharp. Only changes this device." on={backgroundBlur} onChange={setBackgroundBlur} />
+        <SwitchRow title="Moving agent faces" detail="Bot faces look around, blink and breathe. Turn it off to keep them still. Only changes this device." on={movingAgentFaces} onChange={setMovingAgentFaces} />
       </CardSection>
       <EnterpriseSection />
       <ThemePaletteSection />

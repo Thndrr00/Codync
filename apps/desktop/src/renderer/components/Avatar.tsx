@@ -3,6 +3,7 @@ import { isGroup, isWorking, needsInput, type Bot } from '@shared/models'
 import { dotGrid, dotRadius } from '../lib/dot-grid'
 import { avatarColor, palette, useDark, usePixelRatio, useReduceMotion } from '../lib/theme'
 import { prefs, usePref } from '../lib/prefs'
+import { useMovingAgentFaces } from '../lib/use-agent-faces'
 import { Icon } from './Icon'
 import { isRobotLook, RobotAvatar } from './RobotAvatar'
 import './avatar.css'
@@ -75,8 +76,10 @@ export function characterPath(kind: string, w: number, h: number) {
 }
 
 export function CharacterAvatar(props: CharacterProps) {
+  // A still face is an idle one: no gaze, blink or breath, whatever mood its caller asked for.
+  const moving = useMovingAgentFaces()
   return <CustomIcon icon={props.customIcon} size={props.size ?? 40} color={props.tint ?? avatarColor(props.color)}
-    fallback={<GeneratedCharacterAvatar {...props} mood={props.customIcon ? 'idle' : props.mood} />} />
+    fallback={<GeneratedCharacterAvatar {...props} mood={props.customIcon || !moving ? 'idle' : props.mood} />} />
 }
 
 interface Dot {
@@ -300,8 +303,9 @@ export function moodOf(bot: Bot, animated = true): Mood {
   return needsInput(bot) ? 'needsInput' : isWorking(bot) ? 'working' : 'idle'
 }
 
-export function BotAvatar({ bot, size = 40, animated = true }: { bot: Bot; size?: number; animated?: boolean }) {
-  const mood = moodOf(bot, animated)
+export function BotAvatar({ bot, size = 40, animated }: { bot: Bot; size?: number; animated?: boolean }) {
+  const moving = useMovingAgentFaces()
+  const mood = moodOf(bot, animated ?? moving)
   const look = bot.avatarLook || bot.avatarShape
   if (isRobotLook(look)) {
     return <RobotAvatar look={look} color={avatarColor(bot.avatarColor)} size={size} working={mood === 'working'} />
@@ -313,16 +317,18 @@ export function BotAvatar({ bot, size = 40, animated = true }: { bot: Bot; size?
  * A group chat's face, clustered like iMessage: two bots tucked diagonally, three in a
  * triangle, four in a 2×2 grid; past four the last cell counts the rest.
  */
-export function GroupAvatar({ members, size = 40, animated = true }: { members: Bot[]; size?: number; animated?: boolean }) {
+export function GroupAvatar({ members, size = 40, animated }: { members: Bot[]; size?: number; animated?: boolean }) {
+  const moving = useMovingAgentFaces()
+  const animate = animated ?? moving
   // Members drift a little, each on its own beat, so a group reads as several people.
-  const drift = animated && members.length > 1
+  const drift = animate && members.length > 1
   const place = (bot: Bot, side: number, corner: CSSProperties, index: number) => (
     <div
       key={bot.id}
       className={`avatar-slot${drift ? ' avatar-drift' : ''}`}
       style={{ ...corner, '--drift': `${size * 0.02}px`, '--phase': `${index * -0.8}s` } as CSSProperties}
     >
-      <BotAvatar bot={bot} size={side} animated={animated} />
+      <BotAvatar bot={bot} size={side} animated={animate} />
     </div>
   )
   let content
@@ -335,7 +341,7 @@ export function GroupAvatar({ members, size = 40, animated = true }: { members: 
       )
       break
     case 1:
-      content = <BotAvatar bot={members[0]!} size={size} animated={animated} />
+      content = <BotAvatar bot={members[0]!} size={size} animated={animate} />
       break
     case 2:
       content = [place(members[1]!, size * 0.66, { top: 0, right: 0 }, 1), place(members[0]!, size * 0.66, { bottom: 0, left: 0 }, 0)]
@@ -365,7 +371,7 @@ export function GroupAvatar({ members, size = 40, animated = true }: { members: 
 }
 
 /** A bot's character, or a group's members (Android `BotAvatar`). */
-export function BotOrGroupAvatar({ bot, members = [], size = 44, animated = true }: { bot: Bot; members?: Bot[]; size?: number; animated?: boolean }) {
+export function BotOrGroupAvatar({ bot, members = [], size = 44, animated }: { bot: Bot; members?: Bot[]; size?: number; animated?: boolean }) {
   return isGroup(bot) && !bot.customIcon ? <GroupAvatar members={members} size={size} animated={animated} /> : <BotAvatar bot={bot} size={size} animated={animated} />
 }
 

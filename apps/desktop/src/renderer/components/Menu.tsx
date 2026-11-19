@@ -26,7 +26,7 @@ interface MenuRow {
 }
 
 /**
- * One row in a Codync menu: an action (a choice when `selected` is set), or the rows of a submenu, one level deep. An
+ * One row in a Codync menu: an action (a choice when `selected` is set), or the rows of a submenu, which may nest. An
  * anchored menu opens them in its place behind a back row ("Set a size ›"), the roster's right-click menu beside it.
  */
 export type MenuItem = MenuRow & ({ action: () => void; submenu?: undefined } | { submenu: MenuItem[]; action?: undefined })
@@ -71,28 +71,48 @@ export interface MenuSearch {
   placeholder?: string
 }
 
+/** The submenu at the end of a stack of row titles, or null when those rows are gone (a deleted section). */
+function resolveSubmenu(items: MenuItem[], path: readonly string[]): MenuItem | null {
+  let rows = items
+  let found: MenuItem | null = null
+  for (const title of path) {
+    found = rows.find((row) => row.title === title && row.submenu) ?? null
+    if (!found?.submenu) return null
+    rows = found.submenu
+  }
+  return found
+}
+
 /** The floating panel of menu rows. */
 export function MenuPanel({ items, reactions, dismiss, maxHeight, search }: { items: MenuItem[]; reactions?: ReactionPick; dismiss: () => void; maxHeight?: number; search?: MenuSearch }) {
   const tr = useTr()
   const [highlight, setHighlight] = useState(-1)
-  const [opened, setOpened] = useState<MenuItem | null>(null)
+  // Submenus stack, so a menu can nest as deep as its rows go (the roster's sections have folders in
+  // them). The stack keeps titles, not rows, so a live menu's toggles read their new state.
+  const [opened, setOpened] = useState<string[]>([])
+  const current = opened.length ? resolveSubmenu(items, opened) : null
   const panel = useRef<HTMLDivElement>(null)
-  const show = (sub: MenuItem | null) => {
-    setOpened(sub)
+  const open = (sub: MenuItem) => {
+    // A submenu that vanished while open (a deleted section) starts the stack over.
+    setOpened(current ? [...opened, sub.title] : [sub.title])
     setHighlight(-1)
   }
-  const rows: MenuItem[] = opened
-    ? [{ title: opened.title, verbatim: opened.verbatim, icon: 'chevron.left', keepsOpen: true, action: () => show(null) }, ...(opened.submenu ?? [])]
+  const back = () => {
+    setOpened(opened.slice(0, -1))
+    setHighlight(-1)
+  }
+  const rows: MenuItem[] = current
+    ? [{ title: current.title, verbatim: current.verbatim, icon: 'chevron.left', keepsOpen: true, action: back }, ...(current.submenu ?? [])]
     : items
   const pick = (item: MenuItem) => {
     if (item.disabled) return
-    if (item.submenu) return show(item)
+    if (item.submenu) return open(item)
     if (!item.keepsOpen) dismiss()
     item.action()
   }
   // A long submenu opens at its checked row.
   useLayoutEffect(() => {
-    if (opened) panel.current?.querySelector('[aria-checked="true"]')?.scrollIntoView({ block: 'center' })
+    if (current) panel.current?.querySelector('[aria-checked="true"]')?.scrollIntoView({ block: 'center' })
   }, [opened])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -103,9 +123,9 @@ export function MenuPanel({ items, reactions, dismiss, maxHeight, search }: { it
       } else if (e.key === 'Enter' && highlight >= 0 && rows[highlight]) {
         e.preventDefault()
         pick(rows[highlight])
-      } else if (e.key === 'ArrowLeft' && opened) {
+      } else if (e.key === 'ArrowLeft' && current) {
         e.preventDefault()
-        show(null)
+        back()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -115,13 +135,13 @@ export function MenuPanel({ items, reactions, dismiss, maxHeight, search }: { it
     <div ref={panel} className={`menu-panel ${search ? 'has-header' : ''}`} role="menu" style={{ maxHeight }}>
       {search ? <div className="menu-search"><input aria-label={search.placeholder ?? 'Search'} value={search.value} placeholder={search.placeholder ?? 'Search'} autoFocus onChange={(e) => { setHighlight(-1); search.onChange(e.target.value) }} /></div> : null}
       <div className="menu-rows">
-      {reactions && !opened ? (
+      {reactions && !current ? (
         <div className={items.length ? 'menu-reactions' : undefined}>
           <ReactionStrip pick={reactions} dismiss={dismiss} />
         </div>
       ) : null}
       {rows.map((item, i) => (
-        <div key={`${opened?.title ?? ''}-${item.title}-${i}`} role="none">
+        <div key={`${current?.title ?? ''}-${item.title}-${i}`} role="none">
           {item.divider ? <div className="menu-divider" role="separator" /> : null}
           <button
             className={`menu-row ${item.destructive ? 'destructive' : ''} ${highlight === i ? 'highlight' : ''}`}
@@ -182,7 +202,7 @@ export function anchorPlacement(rect: DOMRect) {
  * Presents `MenuPanel` next to `anchor` (or at `point`, for right-clicks), flipping to stay on
  * screen; a click anywhere else closes it (`.codyncMenu` / `.contextActions`).
  */
-export function AnchoredMenu({ open, onClose, anchor, point, items, reactions, search }: {
+export function AnchoredMenu({ open, onClose, anchor, point, items, reactions, search, live = false }: {
   open: boolean
   onClose: () => void
   anchor?: RefObject<HTMLElement | null>
@@ -190,12 +210,14 @@ export function AnchoredMenu({ open, onClose, anchor, point, items, reactions, s
   items: () => MenuItem[]
   reactions?: ReactionPick
   search?: MenuSearch
+  /** Reads the rows again on every render while open, for a menu whose toggles change its rows. */
+  live?: boolean
 }) {
   const { mounted, shown } = usePresence(open, 120)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const frozen = useRef<MenuItem[]>([])
   const layer = useRef<HTMLDivElement>(null)
-  if (open) frozen.current = items()
+  if (open && !live) frozen.current = items()
   useLayoutEffect(() => {
     if (!open) return
     if (point) setRect(new DOMRect(point.x, point.y, 0, 0))
@@ -207,7 +229,7 @@ export function AnchoredMenu({ open, onClose, anchor, point, items, reactions, s
   return createPortal(
     <div ref={layer} className={`anchored ${shown ? 'shown' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()} onContextMenu={(e) => { e.preventDefault(); onClose() }}>
       <div className={`anchored-panel t-dropdown ${shown ? "is-open" : ""}`} style={{ ...style, maxWidth: width }}>
-        <MenuPanel items={frozen.current} reactions={reactions} dismiss={onClose} maxHeight={Math.min(420, room)} search={search} />
+        <MenuPanel items={live ? items() : frozen.current} reactions={reactions} dismiss={onClose} maxHeight={Math.min(420, room)} search={search} />
       </div>
     </div>,
     document.body,

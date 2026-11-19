@@ -4,29 +4,44 @@ import { prefs, usePref } from '../lib/prefs'
 import { useModel } from '../lib/observable'
 import { foldsAfterRename, rosterGroups, rosterLines, sameRosterGroup, sectionRename, shownRows, shownSection } from '../lib/roster-sections'
 import type { BotStore } from './bot-store'
-import type { AppModel, BotRef } from './app-model'
+import { sameRef, type AppModel, type BotRef, type RosterItem } from './app-model'
 import { useState } from 'react'
-import { matchesRoster, type RosterFilter, type RosterGrouping } from '../lib/roster-query'
+import { matchesRoster, type RosterGrouping } from '../lib/roster-query'
+import { NO_ROSTER_VIEW_FILTER, matchesRosterView, normalizeRosterViewFilter, rosterViewFilterIsSet, type RosterViewFilter } from '../lib/roster-view-filter'
 
 /** Device-local section ordering and folding, matching the iPhone roster. */
 export function useComputerRoster(app: AppModel, shown: Set<string>) {
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<RosterFilter>('all')
   const [grouping, setGrouping] = useState<RosterGrouping>('manual')
   const order = useModel(app.computerOrder).ids
   const [collapsed, setCollapsed] = usePref(prefs.collapsedComputers)
   const [sectionOrders, setSectionOrders] = usePref(prefs.rosterSectionOrder)
   const [folded, setFolded] = usePref(prefs.collapsedRosterSections)
+  const [savedViewFilter, setSavedViewFilter] = usePref(prefs.rosterViewFilter)
+  const viewFilter = normalizeRosterViewFilter(savedViewFilter)
   const computers = orderedComputers(app.computers, order)
   const allItems = app.roster.filter((item) => shown.has(item.ref.computerId))
-  const filtered = query.trim() !== '' || filter !== 'all'
-  const sections = computerSections(computers.filter((c) => shown.has(c.id)), allItems.filter((i) => matchesRoster(i.bot, query, filter)))
+  // The open bot stays in the roster while a filter hides it, so the chat never loses its row.
+  const shownByView = (item: RosterItem) => matchesRosterView(item.bot, viewFilter) || (app.selection !== null && sameRef(item.ref, app.selection))
+  const filtered = query.trim() !== '' || rosterViewFilterIsSet(viewFilter)
+  const sections = computerSections(computers.filter((c) => shown.has(c.id)), allItems.filter((i) => matchesRoster(i.bot, query, 'all') && shownByView(i)))
     .map((section) => ({ ...section, store: app.store(section.computer.id) }))
     .filter((section): section is typeof section & { store: BotStore } => section.store !== null)
+    // While filtering, a computer with no matching bot has no heading to show.
+    .filter((section) => !filtered || section.items.length > 0)
   const grouped = sections.length > 1
   return {
     sections,
-    allItems, query, setQuery, filter, setFilter, grouping, setGrouping, filtered,
+    allItems, query, setQuery, grouping, setGrouping, filtered,
+    viewFilter,
+    setViewFilter(next: RosterViewFilter) {
+      setSavedViewFilter(normalizeRosterViewFilter(next))
+    },
+    /** Search and the view filter go back to showing every bot. */
+    clearFilters() {
+      setQuery('')
+      setSavedViewFilter(NO_ROSTER_VIEW_FILTER)
+    },
     canReorder: !filtered && grouping === 'manual',
     grouped,
     collapsed,
