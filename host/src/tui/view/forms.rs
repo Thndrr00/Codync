@@ -80,6 +80,10 @@ fn field_help(app: &App, f: &Form, agent_name: &str) -> Option<(String, Style)> 
             tr("Reachable by cloud assistants: ChatGPT or Claude in your Codync account can see and message this bot.")
                 .into_owned()
         }
+        Field::LearnSkills => {
+            tr("After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.")
+                .into_owned()
+        }
         _ => return None,
     };
     Some((line, t.dim))
@@ -134,6 +138,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Approvals => "Approvals",
             Field::Compaction => "Summarize",
             Field::Notify => "Notify",
+            Field::LearnSkills => "Learn skills on its own",
             Field::Computer => "Use computer",
             Field::Team => "Manage team",
             Field::Network => "Network",
@@ -367,6 +372,10 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
                 let s = if f.notify { "◉ Done and needs-you   ○ Off" } else { "○ Done and needs-you   ◉ Off" };
                 put(buf, vx, y, vw, s, t.text.patch(base));
             }
+            Field::LearnSkills => {
+                let s = if f.learn_skills { "◉ On   ○ Off" } else { "○ On   ◉ Off" };
+                put(buf, vx, y, vw, s, t.text.patch(base));
+            }
             Field::Color => {
                 let mut x = vx;
                 for (ci, c) in COLORS.iter().enumerate() {
@@ -429,6 +438,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         | Field::Approvals
         | Field::Compaction
         | Field::Notify
+        | Field::LearnSkills
         | Field::Saver
         | Field::Computer
         | Field::Team

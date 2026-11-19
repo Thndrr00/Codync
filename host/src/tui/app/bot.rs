@@ -46,6 +46,8 @@ pub struct Bot {
     pub position: i64,
     pub hidden: bool,
     pub notify: bool,
+    /// It learns skills from its own background review (`learnSkills`); off until the person turns it on.
+    pub learn_skills: bool,
     pub computer: bool,
     /// It creates bots and changes any bot's setup (`chat::manage`); `None` from a host without it.
     pub manage_team: Option<bool>,
@@ -211,6 +213,7 @@ impl Bot {
             position: v["position"].as_i64().unwrap_or(0),
             hidden: v["hidden"].as_bool().unwrap_or(false),
             notify: v["notify"].as_bool().unwrap_or(true),
+            learn_skills: v["learnSkills"].as_bool().unwrap_or(false),
             computer: v["computer"].as_bool().unwrap_or(false),
             manage_team: v["manageTeam"].as_bool(),
             offered_to_network: v["offeredToNetwork"].as_bool(),

@@ -206,6 +206,7 @@ pub enum Field {
     Approvals,
     Compaction,
     Notify,
+    LearnSkills,
     Computer,
     Team,
     Network,
@@ -216,7 +217,7 @@ pub enum Field {
     Skills,
 }
 
-pub const FIELDS: [Field; 27] = [
+pub const FIELDS: [Field; 28] = [
     Field::Name,
     Field::Instructions,
     Field::Check,
@@ -236,6 +237,7 @@ pub const FIELDS: [Field; 27] = [
     Field::Folder,
     Field::Approvals,
     Field::Notify,
+    Field::LearnSkills,
     Field::Computer,
     Field::Team,
     Field::Network,
@@ -277,6 +279,8 @@ pub struct Form {
     pub cwd: String,
     pub auto: bool,
     pub notify: bool,
+    /// It learns skills from its own background review; off until it is turned on.
+    pub learn_skills: bool,
     pub computer: bool,
     /// `None`: the host has no Manage the team.
     pub manage_team: Option<bool>,

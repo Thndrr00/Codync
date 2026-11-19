@@ -145,6 +145,7 @@ impl App {
             cwd: if b.managed_workspace { String::new() } else { b.cwd.clone() },
             auto: b.auto,
             notify: b.notify,
+            learn_skills: b.learn_skills,
             computer: b.computer,
             manage_team: b.manage_team,
             offered_to_network: b.offered_to_network,
@@ -273,6 +274,7 @@ impl App {
                         | Field::Approvals
                         | Field::Compaction
                         | Field::Notify
+                        | Field::LearnSkills
                         | Field::Saver
                         | Field::Computer
                         | Field::Team
@@ -306,6 +308,7 @@ impl App {
                     Field::Approvals => f.auto = !f.auto,
                     Field::Compaction => f.cycle_compaction(d),
                     Field::Notify => f.notify = !f.notify,
+                    Field::LearnSkills => f.learn_skills = !f.learn_skills,
                     Field::Saver => f.saver = f.saver.map(|on| !on),
                     Field::Computer => f.computer = !f.computer,
                     Field::Team => f.manage_team = f.manage_team.map(|on| !on),
@@ -408,6 +411,7 @@ impl Form {
             "fallbacks": self.fallbacks,
             "selfFallbacks": self.self_fallbacks,
             "notify": self.notify,
+            "learnSkills": self.learn_skills,
             "computer": self.computer,
             "manageTeam": self.manage_team.unwrap_or_default(),
             "offeredToNetwork": self.offered_to_network.unwrap_or(true),
@@ -556,6 +560,9 @@ mod tests {
         assert_eq!(f.changes(), json!({}));
         f.notify = false;
         assert_eq!(f.changes(), json!({"notify": false}), "a model changed elsewhere meanwhile stays");
+        f.notify = true;
+        f.learn_skills = true;
+        assert_eq!(f.changes(), json!({"learnSkills": true}), "learning skills is off until it is turned on");
     }
 
     /// Feeds `keys` to the editor, which must stay open.
