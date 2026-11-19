@@ -5,6 +5,17 @@ Same rule as the earlier plans: copy behavior and user-facing text with a short 
 reuse Codync's own components and bridge to Codync concepts where an OpenBot subsystem does not
 exist. "Joined server" and web-client items need a host/server or web client Codync doesn't have.
 
+## State
+
+All "Ported" rows below are implemented and pushed on this branch. The host's bounded self-check,
+status lines, provider retry, bounded tab close, WhatsApp group name, webhook secret, MCP headers
+and boolean schemas, the desktop chrome and tab strip, thread look on the phones and desktop, the
+Apps row in all four clients, and flow-canvas grouping with custom video length are in. The custom
+OpenAI request builder is a tested equivalent with no live caller: Codync's custom backend is a user
+CLI, not a raw OpenAI request path. The app buttons for "Give the signing secret" and the rendered
+header-approval card are not wired: the host actions are reachable through the generic `routineCall`
+and `connectorCall` APIs. Nothing in this plan has been compiled or run end to end on this machine.
+
 ## Ported — host behavior and status
 
 | OpenBot 0.74.0 | Codync | Where |
