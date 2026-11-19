@@ -391,7 +391,7 @@ fn kind_of(name: &str, args: &Value) -> Result<Kind> {
                 target: optional_target(args)?,
                 text: text.to_owned(),
                 replace: match args.get("mode").and_then(Value::as_str).map(str::trim) {
-                    None | Some("") | Some("replace") => true,
+                    None | Some("" | "replace") => true,
                     Some("append") => false,
                     Some(other) => bail!("A mode is replace or append, not `{other}`."),
                 },

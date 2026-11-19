@@ -97,7 +97,7 @@ async fn run(
     steps: &[Action],
 ) -> Result<Value> {
     let started = Instant::now();
-    for (index, step) in steps.iter().enumerate() {
+    for (index, each) in steps.iter().enumerate() {
         let left = budget.saturating_sub(started.elapsed());
         if left.is_zero() {
             bail!(
@@ -108,7 +108,7 @@ async fn run(
             );
         }
         lease.check()?;
-        let mut current = step.clone();
+        let mut current = each.clone();
         current.snapshot = false;
         current.timeout = current.timeout.min(left);
         if let Err(error) = step(hub, bot, lease, &current).await {
