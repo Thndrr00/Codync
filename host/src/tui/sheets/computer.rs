@@ -60,6 +60,12 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
             service_label(sheet.state["services"]["research"].as_str()),
             service_label(sheet.state["services"]["slack"].as_str())
         );
+        let text = format!(
+            "{text}\n\nLocal apps: {}/{} registered; {} bots made them. A safeguard on this computer, not a plan: < and > change it, past it a new app is refused, and an app a bot already has still updates.",
+            sheet.state["localApps"]["count"].as_u64().unwrap_or_default(),
+            sheet.state["localApps"]["limit"].as_u64().unwrap_or_default(),
+            sheet.state["localApps"]["botsWithApps"].as_u64().unwrap_or_default()
+        );
         Paragraph::new(text).wrap(Wrap { trim: false }).style(palette.panel).render(body, buf);
     } else if let Some(text) = &sheet.preview {
         Paragraph::new(text.as_str())
@@ -122,7 +128,7 @@ pub fn draw(buf: &mut Buffer, area: Rect, sheet: &ComputerSheet) {
             .as_deref()
             .or(sheet.busy.then_some("Waiting for host…"))
             .or(sheet.running.then_some("Command running; Status → 3 revokes shell and stops owned processes.")),
-        "Tab page · Ctrl+R refresh · ↑↓ select/scroll · Enter open/run/confirm · Esc back/close",
+        "Tab page · Ctrl+R refresh · ↑↓ select/scroll · Enter open/run/confirm · < > local apps · Esc back/close",
     );
 }
 fn service_label(value: Option<&str>) -> &'static str {
