@@ -35,6 +35,9 @@ export type VoiceStuck = 'none' | 'connecting' | 'reconnecting' | 'speaking'
 /** Why a call's engine gave up. */
 export type VoiceFailure = 'none' | 'microphone' | 'connection' | 'provider'
 
+/** How the person's own bubbles take an agent's avatar colour (`Settings › Appearance › Your bubbles`). */
+export type BubbleStyle = 'solid' | 'tint' | 'classic'
+
 /** What came of a window whose page crashed: it loaded again, or crashed too often and stays down. */
 export type WindowRecoveryOutcome = 'reloaded' | 'gave_up'
 /** How the ask before Reach from anywhere turns on ended. */
@@ -54,6 +57,7 @@ export type AnalyticsEvent =
   | { event: 'star_prompt_answered'; ask: 'first' | 'second'; starred: boolean }
   | { event: 'link_opened'; link: Link }
   | { event: 'dev_server_action'; action: 'open' | 'copy' }
+  | { event: 'setting_changed'; setting: 'your_bubbles'; value: BubbleStyle }
   | { event: 'screen_viewed'; screen: Screen }
   | { event: 'voice_call_started'; engine: VoiceCallEngine }
   | { event: 'voice_call_quality'; engine: VoiceCallEngine; ready_ms?: number; reconnects: number; stuck: VoiceStuck; failure: VoiceFailure }

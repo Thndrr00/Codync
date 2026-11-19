@@ -14,7 +14,7 @@ import { useTr } from '../../lib/use-language'
 import { DEFAULT_TEXT_SIZE, prefs, TEXT_SIZES, usePref } from '../../lib/prefs'
 import { YOUR_BUBBLE_STYLES } from '../../lib/theme'
 import { useAccount } from '../../store/account'
-import { useScreenViewed } from '../../store/analytics'
+import { analytics, useScreenViewed } from '../../store/analytics'
 import { StoreContext, useApp } from '../../store/context'
 import { SwitchRow } from '../bots/parts'
 import { ComputerBadge } from '../ComputerBadge'
@@ -218,7 +218,14 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
           <ChoicePicker selection={avatarStyle} options={[{ id: 'plush', label: tr('Plush') }, { id: 'flat', label: tr('Flat') }]} onChange={setAvatarStyle} />
         </ValueRow>
         <ValueRow label="Your bubbles">
-          <SegmentedChoice selection={yourBubbles} options={YOUR_BUBBLE_STYLES} onChange={setYourBubbles} />
+          <SegmentedChoice
+            selection={yourBubbles}
+            options={YOUR_BUBBLE_STYLES}
+            onChange={(value) => {
+              setYourBubbles(value)
+              analytics.track({ event: 'setting_changed', setting: 'your_bubbles', value })
+            }}
+          />
         </ValueRow>
         <Switch on={compact} onChange={setCompact}>
           Compact sidebar

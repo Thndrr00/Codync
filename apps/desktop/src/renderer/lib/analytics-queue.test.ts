@@ -49,4 +49,7 @@ test('track sends the event name and its properties, from the desktop app', () =
     event: 'sign_in_failed', provider: 'google', reason: 'timeout', app: 'desktop',
   })
   assert.deepEqual(trackBody({ event: 'window_opened' }), { event: 'window_opened', app: 'desktop' })
+  assert.deepEqual(trackBody({ event: 'setting_changed', setting: 'your_bubbles', value: 'tint' }), {
+    event: 'setting_changed', setting: 'your_bubbles', value: 'tint', app: 'desktop',
+  })
 })

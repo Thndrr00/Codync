@@ -139,6 +139,11 @@ pub enum Reported {
         opened: bool,
     },
     WhatsNewShown,
+    /// A style or switch the person picked in the app's settings (the catalog's name and value only).
+    SettingChanged {
+        setting: SettingName,
+        value: BubbleStyle,
+    },
 }
 
 // Value lists. A value a newer client adds arrives as `other` instead of being refused.
@@ -389,6 +394,24 @@ pub enum ClaimFailure {
     Other,
 }
 
+/// The setting a `setting_changed` event is about: only the catalog's names get through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SettingName {
+    #[serde(rename = "your_bubbles")]
+    YourBubbles,
+}
+
+/// How the person's own bubbles take an agent's avatar colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BubbleStyle {
+    Solid,
+    Tint,
+    Classic,
+    #[serde(other)]
+    Other,
+}
+
 impl Track {
     /// The body to send for `event`, as `app` (what the terminal UI posts).
     pub fn body(app: App, event: Reported) -> Value {
@@ -546,6 +569,34 @@ mod tests {
             assert_eq!(name, event.name(), "the catalog name");
             assert_eq!(read_json(&body), Some((event, expected)), "{body}");
         }
+    }
+
+    #[test]
+    fn setting_changed_round_trips_the_bubble_style() {
+        for value in ["solid", "tint", "classic"] {
+            assert_eq!(
+                read_json(
+                    &json!({"event": "setting_changed", "setting": "your_bubbles", "value": value, "app": "desktop"})
+                ),
+                Some((Event::SettingChanged, json!({"app": "desktop", "setting": "your_bubbles", "value": value}))),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_bubble_style_becomes_other() {
+        assert_eq!(
+            read_json(
+                &json!({"event": "setting_changed", "setting": "your_bubbles", "value": "gradient", "app": "desktop"})
+            ),
+            Some((Event::SettingChanged, json!({"app": "desktop", "setting": "your_bubbles", "value": "other"})))
+        );
+    }
+
+    #[test]
+    fn a_setting_outside_the_catalog_is_refused() {
+        assert!(read(&json!({"event": "setting_changed", "setting": "not_a_setting", "value": "solid"})).is_err());
     }
 
     #[test]
