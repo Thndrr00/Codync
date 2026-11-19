@@ -1,0 +1,150 @@
+/* A row of equal-width tabs. The row scrolls when they do not fit; a menu at the end lists the
+ * tabs out of view. Every transition uses the theme tokens, so Reduce Motion turns them all off. */
+.tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tab-strip-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+/* Fades at the edges of a scrolled row, using the sheet color (no new color). */
+.tab-strip-viewport::before,
+.tab-strip-viewport::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--hover);
+}
+.tab-strip-viewport::before {
+  left: 0;
+  background: linear-gradient(to right, var(--sheet), transparent);
+}
+.tab-strip-viewport::after {
+  right: 0;
+  background: linear-gradient(to left, var(--sheet), transparent);
+}
+.tab-strip-viewport[data-fade-start]::before,
+.tab-strip-viewport[data-fade-end]::after {
+  opacity: 1;
+}
+
+.tab-strip-tabs {
+  --tab-strip-tab-width: 200px;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+.tab-strip-tabs::-webkit-scrollbar {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-strip-tabs {
+    scroll-behavior: auto;
+  }
+}
+
+.tab-strip-tab {
+  width: var(--tab-strip-tab-width);
+  min-width: var(--tab-strip-tab-width);
+  max-width: var(--tab-strip-tab-width);
+  flex: none;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  transition: background-color var(--hover), width var(--morph), min-width var(--morph), max-width var(--morph);
+}
+/* After a close the width stays the same until the pointer leaves the row, so the next X comes
+ * under the pointer and more tabs can be closed without moving it. */
+.tab-strip-tabs[data-frozen] .tab-strip-tab {
+  width: var(--tab-strip-frozen);
+  min-width: var(--tab-strip-frozen);
+  max-width: var(--tab-strip-frozen);
+}
+.tab-strip-tab.selected {
+  background: var(--field);
+}
+.tab-strip-tab:hover {
+  background: rgba(var(--text-rgb), 0.06);
+}
+
+.tab-strip-select {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--secondary);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.tab-strip-tab.selected .tab-strip-select {
+  color: var(--text);
+}
+.tab-strip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-strip-close {
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--secondary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--hover), background-color var(--hover), color var(--hover);
+}
+.tab-strip-tab.selected .tab-strip-close,
+.tab-strip-tab:hover .tab-strip-close,
+.tab-strip-tab:focus-within .tab-strip-close {
+  opacity: 1;
+}
+.tab-strip-close:hover {
+  background: rgba(var(--text-rgb), 0.1);
+  color: var(--text);
+}
+
+.tab-strip-more {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  transition: background-color var(--hover), color var(--hover);
+}
+.tab-strip-more:hover {
+  background: rgba(var(--text-rgb), 0.08);
+  color: var(--text);
+}

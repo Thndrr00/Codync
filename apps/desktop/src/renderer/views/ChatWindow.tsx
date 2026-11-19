@@ -3,6 +3,7 @@ import type { WindowCommand } from '@shared/ipc'
 import { isSSHConnecting, showsChat as shouldShowChat } from '@shared/ssh-startup'
 import { draftOf, type Bot, type BotDraft } from '@shared/models'
 import { CharacterAvatar } from '../components/Avatar'
+import { ChromeIconButton } from '../components/Chrome'
 import { Button, IconButton, ResizeHandle } from '../components/Controls'
 import { Dialog, ModalHeader, Sheet } from '../components/Overlay'
 import { AnchoredMenu, type MenuItem } from '../components/Menu'
@@ -509,6 +510,9 @@ function ChatSplitView() {
             <ComputerFilterHeader hidden={hidden} setHidden={setHidden} manage={() => setSettings('computers')} compact />
             <IconButton title="Search" icon="magnifyingglass" size={32} className="sidebar-header-action" onClick={() => setSearching(true)} />
             <IconButton title="New" icon="plus" size={32} className="sidebar-header-action" buttonRef={newButton} menuOpen={newMenu} onClick={() => setNewMenu((o) => !o)} disabled={!onlineStores.length} />
+            {/* The sidebar toggle shares the side-panel toggle's button (icon size, shape and hover fill),
+                at the end of the open sidebar (OpenBot 0.74.0's top-row chrome alignment). */}
+            <ChromeIconButton ringed icon="sidebar.left" label="Collapse sidebar" onClick={() => setCompact(true)} />
           </HStack>
           <AnchoredMenu open={newMenu} onClose={() => setNewMenu(false)} anchor={newButton} items={newItems} />
         </div>

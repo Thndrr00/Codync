@@ -81,6 +81,8 @@ No scroll bars: scroll indicators never show (`.scrollIndicators(.never)` on the
 
 Anything with a background fill gets no extra drawn border. Use `Palette` and `Motion`; visibility changes animate and honor Reduce Motion. Icon-only actions have an accessibility label and desktop help where applicable. Reserve text for actions an icon cannot clearly express.
 
+On the desktop, the settings page's Close is a plain X (`ModalCloseButton`): no grey pad or tooltip, filling only on hover. The sidebar and side-panel toggles share `ChromeIconButton` (one icon size, shape and hover fill; the sidebar toggle sits at the end of the open sidebar). Tab strips (`TabStrip`) keep each tab one width, show the X on the selected or hovered tab, scroll with an overflow menu for hidden tabs, close on middle click, keep the next X under the pointer after a close, and scroll the row while a tab is dragged to an end.
+
 ## Motion and status
 
 `CharacterAvatar` identifies a bot. `ThinkingOrb` conveys working, searching, listening or connecting and needs adjacent text or an accessible outer label. In-app animation pauses off-screen, when inactive, or with Reduce Motion. Widgets/activities use static frames.

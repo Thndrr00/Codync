@@ -2485,5 +2485,7 @@
   "People you did not allow get no reply.": "Las personas que no hayas permitido no reciben respuesta.",
   "No threads yet.": "Aún no hay hilos.",
   "Subagents": "Subagentes",
-  "Let this bot hand a bounded task to a short-lived child turn. The child has no chat of its own and spends this bot's tokens.": "Deja que este bot entregue una tarea acotada a un turno hijo de corta duración. El hijo no tiene chat propio y gasta los tokens de este bot."
+  "Let this bot hand a bounded task to a short-lived child turn. The child has no chat of its own and spends this bot's tokens.": "Deja que este bot entregue una tarea acotada a un turno hijo de corta duración. El hijo no tiene chat propio y gasta los tokens de este bot.",
+  "Collapse sidebar": "Contraer la barra lateral",
+  "Hidden tabs": "Pestañas ocultas"
 }

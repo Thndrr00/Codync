@@ -4,6 +4,7 @@ import { reduceMotion } from '../lib/theme'
 import { afterExit } from '../lib/exit-delay'
 import { stackModals } from '../lib/modal-stack'
 import { useTr } from '../lib/use-language'
+import { ModalCloseButton } from './Chrome'
 import { Icon } from './Icon'
 import { VStack } from './Stack'
 import { Text } from './Text'
@@ -258,8 +259,9 @@ export function SheetPage({ className, children }: { className?: string; childre
 
 /**
  * A modal's title row: an optional icon, the title (and a line under it), optional trailing
- * actions, and a close button that dismisses the modal, or calls `onClose` for a panel that
- * isn't one. `onClose={null}` leaves the close button out (a modal only its own action ends).
+ * actions, and a plain-X close button that dismisses the modal, or calls `onClose` for a panel
+ * that isn't one. The X has no grey pad or tooltip, and fills on hover (`ModalCloseButton`).
+ * `onClose={null}` leaves the close button out (a modal only its own action ends).
  */
 export function ModalHeader({ title, subtitle, icon, trailing, onClose, closeTitle = 'Close' }: {
   title: ReactNode
@@ -284,7 +286,7 @@ export function ModalHeader({ title, subtitle, icon, trailing, onClose, closeTit
         {subtitle !== undefined ? <Text size="callout" tone="secondary" lines={2} title={typeof subtitle === 'string' ? subtitle : undefined}>{subtitle}</Text> : null}
       </VStack>
       {trailing}
-      {onClose === null ? null : <IconButtonBase title={closeTitle} icon="xmark" onClick={onClose ?? dismiss} />}
+      {onClose === null ? null : <ModalCloseButton label={closeTitle} onClick={onClose ?? dismiss} />}
     </div>
   )
 }
