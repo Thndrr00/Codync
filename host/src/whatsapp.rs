@@ -17,6 +17,23 @@ pub(crate) use settings::{set_allowed, set_bot, set_working_message, working_mes
 mod inbox;
 pub(crate) use inbox::claim_prompt;
 
+/// OpenBot 0.74.0: WhatsApp sometimes leaves a group's name out of its events. The group still
+/// lists and its history still reads as "WhatsApp group" until WhatsApp sends a name, so an
+/// agent's chat list or history request never fails with `no_answer`. A direct chat keeps naming
+/// the sender, as before.
+pub(crate) fn place_name<'a>(name: Option<&'a str>, group: bool, sender: &'a str) -> &'a str {
+    let named = name.unwrap_or_default().trim();
+    if !named.is_empty() {
+        return named;
+    }
+    if group {
+        "WhatsApp group"
+    } else {
+        let sender = sender.trim();
+        if sender.is_empty() { "someone" } else { sender }
+    }
+}
+
 use crate::hub::Hub;
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
@@ -430,6 +447,15 @@ mod tests {
         assert_eq!(state.state, "");
         assert!(state.qr.is_none());
         assert!(state.pair_code.is_none());
+    }
+
+    #[test]
+    fn a_group_with_no_name_still_gets_a_place_name() {
+        assert_eq!(place_name(Some("Family"), true, "sender"), "Family");
+        assert_eq!(place_name(Some("  "), true, "sender"), "WhatsApp group");
+        assert_eq!(place_name(None, true, "sender"), "WhatsApp group");
+        assert_eq!(place_name(None, false, "sender"), "sender");
+        assert_eq!(place_name(None, false, ""), "someone");
     }
 
     #[test]

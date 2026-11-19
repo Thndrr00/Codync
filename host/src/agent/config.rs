@@ -1,6 +1,47 @@
-//! Fast mode in a session's config options (ACP `configOptions`).
+//! Fast mode in a session's config options (ACP `configOptions`), and the request a custom
+//! OpenAI-compatible endpoint gets.
 
 use serde_json::{Value, json};
+
+/// A custom endpoint a bot points at, as far as request building is concerned. The key is only a
+/// flag here: it is sent as a header by the agent CLI, never in a request body or a log.
+#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
+pub struct CustomEndpoint<'a> {
+    pub base_url: &'a str,
+    pub api_key: Option<&'a str>,
+}
+
+/// OpenBot 0.74.0 (#7476): OpenAI's own v1 API refuses function tools together with
+/// `reasoning_effort` on `/chat/completions` for newer models such as GPT-6 Astra, so each turn
+/// failed with "Function tools with reasoning_effort are not supported". With a key, its v1 URL
+/// uses the Responses adapter (`/responses`, `store: false`), which accepts both. A keyless or
+/// other endpoint keeps the compatible adapter: the OpenAI adapter would otherwise read an
+/// inherited `OPENAI_API_KEY` and send a key the user never gave this endpoint.
+#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
+pub fn uses_responses_api(endpoint: &CustomEndpoint<'_>) -> bool {
+    endpoint.api_key.is_some_and(|key| !key.trim().is_empty())
+        && endpoint.base_url.trim().trim_end_matches('/').eq_ignore_ascii_case("https://api.openai.com/v1")
+}
+
+/// The path the agent CLI calls for `endpoint`.
+#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
+pub fn request_path(endpoint: &CustomEndpoint<'_>) -> &'static str {
+    if uses_responses_api(endpoint) { "/v1/responses" } else { "/v1/chat/completions" }
+}
+
+/// The request body for one turn on a custom endpoint: function tools and reasoning effort are
+/// both kept, whichever adapter the endpoint uses. The key is not part of the body.
+#[allow(dead_code, reason = "ported request construction; Codync's CLI config writer is outside this change")]
+pub fn custom_request(endpoint: &CustomEndpoint<'_>, model: &str, effort: Option<&str>, tools: &[Value]) -> Value {
+    let mut body = json!({"model": model, "stream": true, "tools": tools});
+    if uses_responses_api(endpoint) {
+        body["store"] = json!(false);
+    }
+    if let Some(effort) = effort.filter(|effort| !effort.trim().is_empty()) {
+        body["reasoning_effort"] = json!(effort);
+    }
+    body
+}
 
 /// Fast mode's option IDs: Claude's adapter (`fast`) and Codex's (`fast-mode`).
 const FAST_MODE_IDS: [&str; 2] = ["fast", "fast-mode"];
@@ -93,6 +134,33 @@ pub fn fast_mode_change(config: &Value, on: bool) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_custom_openai_v1_keeps_function_tools_and_reasoning_effort() {
+        let tools = [json!({"type": "function", "function": {"name": "search"}})];
+        let openai = CustomEndpoint { base_url: "https://api.openai.com/v1", api_key: Some("sk-test") };
+        assert!(uses_responses_api(&openai));
+        assert_eq!(request_path(&openai), "/v1/responses");
+        let body = custom_request(&openai, "gpt-6-astra", Some("high"), &tools);
+        assert_eq!(body["tools"], json!(tools), "function tools stay with a reasoning effort");
+        assert_eq!(body["reasoning_effort"], "high");
+        assert_eq!(body["store"], false);
+        assert!(!body.to_string().contains("sk-test"), "the key is a header, not the body");
+
+        let keyless = CustomEndpoint { base_url: "https://api.openai.com/v1", api_key: None };
+        let other = CustomEndpoint { base_url: "https://llm.example.com/v1", api_key: Some("sk-test") };
+        for endpoint in [&keyless, &other] {
+            assert!(!uses_responses_api(endpoint));
+            assert_eq!(request_path(endpoint), "/v1/chat/completions");
+            let body = custom_request(endpoint, "gpt-6-astra", Some("high"), &tools);
+            assert_eq!(body["tools"], json!(tools));
+            assert_eq!(body["reasoning_effort"], "high");
+            assert!(body.get("store").is_none());
+        }
+        let no_effort = custom_request(&openai, "gpt-6-astra", None, &tools);
+        assert_eq!(no_effort["tools"], json!(tools));
+        assert!(no_effort.get("reasoning_effort").is_none());
+    }
 
     #[test]
     fn fast_mode_is_claudes_and_codexs_on_off_option() {

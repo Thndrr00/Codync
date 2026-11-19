@@ -100,6 +100,26 @@ pub fn reset_time(usage: &Usage, backend: &str, now: i64) -> Option<i64> {
     provider.windows.iter().filter(|w| w.percent >= 99.5).filter_map(|w| w.resets_at).filter(|t| *t > now).max()
 }
 
+/// Whether a fresh turn or routine may clear a failure latch. OpenBot 0.74.0: a provider that did
+/// not start several times in a row is stopped, but the next message or routine must start it once
+/// instead of waiting for a provider refresh. In Codync that latch is a `NotStarting` rest; the
+/// failing loop still records its rest as usual, only the turn boundary clears it.
+pub fn retry_startable(rest: Option<&Rest>) -> bool {
+    rest.is_some_and(|rest| rest.reason == Reason::NotStarting && rest.until > 0)
+}
+
+/// Clears a start-failure latch so the next run tries the agent once. A usage limit, rate limit or
+/// signed-out rest is not a start failure and is left alone. Returns whether anything was cleared.
+pub fn retry_start(store: &Store, account: &str) -> bool {
+    if !retry_startable(saved(store, account).as_ref()) {
+        return false;
+    }
+    if let Err(error) = store.kv_delete(&key(account)) {
+        tracing::warn!(account, error = format!("{error:#}"), "couldn't clear the agent's start-failure latch");
+    }
+    true
+}
+
 /// Agent `backend`'s accounts (also ones a command of its own runs) whose last rest was for being signed out.
 pub fn signed_out(store: &Store, backend: &str) -> Vec<String> {
     // The prefix also finds agents whose name starts with `backend`'s.
@@ -142,6 +162,21 @@ mod tests {
         // One Codync can't sign in to looks again sooner.
         assert_eq!(get(&store, "claudette", 0).map(|r| r.until), Some(SIGNED_OUT_ELSEWHERE));
         assert_eq!(record(&store, "claude", Reason::SignedOut, 0, None).map(|r| r.until), Some(SIGNED_OUT));
+    }
+
+    #[test]
+    fn a_new_turn_clears_only_a_start_failure_latch() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        record(&store, "codex", Reason::NotStarting, 1_000, None);
+        assert!(retry_startable(get(&store, "codex", 1_000).as_ref()));
+        assert!(retry_start(&store, "codex"), "a new turn retries a provider that wouldn't start");
+        assert!(get(&store, "codex", 1_000).is_none(), "the latch is gone, not shortened");
+
+        record(&store, "claude", Reason::UsageLimit, 1_000, Some(9_000));
+        assert!(!retry_startable(get(&store, "claude", 1_000).as_ref()));
+        assert!(!retry_start(&store, "claude"), "a plan limit is not a start failure");
+        assert_eq!(get(&store, "claude", 1_000).map(|rest| rest.reason), Some(Reason::UsageLimit));
+        assert!(!retry_startable(None), "no rest is nothing to retry");
     }
 
     #[test]

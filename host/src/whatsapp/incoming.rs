@@ -114,7 +114,7 @@ impl WhatsApp {
             "event": if group { "groupMention" } else { "message" },
             "chat": event["chat"],
             "from": event["sender"],
-            "name": event["name"],
+            "name": super::place_name(event["name"].as_str(), group, sender),
             "text": text,
             "group": event["group"],
             "media": media.cloned(),
@@ -139,7 +139,7 @@ impl WhatsApp {
                 &crate::store::Lane::main(&bot),
                 crate::store::EntryKind::User,
                 hub.store.max_turn(&bot),
-                &json!({"text":format!("WhatsApp conversation · {chat}"), "source":"whatsapp", "status":"sent", "whatsappChat": chat}),
+                &json!({"text":format!("WhatsApp conversation · {}", super::place_name(event["name"].as_str(), group, sender)), "source":"whatsapp", "status":"sent", "whatsappChat": chat}),
             ) {
                 tracing::warn!(%error, "Could not create the WhatsApp conversation");
                 return;
@@ -151,10 +151,8 @@ impl WhatsApp {
             return;
         }
         let id = entry_id(&["message", chat, event["id"].as_str().unwrap_or_default()]);
-        let prompt = format!(
-            "WhatsApp message from {}:\n\n{note}",
-            event["name"].as_str().unwrap_or_else(|| event["sender"].as_str().unwrap_or("someone"))
-        );
+        let prompt =
+            format!("WhatsApp message from {}:\n\n{note}", super::place_name(event["name"].as_str(), group, sender));
         let lane = crate::store::Lane::in_thread(&bot, &root);
         let Ok((entry, _)) = hub.add_entry_once(
             &id,

@@ -93,6 +93,14 @@ pub fn end_rest(hub: &Hub, account: &str) {
     }
 }
 
+/// A new turn or routine starts: clear an agent's start-failure latch so this run tries it once
+/// (OpenBot 0.74.0). The loop that failed to start it is left alone; only this boundary retries.
+pub fn start_again(hub: &Hub, account: &str) {
+    if rest::retry_start(&hub.store, account) {
+        tell_bots(hub, account);
+    }
+}
+
 /// Agent `backend` is signed in now: its rests for being signed out are over (one for usage stays), so bots that
 /// moved on to a fallback come back on their next message.
 pub fn signed_in(hub: &Hub, backend: &str) {

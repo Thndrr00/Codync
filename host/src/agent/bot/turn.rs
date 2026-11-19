@@ -101,6 +101,11 @@ impl Actor {
     ) -> Result<()> {
         // A computer short of memory takes on no new work; the person is told why (`start_failed`).
         self.hub.health.admit(now_ms())?;
+        // OpenBot 0.74.0: the next message or routine retries a provider that had failed to start several
+        // times. Clear the latch on every step of this bot's chain before the turn picks an agent.
+        for step in 0..crate::agent::fallback::steps(&self.cfg) {
+            crate::agent::fallback::start_again(&self.hub, &crate::agent::fallback::account(&self.cfg, step));
+        }
         // A step's own model never outlives its turn: the bot's own goes back before anything else.
         self.restore_turn_model().await;
         self.proactive_turn = self.proactive_batch(entry_ids);

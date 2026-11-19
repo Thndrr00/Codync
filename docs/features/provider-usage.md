@@ -50,6 +50,20 @@ island's pagination is desktop-only because the other clients do not have its
 small fixed window. The user clarified that "web" means the Electron desktop,
 so the public website is unaffected.
 
+## Starting a provider again, and custom endpoints
+
+A provider that would not start several times in a row gets a `NotStarting`
+rest, so all bots skip it while it recovers (OpenBot 0.74.0). A message or a
+routine is a new turn: `agent::fallback::start_again` clears only that
+start-failure latch, so the next run tries the agent once. It does not retry
+inside the failing loop, and it leaves usage, rate-limit and signed-out rests
+alone. A custom OpenAI-compatible endpoint at `https://api.openai.com/v1` with
+a key uses the Responses request rather than `/chat/completions`: newer models
+such as GPT-6 Astra refuse function tools together with `reasoning_effort` on
+the compatible endpoint. Both the tools and the effort stay in the request; a
+keyless or other endpoint keeps the compatible adapter, and the key is only a
+header, never part of the body or a log.
+
 Source tests cover version gating, invalid/missing quota, conversion and model
 groups, distinct account identities, Codex app-server parsing, Grok's proto3
 billing periods, the saved reading and Android decoding of unavailable

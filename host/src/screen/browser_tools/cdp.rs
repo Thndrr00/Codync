@@ -42,6 +42,17 @@ const QUIET_MS: u64 = 500;
 const POLL: Duration = Duration::from_millis(150);
 /// How long the whole action may take beyond its own deadline, before the browser counts as hung.
 const HUNG: Duration = Duration::from_secs(5);
+/// OpenBot 0.74.0: a close cannot wait for an earlier action that a page which stopped answering
+/// holds. Wait this long for the tab to free itself, then close the browser under the blocked
+/// action so the queued calls end and the agent's turn does not stay on "working".
+const CLOSE_QUEUE_WAIT: Duration = Duration::from_secs(10);
+/// Grace period after the browser is closed for its queued calls to end on the closed page.
+const CLOSED_PAGE_DRAIN: Duration = Duration::from_secs(2);
+/// After a page script, a saved login or card fill can still be blocked by that script living on in
+/// another tab of the site, including a popup the agent never scripted. A secret is only ever sent
+/// to the page by a secure fill, never returned to the agent; Codync's browser tools have no such
+/// fill today, so this reason goes back with `evaluate` as guidance.
+const AGENT_SCRIPTED_TABS_NOTE: &str = "A script you ran with evaluate can still run in this page or another open page of this site. First close or navigate each other tab of this site, including a popup or opener tab where you did not run evaluate. A tab of another chat or agent can also block a secure fill, and it is not in this bot's tab list: when you see no other tab of this site, ask the user to close the other tabs of this site. Then reload this page with navigate direction=reload, not with evaluate or by opening its address again, take a fresh snapshot, and retry.";
 
 /// The page-side helpers, evaluated with each call: an expression that builds the page's API.
 const PAGE: &str = include_str!("page.js");
@@ -127,13 +138,18 @@ fn slot(bot: &str) -> Slot {
     registry.entry(bot.to_owned()).or_default().clone()
 }
 
-/// Stops a bot's browser and forgets it.
+/// Stops a bot's browser and forgets it. OpenBot 0.74.0: an earlier action can hold the tab (a
+/// snapshot on a page that stopped answering), so the close waits only briefly for it instead of
+/// keeping the agent's turn on "working" until the user presses Stop.
 async fn close(bot: &str) {
     let removed = SESSIONS.locked().remove(bot);
     let Some(slot) = removed else { return };
-    let ended = {
-        let mut guard = slot.lock().await;
-        guard.take()
+    let ended = match timeout(CLOSE_QUEUE_WAIT, slot.lock()).await {
+        Ok(mut guard) => guard.take(),
+        Err(_) => {
+            tracing::warn!(bot = %bot, "A bot browser tab closed while an earlier action still held it");
+            None
+        }
     };
     stop(ended).await;
 }
@@ -175,12 +191,15 @@ async fn spawn(bot: &str) -> Result<Session> {
     Ok(Session { process, folder, pipe: socket, context, target })
 }
 
-/// Stops a browser and removes its profile, retrying a profile Chrome still holds.
+/// Stops a browser and removes its profile, retrying a profile Chrome still holds. The terminate
+/// itself is bounded: a page that stopped answering can keep a command pending for ever, and the
+/// close must finish without waiting for it (OpenBot 0.74.0).
 async fn stop(session: Option<Session>) {
     let Some(mut session) = session else { return };
-    if let Err(error) = session.process.terminate_owned().await {
-        tracing::warn!(%error, "could not stop a bot's browser");
-        return;
+    match timeout(CLOSED_PAGE_DRAIN, session.process.terminate_owned()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => tracing::warn!(%error, "could not stop a bot's browser"),
+        Err(_) => tracing::warn!("A bot browser did not stop in time; finishing the close anyway"),
     }
     let folder = session.folder.clone();
     if let Err(error) = remove_folder(&folder) {
@@ -532,7 +551,7 @@ async fn evaluate(session: &mut Session, tab: &str, source: &str, await_promise:
         } else {
             serde_json::from_str(&encoded).unwrap_or(Value::String(encoded))
         };
-        return Ok(json!({"value": value, "truncated": truncated}));
+        return Ok(json!({"value": value, "truncated": truncated, "note": AGENT_SCRIPTED_TABS_NOTE}));
     }
     if answer["fallback"] != true {
         bail!("{}", answer["error"].as_str().unwrap_or("The page refused the expression."));
@@ -547,7 +566,7 @@ async fn evaluate(session: &mut Session, tab: &str, source: &str, await_promise:
     )
     .await
     .context("The page did not evaluate the expression: it may have thrown, or the page refused it")?;
-    Ok(json!({"value": result["result"]["value"], "truncated": false}))
+    Ok(json!({"value": result["result"]["value"], "truncated": false, "note": AGENT_SCRIPTED_TABS_NOTE}))
 }
 
 /// An element's point on the page, with the label the snapshot gave it.
@@ -607,6 +626,16 @@ mod tests {
         assert!(text.contains("api.box({\"ref\":7})"), "{text}");
         assert!(text.contains("window.__codyncRefs || (window.__codyncRefs = new Map())"));
         assert!(text.contains("((refs) =>"), "the helpers are bound to the document's refs: {text}");
+    }
+
+    #[test]
+    fn a_page_script_gets_the_clear_other_tabs_reason() {
+        let note = AGENT_SCRIPTED_TABS_NOTE;
+        assert!(note.contains("each other tab of this site"), "{note}");
+        assert!(note.contains("popup or opener tab"), "{note}");
+        assert!(note.contains("ask the user to close"), "{note}");
+        assert!(note.contains("navigate direction=reload"), "{note}");
+        assert!(CLOSE_QUEUE_WAIT < Duration::from_secs(60), "a blocked close must finish");
     }
 
     #[test]

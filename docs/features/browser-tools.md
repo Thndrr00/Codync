@@ -96,6 +96,15 @@ a new snapshot, an element that cannot take typing says so, a page that never sh
 *The page did not show "Invoices" within 15 seconds; take a snapshot to see where it is.*, and a run
 that fails names the step that failed and says the steps before it stay done.
 
+Closing a browser is bounded too (OpenBot 0.74.0): a close waits at most ten seconds for an earlier
+action that a stalled page holds, then closes the browser under it, so the tool call ends and the
+agent's turn is not left on "working" until someone presses Stop. A script the agent ran with
+`evaluate` can still live in another tab of the site, including a popup it never scripted, so
+`evaluate` returns a note telling the agent to close or navigate the other tabs of that site, to ask
+the user to close tabs it cannot see, and then to reload the page with `navigate direction=reload`
+before retrying. Codync's browser tools have no saved-logins or card-fill surface; the note is the
+guidance that a secure fill would need, and a secret would go only to the page, never to the agent.
+
 ## Privacy
 
 The browser is the bot's own: an isolated profile and context, no cookie of the owner's browser, and
