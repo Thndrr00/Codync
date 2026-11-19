@@ -19,6 +19,7 @@ pub mod catalog;
 pub mod command;
 pub mod flow;
 pub mod output;
+pub mod size;
 
 pub use output::{Output, decode_base64, display_name, kind, output};
 
@@ -143,6 +144,7 @@ pub fn check_settings(node: &crate::store::FlowMedia) -> Result<Request> {
             .clone()
             .filter(|voice| kind == Kind::Video && model.voices && VOICES.iter().any(|(id, _)| id == voice)),
         frames: Frames::default(),
+        size: None,
     };
     if let Some(resolution) = &request.resolution {
         ensure!(!resolution.is_empty(), "{} does not make the size {}", model.name, node.resolution);

@@ -107,7 +107,31 @@ impl Actor {
         let (reply, done) = oneshot::channel();
         self.files.quiet.push(done);
         let epoch = self.files.epoch;
+        // A picture asked for at an exact size is cut to its middle and scaled here, on the file the
+        // model made (OpenBot 0.73.0): the model only has to get the aspect close.
+        let (source, name) = match (kind, prompt.as_deref().and_then(crate::media::size::in_note)) {
+            (Kind::Image, Some(size)) => match Self::resize_on_disk(&source, size) {
+                Ok(path) => (path, crate::media::display_name(kind, None, 0)),
+                Err(error) => {
+                    tracing::warn!(bot = %self.cfg.id, error = format!("{error:#}"), "a sized picture kept its own size");
+                    (source, name)
+                }
+            },
+            _ => (source, name),
+        };
         self.begin_share(source, Some(name), Some(kind), prompt, epoch, Arc::new(AtomicBool::new(false)), reply);
+    }
+
+    /// A picture cut to the middle of the asked shape and scaled to its pixels, written beside the
+    /// original as a PNG; the path of the new file. Ported from `OpenBot` 0.73.0.
+    fn resize_on_disk(source: &str, size: crate::media::size::Size) -> anyhow::Result<String> {
+        let bytes = std::fs::read(source)?;
+        let sized = crate::media::size::apply(&bytes, size)?;
+        let folder = crate::service::data_dir().join("media");
+        std::fs::create_dir_all(&folder)?;
+        let path = folder.join(format!("{}.png", uuid::Uuid::new_v4()));
+        std::fs::write(&path, sized)?;
+        Ok(path.to_string_lossy().into_owned())
     }
 
     #[allow(clippy::too_many_arguments, reason = "the two extra facts only a media file has")]

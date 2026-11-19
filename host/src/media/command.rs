@@ -43,6 +43,8 @@ pub struct Request {
     /// A preset voice of a video, from `VOICES`.
     pub voice: Option<String>,
     pub frames: Frames,
+    /// The exact width and height a picture is cut and scaled to, when asked for.
+    pub size: Option<super::size::Size>,
 }
 
 fn short(value: &str) -> bool {
@@ -76,6 +78,7 @@ pub fn parse(kind: Kind, backend: &str, text: &str) -> Result<Request> {
     let mut transparent = false;
     let mut voice: Option<String> = None;
     let mut frames = Frames::default();
+    let mut size: Option<super::size::Size> = None;
     let mut rest: Vec<&str> = Vec::new();
     while let Some(word) = words.next() {
         // A flag only counts before the description; "-" and words are the description.
@@ -91,6 +94,8 @@ pub fn parse(kind: Kind, backend: &str, text: &str) -> Result<Request> {
                 ensure!(frames.references.len() < MAX_REFERENCES, "at most {MAX_REFERENCES} reference pictures");
                 frames.references.push(path_arg(word, &take(&mut words, word)?)?);
             }
+            "--size" => size = Some(super::size::parse(&take(&mut words, word)?)?),
+            "--size" => size = Some(super::size::parse(&take(&mut words, word)?)?),
             "--transparent" => transparent = true,
             _ => {
                 rest.push(word);
@@ -149,6 +154,7 @@ pub fn parse(kind: Kind, backend: &str, text: &str) -> Result<Request> {
         transparent: transparent && kind == Kind::Image && model.transparent,
         voice,
         frames,
+        size: size.filter(|_| kind == Kind::Image),
     })
 }
 
@@ -202,6 +208,14 @@ impl Request {
             }
             Kind::Image => {
                 let mut ask = format!("Make one image with the `{}` tool, aspect ratio {}.", self.tool(), self.aspect);
+                if let Some(size) = self.size {
+                    // The size is applied here, on the made file: the model only has to get close.
+                    let _ = write!(
+                        ask,
+                        " It will be cut to its middle and scaled to exactly {}x{} pixels (--size {}x{}), so any aspect close to that is fine; do not add borders.",
+                        size.width, size.height, size.width, size.height
+                    );
+                }
                 if self.transparent
                     && let Some((_, words)) =
                         TRANSPARENT_ASKS.iter().find(|(backend, _)| *backend == self.model.backend)
