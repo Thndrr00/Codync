@@ -1,4 +1,4 @@
-//! An agent posts a Discord embed card (OpenBot 0.66.0: "Agents can post Discord embeds"): a title, a
+//! An agent posts a Discord embed card (`OpenBot` 0.66.0: "Agents can post Discord embeds"): a title, a
 //! description, fields and an image in the message, instead of plain text. The bot must be connected to
 //! Discord; the card goes straight to the channel the model names.
 

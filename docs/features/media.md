@@ -17,7 +17,7 @@ to make. The host, not the agent, decides what the flags mean:
 /video --model grok-imagine --aspect 9:16 --duration 6 --resolution 720p --voice eve a paper boat in a gutter
 ```
 
-- `--model` (default: the backend's first model of that kind), `--aspect` (1:1, 4:3, 16:9, 9:16),
+- `--model` (default: the backend's first model of that kind), `--aspect` (1:1, 4:3, 16:9, 9:16, 4:5, 5:4),
   `--transparent` (pictures only), and for a video `--duration` (6 or 10 seconds), `--resolution`
   (480p, 720p) and `--voice` (ara, eve, leo, rex).
 - `--first`, `--last` and `--ref <path>` name a first frame, a last frame and up to 14 reference

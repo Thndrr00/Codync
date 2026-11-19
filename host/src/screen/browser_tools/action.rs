@@ -184,7 +184,7 @@ impl Load {
 pub(crate) struct Target(u32);
 
 impl Target {
-    /// `7`, `"7"`, `"#7"`, `"[7]"`, `{"ref": 7}` or `{"kind": "ref", "ref": 7}`, as OpenBot's
+    /// `7`, `"7"`, `"#7"`, `"[7]"`, `{"ref": 7}` or `{"kind": "ref", "ref": 7}`, as `OpenBot`'s
     /// target union allows but with a ref as the only kind.
     pub(crate) fn parse(value: &Value) -> Result<Self> {
         if let Value::Object(fields) = value {

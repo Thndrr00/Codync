@@ -26,8 +26,9 @@ use anyhow::{Result, bail, ensure};
 use command::{Frames, Request};
 use serde_json::{Value, json};
 
-/// An aspect ratio a model may be asked for. The first is the default.
-pub const ASPECTS: [&str; 4] = ["1:1", "4:3", "16:9", "9:16"];
+/// The aspect ratios a model makes when it names none; the first is the default. Ported from
+/// `OpenBot` 0.73.0, which added 4:5 for a social post and 5:4 for a print.
+pub const ASPECTS: [&str; 6] = ["1:1", "4:3", "16:9", "9:16", "4:5", "5:4"];
 /// The lengths of a video in seconds, for a model that names none.
 pub const DURATIONS: [u32; 2] = [6, 10];
 /// The resolutions of a video, for a model that names none; the first is the default.

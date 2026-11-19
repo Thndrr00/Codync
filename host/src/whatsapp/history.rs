@@ -10,6 +10,7 @@ use crate::store::Store;
 use anyhow::Result;
 use rusqlite::params;
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 
 /// How long a message is kept.
 pub(crate) const KEEP_MS: i64 = 90 * 24 * 60 * 60 * 1000;
@@ -70,10 +71,10 @@ pub(crate) fn search(store: &Store, words: &[String], since: i64, before: i64, l
         let mut bound: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(since), Box::new(before)];
         for word in words {
             // The word is matched as text: its own `%` and `_` must not become wildcards.
-            bound.push(Box::new(format!("%{}%", word.replace('%', "").replace('_', ""))));
-            sql.push_str(&format!(" AND lower(text) LIKE ?{}", bound.len()));
+            bound.push(Box::new(format!("%{}%", word.replace(['%', '_'], ""))));
+            let _ = write!(sql, " AND lower(text) LIKE ?{}", bound.len());
         }
-        sql.push_str(&format!(" ORDER BY id DESC LIMIT {limit}"));
+        let _ = write!(sql, " ORDER BY id DESC LIMIT {limit}");
         let mut statement = c.prepare(&sql)?;
         let refs: Vec<&dyn rusqlite::ToSql> = bound.iter().map(|value| value.as_ref()).collect();
         let rows = statement.query_map(refs.as_slice(), |row| {

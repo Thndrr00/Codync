@@ -1,11 +1,11 @@
 //! The tool definitions the chat MCP server lists. Ported from `OpenBot` nightly's
 //! `BROWSER_TOOL_DEFINITIONS` (`src/backend/browser-tools.ts`) with Codync's wording: an element ref
-//! instead of OpenBot's target kinds, no tab id, and none of the vault, card fill, takeover, image,
+//! instead of `OpenBot`'s target kinds, no tab id, and none of the vault, card fill, takeover, image,
 //! recording, upload, environment or dialog tools.
 
 use serde_json::{Value, json};
 
-/// What every action that changes the page answers, as OpenBot words it.
+/// What every action that changes the page answers, as `OpenBot` words it.
 const ACTION_RESULT: &str = "Returns a status; pass snapshot: true to read the page afterwards.";
 const NEEDS_ACCESS: &str = "The bot needs Use the computer on, with its browser permission.";
 

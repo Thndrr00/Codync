@@ -2,7 +2,7 @@
 //! taught the bot how to do a class of task (they corrected it, or a method clearly worked), and a writer turns that
 //! lesson into a skill of the bot's own or adds it to one it already saved.
 //!
-//! Ported from OpenBot 0.66.0's "Agents now learn skills by themselves": the signals, the conservative rules and the
+//! Ported from `OpenBot` 0.66.0's "Agents now learn skills by themselves": the signals, the conservative rules and the
 //! prompts follow `src/backend/agent/skill-learning.ts`, `src/backend/agent/skill-suggestion.ts` and
 //! `src/backend/agent/memory-review-prompt.ts` (`skillRules`). Saving is Codync's own (`chat::skills` over
 //! `market::skills`), so a learned skill is exactly a skill the bot saved: `source: "custom"`, `writtenBy` its bot, on
@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 /// The most characters of a learned skill's name, as `save_skill` takes.
 const NAME_CHARS: usize = 64;
-/// The most characters of a learned when-to-use line (OpenBot writes 500).
+/// The most characters of a learned when-to-use line (`OpenBot` writes 500).
 const DESCRIPTION_CHARS: usize = 500;
 /// The most characters of learned instructions: a longer skill costs every chat that loads it.
 const INSTRUCTIONS_CHARS: usize = 12_000;
@@ -88,7 +88,7 @@ pub struct Lesson {
     /// The skill's name: the listed one's for a change, the new one's for a skill.
     pub name: String,
     /// The lesson in a sentence or two, kept so the next review doesn't save it again.
-    pub lesson: String,
+    pub lesson_text: String,
 }
 
 /// A review's answer, after the rules.
@@ -158,7 +158,7 @@ pub fn decide(raw: &str, messages: &[Message], own: &[Own], room: bool) -> Verdi
             let Some(skill) = own.iter().find(|s| s.id == found.id.trim()) else {
                 return Verdict::Refused("it changes a skill the bot didn't save");
             };
-            Verdict::Learn(Lesson { skill: Some(skill.id.clone()), name: skill.name.clone(), lesson: text.to_owned() })
+            Verdict::Learn(Lesson { skill: Some(skill.id.clone()), name: skill.name.clone(), lesson_text: text.to_owned() })
         }
         "create" => {
             let name = clip(&found.name, NAME_CHARS);
@@ -171,7 +171,7 @@ pub fn decide(raw: &str, messages: &[Message], own: &[Own], room: bool) -> Verdi
             if own.iter().any(|s| same_name(&s.name, &name)) {
                 return Verdict::Refused("a skill the bot saved has that name");
             }
-            Verdict::Learn(Lesson { skill: None, name, lesson: text.to_owned() })
+            Verdict::Learn(Lesson { skill: None, name, lesson_text: text.to_owned() })
         }
         _ => Verdict::Refused("the answer names no action"),
     }
@@ -275,7 +275,7 @@ sentences\"}}}}"
     (system, parts.join("\n\n"))
 }
 
-/// The rules the writer follows, from OpenBot's skill writer.
+/// The rules the writer follows, from `OpenBot`'s skill writer.
 const WRITE_RULES: &str = "A skill is the instructions for one class of task, done the most efficient and correct way \
 for this user. A later chat loads it and gets the result right the first time.
 
@@ -320,7 +320,7 @@ pub fn write_prompt(
         "{opening}\n\n{WRITE_RULES}{change}\n\nAnswer only one JSON object: {{\"description\": \"...\", \"instructions\": \
 \"...\"}}, with at most {DESCRIPTION_CHARS} characters in the description and {INSTRUCTIONS_CHARS} in the instructions."
     );
-    let mut parts = vec![format!("<lesson>\n{}\n</lesson>", lesson.lesson)];
+    let mut parts = vec![format!("<lesson>\n{}\n</lesson>", lesson.lesson_text)];
     if let Some(current) = current {
         let text = json!({"description": current.description, "instructions": current.instructions});
         parts.push(format!("<current_skill>\n{}\n</current_skill>", list([text])));
@@ -386,7 +386,7 @@ pub async fn review(hub: &Arc<Hub>, cfg: &BotConfig, read: &[Entry]) -> Result<(
     }
     // Codync's own save: `writtenBy` this bot, on for this bot only, a version to undo, and the chat's notice.
     crate::chat::skills::call(hub, &cfg.id, &args).await?;
-    remember(&hub.store, &cfg.id, &lesson.lesson)
+    remember(&hub.store, &cfg.id, &lesson.lesson_text)
 }
 
 /// The tool calls of the turns this batch covers, oldest first.
