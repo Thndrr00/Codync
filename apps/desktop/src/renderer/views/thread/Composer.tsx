@@ -90,7 +90,9 @@ function DestinationComposer({ botId, thread, reply, about, cancelReply, onCall,
     : about
       ? tr('Message about “{title}”').replace('{title}', about.title)
       : reply || thread
-      ? tr('Reply…')
+      ? thread
+        ? tr('Message {name} in this thread').replace('{name}', name)
+        : tr('Reply…')
       : bot && isGroup(bot)
         ? tr('Ask everyone · @ to ask one bot')
         : working

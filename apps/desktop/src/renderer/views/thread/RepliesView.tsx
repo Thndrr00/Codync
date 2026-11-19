@@ -8,7 +8,8 @@ import { useStore } from '../../store/context'
 import { useTr } from '../../lib/use-language'
 import { UpdateNeededCard } from '../UpdateNeededCard'
 import { buildChat, rowIn, useArrivals } from './chat-items'
-import { ChatRow } from './ChatRows'
+import { BotMessageRow } from './BotConversation'
+import { ChatRow, TimeSeparator } from './ChatRows'
 import { ForwardSheet } from './ForwardSheet'
 import { WorkingIndicator } from './WorkingIndicator'
 import { workingSteps } from './trace-turns'
@@ -32,6 +33,7 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
   const items = buildChat(replies)
   const arrivals = useArrivals([...items.map((i) => i.id), ...(live ? ['working'] : [])], true)
   const [showTrace, setShowTrace] = useState(false)
+  const [replyEntry, setReplyEntry] = useState<Entry | null>(null)
   const [forwardEntry, setForwardEntry] = useState<Entry | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -102,14 +104,22 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
           ) : null}
           {items.map((item) => {
             const line = unread > 0 && item.kind === 'entry' && seen++ === newLineAfter ? <UnreadLine key="new" /> : null
-            return item.kind === 'entry' ? (
+            if (item.kind === 'separator') return <TimeSeparator key={item.id} date={item.date} />
+            if (item.kind === 'exchanges') {
+              // A bot-to-bot exchange reads as one block, like in the chat. The thread sheet has no
+              // peer chat to jump to, so the author chip stays informational here.
+              return <BotMessageRow key={item.id} exchanges={item.exchanges} open={() => {}} />
+            }
+            return (
               <div key={item.id}>
                 {line}
                 <div className={arrivals.has(item.id) ? rowIn(item) : undefined}>
-                  <ChatRow entry={item.entry} groupStart={item.groupStart} chat={chat} openTrace={openTrace} onForward={store.mismatch ? undefined : setForwardEntry} />
+                  <ChatRow entry={item.entry} groupStart={item.groupStart} chat={chat} openTrace={openTrace}
+                    onReply={store.mismatch ? undefined : setReplyEntry}
+                    onForward={store.mismatch ? undefined : setForwardEntry} />
                 </div>
               </div>
-            ) : line
+            )
           })}
           {doc && !loading && !loadError && !items.length && !live ? (
             <Text as="div" tone="secondary">Ask this bot about the saved document. This page has its own conversation.</Text>
@@ -128,7 +138,7 @@ export function RepliesView({ botId, rootId, close, documentTitle }: { botId: st
             <UpdateNeededCard />
           </div>
         ) : (
-          <Composer botId={botId} thread={rootId} />
+          <Composer botId={botId} thread={rootId} reply={replyEntry} cancelReply={() => setReplyEntry(null)} />
         )}
       </div>
       <Dialog open={renaming} title="Rename thread" actions={[{ title: 'Save', action: saveRename }]} onClose={() => setRenaming(false)}>

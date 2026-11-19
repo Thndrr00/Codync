@@ -47,6 +47,8 @@ import { BotEditorView } from '../bots/BotEditorView'
 import { FormSheet } from '../marketplace/pieces'
 import { CallView } from '../call/CallView'
 import { MacChatButton } from './MacChatButton'
+import { TabStrip } from '../../components/TabStrip'
+import { ChromeIconButton } from '../../components/Chrome'
 import { ArtifactView } from '../library/ArtifactView'
 import { KofiInviteCard } from './KofiInvite'
 import { useKofiInviteAt } from '../../lib/use-kofi-invite'
@@ -241,7 +243,7 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
             {!store.mismatch ? <MacChatButton className="ringed" title="Pinned messages" icon="pin" onClick={() => setShowPins(true)} /> : null}
             <Spacer />
             {(!showSettings || !wide) && !compactDetails ? (
-              <MacChatButton className="ringed" title="Conversation details" icon="chevron.left.2" direction={[-1, 0]} onClick={toggleDetails} />
+              <ChromeIconButton ringed icon="chevron.left.2" label="Conversation details" onClick={toggleDetails} />
             ) : null}
           </div>
           {/* The call bar takes the pill's place; its frosted glass would show the name blurred. */}
@@ -291,18 +293,13 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
         {activeArtifact ? (
           <div className="artifact-tabbed">
             {artifacts.length > 1 ? (
-              <div className="artifact-tabs" role="tablist" aria-label={tr('Open artifacts')}>
-                {artifacts.map((id) => (
-                  <div key={id} role="presentation" className={id === activeArtifact ? 'artifact-tab active' : 'artifact-tab'}>
-                    <button role="tab" aria-selected={id === activeArtifact} onClick={() => setActiveArtifact(id)}>
-                      {store.artifacts.byId.get(id)?.title ?? tr('Artifact')}
-                    </button>
-                    <button className="artifact-tab-close" title={tr('Close tab')} onClick={() => closeArtifact(id)}>
-                      <Icon name="xmark" size={9} weight="bold" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <TabStrip
+                tabs={artifacts.map((id) => ({ id, title: store.artifacts.byId.get(id)?.title ?? tr('Artifact') }))}
+                active={activeArtifact}
+                label={tr('Open artifacts')}
+                onSelect={setActiveArtifact}
+                onClose={closeArtifact}
+              />
             ) : null}
             <ArtifactView key={activeArtifact} botId={botId} artifactId={activeArtifact} close={() => closeArtifact(activeArtifact)} />
           </div>
@@ -311,16 +308,13 @@ export const ThreadView = memo(function ThreadView({ botId }: { botId: string })
       {activeFile ? (
         <div className="artifact-tabbed">
           {files.length > 1 ? (
-            <div className="artifact-tabs" role="tablist" aria-label={tr('Open files')}>
-              {files.map(({ file }) => (
-                <div key={file.id} role="presentation" className={file.id === activeFile ? 'artifact-tab active' : 'artifact-tab'}>
-                  <button role="tab" aria-selected={file.id === activeFile} onClick={() => setActiveFile(file.id)}>{file.name}</button>
-                  <button className="artifact-tab-close" title={tr('Close tab')} onClick={() => closeFile(file.id)}>
-                    <Icon name="xmark" size={9} weight="bold" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            <TabStrip
+              tabs={files.map(({ file }) => ({ id: file.id, title: file.name }))}
+              active={activeFile}
+              label={tr('Open files')}
+              onSelect={setActiveFile}
+              onClose={closeFile}
+            />
           ) : null}
           {(() => {
             const shown = files.find((item) => item.file.id === activeFile)
