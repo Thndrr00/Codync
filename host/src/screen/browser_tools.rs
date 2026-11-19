@@ -53,6 +53,8 @@ pub fn tools() -> Vec<Value> {
 /// Runs one browser tool for `bot`.
 pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
     let action = Action::parse(name, args)?;
+    // Analytics: which action ran, never the page, the address or the text.
+    crate::analytics::browser_tool(hub, bot, name);
     // The same gate as the computer tools: computer access for this bot, with its browser permission.
     let lease = hub.computer.begin(hub, bot, crate::computer::Capability::Browser)?;
     execute(hub, bot, &lease, &action).await

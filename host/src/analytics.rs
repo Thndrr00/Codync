@@ -72,6 +72,20 @@ pub fn network_failed(hub: &Hub, stage: NetworkStage) {
     capture(hub, Event::NetworkFailed, Map::from_iter([("stage".into(), stage.into())]));
 }
 
+/// Reports one browser action a bot ran; never the address, the page or the text it typed.
+pub fn browser_tool(hub: &Hub, agent: &str, tool: &str) {
+    capture(hub, Event::BrowserTool, Map::from_iter([("agent".into(), agent.into()), ("tool".into(), tool.into())]));
+}
+
+/// Reports a skill a background review saved or extended; never the skill's name, description or text.
+pub fn skill_learned(hub: &Hub, agent: &str, action: &str) {
+    capture(
+        hub,
+        Event::SkillLearned,
+        Map::from_iter([("agent".into(), agent.into()), ("action".into(), action.into())]),
+    );
+}
+
 pub struct Analytics {
     enabled: Mutex<bool>,
     consent: tokio::sync::watch::Sender<bool>,

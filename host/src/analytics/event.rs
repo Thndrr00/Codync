@@ -87,6 +87,10 @@ pub enum Event {
     SkillInstalled,
     SkillRemoved,
     SkillWritten,
+    /// A background review saved or extended a skill by itself (ction: created/updated).
+    SkillLearned,
+    /// One browser action a bot ran (	ool), never the page or the text.
+    BrowserTool,
     /// A bot's `publish_artifact`.
     ArtifactPublished,
     CredentialSaved,
@@ -208,6 +212,8 @@ impl Event {
             Self::SkillInstalled => "skill_installed",
             Self::SkillRemoved => "skill_removed",
             Self::SkillWritten => "skill_written",
+            Self::SkillLearned => "skill_learned",
+            Self::BrowserTool => "browser_tool",
             Self::ArtifactPublished => "artifact_published",
             Self::CredentialSaved => "credential_saved",
             Self::AgentSetupStarted => "agent_setup_started",

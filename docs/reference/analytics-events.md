@@ -134,7 +134,9 @@ host answers and sends it once the host is up.
 | `connector_signin_started` | host | `connectorSignIn` | — |
 | `skill_installed` | host | `installSkill`, or a bot's `install_skill` (`chatCall`, a skill from a public GitHub link) | `custom` (`false` for a link) |
 | `skill_removed` | host | `removeSkill` | — |
-| `skill_written` | host | A bot's `save_skill` (`chatCall`) | `change` (`new`/`update`) |
+| `skill_written` | host | A bot's `save_skill` (`chatCall`) | `change` (`new`/`update`) |
+| `skill_learned` | host | A bot's background review saved or extended a skill by itself | `agent`, `action` (`created`/`updated`); never its name or text |
+| `browser_tool` | host | A bot ran one of its browser tools | `agent`, `tool`; never the page, the address or the typed text |
 | `artifact_published` | host | A bot's `publish_artifact` (`chatCall`) | `change` (`new`/`update`), `card` (whether its card went into the bot's chat), never its title |
 | `credential_saved` | host | A key, login or vault is saved (clearing one isn't) | `kind` (`login`/`onepassword`/`connector`/`composio`/`voice`/`agent_env`) |
 | `agent_setup_started` | host | `agentSetup` (an agent's install or sign-in terminal) | `agent` |

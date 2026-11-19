@@ -158,7 +158,11 @@ pub fn decide(raw: &str, messages: &[Message], own: &[Own], room: bool) -> Verdi
             let Some(skill) = own.iter().find(|s| s.id == found.id.trim()) else {
                 return Verdict::Refused("it changes a skill the bot didn't save");
             };
-            Verdict::Learn(Lesson { skill: Some(skill.id.clone()), name: skill.name.clone(), lesson_text: text.to_owned() })
+            Verdict::Learn(Lesson {
+                skill: Some(skill.id.clone()),
+                name: skill.name.clone(),
+                lesson_text: text.to_owned(),
+            })
         }
         "create" => {
             let name = clip(&found.name, NAME_CHARS);
@@ -385,7 +389,10 @@ pub async fn review(hub: &Arc<Hub>, cfg: &BotConfig, read: &[Entry]) -> Result<(
         args["id"] = id.clone().into();
     }
     // Codync's own save: `writtenBy` this bot, on for this bot only, a version to undo, and the chat's notice.
+    let outcome = if lesson.skill.is_some() { "updated" } else { "created" };
     crate::chat::skills::call(hub, &cfg.id, &args).await?;
+    // Analytics: what the review did, never the skill's name or its text.
+    crate::analytics::skill_learned(hub, &cfg.id, outcome);
     remember(&hub.store, &cfg.id, &lesson.lesson_text)
 }
 
