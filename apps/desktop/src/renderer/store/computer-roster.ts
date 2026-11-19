@@ -7,7 +7,7 @@ import type { BotStore } from './bot-store'
 import { sameRef, type AppModel, type BotRef, type RosterItem } from './app-model'
 import { useState } from 'react'
 import { matchesRoster, type RosterGrouping } from '../lib/roster-query'
-import { NO_ROSTER_VIEW_FILTER, matchesRosterView, normalizeRosterViewFilter, rosterViewFilterIsSet, type RosterViewFilter } from '../lib/roster-view-filter'
+import { NO_ROSTER_VIEW_FILTER, matchesRosterView, normalizeRosterViewFilter, rosterViewFilterIsSet, sortRosterRows, type RosterViewFilter } from '../lib/roster-view-filter'
 import type { ThreadInfo } from '@shared/models'
 
 /** Device-local section ordering and folding, matching the iPhone roster. */
@@ -26,7 +26,7 @@ export function useComputerRoster(app: AppModel, shown: Set<string>) {
   const shownByView = (item: RosterItem) => matchesRosterView(item.bot, viewFilter) || (app.selection !== null && sameRef(item.ref, app.selection))
   const filtered = query.trim() !== '' || rosterViewFilterIsSet(viewFilter)
   const sections = computerSections(computers.filter((c) => shown.has(c.id)), allItems.filter((i) => matchesRoster(i.bot, query, 'all') && shownByView(i)))
-    .map((section) => ({ ...section, store: app.store(section.computer.id) }))
+    .map((section) => ({ ...section, items: sortRosterRows(section.items, viewFilter.sort), store: app.store(section.computer.id) }))
     .filter((section): section is typeof section & { store: BotStore } => section.store !== null)
     // While filtering, a computer with no matching bot has no heading to show.
     .filter((section) => !filtered || section.items.length > 0)
@@ -43,7 +43,7 @@ export function useComputerRoster(app: AppModel, shown: Set<string>) {
       setQuery('')
       setSavedViewFilter(NO_ROSTER_VIEW_FILTER)
     },
-    canReorder: !filtered && grouping === 'manual',
+    canReorder: !filtered && grouping === 'manual' && viewFilter.sort === 'manual',
     grouped,
     collapsed,
     folded,
@@ -88,7 +88,7 @@ export function useComputerRoster(app: AppModel, shown: Set<string>) {
     },
     /** One place up (-1) or down (+1) among its computer's bots in the same band (lead, pinned, the rest) and, for the rest, the same section. */
     moveBot(ref: BotRef, offset: number) {
-      if (filtered || grouping !== 'manual') return
+      if (filtered || grouping !== 'manual' || viewFilter.sort !== 'manual') return
       const section = sections.find((s) => s.computer.id === ref.computerId)
       const items = section?.items ?? []
       const moved = items.find((item) => item.bot.id === ref.botId)

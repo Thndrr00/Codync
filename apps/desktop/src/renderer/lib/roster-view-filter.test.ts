@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { normalizeBot } from '../../shared/models.ts'
 import {
   NO_ROSTER_VIEW_FILTER, matchesRosterView, normalizeRosterViewFilter, rosterSectionMark, rosterSectionTree,
-  rosterViewFilterIsSet, toggleRosterSection,
+  rosterViewFilterIsSet, sortRosterRows, toggleRosterSection,
 } from './roster-view-filter.ts'
 
 const agent = normalizeBot({ id: 'a', name: 'Nova', section: 'Work/Clients', unread: 2 })
@@ -62,6 +62,27 @@ test('A saved filter of another shape reads as far as it can', () => {
   assert.deepEqual(normalizeRosterViewFilter({ show: 'channels', unread: true, sections: ['Work', 2, 'Work'] }), {
     ...NO_ROSTER_VIEW_FILTER, show: 'channels', unread: true, sections: ['Work'],
   })
+  assert.equal(normalizeRosterViewFilter({ sort: 'recent' }).sort, 'recent')
+  assert.equal(normalizeRosterViewFilter({ sort: 'other' }).sort, 'manual')
   assert.equal(rosterViewFilterIsSet({ ...NO_ROSTER_VIEW_FILTER, sections: ['Work'] }), true)
   assert.equal(rosterViewFilterIsSet(NO_ROSTER_VIEW_FILTER), false)
+  // The sort is an order, not a filter: it does not light the filter's dot.
+  assert.equal(rosterViewFilterIsSet({ ...NO_ROSTER_VIEW_FILTER, sort: 'recent' }), false)
+})
+
+test('Recent activity orders a section by last message, keeping pins and needs-attention on top', () => {
+  const old = normalizeBot({ id: 'old', name: 'Old', section: 'Work', lastAt: 100 })
+  const newest = normalizeBot({ id: 'newest', name: 'New', section: 'Work', lastAt: 300 })
+  const middle = normalizeBot({ id: 'middle', name: 'Mid', section: 'Work', lastAt: 200 })
+  const waiting = normalizeBot({ id: 'waiting', name: 'Ask', section: 'Work', status: 'needsInput', lastAt: 50 })
+  const failed = normalizeBot({ id: 'failed', name: 'Error', section: 'Work', status: 'error', lastAt: 40 })
+  const pinned = normalizeBot({ id: 'pinned', name: 'Pin', section: 'Work', pinned: true, lastAt: 10 })
+  // The saved drag order: neither sort changes it, so switching back restores it.
+  const rows = [old, newest, middle, waiting, failed, pinned].map((bot) => ({ bot }))
+  const ids = (sorted: typeof rows) => sorted.map((row) => row.bot.id)
+
+  assert.deepEqual(ids(sortRosterRows(rows, 'manual')), ['old', 'newest', 'middle', 'waiting', 'failed', 'pinned'])
+  assert.deepEqual(ids(sortRosterRows(rows, 'recent')), ['pinned', 'waiting', 'failed', 'newest', 'middle', 'old'])
+  assert.deepEqual(ids(rows), ['old', 'newest', 'middle', 'waiting', 'failed', 'pinned'])
+  assert.deepEqual(ids(sortRosterRows(rows, 'manual')), ['old', 'newest', 'middle', 'waiting', 'failed', 'pinned'])
 })

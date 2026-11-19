@@ -3,8 +3,12 @@ import { isGroup, type Bot } from '../../shared/models.ts'
 /** What the roster shows: every row, only agents, or only channels (group chats). */
 export type RosterShow = 'all' | 'agents' | 'channels'
 
-/** How the roster orders its rows. It keeps the person's drag order, so Manual is the only one. */
-export type RosterSort = 'manual'
+/** The states that need the user's attention, shared by the filter and the recent-activity sort. */
+const ATTENTION_STATUSES: readonly string[] = ['needsInput', 'error']
+const needsAttention = (status: string) => ATTENTION_STATUSES.includes(status)
+
+/** How the roster orders its rows inside each section. Manual keeps the person's drag order. */
+export type RosterSort = 'manual' | 'recent'
 
 /**
  * The roster's own filter, saved on this device under one key (OpenBot 0.73.0's sidebar filter,
@@ -38,7 +42,7 @@ export function normalizeRosterViewFilter(value: unknown): RosterViewFilter {
     attention: raw.attention === true,
     pinned: raw.pinned === true,
     sections,
-    sort: 'manual',
+    sort: raw.sort === 'recent' ? 'recent' : 'manual',
   }
 }
 
@@ -54,7 +58,7 @@ export function matchesRosterView(bot: Bot, filter: RosterViewFilter): boolean {
   if (filter.unread || filter.working || filter.attention || filter.pinned) {
     const shown = (filter.unread && bot.unread > 0)
       || (filter.working && bot.status === 'working')
-      || (filter.attention && ['needsInput', 'error'].includes(bot.status))
+      || (filter.attention && needsAttention(bot.status))
       || (filter.pinned && bot.pinned)
     if (!shown) return false
   }
@@ -62,6 +66,27 @@ export function matchesRosterView(bot: Bot, filter: RosterViewFilter): boolean {
   // Picking a section also picks the sections in it (toggleRosterSection), so each name is exact:
   // unchecking one section in a selected parent then hides just that section.
   return filter.sections.includes(bot.section ?? '')
+}
+
+/** A row as the sort reads it: its pin, its state and the time of its last message. */
+type SortableRosterBot = Pick<Bot, 'pinned' | 'status' | 'lastAt'>
+
+/**
+ * The rows of one section in the chosen order. Recent activity keeps pins and bots that need you
+ * above the rest, then shows each band by its last message, newest first. Manual keeps the order the
+ * host sent. It copies before sorting, so the person's drag order is never changed and switching
+ * back restores it.
+ */
+export function sortRosterRows<T extends { bot: SortableRosterBot }>(rows: readonly T[], sort: RosterSort): T[] {
+  if (sort === 'manual') return [...rows]
+  return [...rows].sort((a, b) => attentionBand(a.bot) - attentionBand(b.bot) || b.bot.lastAt - a.bot.lastAt)
+}
+
+/** Pins first, then bots that need you, then everyone else. */
+function attentionBand(bot: SortableRosterBot): number {
+  if (bot.pinned) return 0
+  if (needsAttention(bot.status)) return 1
+  return 2
 }
 
 /** A section and the sections nested in it, as the filter menu shows them. */

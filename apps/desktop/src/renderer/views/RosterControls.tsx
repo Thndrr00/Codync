@@ -72,7 +72,15 @@ function rosterFilterItems(filter: RosterViewFilter, onChange: (value: RosterVie
     { title: 'Only pinned', selected: filter.pinned, keepsOpen: true, action: () => set({ pinned: !filter.pinned }) },
   ]
   if (roots.length) rows.push({ title: 'Sections', icon: 'folder', divider: true, submenu: sectionRows(roots, filter, set) })
-  rows.push({ title: 'Sort', detail: 'Manual order', divider: true, disabled: true, action: () => {} })
+  rows.push({
+    title: 'Sort',
+    detail: filter.sort === 'recent' ? 'Recent activity' : 'Manual order',
+    divider: true,
+    submenu: [
+      { title: 'Manual order', selected: filter.sort === 'manual', action: () => set({ sort: 'manual' }) },
+      { title: 'Recent activity', selected: filter.sort === 'recent', action: () => set({ sort: 'recent' }) },
+    ],
+  })
   if (rosterViewFilterIsSet(filter)) rows.push({ title: 'Clear filters', icon: 'xmark', divider: true, action: () => onChange(NO_ROSTER_VIEW_FILTER) })
   return rows
 }
