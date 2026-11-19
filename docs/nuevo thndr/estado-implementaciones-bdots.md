@@ -54,6 +54,14 @@ llamada a apps conectadas que llegue a la puerta de permisos cuando `appsInBackg
 Las que siguen abiertas son el nodo de aprobación humana dentro de un flujo de rutina, agrupar
 pasos de trabajo en un bloque colapsable, los skills de diseño y el correo entrante por bot.
 
+## Eventos de analítica
+
+Según la regla de `AGENTS.md`, las funciones nuevas reportan uso sin contenido:
+`app_link_changed` (crear/revocar/borrar, con `mode` público), `mini_app_requested` (`method`, nunca
+ruta ni token) y `user_question_asked` (número de opciones, nunca la pregunta). Definidos en
+`analytics/event.rs`, mapeados en `analytics/observe.rs` y documentados en
+`docs/reference/analytics-events.md`.
+
 ## Verificación
 
 - Desktop: `npm run typecheck` limpio; `npm test` → 562 tests, 538 pasan, 0 fallan, 24 omitidos.

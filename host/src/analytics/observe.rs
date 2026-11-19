@@ -161,6 +161,29 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("change".into(), (if update { "update" } else { "new" }).into());
             Event::ArtifactPublished
         }
+        // Mini-app capability links and deletions: only the action and the public mode, never a slug, token or URL.
+        "createAppLink" => {
+            p.insert("action".into(), "create".into());
+            p.insert("mode".into(), b["mode"].as_str().unwrap_or("view").into());
+            Event::AppLinkChanged
+        }
+        "revokeAppLink" => {
+            p.insert("action".into(), "revoke".into());
+            Event::AppLinkChanged
+        }
+        "deleteBotApp" => {
+            p.insert("action".into(), "delete".into());
+            Event::AppLinkChanged
+        }
+        "appRequest" => {
+            p.insert("method".into(), b["method"].as_str().unwrap_or("GET").to_ascii_uppercase().into());
+            Event::MiniAppRequested
+        }
+        // A bot's `ask_user`: how many choices it offered, never the question or the labels.
+        "chatCall" if b["name"] == crate::chat::ask_user::TOOLS[0] => {
+            p.insert("options".into(), b["arguments"]["options"].as_array().map_or(0, Vec::len).into());
+            Event::UserQuestionAsked
+        }
         "agentSetup" | "agentAuthenticate" => {
             // An agent's catalog id; Node.js setup names none.
             if let Some(agent) = b["backend"].as_str().filter(|a| !a.is_empty()) {

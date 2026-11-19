@@ -143,6 +143,31 @@ fn a_connector_edit_reports_how_it_ended_and_nothing_it_changed() {
 }
 
 #[test]
+fn mini_apps_and_questions_report_use_without_content() {
+    assert_eq!(
+        props("createAppLink", &json!({"slug": "secret-board", "token": "abc", "mode": "edit"})),
+        Some((Event::AppLinkChanged, json!({"action": "create", "mode": "edit", "client": "local"})))
+    );
+    assert_eq!(
+        props("revokeAppLink", &json!({"token": "abc"})).map(|(_, p)| p["action"].clone()),
+        Some(json!("revoke"))
+    );
+    assert_eq!(
+        props("appRequest", &json!({"path": "/private/report.html", "method": "get", "body": "secret"})),
+        Some((Event::MiniAppRequested, json!({"method": "GET", "client": "local"})))
+    );
+    assert_eq!(
+        props(
+            "chatCall",
+            &json!({"name": "ask_user", "arguments": {
+                "question": "Salary or invoice?", "options": [{"label": "a"}, {"label": "b"}, {"label": "c"}]
+            }})
+        ),
+        Some((Event::UserQuestionAsked, json!({"options": 3, "client": "local"})))
+    );
+}
+
+#[test]
 fn connectors_skills_and_agents() {
     assert_eq!(
         props("removeConnector", &json!({"id": "github"})),

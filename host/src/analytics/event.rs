@@ -85,6 +85,12 @@ pub enum Event {
     SkillWritten,
     /// A bot's `publish_artifact`.
     ArtifactPublished,
+    /// A mini-app capability link was issued, revoked, or its app deleted (`action`).
+    AppLinkChanged,
+    /// A client read a mini-app page through the host bridge (`method`).
+    MiniAppRequested,
+    /// A bot's `ask_user` showed a question with choices (`options`: how many).
+    UserQuestionAsked,
     CredentialSaved,
     AgentSetupStarted,
     AgentSignedIn,
