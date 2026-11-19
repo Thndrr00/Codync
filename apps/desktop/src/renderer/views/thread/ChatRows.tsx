@@ -395,7 +395,7 @@ const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeS
 
 /** Settings › Appearance › Your bubbles for this chat: Solid's fill and the ink that reads on it, Tint's avatar
  *  colour, or nothing for Classic. A group, a bot with its own picture and a chat with no avatar keep Classic. */
-function yourBubble(chat: Bot | null, style: YourBubbles): { className: string; style?: CSSProperties } {
+export function yourBubble(chat: Bot | null, style: YourBubbles): { className: string; style?: CSSProperties } {
   const tint = chat && chat.kind === 'agent' && !chat.avatarPhoto ? avatarColor(chat.avatarColor) : null
   if (!tint || style === 'classic') return { className: '' }
   if (style === 'tint') return { className: 'tint', style: { '--your-bubble': tint } as CSSProperties }

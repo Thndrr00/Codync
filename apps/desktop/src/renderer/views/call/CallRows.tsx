@@ -10,7 +10,9 @@ import { Text } from '../../components/Text'
 import { useFetched } from '../../lib/use-fetched'
 import { useTr } from '../../lib/use-language'
 import { useStore } from '../../store/context'
-import { Bubble } from '../thread/ChatRows'
+import { prefs, usePref } from '../../lib/prefs'
+import type { Bot } from '@shared/models'
+import { Bubble, yourBubble } from '../thread/ChatRows'
 import { callLength, relativeTime } from '../thread/chat-items'
 import { MarkdownText } from '../thread/Markdown'
 import '../thread/bot-conversation.css'
@@ -59,7 +61,7 @@ export function CallConversationView({ botId, lineId }: { botId: string; lineId:
           {!error && fetched !== null && messages.length === 0 ? <Text as="div" size="footnote" tone="tertiary" className="call-note">{tr('Nothing was said on this call.')}</Text> : null}
           {messages.map((m, i) => (
             <div key={i} className={i === 0 ? undefined : opensExchange(m, messages[i - 1]) ? 'call-gap-wide' : 'call-gap'}>
-              <CallMessageRow message={m} />
+              <CallMessageRow message={m} chat={store.bots.get(botId) ?? null} />
             </div>
           ))}
         </VStack>
@@ -89,13 +91,16 @@ function CallHeader({ botId, line }: { botId: string; line: Entry }) {
 /** Whether `message` starts a new exchange (you speak after the other side), which gets more room above it. */
 const opensExchange = (message: CallMessage, previous?: CallMessage) => message.speaker === 'user' && previous?.speaker !== 'user'
 
-function CallMessageRow({ message }: { message: CallMessage }) {
+function CallMessageRow({ message, chat }: { message: CallMessage; chat: Bot | null }) {
+  // Ported from OpenBot 0.72.0: a person's own line takes the same bubble style as the chat.
+  const [yourBubbles] = usePref(prefs.yourBubbles)
+  const mine = yourBubble(chat, yourBubbles)
   const copy = () => [{ title: 'Copy', icon: 'square.on.square', action: () => window.codync.app.copy(message.text) }]
   switch (message.speaker) {
     case 'user':
       return (
         <div className="message user">
-          <div className="message-body"><Bubble className="bubble user selectable" items={copy}><Text>{message.text}</Text></Bubble></div>
+          <div className="message-body"><Bubble className={`bubble user selectable ${mine.className}`} style={mine.style} items={copy}><Text>{message.text}</Text></Bubble></div>
         </div>
       )
     case 'voice':
