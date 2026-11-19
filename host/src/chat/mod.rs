@@ -2,11 +2,15 @@
 //! bot-to-bot requests, artifacts and the Library, team management, a bot's own fallbacks, prompt snapshots, long-term memory, automatic bot names and the lead bot.
 
 pub mod agent_request;
+pub mod agent_tombstone;
 pub mod apps;
 pub mod artifacts;
+pub mod burst;
 pub mod calls;
+pub mod catchup_check;
 pub mod choices;
 pub mod context;
+pub mod continuation;
 pub mod decider;
 pub mod fallbacks;
 pub mod files;
@@ -14,6 +18,7 @@ pub mod forward;
 pub mod group;
 pub mod handoff;
 pub mod instruction_history;
+pub mod latest;
 pub mod lead;
 pub mod library;
 pub mod manage;
@@ -30,6 +35,7 @@ pub mod person;
 pub mod presence;
 pub mod profile;
 pub mod prompt;
+pub mod provenance;
 pub mod reactions;
 pub mod recall;
 pub mod recap;

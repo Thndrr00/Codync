@@ -45,6 +45,13 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | Approval requests by agents (ADR 0126) | A bounded request with who asked, why and two options, answered once through `agentApproval` | `chat/agent_request.rs`, `api/bots.rs` |
 | Local vault (ADR 0144) | An index of secret names, sources and masked hints; the value stays in the OS Keychain, never in the index, through `vaultMask` | `chat/vault.rs`, `api/bots.rs` |
 
+| Tombstone on delete (ADR 0082) | A deleted agent's record names the memory, files and routines it left, through `agentTombstone` | `chat/agent_tombstone.rs`, `api/bots.rs` |
+| Messages in a row (ADR 0112) | A quick burst is one request, not several turns, through `burstRequest` | `chat/burst.rs`, `api/bots.rs` |
+| Check before catch-up (ADR 0136) | A catch-up after a usage pause first checks the pause ended, through `catchUpCheck` | `chat/catchup_check.rs`, `api/bots.rs` |
+| Back to latest (ADR 0140) | Resuming opens at the newest messages, with a bounded backtrack, through `resumeAnchor` | `chat/latest.rs`, `api/bots.rs` |
+| Turn verdicts (ADR 0097) | One vocabulary for how a turn ends — done, stopped, failed, waiting — through `turnVerdict` | `chat/continuation.rs`, `api/bots.rs` |
+| Memory that proves itself (ADR 0167) | A claim is recorded only when a call produced it and names its source, through `claimAdmissible` | `chat/provenance.rs`, `api/bots.rs` |
+
 The clients reach all of these through typed bridges that only call the host and decode its answer:
 `apps/desktop/src/renderer/client/agentes-chat.ts`, `CodyncKit/Client/HostClient+AgentesChat.swift`,
 `core/.../AgentesChat.kt` and `host/src/tui/net/agentes_chat.rs`. The host still owns the logic.

@@ -78,6 +78,33 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "agentTombstone" => Ok(crate::chat::agent_tombstone::tombstone(
+            str_arg(&b, "botId")?,
+            str_arg(&b, "name")?,
+            b["memory"].as_u64().unwrap_or(0) as usize,
+            b["files"].as_u64().unwrap_or(0) as usize,
+            b["routines"].as_u64().unwrap_or(0) as usize,
+        )),
+        "burstRequest" => Ok(crate::chat::burst::request(
+            &b["messages"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
+                .unwrap_or_default(),
+        )),
+        "catchUpCheck" => {
+            Ok(crate::chat::catchup_check::may_catch_up(b["pausedUntil"].as_i64(), crate::store::now_ms()))
+        }
+        "resumeAnchor" => Ok(crate::chat::latest::anchor(b["newest"].as_i64().unwrap_or(0), b["since"].as_i64())),
+        "turnVerdict" => Ok(crate::chat::continuation::verdict(
+            b["stopped"].as_bool().unwrap_or(false),
+            b["failed"].as_bool().unwrap_or(false),
+            b["waiting"].as_bool().unwrap_or(false),
+        )),
+        "claimAdmissible" => Ok(crate::chat::provenance::admissible(
+            str_arg(&b, "claim")?,
+            b["produced"].as_bool().unwrap_or(false),
+            b["source"].as_str(),
+        )),
         "botPresence" => match b["status"].as_str() {
             Some(status) => {
                 crate::chat::presence::set(&hub.store, str_arg(&b, "botId")?, Some(status), b["until"].as_i64())?
