@@ -45,6 +45,10 @@ than one, **Custom** opens a slider over the range those lengths span (the small
 one second per step), so the step can make a clip of exactly that length. The value is saved with the
 step; a host that doesn't know Custom keeps the short list.
 
+## Collaborative edits
+
+When two people edit the same canvas, the host merges their changes field by field instead of letting the last save win: a save carries the revision the person started from, the host finds that document in a short stamped history (`routineflow.docs.<botId>`), and a pure three-way merge (`host/src/routines/flow/merge.rs`) folds the nodes, links, step settings and groups together. An entry only one person changed is always kept; two different versions of one entry — or a change against a removal — are reported as conflicts with both versions, and `saveRoutineFlow` stores the merge as pending until `resolveRoutineFlowConflict` is called once per choice with `local` or `incoming` (the merged groups are written to the canvas in the same transaction). A person editing alone sees no difference, an edit that folded in quietly shows "someone else edited this", and an older canvas whose revision is no longer in the history is saved as-is with no base.
+
 ## Running a flow
 
 A routine's card on the canvas shows **Run** while it has no run in flight and **Stop** while one is
@@ -109,6 +113,8 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `updateRoutineFlowMedia` | `mediaId` and any of `prompt`, `model`, `aspect`, `duration`, `resolution`, `voice`, `transparent` | `{"media": MediaStep}` |
 | `removeRoutineFlowMedia` | `mediaId` | `{"ok": true}` |
 | `saveRoutineFlowGroups` | `botId`, `groups` (the whole list of Groups; every member must name an existing node) | `{"ok": true}` |
+| `saveRoutineFlow` | `botId`, `baseRev`, `document` (`nodes`, `links`, `settings`, `groups` as id → version maps, optional `rev`) | `{"saved": document, "merged": bool}` or `{"conflicts": [...], "document": merged}` |
+| `resolveRoutineFlowConflict` | `botId`, `field`, `key`, `choice` (`local`/`incoming`) | `{"saved": document}` or the remaining `{"conflicts": [...], "document": merged}` |
 | `testRoutineFlow` | `botId` (the routine's owner), `routineId`, optional `input` | `{"runId": "flow-test-…"}` |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`

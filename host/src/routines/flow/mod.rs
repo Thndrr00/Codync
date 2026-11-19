@@ -15,9 +15,11 @@
 
 mod api;
 mod canvas;
+mod document;
 mod engine;
 pub mod graph;
 pub mod groups;
+mod merge;
 mod recover;
 mod registry;
 mod tools;

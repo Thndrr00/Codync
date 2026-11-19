@@ -1,6 +1,7 @@
 //! The host API methods of routine flows, with strict validation of every input.
 
-use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, engine, graph, groups};
+use super::merge::{FlowDocument, Version};
+use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, document, engine, graph, groups, merge};
 use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
@@ -30,6 +31,8 @@ pub const METHODS: &[&str] = &[
     "updateRoutineFlowMedia",
     "removeRoutineFlowMedia",
     "saveRoutineFlowGroups",
+    "saveRoutineFlow",
+    "resolveRoutineFlowConflict",
     "testRoutineFlow",
 ];
 
@@ -138,6 +141,22 @@ fn groups_arg(hub: &Hub, b: &Value) -> Result<Vec<FlowGroup>> {
         }
     }
     Ok(parsed)
+}
+
+/// The flow document a client sends, bounded before it is merged or stored.
+fn document_arg(b: &Value) -> Result<FlowDocument> {
+    let value = b.get("document").filter(|value| !value.is_null()).context("`document` is required")?;
+    let document: FlowDocument = serde_json::from_value(value.clone()).context("`document` is invalid")?;
+    Ok(merge::bound(&document))
+}
+
+/// The groups of a merged document, in the form `groups::save` validates.
+fn document_groups(document: &FlowDocument) -> Result<Vec<FlowGroup>> {
+    document
+        .groups
+        .values()
+        .map(|value| serde_json::from_value(value.clone()).context("a group in `document` is invalid"))
+        .collect()
 }
 
 /// A step of a flow a link may end at: a bot that takes hand-offs or a media step of this routine.
@@ -434,6 +453,64 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             let parsed = groups_arg(hub, b)?;
             hub.emit_flow_change(|| Ok(((), Some(groups::save(&hub.store, bot, &parsed)?))))?;
             json!({"ok": true})
+        }
+        "saveRoutineFlow" => {
+            let bot = id_arg(b, "botId")?;
+            canvas_bot(hub, bot)?;
+            let local = document_arg(b)?;
+            let base_rev = b["baseRev"].as_i64().context("`baseRev` must be a number")?;
+            let snapshots = document::history(&hub.store, bot);
+            let empty = FlowDocument::default();
+            let incoming = snapshots.last().map(|snapshot| &snapshot.document).unwrap_or(&empty);
+            let result = merge::merge(document::base_at(&snapshots, base_rev), &local, incoming);
+            if result.conflicts.is_empty() {
+                // A canvas that sends no groups keeps the ones on the host; one that does sends
+                // the whole list, so an older single editor and a new one both stay working.
+                let groups = if b["document"].get("groups").is_some() {
+                    document_groups(&result.document)?
+                } else {
+                    groups::load(&hub.store, bot)
+                };
+                let change = document::save(&hub.store, bot, &result.document, &groups)?;
+                hub.emit_flow_change(|| Ok(((), Some(change))))?;
+                json!({"saved": result.document, "merged": result.merged})
+            } else {
+                let waiting = document::Pending {
+                    base_rev,
+                    document: result.document.clone(),
+                    conflicts: result.conflicts.clone(),
+                };
+                document::save_pending(&hub.store, bot, &waiting)?;
+                json!({"conflicts": result.conflicts, "document": result.document, "merged": result.merged})
+            }
+        }
+        "resolveRoutineFlowConflict" => {
+            let bot = id_arg(b, "botId")?;
+            canvas_bot(hub, bot)?;
+            let (field, key) = (id_arg(b, "field")?, id_arg(b, "key")?);
+            let version = match str_arg(b, "choice")? {
+                "local" => Version::Local,
+                "incoming" => Version::Incoming,
+                other => bail!("`choice` must be local or incoming, not {other}"),
+            };
+            let mut waiting = document::pending(&hub.store, bot).context("no flow conflict to resolve")?;
+            let conflict = waiting
+                .conflicts
+                .iter()
+                .find(|conflict| conflict.field == field && conflict.key == key)
+                .context("that conflict is not waiting for a choice")?
+                .clone();
+            merge::resolve(&mut waiting.document, &conflict, version);
+            waiting.conflicts.retain(|conflict| conflict.field != field || conflict.key != key);
+            if waiting.conflicts.is_empty() {
+                let groups = document_groups(&waiting.document)?;
+                let change = document::save(&hub.store, bot, &waiting.document, &groups)?;
+                hub.emit_flow_change(|| Ok(((), Some(change))))?;
+                json!({"saved": waiting.document})
+            } else {
+                document::save_pending(&hub.store, bot, &waiting)?;
+                json!({"conflicts": waiting.conflicts, "document": waiting.document})
+            }
         }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);

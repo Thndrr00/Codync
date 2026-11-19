@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { MediaKind } from '@shared/media'
 import { isGroup, type Bot } from '@shared/models'
-import { Button, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
+import { Button, ChoicePicker, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
 import { Dialog, DialogField, ModalHeader, Sheet } from '../../../components/Overlay'
 import { AnchoredMenu } from '../../../components/Menu'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
@@ -15,6 +15,9 @@ import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import { RoutineFlowStore } from '../../../store/routine-flow-store'
 import { FlowCanvasView, type FlowSelection } from './FlowCanvas'
+import {
+  documentFromCanvas, type FlowChoice, type FlowConflict, type FlowDocument, type FlowSaveAnswer,
+} from './flow-merge'
 import { groupsOf, groupSpot, newGroupId, outputType, parsePort, type CanvasWithGroups, type FlowGroup } from './flow-groups'
 import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspector'
 import { FlowList } from './FlowList'
@@ -41,6 +44,11 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [mode, setMode] = useState<Mode>('canvas')
   const [selection, setSelection] = useState<FlowSelection>(null)
   const [note, setNote] = useState<string | null>(null)
+  /** Someone else's edit was folded into ours without a choice being needed. */
+  const [mergeNote, setMergeNote] = useState(false)
+  /** A save found fields both people changed: the merged document and the choices still needed. */
+  const [conflict, setConflict] = useState<{ document: FlowDocument; conflicts: FlowConflict[] } | null>(null)
+  const [choices, setChoices] = useState<Record<string, FlowChoice>>({})
   const [creating, setCreating] = useState(false)
   const [choose, setChoose] = useState<{ from: string; to: string; at: { x: number; y: number }; routines: { id: string; name: string }[] } | null>(null)
   /** Keys being grouped, waiting for a name (Ctrl/Cmd+G). */
@@ -145,16 +153,52 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     await flow.removeMedia(media.id)
   }
 
-  // Groups are drawing-only data on the host's canvas; every change replaces the saved list and
-  // reloads, so another client's edit and our own always end at the same document.
-  const saveGroups = async (next: FlowGroup[]) => {
-    if (!canvas || offline) return
+  const fieldLabel = (field: string) => tr(
+    field === 'nodes' ? 'Node' : field === 'links' ? 'Link' : field === 'settings' ? 'Step settings' : field === 'groups' ? 'Group' : field,
+  )
+  const versionText = (value: Record<string, unknown> | null) => value === null ? tr('Removed') : JSON.stringify(value, null, 2)
+  const conflictId = (item: FlowConflict) => `${item.field}:${item.key}`
+
+  /** Sends one choice at a time; the last one saves the whole merged document. */
+  const applyChoices = async (waiting: { document: FlowDocument; conflicts: FlowConflict[] }) => {
     try {
-      await (await store.ready()).call('saveRoutineFlowGroups', { botId, groups: next })
-      await flow.load()
+      const client = await store.ready()
+      let answer: FlowSaveAnswer | null = null
+      for (const item of waiting.conflicts) {
+        answer = await client.call<FlowSaveAnswer>('resolveRoutineFlowConflict', {
+          botId, field: item.field, key: item.key, choice: choices[conflictId(item)] ?? 'local',
+        })
+        if (answer.saved) break
+      }
+      if (answer?.saved) {
+        setConflict(null)
+        await flow.load()
+      }
     } catch {
       setNote(tr('Could not save the group.'))
     }
+  }
+
+  // Groups are drawing-only data on the host's canvas. The save carries the whole flow document
+  // with the revision we started from, so the host can merge someone else's edits field by field
+  // and writes the merged groups back to the canvas in the same transaction.
+  const saveGroups = async (next: FlowGroup[]) => {
+    if (!canvas || offline) return
+    setMergeNote(false)
+    try {
+      const answer = await (await store.ready()).call<FlowSaveAnswer>('saveRoutineFlow', {
+        botId, baseRev: canvas.rev, document: documentFromCanvas(canvas, next),
+      })
+      if (answer.conflicts?.length) {
+        setConflict({ document: answer.document, conflicts: answer.conflicts })
+        setChoices({})
+        return
+      }
+      if (answer.merged) setMergeNote(true)
+    } catch {
+      setNote(tr('Could not save the group.'))
+    }
+    await flow.load()
   }
   const createGroup = async (keys: string[], name: string) => {
     if (!canvas) return
@@ -235,6 +279,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
       {offline ? <Text size="caption" tone="attention">{tr('Offline: the flow is read-only until the computer is reachable.')}</Text> : null}
       {model.error ? <Text size="caption" tone="danger">{model.error}</Text> : null}
       {note ? <Text size="caption" tone="danger">{note}</Text> : null}
+      {mergeNote ? <Text size="caption" tone="attention" className="flow-merge-note">{tr('Someone else edited this flow; their changes were merged in.')}</Text> : null}
       {canvas.routines.length === 0 ? (
         <Text as="div" size="callout" tone="secondary" className="outlined-card flow-state">{tr('No routines yet. Ask the bot for one, then connect it to other bots here.')}</Text>
       ) : (
@@ -333,6 +378,43 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
             setGroupDraft(null)
           }}
         />
+      </Dialog>
+      <Dialog
+        open={conflict !== null}
+        title={tr('This flow changed while you were editing it.')}
+        message={tr('Choose which version to keep for each item, then apply.')}
+        actions={[{
+          title: tr('Apply choices'),
+          action: () => { if (conflict) void applyChoices(conflict) },
+        }]}
+        onClose={() => setConflict(null)}
+      >
+        {conflict ? (
+          <VStack gap={10} className="flow-conflicts">
+            {conflict.conflicts.map((item) => {
+              const id = conflictId(item)
+              return (
+                <VStack gap={4} key={id} className="flow-conflict">
+                  <Text size="callout" weight="semibold">{fieldLabel(item.field)} · {item.key}</Text>
+                  <HStack gap={6} align="center">
+                    <Text size="caption" tone="secondary" className="flow-conflict-label">{tr('Your version')}</Text>
+                    <Text size="caption" lines={2} grow title={versionText(item.local)} className="flow-conflict-text">{versionText(item.local)}</Text>
+                  </HStack>
+                  <HStack gap={6} align="center">
+                    <Text size="caption" tone="secondary" className="flow-conflict-label">{tr('Their version')}</Text>
+                    <Text size="caption" lines={2} grow title={versionText(item.incoming)} className="flow-conflict-text">{versionText(item.incoming)}</Text>
+                  </HStack>
+                  <ChoicePicker<FlowChoice>
+                    fits
+                    selection={choices[id] ?? 'local'}
+                    options={[{ id: 'local', label: 'Your version' }, { id: 'incoming', label: 'Their version' }]}
+                    onChange={(choice) => setChoices({ ...choices, [id]: choice })}
+                  />
+                </VStack>
+              )
+            })}
+          </VStack>
+        ) : null}
       </Dialog>
     </VStack>
   )

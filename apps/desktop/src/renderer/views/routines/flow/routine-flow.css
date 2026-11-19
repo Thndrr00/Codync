@@ -473,3 +473,32 @@
 .flow-new-routine .routine-editor > .sheet-page-header {
   display: none;
 }
+
+/* A quiet note when another person's edit was folded into ours (motion through the theme tokens). */
+.flow-merge-note {
+  transition: opacity var(--morph);
+}
+
+/* The two versions of each field both people changed, inside the shared conflict Dialog. */
+.flow-conflicts {
+  max-height: min(420px, 52vh);
+  overflow-y: auto;
+}
+.flow-conflict {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+.flow-conflict-label {
+  flex: none;
+  min-width: 88px;
+}
+.flow-conflict-text {
+  min-width: 0;
+  font-family: var(--mono);
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-merge-note {
+    transition: none;
+  }
+}
