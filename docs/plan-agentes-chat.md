@@ -34,9 +34,12 @@ Los e2e que fallan son de entorno: `phone_pairs` (`Protocol` de Windows), `wire_
 salud aparece solo con la memoria al 96 %, así que sus campos no se graban) y `compaction`/`memory`
 (el host bloquea turnos sobre el 85 % de memoria). Después se trajeron también los ADR 0047 (handoff
 de rutinas), 0052 (perfil por persona), 0044 (worktree por misión) y 0043 (herramientas por tipo de
-run), reutilizando el kv store y las estructuras de misiones y rutinas; llevan tests unitarios puros y
-solo se validó su sintaxis con `rustfmt`, sin compilar. El bump de versión no procede:
-`MARKETING_VERSION` 2.56.0 ya va por delante del último tag (`v2.47.0`).
+run), más 0124 (choice cards), 0138 (message links), 0147 (voz), 0084 (presencia), 0155/0164 (setup),
+0089 (stretches), 0126 (aprobaciones por agentes) y 0144 (vault). Los cinco últimos también tienen
+puentes tipados en los cuatro clientes (desktop, iOS, Android, TUI). Todo esto **compila**:
+`cargo clippy --all-targets -- -D warnings` pasa y **1307 tests unitarios pasan** (0 fallos); el
+`tsc` del escritorio pasa. iOS y Android no se compilaron aquí (sin Xcode/emulador). El bump de
+versión no procede: `MARKETING_VERSION` 2.56.0 ya va por delante del último tag (`v2.47.0`).
 
 1. `cargo check --all-targets` en `host/` y corregir lo que salga.
 2. `cargo fmt --check` y `cargo clippy --all-targets -- -D warnings`.
