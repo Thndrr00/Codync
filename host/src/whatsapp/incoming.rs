@@ -11,15 +11,25 @@ impl WhatsApp {
         let Some(chat) = event["chat"].as_str().filter(|c| !c.is_empty()) else { return };
         let sender = event["sender"].as_str().unwrap_or_default();
         let group = event["group"].as_bool().unwrap_or(false);
+        let media = event["media"].as_object();
+        // The file is saved as the message arrives, before the mention and allow checks, because the
+        // number keeps its files along with its text (OpenBot 0.72.0).
+        let saved = match media {
+            Some(media) => save_media(media).await.ok().flatten(),
+            None => None,
+        };
         // Ported from `OpenBot` 0.72.0: the number keeps what it received for 90 days, also the group
         // lines that do not mention it, so an agent can read them back later.
         let _ = super::history::remember(
             &hub.store,
-            chat,
-            sender,
-            event["name"].as_str().unwrap_or_default(),
-            &text,
-            crate::store::now_ms(),
+            &super::history::Message {
+                chat,
+                sender,
+                name: event["name"].as_str().unwrap_or_default(),
+                text: text.as_str(),
+                file: saved.as_deref(),
+                at: crate::store::now_ms(),
+            },
         );
         if group && !event["mentioned"].as_bool().unwrap_or(false) && !event["quoted"].as_bool().unwrap_or(false) {
             return;
@@ -62,10 +72,9 @@ impl WhatsApp {
                 .await;
             return;
         };
-        let media = event["media"].as_object();
         let mut attached = Vec::new();
         let note = if let Some(m) = media {
-            if let Ok(Some(path)) = save_media(m).await {
+            if let Some(path) = &saved {
                 attached.push(path.clone());
                 format!("{text}\n\n[Attached: {path}]").trim().to_owned()
             } else {

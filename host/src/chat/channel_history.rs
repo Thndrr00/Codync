@@ -91,12 +91,17 @@ pub fn read(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
     if source.is_empty() || source == "whatsapp" {
         let kept = crate::whatsapp::history::search(&hub.store, &query, since, i64::MAX, limit).unwrap_or_default();
         for hit in kept {
-            messages.push(json!({
+            let mut message = json!({
                 "source": "whatsapp",
                 "at": hit["at"].clone(),
                 "from": hit["from"].clone(),
                 "text": hit["text"].clone(),
-            }));
+            });
+            // The file saved with a message that arrived, when it had one (OpenBot 0.72.0).
+            if let Some(file) = hit.get("file") {
+                message["file"] = file.clone();
+            }
+            messages.push(message);
         }
         messages.sort_by_key(|message| std::cmp::Reverse(message["at"].as_i64().unwrap_or_default()));
         messages.dedup_by(|a, b| a["at"] == b["at"] && a["text"] == b["text"]);

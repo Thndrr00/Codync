@@ -105,6 +105,21 @@ async fn consume(acp: &Acp, incoming: Option<Incoming>, capture: &mut Option<(&s
     Ok(())
 }
 
+/// The length of a Claude plan window. The adapter, the CLI and the status line name it only by kind
+/// or label (`five_hour`, `5-hour`, `Weekly · Opus`), so the length is derived from that kind rather
+/// than read from the provider.
+fn derived_seconds(kind: &str) -> Option<i64> {
+    if kind == "five_hour" {
+        return Some(5 * 60 * 60);
+    }
+    kind.starts_with("seven_day").then_some(7 * 24 * 60 * 60)
+}
+
+/// A Claude window carrying the length its kind implies.
+fn plan_window(id: &str, label: String, percent: f64, resets_at: Option<i64>) -> Window {
+    Window::new(id, label, percent, resets_at).lasting(derived_seconds(id))
+}
+
 /// The ACP adapter's Markdown report: one `**label** - **N%** - Resets ...`
 /// line per window. The separators are read as Markdown markers, not as
 /// particular punctuation, so the report parses whatever dash and dot it uses.
@@ -121,7 +136,7 @@ pub fn parse_acp_usage(text: &str) -> Vec<Window> {
         }
         let Some((id, name)) = acp_window(label) else { continue };
         let resets = rest.split_once("Resets ").map(|(_, r)| r.trim()).filter(|r| !r.is_empty());
-        windows.push(Window { resets_text: resets.map(str::to_owned), ..Window::new(id, name, percent, None) });
+        windows.push(Window { resets_text: resets.map(str::to_owned), ..plan_window(&id, name, percent, None) });
     }
     windows
 }
@@ -177,7 +192,7 @@ pub fn parse_claude_usage(text: &str) -> Vec<Window> {
                     (format!("seven_day_{}", model.to_lowercase()), format!("Weekly · {model}"))
                 }
             };
-            Some(Window { resets_text: resets, ..Window::new(id, label, percent, None) })
+            Some(Window { resets_text: resets, ..plan_window(&id, label, percent, None) })
         })
         .collect()
 }
@@ -189,7 +204,8 @@ pub fn ingest_statusline(hub: &Hub, body: &Value) {
         .into_iter()
         .filter_map(|(key, label)| {
             let percent = rl[key]["used_percentage"].as_f64()?;
-            Some(Window::new(key, label, percent, rl[key]["resets_at"].as_i64().map(|s| s.saturating_mul(1000))))
+            let resets_at = rl[key]["resets_at"].as_i64().map(|s| s.saturating_mul(1000));
+            Some(plan_window(key, label.to_owned(), percent, resets_at))
         })
         .collect();
     if !windows.is_empty() {
@@ -218,7 +234,7 @@ fn claude_window(info: &Value) -> Option<Window> {
     let percent = if u <= 1.0 { u * 100.0 } else { u };
     // Seconds, but accept milliseconds too.
     let resets = info["resetsAt"].as_i64().map(|t| if t > 100_000_000_000 { t } else { t.saturating_mul(1000) });
-    Some(Window::new(kind, label, percent, resets))
+    Some(plan_window(kind, label.to_owned(), percent, resets))
 }
 
 #[cfg(test)]
@@ -234,6 +250,8 @@ mod tests {
         assert_eq!(w[0].id, "five_hour");
         assert!((w[0].percent - 11.0).abs() < f64::EPSILON);
         assert_eq!(w[0].resets_text.as_deref(), Some("Sep 25 at 5am (Asia/Taipei)"));
+        assert_eq!(w[0].window_seconds, Some(18_000), "the 5-hour label gives the length");
+        assert_eq!(w[1].window_seconds, Some(604_800), "a weekly limit is a week long");
         assert_eq!(w[2].label, "Weekly · Fable");
     }
 
@@ -246,8 +264,10 @@ mod tests {
         assert_eq!(w[0].id, "five_hour");
         assert!((w[0].percent - 5.0).abs() < f64::EPSILON);
         assert_eq!(w[0].resets_text.as_deref(), Some("Nov 5, 2:00 AM GMT-6"));
+        assert_eq!(w[0].window_seconds, Some(18_000));
         assert_eq!(w[1].label, "Weekly");
         assert_eq!(w[2].label, "Weekly · Opus");
+        assert_eq!(w[2].window_seconds, Some(604_800), "a per-model weekly limit is a week long");
     }
 
     #[test]
@@ -265,6 +285,7 @@ mod tests {
             .unwrap();
         assert!((w.percent - 42.0).abs() < 1e-9);
         assert_eq!(w.resets_at, Some(1_790_000_000_000));
+        assert_eq!(w.window_seconds, Some(18_000));
         assert!(claude_window(&json!({"rateLimitType": "overage", "utilization": 0.1})).is_none());
     }
 }

@@ -17,6 +17,8 @@ On the wire, `usage` gains `services: [{id, name, shown, registry?}]` next to `p
 
 `usage` with `refresh: true` answers within a minute with what has landed by then; a slower reader (a first download) carries on and lands through `usage` events. Every change goes through `Hub::update_usage`, under the lock, so a reading landing during a sync isn't written over.
 
+A window may carry `windowSeconds`, how long one period of its limit lasts: stated by the provider (Codex's `windowDurationMins`) or derived from the label where only a reset is given (Claude's 5-hour and weekly limits). With `resets_at` it also gives the window's start, `resets_at - windowSeconds`, so a client can draw a **pace mark**: the share an even spend would have used by now, clamped to 0–100, which `pace_percent` in `host/src/usage/mod.rs` defines and each client mirrors. The field is additive: a window whose length is unknown sends none, shows no mark, and its `percent` is unchanged.
+
 Adding an agent is one row in `READERS` (`usage/services.rs`). The reader's `id` is the harness id, so a bot's `backend` finds it (`backends::harness_of`, which also answers to the registry id).
 
 ## Readers

@@ -104,6 +104,11 @@ pub struct Window {
     /// Human text when only that is known ("Sep 26 at 12pm (Asia/Taipei)").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resets_text: Option<String>,
+    /// How long one period of the limit lasts, in seconds: stated by the provider (Codex's
+    /// `windowDurationMins`), or derived from the label where it gives only a reset (Claude's
+    /// 5-hour and weekly limits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_seconds: Option<i64>,
     /// A reading that isn't a share of a cap ("$4.20", "1.2M tokens", "Unlimited").
     /// Clients show this instead of the percent, and it never counts as the tightest limit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -112,13 +117,43 @@ pub struct Window {
 
 impl Window {
     fn new(id: impl Into<String>, label: impl Into<String>, percent: f64, resets_at: Option<i64>) -> Self {
-        Self { id: id.into(), label: label.into(), percent, resets_at, resets_text: None, text: None }
+        Self {
+            id: id.into(),
+            label: label.into(),
+            percent,
+            resets_at,
+            resets_text: None,
+            window_seconds: None,
+            text: None,
+        }
+    }
+
+    /// The same window with the length of one period of its limit; `None` leaves it unknown.
+    #[must_use]
+    fn lasting(mut self, seconds: Option<i64>) -> Self {
+        self.window_seconds = seconds;
+        self
     }
 
     /// A row with no bar: today's tokens, an uncapped balance, an unlimited plan.
     fn note(id: impl Into<String>, label: impl Into<String>, text: impl Into<String>) -> Self {
         Self { text: Some(text.into()), ..Self::new(id, label, 0.0, None) }
     }
+}
+
+/// The share of a plan window an even spend would have used by `now_ms`: the limit spread evenly from
+/// the window's start (`resets_at` minus its length) to its reset, clamped to 0–100. A pace mark
+/// draws at this share. `None` when the reset or the length is unknown.
+///
+/// The clients mirror this to draw the mark; the host keeps the one definition of the arithmetic.
+#[allow(dead_code)]
+pub fn pace_percent(window: &Window, now_ms: i64) -> Option<f64> {
+    let resets_at = window.resets_at?;
+    let length_ms = window.window_seconds.filter(|seconds| *seconds > 0)?.checked_mul(1000)?;
+    let elapsed_ms = now_ms.saturating_sub(resets_at.saturating_sub(length_ms));
+    #[allow(clippy::cast_precision_loss)]
+    let percent = elapsed_ms as f64 / length_ms as f64 * 100.0;
+    Some(percent.clamp(0.0, 100.0))
 }
 
 impl Usage {
@@ -422,5 +457,43 @@ mod tests {
         let note = Window { percent: 99.0, ..Window::note("cost", "Cost today", "$9") };
         assert!(!over_headroom(&[note]));
         assert!(over_headroom(&[Window::new("five_hour", "5-hour", 80.0, None)]));
+    }
+
+    /// A window with the reset and length given, and any percent.
+    fn timed(resets_at: Option<i64>, window_seconds: Option<i64>) -> Window {
+        Window { resets_at, window_seconds, ..Window::new("five_hour", "5-hour", 10.0, None) }
+    }
+
+    #[test]
+    fn a_pace_mark_needs_both_a_reset_and_a_length() {
+        let hour = Some(60 * 60);
+        let reset = Some(10_000_000);
+        assert_eq!(pace_percent(&timed(None, hour), 0), None, "no reset, no mark");
+        assert_eq!(pace_percent(&timed(reset, None), 0), None, "no length, no mark");
+        assert_eq!(pace_percent(&timed(reset, Some(0)), 0), None, "a window of no length has no even rate");
+    }
+
+    #[test]
+    fn halfway_through_a_window_half_of_the_limit_is_the_pace() {
+        let resets_at = 10_000_000;
+        let window = timed(Some(resets_at), Some(60 * 60));
+        let halfway = pace_percent(&window, resets_at - 30 * 60 * 1000).unwrap_or_default();
+        assert!((halfway - 50.0).abs() < 1e-9);
+        let start = pace_percent(&window, resets_at - 60 * 60 * 1000).unwrap_or_default();
+        assert!(start.abs() < 1e-9, "nothing is due at the window's start");
+    }
+
+    #[test]
+    fn past_its_reset_a_window_counts_as_spent() {
+        let window = timed(Some(1_000_000), Some(60));
+        assert_eq!(pace_percent(&window, 5_000_000), Some(100.0));
+    }
+
+    #[test]
+    fn a_window_carries_its_length_only_when_it_is_known() {
+        let known = Window::new("five_hour", "5-hour", 10.0, None).lasting(Some(5 * 60 * 60));
+        assert_eq!(serde_json::to_value(&known).unwrap()["windowSeconds"], 18_000);
+        let unknown = serde_json::to_value(Window::new("weekly", "Weekly", 1.0, None)).unwrap();
+        assert!(unknown.get("windowSeconds").is_none(), "an unknown length sends no field");
     }
 }

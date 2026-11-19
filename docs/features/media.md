@@ -94,6 +94,15 @@ Additive: `mediaModels`, the commands, the `media:` node keys, the methods and t
 `minApp` and `minHost` do not change, and a client that knows none of it shows the command as plain
 text and ignores `mediaNodes`.
 
+## Files a WhatsApp number received
+
+Ported from OpenBot 0.72.0: a linked number keeps the files it received along with the text, so a
+routine can read what came with a message that never reached the bot. `save_media`
+(`host/src/whatsapp.rs`) writes the file when the message arrives, before the mention and allow
+checks, and `whatsapp::history` keeps its path beside the text in a `file` column (relative to the
+data folder, added to a table made before the column on first use). Unlinking the number, or a
+message leaving the 90-day or 20 000-row retention, deletes the file with its row.
+
 ## Not ported
 
 - **Sunra** models (Nano Banana Pro, GPT Image 2, Seedream, FLUX, Seedance, Kling, Veo) need the

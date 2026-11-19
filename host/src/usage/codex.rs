@@ -105,13 +105,19 @@ fn windows_from_limits(limit: &Value) -> Vec<Window> {
     ["primary", "secondary"]
         .into_iter()
         .filter_map(|key| {
-            let window = &limit[key];
-            let percent = window["usedPercent"].as_f64()?;
-            let minutes = window["windowDurationMins"].as_i64().unwrap_or(0);
-            let resets = window["resetsAt"].as_i64().map(|s| s.saturating_mul(1000));
-            Some(Window::new(key, window_label(minutes, key), percent.clamp(0.0, 100.0), resets))
+            let value = &limit[key];
+            let percent = value["usedPercent"].as_f64()?;
+            let minutes = value["windowDurationMins"].as_i64().unwrap_or(0);
+            let resets = value["resetsAt"].as_i64().map(|s| s.saturating_mul(1000));
+            let window = Window::new(key, window_label(minutes, key), percent.clamp(0.0, 100.0), resets);
+            Some(window.lasting(seconds_from_minutes(minutes)))
         })
         .collect()
+}
+
+/// The window's length in seconds; Codex states it in minutes.
+fn seconds_from_minutes(minutes: i64) -> Option<i64> {
+    minutes.checked_mul(60).filter(|seconds| *seconds > 0)
 }
 
 fn window_label(minutes: i64, key: &str) -> String {
@@ -173,7 +179,7 @@ pub fn parse_codex(rl: &Value, observed_ms: i64) -> Vec<Window> {
             let resets = w["resets_at"].as_i64().map(|s| s.saturating_mul(1000)).or_else(|| {
                 w["resets_in_seconds"].as_i64().map(|s| observed_ms.saturating_add(s.saturating_mul(1000)))
             });
-            Some(Window::new(k, label, percent, resets))
+            Some(Window::new(k, label, percent, resets).lasting(seconds_from_minutes(minutes)))
         })
         .collect()
 }
@@ -191,7 +197,9 @@ mod tests {
         );
         assert_eq!(x[0].label, "5-hour");
         assert_eq!(x[0].resets_at, Some(11_000));
+        assert_eq!(x[0].window_seconds, Some(18_000), "300 minutes is five hours");
         assert_eq!(x[1].resets_at, Some(100_000));
+        assert_eq!(x[1].window_seconds, Some(604_800), "10080 minutes is a week");
     }
 
     #[test]
@@ -206,6 +214,7 @@ mod tests {
         assert_eq!(w[0].label, "Monthly");
         assert_eq!(w[0].percent, 0.0);
         assert_eq!(w[0].resets_at, Some(1_796_445_049_000));
+        assert_eq!(w[0].window_seconds, Some(2_592_000), "43200 minutes is thirty days");
     }
 
     #[test]
