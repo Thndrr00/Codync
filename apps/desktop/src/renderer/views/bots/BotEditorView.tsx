@@ -17,6 +17,7 @@ import { useAgentModels } from './agent-models'
 import { AgentAccountPicker } from './AgentAccountPicker'
 import { BotAgentKeys } from './BotAgentKeys'
 import { BotUsageRows } from './BotUsageRows'
+import { DocsSearchSection } from './DocsSearchSection'
 import { HermesRuntimeCard } from './HermesRuntimeCard'
 import { AgentModelPicker } from './AgentModelPicker'
 import { agentChoice, AgentStepBanner, FallbacksRow } from './Fallbacks'
@@ -440,6 +441,8 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
             placeholder="for example: shell, browser"
           />
         </CardSection>
+
+        {saved ? <DocsSearchSection key={saved.id} botId={saved.id} workingFolder={draft.cwd} /> : null}
 
         {saved?.backend === 'hermes' ? <HermesRuntimeCard key={`${store.hello?.hostId ?? ''}/${saved.id}`} botId={saved.id} /> : null}
 

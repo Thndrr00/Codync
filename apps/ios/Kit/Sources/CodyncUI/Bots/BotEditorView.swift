@@ -284,6 +284,11 @@ struct BotSettingsForm: View {
             }
             .animation(Motion.reduced(Motion.layout, reduceMotion), value: bot?.agentStep)
 
+            // Where the bot's built-in documentation search reads: only a bot that runs an agent has an index.
+            if let id = draft.id, bot?.isGroup != true {
+                DocsSearchCard(botId: id).id(id)
+            }
+
             if let id = draft.id, draft.backend == "hermes", model.bots[id]?.backend == "hermes" {
                 HermesRuntimeCard(botId: id).id(id)
             }

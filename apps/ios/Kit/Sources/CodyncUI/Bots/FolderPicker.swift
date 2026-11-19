@@ -2,6 +2,9 @@ import CodyncKit
 import SwiftUI
 
 struct FolderPicker: View {
+    /// What the folder is for: the bot's workspace, or the folder its documentation search reads.
+    var title = "Choose workspace"
+    var note = "Your bot will work in this folder."
     let start: String?
     let onPick: (String) -> Void
     @Environment(BotStore.self) private var model
@@ -16,10 +19,10 @@ struct FolderPicker: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader("Choose workspace")
+            ModalHeader(title)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Your bot will work in this folder.").font(.subheadline).foregroundStyle(Palette.secondary)
+                    Text(L10n.tr(note)).font(.subheadline).foregroundStyle(Palette.secondary)
                     HStack(spacing: 10) {
                         Image(systemName: "desktopcomputer")
                         Text(model.hello?.name ?? "Computer").lineLimit(1)

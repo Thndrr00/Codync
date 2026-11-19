@@ -2034,5 +2034,17 @@
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
   "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
-  "Bots that made apps": "앱을 만든 봇"
+  "Bots that made apps": "앱을 만든 봇",
+  "Documentation search": "문서 검색",
+  "Your bot searches this folder for documentation and code and cites the file and line. Until you choose another folder, it is the bot's working folder. Generated folders and what .gitignore lists are skipped.": "봇이 이 폴더의 문서와 코드를 검색하고 파일과 줄을 인용합니다. 다른 폴더를 선택할 때까지 봇의 작업 폴더를 사용합니다. 생성된 폴더와 .gitignore에 있는 항목은 건너뜁니다.",
+  "The index stopped at its limit of 4,000 files or 24 MB, so a search may miss some files.": "인덱스가 4,000개 파일 또는 24MB 한도에 도달해 일부 파일이 검색되지 않을 수 있습니다.",
+  "Reading the index…": "인덱스를 읽는 중…",
+  "Choose folder": "폴더 선택",
+  "Use working folder": "작업 폴더 사용",
+  "Reconnect to this computer to change the indexed folder.": "색인할 폴더를 바꾸려면 이 컴퓨터에 다시 연결하세요.",
+  "Couldn't read the documentation index.": "문서 인덱스를 읽지 못했습니다.",
+  "Couldn't change the indexed folder.": "색인 폴더를 바꾸지 못했습니다.",
+  "Size": "크기",
+  "Choose documentation folder": "문서 폴더 선택",
+  "Your bot will search this folder for documentation and code.": "봇이 이 폴더의 문서와 코드를 검색합니다."
 }

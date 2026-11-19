@@ -2125,5 +2125,17 @@
   "Cancelled": "Cancelado",
   "Edit routine": "Editar rutina",
   "Pick a routine to see its history.": "Elige una rutina para ver su historial.",
-  "Bots that made apps": "Bots que crearon apps"
+  "Bots that made apps": "Bots que crearon apps",
+  "Documentation search": "Búsqueda en la documentación",
+  "Your bot searches this folder for documentation and code and cites the file and line. Until you choose another folder, it is the bot's working folder. Generated folders and what .gitignore lists are skipped.": "Tu bot busca documentación y código en esta carpeta y cita el archivo y la línea. Hasta que elijas otra carpeta, es la carpeta de trabajo del bot. Se omiten las carpetas generadas y lo que indica .gitignore.",
+  "The index stopped at its limit of 4,000 files or 24 MB, so a search may miss some files.": "El índice se detuvo en su límite de 4000 archivos o 24 MB, así que una búsqueda puede omitir algunos archivos.",
+  "Reading the index…": "Leyendo el índice…",
+  "Choose folder": "Elegir carpeta",
+  "Use working folder": "Usar la carpeta de trabajo",
+  "Reconnect to this computer to change the indexed folder.": "Vuelve a conectarte a este ordenador para cambiar la carpeta indexada.",
+  "Couldn't read the documentation index.": "No se pudo leer el índice de documentación.",
+  "Couldn't change the indexed folder.": "No se pudo cambiar la carpeta indexada.",
+  "Size": "Tamaño",
+  "Choose documentation folder": "Elegir carpeta de documentación",
+  "Your bot will search this folder for documentation and code.": "Tu bot buscará en esta carpeta documentación y código."
 }

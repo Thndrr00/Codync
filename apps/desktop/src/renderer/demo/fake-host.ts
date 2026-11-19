@@ -282,6 +282,16 @@ export class FakeHost {
         return { backends: ((await this.call('hello', {})) as { backends: unknown }).backends }
       case 'listDirs':
         return { path: '/Users/demo/code', parent: '/Users/demo', isGit: false, dirs: [{ name: 'pace', path: story.cwd, isGit: true }] }
+      // A bot's documentation index (`host/src/docs/mod.rs`): the folder it reads and what it holds.
+      case 'docsStatus':
+      case 'setDocsFolder':
+        return {
+          folder: str('path') || this.bots.get(str('botId'))?.cwd || story.cwd,
+          files: 412,
+          bytes: 12_400_000,
+          truncated: false,
+          builtAt: Date.now(),
+        }
       case 'memory':
         return {
           shared: true, yours: { entries: [], used: 0, cap: 400 }, bot: { entries: [], used: 0, cap: 1200 },

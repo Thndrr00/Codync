@@ -2034,5 +2034,17 @@
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
   "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
-  "Bots that made apps": "Боты, создавшие приложения"
+  "Bots that made apps": "Боты, создавшие приложения",
+  "Documentation search": "Поиск по документации",
+  "Your bot searches this folder for documentation and code and cites the file and line. Until you choose another folder, it is the bot's working folder. Generated folders and what .gitignore lists are skipped.": "Бот ищет документацию и код в этой папке и указывает файл и строку. Пока вы не выберете другую папку, используется рабочая папка бота. Созданные папки и то, что указано в .gitignore, пропускаются.",
+  "The index stopped at its limit of 4,000 files or 24 MB, so a search may miss some files.": "Индекс достиг предела в 4 000 файлов или 24 МБ, поэтому поиск может пропустить часть файлов.",
+  "Reading the index…": "Чтение индекса…",
+  "Choose folder": "Выбрать папку",
+  "Use working folder": "Использовать рабочую папку",
+  "Reconnect to this computer to change the indexed folder.": "Переподключитесь к этому компьютеру, чтобы изменить индексируемую папку.",
+  "Couldn't read the documentation index.": "Не удалось прочитать индекс документации.",
+  "Couldn't change the indexed folder.": "Не удалось изменить индексируемую папку.",
+  "Size": "Размер",
+  "Choose documentation folder": "Выбрать папку документации",
+  "Your bot will search this folder for documentation and code.": "Бот будет искать документацию и код в этой папке."
 }

@@ -24,9 +24,10 @@ rather than an incidental mention. Results are deterministic and capped at 20.
 
 ## Indexing
 
-The root is the bot's `cwd`, unless `setDocsFolder({botId, path})` names another folder for that bot
-(an empty path clears it). `docsStatus({botId})` reports the folder, file count, bytes, build time and
-whether a limit truncated the walk.
+The root is the bot's `cwd`, unless the bot's settings name another folder for it (desktop, iPhone and
+Android show **Documentation search** with the indexed folder, its files and size; `setDocsFolder({botId, path})`
+does the same, and an empty path clears it). `docsStatus({botId})` reports the folder, file count, bytes,
+build time and whether a limit truncated the walk.
 
 - `.gitignore` files are read per directory, including nested ones. A rule without a slash matches any
   path segment; a rule with a slash is anchored to its own directory; `!` re-includes and the last

@@ -82,7 +82,7 @@ is bigger than one release.
 | OpenBot uploads (ring, cancel, retry) | done (desktop, iPhone, Android and terminal) |
 | OpenBot subagent cards | done (desktop, iPhone, Android and terminal) |
 | OpenBot usage-limit chip in the model picker | done (desktop, iPhone, Android and terminal) |
-| Documentation and code search for bots (`codync-docs`) | done (host; `docs_search`, `code_search`, `docs_read`) |
+| Documentation and code search for bots (`codync-docs`) | done (host; `docs_search`, `code_search`, `docs_read`; folder setting on desktop, iPhone and Android) |
 | Local mini-app safeguard (count and ceiling) | done (host; editor on desktop, iPhone, Android and terminal) |
 | Host updates inside an LXC container without AppArmor | done (host; skips the profile step and rolls back) |
 | Plush in empty Marketplace lists and searches | done (desktop, iPhone and Android; still under Reduce Motion) |

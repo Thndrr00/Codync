@@ -2034,5 +2034,17 @@
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
   "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
-  "Bots that made apps": "アプリを作成したボット"
+  "Bots that made apps": "アプリを作成したボット",
+  "Documentation search": "ドキュメント検索",
+  "Your bot searches this folder for documentation and code and cites the file and line. Until you choose another folder, it is the bot's working folder. Generated folders and what .gitignore lists are skipped.": "ボットはこのフォルダのドキュメントとコードを検索し、ファイルと行を示します。別のフォルダを選ぶまで、ボットの作業フォルダを使います。生成されたフォルダと .gitignore に載っているものは除外されます。",
+  "The index stopped at its limit of 4,000 files or 24 MB, so a search may miss some files.": "インデックスは 4,000 ファイルまたは 24 MB の上限に達したため、検索で一部のファイルが見つからないことがあります。",
+  "Reading the index…": "インデックスを読み込み中…",
+  "Choose folder": "フォルダを選択",
+  "Use working folder": "作業フォルダを使う",
+  "Reconnect to this computer to change the indexed folder.": "索引するフォルダを変更するには、このコンピューターに再接続してください。",
+  "Couldn't read the documentation index.": "ドキュメントのインデックスを読み込めませんでした。",
+  "Couldn't change the indexed folder.": "索引するフォルダを変更できませんでした。",
+  "Size": "サイズ",
+  "Choose documentation folder": "ドキュメントのフォルダを選択",
+  "Your bot will search this folder for documentation and code.": "ボットはこのフォルダのドキュメントとコードを検索します。"
 }

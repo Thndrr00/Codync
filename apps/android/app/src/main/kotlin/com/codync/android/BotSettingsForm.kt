@@ -67,6 +67,7 @@ internal enum class FormPart { All, Often, Rarely }
                     notifyRow(draft, change); computerUseRow(state, store, draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change)
                 }
                 Plugins(state, draft, change) { viewingSkill = it }
+                draft.id?.let { DocsSettingsCard(it, state, store, draft.cwd) }
                 draft.id?.let { MemoryCard(it, state, store) }
                 state.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
             }

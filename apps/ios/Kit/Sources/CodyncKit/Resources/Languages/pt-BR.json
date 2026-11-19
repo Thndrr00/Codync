@@ -2034,5 +2034,17 @@
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
   "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
-  "Bots that made apps": "Bots que criaram apps"
+  "Bots that made apps": "Bots que criaram apps",
+  "Documentation search": "Pesquisa na documentação",
+  "Your bot searches this folder for documentation and code and cites the file and line. Until you choose another folder, it is the bot's working folder. Generated folders and what .gitignore lists are skipped.": "Seu bot pesquisa documentação e código nesta pasta e cita o arquivo e a linha. Até você escolher outra pasta, é a pasta de trabalho do bot. Pastas geradas e o que o .gitignore lista são ignorados.",
+  "The index stopped at its limit of 4,000 files or 24 MB, so a search may miss some files.": "O índice parou no limite de 4.000 arquivos ou 24 MB, então uma pesquisa pode perder alguns arquivos.",
+  "Reading the index…": "Lendo o índice…",
+  "Choose folder": "Escolher pasta",
+  "Use working folder": "Usar a pasta de trabalho",
+  "Reconnect to this computer to change the indexed folder.": "Reconecte-se a este computador para mudar a pasta indexada.",
+  "Couldn't read the documentation index.": "Não foi possível ler o índice de documentação.",
+  "Couldn't change the indexed folder.": "Não foi possível mudar a pasta indexada.",
+  "Size": "Tamanho",
+  "Choose documentation folder": "Escolher pasta de documentação",
+  "Your bot will search this folder for documentation and code.": "Seu bot vai pesquisar documentação e código nesta pasta."
 }

@@ -115,5 +115,17 @@
   "sub-tasks": "المهام الفرعية",
   "this bot": "هذا الروبوت",
   "{finished} of {total}": "{finished} من {total}",
-  "{used} of {limit}": "{used} من {limit}"
+  "{used} of {limit}": "{used} من {limit}",
+  "Documentation search": "البحث في الوثائق",
+  "Your bot searches this folder for documentation and code and cites the file and line. Until you choose another folder, it is the bot's working folder. Generated folders and what .gitignore lists are skipped.": "يبحث الروبوت في هذا المجلد عن الوثائق والشيفرة ويذكر الملف والسطر. إلى أن تختار مجلدًا آخر، فهو مجلد عمل الروبوت. تُتجاوز المجلدات المولّدة وما يذكره ‎.gitignore.",
+  "The index stopped at its limit of 4,000 files or 24 MB, so a search may miss some files.": "توقف الفهرس عند حده البالغ 4,000 ملف أو 24 ميغابايت، لذا قد يفوّت البحث بعض الملفات.",
+  "Reading the index…": "جارٍ قراءة الفهرس…",
+  "Choose folder": "اختيار مجلد",
+  "Use working folder": "استخدام مجلد العمل",
+  "Reconnect to this computer to change the indexed folder.": "أعد الاتصال بهذا الكمبيوتر لتغيير المجلد المفهرس.",
+  "Couldn't read the documentation index.": "تعذّرت قراءة فهرس الوثائق.",
+  "Couldn't change the indexed folder.": "تعذّر تغيير المجلد المفهرس.",
+  "Size": "الحجم",
+  "Choose documentation folder": "اختيار مجلد الوثائق",
+  "Your bot will search this folder for documentation and code.": "سيبحث الروبوت في هذا المجلد عن الوثائق والشيفرة."
 }
