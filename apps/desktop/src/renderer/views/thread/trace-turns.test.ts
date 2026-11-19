@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { runningTurn, scrolledToEnd, traceTurns, workingSteps } from './trace-turns.ts'
+import { groupWorkSteps, runningTurn, scrolledToEnd, traceTurns, workingSteps } from './trace-turns.ts'
 import type { Entry, EntryData } from '../../../shared/models.ts'
 
 const entry = (id: string, turn: number, kind = 'agent', status?: string, data: EntryData = {}): Entry => ({
@@ -35,6 +35,20 @@ test('the running turn is the newest one, not a queued message waiting for the n
   const entries = [entry('u1', 1, 'user'), entry('t1', 1, 'thought'), entry('q', 2, 'user', 'queued')]
   assert.equal(runningTurn(entries, true), 1)
   assert.equal(runningTurn(entries, false), undefined)
+})
+
+test('a run of three or more tool steps folds into one group, a shorter run stays visible', () => {
+  const entries = [
+    entry('u', 1, 'user'),
+    entry('t1', 1, 'tool'), entry('t2', 1, 'tool'), entry('t3', 1, 'tool'),
+    entry('a', 1, 'agent'),
+    entry('t4', 1, 'tool'), entry('t5', 1, 'tool'),
+  ]
+  const slots = groupWorkSteps(entries)
+  assert.deepEqual(slots.map((s) => s.kind), ['row', 'work', 'row', 'row', 'row'])
+  const group = slots[1]
+  assert.equal(group.kind, 'work')
+  if (group.kind === 'work') assert.deepEqual(group.entries.map((e) => e.id), ['t1', 't2', 't3'])
 })
 
 test('the trace follows new steps only while scrolled to the end', () => {

@@ -17,6 +17,19 @@ class TraceTest {
             if (bookkeeping != null) put("bookkeeping", bookkeeping)
         })
 
+    @Test fun `a run of three tools folds into one work group, a shorter run stays visible`() {
+        val entries = listOf(
+            entry("u", 1), entry("t1", 1, kind = "tool"), entry("t2", 1, kind = "tool"),
+            entry("t3", 1, kind = "tool"), entry("a", 1), entry("t4", 1, kind = "tool"),
+        )
+        val slots = groupWorkSteps(entries)
+        assertEquals(listOf("row", "work", "row", "row"), slots.map {
+            when (it) { is WorkSlot.Row -> "row"; is WorkSlot.Group -> "work" }
+        })
+        val group = slots[1] as WorkSlot.Group
+        assertEquals(listOf("t1", "t2", "t3"), group.entries.map { it.id })
+    }
+
     @Test fun `the trace unfolds the running turn, not a queued message holding the next`() {
         val entries = listOf(entry("u1", 1), entry("t1", 1), entry("q", 2, status = "queued"))
         assertEquals(1L, runningTurn(entries, working = true))

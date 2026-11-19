@@ -1,0 +1,27 @@
+A bot can build a small web app you can open in a tab: a board, a form, a dashboard. Codync serves it in a sandbox and keeps its data on your computer. The bot can keep improving it from your messages.
+
+## Ask the bot for one
+
+In the bot's chat:
+
+> Build me a board to track these tasks, with a page I can open.
+
+The bot saves the app under a name and gives you a card in the chat. Click **Open** to use it. The card carries the version, so when the bot publishes a fix the open tab reloads.
+
+Apps run in an isolated origin: they cannot read your Codync cookies, local storage or other tabs. Data they keep goes to the bot's own collections on your computer, not to an outside service.
+
+## Share an app
+
+A bot's app card has **Share link**. Make a link that can **view** or **edit**, then send it to someone. A view link can read the app and its data; an edit link can change them. Sharing never needs the other person to sign in to Codync. You can revoke a link from the app's list.
+
+## Ask the bot a question with choices
+
+When a bot needs a decision, it can put a card in the chat with two to four options:
+
+> Which database should I use?
+
+Tap an option and the answer goes straight into the bot's chat as your next message. The bot carries on from your choice. Nothing you type into the app or the card is used for analytics.
+
+## Limits
+
+An app runs only on the computer its bot lives on. Your phone reaches it through Codync's encrypted channel, so it works even when you are away, but a link stops working if that computer is offline. Apps are small tools, not a replacement for a deployed website: there is no custom domain, account system or public hosting.

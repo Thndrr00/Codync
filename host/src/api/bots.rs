@@ -76,6 +76,32 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             str_arg(&b, "id")?,
             b["rotate"].as_bool().unwrap_or(false),
         )?,
+        // Incoming mail: the local half of bdots' per-bot address. A relay posts here with the token.
+        "emailSetup" => {
+            let bot_id = str_arg(&b, "botId")?;
+            let token = b["token"]
+                .as_str()
+                .map(str::trim)
+                .filter(|t| {
+                    (16..=128).contains(&t.len())
+                        && t.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                })
+                .context("token must be 16-128 letters, digits, '-' or '_'")?;
+            hub.store.kv_set(&crate::email::token_key(bot_id), token)?;
+            json!({"configured": true})
+        }
+        "emailDeliver" => {
+            let bot_id = str_arg(&b, "botId")?;
+            crate::email::deliver(
+                hub,
+                bot_id,
+                str_arg(&b, "token")?,
+                str_arg(&b, "from")?,
+                str_arg(&b, "subject")?,
+                b["body"].as_str().unwrap_or_default(),
+                crate::store::now_ms(),
+            )?
+        }
         "routineCall" => crate::routines::call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"])?,
         "memoryCall" => {
             crate::chat::memory::tool_call(hub, str_arg(&b, "botId")?, str_arg(&b, "name")?, &b["arguments"]).await?

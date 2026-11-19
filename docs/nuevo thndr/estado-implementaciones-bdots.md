@@ -51,8 +51,19 @@ de los agentes externos, y `respondPermission` convierte la opción elegida en e
 del bot. No hace falta UI nueva. La idea 23 —«en segundo plano solo
 herramientas de apps de solo lectura»— también quedó cerrada: `approval_gate.rs` rechaza cualquier
 llamada a apps conectadas que llegue a la puerta de permisos cuando `appsInBackground` está apagado.
-Las que siguen abiertas son el nodo de aprobación humana dentro de un flujo de rutina, agrupar
-pasos de trabajo en un bloque colapsable, los skills de diseño y el correo entrante por bot.
+Las cuatro que seguían abiertas también quedaron cerradas:
+- **Nodo de aprobación humana:** `request_approval` en `chat/ask_user.rs` reutiliza la tarjeta y la
+  ruta de respuesta de `ask_user`; la decisión vuelve al chat como el siguiente mensaje del bot.
+- **Pasos agrupados:** `groupWorkSteps` / `group_work_steps` pliega corridas de 3 o más pasos de
+  herramienta en una línea «Worked on N steps» en Desktop, Android, iOS y el TUI, con tests.
+- **Skills de diseño:** `.agents/skills/interface-review/SKILL.md` con el checklist de jerarquía,
+  componentes compartidos, accesibilidad y paridad.
+- **Correo entrante:** `host/src/email.rs` valida un token por bot, descarta autorrespuestas y guarda
+  cada mensaje bajo `<cwd>/inbox/email/`; los métodos `emailSetup` y `emailDeliver` exponen esa
+  mitad local. La dirección `usuario.bot@dominio` y el relay de correo siguen siendo externos.
+
+Además, el panel de mini-apps de iPhone (`MiniAppsSection.swift`) usa el puente `HostClient+Bdots`
+y la guía de usuario `web/content/docs/mini-apps.mdx` explica apps, enlaces y tarjetas de elección.
 
 ## Eventos de analítica
 

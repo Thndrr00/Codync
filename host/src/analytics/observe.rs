@@ -95,6 +95,12 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("on".into(), true.into());
             Event::SettingChanged
         }
+        "emailSetup" => {
+            p.insert("setting".into(), "incoming_email".into());
+            p.insert("on".into(), true.into());
+            Event::SettingChanged
+        }
+        "emailDeliver" => Event::EmailReceived,
         "updateBot" => Event::BotUpdated,
         "reorderBots" => Event::BotsReordered,
         "deleteBot" => Event::BotDeleted,
@@ -180,8 +186,12 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             Event::MiniAppRequested
         }
         // A bot's `ask_user`: how many choices it offered, never the question or the labels.
-        "chatCall" if b["name"] == crate::chat::ask_user::TOOLS[0] => {
+        "chatCall" if b["name"] == crate::chat::ask_user::ASK_USER => {
             p.insert("options".into(), b["arguments"]["options"].as_array().map_or(0, Vec::len).into());
+            Event::UserQuestionAsked
+        }
+        "chatCall" if b["name"] == crate::chat::ask_user::REQUEST_APPROVAL => {
+            p.insert("options".into(), 2.into());
             Event::UserQuestionAsked
         }
         "agentSetup" | "agentAuthenticate" => {

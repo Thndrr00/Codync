@@ -137,6 +137,7 @@ host answers and sends it once the host is up.
 | `mini_app_requested` | host | `appRequest`: a client read a bot's mini-app through the host bridge | `method` (`GET`/`POST`/…), never the path, body or token |
 | `user_question_asked` | host | A bot's `ask_user` (`chatCall`) | `options` (how many choices), never the question or its labels |
 | `user_question_answered` | host | `respondPermission` on an `ask_user` card | `outcome` (`answered`/`skipped`), never the chosen label |
+| `email_received` | host | `emailDeliver`: a relay delivered mail to a bot's inbox | —, never the sender, subject or body |
 | `credential_saved` | host | A key, login or vault is saved (clearing one isn't) | `kind` (`login`/`onepassword`/`connector`/`composio`/`voice`/`agent_env`) |
 | `agent_setup_started` | host | `agentSetup` (an agent's install or sign-in terminal) | `agent` |
 | `agent_signed_in` | host | `agentAuthenticate` | `agent` |

@@ -14,7 +14,9 @@ use crate::{
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
-pub const TOOLS: [&str; 1] = ["ask_user"];
+pub const ASK_USER: &str = "ask_user";
+pub const REQUEST_APPROVAL: &str = "request_approval";
+pub const TOOLS: [&str; 2] = [ASK_USER, REQUEST_APPROVAL];
 
 const MAX_QUESTION: usize = 400;
 const MAX_HEADER: usize = 80;
@@ -23,30 +25,41 @@ const MAX_DESCRIPTION: usize = 240;
 const MIN_OPTIONS: usize = 2;
 const MAX_OPTIONS: usize = 4;
 
-pub fn tools() -> [Value; 1] {
-    [json!({
-        "name": "ask_user",
-        "description": "Ask the person a question with two to four choices. Your turn ends here; their answer arrives as their next message in the chat, so stop and wait instead of guessing.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "question": {"type": "string", "description": "What you need to know."},
-                "header": {"type": "string", "description": "A short label for the card."},
-                "options": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "label": {"type": "string", "description": "The choice the person taps."},
-                            "description": {"type": "string", "description": "What this choice means."}
-                        },
-                        "required": ["label"]
+pub fn tools() -> [Value; 2] {
+    [
+        json!({
+            "name": "request_approval",
+            "description": "Pause a workflow until a person approves or rejects a step. Your turn ends here; their decision arrives as their next message in the chat. Never use it for something you can safely do yourself.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"question": {"type": "string", "description": "What needs a person's decision."}},
+                "required": ["question"]
+            }
+        }),
+        json!({
+            "name": "ask_user",
+            "description": "Ask the person a question with two to four choices. Your turn ends here; their answer arrives as their next message in the chat, so stop and wait instead of guessing.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "What you need to know."},
+                    "header": {"type": "string", "description": "A short label for the card."},
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string", "description": "The choice the person taps."},
+                                "description": {"type": "string", "description": "What this choice means."}
+                            },
+                            "required": ["label"]
+                        }
                     }
-                }
-            },
-            "required": ["question", "options"]
-        }
-    })]
+                },
+                "required": ["question", "options"]
+            }
+        }),
+    ]
 }
 
 /// A choice as validated and stored on the card.
@@ -107,14 +120,21 @@ pub fn card(question: &str, header: &str, choices: &[Choice], bot: &str, cwd: &s
 }
 
 pub fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
-    if name != "ask_user" {
+    if name != "ask_user" && name != "request_approval" {
         bail!("unknown ask_user tool: {name}");
     }
     let question = clip(args["question"].as_str().unwrap_or_default(), MAX_QUESTION);
     if question.is_empty() {
-        bail!("ask_user needs a question");
+        bail!("{name} needs a question");
     }
-    let choices = choices(args)?;
+    let choices = if name == "request_approval" {
+        vec![
+            Choice { label: "Approve".to_owned(), description: String::new() },
+            Choice { label: "Reject".to_owned(), description: String::new() },
+        ]
+    } else {
+        choices(args)?
+    };
     let cwd = hub.store.bot(bot)?.map(|row| row.config.cwd).unwrap_or_default();
     let data = card(&question, args["header"].as_str().unwrap_or_default(), &choices, bot, &cwd);
     let entry = hub

@@ -93,6 +93,8 @@ pub enum Event {
     UserQuestionAsked,
     /// The person answered or left a `ask_user` card (`outcome`).
     UserQuestionAnswered,
+    /// A mail relay delivered a message to a bot's inbox (`stored`/`auto_reply`), never its content.
+    EmailReceived,
     CredentialSaved,
     AgentSetupStarted,
     AgentSignedIn,
