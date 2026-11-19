@@ -33,6 +33,8 @@ struct CallLineRow: View {
 struct CallConversationView: View {
     let line: Entry
     @Environment(BotStore.self) private var model
+    @AppStorage(YourBubbleStyle.storageKey) private var yourBubbles = YourBubbleStyle.solid
+    @Environment(\.colorScheme) private var colorScheme
     /// The call's own messages, which the chat this device holds may not reach back to; nil while they load.
     @State private var fetched: [Entry]?
     @State private var error: String?
@@ -83,10 +85,12 @@ struct CallConversationView: View {
     @ViewBuilder private func row(_ message: CallMessage) -> some View {
         switch message.speaker {
         case .user:
+            // Ported from OpenBot 0.72.0: a person's own line takes the same bubble style as the chat.
+            let look = yourBubbles.look(for: model.bots[line.botId], dark: colorScheme == .dark)
             Text(message.text)
-                .foregroundStyle(Palette.text)
+                .foregroundStyle(look?.ink ?? Palette.text)
                 .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(look?.fill ?? Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.leading, 56)
         case .voice:
