@@ -19,6 +19,7 @@
   "A group has no memory of its own": "Eine Gruppe hat kein eigenes Gedächtnis",
   "A group has no session of its own": "Eine Gruppe hat keine eigene Sitzung",
   "A live conversation. Talk over replies.": "Ein Live-Gespräch. Du kannst Antworten unterbrechen.",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "Eine Schutzgrenze dieses Computers, kein Tarif: Die Bots hier können zusammen so viele Mini-Apps behalten. Eine App zu ändern, die ein Bot schon erstellt hat, zählt nie, und eine zu löschen schafft Platz.",
   "A local, extensible, open source AI agent that automates engineering tasks": "Ein lokaler, erweiterbarer Open-Source-KI-Agent, der technische Aufgaben automatisiert",
   "A memory of its own": "Ein eigenes Gedächtnis",
   "A record": "Ein Protokoll",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "Genehmigt. Die Person kann jetzt schreiben.",
   "Approximate location": "Ungefährer Standort",
   "Apps": "Apps",
+  "Apps on this computer": "Apps auf diesem Computer",
   "Artifact": "Artefakt",
   "Artifact title": "Artefakttitel",
   "Artifacts {name} makes and files shared in this chat show here.": "Artefakte von {name} und in diesem Chat geteilte Dateien erscheinen hier.",
@@ -687,6 +689,8 @@
   "Loading the registry…": "Registry wird geladen…",
   "Loading webhook…": "Webhook wird geladen…",
   "Loading…": "Lade…",
+  "Local app limit": "Grenze für lokale Apps",
+  "Local apps": "Lokale Apps",
   "Local pairing": "Lokale Kopplung",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "Local-First-Codierungsagent. Läuft vollständig auf Ihrem Computer mit optionaler LLM-Inferenz auf dem Gerät über Onde.",
   "Lock Screen": "Sperrbildschirm",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "{percent} % verbraucht",
   "{size} pt (Default)": "{size} pt (Standard)",
   "{url} answered {status}": "{url} antwortete mit {status}",
+  "{used} of {limit}": "{used} von {limit}",
   "· now": "· jetzt",
   "←→ network": "←→ Netzwerk",
   "↑↓ move · ↵ run · esc back": "↑↓ bewegen · ↵ ausführen · esc zurück",
@@ -2027,5 +2032,6 @@
   "Routines that listen to this channel": "Routines that listen to this channel",
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
-  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot"
+  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
+  "Bots that made apps": "Bots, die Apps erstellt haben"
 }

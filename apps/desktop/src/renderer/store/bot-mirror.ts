@@ -13,6 +13,7 @@ import {
   type Usage,
 } from '@shared/models'
 import type { HostHealth } from '@shared/health'
+import type { LocalApps } from '@shared/local-apps'
 import type { NetworkView, RecoveryCode } from '@shared/network'
 import type { HostClient, HostRoute, HostTransport } from '../client/host-client'
 import { rosterOrder } from '../lib/computer-roster'
@@ -85,6 +86,9 @@ export class BotMirror extends Observable {
   usage: Usage = { providers: [] }
   /** Memory, CPU and disk of this computer (`hostHealth`); null until read, or from an older host. */
   health: HostHealth | null = null
+  /** The computer-wide ceiling on local mini-apps, how many it holds and how many bots made them
+   *  (`localApps`); null until read, or from an older host. */
+  localApps: LocalApps | null = null
   screen: ScreenState | null = null
   /** This computer's n8n instance; null on a host that predates it. */
   n8n: N8nState | null = null

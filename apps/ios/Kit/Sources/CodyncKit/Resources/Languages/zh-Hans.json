@@ -19,6 +19,7 @@
   "A group has no memory of its own": "群聊没有自己的记忆",
   "A group has no session of its own": "群聊没有自己的会话",
   "A live conversation. Talk over replies.": "实时对话。可以在回复时插话。",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "这是本机的保护措施，不是套餐：这台电脑上的机器人合计最多保留这么多迷你应用。修改机器人已有的应用不计入，删除一个即可腾出位置。",
   "A local, extensible, open source AI agent that automates engineering tasks": "本地、可扩展的开源 AI 智能体，用来自动完成工程任务",
   "A memory of its own": "它自己的记忆",
   "A record": "一份记录",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "已批准。对方现在可以发消息了。",
   "Approximate location": "大致位置",
   "Apps": "应用",
+  "Apps on this computer": "本机上的应用",
   "Artifact": "产物",
   "Artifact title": "Artifact 标题",
   "Artifacts {name} makes and files shared in this chat show here.": "{name} 做的 Artifact，和这个对话里分享的文件，都会出现在这里。",
@@ -687,6 +689,8 @@
   "Loading the registry…": "正在加载注册表…",
   "Loading webhook…": "正在加载 Webhook…",
   "Loading…": "正在加载…",
+  "Local app limit": "本地应用上限",
+  "Local apps": "本地应用",
   "Local pairing": "本机配对",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "本地优先的编程智能体。完全在你的电脑上运行，也可以通过 Onde 在本机推理模型。",
   "Lock Screen": "锁定屏幕",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "已用 {percent}%",
   "{size} pt (Default)": "{size} pt（默认）",
   "{url} answered {status}": "{url} 返回了 {status}",
+  "{used} of {limit}": "{used} / {limit}",
   "· now": "· 现在",
   "←→ network": "←→ 网络",
   "↑↓ move · ↵ run · esc back": "↑↓ 移动 · ↵ 执行 · esc 返回",
@@ -2027,5 +2032,6 @@
   "Routines that listen to this channel": "Routines that listen to this channel",
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
-  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot"
+  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
+  "Bots that made apps": "创建了应用的机器人"
 }

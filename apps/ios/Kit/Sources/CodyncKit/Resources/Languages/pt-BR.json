@@ -19,6 +19,7 @@
   "A group has no memory of its own": "Um grupo não tem memória própria",
   "A group has no session of its own": "Um grupo não tem sessão própria",
   "A live conversation. Talk over replies.": "Uma conversa ao vivo. Fale mesmo durante as respostas.",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "Uma proteção deste computador, não um plano: os bots aqui podem manter juntos até esta quantidade de miniapps. Alterar um app que um bot já criou nunca conta, e excluir um abre espaço.",
   "A local, extensible, open source AI agent that automates engineering tasks": "Um agente de IA local, extensível e de código aberto que automatiza tarefas de engenharia",
   "A memory of its own": "Uma memória própria",
   "A record": "Um registro",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "Aprovado. A pessoa já pode escrever.",
   "Approximate location": "Localização aproximada",
   "Apps": "Aplicativos",
+  "Apps on this computer": "Apps neste computador",
   "Artifact": "Artefato",
   "Artifact title": "Título do artefato",
   "Artifacts {name} makes and files shared in this chat show here.": "Os artefatos que {name} cria e os arquivos compartilhados nesta conversa aparecem aqui.",
@@ -687,6 +689,8 @@
   "Loading the registry…": "Carregando o registro…",
   "Loading webhook…": "Carregando webhook…",
   "Loading…": "Carregando…",
+  "Local app limit": "Limite de apps locais",
+  "Local apps": "Apps locais",
   "Local pairing": "Pareamento local",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "Agente de programação que prioriza o uso local. Roda inteiramente na sua máquina, com inferência local opcional de LLM via Onde.",
   "Lock Screen": "Tela Bloqueada",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "{percent}% usado",
   "{size} pt (Default)": "{size} pt (Padrão)",
   "{url} answered {status}": "{url} respondeu com {status}",
+  "{used} of {limit}": "{used} de {limit}",
   "· now": "· agora",
   "←→ network": "←→ rede",
   "↑↓ move · ↵ run · esc back": "↑↓ mover · ↵ executar · esc voltar",
@@ -2027,5 +2032,6 @@
   "Routines that listen to this channel": "Routines that listen to this channel",
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
-  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot"
+  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
+  "Bots that made apps": "Bots que criaram apps"
 }

@@ -19,6 +19,7 @@
   "A group has no memory of its own": "集団にはそれ自体の記憶がない",
   "A group has no session of its own": "グループには独自のセッションがありません",
   "A live conversation. Talk over replies.": "生の会話。返信について話し合います。",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "このコンピューターの保護上限で、プランではありません。ここのボットは合わせてこの数までミニアプリを保持できます。ボットがすでに作ったアプリの更新は数えず、削除すると空きができます。",
   "A local, extensible, open source AI agent that automates engineering tasks": "エンジニアリング タスクを自動化する、ローカルで拡張可能なオープンソース AI エージェント",
   "A memory of its own": "自分だけの思い出",
   "A record": "記録",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "承認しました。この相手はもう書き込めます。",
   "Approximate location": "おおよその位置",
   "Apps": "アプリ",
+  "Apps on this computer": "このコンピューターのアプリ",
   "Artifact": "アーティファクト",
   "Artifact title": "アーティファクトのタイトル",
   "Artifacts {name} makes and files shared in this chat show here.": "{name} が作ったアーティファクトと、このチャットで共有したファイルがここに表示されます。",
@@ -687,6 +689,8 @@
   "Loading the registry…": "レジストリをロード中…",
   "Loading webhook…": "Webhook を読み込み中…",
   "Loading…": "読み込み中…",
+  "Local app limit": "ローカルアプリの上限",
+  "Local apps": "ローカルアプリ",
   "Local pairing": "ローカルペアリング",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "ローカルファーストコーディングエージェント。 Onde を介したオプションのオンデバイス LLM 推論を使用して、完全にマシン上で実行されます。",
   "Lock Screen": "ロック画面",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "{percent}% 使用済み",
   "{size} pt (Default)": "{size} ポイント (デフォルト)",
   "{url} answered {status}": "{url} が {status} に回答しました",
+  "{used} of {limit}": "{used} / {limit}",
   "· now": "・ 今",
   "←→ network": "←→ ネットワーク",
   "↑↓ move · ↵ run · esc back": "↑↓ 移動・↵ 実行・esc 戻る",
@@ -2027,5 +2032,6 @@
   "Routines that listen to this channel": "Routines that listen to this channel",
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
-  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot"
+  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
+  "Bots that made apps": "アプリを作成したボット"
 }

@@ -19,6 +19,7 @@
   "A group has no memory of its own": "Un grupo no tiene memoria propia",
   "A group has no session of its own": "Un grupo no tiene sesión propia",
   "A live conversation. Talk over replies.": "Una conversación en directo. Puedes hablar durante las respuestas.",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "Una protección local de esta computadora, no un plan: los bots pueden tener entre todos hasta esta cantidad de mini-apps aquí. Cambiar una app que un bot ya creó nunca cuenta, y borrar una deja sitio.",
   "A local, extensible, open source AI agent that automates engineering tasks": "Un agente de IA local, extensible y de código abierto que automatiza las tareas de ingeniería",
   "A memory of its own": "Su propia memoria",
   "A record": "Un registro",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "Aprobado. La persona ya puede escribir.",
   "Approximate location": "Ubicación aproximada",
   "Apps": "Apps",
+  "Apps on this computer": "Apps en este ordenador",
   "Artifact": "Artifacto",
   "Artifact title": "Título del artefacto",
   "Artifacts {name} makes and files shared in this chat show here.": "Los artefactos que crea {name} y los archivos compartidos en este chat aparecen aquí.",
@@ -687,6 +689,8 @@
   "Loading the registry…": "Cargando el registro…",
   "Loading webhook…": "Cargando webhook…",
   "Loading…": "Cargando…",
+  "Local app limit": "Límite de apps locales",
+  "Local apps": "Apps locales",
   "Local pairing": "Emparejamiento local",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "Agente de codificación local primero. Se ejecuta completamente en su máquina con inferencia LLM opcional en el dispositivo a través de Onde.",
   "Lock Screen": "Pantalla de bloqueo",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "{percent} % usado",
   "{size} pt (Default)": "{size} pt (Predeterminado)",
   "{url} answered {status}": "{url} respondió {status}",
+  "{used} of {limit}": "{used} de {limit}",
   "· now": "· ahora",
   "←→ network": "←→ red",
   "↑↓ move · ↵ run · esc back": "↑↓ mover · ↵ ejecutar · esc volver",
@@ -2118,5 +2123,6 @@
   "Running now": "En marcha",
   "Cancelled": "Cancelado",
   "Edit routine": "Editar rutina",
-  "Pick a routine to see its history.": "Elige una rutina para ver su historial."
+  "Pick a routine to see its history.": "Elige una rutina para ver su historial.",
+  "Bots that made apps": "Bots que crearon apps"
 }

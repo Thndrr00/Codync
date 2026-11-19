@@ -19,6 +19,7 @@
   "A group has no memory of its own": "그룹에는 자체 기억이 없습니다",
   "A group has no session of its own": "그룹에는 자체 세션이 없습니다",
   "A live conversation. Talk over replies.": "실시간 대화입니다. 답변 중에도 말할 수 있습니다.",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "이 컴퓨터의 보호 한도이며 요금제가 아닙니다. 이곳의 봇은 합쳐서 이 개수까지 미니 앱을 보관할 수 있습니다. 봇이 이미 만든 앱을 수정하는 것은 세지 않으며, 하나를 삭제하면 자리가 납니다.",
   "A local, extensible, open source AI agent that automates engineering tasks": "엔지니어링 작업을 자동화하는 확장 가능한 로컬 오픈 소스 AI 에이전트",
   "A memory of its own": "자체 기억",
   "A record": "기록",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "승인했습니다. 이제 이 사람이 글을 보낼 수 있습니다.",
   "Approximate location": "대략적인 위치",
   "Apps": "앱",
+  "Apps on this computer": "이 컴퓨터의 앱",
   "Artifact": "아티팩트",
   "Artifact title": "아티팩트 제목",
   "Artifacts {name} makes and files shared in this chat show here.": "{name}이(가) 만든 아티팩트와 이 채팅에서 공유한 파일이 여기에 표시됩니다.",
@@ -687,6 +689,8 @@
   "Loading the registry…": "레지스트리를 불러오는 중…",
   "Loading webhook…": "Webhook을 불러오는 중…",
   "Loading…": "불러오는 중…",
+  "Local app limit": "로컬 앱 한도",
+  "Local apps": "로컬 앱",
   "Local pairing": "로컬 페어링",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "로컬 우선 코딩 에이전트. Onde를 통한 선택적 장치 내 LLM 추론을 통해 컴퓨터에서 완전히 실행됩니다.",
   "Lock Screen": "잠금 화면",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "{percent}% 사용됨",
   "{size} pt (Default)": "{size} pt (기본값)",
   "{url} answered {status}": "{url}에서 {status} 응답",
+  "{used} of {limit}": "{used} / {limit}",
   "· now": "· 지금",
   "←→ network": "←→ 네트워크",
   "↑↓ move · ↵ run · esc back": "↑↓ 이동 · ↵ 실행 · esc 뒤로",
@@ -2027,5 +2032,6 @@
   "Routines that listen to this channel": "Routines that listen to this channel",
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
-  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot"
+  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
+  "Bots that made apps": "앱을 만든 봇"
 }

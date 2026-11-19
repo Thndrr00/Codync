@@ -19,6 +19,7 @@
   "A group has no memory of its own": "Un groupe n’a pas de mémoire propre",
   "A group has no session of its own": "Un groupe n’a pas de session propre",
   "A live conversation. Talk over replies.": "Une conversation en direct. Vous pouvez interrompre les réponses.",
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "Une protection de cet ordinateur, pas une offre : les bots peuvent garder ensemble ce nombre de mini-applications ici. Modifier une application qu'un bot a déjà créée ne compte jamais, et en supprimer une libère de la place.",
   "A local, extensible, open source AI agent that automates engineering tasks": "Un agent d'IA local, extensible et open source qui automatise les tâches d'ingénierie",
   "A memory of its own": "Sa propre mémoire",
   "A record": "Un historique",
@@ -131,6 +132,7 @@
   "Approved. The person can write now.": "Approuvé. La personne peut écrire maintenant.",
   "Approximate location": "Localisation approximative",
   "Apps": "Apps",
+  "Apps on this computer": "Applications sur cet ordinateur",
   "Artifact": "Artéfact",
   "Artifact title": "Titre de l'artefact",
   "Artifacts {name} makes and files shared in this chat show here.": "Les artefacts créés par {name} et les fichiers partagés dans cette discussion apparaissent ici.",
@@ -687,6 +689,8 @@
   "Loading the registry…": "Chargement du registre…",
   "Loading webhook…": "Chargement du webhook…",
   "Loading…": "Chargement…",
+  "Local app limit": "Limite d'applications locales",
+  "Local apps": "Applications locales",
   "Local pairing": "Appairage local",
   "Local-first coding agent. Runs entirely on your machine with optional on-device LLM inference via Onde.": "Agent de codage local d’abord. Fonctionne entièrement sur votre machine avec une inférence LLM optionnelle sur l'appareil via Onde.",
   "Lock Screen": "Écran verrouillé",
@@ -1618,6 +1622,7 @@
   "{percent}% used": "{percent} % utilisé",
   "{size} pt (Default)": "{size} pt (Par défaut)",
   "{url} answered {status}": "{url} a répondu {status}",
+  "{used} of {limit}": "{used} sur {limit}",
   "· now": "· maintenant",
   "←→ network": "←→ réseau",
   "↑↓ move · ↵ run · esc back": "↑↓ déplacer · ↵ exécuter · esc retour",
@@ -2027,5 +2032,6 @@
   "Routines that listen to this channel": "Routines that listen to this channel",
   "New routine for this channel": "New routine for this channel",
   "Routine name": "Routine name",
-  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot"
+  "What it should do when this channel mentions the bot": "What it should do when this channel mentions the bot",
+  "Bots that made apps": "Bots ayant créé des apps"
 }

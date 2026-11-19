@@ -28,6 +28,7 @@ import type { BotCatalog } from '@shared/catalog'
 import type { CallLine } from '@shared/calls'
 import { cleanRules, type ApprovalEvaluation, type ApprovalRule, type RuleProposal } from '@shared/approval-rules'
 import type { HostHealth } from '@shared/health'
+import type { LocalApps } from '@shared/local-apps'
 import type { SecurityProfile } from '@shared/security-profiles'
 import type { HostClient } from '../client/host-client'
 import { dropQueued, queueMessage, takeQueued } from './outbox'
@@ -893,6 +894,23 @@ export class BotStore extends BotSync {
   async setHealthThresholds(warn: number, critical: number) {
     if (this.retired || !this.client) return
     this.health = await this.client.call<HostHealth>('setHealthThresholds', { warn, critical })
+    this.changed()
+  }
+
+  /** Reads the computer-wide ceiling on local mini-apps; an older host keeps what was there (nothing). */
+  async refreshLocalApps() {
+    if (this.retired || !this.client) return
+    try {
+      this.localApps = await this.client.call<LocalApps>('localApps', {})
+      this.changed()
+    } catch {}
+  }
+
+  /** Changes that ceiling; throws the host's reason when the value isn't one of the choices. */
+  async setLocalAppsLimit(limit: number) {
+    if (this.retired || !this.client) return
+    const saved = await this.client.call<{ limit: number }>('setLocalAppsLimit', { limit })
+    if (this.localApps) this.localApps = { ...this.localApps, limit: saved.limit }
     this.changed()
   }
 

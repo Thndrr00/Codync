@@ -36,6 +36,7 @@ import { AgentImportSection } from './AgentImportSection'
 import { ChannelsSection } from './ChannelsSection'
 import { GitHubSection } from './GitHubSection'
 import { DemoSection } from './DemoSection'
+import { LocalAppsSection } from './LocalAppsSection'
 import { ResearchSettingsSection } from './ResearchSettingsSection'
 import { HiddenBotsSection } from './HiddenBotsSection'
 import { ArchivedGroupsSection } from './ArchivedGroupsSection'
@@ -302,6 +303,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
       <ChannelsSection onExtensions={onExtensions} />
       <GitHubSection />
       <AgentImportSection />
+      <LocalAppsSection />
       <DemoSection />
       <HiddenBotsSection />
       <ArchivedGroupsSection />

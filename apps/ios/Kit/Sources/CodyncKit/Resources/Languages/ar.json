@@ -1,12 +1,15 @@
 {
+  "A local safeguard on this computer, not a plan: the bots here may keep up to this many mini-apps between them. Changing an app a bot already made never counts, and deleting one makes room.": "حدّ حماية على هذا الكمبيوتر، وليس خطة: يمكن للبوتات هنا أن تحتفظ مجتمعةً بهذا العدد من التطبيقات المصغّرة. لا يُحتسب تعديل تطبيق أنشأه البوت من قبل، وحذف تطبيق يفسح المجال.",
   "Activity": "النشاط",
   "Add": "إضافة",
   "Agent": "الوكيل",
   "Approve automatically": "الموافقة تلقائيًا",
   "Approved. The person can write now.": "تمت الموافقة. يمكن للشخص الكتابة الآن.",
+  "Apps on this computer": "التطبيقات على هذا الكمبيوتر",
   "Ask me": "اسألني",
   "Back": "رجوع",
   "Bots": "الروبوتات",
+  "Bots that made apps": "الروبوتات التي أنشأت تطبيقات",
   "Cancel": "إلغاء",
   "Cancel upload": "إلغاء الرفع",
   "Close": "إغلاق",
@@ -34,6 +37,8 @@
   "Keep memories in this channel": "الاحتفاظ بالذكريات في هذه القناة",
   "Library": "المكتبة",
   "Loading…": "جارٍ التحميل…",
+  "Local app limit": "حد التطبيقات المحلية",
+  "Local apps": "التطبيقات المحلية",
   "Memory": "الذاكرة",
   "Model": "النموذج",
   "Name": "الاسم",
@@ -108,5 +113,6 @@
   "Drop to send to {name}": "أفلت للإرسال إلى {name}",
   "sub-tasks": "المهام الفرعية",
   "this bot": "هذا الروبوت",
-  "{finished} of {total}": "{finished} من {total}"
+  "{finished} of {total}": "{finished} من {total}",
+  "{used} of {limit}": "{used} من {limit}"
 }
