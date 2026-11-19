@@ -298,6 +298,12 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             let listed = tokio::task::spawn_blocking(backends::list).await?;
             json!({"removed": removed, "backends": listed})
         }
+        // The computer's local app safeguard: how many mini-apps it holds and the ceiling.
+        "localApps" => crate::local_apps::status(&hub.store)?,
+        "setLocalAppsLimit" => {
+            let limit = u32::try_from(b["limit"].as_u64().context("limit is required")?).unwrap_or(u32::MAX);
+            json!({"limit": crate::local_apps::set(&hub.store, limit)?})
+        }
         "termInput" => {
             hub.terms.write(str_arg(&b, "term")?, str_arg(&b, "data")?)?;
             json!({})

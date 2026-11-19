@@ -45,7 +45,7 @@ pub(crate) mod slack;
 pub(crate) mod whatsapp;
 pub use whatsapp::{WHATSAPP_FACT_CHARS, WHATSAPP_FACTS, WhatsAppPerson};
 
-pub use apps::{AppLink, AppLinkMode, BotApp};
+pub use apps::{AppLink, AppLinkMode, AppTotals, BotApp};
 pub use computer_activity::{ComputerActivity, ComputerActivityResult};
 pub use devices::{Device, DeviceSource, Scope};
 pub use documents::{Document, DocumentDraft, ReviewDecision, ReviewStatus};

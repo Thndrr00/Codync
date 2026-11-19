@@ -43,6 +43,7 @@ mod import;
 mod import_cli;
 mod local_agent;
 mod local_api;
+mod local_apps;
 mod local_models;
 mod market;
 mod mcp;

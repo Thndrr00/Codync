@@ -73,6 +73,15 @@ pub struct AppDataItem {
     pub updated_by: Option<String>,
 }
 
+/// Every local mini-app on this computer, and how many bots made them: the computer-wide ceiling
+/// counts apps, not bots, and an app belongs to the bot that saved it.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppTotals {
+    pub apps: i64,
+    pub bots: i64,
+}
+
 pub(super) fn open(c: &Connection) -> Result<()> {
     c.execute_batch(
         "CREATE TABLE IF NOT EXISTS bot_apps (
@@ -220,6 +229,23 @@ impl Store {
             }
             None => Ok(None),
         }
+    }
+
+    /// Whether this bot already registered `slug`: saving it again is an update, not a new app.
+    pub fn has_bot_app(&self, bot_id: &str, slug: &str) -> Result<bool> {
+        let c = self.db.locked();
+        let found = c
+            .query_row("SELECT 1 FROM bot_apps WHERE bot_id = ?1 AND slug = ?2", params![bot_id, slug], |_| Ok(()))
+            .optional()?;
+        Ok(found.is_some())
+    }
+
+    /// How many apps this computer holds and how many bots made them.
+    pub fn app_totals(&self) -> Result<AppTotals> {
+        let c = self.db.locked();
+        Ok(c.query_row("SELECT COUNT(*), COUNT(DISTINCT bot_id) FROM bot_apps", [], |r| {
+            Ok(AppTotals { apps: r.get(0)?, bots: r.get(1)? })
+        })?)
     }
 
     pub fn save_bot_app(
