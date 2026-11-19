@@ -112,6 +112,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::channel_history::read(hub, bot, &b["arguments"])?
             } else if name == crate::chat::discord_embed::TOOL {
                 crate::chat::discord_embed::call(hub, bot, &b["arguments"]).await?
+            } else if name == crate::chat::browser_profile::TOOL {
+                crate::chat::browser_profile::call(hub, bot, &b["arguments"]).await?
             } else if crate::screen::browser_tools::TOOLS.contains(&name) {
                 crate::screen::browser_tools::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::fallbacks::TOOLS.contains(&name) {

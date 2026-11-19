@@ -95,6 +95,7 @@ pub async fn serve(bot: String, port: u16, server: Server) -> Result<()> {
                 list.extend(crate::chat::fallbacks::tools());
                 list.push(crate::chat::reactions::tool());
                 list.push(crate::chat::channel_history::tool());
+                list.push(crate::chat::browser_profile::tool());
                 list.push(crate::chat::discord_embed::tool());
                 list.extend(crate::screen::browser_tools::tools());
                 list.extend(crate::chat::skills::tools());
