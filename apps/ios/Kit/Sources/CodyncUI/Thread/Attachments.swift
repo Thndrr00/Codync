@@ -154,6 +154,7 @@ struct AttachmentViewer: View {
     let load: @MainActor (BotStore) async -> Data?
     @Environment(BotStore.self) private var model
     @State private var note: String?
+    @State private var zoom = ImageZoom.fit
 
     init(file: Attachment, botId: String) {
         name = file.name
@@ -175,9 +176,12 @@ struct AttachmentViewer: View {
             if let note {
                 Text(L10n.tr(note)).font(.caption).foregroundStyle(Palette.secondary)
             }
-            image
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(12)
+            ZoomableImage(zoom: $zoom) {
+                image
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(12)
+            }
+            .onAppear { zoom = .fit }
         }
         .background(Palette.background)
     }

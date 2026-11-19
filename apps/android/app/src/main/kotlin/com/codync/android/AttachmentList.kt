@@ -54,14 +54,14 @@ import kotlinx.coroutines.withContext
 /** A sent image full size, in a sheet while `file` is set. */
 @Composable internal fun AttachmentImageSheet(file: Attachment?, botId: String, state: AppState, store: AppStore, dismiss: () -> Unit) {
     ImageSheet(file, { it.name }, dismiss, copy = { shown -> store.attachments.copyImage(store.attachment(botId, shown), shown.name) }) { shown, modifier ->
-        AttachmentImage(shown, botId, 4096, state, store, modifier)
+        AttachmentImage(shown, botId, 4096, state, store, modifier, zoomable = true)
     }
 }
 
 /** An image a bot shared full size, in a sheet while `file` is set. */
 @Composable internal fun SharedImageSheet(file: SharedFile?, entryId: String, state: AppState, store: AppStore, dismiss: () -> Unit) {
     ImageSheet(file, { it.name }, dismiss, copy = { shown -> store.attachments.copyImage(store.sharedImage(entryId, shown), shown.name) }) { shown, modifier ->
-        SharedImage(shown, entryId, 4096, state, store, modifier)
+        SharedImage(shown, entryId, 4096, state, store, modifier, zoomable = true)
     }
 }
 
@@ -109,12 +109,14 @@ import kotlinx.coroutines.withContext
 
 /** A sent image, fetched from the computer once and then read from the cache; a placeholder until then. */
 @Composable internal fun AttachmentImage(file: Attachment, botId: String, maxPixels: Int, state: AppState, store: AppStore, modifier: Modifier,
-    scale: ContentScale = ContentScale.Fit) = RemoteImage(file.id, maxPixels, state, modifier, scale) { store.attachment(botId, file) }
+    scale: ContentScale = ContentScale.Fit, zoomable: Boolean = false) =
+    RemoteImage(file.id, maxPixels, state, modifier, scale, zoomable) { store.attachment(botId, file) }
 
 /** An image a bot shared, like `AttachmentImage`. */
-@Composable internal fun SharedImage(file: SharedFile, entryId: String, maxPixels: Int, state: AppState, store: AppStore, modifier: Modifier) =
+@Composable internal fun SharedImage(file: SharedFile, entryId: String, maxPixels: Int, state: AppState, store: AppStore, modifier: Modifier,
+    zoomable: Boolean = false) =
     if (file.name.lowercase().endsWith(".svg")) RemoteSvg(file.id, state, modifier) { store.sharedImage(entryId, file) }
-    else RemoteImage(file.id, maxPixels, state, modifier, ContentScale.Fit) { store.sharedImage(entryId, file) }
+    else RemoteImage(file.id, maxPixels, state, modifier, ContentScale.Fit, zoomable) { store.sharedImage(entryId, file) }
 
 /** An SVG shown by a WebView: the decoder behind bitmaps cannot read vector files. */
 @Composable private fun RemoteSvg(id: String, state: AppState, modifier: Modifier, load: suspend () -> java.io.File) {
@@ -143,7 +145,8 @@ import kotlinx.coroutines.withContext
 }
 
 /** A picture `load` fetches from the computer into the cache (iOS `AttachmentImage`); a placeholder until then. */
-@Composable private fun RemoteImage(id: String, maxPixels: Int, state: AppState, modifier: Modifier, scale: ContentScale, load: suspend () -> java.io.File) {
+@Composable private fun RemoteImage(id: String, maxPixels: Int, state: AppState, modifier: Modifier, scale: ContentScale, zoomable: Boolean = false,
+    load: suspend () -> java.io.File) {
     var image by remember(id, maxPixels) { mutableStateOf<ImageBitmap?>(null) }
     // Retried whenever the link changes: an image the computer couldn't send stays a placeholder, as on iOS.
     LaunchedEffect(id, maxPixels, state.actualConnection) {
@@ -155,8 +158,10 @@ import kotlinx.coroutines.withContext
         catch (_: Exception) { /* The placeholder stays; the next link change tries again. */ }
     }
     val bitmap = image
-    if (bitmap != null) Image(bitmap, contentDescription = null, modifier = modifier, contentScale = scale)
-    else Box(modifier.size(160.dp, 120.dp).clip(RoundedRectangle(16.dp)).background(Palette.bubbleUser), contentAlignment = Alignment.Center) {
+    if (bitmap != null) {
+        if (zoomable) ZoomableImage(bitmap, open = true, modifier = modifier, zoomedIn = {})
+        else Image(bitmap, contentDescription = null, modifier = modifier, contentScale = scale)
+    } else Box(modifier.size(160.dp, 120.dp).clip(RoundedRectangle(16.dp)).background(Palette.bubbleUser), contentAlignment = Alignment.Center) {
         Symbol("photo", size = 20.dp, tint = Palette.tertiary)
     }
 }
