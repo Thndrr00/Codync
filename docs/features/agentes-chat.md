@@ -36,6 +36,9 @@ Its `LICENSE` and `NOTICE` stay behind if any line is ever lifted verbatim.
 | A profile per person (ADR 0052) | Bounded facts about the person (30 facts, 200 chars each, 1200 total), shared by bots, inspectable and deletable through `personFacts`, and rendered as a hidden block for the run | `chat/person.rs`, `api/bots.rs` |
 | One worktree per mission (ADR 0044) | A mission's branch and folder are derived once from its id and title, safe for git and disks; `missionWorktree` returns the plan | `chat/mission_worktree.rs`, `api/bots.rs` |
 | Tools per run kind (ADR 0043) | A routine run's tool set is declared in one place and every withheld tool carries the reason to tell the agent (`toolSet`); a conversation keeps all tools | `chat/toolset.rs`, `api/bots.rs` |
+| Choice cards (ADR 0124) | A bounded question with 2–8 labeled options, answered once through `choiceCard`; a later answer cannot change the first | `chat/choices.rs`, `api/bots.rs` |
+| Message links (ADR 0138) | One permalink per message (`codync://message/<bot>/<entry>`) and a structured cite so clients draw a pill and agents point to where they were asked | `chat/message_link.rs`, `api/bots.rs` |
+| How agents talk (ADR 0147) | A per-bot voice, simple by default or technical by choice, that only changes the wording line through `agentVoice` | `chat/voice.rs`, `api/bots.rs` |
 
 ## Not taken
 

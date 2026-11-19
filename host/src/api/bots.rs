@@ -78,6 +78,27 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "choiceCard" => match b["op"].as_str().unwrap_or("get") {
+            "create" => {
+                crate::chat::choices::create(&hub.store, str_arg(&b, "id")?, str_arg(&b, "question")?, &b["options"])
+            }
+            "answer" => crate::chat::choices::answer(&hub.store, str_arg(&b, "id")?, str_arg(&b, "option")?),
+            _ => Ok(json!({"card": crate::chat::choices::create(
+                &hub.store,
+                str_arg(&b, "id")?,
+                str_arg(&b, "question")?,
+                &b["options"],
+            )?})),
+        },
+        "messageLink" => Ok(crate::chat::message_link::cite(
+            str_arg(&b, "botId")?,
+            str_arg(&b, "entryId")?,
+            b["label"].as_str().unwrap_or("message"),
+        )),
+        "agentVoice" => match b["voice"].as_str() {
+            Some(voice) => crate::chat::voice::set(&hub.store, str_arg(&b, "botId")?, voice),
+            None => Ok(json!({"voice": crate::chat::voice::get(&hub.store, str_arg(&b, "botId")?)})),
+        },
         "toolSet" => Ok(match b["kind"].as_str().unwrap_or("conversation") {
             "routine" => crate::chat::toolset::routine(),
             _ => crate::chat::toolset::conversation(),
