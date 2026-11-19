@@ -2477,5 +2477,7 @@
   "Clip step": "片段步骤",
   "This step is gone.": "这一步已不存在。",
   "Clip": "片段",
-  "Picture": "图片"
+  "Picture": "图片",
+  "Anyone can write until you allow chats. After that, people you did not allow get no reply.": "Anyone can write until you allow chats. After that, people you did not allow get no reply.",
+  "People you did not allow get no reply.": "People you did not allow get no reply."
 }

@@ -2477,5 +2477,7 @@
   "Clip step": "클립 단계",
   "This step is gone.": "이 단계는 사라졌습니다.",
   "Clip": "클립",
-  "Picture": "그림"
+  "Picture": "그림",
+  "Anyone can write until you allow chats. After that, people you did not allow get no reply.": "Anyone can write until you allow chats. After that, people you did not allow get no reply.",
+  "People you did not allow get no reply.": "People you did not allow get no reply."
 }

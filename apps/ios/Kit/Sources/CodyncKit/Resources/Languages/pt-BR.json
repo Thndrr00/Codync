@@ -2477,5 +2477,7 @@
   "Clip step": "Passo de clipe",
   "This step is gone.": "Este passo sumiu.",
   "Clip": "Clipe",
-  "Picture": "Imagem"
+  "Picture": "Imagem",
+  "Anyone can write until you allow chats. After that, people you did not allow get no reply.": "Anyone can write until you allow chats. After that, people you did not allow get no reply.",
+  "People you did not allow get no reply.": "People you did not allow get no reply."
 }

@@ -410,5 +410,7 @@
   "A request gets it while the bot works, then the answer. Off sends only the answer.": "يصل الطلب إليها أثناء عمل المساعد، ثم يأتي الرد. أوقف هذا لإرسال الرد فقط."
 ,
   "Learn skills on its own": "Learn skills on its own",
-  "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.": "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens."
+  "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.": "After a correction or a method that worked, its background review saves what it learned as a skill of its own. Off spends no tokens.",
+  "Anyone can write until you allow chats. After that, people you did not allow get no reply.": "Anyone can write until you allow chats. After that, people you did not allow get no reply.",
+  "People you did not allow get no reply.": "People you did not allow get no reply."
 }

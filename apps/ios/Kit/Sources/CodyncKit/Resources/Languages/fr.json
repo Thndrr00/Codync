@@ -2477,5 +2477,7 @@
   "Clip step": "Étape de clip",
   "This step is gone.": "Cette étape a disparu.",
   "Clip": "Clip",
-  "Picture": "Image"
+  "Picture": "Image",
+  "Anyone can write until you allow chats. After that, people you did not allow get no reply.": "Anyone can write until you allow chats. After that, people you did not allow get no reply.",
+  "People you did not allow get no reply.": "People you did not allow get no reply."
 }

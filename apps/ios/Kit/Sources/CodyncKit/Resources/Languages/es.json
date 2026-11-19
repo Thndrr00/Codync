@@ -2477,5 +2477,7 @@
   "Clip step": "Paso de clip",
   "This step is gone.": "Este paso ya no existe.",
   "Clip": "Clip",
-  "Picture": "Imagen"
+  "Picture": "Imagen",
+  "Anyone can write until you allow chats. After that, people you did not allow get no reply.": "Cualquiera puede escribir hasta que permitas chats. Después, las personas que no hayas permitido no reciben respuesta.",
+  "People you did not allow get no reply.": "Las personas que no hayas permitido no reciben respuesta."
 }

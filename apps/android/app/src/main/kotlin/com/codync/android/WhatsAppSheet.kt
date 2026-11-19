@@ -135,6 +135,10 @@ import kotlinx.coroutines.launch
                                 act { store.whatsappConnect(); link = store.whatsapp() }
                             }
                         }
+                        row {
+                            Text(tr("Anyone can write until you allow chats. After that, people you did not allow get no reply."),
+                                style = Type.caption, color = Palette.secondary)
+                        }
                     }
                 }
                 row {
@@ -167,6 +171,9 @@ import kotlinx.coroutines.launch
                             val value = jid.trim()
                             act { store.whatsappSetAllowed(value, true); jid = ""; link = store.whatsapp() }
                         }
+                    }
+                    row {
+                        Text(tr("People you did not allow get no reply."), style = Type.caption, color = Palette.secondary)
                     }
                 }
             }

@@ -137,6 +137,9 @@ export function WhatsAppSheet() {
                 <HStack gap={8}>
                   <Button kind="secondary" onClick={() => void connect()}>{tr('Scan a QR code')}</Button>
                 </HStack>
+                <Text size="caption" tone="secondary">
+                  {tr('Anyone can write until you allow chats. After that, people you did not allow get no reply.')}
+                </Text>
               </>
             )}
             <ValueRow label={tr('Bot')}>
@@ -192,6 +195,7 @@ function AllowedChats({ allowed, onSet }: { allowed: string[]; onSet: (jid: stri
         <input className="field-box" value={jid} placeholder="5215555555555@s.whatsapp.net" onChange={(e) => setJid(e.target.value)} />
         <Button kind="secondary" disabled={!jid.trim()} onClick={add}>{tr('Allow')}</Button>
       </HStack>
+      <Text size="caption" tone="secondary">{tr('People you did not allow get no reply.')}</Text>
     </VStack>
   )
 }

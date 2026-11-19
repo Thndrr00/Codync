@@ -117,6 +117,9 @@ public struct WhatsAppSheet: View {
                     }
                     .buttonStyle(.secondary)
                     .disabled(busy)
+                    Text(L10n.tr("Anyone can write until you allow chats. After that, people you did not allow get no reply."))
+                        .font(.caption)
+                        .foregroundStyle(Palette.secondary)
                 }
             }
             if let state = link?.state, ["connected", "qr", "starting", "pairing"].contains(state) {
@@ -180,6 +183,9 @@ public struct WhatsAppSheet: View {
                 .disabled(busy || jid.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.vertical, 2)
+            Text(L10n.tr("People you did not allow get no reply."))
+                .font(.caption)
+                .foregroundStyle(Palette.secondary)
         }
     }
 
