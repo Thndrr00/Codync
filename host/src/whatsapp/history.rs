@@ -185,6 +185,15 @@ fn remove_files(files: &[String]) {
     }
 }
 
+/// Deletes the file `save_media` wrote for a queued message that is dropped before history keeps its
+/// row. The path is the absolute one saved in `_codyncPath`; `relative` keeps it inside the data
+/// folder, so the same traversal guard and NotFound handling as a row's file apply.
+pub(crate) fn remove_queued_file(path: &str) {
+    if let Some(relative) = relative(path) {
+        remove_files(&[relative]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,5 +294,14 @@ mod tests {
         assert_eq!(kept_file(root, "whatsapp-media/a.jpg"), Some(root.join("whatsapp-media/a.jpg")));
         assert_eq!(kept_file(root, "../a.jpg"), None, "a row can't point outside the folder");
         assert_eq!(kept_file(root, "/etc/passwd"), None);
+    }
+
+    #[test]
+    fn a_queued_file_is_deleted_when_its_message_never_reaches_history() {
+        let (path, shown) = saved_file("queued.jpg");
+        remove_queued_file(&shown);
+        assert!(!path.exists(), "a dropped queued message takes its file with it");
+        remove_queued_file(&shown);
+        // Removing a file already gone is fine; only other errors are logged.
     }
 }

@@ -100,6 +100,44 @@ async fn hermes_whatsapp_notes_survive_temporary_disconnect_without_running_a_bo
     assert!(read(hub).unwrap().is_empty());
 }
 
+/// A queued message whose media file was saved as it arrived.
+fn queued_with_file(hub: &Hub, id: &str) -> (PathBuf, Pending) {
+    let dir = crate::service::data_dir().join("whatsapp-media");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(format!("{}-{id}.jpg", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&path, b"jpeg").unwrap();
+    let mut event = Fixture::event();
+    event["media"] = json!({"_codyncPath": path.to_string_lossy()});
+    let generation = snapshot(hub, &event, OWNER).unwrap().unwrap();
+    (path, Pending { id: id.into(), generation, event })
+}
+
+#[tokio::test]
+async fn a_revoked_queued_message_takes_its_file_with_it() {
+    let fixture = Fixture::new();
+    let hub = &fixture.hub;
+    let (path, pending) = queued_with_file(hub, "revoked");
+    hub.store.kv_set(KEY, &serde_json::to_string(&vec![pending]).unwrap()).unwrap();
+    // The authorization the message was queued under is gone before its turn.
+    let mut target = hub.store.bot("a").unwrap().unwrap().config;
+    target.hidden = true;
+    hub.store.save_bot(&target).unwrap();
+    tick(&hub.whatsapp, hub).await.unwrap();
+    assert!(read(hub).unwrap().is_empty(), "the revoked message leaves the queue");
+    assert!(!path.exists(), "with no history row to own it, its file goes with it");
+}
+
+#[tokio::test]
+async fn invalidating_the_link_deletes_files_of_queued_messages() {
+    let fixture = Fixture::new();
+    let hub = &fixture.hub;
+    let (path, pending) = queued_with_file(hub, "queued");
+    hub.store.kv_set(KEY, &serde_json::to_string(&vec![pending]).unwrap()).unwrap();
+    invalidate_link(hub).unwrap();
+    assert!(read(hub).unwrap().is_empty());
+    assert!(!path.exists(), "a file saved for a queued message goes when the link is dropped");
+}
+
 #[test]
 fn whatsapp_decisions_keep_the_original_author_when_another_participant_writes() {
     let fixture = Fixture::new();

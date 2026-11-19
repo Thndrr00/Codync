@@ -101,7 +101,9 @@ routine can read what came with a message that never reached the bot. `save_medi
 (`host/src/whatsapp.rs`) writes the file when the message arrives, before the mention and allow
 checks, and `whatsapp::history` keeps its path beside the text in a `file` column (relative to the
 data folder, added to a table made before the column on first use). Unlinking the number, or a
-message leaving the 90-day or 20 000-row retention, deletes the file with its row.
+message leaving the 90-day or 20 000-row retention, deletes the file with its row. A message revoked
+or dropped from the input queue before it reaches history also has its saved file deleted, so no
+file is left behind without a row.
 
 ## Not ported
 

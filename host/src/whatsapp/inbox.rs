@@ -25,9 +25,18 @@ fn read(hub: &Hub) -> Result<Vec<Pending>> {
     Ok(hub.store.kv_read(KEY)?.as_deref().map(serde_json::from_str).transpose()?.unwrap_or_default())
 }
 
+/// A queued message that is dropped before `on_message` writes its history row still owns the file
+/// `save_media` wrote; without a row, nothing else would delete it.
+fn remove_pending_media(event: &Value) {
+    if let Some(path) = event["media"]["_codyncPath"].as_str() {
+        super::history::remove_queued_file(path);
+    }
+}
+
 pub(super) fn invalidate_link(hub: &Hub) -> Result<()> {
     hub.whatsapp.revocation_pending.store(true, Ordering::SeqCst);
     let _guard = crate::LockExt::locked(&hub.store.connector_lock);
+    let queued = read(hub)?;
     let result = hub.store.with_connection(|connection| {
         let tx = connection.unchecked_transaction()?;
         tx.execute(
@@ -41,6 +50,9 @@ pub(super) fn invalidate_link(hub: &Hub) -> Result<()> {
     });
     if result.is_ok() {
         hub.whatsapp.revocation_pending.store(false, Ordering::SeqCst);
+        for pending in &queued {
+            remove_pending_media(&pending.event);
+        }
     }
     result
 }
@@ -238,20 +250,27 @@ async fn tick(app: &WhatsApp, hub: &Arc<Hub>) -> Result<()> {
     if app.state().await.state != "connected" {
         return Ok(());
     }
-    if fingerprint(app, hub, &pending.event).await?.as_deref() == Some(pending.generation.as_str()) {
+    let delivered = if fingerprint(app, hub, &pending.event).await?.as_deref() == Some(pending.generation.as_str()) {
         tokio::select! {
             biased;
-            result = revoked(app, hub, &pending) => { if !result? { return Ok(()) } },
-            () = app.on_message(hub, &pending.event, &pending.generation) => {},
+            result = revoked(app, hub, &pending) => { if !result? { return Ok(()) } false },
+            () = app.on_message(hub, &pending.event, &pending.generation) => true,
         }
-    }
+    } else {
+        false
+    };
     if app.state().await.state != "connected" {
         return Ok(());
     }
     let _guard = crate::LockExt::locked(&hub.store.connector_lock);
     let mut queue = read(hub)?;
     queue.retain(|job| job.id != pending.id);
-    hub.store.kv_set(KEY, &serde_json::to_string(&queue)?)
+    hub.store.kv_set(KEY, &serde_json::to_string(&queue)?)?;
+    // A delivered message's row now owns its file; every other removal leaves no row behind.
+    if !delivered {
+        remove_pending_media(&pending.event);
+    }
+    Ok(())
 }
 
 pub(super) fn start(app: &Arc<WhatsApp>, hub: &Arc<Hub>) {
