@@ -717,6 +717,7 @@
   "Memory of this bot…": "このボットの記憶…",
   "Message a bot": "ボットにメッセージを送信する",
   "Message about “{title}”": "「{title}」についてメッセージ",
+  "Message {name} in this thread": "このスレッドで {name} にメッセージ",
   "Message {name}": "{name} へのメッセージ",
   "Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention.": "許可されたチャットのメッセージは選んだボットに届きます。メンションからワークフローを開始することもできます。",
   "MiniMax Code is an AI coding agent with Agent Client Protocol support.": "MiniMax Code は、エージェント クライアント プロトコルをサポートする AI コーディング エージェントです。",

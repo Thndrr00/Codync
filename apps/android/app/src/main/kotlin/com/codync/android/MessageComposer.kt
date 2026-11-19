@@ -154,7 +154,8 @@ private enum class Trailing { Interrupt, Stop, Call, Send }
         terminal -> "This bot runs in your terminal — reply there; approvals still work here"
         about != null -> tr("Message about “{title}”").replace("{title}", about)
         replyQuote != null -> tr("Reply…")
-        thread != null -> "Reply…"
+        // A thread's title can be a whole message, so name the agent and this thread instead.
+        thread != null -> tr("Message {name} in this thread").replace("{name}", bot.name)
         bot.kind == "group" -> "Message everyone · @ to ask one bot"
         working -> tr("Message {name}").replace("{name}", bot.name)
         else -> "Ask ${bot.name}"

@@ -209,7 +209,8 @@ async fn the_settings_form_scrolls_to_keep_the_focused_field_in_sight() {
         terminal.backend().buffer().content().iter().map(ratatui::buffer::Cell::symbol).collect::<String>()
     };
     assert!(!drawn(0).contains("Skills"), "more fields than the form has rows");
-    assert!(drawn(FIELDS.len() - 1).contains("Skills"), "scrolled to the focused one");
+    assert!(drawn(FIELDS.len() - 2).contains("Skills"), "scrolled to the focused one");
+    assert!(drawn(FIELDS.len() - 1).contains("Apps"), "the shared apps link is the last row");
 }
 
 #[tokio::test]

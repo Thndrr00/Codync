@@ -717,6 +717,7 @@
   "Memory of this bot…": "這個 Bot 的記憶…",
   "Message a bot": "給 Bot 發訊息",
   "Message about “{title}”": "針對「{title}」傳訊息",
+  "Message {name} in this thread": "在此主題中給 {name} 發訊息",
   "Message {name}": "給 {name} 傳訊息",
   "Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention.": "允許的聊天中的訊息會送達你選擇的機器人。工作流程也可以由提及觸發。",
   "MiniMax Code is an AI coding agent with Agent Client Protocol support.": "MiniMax Code，支援 Agent Client Protocol 的 AI 程式設計智慧體。",

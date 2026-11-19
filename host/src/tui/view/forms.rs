@@ -75,6 +75,7 @@ fn field_help(app: &App, f: &Form, agent_name: &str) -> Option<(String, Style)> 
         Field::Team => {
             "Let this bot create bots and change any bot's setup, its own included. The bots it creates can too.".to_owned()
         }
+        Field::Apps => "Connect an app or add your own MCP server in Extensions. All agents get the apps you connect.".to_owned(),
         Field::Network => tr("Offered to the network: bots on your other computers can see and message this bot.").into_owned(),
         Field::Assistants => {
             tr("Reachable by cloud assistants: ChatGPT or Claude in your Codync account can see and message this bot.")
@@ -152,6 +153,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
             Field::Shape => "Shape",
             Field::Connectors => "Connectors",
             Field::Skills => "Skills",
+            Field::Apps => "Apps",
         };
         let label = tr(lab);
         put(buf, fx, y, label_w, &label, if active { t.bold } else { t.secondary }.patch(t.panel));
@@ -435,6 +437,7 @@ pub(super) fn form_view(buf: &mut Buffer, area: Rect, app: &App, f: &Form) {
         Field::Connectors => "←→ move · space toggle · tab next",
         Field::ModelOptions => "←→ move · space change · tab next",
         Field::Skills => "←→ move · space toggle · i details · tab next",
+        Field::Apps => "↵ open Extensions on Apps · tab next field",
         Field::Agent if f.backend == "hermes" => "←→ change · ↵ install / sign in · h runtime · tab next",
         Field::Agent => "←→ change · ↵ install / sign in · tab next",
         Field::Account => "left/right pick account; i sign in; r refresh",

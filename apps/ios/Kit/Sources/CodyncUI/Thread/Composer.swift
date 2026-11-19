@@ -63,6 +63,9 @@ struct Composer: View {
         if let artifact { return L10n.tr("Message about “{title}”").replacingOccurrences(of: "{title}", with: artifact.title) }
         if replyingTo != nil { return L10n.tr("Reply…") }
         if bot?.isGroup == true { return L10n.tr("Ask everyone · @ to ask one bot") }
+        // A thread can be named after a whole message, so the box names the agent and the thread
+        // instead of repeating that title (OpenBot 0.74.0).
+        if thread != nil { return L10n.tr("Message {name} in this thread").replacingOccurrences(of: "{name}", with: name) }
         let key = working ? "Message {name}" : "Ask {name}"
         return L10n.tr(key).replacingOccurrences(of: "{name}", with: name)
     }

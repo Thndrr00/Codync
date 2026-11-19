@@ -44,6 +44,7 @@ internal enum class FormPart { All, Often, Rarely }
     var folders by remember { mutableStateOf(false) }
     var viewingSkill by remember { mutableStateOf<SkillRef?>(null) }
     var addingFallback by remember { mutableStateOf(false) }
+    var showMarketplace by remember { mutableStateOf(false) }
     val online = state.actualConnection is LinkState.Ready
     val bot = state.bots.firstOrNull { it.id == draft.id }
     LaunchedEffect(online) { if (online) store.refreshPlugins() }
@@ -66,6 +67,7 @@ internal enum class FormPart { All, Often, Rarely }
                 CardSection("Activity") {
                     notifyRow(draft, change); computerUseRow(state, store, draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change)
                 }
+                appsRow { showMarketplace = true }
                 Plugins(state, draft, change) { viewingSkill = it }
                 draft.id?.let { MemoryCard(it, state, store) }
                 state.error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
@@ -86,6 +88,7 @@ internal enum class FormPart { All, Often, Rarely }
                 // The agent and its model are on the Details page; what's left is where it works.
                 CardSection("Workspace") { computerRow(state, online); placeRows(state, store, draft, bot?.securityProfile, change) { folders = true } }
                 CardSection("Activity") { notifyRow(draft, change); manageTeamRow(state, draft, change); reachRows(state, draft, change) }
+                appsRow { showMarketplace = true }
                 Plugins(state, draft, change) { viewingSkill = it }
             }
         }
@@ -97,6 +100,8 @@ internal enum class FormPart { All, Often, Rarely }
         }
     }
     CodyncSheet(viewingSkill, { viewingSkill = null }) { SkillSheet(it, state, store) }
+    // Apps belong to the computer and are shared by every agent; Extensions opens on its Apps tab.
+    CodyncSheet(showMarketplace, { showMarketplace = false }) { MarketplaceView(state, store) }
     CodyncSheet(addingFallback, { addingFallback = false }) {
         AddFallbackSheet(state, store, draft.backend, draft.fallbacks.orEmpty()) { change(draft.copy(fallbacks = draft.fallbacks.orEmpty() + it)); addingFallback = false }
     }
@@ -286,6 +291,16 @@ private fun CardRows.reachRows(state: AppState, draft: BotDraft, change: (BotDra
         row {
             SwitchRow("Reachable by cloud assistants", "ChatGPT or Claude in your Codync account can see and message this bot.", on,
                 { change(draft.copy(reachableByAssistants = it)) })
+        }
+    }
+}
+
+/** The shared apps row: a link to Extensions' Apps tab, not a per-bot toggle. */
+@Composable private fun CardRows.appsRow(open: () -> Unit) = row {
+    ValueRow(tr("Apps"), modifier = Modifier.plainButton(action = open)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(tr("All agents"), style = Type.caption, color = Palette.secondary)
+            Symbol("chevron.right", size = 13.dp, tint = Palette.tertiary)
         }
     }
 }

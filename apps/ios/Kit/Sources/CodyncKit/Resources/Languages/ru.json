@@ -717,6 +717,7 @@
   "Memory of this bot…": "Память этого бота…",
   "Message a bot": "Написать боту",
   "Message about “{title}”": "Сообщение о «{title}»",
+  "Message {name} in this thread": "Сообщение для {name} в этой ветке",
   "Message {name}": "Сообщение для {name}",
   "Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention.": "Сообщения из разрешённых чатов попадают выбранному боту. Рабочий процесс также может запускаться упоминанием.",
   "MiniMax Code is an AI coding agent with Agent Client Protocol support.": "MiniMax Code — ИИ-агент для программирования с поддержкой Agent Client Protocol.",

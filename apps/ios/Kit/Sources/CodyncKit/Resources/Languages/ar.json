@@ -308,6 +308,7 @@
   "See the": "راجع",
   "Value": "القيمة",
   "Language": "اللغة",
+  "Message {name} in this thread": "رسالة إلى {name} في هذا الموضوع",
   "Message about “{title}”": "رسالة حول «{title}»",
   "App version": "إصدار التطبيق",
   "Clear": "مسح",

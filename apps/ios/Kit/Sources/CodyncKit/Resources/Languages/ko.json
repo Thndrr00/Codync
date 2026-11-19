@@ -717,6 +717,7 @@
   "Memory of this bot…": "이 봇의 기억...",
   "Message a bot": "봇에게 메시지 보내기",
   "Message about “{title}”": "“{title}”에 대해 메시지 보내기",
+  "Message {name} in this thread": "이 스레드에서 {name}에게 메시지 보내기",
   "Message {name}": "{name}에게 보낼 메시지",
   "Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention.": "허용된 채팅의 메시지는 선택한 봇에게 전달됩니다. 멘션으로 워크플로를 시작할 수도 있습니다.",
   "MiniMax Code is an AI coding agent with Agent Client Protocol support.": "MiniMax Code는 Agent Client Protocol을 지원하는 AI 코딩 에이전트입니다.",

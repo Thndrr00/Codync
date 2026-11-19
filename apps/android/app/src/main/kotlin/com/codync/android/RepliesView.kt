@@ -56,6 +56,8 @@ import com.kyant.shapes.RoundedRectangle
     var renaming by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf("") }
     var confirmingDelete by remember { mutableStateOf(false) }
+    // The reply a thread message quotes, shown above this thread's own box until sent or cancelled.
+    var replyingTo by remember(rootId) { mutableStateOf<Entry?>(null) }
     // Jump to latest floats as chrome, frosting the replies scrolling under it.
     GlassStage(Modifier.fillMaxSize(), chrome = {
         JumpToLatest(scroll, Modifier.align(Alignment.BottomCenter).padding(bottom = with(density) { composerHeight.toDp() } + 10.dp))
@@ -113,12 +115,15 @@ import com.kyant.shapes.RoundedRectangle
                         if (state.error != null) LinkButton("Retry loading conversation") { store.loadDocumentConversation(bot.id, rootId) }
                     }
                 }
-                items(rows.filter { it !is ChatItem.Separator }, key = { it.id }) { item ->
+                // The thread reuses the chat's rows and separators, not a separate look of its own.
+                items(rows.filter { it !is ChatItem.Exchanges }, key = { it.id }) { item ->
                     when (item) {
-                        is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = openTrace, reply = null, connect = connect, thread = rootId)
+                        is ChatItem.Separator -> TimeSeparator(item.at)
+                        is ChatItem.Message -> ChatRow(item.entry, item.groupStart, bot, state, store, openTrace = openTrace,
+                            reply = { replyingTo = it }, connect = connect, thread = rootId)
                         is ChatItem.Pending -> PendingBubble(item.send, item.groupStart, state, store)
                         is ChatItem.NewLine -> NewLineRow(null)
-                        is ChatItem.Separator, is ChatItem.Exchanges -> {}
+                        is ChatItem.Exchanges -> {}
                     }
                 }
                 if (working) item("working") { WorkingIndicator(bot, currentThinking(state.entries, bot.id, rootId)) }
@@ -127,7 +132,8 @@ import com.kyant.shapes.RoundedRectangle
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { composerHeight = it.height }) {
             val mismatch = state.mismatch
             if (mismatch != null) UpdateNeededCard(state, mismatch, store::requestHostUpdate, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
-            else MessageComposer(bot, rootId, state, store, onCall = null)
+            else MessageComposer(bot, rootId, state, store, onCall = null,
+                replyingTo = replyingTo, cancelReply = { replyingTo = null })
         }
     }
     if (!doc) {

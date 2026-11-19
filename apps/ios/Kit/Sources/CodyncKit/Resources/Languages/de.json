@@ -717,6 +717,7 @@
   "Memory of this bot…": "Gedächtnis dieses Bots…",
   "Message a bot": "Einem Bot schreiben",
   "Message about “{title}”": "Nachricht zu „{title}“",
+  "Message {name} in this thread": "Nachricht an {name} in diesem Thread",
   "Message {name}": "Nachricht an {name}",
   "Messages from your allowed chats reach the bot you pick. A workflow can also start from a mention.": "Nachrichten aus deinen erlaubten Chats erreichen den gewählten Bot. Ein Workflow kann auch durch eine Erwähnung starten.",
   "MiniMax Code is an AI coding agent with Agent Client Protocol support.": "MiniMax Code ist ein KI-Coding-Agent mit Agent Client Protocol-Unterstützung.",

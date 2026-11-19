@@ -25,6 +25,7 @@ import { useAgentSetup } from './agent-status'
 import { lastPathComponent } from '../../lib/path'
 import { errorText, isValid, normalized, useFollowSaved, usePlugins, type Plugins } from './drafts'
 import { FormSheet } from '../marketplace/pieces'
+import { MarketplaceView } from '../marketplace/MarketplaceView'
 import { SkillSheet, type SkillRef } from '../marketplace/SkillSheet'
 import { AnchoredPanel, AutoTextArea, AvatarPicker, Field, SwitchRow } from './parts'
 import { ApprovalRulesEditor } from './ApprovalRulesEditor'
@@ -135,6 +136,7 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
   const [pickingAvatar, setPickingAvatar] = useState(false)
   const [pickingFolder, setPickingFolder] = useState(false)
   const [viewingSkill, setViewingSkill] = useState<SkillRef | null>(null)
+  const [showApps, setShowApps] = useState(false)
   const [proxy, setProxy] = useState<{ proxy: string | null; authenticated: boolean } | null>(null)
   const [proxyInput, setProxyInput] = useState('')
   const [proxyError, setProxyError] = useState<string | null>(null)
@@ -530,6 +532,10 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
 
         <ProactiveCheckIns settings={draft.proactive} onChange={(next) => set('proactive', next)} />
 
+        {/* Apps belong to the computer, shared by every agent: the Marketplace opens on Apps. */}
+        <ValueRow label="Apps">
+          <Button kind="secondary" onClick={() => setShowApps(true)}>{tr('All agents')}</Button>
+        </ValueRow>
         <PluginToggles
           title="Connectors"
           empty="No connectors yet. Add GitHub, Linear, Notion and more from Extensions."
@@ -550,6 +556,9 @@ function BotSettingsForm({ draft, onChange, error, plugins, part = 'all' }: {
       <FormSheet open={viewingSkill !== null} onClose={() => setViewingSkill(null)}>
         {viewingSkill ? <SkillSheet key={viewingSkill.name} skill={viewingSkill} /> : null}
       </FormSheet>
+      <Sheet open={showApps} onClose={() => setShowApps(false)} width={Math.min(920, window.innerWidth - 80)} height={Math.min(720, window.innerHeight - 80)} dismissOnDim>
+        <MarketplaceView initialSection="apps" />
+      </Sheet>
       <Sheet open={pickingFolder} onClose={() => setPickingFolder(false)} width={460} height={520}>
         <FolderPicker
           start={draft.cwd || store.hello?.home || null}

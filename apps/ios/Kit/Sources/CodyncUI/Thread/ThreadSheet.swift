@@ -23,6 +23,8 @@ struct ThreadSheet: View {
     @State private var renameText = ""
     @State private var deleting = false
     @State private var following = true
+    /// A bot-to-bot exchange's peer, whose conversation opens from the thread's compact row.
+    @State private var botChat: BotChatTarget?
 
     private var bot: Bot? { model.bots[botId] }
     private var working: Bool { bot?.isWorking(in: botId) == true && !model.isOffline }
@@ -58,6 +60,7 @@ struct ThreadSheet: View {
             info = await model.readThread(botId, root: root) ?? info
         }
         .codyncSheet(isPresented: $showTrace) { TraceView(botId: botId) }
+        .codyncSheet(item: $botChat) { BotConversationView(botId: botId, peerId: $0.id) }
         .codyncDialog("Rename thread", isPresented: $renaming, field: DialogField("A short name", text: $renameText)) {
             [DialogAction("Save") { model.renameThread(root, botId: botId, title: renameText) }]
         }
@@ -85,8 +88,24 @@ struct ThreadSheet: View {
         return items
     }
 
+    /// The thread reuses the chat's own rows: the same sender runs, day/time separators, compact
+    /// actions and working row, only scoped to this thread's replies.
+    @ViewBuilder private func row(_ item: ChatItem) -> some View {
+        switch item.kind {
+        case .separator(let date):
+            TimeSeparator(date: date)
+        case .exchanges(let group):
+            BotMessageRow(group: group) { botChat = BotChatTarget(id: group.peerId) }
+        case .entry(let e, let groupStart):
+            ChatRow(entry: e, groupStart: groupStart, chat: bot, openTrace: { showTrace = true },
+                    reply: e.isReplyable && model.mismatch == nil ? { replyingTo = e } : nil)
+                .equatable()
+        }
+    }
+
     private var transcript: some View {
         let replies = model.threadChat(botId, root)
+        let items = ChatItem.build(replies)
         var rows: [ConversationRow] = []
         if let branch = info?.branchText, !branch.isEmpty {
             rows.append(ConversationRow("branch") { BranchLine(text: branch) { dismiss() } })
@@ -97,17 +116,17 @@ struct ThreadSheet: View {
             })
             rows.append(ConversationRow("count") { CountLine(count: replies.count) })
         }
-        let newLineAfter = max(0, replies.count - unread)
-        for (index, reply) in replies.enumerated() {
-            if unread > 0, index == newLineAfter { rows.append(ConversationRow("new") { UnreadLine() }) }
-            rows.append(ConversationRow(reply.id) {
-                ChatRow(entry: reply, groupStart: index == 0 || replies[index - 1].kind == "user" || reply.kind == "user",
-                        chat: bot, openTrace: { showTrace = true }, reply: nil)
-            })
+        // The unread line sits above the first reply that came in after the thread was opened.
+        let newLineId = unread > 0 && replies.count >= unread ? replies[replies.count - unread].id : nil
+        for item in items {
+            if item.id == newLineId { rows.append(ConversationRow("new") { UnreadLine() }) }
+            rows.append(ConversationRow(item.id, isUserMessage: item.isUserMessage) { row(item) })
         }
+        // Working (and waiting) sit right under the last message, as in the agent's chat.
         if let bot, working {
             rows.append(ConversationRow("working") {
                 WorkingIndicator(bot: bot, steps: Entry.workingSteps(replies))
+                    .id(bot.startedAt)
                     .padding(.top, 6)
             })
         }

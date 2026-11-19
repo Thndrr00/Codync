@@ -234,6 +234,12 @@ impl App {
                 self.open_agent(&backend, false);
                 return None;
             }
+            // Apps are the computer's, shared by all agents: the row opens Extensions on Apps.
+            KeyCode::Enter if field == Field::Apps => {
+                self.overlays.push(Overlay::Form(f));
+                self.open_market();
+                return None;
+            }
             KeyCode::Char('i') if field == Field::Skills => {
                 let id = f.skills.get(f.sub).map(|t| t.id.clone());
                 let skill = self.plugins.1.iter().find(|v| v["id"].as_str() == id.as_deref()).cloned();

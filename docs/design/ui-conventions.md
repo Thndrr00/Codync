@@ -162,6 +162,16 @@ and states.
   `v`/`r` picks a message, j/k moves to the row, ↵ (or a click) opens it, j/k ↑↓ and
   ^u/^d scroll, esc closes; `r`, `f` and `1…6` on the row say it is read-only. The data contract is
   [bot collaboration](../features/bot-collaboration.md#notice-data).
+- A thread reads like the agent's chat on every client that has one: consecutive messages from one sender
+  are one block, a day/time separator splits quiet stretches, the working and waiting rows sit under the
+  last message, and an answer's steps live in its action row with Reply and the message menu. Each thread
+  reuses its platform's chat rows and grouping helper (`buildChat`/`ChatItem.build`/`chatItems`) rather than
+  a separate thread-only row. The thread message box names the agent and "this thread", not the thread
+  title, which can be a full message (OpenBot 0.74.0).
+- Every bot settings form has an **Apps** row beside Connectors and Skills, with the value **All agents**:
+  it opens the existing Marketplace on its Apps tab, where a person connects an app or adds a custom MCP
+  server with **Add custom**. Apps are the computer's, shared by every agent, so the row is a link and not
+  a per-bot toggle. The TUI row opens Extensions with Enter (`Action::Market`, the `A` action).
 - TUI bot settings include **Use computer** and **Manage team**, matching the iPhone and desktop apps. The
   remote-screen viewer and voice-call UI are not in the TUI.
 - A bot's pages in the TUI match the inspector's tabs: `R` opens Details (the agent, model and first line of the instructions, which `i` edits in

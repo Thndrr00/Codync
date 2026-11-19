@@ -216,9 +216,11 @@ pub enum Field {
     Shape,
     Connectors,
     Skills,
+    /// A link to Extensions' Apps tab, shared by every agent (not a per-bot setting).
+    Apps,
 }
 
-pub const FIELDS: [Field; 29] = [
+pub const FIELDS: [Field; 30] = [
     Field::Name,
     Field::Instructions,
     Field::Check,
@@ -248,6 +250,7 @@ pub const FIELDS: [Field; 29] = [
     Field::Shape,
     Field::Connectors,
     Field::Skills,
+    Field::Apps,
 ];
 
 pub struct Toggle {

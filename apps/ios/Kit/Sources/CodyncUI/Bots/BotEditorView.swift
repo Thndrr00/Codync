@@ -73,6 +73,7 @@ struct BotSettingsForm: View {
     @State private var pickingFolder = false
     @State private var pickingAvatar = false
     @State private var viewingSkill: SkillRef?
+    @State private var showingApps = false
     /// Retry model list reloads Permissions too: its modes come from the same list.
     @State private var modelReload = 0
 
@@ -104,6 +105,8 @@ struct BotSettingsForm: View {
             backgroundModels = (try? await model.loadAgentModels(backend: draft.backend, account: draft.account))?.models ?? []
         }
         .codyncSheet(item: $viewingSkill) { SkillSheet(skill: $0) }
+        // Apps are the computer's, shared by every agent: MarketplaceView opens on its Apps tab.
+        .codyncSheet(isPresented: $showingApps) { MarketplaceView() }
         .codyncSheet(isPresented: $pickingFolder) {
             FolderPicker(start: draft.cwd.isEmpty ? model.hello?.home : draft.cwd) {
                 draft.cwd = $0
@@ -330,6 +333,17 @@ struct BotSettingsForm: View {
                               isOn: Binding(get: { draft.reachableByAssistants ?? true }, set: { draft.reachableByAssistants = $0 }))
                 }
             }
+
+            Button { showingApps = true } label: {
+                ValueRow("Apps") {
+                    HStack(spacing: 6) {
+                        Text(L10n.tr("All agents"))
+                        Image(systemName: "chevron.right").font(.caption2)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             PluginToggles(
                 title: "Connectors",
