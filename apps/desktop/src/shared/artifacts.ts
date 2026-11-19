@@ -35,11 +35,12 @@ const FOLLOWED_MS = 1000
 /** Whether what an artifact opens follows the user: a click or key in the window, after its viewer loaded, just now. */
 export const followsUser = (input: number, loaded: number, now: number) => input > loaded && now - input < FOLLOWED_MS
 
-/** One thing in a chat's Library (`library`): an artifact, a file the bot shared, or one the user attached. */
+/** One thing in a chat's Library (`library`): an artifact, a file the bot shared, or one the user attached.
+ * `folderId` is the folder (of this chat) it is filed in; without one it shows under Not in a folder. */
 export type LibraryItem =
-  | { kind: 'artifact'; at: number; artifact: Artifact }
-  | { kind: 'file'; at: number; entryId: string; file: SharedFile }
-  | { kind: 'attachment'; at: number; entryId: string; file: Attachment }
+  | { kind: 'artifact'; at: number; folderId?: string; artifact: Artifact }
+  | { kind: 'file'; at: number; folderId?: string; entryId: string; file: SharedFile }
+  | { kind: 'attachment'; at: number; folderId?: string; entryId: string; file: Attachment }
 
 /** An artifact card in the chat (`data.artifact`): the artifact as it was published then. */
 export interface ArtifactCard {

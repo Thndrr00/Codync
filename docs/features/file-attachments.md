@@ -86,3 +86,10 @@ The terminal UI shows only the card.
 This feature adds no previews of other file types, folder packaging, background
 transfers, persistent resume or Watch UI. Existing bots do not publish workspace files
 automatically: they must call `send_file`.
+
+A chat's Library (desktop) can file its artifacts and shared files in folders held in the host's kv blob per chat;
+the side rail adds **Favorites**, **All files**, **Recent** (last 7 days) and **Not in a folder**, folder tiles show
+their newest items, and dragging an item onto a tile, onto **New folder** or onto **Not in a folder** files, creates
+or unfiles it with an **Undo** notice. Starred folders are kept in this browser only. A bot can organize its own chat's
+folders with the `library` chat tools (deleting a folder needs approval under Ask); libraries with no folders read as
+before.

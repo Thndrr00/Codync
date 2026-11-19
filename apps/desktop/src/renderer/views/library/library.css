@@ -136,6 +136,30 @@
   opacity: 1;
 }
 
+/* The side rail, folder tiles and move notice of a chat's Library. */
+.library-view { width: 100%; min-width: 0; }
+.library-rail { flex: none; width: 118px; padding-right: 4px; border-right: 1px solid var(--border); }
+.library-rail-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; color: var(--text); background: transparent; border-radius: var(--radius-s); text-align: left; transition: background-color var(--hover), color var(--hover); }
+.library-rail-item:hover { background: var(--surface); }
+.library-rail-item.active { background: var(--raised, var(--surface)); }
+.library-rail-sub { display: flex; flex-direction: column; padding-left: 10px; }
+.library-rail-item.drop-target { background: var(--surface); outline: 1px dashed var(--secondary); }
+.library-content { flex: 1; min-width: 0; }
+.library-folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.library-folder-tile { min-width: 0; padding: 8px; background: var(--surface); border-radius: var(--radius-s); transition: background-color var(--hover), transform var(--press); }
+.library-folder-tile.can-drop:hover { background: var(--raised, var(--surface)); }
+.library-folder-open { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding: 0; color: var(--text); background: none; border: none; text-align: left; }
+.library-folder-field { flex: 1; min-width: 0; padding: 0; font: inherit; font-size: var(--text-callout); color: var(--text); background: none; border: none; outline: none; }
+.library-folder-menu { opacity: 0; transition: opacity var(--hover); }
+.library-folder-tile:hover .library-folder-menu,
+.library-folder-menu[aria-expanded='true'],
+.library-folder-menu:focus-visible { opacity: 1; }
+.library-folder-newest { min-width: 0; padding: 4px 0 0 22px; }
+.library-folder-tile.new { display: flex; align-items: center; min-height: 46px; border: 1px dashed var(--border); background: transparent; }
+.library-undo { padding: 8px 10px; background: var(--surface); border-radius: var(--radius-s); }
+.library-row[draggable='true'] { cursor: grab; }
+.library-row[draggable='true']:active { cursor: grabbing; }
+
 /* Several artifacts open at once: a tab strip over the one shown. */
 .artifact-tabbed {
   position: absolute;

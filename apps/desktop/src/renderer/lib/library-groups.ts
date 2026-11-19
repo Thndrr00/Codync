@@ -3,6 +3,13 @@ export type LibraryGroup = 'Today' | 'Yesterday' | 'This week' | 'Earlier'
 
 const DAY = 24 * 60 * 60 * 1000
 
+/** The side rail's Recent view: the last seven days, rolling from now. */
+export const RECENT_DAYS = 7
+
+export function isRecent(at: number, now = Date.now()): boolean {
+  return at > now - RECENT_DAYS * DAY && at <= now
+}
+
 export function libraryGroup(at: number, now = Date.now()): LibraryGroup {
   const today = new Date(now).setHours(0, 0, 0, 0)
   if (at >= today) return 'Today'

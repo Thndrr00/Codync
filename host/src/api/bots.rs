@@ -120,6 +120,8 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 crate::chat::fallbacks::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::chat::artifacts::TOOLS.contains(&name) {
                 crate::chat::artifacts::call(hub, bot, name, &b["arguments"]).await?
+            } else if crate::chat::library::TOOLS.contains(&name) {
+                crate::chat::library::agent_tools::call(hub, bot, name, &b["arguments"]).await?
             } else if crate::dev_servers::TOOLS.contains(&name) {
                 crate::dev_servers::call(hub, bot, name, &b["arguments"]).await?
             } else {
@@ -577,6 +579,13 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             crate::chat::memory::import_agent_memory(hub, str_arg(&b, "botId")?, &b["facts"]).await?
         }
         "library" => crate::chat::library::list(hub, str_arg(&b, "botId")?)?,
+        // A chat's Library folders: list them with their items, or make, rename, move, delete and file.
+        "libraryFolders"
+        | "libraryFolderCreate"
+        | "libraryFolderRename"
+        | "libraryFolderMove"
+        | "libraryFolderDelete"
+        | "libraryFileItem" => crate::chat::library::call(hub, method, &b)?,
         "readArtifact" | "renameArtifact" => crate::chat::artifacts::api(hub, method, &b).await?,
         "editHandoff" | "keepConversation" => crate::chat::handoff::call(hub, method, &b)?,
         "react" => {
