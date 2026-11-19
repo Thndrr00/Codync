@@ -8,6 +8,7 @@ import { Text } from '../../components/Text'
 import { copyPicture } from '../../lib/copy-image'
 import { useTr } from '../../lib/use-language'
 import { useStoreRef } from '../../store/context'
+import { ZoomableImage } from './ZoomableImage'
 import './attachments.css'
 
 /** The symbol for a file by its extension. */
@@ -86,7 +87,9 @@ export function AttachmentViewer({ source, close }: { source: ImageSource | null
           <ModalHeader title={source.file.name} trailing={<Button kind="secondary" onClick={() => void copy()}>{tr('Copy')}</Button>} />
           {note ? <Text size="caption" tone="secondary">{note}</Text> : null}
           <div className="attachment-viewer">
-            <AttachmentImage source={source} fit="full" />
+            <ZoomableImage>
+              <AttachmentImage source={source} fit="full" />
+            </ZoomableImage>
           </div>
         </SheetPage>
       ) : null}
