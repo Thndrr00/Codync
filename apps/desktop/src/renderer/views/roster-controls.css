@@ -17,6 +17,29 @@
 .roster-history { padding: 16px; overflow-y: auto; }
 .roster-hit { text-align: start; padding: 12px; border-radius: 12px; background: var(--surface); color: var(--text); overflow-wrap: anywhere; }
 .roster-preview-message { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* The disclosure sits beside the row button: a button cannot hold another button. It is part of
+   the row visually, and a real button so Tab, Enter and Space work. */
+.roster-row-threads { position: relative; }
+.roster-row-threads > .roster-row { padding-right: 30px; }
+.roster-thread-disclosure { position: absolute; top: 24px; right: 4px; translate: 0 -50%; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; color: var(--tertiary); }
+.roster-thread-disclosure:hover, .roster-row-threads:hover .roster-thread-disclosure { color: var(--secondary); }
+.roster-thread-disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.roster-thread-chevron { display: inline-flex; transition: transform var(--morph); }
+.roster-thread-chevron.expanded { transform: rotate(90deg); }
+/* Threads fold with the row: grid rows animate from no height to their content. */
+.roster-threads { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--morph); }
+.roster-threads.open { grid-template-rows: 1fr; }
+.roster-threads-inner { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+.roster-threads-empty { padding: 2px 8px 6px 38px; }
+.roster-thread-row { display: flex; align-items: center; gap: 6px; width: calc(100% - 32px); margin-left: 32px; padding: 5px 6px; border-radius: var(--radius-s); text-align: start; color: var(--text); }
+.roster-thread-row:hover { background: var(--bubble-agent); }
+.roster-thread-row:active { background: var(--surface); }
+.roster-thread-row:disabled { opacity: .5; }
+.roster-thread-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.roster-thread-row .unread-badge { min-width: 16px; height: 16px; padding: 0 4px; }
+.roster-thread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.roster-thread-working { display: inline-flex; flex: none; }
+.roster-thread-open { color: var(--tertiary); }
 .roster-row-actions { display: flex; justify-content: flex-end; gap: 4px; }
 .roster-row-actions button { padding: 6px 10px; color: var(--secondary); border-radius: 8px; background: var(--surface); min-height: 32px; }
 .roster-row-actions button:disabled { opacity: .5; }

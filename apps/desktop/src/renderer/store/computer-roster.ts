@@ -8,6 +8,7 @@ import { sameRef, type AppModel, type BotRef, type RosterItem } from './app-mode
 import { useState } from 'react'
 import { matchesRoster, type RosterGrouping } from '../lib/roster-query'
 import { NO_ROSTER_VIEW_FILTER, matchesRosterView, normalizeRosterViewFilter, rosterViewFilterIsSet, type RosterViewFilter } from '../lib/roster-view-filter'
+import type { ThreadInfo } from '@shared/models'
 
 /** Device-local section ordering and folding, matching the iPhone roster. */
 export function useComputerRoster(app: AppModel, shown: Set<string>) {
@@ -51,6 +52,10 @@ export function useComputerRoster(app: AppModel, shown: Set<string>) {
       setSectionOrders({ ...prefs.rosterSectionOrder.get(), [computerId]: names })
     },
     items: sections.flatMap((section) => section.items),
+    /** The bot's live threads as the chat's thread drawer already loaded them, newest first. */
+    threadsFor(item: RosterItem): ThreadInfo[] {
+      return item.store.threads.get(item.bot.id) ?? []
+    },
     /** The rows on screen, top to bottom, for â†‘/â†“. */
     navigable: sections.flatMap((section) => grouped && collapsed.includes(section.computer.id) ? [] : shownRows(rosterLines(section.items, folded, sectionOrders[section.computer.id]))),
     toggle(id: string) {

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { runningAgent } from '@shared/fallbacks'
-import { isGroup, type Bot } from '@shared/models'
+import { isGroup, type Bot, type ThreadInfo } from '@shared/models'
+import { Icon } from '../components/Icon'
+import { Sheet } from '../components/Overlay'
 import { moveInOrder } from '../lib/computer-roster'
 import { pointerDrag, type Point } from '../lib/pointer-drag'
 import { prefs, usePref } from '../lib/prefs'
@@ -17,6 +19,8 @@ import { ComputerHeadingLabel, ComputerRosterSection } from './ComputerRosterSec
 import { AppFloorCard, UpdateNeededCard } from './UpdateNeededCard'
 import { RosterControls, RosterPreview } from './RosterControls'
 import { RosterSection } from './RosterSection'
+import { RepliesView } from './thread/RepliesView'
+import { RosterThreads } from './RosterThreads'
 import { RosterStops } from '../store/roster-query'
 import { rosterProject, rosterProjectLabel } from '../lib/roster-query'
 import { useModel } from '../lib/observable'
@@ -55,6 +59,9 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
   const validPreview = preview && roster.allItems.some((item) => item.store === preview.store && sameRef(item.ref, preview.ref)) ? preview : null
   useEffect(() => { if (preview && !validPreview) setPreview(null) }, [preview, validPreview])
   const [revealed, setRevealed] = useState<string | null>(null)
+  // One expanded row at a time; threads stay folded with their row and with its computer section.
+  const [expandedThreads, setExpandedThreads] = useState<string | null>(null)
+  const [threadOpen, setThreadOpen] = useState<{ botId: string; store: BotStore; threadId: string } | null>(null)
   const [collapsedProjects, setCollapsedProjects] = usePref(prefs.collapsedProjects)
   const [stops] = useState(() => new RosterStops())
   useModel(stops)
@@ -206,8 +213,15 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
     const many = roster.sections.length > 1
     const agent = logoAgent(item, agentLogos)
     const name = agent ? `${item.bot.name}, ${item.store.backendName(agent)}` : item.bot.name
+    const expanded = !compact && expandedThreads === key
+    const threads = compact ? noThreads : roster.threadsFor(item)
+    const toggleThreads = () => {
+      if (expanded) return setExpandedThreads(null)
+      setExpandedThreads(key)
+      void item.store.refreshThreads(item.bot.id).catch((e: unknown) => item.store.setError(e instanceof Error ? e.message : String(e)))
+    }
     return (
-      <div key={key}>
+      <div key={key} className="roster-row-threads">
       <RosterRow
         key={key}
         hovered={hovered === key || held}
@@ -226,6 +240,16 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
       >
         <RosterBotRow item={item} compact={compact} agent={agent} />
       </RosterRow>
+      {!compact ? <button className="roster-thread-disclosure press" aria-expanded={expanded}
+        aria-label={`${expanded ? 'Hide' : 'Show'} threads for ${item.bot.name}`}
+        title={`${expanded ? 'Hide' : 'Show'} threads`} onClick={toggleThreads}>
+        <span className={`roster-thread-chevron ${expanded ? 'expanded' : ''}`}><Icon name="chevron.right" size={9} /></span>
+      </button> : null}
+      {!compact ? <RosterThreads bot={item.bot} store={item.store} threads={threads} open={expanded}
+        onOpen={(thread) => {
+          app.select(item.ref)
+          setThreadOpen({ botId: item.bot.id, store: item.store, threadId: thread.id })
+        }} /> : null}
       {!compact && revealed === key ? <div className="roster-row-actions">
         <button onClick={() => setPreview(item)}>Preview</button>
         <button disabled={item.store.connection.kind !== 'online'} onClick={() => item.store.setPinned(item.bot, !item.bot.pinned)}>{item.bot.pinned ? 'Unpin' : 'Pin'}</button>
@@ -305,6 +329,12 @@ export function BotRoster({ roster, compact, onContext, onSectionContext, openEx
       {sections}
       {validPreview ? <RosterPreview item={validPreview} close={() => setPreview(null)} open={() => { app.select(validPreview.ref); setPreview(null) }} /> : null}
       {lift ? <RosterGhost key={lift.seq} lift={lift} ghost={ghost} compact={compact} logos={agentLogos} /> : null}
+      {/* The same thread view the chat's Threads tab uses, over the now-selected bot's chat. */}
+      {threadOpen ? <StoreContext.Provider value={threadOpen.store}>
+        <Sheet open onClose={() => setThreadOpen(null)} width={620} height={560}>
+          <RepliesView botId={threadOpen.botId} rootId={threadOpen.threadId} close={() => setThreadOpen(null)} />
+        </Sheet>
+      </StoreContext.Provider> : null}
     </>
   )
 }
@@ -392,6 +422,7 @@ function RosterRow({ hovered, lifted, compact, label, title, selected, dragKey, 
 }
 
 const noMembers: Bot[] = []
+const noThreads: ThreadInfo[] = []
 
 /** How long the lifted copy takes to settle into its slot (`--morph`). */
 const SETTLE_MS = 200
