@@ -156,6 +156,10 @@
   fill: var(--accent);
   opacity: 0.3;
 }
+.flow-minimap rect[data-kind='group'] {
+  fill: var(--accent);
+  opacity: 0.5;
+}
 .flow-minimap rect.flow-minimap-view {
   fill: none;
   stroke: var(--accent);
@@ -287,6 +291,64 @@
 }
 .flow-node[data-target='true'] {
   box-shadow: 0 0 0 2px var(--added), var(--shadow-m);
+}
+
+/* A group: a folded stack card and its per-output-kind ports on the canvas. */
+.flow-group-card {
+  background: color-mix(in srgb, var(--accent) 6%, var(--sheet));
+  gap: 8px;
+}
+.flow-group-previews {
+  min-height: 22px;
+}
+.flow-group-preview {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--accent) 14%, var(--sheet));
+  color: var(--accent);
+}
+.flow-group-preview + .flow-group-preview {
+  margin-left: -10px;
+}
+.flow-port-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--chrome-stroke);
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--accent);
+  cursor: crosshair;
+}
+.flow-port-node:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.flow-port-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.flow-edge-count {
+  fill: var(--secondary);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+}
+.flow-length-custom input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.flow-group-name {
+  min-height: 34px;
 }
 .flow-port {
   position: absolute;

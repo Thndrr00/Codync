@@ -19,9 +19,31 @@ from the graphical canvas of the desktop and phone apps, or in the terminal UI (
 | **Step status** | `running`, `succeeded`, `failed`, `skipped`, `cancelled` |
 | **Media step** | `id`, `routineId`, `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
 | **Position** | `nodeKey` (`routine:<id>`, `bot:<id>` or `media:<id>`), `x`, `y` (numbers, at most ±1 000 000) |
+| **Group** | `id`, `name` (≤ 120 chars), `members` (node keys, each in at most one group), `collapsed` (folded into a stack card), `x`, `y` (card position) — drawing only, never changes what runs |
 
 A **canvas** belongs to a bot and holds every routine it owns or that passes through it, the links of
-those routines, where the nodes sit, and the bots **placed** on it before any link reaches them.
+those routines, where the nodes sit, the bots **placed** on it before any link reaches them, and the
+**groups** of nodes drawn together. Groups are ported from OpenBot 0.74.0 but use Codync's model:
+a group bundles canvas nodes, it is not a workflow of its own.
+
+## Grouping nodes
+
+Select several nodes (click with Ctrl/Cmd or Shift held to add them), press **Group** (Ctrl/Cmd+G) and
+give the group a name. A group has **one port per distinct output kind** of its members — a bot's
+*Reply*, a picture step's *Picture*, a clip step's *Clip*. A line drawn from one of those ports
+reaches every member of that kind. Links from several members to the same node are drawn as **one line
+with a count**, not a tangle of lines. Drag a group card to move its members with it.
+
+Press **Collapse group** (or double-click its card) to fold the members into a **stack card** that
+previews the pictures it holds; double-click the card to open it again. **Ungroup** (Shift+Ctrl/Cmd+G)
+ends the group but leaves every node and link in place — a group never changes what a routine runs.
+Pasting or dropping two or more files on the canvas makes one picture step per file, all in a single
+new group. An older host or canvas with no groups simply shows the nodes ungrouped.
+
+A video step's **Length** menu lists the lengths its model declares. When the model declares more
+than one, **Custom** opens a slider over the range those lengths span (the smallest to the largest,
+one second per step), so the step can make a clip of exactly that length. The value is saved with the
+step; a host that doesn't know Custom keeps the short list.
 
 ## Running a flow
 
@@ -86,6 +108,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `addRoutineFlowMedia` | `routineId`, `kind` (`image`/`video`) | `{"media": MediaStep}` |
 | `updateRoutineFlowMedia` | `mediaId` and any of `prompt`, `model`, `aspect`, `duration`, `resolution`, `voice`, `transparent` | `{"media": MediaStep}` |
 | `removeRoutineFlowMedia` | `mediaId` | `{"ok": true}` |
+| `saveRoutineFlowGroups` | `botId`, `groups` (the whole list of Groups; every member must name an existing node) | `{"ok": true}` |
 | `testRoutineFlow` | `botId` (the routine's owner), `routineId`, optional `input` | `{"runId": "flow-test-…"}` |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
@@ -108,7 +131,8 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
   "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
   "mediaNodes": [ { "id": "…", "routineId": "…", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
   "positions": [ { "nodeKey": "routine:…", "x": 0.0, "y": 0.0 } ],
-  "placedBotIds": ["…"]
+  "placedBotIds": ["…"],
+  "groups": [ { "id": "g1", "name": "Pictures", "members": ["media:…", "media:…"], "collapsed": false, "x": 0.0, "y": 0.0 } ]
 }
 ```
 
@@ -131,6 +155,8 @@ when to use them (see [Routines](routines.md#conversational-setup-and-tools)).
 
 SQLite tables `routine_flow_links`, `routine_flow_steps`, `routine_flow_positions` and `routine_flow_placed`
 (`host/src/store/flows.rs`, `flow_steps.rs`), with indexes by routine, owner bot, target bot and step status.
+A bot's groups live in the kv blob (`routineflow.groups.<botId>`, written and validated by
+`host/src/routines/flow/groups.rs`), so an older canvas without the field reads as ungrouped.
 Routines themselves live in the `routines.v1` JSON blob, so the cascade is explicit: deleting a routine
 (`flow::forget_routine`) or a bot (`flow::forget_bot`, also at startup for deleted bots) removes its links,
 steps, positions and placements in one transaction. Each change stamps a global `rev` and records it per bot in
@@ -145,7 +171,7 @@ ignore the new method names and `routineFlow` events (the TUI and apps skip unkn
 
 In each client, a bot's routines screen has a **List | Flow** selector. Flow shows the canvas of that bot: routine, bot and media nodes, a fixed dashed edge from each routine to its own bot, link edges, saved positions (nodes never moved sit in automatic columns by depth), and each bot's latest step status (icon and words, never colour alone). A **list** of the same flow is the keyboard and screen-reader equivalent (and the phone's default with TalkBack on or on narrow screens). Both open the same inspector: a routine (pause/resume, test, add a picture or clip step, latest steps, run history), a bot (hand its reply on to…, remove if placed by hand), a media step (description, model, frame and a video's length, resolution and voice, transparency, save, remove, hand its file on to…, which also hands on to bots) or a link (instruction, model and its options, disconnect). States: loading, no routines, not connected, no runs yet, error with retry, offline (read-only) and a host without the methods (the canvas says to update Codync there). The desktop rail's **Bot canvas** button opens the selected bot's flow in the same large sheet.
 
-- **Desktop** (`apps/desktop/src/renderer/views/routines/flow/`, model `lib/routine-flow.ts`, state `store/routine-flow-store.ts`): hand-written pan/zoom/drag; connect by dragging from a bot's dot onto another bot, or from the inspector. Choosing **Flow** opens the canvas in a large sheet (the details column is too narrow for a graph); the same canvas can be reopened from its expand button. A routine card shows the next seven days as seven tick columns and its newest runs as status dots, with a play button that tests the flow (disabled until a bot is linked).
+- **Desktop** (`apps/desktop/src/renderer/views/routines/flow/`, model `lib/routine-flow.ts`, state `store/routine-flow-store.ts`): hand-written pan/zoom/drag; connect by dragging from a bot's dot onto another bot, or from the inspector. Choosing **Flow** opens the canvas in a large sheet (the details column is too narrow for a graph); the same canvas can be reopened from its expand button. A routine card shows the next seven days as seven tick columns and its newest runs as status dots, with a play button that tests the flow (disabled until a bot is linked). Multi-select and Ctrl/Cmd+G group nodes (one port per output kind, counted lines, a collapse/expand stack card, Shift+Ctrl/Cmd+G to ungroup); a video step's Length menu has a Custom slider over the model's declared range. Groups are desktop-only drawing state: the phone and terminal clients keep showing the ungrouped nodes and links.
 - **Android** (`RoutineFlow*.kt`, model `core/RoutineFlow.kt`): pan, pinch and node dragging; connect from the bot's detail sheet; the same week strip, run dots and play button on a routine card.
 - **Terminal** (`f` on a routine): the chain as rows; same words (Running, Succeeded, Failed, Skipped, Cancelled).
 - **iPhone**: not built yet, so routine flows and their media steps are read and edited on the other clients.

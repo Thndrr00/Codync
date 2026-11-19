@@ -305,7 +305,8 @@ pub fn check(request: &Request) -> Result<()> {
             request.resolution.as_deref().is_some_and(|value| catalog::resolutions(request.model).contains(&value)),
             "unsupported resolution"
         );
-        ensure!(catalog::durations(request.model).contains(&request.duration), "unsupported length");
+        // OpenBot 0.74.0: any whole-second length in the model's range, not only its presets.
+        ensure!(catalog::valid_duration(request.duration), "unsupported length");
     } else if request.resolution.is_some() {
         bail!("an image has no resolution");
     }
@@ -401,7 +402,9 @@ mod tests {
         assert!(check(&image("a fox")).is_ok());
         let mut request = parse(Kind::Video, "grok", "a fox").unwrap();
         request.duration = 7;
-        assert!(check(&request).is_err());
+        assert!(check(&request).is_ok(), "a custom length in range is allowed (OpenBot 0.74.0)");
+        request.duration = 0;
+        assert!(check(&request).is_err(), "a length of zero is never allowed");
         request.duration = 6;
         request.resolution = None;
         assert!(check(&request).is_err());

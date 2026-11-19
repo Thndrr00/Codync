@@ -1,32 +1,49 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import type { Bot } from '@shared/models'
 import { IconButton } from '../../../components/Controls'
+import { Icon } from '../../../components/Icon'
 import { useTr } from '../../../lib/use-language'
 import {
-  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, flowEdges, isUnconnected, latestStep, layoutNodes, mediaOf, nodeAt, stepOf, zoomAt,
-  type FlowCanvas, type FlowNode, type View,
+  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, isUnconnected, latestStep, mediaOf, mediaTitle, nodeAt, stepOf, zoomAt,
+  type FlowNode, type View,
 } from '../../../lib/routine-flow.ts'
+import {
+  CanvasWithGroups, groupKey, groupOf, groupedEdges, groupedNodes, groupsOf, parsePort, portPrefix,
+  type FlowGroup, type GroupedEdge,
+} from './flow-groups'
+import { FlowGroupCard, type GroupPreview } from './FlowGroupCard'
 import { FlowNodeCard } from './FlowNodeCard'
 
-export type FlowSelection = { kind: 'node'; key: string } | { kind: 'edge'; id: string } | null
+export type FlowSelection = { kind: 'node'; key: string } | { kind: 'edge'; id: string } | { kind: 'group'; id: string } | null
 
 interface Props {
-  canvas: FlowCanvas
+  canvas: CanvasWithGroups
   bots: ReadonlyMap<string, Bot>
   selection: FlowSelection
   disabled: boolean
   onSelect: (selection: FlowSelection) => void
   onMove: (nodeKey: string, x: number, y: number) => void
-  /** A step's connection was dropped on another bot or media step. */
-  onConnect: (fromBotId: string, toBotId: string, at: { x: number; y: number }) => void
+  /** A whole group (and its members) was dragged to a new origin. */
+  onMoveGroup: (groupId: string, x: number, y: number) => void
   /** Runs this routine's flow now, from its card. */
   onRun: (routineId: string) => void
   /** Stops the routine run in flight, from its card (OpenBot 0.71.0). */
   onStop: (routineId: string) => void
+  /** A step's connection was dropped on another bot or media step. */
+  onConnect: (fromBotId: string, toBotId: string, at: { x: number; y: number }) => void
+  /** Several selected nodes are being grouped (the view asks for the name). */
+  onGroup: (keys: string[]) => void
+  onUngroup: (groupId: string) => void
+  /** Collapse or expand a group (double-click a stack card opens it). */
+  onToggleGroup: (groupId: string) => void
+  /** Two or more files were pasted or dropped; the view makes a node per file in one group. */
+  onFiles: (files: { name: string }[]) => void
 }
 
 const NUDGE = 20
 const DRAG_SLOP = 3
+const PORT_LABEL: Record<string, string> = { text: 'Reply', image: 'Picture', video: 'Clip' }
+const PORT_ICON: Record<string, string> = { text: 'bubble.left', image: 'photo', video: 'film' }
 
 /** A small overview of the canvas: every card, and the part the viewport shows. */
 function MiniMap({ nodes, view, box, onCenter }: {
@@ -68,7 +85,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
       <svg viewBox="0 0 150 90" aria-hidden="true">
         {nodes.map((node) => {
           const p = at(node.x, node.y)
-          return <rect key={node.key} x={p.x} y={p.y} width={NODE_WIDTH * scale} height={NODE_HEIGHT * scale} rx={2} data-kind={node.kind} />
+          return <rect key={node.key} x={p.x} y={p.y} width={NODE_WIDTH * scale} height={NODE_HEIGHT * scale} rx={2} data-kind={node.key.startsWith('group:') ? 'group' : node.key.startsWith(portPrefix) ? 'media' : node.kind} />
         })}
         <rect className="flow-minimap-view" x={visible.x} y={visible.y} width={visible.width} height={visible.height} rx={2} />
       </svg>
@@ -76,14 +93,16 @@ function MiniMap({ nodes, view, box, onCenter }: {
   )
 }
 
-/** The canvas: routine and bot nodes, the edges between them, pan (drag the background), zoom (wheel and buttons). */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onConnect, onRun, onStop }: Props) {
+/** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onRun, onStop }: Props) {
   const tr = useTr()
-  const nodes = useMemo(() => layoutNodes(canvas), [canvas])
-  const edges = useMemo(() => flowEdges(canvas), [canvas])
+  const groups = groupsOf(canvas)
+  const nodes = useMemo(() => groupedNodes(canvas), [canvas])
+  const edges = useMemo(() => groupedEdges(canvas), [canvas])
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
   const [live, setLive] = useState<{ key: string; x: number; y: number } | null>(null)
   const [wire, setWire] = useState<{ from: string; x: number; y: number } | null>(null)
+  const [multi, setMulti] = useState<Set<string>>(new Set())
   const viewport = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 800, height: 500 })
   const fitted = useRef(false)
@@ -141,6 +160,7 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
   const startPan = (event: PointerEvent) => {
     if (event.target !== event.currentTarget && !(event.target as Element).classList.contains('flow-layer')) return
     onSelect(null)
+    setMulti(new Set())
     let last = { x: event.clientX, y: event.clientY }
     track(
       (e) => {
@@ -174,16 +194,40 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
     )
   }
 
-  const startWire = (node: FlowNode, event: PointerEvent) => {
-    const start = toCanvas(event.clientX, event.clientY)
-    setWire({ from: node.id, ...start })
+  /** Dragging a stack card moves the group's origin; the view shifts its members with it. */
+  const startGroupDrag = (group: FlowGroup, event: PointerEvent) => {
+    if (event.button !== 0) return
+    const origin = toCanvas(event.clientX, event.clientY)
+    const grab = { x: origin.x - group.x, y: origin.y - group.y }
+    let moved = false
+    let at = { x: group.x, y: group.y }
     track(
-      (e) => setWire({ from: node.id, ...toCanvas(e.clientX, e.clientY) }),
+      (e) => {
+        const p = toCanvas(e.clientX, e.clientY)
+        if (!moved && Math.hypot(p.x - origin.x, p.y - origin.y) * viewRef.current.scale < DRAG_SLOP) return
+        moved = true
+        at = { x: p.x - grab.x, y: p.y - grab.y }
+        setLive({ key: groupKey(group.id), ...at })
+      },
+      () => {
+        setLive(null)
+        if (moved) onMoveGroup(group.id, at.x, at.y)
+      },
+    )
+  }
+
+  const startWire = (from: string, event: PointerEvent) => {
+    const start = toCanvas(event.clientX, event.clientY)
+    setWire({ from, ...start })
+    track(
+      (e) => setWire({ from, ...toCanvas(e.clientX, e.clientY) }),
       (e) => {
         setWire(null)
         const p = toCanvas(e.clientX, e.clientY)
-        const target = nodeAt(nodes, p.x, p.y)
-        if (target && target.kind !== 'routine' && target.id !== node.id) onConnect(node.id, target.id, { x: e.clientX, y: e.clientY })
+        const target = nodeAt([...byKey.values()], p.x, p.y)
+        const valid = target && target.kind !== 'routine' && target.id !== from
+          && !target.key.startsWith(portPrefix) && !target.key.startsWith('group:')
+        if (valid) onConnect(from, target.id, { x: e.clientX, y: e.clientY })
       },
     )
   }
@@ -194,12 +238,52 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
     const d = delta[event.key]
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      onSelect({ kind: 'node', key: node.key })
+      onSelect(targetSelection(node.key))
     } else if (d && !disabled) {
       event.preventDefault()
       onMove(node.key, node.x + d[0], node.y + d[1])
     }
   }
+
+  /** Group / ungroup from the keyboard, over any focused node or the canvas itself. */
+  const canvasKeys = (event: KeyboardEvent) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'g') return
+    event.preventDefault()
+    if (event.shiftKey) {
+      const id = selection?.kind === 'group' ? selection.id : groupOf(groups, [...multi][0] ?? '')?.id
+      if (id) onUngroup(id)
+    } else {
+      const keys = multi.size >= 2 ? [...multi] : selection?.kind === 'node' ? [selection.key] : []
+      if (keys.length >= 2) {
+        onGroup(keys)
+        setMulti(new Set())
+      }
+    }
+  }
+
+  const pick = (key: string, event: PointerEvent, id?: string) => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      setMulti((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+    } else {
+      setMulti(new Set([key]))
+      onSelect(id ? { kind: 'group', id } : { kind: 'node', key })
+    }
+  }
+
+  const targetSelection = (key: string) => key.startsWith('group:')
+    ? { kind: 'group' as const, id: key.slice(6) }
+    : { kind: 'node' as const, key }
+
+  const previews = (group: FlowGroup): GroupPreview[] => group.members.flatMap((key) => {
+    if (!key.startsWith('media:')) return []
+    const media = mediaOf(canvas, key)
+    return [{ key, title: mediaTitle(media), kind: media?.kind ?? 'text' }]
+  })
 
   const placed = (node: FlowNode) => (live && live.key === node.key ? { ...node, x: live.x, y: live.y } : node)
   const byKey = new Map(nodes.map((n) => [n.key, placed(n)]))
@@ -210,15 +294,50 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
     setView((v) => zoomAt(v, factor, box.width / 2, box.height / 2))
   }
 
+  const edgeLabel = (edge: GroupedEdge, from: FlowNode, to: FlowNode) => {
+    if (edge.count <= 1) return null
+    const x = (from.x + NODE_WIDTH + to.x) / 2
+    const y = (from.y + to.y) / 2 + NODE_HEIGHT / 2
+    return <text className="flow-edge-count" x={x} y={y} aria-label={tr('{count} lines').replace('{count}', String(edge.count))}>×{edge.count}</text>
+  }
+
   return (
-    <div className="flow-viewport" ref={viewport} onPointerDown={startPan} role="application" aria-label={tr('Routine flow canvas')}>
+    <div
+      className="flow-viewport"
+      ref={viewport}
+      role="application"
+      aria-label={tr('Routine flow canvas')}
+      tabIndex={0}
+      onPointerDown={startPan}
+      onKeyDown={canvasKeys}
+      onPaste={(event) => {
+        const files = [...event.clipboardData.files]
+        if (files.length >= 2) {
+          event.preventDefault()
+          onFiles(files.map((file) => ({ name: file.name })))
+        }
+      }}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes('Files')) event.preventDefault()
+      }}
+      onDrop={(event) => {
+        const files = [...event.dataTransfer.files]
+        if (files.length >= 2) {
+          event.preventDefault()
+          onFiles(files.map((file) => ({ name: file.name })))
+        }
+      }}
+    >
       <div className="flow-layer" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
         <svg className="flow-edges" width="1" height="1" aria-hidden="true">
           {edges.map((edge) => {
             const from = byKey.get(edge.from)
             const to = byKey.get(edge.to)
             if (!from || !to) return null
-            const d = edgePath(from, to)
+            // A port is a small dot, not a card: its line leaves the dot, not a far-right card edge.
+            const d = edge.from.startsWith(portPrefix)
+              ? `M ${from.x + 10} ${from.y + 10} C ${from.x + 70} ${from.y + 10}, ${to.x - 50} ${to.y + NODE_HEIGHT / 2}, ${to.x} ${to.y + NODE_HEIGHT / 2}`
+              : edgePath(from, to)
             const isSelected = selection?.kind === 'edge' && selection.id === edge.linkId
             return (
               <g key={edge.id}>
@@ -226,15 +345,60 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
                 {edge.linkId ? (
                   <path className="flow-edge-hit" d={d} onPointerDown={(e) => { e.stopPropagation(); onSelect({ kind: 'edge', id: edge.linkId! }) }} />
                 ) : null}
+                {edgeLabel(edge, from, to)}
               </g>
             )
           })}
           {wire && wireFrom ? (
-            <path className="flow-edge" data-kind="wire" d={`M ${wireFrom.x + NODE_WIDTH} ${wireFrom.y + NODE_HEIGHT / 2} L ${wire.x} ${wire.y}`} />
+            <path
+              className="flow-edge"
+              data-kind="wire"
+              d={wire.from.startsWith(portPrefix)
+                ? `M ${wireFrom.x + 10} ${wireFrom.y + 10} L ${wire.x} ${wire.y}`
+                : `M ${wireFrom.x + NODE_WIDTH} ${wireFrom.y + NODE_HEIGHT / 2} L ${wire.x} ${wire.y}`}
+            />
           ) : null}
         </svg>
         {nodes.map((raw) => {
           const node = placed(raw)
+          // An output port: a small labelled dot a line can start from to reach every member.
+          if (node.key.startsWith(portPrefix)) {
+            const port = parsePort(node.key)!
+            return (
+              <button
+                key={node.key}
+                type="button"
+                className="flow-port-node"
+                style={{ transform: `translate(${node.x}px, ${node.y}px)` }}
+                title={tr('Connect this output of the group')}
+                aria-label={`${tr('Connect from this group')}: ${tr(PORT_LABEL[port.type] ?? port.type)}`}
+                disabled={disabled}
+                onPointerDown={(e) => { e.stopPropagation(); startWire(node.id, e) }}
+              >
+                <Icon name={PORT_ICON[port.type] ?? 'circle'} size={11} />
+              </button>
+            )
+          }
+          // A collapsed group's stack card.
+          if (node.key.startsWith('group:')) {
+            const group = groups.find((g) => g.id === node.id)
+            if (!group) return null
+            return (
+              <FlowGroupCard
+                key={raw.key}
+                group={group}
+                previews={previews(group)}
+                x={node.x}
+                y={node.y}
+                selected={multi.has(node.key) || selection?.kind === 'group' && selection.id === group.id}
+                disabled={disabled}
+                onSelect={(e) => pick(node.key, e, group.id)}
+                onDragStart={(e) => startGroupDrag(group, e)}
+                onKey={(e) => keyOnNode(node, e)}
+                onOpen={() => onToggleGroup(group.id)}
+              />
+            )
+          }
           const card = raw.kind === 'routine' ? canvas.routines.find((c) => c.routine.id === raw.id) : undefined
           const media = raw.kind === 'media' ? mediaOf(canvas, raw.id) : null
           const step = raw.kind === 'routine' ? null : latestStep(canvas, raw.id)
@@ -249,12 +413,12 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               media={media}
               step={card ? stepOf(card, card.routine.botId) : step}
               unconnected={card ? isUnconnected(canvas, card.routine.id) : false}
-              selected={selection?.kind === 'node' && selection.key === raw.key}
+              selected={multi.has(raw.key) || selection?.kind === 'node' && selection.key === raw.key}
               connectTarget={hovered?.key === raw.key && raw.kind !== 'routine' && raw.id !== wire?.from}
               disabled={disabled}
-              onSelect={() => onSelect({ kind: 'node', key: raw.key })}
+              onSelect={(e) => pick(raw.key, e)}
               onDragStart={(e) => startDrag(raw, e)}
-              onPortStart={(e) => startWire(raw, e)}
+              onPortStart={(e) => startWire(raw.id, e)}
               onKey={(e) => keyOnNode(raw, e)}
               onRun={raw.kind === 'routine' ? () => onRun(raw.id) : undefined}
               onStop={raw.kind === 'routine' ? () => onStop(raw.id) : undefined}

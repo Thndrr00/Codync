@@ -14,6 +14,7 @@ import { useAgentModels } from '../../bots/agent-models'
 import { AgentModelPicker } from '../../bots/AgentModelPicker'
 import { runLabel } from '../routine'
 import type { FlowSelection } from './FlowCanvas'
+import { groupsOf, type FlowGroup } from './flow-groups'
 import { StatusChip } from './FlowNodeCard'
 
 /** A step, bot or media node the selected step may hand work to. */
@@ -62,6 +63,9 @@ interface Props {
   onAddMedia: (routineId: string, kind: MediaKind) => void
   onSaveMedia: (media: FlowMedia, settings: MediaSettings) => void
   onRemoveMedia: (media: FlowMedia) => void
+  onRenameGroup: (groupId: string, name: string) => void
+  onToggleGroup: (groupId: string) => void
+  onUngroup: (groupId: string) => void
   /** The steps and bots `from` may hand work to, in some routine of this canvas. */
   targets: (fromBotId: string) => FlowTarget[]
 }
@@ -82,6 +86,10 @@ export function FlowInspector(props: Props) {
     const link = canvas.links.find((l) => l.id === selection.id)
     return link ? <LinkPanel {...props} link={link} bots={bots} /> : null
   }
+  if (selection.kind === 'group') {
+    const group = groupsOf(canvas).find((g) => g.id === selection.id)
+    return group ? <GroupPanel {...props} group={group} /> : null
+  }
   const [kind, id] = selection.key.split(':')
   if (kind === 'routine') {
     const card = canvas.routines.find((c) => c.routine.id === id)
@@ -93,6 +101,32 @@ export function FlowInspector(props: Props) {
   }
   const bot = bots.get(id)
   return <BotPanel {...props} botId={id} bot={bot} />
+}
+
+/** A group of nodes: a name, its collapse state and the gesture that ends the group. */
+function GroupPanel({ group, busy, offline, onRenameGroup, onToggleGroup, onUngroup }: Props & { group: FlowGroup }) {
+  const tr = useTr()
+  const [name, setName] = useState(group.name)
+  useEffect(() => setName(group.name), [group.id, group.name])
+  const changed = name.trim() !== group.name
+  return (
+    <VStack gap={10} className="flow-inspector">
+      <Text weight="semibold">{tr('Group')}</Text>
+      <Text size="callout" tone="secondary">{tr('{count} nodes drawn together').replace('{count}', String(group.members.length))}</Text>
+      <input
+        className="routine-input flow-group-name"
+        aria-label={tr('Group name')}
+        placeholder={tr('Group name')}
+        value={name}
+        maxLength={120}
+        disabled={offline}
+        onChange={(event) => setName(event.target.value)}
+      />
+      <Button disabled={busy || offline || !changed} onClick={() => onRenameGroup(group.id, name.trim())}>{tr('Save name')}</Button>
+      <Button kind="secondary" disabled={busy || offline} onClick={() => onToggleGroup(group.id)}>{tr(group.collapsed ? 'Open group' : 'Collapse group')}</Button>
+      <Button kind="secondary" disabled={busy || offline} onClick={() => onUngroup(group.id)}>{tr('Ungroup')}</Button>
+    </VStack>
+  )
 }
 
 function LinkPanel({ link, bots, busy, offline, onSaveInstruction, onDisconnect }: Props & { link: FlowLink }) {
@@ -248,6 +282,8 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
   const [answer, setAnswer] = useState<MediaAnswer | null>(null)
   const [failed, setFailed] = useState(false)
   const [draft, setDraft] = useState<MediaDraft>(() => mediaDraft(media))
+  /** A length outside the model's short list opens the Custom slider (OpenBot 0.74.0). */
+  const [customLength, setCustomLength] = useState(false)
   const kept = `${media.model}|${media.prompt}|${media.aspect}|${media.duration}|${media.resolution}|${media.transparent}|${media.voice}`
   // The host's copy changed (a save, another device): show it; an edit in the box is kept otherwise.
   useEffect(() => setDraft(mediaDraft(media)), [media.id, kept])
@@ -268,6 +304,22 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
   const changed = (Object.keys(draft) as (keyof MediaDraft)[]).some((key) => draft[key] !== current[key])
   const options = targets(nodeKey)
   const caps = model?.capabilities
+  const durationList = caps?.durations ?? []
+  const CUSTOM_LENGTH = -1
+  const lengthMin = durationList.length ? Math.min(...durationList) : 0
+  const lengthMax = durationList.length ? Math.max(...durationList) : 0
+  // A saved length the model's short list doesn't offer stays on the Custom slider.
+  useEffect(() => setCustomLength(durationList.length > 1 && !durationList.includes(draft.duration)),
+    [media.id, draft.model, durationList.join(',')])
+  const setLength = (value: number) => {
+    if (value === CUSTOM_LENGTH) {
+      setCustomLength(true)
+      if (draft.duration < lengthMin || draft.duration > lengthMax) setDraft({ ...draft, duration: lengthMin })
+    } else {
+      setCustomLength(false)
+      setDraft({ ...draft, duration: value })
+    }
+  }
   const pick = (chosen: MediaModel) => setDraft({ ...onModel(draft, chosen), prompt: draft.prompt })
   return (
     <VStack gap={10} className="flow-inspector">
@@ -317,10 +369,33 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
             <Text size="caption" tone="secondary">{tr('Aspect ratio')}</Text>
             <ChipChoice label="Aspect ratio" selection={draft.aspect} options={caps.aspects.map((a) => ({ id: a, label: a }))} onChange={(aspect) => setDraft({ ...draft, aspect })} />
           </VStack>
-          {media.kind === 'video' && caps.durations.length > 0 ? (
+          {media.kind === 'video' && durationList.length > 0 ? (
             <VStack gap={4}>
               <Text size="caption" tone="secondary">{tr('Length')}</Text>
-              <ChipChoice label="Length" selection={draft.duration} options={caps.durations.map((d) => ({ id: d, label: `${d}s` }))} onChange={(duration) => setDraft({ ...draft, duration })} />
+              <ChipChoice
+                label="Length"
+                selection={customLength ? CUSTOM_LENGTH : draft.duration}
+                options={[
+                  ...durationList.map((d) => ({ id: d, label: `${d}s` })),
+                  ...(durationList.length > 1 ? [{ id: CUSTOM_LENGTH, label: tr('Custom') }] : []),
+                ]}
+                onChange={setLength}
+              />
+              {customLength && durationList.length > 1 ? (
+                <HStack gap={8} align="center" className="flow-length-custom">
+                  <input
+                    type="range"
+                    min={lengthMin}
+                    max={lengthMax}
+                    step={1}
+                    value={Math.min(lengthMax, Math.max(lengthMin, draft.duration))}
+                    aria-label={tr('Custom length')}
+                    disabled={offline}
+                    onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })}
+                  />
+                  <Text size="caption" tone="secondary">{draft.duration}s</Text>
+                </HStack>
+              ) : null}
             </VStack>
           ) : null}
           {media.kind === 'video' && caps.resolutions.length > 0 ? (

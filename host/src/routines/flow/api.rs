@@ -1,6 +1,6 @@
 //! The host API methods of routine flows, with strict validation of every input.
 
-use super::{MAX_INSTRUCTION_BYTES, canvas, engine, graph};
+use super::{FlowGroup, MAX_INSTRUCTION_BYTES, canvas, engine, graph, groups};
 use crate::LockExt;
 use crate::chat::team::flow::recipient;
 use crate::hub::Hub;
@@ -29,6 +29,7 @@ pub const METHODS: &[&str] = &[
     "addRoutineFlowMedia",
     "updateRoutineFlowMedia",
     "removeRoutineFlowMedia",
+    "saveRoutineFlowGroups",
     "testRoutineFlow",
 ];
 
@@ -124,6 +125,19 @@ fn node_exists(hub: &Hub, key: &str) -> Result<()> {
         bail!("nodeKey must name an existing routine, bot or media step");
     }
     Ok(())
+}
+
+/// The groups a request saves: a checked list, every member naming a node that still exists.
+fn groups_arg(hub: &Hub, b: &Value) -> Result<Vec<FlowGroup>> {
+    let Some(value) = b.get("groups") else { bail!("`groups` is required") };
+    let parsed: Vec<FlowGroup> = serde_json::from_value(value.clone()).context("`groups` is invalid")?;
+    groups::validate(&parsed)?;
+    for group in &parsed {
+        for member in &group.members {
+            node_exists(hub, member)?;
+        }
+    }
+    Ok(parsed)
 }
 
 /// A step of a flow a link may end at: a bot that takes hand-offs or a media step of this routine.
@@ -411,6 +425,13 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             let id = id_arg(b, "mediaId")?;
             hub.store.flow_media_node(id)?.context("media step not found")?;
             hub.emit_flow_change(|| Ok(((), hub.store.flow_remove_media(id)?)))?;
+            json!({"ok": true})
+        }
+        "saveRoutineFlowGroups" => {
+            let bot = id_arg(b, "botId")?;
+            canvas_bot(hub, bot)?;
+            let parsed = groups_arg(hub, b)?;
+            hub.emit_flow_change(|| Ok(((), Some(groups::save(&hub.store, bot, &parsed)?))))?;
             json!({"ok": true})
         }
         _ => {

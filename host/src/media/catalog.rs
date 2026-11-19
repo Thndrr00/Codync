@@ -97,6 +97,14 @@ pub fn durations(model: &Model) -> &'static [u32] {
     if model.durations.is_empty() { &super::DURATIONS } else { model.durations }
 }
 
+/// Whether a video length is a whole number of seconds in the range a model can make. OpenBot 0.74.0
+/// lets a canvas step ask for any length in the model's range rather than only its named presets; a
+/// length outside this bound is still refused before it reaches a provider.
+#[must_use]
+pub fn valid_duration(seconds: u32) -> bool {
+    (1..=60).contains(&seconds)
+}
+
 /// The resolutions a model makes, `RESOLUTIONS` when it names none.
 pub fn resolutions(model: &Model) -> &'static [&'static str] {
     if model.resolutions.is_empty() { &super::RESOLUTIONS } else { model.resolutions }
@@ -120,6 +128,14 @@ pub fn json(model: &Model) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_custom_length_is_a_whole_second_in_range() {
+        assert!(!valid_duration(0));
+        assert!(valid_duration(7), "a length between the presets is allowed (OpenBot 0.74.0)");
+        assert!(valid_duration(60));
+        assert!(!valid_duration(61));
+    }
 
     #[test]
     fn a_backend_offers_only_its_own_models_and_kind() {

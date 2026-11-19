@@ -150,12 +150,8 @@ pub fn check_settings(node: &crate::store::FlowMedia) -> Result<Request> {
         ensure!(!resolution.is_empty(), "{} does not make the size {}", model.name, node.resolution);
     }
     if kind == Kind::Video {
-        ensure!(
-            catalog::durations(model).contains(&request.duration),
-            "{} does not make {} seconds",
-            model.name,
-            node.duration
-        );
+        // OpenBot 0.74.0: a flow step may pick any length in the model's range, not just its presets.
+        ensure!(catalog::valid_duration(request.duration), "{} does not make {} seconds", model.name, node.duration);
     }
     if node.voice.is_some() && kind == Kind::Video && model.voices && request.voice.is_none() {
         bail!("unknown voice `{}`", node.voice.as_deref().unwrap_or_default());

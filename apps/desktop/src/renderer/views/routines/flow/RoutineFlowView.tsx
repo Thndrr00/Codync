@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { MediaKind } from '@shared/media'
 import { isGroup, type Bot } from '@shared/models'
 import { Button, DropdownMenu, IconButton, SegmentedChoice, Spinner } from '../../../components/Controls'
-import { ModalHeader, Sheet } from '../../../components/Overlay'
+import { Dialog, DialogField, ModalHeader, Sheet } from '../../../components/Overlay'
 import { AnchoredMenu } from '../../../components/Menu'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
@@ -15,6 +15,7 @@ import { useTr } from '../../../lib/use-language'
 import { useStore } from '../../../store/context'
 import { RoutineFlowStore } from '../../../store/routine-flow-store'
 import { FlowCanvasView, type FlowSelection } from './FlowCanvas'
+import { groupsOf, groupSpot, newGroupId, outputType, parsePort, type CanvasWithGroups, type FlowGroup } from './flow-groups'
 import { FlowInspector, type FlowTarget, type MediaSettings } from './FlowInspector'
 import { FlowList } from './FlowList'
 import { RoutineEditorView } from '../RoutineEditorView'
@@ -42,6 +43,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [note, setNote] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [choose, setChoose] = useState<{ from: string; to: string; at: { x: number; y: number }; routines: { id: string; name: string }[] } | null>(null)
+  /** Keys being grouped, waiting for a name (Ctrl/Cmd+G). */
+  const [groupDraft, setGroupDraft] = useState<string[] | null>(null)
+  const [groupName, setGroupName] = useState('')
   const offline = store.isOffline
   const rev = store.flowRev(botId)
 
@@ -55,7 +59,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     if (rev > 0) void flow.load()
   }, [rev, flow])
 
-  const canvas = model.canvas
+  const canvas = model.canvas as CanvasWithGroups | null
   const bots = store.bots
   const roster = useMemo(() => [...bots.values()].filter(canTakeWork), [bots])
 
@@ -70,6 +74,18 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
 
   const dropped = (from: string, to: string, at: { x: number; y: number }) => {
     if (!canvas || offline) return
+    // A line from a group's output port reaches every member of that output kind.
+    const port = parsePort(from)
+    if (port) {
+      const group = groupsOf(canvas).find((g) => g.id === port.id)
+      for (const key of group?.members ?? []) {
+        if (outputType(canvas, key) !== port.type) continue
+        const id = key.startsWith('media:') ? key : key.slice(key.indexOf(':') + 1)
+        const options = connectable(canvas, id, to)
+        if (options.length > 0) void connect(options[0].routine.id, id, to)
+      }
+      return
+    }
     const routines = connectable(canvas, from, to)
     if (routines.length === 0) {
       const reason = canvas.routines.map((r) => connectProblem(canvas, r.routine.id, from, to)).find(Boolean)
@@ -129,6 +145,77 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     await flow.removeMedia(media.id)
   }
 
+  // Groups are drawing-only data on the host's canvas; every change replaces the saved list and
+  // reloads, so another client's edit and our own always end at the same document.
+  const saveGroups = async (next: FlowGroup[]) => {
+    if (!canvas || offline) return
+    try {
+      await (await store.ready()).call('saveRoutineFlowGroups', { botId, groups: next })
+      await flow.load()
+    } catch {
+      setNote(tr('Could not save the group.'))
+    }
+  }
+  const createGroup = async (keys: string[], name: string) => {
+    if (!canvas) return
+    const group: FlowGroup = {
+      id: newGroupId(groupsOf(canvas)),
+      name: name.trim() || tr('New group'),
+      members: keys,
+      collapsed: false,
+      ...groupSpot(layoutNodes(canvas), keys),
+    }
+    await saveGroups([...groupsOf(canvas), group])
+    setSelection({ kind: 'group', id: group.id })
+  }
+  const ungroup = async (id: string) => {
+    if (!canvas) return
+    if (selection?.kind === 'group' && selection.id === id) setSelection(null)
+    await saveGroups(groupsOf(canvas).filter((g) => g.id !== id))
+  }
+  const toggleGroup = async (id: string) => {
+    if (!canvas) return
+    await saveGroups(groupsOf(canvas).map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)))
+  }
+  const renameGroup = async (id: string, name: string) => {
+    if (!canvas) return
+    await saveGroups(groupsOf(canvas).map((g) => (g.id === id ? { ...g, name } : g)))
+  }
+  const moveGroup = async (id: string, x: number, y: number) => {
+    if (!canvas) return
+    const group = groupsOf(canvas).find((g) => g.id === id)
+    if (!group) return
+    const dx = x - group.x
+    const dy = y - group.y
+    const places = new Map(layoutNodes(canvas).map((node) => [node.key, node]))
+    for (const key of group.members) {
+      const node = places.get(key)
+      if (node) await flow.move(key, node.x + dx, node.y + dy)
+    }
+    await saveGroups(groupsOf(canvas).map((g) => (g.id === id ? { ...g, x, y } : g)))
+  }
+  /** A paste or drop of two or more files makes one picture step per file, all in one group. */
+  const addFiles = async (files: { name: string }[]) => {
+    if (!canvas || offline) return
+    const routine = canvas.routines.find((r) => r.routine.botId === botId) ?? canvas.routines[0]
+    if (!routine) {
+      setNote(tr('Add a routine before dropping files.'))
+      return
+    }
+    const members: string[] = []
+    for (const file of files) {
+      const media = await flow.addMedia(routine.routine.id, 'image')
+      if (!media) return
+      await flow.updateMedia(media.id, { prompt: file.name })
+      members.push(mediaKey(media.id))
+    }
+    if (members.length < 2) return
+    const spot = freeSpot(canvas)
+    await saveGroups([...groupsOf(canvas), {
+      id: newGroupId(groupsOf(canvas)), name: tr('New group'), members, collapsed: false, x: spot.x, y: spot.y,
+    }])
+  }
+
   return (
     <VStack gap={8} className="routine-flow">
       <HStack gap={8} wrap>
@@ -161,7 +248,12 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 disabled={offline || model.busy}
                 onSelect={setSelection}
                 onMove={(key, x, y) => void flow.move(key, x, y)}
+                onMoveGroup={(id, x, y) => void moveGroup(id, x, y)}
                 onConnect={dropped}
+                onGroup={(keys) => { setGroupDraft(keys); setGroupName('') }}
+                onUngroup={(id) => void ungroup(id)}
+                onToggleGroup={(id) => void toggleGroup(id)}
+                onFiles={(files) => void addFiles(files)}
                 onRun={(id) => {
                   setSelection({ kind: 'node', key: `routine:${id}` })
                   void flow.test(id)
@@ -189,6 +281,9 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
             onAddMedia={(id, kind) => void addMedia(id, kind)}
             onSaveMedia={saveMedia}
             onRemoveMedia={(media) => void removeMedia(media)}
+            onRenameGroup={(id, name) => void renameGroup(id, name)}
+            onToggleGroup={(id) => void toggleGroup(id)}
+            onUngroup={(id) => void ungroup(id)}
           />
         </HStack>
       )}
@@ -216,6 +311,29 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           </VStack>
         ) : null}
       </Sheet>
+      <Dialog
+        open={groupDraft !== null}
+        title={tr('Name the group')}
+        actions={[{
+          title: tr('Group'),
+          action: () => {
+            if (groupDraft) void createGroup(groupDraft, groupName)
+            setGroupDraft(null)
+          },
+        }]}
+        onClose={() => setGroupDraft(null)}
+      >
+        <DialogField
+          value={groupName}
+          onChange={setGroupName}
+          placeholder={tr('Group name')}
+          label={tr('Group name')}
+          onSubmit={() => {
+            if (groupDraft) void createGroup(groupDraft, groupName)
+            setGroupDraft(null)
+          }}
+        />
+      </Dialog>
     </VStack>
   )
 }

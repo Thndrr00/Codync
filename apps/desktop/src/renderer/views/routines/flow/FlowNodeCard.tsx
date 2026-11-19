@@ -88,7 +88,8 @@ interface Props {
   selected: boolean
   connectTarget: boolean
   disabled: boolean
-  onSelect: () => void
+  /** The pointer that picked the card, so the canvas can add it to a multi-selection. */
+  onSelect: (event: PointerEvent) => void
   onDragStart: (event: PointerEvent) => void
   onPortStart: (event: PointerEvent) => void
   onKey: (event: KeyboardEvent) => void
@@ -114,7 +115,7 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
       aria-pressed={selected}
       style={{ transform: `translate(${x}px, ${y}px)`, ...(node.kind === 'routine' ? { '--flow-tint': routineTint(node.id) } as CSSProperties : {}) }}
       onPointerDown={(event) => {
-        onSelect()
+        onSelect(event)
         if (!disabled) onDragStart(event)
       }}
       onKeyDown={onKey}

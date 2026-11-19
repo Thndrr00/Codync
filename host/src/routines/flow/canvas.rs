@@ -1,6 +1,7 @@
 //! One bot's canvas as clients load it: its routines and those whose flow passes through it, the
 //! links, where the nodes sit and the bots placed before any link reaches them.
 
+use super::groups;
 use crate::LockExt;
 use crate::hub::{Hub, flows::flow_event};
 use crate::routines::{Routine, Routines, Run, public};
@@ -63,6 +64,7 @@ pub(super) fn canvas(hub: &Hub, bot: &str) -> Result<Value> {
         "positions": store.flow_positions(bot)?,
         "placedBotIds": store.flow_placed_bots(bot)?,
         "mediaNodes": store.flow_media_for(&ids)?,
+        "groups": groups::load(store, bot),
     }))
 }
 
