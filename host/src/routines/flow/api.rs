@@ -159,6 +159,11 @@ fn document_groups(document: &FlowDocument) -> Result<Vec<FlowGroup>> {
         .collect()
 }
 
+/// The ids of the routines whose links and media a merged save writes back: those on this canvas.
+fn canvas_routine_ids(hub: &Hub, bot: &str) -> Result<Vec<String>> {
+    Ok(hub.routines.canvas_routines(&hub.store, bot)?.into_iter().map(|r| r.id).collect())
+}
+
 /// A step of a flow a link may end at: a bot that takes hand-offs or a media step of this routine.
 fn end_node(hub: &Hub, routine: &Routine, id: &str) -> Result<()> {
     match id.strip_prefix(crate::store::flow_media::PREFIX) {
@@ -471,7 +476,14 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
                 } else {
                     groups::load(&hub.store, bot)
                 };
-                let change = document::save(&hub.store, bot, &result.document, &groups)?;
+                // A canvas editing alone has already written its links and nodes through the
+                // granular methods; only a merge that folded in someone else's edit writes them
+                // back from the document.
+                let change = if result.merged {
+                    document::save_merged(&hub.store, bot, &result.document, &groups, &canvas_routine_ids(hub, bot)?)?
+                } else {
+                    document::save(&hub.store, bot, &result.document, &groups)?
+                };
                 hub.emit_flow_change(|| Ok(((), Some(change))))?;
                 json!({"saved": result.document, "merged": result.merged})
             } else {
@@ -504,7 +516,8 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
             waiting.conflicts.retain(|conflict| conflict.field != field || conflict.key != key);
             if waiting.conflicts.is_empty() {
                 let groups = document_groups(&waiting.document)?;
-                let change = document::save(&hub.store, bot, &waiting.document, &groups)?;
+                let change =
+                    document::save_merged(&hub.store, bot, &waiting.document, &groups, &canvas_routine_ids(hub, bot)?)?;
                 hub.emit_flow_change(|| Ok(((), Some(change))))?;
                 json!({"saved": waiting.document})
             } else {

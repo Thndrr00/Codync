@@ -14,6 +14,7 @@
 //! the reply of an earlier run.
 
 mod api;
+mod apply;
 mod canvas;
 mod document;
 mod engine;

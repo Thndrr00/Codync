@@ -18,6 +18,16 @@ pub const MAX_COORDINATE: f64 = 1_000_000.0;
 /// kv prefix of the per-bot canvas revision.
 pub const REV_PREFIX: &str = "routineflow.rev.";
 
+/// The caps a merged document's shapes must respect, mirroring the document's own caps. Each write
+/// is checked again here so a store call can never grow a table past what a canvas can hold.
+const MERGE_LINKS_CAP: usize = 1000;
+const MERGE_NODES_CAP: usize = 1000;
+const MERGE_MEDIA_CAP: usize = 500;
+const MERGE_INSTRUCTION_CAP: usize = 8_000;
+/// The media columns, in the order `row_media` of `flow_media` reads them.
+const MEDIA_COLUMNS: &str =
+    "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id";
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowLink {
@@ -118,11 +128,16 @@ fn links_of(c: &Connection, routine_id: &str) -> Result<Vec<FlowLink>> {
 
 /// Stamps one rev for `bots` and records it as each one's canvas revision.
 pub(super) fn touch(tx: &Transaction, bots: impl IntoIterator<Item = String>) -> Result<Option<FlowChange>> {
+    touch_at(tx, next_rev(tx)?, bots)
+}
+
+/// Records an already-stamped `rev` (the one a merged document's groups were saved at) on every bot
+/// whose canvas shows the result, so groups and flow tables share one rev.
+fn touch_at(tx: &Transaction, rev: i64, bots: impl IntoIterator<Item = String>) -> Result<Option<FlowChange>> {
     let bots: Vec<String> = bots.into_iter().collect::<BTreeSet<_>>().into_iter().collect();
     if bots.is_empty() {
         return Ok(None);
     }
-    let rev = next_rev(tx)?;
     for bot in &bots {
         tx.execute(
             "INSERT INTO kv(k, v) VALUES(?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2",
@@ -146,7 +161,7 @@ pub(super) fn audience(c: &Connection, routine_id: &str, owner: &str) -> Result<
     Ok(bots)
 }
 
-fn check_node_key(key: &str) -> Result<()> {
+pub(crate) fn check_node_key(key: &str) -> Result<()> {
     let ok = key
         .split_once(':')
         .is_some_and(|(kind, id)| matches!(kind, "routine" | "bot" | "media") && !id.is_empty() && !id.contains(':'));
@@ -156,7 +171,7 @@ fn check_node_key(key: &str) -> Result<()> {
     Ok(())
 }
 
-fn check_coordinate(v: f64) -> Result<()> {
+pub(crate) fn check_coordinate(v: f64) -> Result<()> {
     if !v.is_finite() || v.abs() > MAX_COORDINATE {
         bail!("coordinates must be numbers within ±{MAX_COORDINATE}");
     }
@@ -340,6 +355,210 @@ impl Store {
                 )?;
             }
             let change = if gone == 0 { None } else { touch(&tx, [canvas_bot.to_owned()])? };
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
+    /// Replaces the runnable flow state of a merged document under `rev`, the revision its groups
+    /// were saved at. Links of the routines on the canvas, the canvas's nodes and placed bots, and
+    /// those routines' media steps are all rewritten in one transaction so a reload can never show
+    /// half a merge. The owner and timestamp of a row already in the store are kept; a malformed
+    /// entry fails the whole write instead of being dropped.
+    pub fn flow_apply_merged(
+        &self,
+        rev: i64,
+        canvas_bot: &str,
+        routine_ids: &[String],
+        links: &[FlowLink],
+        positions: &[FlowPosition],
+        placed: &[String],
+        media: &[super::FlowMedia],
+    ) -> Result<FlowChange> {
+        if links.len() > MERGE_LINKS_CAP {
+            bail!("a merged document has at most {MERGE_LINKS_CAP} links");
+        }
+        if positions.len() > MERGE_NODES_CAP || placed.len() > MERGE_NODES_CAP {
+            bail!("a canvas holds at most {MERGE_NODES_CAP} nodes");
+        }
+        if media.len() > MERGE_MEDIA_CAP {
+            bail!("a merged document has at most {MERGE_MEDIA_CAP} media steps");
+        }
+        for routine in routine_ids {
+            if routine.is_empty() {
+                bail!("a merged routine id is empty");
+            }
+        }
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let mut bots = BTreeSet::from([canvas_bot.to_owned()]);
+
+            // Links: keep the owner and creation time of a row we already know, drop the ones the
+            // merge removed, and write every kept link the way `flow_add_link` does.
+            let mut existing: BTreeMap<String, (String, String, i64)> = BTreeMap::new();
+            for routine in routine_ids {
+                let mut st = tx.prepare(
+                    "SELECT id, routine_id, owner_bot_id, created_at FROM routine_flow_links WHERE routine_id = ?1",
+                )?;
+                let rows = st.query_map([routine.as_str()], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?))
+                })?;
+                for row in rows {
+                    let (id, routine, owner, at) = row?;
+                    existing.insert(id, (routine, owner, at));
+                }
+            }
+            let mut new_ids = BTreeSet::new();
+            let mut pairs = BTreeSet::new();
+            for link in links {
+                if link.id.is_empty()
+                    || link.routine_id.is_empty()
+                    || link.from_bot_id.is_empty()
+                    || link.to_bot_id.is_empty()
+                {
+                    bail!("a merged link needs an id, a routine and both ends");
+                }
+                if link.instruction.len() > MERGE_INSTRUCTION_CAP {
+                    bail!("merged link {} has too long an instruction", link.id);
+                }
+                if !routine_ids.contains(&link.routine_id) {
+                    bail!("merged link {} names a routine that is not on this canvas", link.id);
+                }
+                if !new_ids.insert(link.id.as_str()) {
+                    bail!("two merged links have the id {}", link.id);
+                }
+                if !pairs.insert((link.routine_id.as_str(), link.from_bot_id.as_str(), link.to_bot_id.as_str())) {
+                    bail!("two merged links connect the same bots in routine {}", link.routine_id);
+                }
+                let (routine, owner, at) =
+                    existing.get(&link.id).map(|(r, o, at)| (r.as_str(), o.as_str(), *at)).unwrap_or((
+                        link.routine_id.as_str(),
+                        link.owner_bot_id.as_str(),
+                        link.created_at,
+                    ));
+                if routine != link.routine_id {
+                    bail!("merged link {} moved to another routine", link.id);
+                }
+                tx.execute(
+                    &format!(
+                        "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                         ON CONFLICT(id) DO UPDATE SET routine_id = ?2, from_bot_id = ?4, to_bot_id = ?5,
+                         instruction = ?6, model = ?7, model_options = ?8, created_at = ?9"
+                    ),
+                    params![
+                        link.id,
+                        routine,
+                        owner,
+                        link.from_bot_id,
+                        link.to_bot_id,
+                        link.instruction,
+                        link.model,
+                        options_json(&link.model_options),
+                        at
+                    ],
+                )?;
+                bots.insert(owner.to_owned());
+                for end in [&link.from_bot_id, &link.to_bot_id] {
+                    if !end.starts_with(super::flow_media::PREFIX) {
+                        bots.insert(end.clone());
+                    }
+                }
+            }
+            for (id, (routine, _, _)) in &existing {
+                if routine_ids.contains(routine) && !new_ids.contains(id.as_str()) {
+                    tx.execute("DELETE FROM routine_flow_links WHERE id = ?1", [id.as_str()])?;
+                }
+            }
+
+            // Positions and placements belong to this canvas alone, so replace them outright.
+            tx.execute("DELETE FROM routine_flow_positions WHERE canvas_bot_id = ?1", [canvas_bot])?;
+            tx.execute("DELETE FROM routine_flow_placed WHERE canvas_bot_id = ?1", [canvas_bot])?;
+            for position in positions {
+                check_node_key(&position.node_key)?;
+                check_coordinate(position.x)?;
+                check_coordinate(position.y)?;
+                tx.execute(
+                    "INSERT INTO routine_flow_positions(canvas_bot_id, node_key, x, y) VALUES(?1, ?2, ?3, ?4)",
+                    params![canvas_bot, position.node_key, position.x, position.y],
+                )?;
+            }
+            let mut placed_ids = BTreeSet::new();
+            for bot in placed {
+                if bot.is_empty() || !placed_ids.insert(bot.as_str()) {
+                    bail!("a merged placed bot needs a unique id");
+                }
+                tx.execute(
+                    "INSERT OR IGNORE INTO routine_flow_placed(canvas_bot_id, bot_id) VALUES(?1, ?2)",
+                    params![canvas_bot, bot],
+                )?;
+            }
+
+            // Media: drop steps the merge removed and write every kept step the way `flow_add_media`
+            // does. Links were replaced above (one routine can only link to its own media steps), so
+            // here only the step's place on other canvases needs clearing, as `flow_remove_media` does.
+            let mut current: BTreeMap<String, (String, i64)> = BTreeMap::new();
+            for routine in routine_ids {
+                let mut st =
+                    tx.prepare("SELECT id, owner_bot_id, created_at FROM routine_flow_media WHERE routine_id = ?1")?;
+                let rows = st.query_map([routine.as_str()], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+                })?;
+                for row in rows {
+                    let (id, owner, at) = row?;
+                    current.insert(id, (owner, at));
+                }
+            }
+            let mut media_ids = BTreeSet::new();
+            for step in media {
+                if step.id.is_empty() || step.routine_id.is_empty() || step.model.is_empty() {
+                    bail!("a merged media step needs an id, a routine and a model");
+                }
+                if step.prompt.len() > super::flow_media::MAX_PROMPT_BYTES {
+                    bail!("merged media step {} has too long a description", step.id);
+                }
+                if !routine_ids.contains(&step.routine_id) {
+                    bail!("merged media step {} names a routine that is not on this canvas", step.id);
+                }
+                if !media_ids.insert(step.id.as_str()) {
+                    bail!("two merged media steps have the id {}", step.id);
+                }
+            }
+            for id in current.keys() {
+                if !media_ids.contains(id.as_str()) {
+                    let key = super::flow_media::key(id);
+                    tx.execute("DELETE FROM routine_flow_positions WHERE node_key = ?1", [key.as_str()])?;
+                    tx.execute("DELETE FROM routine_flow_media WHERE id = ?1", [id.as_str()])?;
+                }
+            }
+            for step in media {
+                let (owner, at) =
+                    current.get(&step.id).map(|(o, at)| (o.as_str(), *at)).unwrap_or((step.owner_bot_id.as_str(), step.created_at));
+                tx.execute(
+                    &format!(
+                        "INSERT INTO routine_flow_media({MEDIA_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                         ON CONFLICT(id) DO UPDATE SET kind = ?2, model = ?3, prompt = ?4, aspect = ?5,
+                         duration = ?6, resolution = ?7, transparent = ?8, voice = ?9, created_at = ?10,
+                         routine_id = ?11"
+                    ),
+                    params![
+                        step.id,
+                        step.kind,
+                        step.model,
+                        step.prompt,
+                        step.aspect,
+                        step.duration,
+                        step.resolution,
+                        step.transparent,
+                        step.voice,
+                        at,
+                        step.routine_id,
+                        owner
+                    ],
+                )?;
+                bots.insert(owner.to_owned());
+            }
+
+            let change = touch_at(&tx, rev, bots)?.expect("the canvas bot is always touched");
             tx.commit()?;
             Ok(change)
         })

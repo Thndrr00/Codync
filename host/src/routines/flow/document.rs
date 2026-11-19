@@ -4,9 +4,11 @@
 //! earlier revision gives the merge its common base. The history is short: a document whose base
 //! fell out of it is read as one with no base (a plain save). A conflict waits here as a pending
 //! document until the person chooses a version for every field; the groups of the final document
-//! are written through `groups::save` so the canvas shows what was merged, with a single rev stamp
-//! shared by the groups, the document and the per-bot canvas revision.
+//! are written through `groups::save` so the canvas shows what was merged. On a finished merge the
+//! links, nodes and media steps go back to the runnable flow tables too, under one rev stamp shared
+//! by those tables, the groups, the document and the per-bot canvas revision.
 
+use super::apply;
 use super::groups::{self, FlowGroup};
 use super::merge::{FlowConflict, FlowDocument};
 use crate::store::{FlowChange, Store};
@@ -80,18 +82,48 @@ pub fn clear_pending(store: &Store, bot: &str) -> Result<()> {
     })
 }
 
-/// Saves a resolved document and its groups with one rev stamp, and drops any pending conflict.
-pub fn save(store: &Store, bot: &str, document: &FlowDocument, groups: &[FlowGroup]) -> Result<FlowChange> {
-    // Groups own the canvas rev stamp; the snapshot reuses it so base revisions line up.
-    let change = groups::save(store, bot, groups)?;
+/// Appends `document` to `bot`'s history at `rev` and drops any pending conflict.
+fn stamp(store: &Store, bot: &str, document: &FlowDocument, rev: i64) -> Result<()> {
     let mut snapshots = history(store, bot);
-    snapshots.push(Snapshot { rev: change.rev, document: document.clone() });
+    snapshots.push(Snapshot { rev, document: document.clone() });
     if snapshots.len() > MAX_SNAPSHOTS {
         let extra = snapshots.len() - MAX_SNAPSHOTS;
         snapshots.drain(..extra);
     }
     let value = serde_json::to_string(&snapshots).context("could not store the flow document")?;
     put(store, key(bot), &value)?;
-    clear_pending(store, bot)?;
+    clear_pending(store, bot)
+}
+
+/// Saves a resolved document and its groups with one rev stamp, and drops any pending conflict.
+pub fn save(store: &Store, bot: &str, document: &FlowDocument, groups: &[FlowGroup]) -> Result<FlowChange> {
+    // Groups own the canvas rev stamp; the snapshot reuses it so base revisions line up.
+    let change = groups::save(store, bot, groups)?;
+    stamp(store, bot, document, change.rev)?;
+    Ok(change)
+}
+
+/// Saves a finished merge. On top of the groups and the snapshot, the merged nodes, links and media
+/// steps are written to the runnable flow tables so a canvas reload shows all of the merge under the
+/// same rev. The mapping runs first, so a bad entry fails before anything is written.
+pub fn save_merged(
+    store: &Store,
+    bot: &str,
+    document: &FlowDocument,
+    groups: &[FlowGroup],
+    routine_ids: &[String],
+) -> Result<FlowChange> {
+    let state = apply::runnable(bot, document).context("the merged flow document cannot be applied")?;
+    let change = groups::save(store, bot, groups)?;
+    store.flow_apply_merged(
+        change.rev,
+        bot,
+        routine_ids,
+        &state.links,
+        &state.positions,
+        &state.placed,
+        &state.media,
+    )?;
+    stamp(store, bot, document, change.rev)?;
     Ok(change)
 }
