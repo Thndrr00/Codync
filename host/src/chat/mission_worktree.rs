@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 /// A branch and folder name derived from the mission id and title, safe for git and disks.
 pub fn names(id: &str, title: &str) -> Value {
-    let short: String = id.chars().filter(|c| c.is_ascii_alphanumeric()).take(8).collect();
+    let short: String = id.chars().filter(char::is_ascii_alphanumeric).take(8).collect();
     let slug: String = title
         .to_lowercase()
         .chars()

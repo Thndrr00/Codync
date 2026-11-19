@@ -42,7 +42,8 @@ mod tests {
     fn a_stretch_stops_at_its_bounds() {
         assert!(may_continue(0, false, 0).is_ok());
         assert_eq!(may_continue(MAX_STRETCH_RUNS, false, 0), Err("runs"));
-        assert_eq!(may_continue(0, true, 0), Err("runs")); // unattended cap is lower
+        assert!(may_continue(0, true, 0).is_ok());
+        assert_eq!(may_continue(MAX_STRETCH_UNATTENDED_RUNS, true, 0), Err("runs")); // lower cap
         assert_eq!(may_continue(0, false, MAX_BUDGET_SHARE_PERCENT + 1), Err("budget"));
     }
 

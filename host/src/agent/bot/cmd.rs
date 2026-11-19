@@ -140,7 +140,8 @@ impl Queued {
     /// under load but never starves.
     pub(super) fn effective_priority(&self, now: Instant) -> u8 {
         let waited = now.saturating_duration_since(self.queued_at()).as_secs();
-        self.priority().saturating_sub((waited / 120) as u8)
+        let levels = u8::try_from(waited / 120).unwrap_or(u8::MAX);
+        self.priority().saturating_sub(levels)
     }
 }
 

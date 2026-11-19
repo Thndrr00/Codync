@@ -105,6 +105,6 @@ mod tests {
         assert!(block.starts_with("# About this person\n"));
         assert!(block.contains("- prefers short answers\n"));
         assert!(block.contains("- owns the billing service\n"));
-        assert!(render(&[]).is_empty());
+        assert_eq!(render(&[]), "");
     }
 }

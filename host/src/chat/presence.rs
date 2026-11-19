@@ -31,7 +31,7 @@ pub fn set(store: &Store, bot: &str, text: Option<&str>, until: Option<i64>) -> 
             }
             Some(json!({"text": text, "until": until}))
         }
-        None => Value::Null,
+        None => Some(Value::Null),
     };
     store.kv_set(&key(bot), &serde_json::to_string(&status)?)?;
     Ok(json!({"botId": bot, "status": status}))
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn a_status_is_bounded() {
         assert!("  away  ".trim().chars().count() < MAX_STATUS_CHARS);
-        assert!(MAX_STATUS_CHARS < 200);
+        assert_eq!(MAX_STATUS_CHARS, 120);
     }
 
     #[test]

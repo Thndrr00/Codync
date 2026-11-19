@@ -80,75 +80,75 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         }
         "botPresence" => match b["status"].as_str() {
             Some(status) => {
-                crate::chat::presence::set(&hub.store, str_arg(&b, "botId")?, Some(status), b["until"].as_i64())
+                crate::chat::presence::set(&hub.store, str_arg(&b, "botId")?, Some(status), b["until"].as_i64())?
             }
-            None => Ok(json!({
+            None => json!({
                 "status": crate::chat::presence::get(&hub.store, str_arg(&b, "botId")?, crate::store::now_ms())
-            })),
+            }),
         },
         "botSetup" => {
             let bot = hub.store.bot(str_arg(&b, "botId")?)?.context("unknown bot")?;
-            Ok(crate::chat::setup::checklist(&serde_json::to_value(&bot.config)?))
+            crate::chat::setup::checklist(&serde_json::to_value(&bot.config)?)
         }
-        "stretchCard" => Ok(crate::chat::stretch::paused_card(
+        "stretchCard" => crate::chat::stretch::paused_card(
             b["agent"].as_str().unwrap_or("the bot"),
             b["reason"].as_str().unwrap_or("runs"),
-        )),
+        ),
         "agentApproval" => match b["op"].as_str().unwrap_or("card") {
             "decide" => crate::chat::agent_request::decide(
                 serde_json::from_value(b["card"].clone()).map_err(|_| anyhow!("invalid card"))?,
                 str_arg(&b, "option")?,
-            ),
+            )?,
             _ => crate::chat::agent_request::card(
                 b["agent"].as_str().unwrap_or("the bot"),
                 str_arg(&b, "reason")?,
                 b["requestId"].as_str().unwrap_or("request"),
-            ),
+            )?,
         },
-        "vaultMask" => Ok(crate::chat::vault::entry(
+        "vaultMask" => crate::chat::vault::entry(
             str_arg(&b, "name")?,
             b["source"].as_str().unwrap_or("keychain"),
             &crate::chat::vault::mask(str_arg(&b, "secret")?),
-        )),
+        ),
         "choiceCard" => match b["op"].as_str().unwrap_or("get") {
             "create" => {
-                crate::chat::choices::create(&hub.store, str_arg(&b, "id")?, str_arg(&b, "question")?, &b["options"])
+                crate::chat::choices::create(&hub.store, str_arg(&b, "id")?, str_arg(&b, "question")?, &b["options"])?
             }
-            "answer" => crate::chat::choices::answer(&hub.store, str_arg(&b, "id")?, str_arg(&b, "option")?),
-            _ => Ok(json!({"card": crate::chat::choices::create(
+            "answer" => crate::chat::choices::answer(&hub.store, str_arg(&b, "id")?, str_arg(&b, "option")?)?,
+            _ => json!({"card": crate::chat::choices::create(
                 &hub.store,
                 str_arg(&b, "id")?,
                 str_arg(&b, "question")?,
                 &b["options"],
-            )?})),
+            )?}),
         },
-        "messageLink" => Ok(crate::chat::message_link::cite(
+        "messageLink" => crate::chat::message_link::cite(
             str_arg(&b, "botId")?,
             str_arg(&b, "entryId")?,
             b["label"].as_str().unwrap_or("message"),
-        )),
+        ),
         "agentVoice" => match b["voice"].as_str() {
-            Some(voice) => crate::chat::voice::set(&hub.store, str_arg(&b, "botId")?, voice),
-            None => Ok(json!({"voice": crate::chat::voice::get(&hub.store, str_arg(&b, "botId")?)})),
+            Some(voice) => crate::chat::voice::set(&hub.store, str_arg(&b, "botId")?, voice)?,
+            None => json!({"voice": crate::chat::voice::get(&hub.store, str_arg(&b, "botId")?)}),
         },
-        "toolSet" => Ok(match b["kind"].as_str().unwrap_or("conversation") {
+        "toolSet" => match b["kind"].as_str().unwrap_or("conversation") {
             "routine" => crate::chat::toolset::routine(),
             _ => crate::chat::toolset::conversation(),
-        }),
+        },
         "missionWorktree" => {
-            Ok(crate::chat::mission_worktree::names(str_arg(&b, "missionId")?, b["title"].as_str().unwrap_or_default()))
+            crate::chat::mission_worktree::names(str_arg(&b, "missionId")?, b["title"].as_str().unwrap_or_default())
         }
         "personFacts" => {
             let person = str_arg(&b, "personId")?;
             match b["op"].as_str().unwrap_or("list") {
-                "add" => crate::chat::person::add(&hub.store, person, str_arg(&b, "text")?),
-                "remove" => crate::chat::person::remove(&hub.store, person, str_arg(&b, "text")?),
-                _ => Ok(json!({"facts": crate::chat::person::list(&hub.store, person)})),
+                "add" => crate::chat::person::add(&hub.store, person, str_arg(&b, "text")?)?,
+                "remove" => crate::chat::person::remove(&hub.store, person, str_arg(&b, "text")?)?,
+                _ => json!({"facts": crate::chat::person::list(&hub.store, person)}),
             }
         }
         "routineHandoff" => {
             // A conversation run takes the pending handoff from a quiet routine and says it once.
-            Ok(json!({"message": crate::routines::handoff::take(&hub.store, str_arg(&b, "botId")?)}))
+            json!({"message": crate::routines::handoff::take(&hub.store, str_arg(&b, "botId")?)})
         }
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);

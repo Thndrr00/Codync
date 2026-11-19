@@ -1,18 +1,20 @@
 //! Typed calls for the behaviors brought from agentes.chat. The TUI renders host state; it never
 //! decides any of it. Mirrors the methods in `chat/{presence,setup,stretch,agent_request,vault}`.
 
-use super::Net;
+use super::Client;
 use serde_json::{Value, json};
 
-impl Net {
+impl Client {
     pub async fn presence(&self, bot: &str) -> Result<Option<Value>, String> {
         let res = self.call("botPresence", &json!({"botId": bot})).await?;
-        Ok(res["status"].clone().filter(|v| !v.is_null()))
+        let status = res["status"].clone();
+        Ok((!status.is_null()).then_some(status))
     }
 
     pub async fn set_presence(&self, bot: &str, status: &str, until: Option<i64>) -> Result<Option<Value>, String> {
         let res = self.call("botPresence", &json!({"botId": bot, "status": status, "until": until})).await?;
-        Ok(res["status"].clone().filter(|v| !v.is_null()))
+        let status = res["status"].clone();
+        Ok((!status.is_null()).then_some(status))
     }
 
     pub async fn setup(&self, bot: &str) -> Result<Value, String> {
