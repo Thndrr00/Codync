@@ -25,6 +25,7 @@ pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value
         "routine_webhook" => {
             hub.routines.credentials(hub, bot, required(args, "id")?, args["rotate"].as_bool().unwrap_or(false))
         }
+        "hand_off" => super::handoff::save(&hub.store, bot, required(args, "message")?),
         n if super::flow::TOOLS.contains(&n) => super::flow::tool_call(hub, bot, n, args),
         _ => bail!("unknown routine tool"),
     }
@@ -36,6 +37,7 @@ pub fn tools() -> Value {
     let id = json!({"type":"string"});
     let mut tools = vec![
         json!({"name":"list_routines","description":"List this bot's routines and run history.","inputSchema":{"type":"object","properties":{}}}),
+        json!({"name":"hand_off","description":"Tell the person what this routine found, in your own voice, in their chat. A routine run works quietly: its final text stays in the run history and is never posted here. Call hand_off once with the complete handoff — what you found, why it matters and what you recommend or already did — when there is real news. A conversation run with the chat's context writes it for you, so keep the message self-contained. At most 8000 characters; a second call replaces the first.","inputSchema":{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}}),
     ];
     tools.push(json!({"name":"save_routine","description":"Create or replace a routine. Omit id to create; include id to update. triggers is an OR list. Use cron for recurring clock schedules; interval is for explicitly requested elapsed-duration semantics or existing schedules: interval {type:interval,seconds}; once {type:once,at:Unix milliseconds}; cron {type:cron,expression:five cron fields,timeZone:IANA zone}; webhook {type:webhook}; event {type:event,source:slack/telegram/whatsapp/discord/github/origin/microsoftTeams/linear/sentry/pagerduty/email,event:event name or *,filters:field-to-value map}; watch {type:watch,kind:files or url,target:a file or folder path (relative to your working folder) or an https URL,everyMinutes:1-10080}: checked without you, it runs only when the target changed since the last check (the first check only records it; folders up to 2000 entries, .git and node_modules skipped). Events require a configured webhook sender. Minimum interval is one second.","inputSchema":{"type":"object","properties":{"id":id,"name":{"type":"string"},"instruction":{"type":"string"},"enabled":{"type":"boolean"},"timeoutSeconds":{"type":"integer","minimum":1,"maximum":86400},"triggers":{"type":"array","items":{"type":"object"}}},"required":["name","instruction","triggers"]}}));
     for (name, description) in [

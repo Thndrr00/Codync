@@ -32,8 +32,11 @@ repetida al mismo bot en la última hora se descarta). La suite reveló que la p
 rompía el FIFO entre remitentes; se corrigió a dos carriles. **1290 tests unitarios pasan** (0 fallos).
 Los e2e que fallan son de entorno: `phone_pairs` (`Protocol` de Windows), `wire_shape` (un aviso de
 salud aparece solo con la memoria al 96 %, así que sus campos no se graban) y `compaction`/`memory`
-(el host bloquea turnos sobre el 85 % de memoria). El bump de versión no procede: `MARKETING_VERSION`
-2.56.0 ya va por delante del último tag (`v2.47.0`).
+(el host bloquea turnos sobre el 85 % de memoria). Después se trajeron también los ADR 0047 (handoff
+de rutinas), 0052 (perfil por persona), 0044 (worktree por misión) y 0043 (herramientas por tipo de
+run), reutilizando el kv store y las estructuras de misiones y rutinas; llevan tests unitarios puros y
+solo se validó su sintaxis con `rustfmt`, sin compilar. El bump de versión no procede:
+`MARKETING_VERSION` 2.56.0 ya va por delante del último tag (`v2.47.0`).
 
 1. `cargo check --all-targets` en `host/` y corregir lo que salga.
 2. `cargo fmt --check` y `cargo clippy --all-targets -- -D warnings`.

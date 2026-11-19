@@ -5,6 +5,7 @@ mod editor;
 pub mod events;
 mod failed;
 pub mod flow;
+pub mod handoff;
 mod idle;
 pub(crate) use editor::days_in_month;
 pub use editor::{ScheduleDraft, preview as schedule_preview};

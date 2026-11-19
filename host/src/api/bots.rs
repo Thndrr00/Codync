@@ -78,6 +78,25 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
         "listOpenItems" | "dismissOpenItem" | "listBookmarks" | "saveBookmark" | "deleteBookmark" => {
             crate::chat::open_items::api_call(hub, method, &b)?
         }
+        "toolSet" => Ok(match b["kind"].as_str().unwrap_or("conversation") {
+            "routine" => crate::chat::toolset::routine(),
+            _ => crate::chat::toolset::conversation(),
+        }),
+        "missionWorktree" => {
+            Ok(crate::chat::mission_worktree::names(str_arg(&b, "missionId")?, b["title"].as_str().unwrap_or_default()))
+        }
+        "personFacts" => {
+            let person = str_arg(&b, "personId")?;
+            match b["op"].as_str().unwrap_or("list") {
+                "add" => crate::chat::person::add(&hub.store, person, str_arg(&b, "text")?),
+                "remove" => crate::chat::person::remove(&hub.store, person, str_arg(&b, "text")?),
+                _ => Ok(json!({"facts": crate::chat::person::list(&hub.store, person)})),
+            }
+        }
+        "routineHandoff" => {
+            // A conversation run takes the pending handoff from a quiet routine and says it once.
+            Ok(json!({"message": crate::routines::handoff::take(&hub.store, str_arg(&b, "botId")?)}))
+        }
         "chatCall" => {
             let (bot, name) = (str_arg(&b, "botId")?, str_arg(&b, "name")?);
             if name == "research_sources" {
