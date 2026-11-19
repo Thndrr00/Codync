@@ -66,6 +66,16 @@ pasos de trabajo en un bloque colapsable, los skills de diseño y el correo entr
 
 La rama está pusheada como `feat/bdots-50-mejoras` y el PR es
 [Thndrr00/Codync#8](https://github.com/Thndrr00/Codync/pull/8) contra `main` (el fork no tiene rama `dev`).
+El branch se fusionó con `main` (commit de merge `0f5e747fb`): los 16 conflictos se resolvieron
+conservando las versiones nuevas de `main` en los archivos que esta rama no tocaba y las firmas del
+pruner en `mcp.rs`, donde `call` se mantuvo de cinco argumentos para el CLI y se añadió
+`call_with_pruner` para el puente MCP. La tarjeta de `ask_user` lleva `askUserTool` para no
+confundirse con las tarjetas `question` que `main` ya usa en `external/question.rs`. El PR pasó de
+`DIRTY` a `UNSTABLE` (sin conflictos; checks pendientes).
+
+Sobre más adiciones: el nodo de aprobación humana en flujos y el correo entrante por bot son
+demasiado grandes para escribirlos sin poder compilar el host aquí; los skills de diseño son solo
+documentación y no aportan comportamiento. Se dejan fuera a propósito, no por olvido.
 
 ## Puente iOS
 
