@@ -170,14 +170,16 @@ pub fn choose(
 /// which isolated profile failed) belong to the account currently in use; other accounts stay
 /// eligible so rotation can carry on.
 fn resting(store: &Store, backend: &str, account: &str, active: Option<&str>, now: i64) -> Option<Reason> {
-    if let Some(rest) = rest::get(store, account, now) {
+    // A usage or rate limit of one isolated profile now rests only that profile; provider-wide
+    // reasons (signed out, out of credits) still fall through to the provider key (OpenBot nightly).
+    if let Some(rest) = rest::get_scoped(store, backend, Some(account), now) {
         return Some(rest.reason);
     }
     if rest::signed_out(store, backend).iter().any(|id| id.as_str() == account) {
         return Some(Reason::SignedOut);
     }
     if active == Some(account) {
-        match rest::get(store, backend, now) {
+        match rest::get_scoped(store, backend, None, now) {
             Some(rest) if limited(rest.reason) => return Some(rest.reason),
             _ => {}
         }

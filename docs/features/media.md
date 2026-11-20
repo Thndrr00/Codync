@@ -103,7 +103,9 @@ checks, and `whatsapp::history` keeps its path beside the text in a `file` colum
 data folder, added to a table made before the column on first use). Unlinking the number, or a
 message leaving the 90-day or 20 000-row retention, deletes the file with its row. A message revoked
 or dropped from the input queue before it reaches history also has its saved file deleted, so no
-file is left behind without a row.
+file is left behind without a row. The kept media of one number is also capped at
+2 GB: once the files pass that, the oldest are removed first and only their rows'
+`file` paths are cleared, so the messages and their text stay.
 
 ## Not ported
 

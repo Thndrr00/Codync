@@ -90,6 +90,7 @@ host answers and sends it once the host is up.
 | Event | Sent by | When | Properties |
 |---|---|---|---|
 | `screen_viewed` | host `track` (desktop, TUI), iOS, Android | A screen, sheet or tab is shown | `screen` (see *Screens*) |
+| `library_folder_action` | host (`libraryFolderCreate`, `libraryFolderRename`, `libraryFolderMove`, `libraryFolderDelete`, `libraryFileItem`) | A person made, renamed, moved, deleted or filed a chat's Library folder; listing folders is a read and sends nothing | `action` (`create`/`rename`/`move`/`delete`/`file`); never the folder's name or the item |
 | `bot_created` | host | `createBot` | `kind` (`bot`/`group`), `agent`, `model` or `members` (count) |
 | `bots_imported` | host | `importBots` (bots it makes send no `bot_created`) | `source` (`grok-bot`/`openbot`/`other`), `bots`, `groups` (counts) |
 | `bot_updated` | host | `updateBot` | `fields`: the settings that changed, as the bot config's own camelCase keys (`model`, `permission`, `pinned`, `notify`, `section`, `modelOptions`, `fastMode`, …), never their values; when the edit changes `compaction`, also `compaction`: the kind picked (`early`/`nearLimit`/`off`/`tokens`, never the size) |
@@ -118,6 +119,7 @@ host answers and sends it once the host is up.
 | `routine_deleted` | host | `deleteRoutine` | — |
 | `routine_run` | host | `runRoutine` | — |
 | `routine_retried` | host | `retryRoutineRun` (the retry button on a failed run's notice) | — |
+| `routine_flow_grouped` | host | `saveRoutineFlowGroups`: a person saved a routine-flow canvas's groups; grouping is drawing only and changes no links | — |
 | `dev_server_started` | host | A bot's `start_dev_server` finished | `outcome` (`port`, `no_port`, `exited`, `refused`, `limit`, `failed`) |
 | `dev_server_stopped` | host | A dev server ended | `by` (`user`, `bot`, `restart`, `exited`, `failed`) |
 | `dev_server_action` | host (`devServerStop`, `devServerRestart`, `devServerRemove`, `devServerLogs`), host `track` (desktop, terminal UI), iOS, Android | Someone acted on a dev server | `action` (`stop`, `restart`, `remove`, `logs`, `open`, `copy`) |
@@ -144,7 +146,8 @@ host answers and sends it once the host is up.
 | `reach_account_answered` | host `track` (desktop) | The ask before *Reach from anywhere* turns on for a computer in no account ended | `outcome` (`added`/`own_relay`/`cancelled`/`failed`), `error` on `failed` (`unreachable`: the cloud couldn't be reached; `refused`: it refused; `host`: the host failed) |
 | `setting_changed` | host, iOS, Android | A setting is switched | `setting` (host: `remote_access`/`remote_access_url` (`on`: a relay address is saved, never the address)/`approval` (`on`: approved without the code)/`automatic_updates`/`remote_screen`/`cloud_assistants`/`steer_while_working`/`whatsapp_working_message`/`usage_shown` (with `agent`: which agent's limits the Usage screen lists)/`usage_order` (the agents were arranged); phones: `push`/`live_activities`), `on` |
 | `setting_changed` | host `track` (desktop) | The *Your bubbles* style under Appearance is picked | `setting` (`your_bubbles`), `value` (`solid`/`tint`/`classic`; a style the host doesn't know yet reads as `other`), never any message text |
-| `subagent_delegated` | host | A bot called `delegate` to run one bounded child turn | `outcome` (`ok`/`depth_limit`/`cap`/`failure`), `agent`; never the task or the reply text |
+| `setting_changed` | host (`setAccountRotation`) | The account rotation mode of an agent is set | `setting` (`account_rotation`), `value` (`manual`/`roundRobin`/`onRateLimit`; an unknown mode reads as `other`), never an account id, name or email |
+| `subagent_delegated` | host | A bot called `delegate` to run one bounded child turn; sent with the result, including a refusal before a child starts | `outcome` (`ok`/`depth_limit`/`cap`/`failure`), `agent`; never the task or the reply text |
 | `browser_live_viewed` | host | A person opened a bot's live browser tab or took control | `action` (`opened`/`taken_over`); never the page, title, address or picture |
 | `host_update_installed` | host | `installHostUpdate` | — |
 | `network_joined` | host | `networkCreate` / `networkJoin`: the computer is in a network of the user's computers | `via` (`create`/`invite`), never a name, invite or connector address |

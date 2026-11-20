@@ -331,6 +331,40 @@ async fn store_lookups_add_fields_choice_and_platform() {
 }
 
 #[test]
+fn library_folders_flow_groups_and_account_rotation_report_only_fixed_values() {
+    for (method, action) in [
+        ("libraryFolderCreate", "create"),
+        ("libraryFolderRename", "rename"),
+        ("libraryFolderMove", "move"),
+        ("libraryFolderDelete", "delete"),
+        ("libraryFileItem", "file"),
+    ] {
+        let b = json!({"botId": "b1", "id": "secret-folder", "name": "Salaries", "item": "e1"});
+        let (event, p) = props(method, &b).unwrap_or_else(|| panic!("{method} is tracked"));
+        assert_eq!(
+            (event, Value::Object(p)),
+            (Event::LibraryFolderAction, json!({"action": action, "client": "local"}))
+        );
+    }
+    assert!(props("libraryFolders", &json!({"botId": "b1"})).is_none(), "listing folders is a read");
+
+    let grouped = props("saveRoutineFlowGroups", &json!({"botId": "b1", "groups": [{"name": "Salaries"}]}));
+    assert_eq!(grouped, Some((Event::RoutineFlowGrouped, json!({"client": "local"}))));
+
+    for (mode, value) in [("manual", "manual"), ("roundRobin", "roundRobin"), ("onRateLimit", "onRateLimit")] {
+        let b = json!({"backend": "claude", "mode": mode, "accountId": "acc_salaries"});
+        let (event, p) = props("setAccountRotation", &b).unwrap();
+        assert_eq!(
+            (event, Value::Object(p)),
+            (Event::SettingChanged, json!({"setting": "account_rotation", "value": value, "client": "local"}))
+        );
+    }
+    let unknown = props("setAccountRotation", &json!({"backend": "claude", "mode": "made up"})).unwrap();
+    assert_eq!(unknown.1["value"], json!("other"));
+    assert!(!unknown.1.to_string().contains("made up"));
+}
+
+#[test]
 fn a_failed_network_call_reports_what_it_was_and_others_nothing() {
     let failed_call = |method: &str, b: &Value| {
         let (event, p) = observe(&Caller::Local, method, b)?;

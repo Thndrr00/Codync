@@ -10,7 +10,13 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 /// Methods that stand for one event with one fixed property.
-const FIXED: [(&str, Event, &str, &str); 14] = [
+const FIXED: [(&str, Event, &str, &str); 19] = [
+    // Library folder edits: only the action, never the folder's name or the item filed.
+    ("libraryFolderCreate", Event::LibraryFolderAction, "action", "create"),
+    ("libraryFolderRename", Event::LibraryFolderAction, "action", "rename"),
+    ("libraryFolderMove", Event::LibraryFolderAction, "action", "move"),
+    ("libraryFolderDelete", Event::LibraryFolderAction, "action", "delete"),
+    ("libraryFileItem", Event::LibraryFolderAction, "action", "file"),
     ("editHandoff", Event::HandoffAnswered, "action", "edit"),
     ("keepConversation", Event::HandoffAnswered, "action", "keep"),
     ("credentialSaveLogin", Event::CredentialSaved, "kind", "login"),
@@ -97,6 +103,12 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             p.insert("on".into(), true.into());
             Event::SettingChanged
         }
+        "setAccountRotation" => {
+            // One of the host's fixed modes; never an account id, name or email.
+            p.insert("setting".into(), "account_rotation".into());
+            p.insert("value".into(), rotation_mode(&b["mode"]).into());
+            Event::SettingChanged
+        }
         "updateBot" => Event::BotUpdated,
         // A missing `to` is refused by the call itself, so it reads as `removed` only when given empty.
         "renameSection" => {
@@ -122,6 +134,7 @@ fn call_event(method: &str, b: &Value, p: &mut Map<String, Value>) -> Option<Eve
             Event::MessagePinned
         }
         "saveRoutine" => Event::RoutineSaved,
+        "saveRoutineFlowGroups" => Event::RoutineFlowGrouped,
         "setRoutineEnabled" => {
             p.insert("enabled".into(), b["enabled"].as_bool()?.into());
             Event::RoutineToggled
@@ -320,6 +333,17 @@ fn changed_fields(stored: &BotConfig, patch: &Value) -> Vec<String> {
         .collect();
     fields.sort();
     fields
+}
+
+/// The fixed mode of a `setAccountRotation` call. An unknown value (which the call itself refuses)
+/// reads as `other`, so no text from the request can reach the event.
+fn rotation_mode(mode: &Value) -> &'static str {
+    match mode.as_str() {
+        Some("manual") => "manual",
+        Some("roundRobin") => "roundRobin",
+        Some("onRateLimit") => "onRateLimit",
+        _ => "other",
+    }
 }
 
 /// The kind of option a permission answer picked (ACP's `kind`), from its card.

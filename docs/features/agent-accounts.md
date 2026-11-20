@@ -65,4 +65,11 @@ the existing `fallback::rest` helpers, and advances the cursor only when it
 changes. The host exposes `accountRotation`, `setAccountRotation` and
 `accountStates` (state only — never tokens); the account sections on desktop,
 iPhone and Android use the shared segmented control to set the mode, and the bot
-account pickers show that a chosen account is pinned and ignores rotation.
+account pickers show that a chosen account is pinned and ignores rotation. Setting
+the mode reports `setting_changed` (`setting: account_rotation`, `value`: the mode),
+never an account id or name ([analytics events](../reference/analytics-events.md)).
+
+A rest a limit put one profile into is keyed `rest.<agent>:<account>`, so rotation can
+skip that profile and keep the others eligible; out-of-credits and signed-out rests stay
+on the provider-wide `rest.<agent>` key that older hosts wrote. The old key remains
+readable after the change.

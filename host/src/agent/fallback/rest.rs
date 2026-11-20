@@ -1,7 +1,9 @@
 //! How long an agent rests after it couldn't answer. Usage belongs to the agent's account, not to one bot, so a
 //! rest is the computer's: once one bot finds Claude Code out of usage, every bot skips it until it resets. A usage
 //! limit rests until the reset time the agent reported (`usage`); other failures rest longer each time in a row.
-//! Kept in `kv` (`rest.<account>`, see `account`), so a host restart remembers them.
+//! Kept in `kv`, so a host restart remembers them. The provider-wide key is `rest.<agent>` (older hosts wrote only
+//! this, and it stays readable); a limit one isolated profile hit is kept under `rest.<agent>:<account>`, so
+//! account rotation can leave the other profiles eligible. Out-of-credits and signed-out stay provider-wide.
 
 use super::Reason;
 use crate::store::Store;
@@ -61,8 +63,28 @@ pub fn held_reset(fresh: Option<i64>, held: Option<i64>, now: i64) -> Option<i64
     fresh.or_else(|| held.filter(|t| *t > now))
 }
 
+/// The kv key of an agent's rest. `account` is one isolated profile of the agent, joined with `:` the
+/// same way an isolated account is named elsewhere; without it (or with an empty id) this is the
+/// provider-wide `rest.<agent>` key older hosts wrote.
+pub fn rest_key(agent: &str, account: Option<&str>) -> String {
+    match account.map(str::trim).filter(|id| !id.is_empty()) {
+        Some(id) => format!("rest.{agent}:{id}"),
+        None => format!("rest.{agent}"),
+    }
+}
+
+/// The key a rest of `reason` is saved under. Only a rate or usage limit a particular profile hit is
+/// scoped to that profile: out-of-credits, signed-out and a start failure are the provider's, so every
+/// account sees them on the old provider-wide key.
+pub fn key_for(agent: &str, account: Option<&str>, reason: Reason) -> String {
+    match reason {
+        Reason::UsageLimit | Reason::RateLimited | Reason::Overloaded => rest_key(agent, account),
+        _ => rest_key(agent, None),
+    }
+}
+
 fn key(account: &str) -> String {
-    format!("rest.{account}")
+    rest_key(account, None)
 }
 
 /// Whose usage a rest is about: the agent's account, or a custom command's own (two custom commands are two agents).
@@ -89,9 +111,14 @@ fn backend_of(account: &str) -> &str {
     account.split_once('#').map_or(account, |(backend, _)| backend)
 }
 
+/// The last rest under one kv key, over or not.
+fn saved_key(store: &Store, name: &str) -> Option<Rest> {
+    serde_json::from_str(&store.kv_get(name)?).ok()
+}
+
 /// `account`'s last rest, over or not.
 fn saved(store: &Store, account: &str) -> Option<Rest> {
-    serde_json::from_str(&store.kv_get(&key(account))?).ok()
+    saved_key(store, &key(account))
 }
 
 /// `account`'s rest at `now`, while it lasts.
@@ -99,10 +126,46 @@ pub fn get(store: &Store, account: &str, now: i64) -> Option<Rest> {
     saved(store, account).filter(|rest| rest.until > now)
 }
 
+/// The rest that applies to one isolated `account` of `agent`: a limit that profile hit first, then the
+/// provider-wide rest (out-of-credits, signed-out, a start failure) every account shares. With no account
+/// this is just the provider's own rest. Account rotation uses this per account instead of blaming the
+/// active one for a provider-wide limit.
+pub fn get_scoped(store: &Store, agent: &str, account: Option<&str>, now: i64) -> Option<Rest> {
+    let own = account.and_then(|id| saved_key(store, &rest_key(agent, Some(id)))).filter(|rest| rest.until > now);
+    own.or_else(|| get(store, agent, now))
+}
+
 /// Records that `account` couldn't answer for `reason` at `now`. `resets_at`: when its usage limit resets, if it
 /// said. A model the agent lacks is the bot's setup, not the agent's, so it doesn't rest the agent.
 pub fn record(store: &Store, account: &str, reason: Reason, now: i64, resets_at: Option<i64>) -> Option<Rest> {
-    let before = saved(store, account);
+    record_at(store, &key(account), account, reason, now, resets_at)
+}
+
+/// Records a rest for one isolated `account` of `agent`. A usage or rate limit goes on that profile's key;
+/// every other reason uses the provider-wide key so all bots of the agent see it. Old provider-wide keys
+/// remain readable through [`get`].
+pub fn record_scoped(
+    store: &Store,
+    agent: &str,
+    account: Option<&str>,
+    reason: Reason,
+    now: i64,
+    resets_at: Option<i64>,
+) -> Option<Rest> {
+    let name = key_for(agent, account, reason);
+    // The signed-out wait depends on the agent, not the profile id, which has no `#` to split.
+    record_at(store, &name, agent, reason, now, resets_at)
+}
+
+fn record_at(
+    store: &Store,
+    name: &str,
+    account: &str,
+    reason: Reason,
+    now: i64,
+    resets_at: Option<i64>,
+) -> Option<Rest> {
+    let before = saved_key(store, name);
     // An hour after its last rest ended, a failure starts the backoff over.
     let failures = before.filter(|r| now - r.until < BACKOFF[3]).map_or(0, |r| r.failures) + 1;
     let held = before.filter(|r| r.reason == Reason::UsageLimit).and_then(|r| r.reset_at);
@@ -119,7 +182,7 @@ pub fn record(store: &Store, account: &str, reason: Reason, now: i64, resets_at:
         Reason::RateLimited | Reason::Overloaded => (BACKOFF[(failures as usize - 1).min(BACKOFF.len() - 1)], None),
     };
     let rest = Rest { until: now + wait, reason, failures, reset_at };
-    let saved = serde_json::to_string(&rest).map_err(anyhow::Error::from).and_then(|v| store.kv_set(&key(account), &v));
+    let saved = serde_json::to_string(&rest).map_err(anyhow::Error::from).and_then(|v| store.kv_set(name, &v));
     if let Err(error) = saved {
         tracing::warn!(account, error = format!("{error:#}"), "couldn't record the agent's rest");
     }
@@ -153,6 +216,19 @@ pub fn retry_start(store: &Store, account: &str) -> bool {
     true
 }
 
+/// Clears the limit rest scoped to one isolated `account` of `agent`. A provider-wide rest (out-of-credits,
+/// signed-out) is left for [`clear`], since other accounts still need it.
+pub fn clear_scoped(store: &Store, agent: &str, account: &str) -> bool {
+    let name = rest_key(agent, Some(account));
+    if store.kv_get(&name).is_none() {
+        return false;
+    }
+    if let Err(error) = store.kv_delete(&name) {
+        tracing::warn!(agent, account, error = format!("{error:#}"), "couldn't clear the account's rest");
+    }
+    true
+}
+
 /// Agent `backend`'s accounts (also ones a command of its own runs) whose last rest was for being signed out.
 pub fn signed_out(store: &Store, backend: &str) -> Vec<String> {
     // The prefix also finds agents whose name starts with `backend`'s.
@@ -160,7 +236,9 @@ pub fn signed_out(store: &Store, backend: &str) -> Vec<String> {
         .kv_prefix(&key(backend))
         .iter()
         .filter_map(|k| k.strip_prefix("rest."))
-        .filter(|a| backend_of(a) == backend && saved(store, a).is_some_and(|r| r.reason == Reason::SignedOut))
+        // A scoped key holds a limit, never a sign-out; the `:` separator is not part of an account id.
+        .filter(|a| !a.contains(':') && backend_of(a) == backend)
+        .filter(|a| saved(store, a).is_some_and(|r| r.reason == Reason::SignedOut))
         .map(str::to_owned)
         .collect()
 }
@@ -269,5 +347,64 @@ mod tests {
         custom.backend = "codex".into();
         custom.command = None;
         assert_eq!(account(&custom), "codex");
+    }
+
+    #[test]
+    fn a_rest_key_is_provider_wide_unless_it_names_one_isolated_account() {
+        assert_eq!(rest_key("claude", None), "rest.claude", "the old key is unchanged");
+        assert_eq!(rest_key("claude", Some("acc_1")), "rest.claude:acc_1");
+        assert_eq!(rest_key("claude", Some("  ")), "rest.claude", "an empty id is provider-wide");
+        assert_eq!(rest_key("custom#abc123", Some("acc_1")), "rest.custom#abc123:acc_1");
+
+        // A limit one profile hit is scoped; every other reason stays where older hosts wrote it.
+        for reason in [Reason::UsageLimit, Reason::RateLimited, Reason::Overloaded] {
+            assert_eq!(key_for("claude", Some("acc_1"), reason), "rest.claude:acc_1");
+        }
+        for reason in [Reason::OutOfCredits, Reason::SignedOut, Reason::NotStarting, Reason::ModelMissing] {
+            assert_eq!(
+                key_for("claude", Some("acc_1"), reason),
+                "rest.claude",
+                format!("{reason:?} is the provider's")
+            );
+        }
+    }
+
+    #[test]
+    fn a_scoped_limit_rests_only_its_account_and_an_old_key_is_still_read() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        record_scoped(&store, "claude", Some("acc_1"), Reason::RateLimited, 1_000, None);
+
+        assert_eq!(get_scoped(&store, "claude", Some("acc_1"), 1_000).map(|r| r.reason), Some(Reason::RateLimited));
+        assert_eq!(get_scoped(&store, "claude", Some("acc_2"), 1_000), None, "the other profile stays eligible");
+        assert_eq!(get(&store, "claude", 1_000), None, "the provider-wide rest is untouched");
+
+        // A rest written the old way still rests the provider and every account that checks it.
+        let old = record(&store, "claude", Reason::OutOfCredits, 1_000, None).expect("a rest");
+        assert_eq!(get(&store, "claude", 1_000).map(|r| r.reason), Some(Reason::OutOfCredits));
+        assert_eq!(get_scoped(&store, "claude", Some("acc_2"), 1_000).map(|r| r.reason), Some(old.reason));
+        assert_eq!(
+            get_scoped(&store, "claude", Some("acc_1"), 1_000).map(|r| r.reason),
+            Some(Reason::RateLimited),
+            "a profile's own limit wins over the provider-wide rest"
+        );
+
+        assert!(clear_scoped(&store, "claude", "acc_1"));
+        assert!(!clear_scoped(&store, "claude", "acc_1"), "clearing twice is a no-op");
+        assert_eq!(get_scoped(&store, "claude", Some("acc_1"), 1_000).map(|r| r.reason), Some(old.reason));
+        assert_eq!(get_scoped(&store, "claude", Some("acc_2"), 1_000).map(|r| r.reason), Some(old.reason));
+    }
+
+    #[test]
+    fn out_of_credits_and_sign_out_are_provider_wide_even_when_an_account_is_given() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        record_scoped(&store, "claude", Some("acc_1"), Reason::OutOfCredits, 1_000, None);
+        // Claude signs in through Codync, so a scoped sign-out still rests a full hour on the old key.
+        assert_eq!(
+            record_scoped(&store, "claude", Some("acc_1"), Reason::SignedOut, 1_000, None).map(|r| r.until),
+            Some(1_000 + SIGNED_OUT)
+        );
+        assert_eq!(get_scoped(&store, "claude", Some("acc_2"), 1_000).map(|r| r.reason), Some(Reason::SignedOut));
+        assert_eq!(signed_out(&store, "claude"), ["claude".to_owned()], "a scoped limit isn't a sign-out");
+        assert!(store.kv_get("rest.claude:acc_1").is_none(), "no per-account key was written");
     }
 }

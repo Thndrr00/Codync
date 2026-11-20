@@ -29,6 +29,9 @@ pub enum Event {
     StarPromptAnswered,
     LinkOpened,
     ScreenViewed,
+    /// A person made, renamed, moved, deleted or filed a Library folder (`action`); never the folder's
+    /// name or the item it holds.
+    LibraryFolderAction,
     BotCreated,
     BotUpdated,
     BotsReordered,
@@ -62,6 +65,8 @@ pub enum Event {
     RoutineDeleted,
     RoutineRun,
     RoutineRetried,
+    /// A person saved the groups of a routine-flow canvas; grouping is drawing only, it runs nothing.
+    RoutineFlowGrouped,
     /// A bot called `delegate` to start a subagent child turn (`outcome`, `agent`; never the task).
     SubagentDelegated,
     /// A bot's `start_dev_server` ended (`outcome`).
@@ -171,6 +176,7 @@ impl Event {
             Self::StarPromptAnswered => "star_prompt_answered",
             Self::LinkOpened => "link_opened",
             Self::ScreenViewed => "screen_viewed",
+            Self::LibraryFolderAction => "library_folder_action",
             Self::BotCreated => "bot_created",
             Self::BotUpdated => "bot_updated",
             Self::BotsReordered => "bots_reordered",
@@ -197,6 +203,7 @@ impl Event {
             Self::RoutineDeleted => "routine_deleted",
             Self::RoutineRun => "routine_run",
             Self::RoutineRetried => "routine_retried",
+            Self::RoutineFlowGrouped => "routine_flow_grouped",
             Self::SubagentDelegated => "subagent_delegated",
             Self::DevServerStarted => "dev_server_started",
             Self::DevServerStopped => "dev_server_stopped",

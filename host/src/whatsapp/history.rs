@@ -21,6 +21,29 @@ use std::sync::Mutex;
 pub(crate) const KEEP_MS: i64 = 90 * 24 * 60 * 60 * 1000;
 /// Most messages one number keeps; the oldest go first.
 const MAX_KEPT: i64 = 20_000;
+/// Most media one number keeps, in bytes. Beyond this the oldest files go first (their messages keep
+/// their text, just no file path), so one number can't fill the data folder.
+pub(crate) const MAX_MEDIA_BYTES: i64 = 2 * 1024 * 1024 * 1024;
+
+/// Pure budget decision: how many of the oldest files must go for their total to fit under `cap`.
+/// `sizes` is oldest first; a file bigger than the cap on its own is dropped after every older one.
+fn media_to_prune(sizes: &[i64], cap: i64) -> usize {
+    // i128 keeps the sum exact even for absurd file lengths, so one huge file can't make the rest look free.
+    let total: i128 = sizes.iter().map(|&size| i128::from(size)).sum();
+    let mut over = total - i128::from(cap);
+    if over <= 0 {
+        return 0;
+    }
+    let mut count = 0;
+    for &size in sizes {
+        if over <= 0 {
+            break;
+        }
+        over -= i128::from(size);
+        count += 1;
+    }
+    count
+}
 
 /// How long a message WhatsApp sends again after a newly linked number couldn't read it at first is
 /// still treated as its first copy (OpenBot 0.70.0), not as an ordinary duplicate.
@@ -133,9 +156,11 @@ pub(crate) fn remember(store: &Store, message: &Message<'_>) -> Result<bool> {
     Ok(true)
 }
 
-/// Deletes the rows the 90-day limit and the row count remove, answering the files they named.
+/// Deletes the rows the 90-day limit and the row count remove, and the oldest files past the media
+/// cap, answering the files the caller must delete. Rows trimmed for media keep their text: only their
+/// `file` path is cleared, so no row still needs a file that is about to go.
 fn trim(c: &rusqlite::Connection, at: i64) -> Result<Vec<String>> {
-    let files = {
+    let mut files = {
         let mut statement = c.prepare(
             "SELECT file FROM whatsapp_history WHERE file IS NOT NULL
              AND (at < ?1 OR id NOT IN (SELECT id FROM whatsapp_history ORDER BY id DESC LIMIT ?2))",
@@ -148,6 +173,40 @@ fn trim(c: &rusqlite::Connection, at: i64) -> Result<Vec<String>> {
          OR id NOT IN (SELECT id FROM whatsapp_history ORDER BY id DESC LIMIT ?2)",
         params![cutoff(at), MAX_KEPT],
     )?;
+    files.extend(trim_media(c, MAX_MEDIA_BYTES)?);
+    Ok(files)
+}
+
+/// Clears the `file` path of the oldest rows whose files push the number over `cap`, oldest first, and
+/// answers those paths for `remove_files`. A file already gone has size zero and is never picked.
+fn trim_media(c: &rusqlite::Connection, cap: i64) -> Result<Vec<String>> {
+    let root = crate::service::data_dir();
+    let rows: Vec<(i64, String, i64)> = {
+        let mut statement =
+            c.prepare("SELECT id, file FROM whatsapp_history WHERE file IS NOT NULL ORDER BY id ASC")?;
+        let found = statement.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?;
+        let mut kept = Vec::new();
+        for row in found {
+            let (id, file) = row?;
+            let size = kept_file(&root, &file)
+                .and_then(|path| std::fs::metadata(path).ok())
+                .map_or(0, |meta| meta.len() as i64);
+            if size > 0 {
+                kept.push((id, file, size));
+            }
+        }
+        kept
+    };
+    let sizes: Vec<i64> = rows.iter().map(|row| row.2).collect();
+    let mut files = Vec::new();
+    for (id, file, _) in rows.iter().take(media_to_prune(&sizes, cap)) {
+        // Clear every row naming this path before the caller deletes the file, so no row needs it.
+        c.execute("UPDATE whatsapp_history SET file = NULL WHERE id = ?1", params![id])?;
+        c.execute("UPDATE whatsapp_history SET file = NULL WHERE file = ?1", params![file])?;
+        if !files.contains(file) {
+            files.push(file.clone());
+        }
+    }
     Ok(files)
 }
 
@@ -315,6 +374,40 @@ mod tests {
         assert_eq!(kept.len(), 1, "a message with only a file is kept");
         assert_eq!(kept[0]["text"], "");
         assert_eq!(kept[0]["file"], format!("whatsapp-media/{}", path.file_name().unwrap().to_string_lossy()));
+    }
+
+    #[test]
+    fn the_media_budget_drops_only_as_many_oldest_files_as_it_needs() {
+        assert_eq!(media_to_prune(&[], 4), 0, "nothing kept fits any budget");
+        assert_eq!(media_to_prune(&[1, 2, 3], 6), 0, "at the cap nothing goes");
+        assert_eq!(media_to_prune(&[1, 2, 3], 5), 1, "one oldest file pays for the overrun");
+        assert_eq!(media_to_prune(&[1, 2, 3], 1), 3, "every older file goes before the newest");
+        assert_eq!(media_to_prune(&[4, 1, 1], 4), 1, "the oldest file alone covers the overrun");
+        assert_eq!(media_to_prune(&[i64::MAX, i64::MAX], MAX_MEDIA_BYTES), 2, "sizes can't overflow the sum");
+    }
+
+    #[test]
+    fn files_over_the_media_cap_are_pruned_oldest_first_and_leave_their_messages() {
+        let store = crate::store::tests::temp_store();
+        let (old, old_shown) = saved_file("old.jpg");
+        let (recent, recent_shown) = saved_file("recent.jpg");
+        let now = 1_800_000_000_000;
+        remember(&store, &message("chat", "old", Some(old_shown.as_str()), now)).unwrap();
+        remember(&store, &message("chat", "recent", Some(recent_shown.as_str()), now + 1)).unwrap();
+
+        // Two four-byte files with a six-byte cap: the older one goes, its row keeps the text.
+        let pruned = store.with_connection(|c| trim_media(c, 6)).unwrap();
+        assert_eq!(pruned.len(), 1);
+        remove_files(&pruned);
+        assert!(!old.exists(), "the oldest file over budget goes");
+        assert!(recent.exists(), "the kept file stays");
+
+        let kept = search(&store, &[], 0, i64::MAX, 10).unwrap();
+        assert_eq!(kept.len(), 2, "pruning media doesn't delete messages");
+        let old_row = kept.iter().find(|row| row["text"] == "old").unwrap();
+        let recent_row = kept.iter().find(|row| row["text"] == "recent").unwrap();
+        assert!(old_row.get("file").is_none(), "no row still needs the deleted file");
+        assert!(recent_row.get("file").is_some(), "the other row keeps its file");
     }
 
     #[test]
