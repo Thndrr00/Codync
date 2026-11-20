@@ -281,6 +281,7 @@ mod tests {
             skills: vec![],
             learn_skills: false,
             computer: false,
+            channel_computer_use: false,
             approval_rules: vec![],
             computer_permissions: crate::computer::Permissions::default(),
             manage_team: false,

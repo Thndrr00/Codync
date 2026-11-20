@@ -6,6 +6,17 @@ Bots with **Use the computer** on get the built-in `computer` MCP server (`codyn
 - `type_login` types a saved login only into its own site or app, and a password only into a password field. The agent never sees the value.
 - The harness's own approval rules still apply to each call.
 
+A bot can also drive the desktop when its turn came from a channel (Telegram, Slack, Discord,
+WhatsApp or a native channel), as in OpenBot 0.75. This is off by default and is enabled per bot
+with the `channelComputerUse` bot setting; an owner who turns it on gets the same computer-use
+behavior from a channel as from the local chat. The channel gate is only an extra opt-in: the bot's
+computer capability and browser permissions, the approval card, protected entry and protected
+browser checks, and phone takeover all still apply unchanged, so a channel turn cannot skip them.
+The switch does not change which messages count as external — a key given in a chat is still
+refused for MCP headers, and no screen frame, file content or typed value is added to analytics or
+logs by this path. The phone's live screen and browser views are untouched: channel messages still
+carry only what they did before, with no screen frames or files added to their delivery.
+
 ## Taking over a bot's browser tab
 
 A person can also take over the browser tab a bot's browser tools drive, from the bot's Computer

@@ -54,6 +54,9 @@ pub fn tools() -> Vec<Value> {
 
 /// Runs one browser tool for `bot`.
 pub async fn call(hub: &Hub, bot: &str, name: &str, args: &Value) -> Result<Value> {
+    // Browser tools drive the same computer capability, so a channel turn needs the bot's opt-in
+    // before the capability gate below. No page content is read or logged on a refused call.
+    super::channel_gate::ensure_allowed(hub, bot)?;
     let action = Action::parse(name, args)?;
     // Analytics: which action ran, never the page, the address or the text.
     crate::analytics::browser_tool(hub, bot, name);

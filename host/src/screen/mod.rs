@@ -36,6 +36,7 @@ mod activity;
 #[cfg(windows)]
 pub mod browser_panel;
 pub mod browser_tools;
+mod channel_gate;
 mod computer;
 mod cua;
 mod helper;

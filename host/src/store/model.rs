@@ -248,6 +248,13 @@ pub struct BotConfig {
     /// The bot gets the built-in `computer` MCP server (see `screen`).
     #[serde(default)]
     pub computer: bool,
+    /// The bot may use computer tools when its turn came from a channel (Telegram, Slack, Discord,
+    /// WhatsApp or a native channel). Off until the owner turns it on. The usual capability,
+    /// approval-card, protected-entry and protected-browser checks still apply to those turns
+    /// (see `screen::channel_gate`). This never relaxes the secret rules that refuse keys from
+    /// external chats.
+    #[serde(default)]
+    pub channel_computer_use: bool,
     /// The user's rules for the agent's permission requests, first match wins (see `agent::approval_rules`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub approval_rules: Vec<crate::agent::approval_rules::ApprovalRule>,

@@ -91,6 +91,9 @@ pub async fn computer_tools(hub: &Arc<Hub>) -> Value {
 
 /// Runs one `computer` tool for `bot`: `{content, isError?}` for the agent.
 pub(super) async fn computer(hub: &Arc<Hub>, bot: &str, name: &str, args: Value) -> Result<Value> {
+    // A channel turn needs this bot's opt-in on top of every check below (capability, approval
+    // card, protected entry, takeover). Kept first so panel tools are gated on the same path.
+    super::channel_gate::ensure_allowed(hub, bot)?;
     if crate::computer::panel::is_tool(name) {
         let result = crate::computer::panel::tool(hub, bot, name, &args).await?;
         return Ok(json!({"content":[{"type":"text","text":result.to_string()}],"isError":result["success"] == false}));
