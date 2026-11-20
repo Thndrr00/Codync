@@ -1,0 +1,80 @@
+/* The checklist lives inside the Getting started sheet and uses only the sheet's tokens. */
+.setup-checklist {
+  padding: 10px 2px 4px;
+}
+.setup-progress {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--group);
+  overflow: hidden;
+}
+.setup-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  transition: width 0.4s var(--ease-out);
+}
+.setup-step {
+  min-height: 42px;
+  padding: 4px 2px;
+}
+.setup-step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--tertiary);
+}
+.setup-step.done .setup-step-mark {
+  color: var(--added);
+}
+.setup-step-open,
+.setup-restore {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  font-size: var(--text-caption);
+  padding: 4px 6px;
+  border-radius: var(--radius-s);
+  transition: background-color var(--hover), color var(--hover);
+}
+.setup-step-open:hover,
+.setup-restore:hover {
+  color: var(--text);
+  background: var(--group);
+}
+.setup-complete {
+  padding-top: 6px;
+  color: var(--added);
+  transform-origin: leading center;
+}
+.setup-complete.celebrate {
+  animation: setup-pop 0.6s var(--spring) both;
+}
+@keyframes setup-pop {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+.setup-restore {
+  align-self: flex-start;
+}
+.setup-toggle {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-s);
+  font-size: var(--text-caption);
+  transition: background-color var(--hover), color var(--hover);
+}
+.setup-toggle:hover {
+  color: var(--text);
+  background: var(--group);
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-progress-fill { transition: none; }
+  .setup-complete.celebrate { animation: none; }
+}

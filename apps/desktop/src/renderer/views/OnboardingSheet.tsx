@@ -6,6 +6,7 @@ import { Text } from '../components/Text'
 import { useTr } from '../lib/use-language'
 import { useModel } from '../lib/observable'
 import { useApp } from '../store/context'
+import { SetupChecklist } from './onboarding/SetupChecklist'
 
 type StepId = 'host' | 'agent' | 'bot' | 'access'
 
@@ -15,17 +16,19 @@ const ORDER: StepId[] = ['host', 'agent', 'bot', 'access']
  * A first run, one step at a time: the host, an agent, a bot and computer access. It resumes where it stopped,
  * can skip a step, and stops asking once finished or dismissed.
  */
-export function OnboardingSheet({ open, onClose, onExtensions, onAccess }: {
+export function OnboardingSheet({ open, onClose, onExtensions, onAccess, onAccount }: {
   open: boolean
   onClose: () => void
   onExtensions: () => void
   onAccess: () => void
+  onAccount?: () => void
 }) {
   const tr = useTr()
   const app = useApp()
   const local = useModel(app.local)
   const [index, setIndex] = useState(0)
   const [skipped, setSkipped] = useState<StepId[]>([])
+  const [showChecklist, setShowChecklist] = useState(false)
   if (!open) return null
   const backends = local?.hello?.backends ?? []
   const done: Record<StepId, boolean> = {
@@ -64,7 +67,18 @@ export function OnboardingSheet({ open, onClose, onExtensions, onAccess }: {
   return (
     <Sheet open onClose={onClose} width={520} maxHeight={520}>
       <SheetPage>
-        <ModalHeader title={tr('Getting started')} subtitle={tr('Step {n} of {total}').replace('{n}', String(index + 1)).replace('{total}', String(ORDER.length))} onClose={onClose} closeTitle={tr('Close')} />
+        <ModalHeader
+          title={tr('Getting started')}
+          subtitle={showChecklist ? tr('Your setup at a glance') : tr('Step {n} of {total}').replace('{n}', String(index + 1)).replace('{total}', String(ORDER.length))}
+          trailing={<button type="button" className="setup-toggle" onClick={() => setShowChecklist((value) => !value)}>{tr(showChecklist ? 'Steps' : 'Checklist')}</button>}
+          onClose={onClose}
+          closeTitle={tr('Close')}
+        />
+        {showChecklist ? (
+          <VStack gap={14} className="channel-sheet">
+            <SetupChecklist onExtensions={onExtensions} onAccess={onAccess} onAccount={onAccount} />
+          </VStack>
+        ) : (
         <VStack gap={14} className="channel-sheet">
           <VStack gap={6}>
             <Text weight="semibold">{titles[step]}</Text>
@@ -81,6 +95,7 @@ export function OnboardingSheet({ open, onClose, onExtensions, onAccess }: {
           </HStack>
           {finished ? <Text size="caption" tone="secondary">{tr('You can reopen this in Settings → Getting started.')}</Text> : null}
         </VStack>
+        )}
       </SheetPage>
     </Sheet>
   )

@@ -16,6 +16,7 @@ import { downloadAction, downloadDetail } from '../thread/FileDownloadCard'
 import { artifactShareItems, renameArtifact, TitleField } from './ArtifactParts'
 import { LibraryFolders } from './LibraryFolders'
 import { LibraryRail } from './LibraryRail'
+import { LibraryState } from './LibraryState'
 import { LibraryUndo } from './LibraryUndo'
 import './library.css'
 
@@ -35,6 +36,8 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<Attachment | null>(null)
   const generation = useRef(0)
   const pendingKey = useRef('')
@@ -44,9 +47,10 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
 
   const refresh = useCallback(() => {
     const mine = ++generation.current
+    setLoading(true)
     store.artifacts.library(store.client, botId).then(
-      (items) => { if (mine === generation.current) (setItems(items), setError(null)) },
-      (e: unknown) => { if (mine === generation.current) setError(e instanceof Error ? e.message : String(e)) },
+      (items) => { if (mine === generation.current) (setItems(items), setLoadError(null), setLoading(false)) },
+      (e: unknown) => { if (mine === generation.current) (setLoadError(e instanceof Error ? e.message : String(e)), setLoading(false)) },
     )
     // An older host has no folder method: keep the library as it was, with no folders.
     store.client?.call<{ folders: LibraryFolder[] }>('libraryFolders', { botId }).then(
@@ -154,6 +158,7 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
       <LibraryRail section={section} select={setSection} dragging={dragging} dropUnfiled={() => { if (pendingKey.current) fileItem(pendingKey.current, null) }} />
       <VStack gap={12} grow className="library-content">
         {error ? <Text size="caption" tone="danger" role="alert">{error}</Text> : null}
+        {loadError ? <LibraryState kind="error" title="Couldn’t load this library" detail={loadError} action="Retry" onAction={refresh} /> : null}
         {notice ? <LibraryUndo text={notice.text} undo={() => { setNotice(null); notice.undo() }} dismiss={() => setNotice(null)} /> : null}
         <LibraryFolders
           folders={tiles}
@@ -170,11 +175,16 @@ export function LibraryView({ botId, openArtifact }: { botId: string; openArtifa
           remove={remove}
           doneRenaming={(name) => renamingId && rename(renamingId, name)}
         />
-        {items.length === 0 && folders.length === 0 ? (
-          <VStack gap={4} className="outlined-card library-empty">
-            <Text size="callout" weight="semibold">{tr('Library is empty')}</Text>
-            <Text size="callout" tone="secondary">{tr('Artifacts {name} makes and files shared in this chat show here.').replace('{name}', store.bots.get(botId)?.name ?? '')}</Text>
-          </VStack>
+        {!loadError && loading && items.length === 0 && folders.length === 0 ? (
+          <LibraryState kind="loading" title="Loading your library…" />
+        ) : !loadError && items.length === 0 && folders.length === 0 ? (
+          <LibraryState
+            kind="empty"
+            title="Library is empty"
+            detail={tr('Artifacts {name} makes and files shared in this chat show here.').replace('{name}', store.bots.get(botId)?.name ?? '')}
+            action="Refresh"
+            onAction={refresh}
+          />
         ) : (
           libraryGroups(shown).map(({ group, items }) => (
             <section key={group} className="details-section">

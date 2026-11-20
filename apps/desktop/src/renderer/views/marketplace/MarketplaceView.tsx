@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Backend } from '@shared/models'
 import { Button, IconButton } from '../../components/Controls'
 import { Icon } from '../../components/Icon'
@@ -56,6 +56,7 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
   const [apps, setApps] = useState<MarketApp[]>([])
   const [marketAgents, setMarketAgents] = useState<MarketAgent[]>([])
   const [loadingSkills, setLoadingSkills] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [installing, setInstalling] = useState<MarketConnector | null>(null)
   const [viewingConnector, setViewingConnector] = useState<MarketConnector | null>(null)
@@ -118,31 +119,37 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
   const installedConnectorPreview = plugins.installedConnectors.slice(0, 3)
   const installedSkillPreview = plugins.installedSkills.slice(0, Math.max(0, 3 - installedConnectorPreview.length))
 
+  /** Loads the three catalogs together; reused by the error card's Retry. */
+  const loadMarketData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const client = await store.ready()
+      const [skillsResult, appsResult, agentsResult] = await Promise.allSettled([
+        market.marketSkills(client),
+        market.marketApps(client),
+        market.marketAgents(client),
+      ])
+      const failure = [skillsResult, appsResult, agentsResult].find((result) => result.status === 'rejected')
+      setError(failure?.status === 'rejected' ? errorText(failure.reason) : null)
+      if (skillsResult.status === 'fulfilled') setSkills(skillsResult.value)
+      if (appsResult.status === 'fulfilled') setApps(appsResult.value)
+      if (agentsResult.status === 'fulfilled') setMarketAgents(agentsResult.value)
+      await connectors.reload()
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setLoadingSkills(false)
+      setLoading(false)
+    }
+  }, [connectors, store])
+
   useEffect(() => {
     void plugins.refresh()
     // Picks up CLIs installed or signed in outside Codync.
     void store.refreshBackends()
-    void connectors.load('')
-    void (async () => {
-      try {
-        setSkills(await market.marketSkills(await store.ready()))
-      } catch (e) {
-        setError(errorText(e))
-      }
-      setLoadingSkills(false)
-    })()
-    void (async () => {
-      try {
-        const client = await store.ready()
-        setApps(await market.marketApps(client))
-        setMarketAgents(await market.marketAgents(client))
-      } catch (e) {
-        setError(errorText(e))
-      }
-    })()
+    void loadMarketData()
     return () => connectors.cancel()
-    // Mount only, like the view's `.task`s.
-  }, [])
+  }, [connectors, loadMarketData, store])
 
   // A copied `codync://marketplace/...` link opens that entry once its catalog has loaded.
   useEffect(() => {
@@ -154,6 +161,8 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
   const submit = (q: string) => {
     void connectors.load(q)
   }
+  const clearSearch = () => { setSearch(''); submit('') }
+  const retry = () => { void loadMarketData(); void plugins.refresh() }
 
   const installSkill = async (s: MarketSkill) => {
     setBusySkill(s.source)
@@ -234,7 +243,7 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
         {header}
         {searchField}
         <ExtensionTabs selection={section} onChange={setSection} />
-        <MarketPanel section={section} hostName={store.hostName} error={error ?? connectors.error}>
+        <MarketPanel section={section} hostName={store.hostName} error={error ?? connectors.error} loading={loading} onRetry={retry}>
           {section === 'apps' ? (
             <>
             <MarketSection title={tr('On this computer')}>
@@ -266,6 +275,8 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
               onAddConnector={() => setAddingConnector(true)}
               onInstallConnector={setInstalling}
               onViewConnector={setViewingConnector}
+              onClearSearch={clearSearch}
+              onRetry={retry}
             />
             </>
           ) : section === 'channels' ? (
@@ -287,6 +298,7 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
                   added={agentsAdded}
                   onAdd={(a) => setViewingAgent(a)}
                   onView={setViewingAgent}
+                  onClearSearch={clearSearch}
                 />
                 <MarketSection title={tr('Ready-made bots')}>
                   <CatalogPanel kind="bots" query={query} added={catalogAdded} onAdded={onCatalogAdded} onError={setError} />
@@ -314,6 +326,7 @@ export function MarketplaceView({ initialSection = 'apps', initialAgent, initial
               onWriteSkill={() => setWritingSkill(true)}
               onInstallSkill={(s) => void installSkill(s)}
               onViewSkill={setViewingSkill}
+              onClearSearch={clearSearch}
             />
           )}
         </MarketPanel>

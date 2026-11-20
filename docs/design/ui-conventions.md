@@ -63,7 +63,7 @@ The iPhone and the desktop no longer share UI code. `CodyncUI` (`apps/ios/Kit/`)
 
 ## Shared application controls
 
-Other custom iPhone screens use `Chrome.swift` and `Controls.swift`. The desktop equivalents are in `Overlay.tsx` (`Sheet`, `Dialog`, `ModalHeader`), `Menu.tsx` (`AnchoredMenu`) and `Controls.tsx` (`IconButton`, `DropdownMenu`, `ChoicePicker`, `ChipChoice`, `Switch`, `CardForm`, `CardSection`, `ValueRow`).
+Other custom iPhone screens use `Chrome.swift` and `Controls.swift`. The desktop equivalents are in `Overlay.tsx` (`Sheet`, `Dialog`, `ModalHeader`), `Menu.tsx` (`AnchoredMenu`) and `Controls.tsx` (`IconButton`, `DropdownMenu`, `ChoicePicker`, `ChipChoice`, `Switch`, `CardForm`, `CardSection`, `ValueRow`). The sidebar top row's bell (`views/chrome/NotificationCenter.tsx`) opens a shared `Sheet` of live asks with one-jump rows and an unread badge; the Getting started sheet's optional checklist (`views/onboarding/SetupChecklist.tsx`) derives its progress from the stores and remembers only dismissed steps on this device; Library and Marketplace use illustration-free state cards (`LibraryState.tsx`, `MarketState.tsx`) with a single Retry/Refresh action and shaped skeleton rows instead of spinners.
 
 | Need | Component |
 |---|---|
@@ -294,7 +294,7 @@ Desktop General → Appearance and phone settings → Appearance offer **System*
 **Light** and **Dark**, defaulting to System. Save the choice on the device,
 independently of accounts and hosts, and apply it immediately and on relaunch.
 Desktop uses Electron's native theme source so native chrome, CSS and canvas
-artwork agree across all windows. iPhone sets the window's interface style so
+artwork agree across all windows. Settings › Appearance also offers a custom accent (curated swatches or any validated hex), applied through the existing `--accent` variable with `--on-accent` chosen for contrast in both schemes; Settings › General exports and imports these device-local prefs as versioned JSON, never keys, tokens or account data. iPhone sets the window's interface style so
 already-presented sheets update and System clears the override;
 Android supplies the selected theme and matching system-bar contrast. Remote
 screen viewing and explicitly dark previews keep their existing dark surfaces.

@@ -9,16 +9,20 @@ import { ComposioSection } from './ComposioSection'
 import type { ConnectorCatalog } from './connector-catalog'
 import { CATEGORIES, CATEGORY_LABELS, EXTENSION_SECTIONS, type ExtensionSection, type MarketAgent, type MarketApp, type MarketConnector, type MarketSkill } from './market-models'
 import { ItemGrid, LoadMoreRow, MarketRow, MarketSection, ServiceLogo, SkeletonGrid, SkillGlyph, TileIcon } from './pieces'
+import { MarketLoading, MarketState } from './MarketState'
 
-/** One tab of Extensions: the line saying where its items come from, the tab, and an error under it. */
-export function MarketPanel({ section, hostName, error, children }: { section: ExtensionSection; hostName: string; error: string | null; children: ReactNode }) {
+/** One tab of Extensions: the source line, a loading/error state when needed, then the tab. */
+export function MarketPanel({ section, hostName, error, loading = false, onRetry, children }: { section: ExtensionSection; hostName: string; error: string | null; loading?: boolean; onRetry?: () => void; children: ReactNode }) {
   const tr = useTr()
   const source = EXTENSION_SECTIONS.find((s) => s.id === section)?.source ?? ''
   return (
     <div className="market-panel">
       <Text size="footnote" tone="tertiary">{tr(source).replaceAll('{name}', hostName)}</Text>
+      {loading ? <MarketLoading /> : null}
+      {error ? (
+        <MarketState kind="error" title="Couldn’t load extensions" detail={tr(error)} action="Retry" onAction={onRetry} />
+      ) : null}
       {children}
-      {error ? <Text size="footnote" tone="danger">{tr(error)}</Text> : null}
     </div>
   )
 }
@@ -30,7 +34,7 @@ function grouped<T extends { category: string; featured: boolean }>(items: T[]):
   return [{ title: 'Featured', items: featured }, ...groups].filter((g) => g.items.length > 0)
 }
 
-export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, onAddConnector, onInstallConnector, onViewConnector }: {
+export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, onAddConnector, onInstallConnector, onViewConnector, onClearSearch, onRetry }: {
   apps: MarketApp[]
   query: string
   catalog: ConnectorCatalog<MarketConnector>
@@ -40,6 +44,8 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
   onAddConnector: () => void
   onInstallConnector: (connector: MarketConnector) => void
   onViewConnector: (connector: MarketConnector) => void
+  onClearSearch?: () => void
+  onRetry?: () => void
 }) {
   const tr = useTr()
   const rows = catalog.items.items
@@ -64,7 +70,7 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
           </MarketSection>
         ))
       ) : query ? (
-        <Text tone="secondary">{tr('No apps match “{query}”.').replaceAll('{query}', query)}</Text>
+        <MarketState kind="empty" title="No apps found" detail={tr('No apps match “{query}”.').replaceAll('{query}', query)} action="Clear search" onAction={onClearSearch} />
       ) : null}
       <ComposioSection query={query} />
       <MarketSection title={tr('Custom connector')}>
@@ -81,7 +87,13 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
         {catalog.loading ? (
           <SkeletonGrid />
         ) : rows.length === 0 && !catalog.hasMore ? (
-          <Text tone="secondary">{query ? tr('No connectors match “{query}”.').replaceAll('{query}', query) : tr(`Couldn't load connectors.`)}</Text>
+          <MarketState
+            kind="empty"
+            title={query ? 'No connectors found' : 'No connectors here yet'}
+            detail={query ? tr('No connectors match “{query}”.').replaceAll('{query}', query) : tr('Check the registry again to see what is available.')}
+            action={query ? 'Clear search' : 'Retry'}
+            onAction={query ? onClearSearch : onRetry}
+          />
         ) : (
           <>
             <ItemGrid>
@@ -105,12 +117,13 @@ export function AppsPanel({ apps, query, catalog, added, onAddApp, onViewApp, on
   )
 }
 
-export function MarketAgentsPanel({ agents, query, added, onAdd, onView }: {
+export function MarketAgentsPanel({ agents, query, added, onAdd, onView, onClearSearch }: {
   agents: MarketAgent[]
   query: string
   added: string[]
   onAdd: (agent: MarketAgent) => void
   onView: (agent: MarketAgent) => void
+  onClearSearch?: () => void
 }) {
   const tr = useTr()
   return (
@@ -134,7 +147,7 @@ export function MarketAgentsPanel({ agents, query, added, onAdd, onView }: {
           </MarketSection>
         ))
       ) : (
-        <Text tone="secondary">{tr('No agents match “{query}”.').replaceAll('{query}', query)}</Text>
+        <MarketState kind="empty" title="No agents found" detail={tr('No agents match “{query}”.').replaceAll('{query}', query)} action="Clear search" onAction={onClearSearch} />
       )}
     </div>
   )
@@ -165,7 +178,7 @@ export function AgentsPanel({ agents, query, needsNode, onAddNode, onAgent }: {
   )
 }
 
-export function SkillsPanel({ skills, loading, query, installedSkillIds, busySkill, onWriteSkill, onInstallSkill, onViewSkill }: {
+export function SkillsPanel({ skills, loading, query, installedSkillIds, busySkill, onWriteSkill, onInstallSkill, onViewSkill, onClearSearch }: {
   skills: MarketSkill[]
   loading: boolean
   query: string
@@ -174,6 +187,7 @@ export function SkillsPanel({ skills, loading, query, installedSkillIds, busySki
   onWriteSkill: () => void
   onInstallSkill: (skill: MarketSkill) => void
   onViewSkill: (skill: MarketSkill) => void
+  onClearSearch?: () => void
 }) {
   const tr = useTr()
   const catalogued = skills.filter((s) => s.category)
@@ -225,8 +239,14 @@ export function SkillsPanel({ skills, loading, query, installedSkillIds, busySki
           </ItemGrid>
         </MarketSection>
       ) : null}
-      {!loading && skills.length === 0 && query ? (
-        <Text tone="secondary">{tr('No skills match “{query}”.').replaceAll('{query}', query)}</Text>
+      {!loading && skills.length === 0 ? (
+        <MarketState
+          kind="empty"
+          title={query ? 'No skills found' : 'No skills yet'}
+          detail={query ? tr('No skills match “{query}”.').replaceAll('{query}', query) : tr('Write a short instruction file and give it to a bot to follow.')}
+          action={query ? 'Clear search' : 'Write a skill'}
+          onAction={query ? onClearSearch : onWriteSkill}
+        />
       ) : null}
     </div>
   )

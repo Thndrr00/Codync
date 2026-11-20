@@ -21,6 +21,7 @@ import { BotRoster } from './BotRoster'
 import { ExtensionsMovedTip } from './ExtensionsMovedTip'
 import { RailAccountNotice } from './SidebarFooter'
 import { AppRail } from './AppRail'
+import { NotificationCenter } from './chrome/NotificationCenter'
 import { OnboardingSheet } from './OnboardingSheet'
 import { SidebarUsage } from './SidebarUsage'
 import { RoutineFlowView } from './routines/flow/RoutineFlowView'
@@ -544,6 +545,7 @@ function ChatSplitView() {
           {compact ? (
             <div className="sidebar-rail-actions">
               <IconButton title="Search" icon="magnifyingglass" onClick={() => setSearching(true)} />
+              <NotificationCenter size={36} />
               <IconButton title="New" icon="plus" size={36} buttonRef={railNewButton} menuOpen={railNewMenu} disabled={!onlineStores.length} onClick={() => setRailNewMenu((o) => !o)} />
               <AnchoredMenu open={railNewMenu} onClose={() => setRailNewMenu(false)} anchor={railNewButton} items={newItems} />
               <UpdateBadge size={32} />
@@ -559,6 +561,7 @@ function ChatSplitView() {
             <IconButton title="Keyboard shortcuts" icon="info.circle" size={32} className="sidebar-header-action" onClick={() => setCheatsheet(true)} />
             <IconButton title="Search" icon="magnifyingglass" size={32} className="sidebar-header-action" onClick={() => setSearching(true)} />
             <IconButton title="New" icon="plus" size={32} className="sidebar-header-action" buttonRef={newButton} menuOpen={newMenu} onClick={() => setNewMenu((o) => !o)} disabled={!onlineStores.length} />
+            <NotificationCenter />
             {/* The sidebar toggle shares the side-panel toggle's button (icon size, shape and hover fill),
                 at the end of the open sidebar (OpenBot 0.74.0's top-row chrome alignment). */}
             <ChromeIconButton ringed icon="sidebar.left" label="Collapse sidebar" onClick={() => setCompact(true)} />
@@ -667,6 +670,7 @@ function ChatSplitView() {
         onClose={() => { localStorage.setItem('codync.onboarding', 'done'); setOnboarding(false) }}
         onExtensions={() => { setOnboarding(false); openMarketplace() }}
         onAccess={() => { setOnboarding(false); setSettings('access') }}
+        onAccount={() => { setOnboarding(false); setShowAccount(true) }}
       />
       <Sheet open={filesBot !== null} onClose={() => setFilesBot(null)} width={Math.min(620, windowSize.width - 80)} height={Math.min(680, sheetHeight)}>
         {filesBot ? <BotFilesSheet bot={filesBot.bot} store={filesBot.store} onClose={() => setFilesBot(null)} /> : null}

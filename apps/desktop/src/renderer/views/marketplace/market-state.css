@@ -1,0 +1,23 @@
+/* One-card empty/error states and a loading caption for the Extension panels. */
+.market-state {
+  align-items: center;
+  text-align: center;
+  padding: 24px 20px;
+  border-radius: var(--radius-s);
+  background: var(--group);
+}
+.market-state-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--chip-on);
+  color: var(--secondary);
+}
+.market-state.error .market-state-icon {
+  color: var(--danger);
+}
+.market-loading > :last-child {
+  padding-top: 2px;
+}

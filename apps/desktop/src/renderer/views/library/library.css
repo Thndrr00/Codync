@@ -93,6 +93,35 @@
 .library-empty {
   padding: 14px 16px;
 }
+.library-state {
+  padding: 14px 16px;
+  align-items: flex-start;
+}
+.library-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.library-skeleton-icon,
+.library-skeleton-line {
+  border-radius: var(--radius-s);
+  background: var(--group);
+}
+.library-skeleton-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+}
+.library-skeleton-line {
+  display: block;
+  width: 140px;
+  height: 8px;
+}
+.library-skeleton-line.short {
+  width: 84px;
+}
 .library-row {
   min-height: 46px;
   padding: 4px 6px 4px 14px;
