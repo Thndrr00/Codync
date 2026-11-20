@@ -37,6 +37,7 @@ pub mod skills;
 pub mod steer;
 pub mod subagents;
 pub mod takeover;
+pub mod tasks;
 pub mod teach;
 pub mod team;
 pub mod tool_commands;

@@ -32,6 +32,9 @@ pub mod runtime;
 mod schema;
 mod session_search;
 mod setup;
+mod templates;
+pub use templates::{AgentTemplate, TemplateVisibility};
+pub(crate) mod tasks;
 pub mod threads;
 mod visibility;
 pub(crate) mod week;
@@ -54,6 +57,7 @@ pub use model::{
     Fallback, Lane, Permission, ProactiveSettings, RulePolicy, lane_key, message_text, run_session_key,
 };
 pub use pins::{LIST_LIMIT, PINS_LIMIT};
+pub use tasks::{TaskInfo, TaskState};
 pub use week::Week;
 
 use crate::LockExt;

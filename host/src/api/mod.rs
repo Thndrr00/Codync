@@ -32,6 +32,8 @@ mod rebinding;
 mod remote;
 mod roster;
 mod saved_searches;
+mod tasks;
+mod templates;
 
 pub use events::{events_stream, term_events};
 pub use http::router;
@@ -186,6 +188,9 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
     if documents::METHODS.contains(&method) {
         return documents::call(hub, method, b);
     }
+    if tasks::METHODS.contains(&method) {
+        return tasks::call(hub, caller, method, b);
+    }
     if matches!(method, "listComputerActivity" | "exportComputerActivity") {
         return computer_activity::read(hub, method, &b);
     }
@@ -222,6 +227,10 @@ async fn route(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value) -> Resul
         ControlFlow::Continue(b) => b,
     };
     let b = match marketplace::call(hub, caller, method, b).await? {
+        ControlFlow::Break(v) => return Ok(v),
+        ControlFlow::Continue(b) => b,
+    };
+    let b = match templates::call(hub, caller, method, b).await? {
         ControlFlow::Break(v) => return Ok(v),
         ControlFlow::Continue(b) => b,
     };
