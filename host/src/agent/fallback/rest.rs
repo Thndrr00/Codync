@@ -23,6 +23,22 @@ const SIGNED_OUT: i64 = 60 * MINUTE;
 const SIGNED_OUT_ELSEWHERE: i64 = 10 * MINUTE;
 const NOT_STARTING: i64 = 5 * MINUTE;
 
+/// How long an ACP agent may stay silent while Codync opens its session before the start is given up on.
+/// OpenBot 0.75.0 (#12871): `session/new` had no bound, so an agent that never answered left the work at
+/// "starting" forever and kept a channel member busy, so its later tasks were never assigned. After this much
+/// silence the process is ended with "did not answer in time", the start fails, and the queued work is freed.
+/// Agents that run one process per session (Mistral, Antigravity) keep their current behavior: the watchdog only
+/// applies to a process shared by sessions, as for session restore.
+pub const SESSION_START_STALL: i64 = NOT_STARTING;
+
+#[allow(
+    dead_code,
+    reason = "ported start-timeout decision; the ACP session-open loop is in agent/acp.rs, outside this change"
+)]
+pub fn silent_start_timed_out(silent_ms: i64, per_session_process: bool) -> bool {
+    !per_session_process && silent_ms >= SESSION_START_STALL
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Rest {
@@ -30,6 +46,19 @@ pub struct Rest {
     pub reason: Reason,
     /// Failures in a row, for the backoff.
     pub failures: u32,
+    /// The reset time of the last usage read that had data. OpenBot 0.75.0 (#13018): after a restart a read
+    /// can return no data (idle process stopped, read waited, failed or timed out). A later read with no data
+    /// keeps this time, so a backup model isn't sent back to its main account before the limit resets.
+    #[serde(default)]
+    pub reset_at: Option<i64>,
+}
+
+/// Which reset time a usage-limit rest holds to. A fresh reading with data wins; a read with no data keeps the
+/// reset time of the last real reading, so the agent stays on its backup until the window actually resets. A first
+/// read with no data keeps the old unknown-reset wait. OpenBot 0.75.0 (#13018).
+pub fn held_reset(fresh: Option<i64>, held: Option<i64>, now: i64) -> Option<i64> {
+    let fresh = fresh.filter(|t| *t > now);
+    fresh.or_else(|| held.filter(|t| *t > now))
 }
 
 fn key(account: &str) -> String {
@@ -76,16 +105,20 @@ pub fn record(store: &Store, account: &str, reason: Reason, now: i64, resets_at:
     let before = saved(store, account);
     // An hour after its last rest ended, a failure starts the backoff over.
     let failures = before.filter(|r| now - r.until < BACKOFF[3]).map_or(0, |r| r.failures) + 1;
-    let wait = match reason {
+    let held = before.filter(|r| r.reason == Reason::UsageLimit).and_then(|r| r.reset_at);
+    let (wait, reset_at) = match reason {
         Reason::ModelMissing => return None,
-        Reason::UsageLimit => resets_at.filter(|t| *t > now).map_or(UNKNOWN_RESET, |t| t - now),
-        Reason::OutOfCredits => OUT_OF_CREDITS,
-        Reason::SignedOut if crate::agent::backends::harness(backend_of(account)).is_some() => SIGNED_OUT,
-        Reason::SignedOut => SIGNED_OUT_ELSEWHERE,
-        Reason::NotStarting => NOT_STARTING,
-        Reason::RateLimited | Reason::Overloaded => BACKOFF[(failures as usize - 1).min(BACKOFF.len() - 1)],
+        Reason::UsageLimit => {
+            let reset = held_reset(resets_at, held, now);
+            (reset.map_or(UNKNOWN_RESET, |t| t - now), reset)
+        }
+        Reason::OutOfCredits => (OUT_OF_CREDITS, None),
+        Reason::SignedOut if crate::agent::backends::harness(backend_of(account)).is_some() => (SIGNED_OUT, None),
+        Reason::SignedOut => (SIGNED_OUT_ELSEWHERE, None),
+        Reason::NotStarting => (NOT_STARTING, None),
+        Reason::RateLimited | Reason::Overloaded => (BACKOFF[(failures as usize - 1).min(BACKOFF.len() - 1)], None),
     };
-    let rest = Rest { until: now + wait, reason, failures };
+    let rest = Rest { until: now + wait, reason, failures, reset_at };
     let saved = serde_json::to_string(&rest).map_err(anyhow::Error::from).and_then(|v| store.kv_set(&key(account), &v));
     if let Err(error) = saved {
         tracing::warn!(account, error = format!("{error:#}"), "couldn't record the agent's rest");
@@ -162,6 +195,37 @@ mod tests {
         // One Codync can't sign in to looks again sooner.
         assert_eq!(get(&store, "claudette", 0).map(|r| r.until), Some(SIGNED_OUT_ELSEWHERE));
         assert_eq!(record(&store, "claude", Reason::SignedOut, 0, None).map(|r| r.until), Some(SIGNED_OUT));
+    }
+
+    #[test]
+    fn a_silent_acp_session_start_is_bounded_unless_the_agent_has_one_process_per_session() {
+        assert!(!silent_start_timed_out(0, false));
+        assert!(!silent_start_timed_out(SESSION_START_STALL - 1, false));
+        assert!(silent_start_timed_out(SESSION_START_STALL, false), "five minutes of silence ends the start");
+        assert!(
+            !silent_start_timed_out(SESSION_START_STALL * 2, true),
+            "Mistral and Antigravity run one process per session and keep their behavior"
+        );
+    }
+
+    #[test]
+    fn a_usage_read_without_data_keeps_the_last_real_reset_time() {
+        // OpenBot 0.75.0 (#13018): a later read with no data must not send a backup model back early.
+        assert_eq!(held_reset(Some(9_000), Some(7_200_000), 1_000), Some(9_000), "a fresh read wins");
+        assert_eq!(held_reset(None, Some(7_200_000), 1_000), Some(7_200_000), "no data keeps the held reset");
+        assert_eq!(held_reset(None, None, 1_000), None, "a first read with no data works as before");
+        assert_eq!(held_reset(None, Some(900), 1_000), None, "a reset that already passed is not kept");
+
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let first = record(&store, "claude", Reason::UsageLimit, 1_000, Some(7_200_000)).expect("rests");
+        assert_eq!(first.reset_at, Some(7_200_000));
+        // A later read with no data still rests until the same reset, not for the unknown-reset hour.
+        let later = record(&store, "claude", Reason::UsageLimit, 2_000, None).expect("rests");
+        assert_eq!(later.until, 7_200_000);
+        assert_eq!(later.reset_at, Some(7_200_000));
+        // A fresh read with its own reset replaces the held one.
+        let fresh = record(&store, "claude", Reason::UsageLimit, 2_000, Some(8_000_000)).expect("rests");
+        assert_eq!(fresh.until, 8_000_000);
     }
 
     #[test]

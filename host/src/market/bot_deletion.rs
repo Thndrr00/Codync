@@ -69,6 +69,32 @@ pub fn may_approve(approver_is_owner: bool, asking_agent_full_access: bool) -> b
     approver_is_owner
 }
 
+/// Whether a deletion error is a locked folder rather than some other failure. Windows reports EBUSY (OS error
+/// 32) when a program still holds a file in the agent's folder.
+fn folder_locked(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    lower.contains("ebusy")
+        || lower.contains("resource busy")
+        || lower.contains("os error 32")
+        || lower.contains("in use")
+        || lower.contains("locked")
+}
+
+/// What to tell the agent when a deletion fails. OpenBot 0.75.0 (#13220): on Windows, an EBUSY that no known
+/// provider process causes means a program the agent started still holds its folder. Retrying fails the same
+/// way, so name the step that frees it, and tell the agent to stop rather than delete the folder itself.
+pub fn deletion_error(error: &str, is_windows: bool) -> String {
+    if is_windows && folder_locked(error) {
+        return "Another program still uses this agent's folder, for example a program that the agent started. \
+                Close that program or restart the computer that this agent runs on, then delete the agent again. \
+                Do not delete its folders or files another way."
+            .into();
+    }
+    // Other systems can get EBUSY from a mount point, where "another program" would be wrong; keep their error,
+    // but still stop the agent from trying to remove the folder with its own shell commands.
+    format!("{error} Do not delete the agent's folders or files another way.")
+}
+
 /// Runs the management tool: one card naming every agent, asked even when the bot has Full access,
 /// then the deletion. The card goes to the owner's chat, so only they can answer it.
 pub async fn perform(hub: &Hub, source: &BotConfig, args: &Value) -> Result<Value> {
@@ -91,7 +117,9 @@ pub async fn perform(hub: &Hub, source: &BotConfig, args: &Value) -> Result<Valu
         bail!("only the owner can approve a deletion");
     }
     for id in &ids {
-        hub.delete_bot(id).with_context(|| format!("couldn't delete {id}"))?;
+        if let Err(error) = hub.delete_bot(id) {
+            bail!("couldn't delete {id}: {}", deletion_error(&format!("{error:#}"), cfg!(windows)));
+        }
     }
     Ok(json!({"deleted": ids}))
 }
@@ -112,6 +140,22 @@ mod tests {
         assert!(may_approve(true, true), "the owner approves, even when the agent has Full access");
         assert!(!may_approve(false, true), "Full access never approves on the owner's behalf");
         assert!(!may_approve(false, false));
+    }
+
+    #[test]
+    fn a_windows_locked_folder_says_what_frees_it() {
+        // OpenBot 0.75.0 (#13220): EBUSY from a program the agent started told the agent only to retry, which
+        // failed the same way. Name the step that frees the folder, and stop the agent deleting it itself.
+        let locked = deletion_error("couldn't remove the agent folder: EBUSY (os error 32)", true);
+        assert!(locked.contains("Another program still uses this agent's folder"));
+        assert!(locked.contains("restart the computer that this agent runs on"));
+        assert!(locked.contains("Do not delete its folders or files another way"));
+
+        // Other systems keep their earlier error, and a non-lock Windows error isn't misreported as a lock.
+        let other = deletion_error("permission denied", false);
+        assert!(other.starts_with("permission denied"));
+        assert!(other.contains("Do not delete the agent's folders or files another way"));
+        assert!(deletion_error("permission denied", true).starts_with("permission denied"));
     }
 
     #[test]

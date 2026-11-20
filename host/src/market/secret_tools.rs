@@ -176,10 +176,31 @@ fn secret_forms(usage: &Usage, value: &str) -> Vec<String> {
     forms
 }
 
-fn redact(text: &str, secrets: &[String]) -> String {
+/// Redacts saved-secret forms from `text`, keeping the values in `public` readable. OpenBot 0.75.0 (#13125):
+/// a short saved password can be part of an installed skill's id (`openbot-curated-skill-<slug>`,
+/// `github:owner/repo@sha:path`). Masking it hid the whole id in tool results, so the agent could no longer
+/// uninstall that skill. A public value is held aside before masking and put back after; the saved value is
+/// still masked everywhere else, including when it is the whole public value.
+pub(crate) fn redact_public(text: &str, secrets: &[String], public: &[String]) -> String {
+    let mut out = text.to_owned();
+    let mut held: Vec<(String, &str)> = Vec::new();
+    for (i, value) in public.iter().enumerate() {
+        // A saved value that is itself the whole id stays masked (OpenBot 0.75.0, #13125).
+        if value.is_empty() || secrets.contains(value) || !out.contains(value.as_str()) {
+            continue;
+        }
+        let token = format!("\u{0}public{i}\u{0}");
+        out = out.replace(value.as_str(), token.as_str());
+        held.push((token, value.as_str()));
+    }
     // Too short to replace safely: one or two characters would blank ordinary text (saved
     // values are longer; an `op://` reference may resolve to less).
-    secrets.iter().filter(|s| s.len() >= 3).fold(text.to_owned(), |out, s| out.replace(s.as_str(), REDACTED))
+    let out = secrets.iter().filter(|s| s.len() >= 3).fold(out, |out, s| out.replace(s.as_str(), REDACTED));
+    held.into_iter().fold(out, |out, (token, value)| out.replace(token.as_str(), value))
+}
+
+fn redact(text: &str, secrets: &[String]) -> String {
+    redact_public(text, secrets, &[])
 }
 
 async fn api_request(hub: &Hub, bot: &str, args: &Value) -> Result<Value> {
@@ -315,6 +336,29 @@ mod tests {
         let out = redact("plain=sec+ret/1 url=sec%2Bret%2F1 b64=c2VjK3JldC8x basic=bWU6c2VjK3JldC8x", &forms);
         assert_eq!(out, "plain=[secret] url=[secret] b64=[secret] basic=[secret]");
         assert_eq!(redact("a b", &["a".into()]), "a b");
+    }
+
+    #[test]
+    fn a_skill_id_containing_a_saved_secret_stays_readable() {
+        // OpenBot 0.75.0 (#13125): "openbot" is a short saved password and also part of a curated skill id.
+        let secrets = vec!["openbot".to_owned()];
+        let public =
+            vec!["openbot-curated-skill-weekly-brief".to_owned(), "github:acme/tools@sha:skills/review".to_owned()];
+        let text = "id openbot-curated-skill-weekly-brief and github:acme/tools@sha:skills/review, key=openbot";
+        assert_eq!(
+            redact_public(text, &secrets, &public),
+            "id openbot-curated-skill-weekly-brief and github:acme/tools@sha:skills/review, key=[secret]"
+        );
+        // Without the id registered, the same text masks the secret inside it (the old behavior).
+        assert_eq!(
+            redact_public(text, &secrets, &[]),
+            "id [secret]-curated-skill-weekly-brief and github:acme/tools@sha:skills/review, key=[secret]"
+        );
+        // A saved value that is the complete id is still hidden, and workspace ids are never registered.
+        assert_eq!(
+            redact_public("id openbot", &vec!["openbot".to_owned()], &vec!["openbot".to_owned()]),
+            "id [secret]"
+        );
     }
 
     #[test]

@@ -1,5 +1,7 @@
 //! Check the MCP handshake and tool discovery before reporting a connector ready,
 //! and classify/persist connection failure diagnostics (`lastFailure`: `auth` | `unreachable` | `tool`, Idea 50).
+//! The stored message also carries what to do next: wait for a server that says it is unavailable, check the
+//! address of one that cannot be reached, or reconnect the built-in GitHub connection (OpenBot 0.75.0).
 use crate::store::Store;
 use anyhow::{Result, anyhow, bail};
 use serde_json::{Value, json};
@@ -13,8 +15,25 @@ fn failure_key(id: &str) -> String {
     format!("connector.failure.{id}")
 }
 
-/// Classifies an MCP connection or tool error into `"auth"`, `"unreachable"`, or `"tool"` (Idea 50).
-pub fn classify_failure(message: &str) -> &'static str {
+/// The cause of an MCP connection or tool error, before it is mapped onto the client's three kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FailureCause {
+    /// The connector needs signing in again.
+    Auth,
+    /// The server answered but said it isn't available (5xx / service unavailable): wait and retry.
+    Unavailable,
+    /// The host couldn't reach the server (refused connection, DNS failure): check the address.
+    Unreachable,
+    /// Everything else: a problem with the tool itself.
+    Tool,
+}
+
+/// A 5xx status in a diagnostic: the server is up but not available right now.
+fn has_5xx(lower: &str) -> bool {
+    lower.split(|c: char| !c.is_ascii_digit()).any(|part| part.len() == 3 && part.starts_with('5'))
+}
+
+fn cause(message: &str) -> FailureCause {
     let lower = message.to_ascii_lowercase();
     if lower.contains("sign in")
         || lower.contains("credential")
@@ -25,24 +44,91 @@ pub fn classify_failure(message: &str) -> &'static str {
         || lower.contains("token")
         || lower.contains("rejected setup")
     {
-        "auth"
-    } else if lower.contains("could not start")
+        return FailureCause::Auth;
+    }
+    // OpenBot 0.75.0 (#12894): a server that answers "not available" and one the host cannot reach used to
+    // share the general failure text. Keep them apart so the advice says what actually helps.
+    if has_5xx(&lower)
+        || lower.contains("service unavailable")
+        || lower.contains("bad gateway")
+        || lower.contains("gateway timeout")
+        || lower.contains("gateway timed out")
+    {
+        return FailureCause::Unavailable;
+    }
+    if lower.contains("could not start")
         || lower.contains("timed out")
         || lower.contains("exited")
         || lower.contains("unreachable")
         || lower.contains("can't reach")
         || lower.contains("connection refused")
+        || lower.contains("connection reset")
+        || lower.contains("econnrefused")
+        || lower.contains("econnreset")
+        || lower.contains("enotfound")
+        || lower.contains("eai_again")
+        || lower.contains("ehostunreach")
+        || lower.contains("enetunreach")
+        || lower.contains("dns error")
+        || lower.contains("failed to lookup address")
+        || lower.contains("no route to host")
+        || lower.contains("network is unreachable")
+        || lower.contains("error sending request")
     {
-        "unreachable"
-    } else {
-        "tool"
+        return FailureCause::Unreachable;
+    }
+    FailureCause::Tool
+}
+
+/// Classifies an MCP connection or tool error into `"auth"`, `"unreachable"`, or `"tool"` (Idea 50).
+pub fn classify_failure(message: &str) -> &'static str {
+    match cause(message) {
+        FailureCause::Auth => "auth",
+        // `unavailable` and `unreachable` share the client's kind; the stored message carries the specific advice.
+        FailureCause::Unavailable | FailureCause::Unreachable => "unreachable",
+        FailureCause::Tool => "tool",
     }
 }
 
+/// What the person should do, in the stored failure's message. OpenBot 0.75.0 (#12894): wait for a server that
+/// says it is unavailable; check the address and that the server is running when it cannot be reached.
+pub fn failure_advice(message: &str) -> Option<&'static str> {
+    match cause(message) {
+        FailureCause::Auth => Some("Sign in again in Extensions, then start a new chat."),
+        FailureCause::Unavailable => {
+            Some("The server is not available now. Wait a few minutes, then start a new chat to try again.")
+        }
+        FailureCause::Unreachable => Some(
+            "Check the server's address in Marketplace, Apps, and that the server is running, then start a new chat to try again.",
+        ),
+        FailureCause::Tool => None,
+    }
+}
+
+/// OpenBot 0.75.0 (#13057): the built-in GitHub connection can fail to start for an agent while Marketplace still
+/// shows GitHub as connected. Only the key Codync gave the connection counts — a saved server someone named
+/// `github` is theirs, not this connection.
+pub fn is_github_connection(key: &str) -> bool {
+    matches!(key, "github" | "openbot_github")
+}
+
+/// The actionable text for a GitHub connection that failed to start (OpenBot 0.75.0, #13057).
+pub fn github_start_failure_advice() -> &'static str {
+    "GitHub did not answer, so its tools are not available. Open GitHub in Marketplace, Apps, connect it again if it asks you to, then start a new chat."
+}
+
 pub fn record_failure(store: &Store, id: &str, message: &str) {
+    let mut text = message.to_owned();
+    if is_github_connection(id) && cause(message) != FailureCause::Auth {
+        text.push(' ');
+        text.push_str(github_start_failure_advice());
+    } else if let Some(advice) = failure_advice(message) {
+        text.push(' ');
+        text.push_str(advice);
+    }
     let entry = json!({
         "kind": classify_failure(message),
-        "message": message,
+        "message": text,
         "at": crate::store::now_ms(),
     });
     let _ = store.kv_set(&failure_key(id), &entry.to_string());
@@ -174,5 +260,42 @@ mod tests {
         assert_eq!(classify_failure("Could not start the connector."), "unreachable");
         assert_eq!(classify_failure("Connector setup timed out."), "unreachable");
         assert_eq!(classify_failure("Connector did not return its tools"), "tool");
+    }
+
+    #[test]
+    fn an_unavailable_server_and_an_unreachable_one_get_different_advice() {
+        // OpenBot 0.75.0 (#12894): a 5xx answer means wait; a refused connection or DNS failure means check
+        // the address and that the server is running.
+        let unavailable = "MCP server returned HTTP 503 Service Unavailable";
+        assert_eq!(cause(unavailable), FailureCause::Unavailable);
+        assert_eq!(classify_failure(unavailable), "unreachable");
+        assert!(failure_advice(unavailable).unwrap().contains("Wait a few minutes"));
+
+        for message in [
+            "error sending request: connection refused",
+            "dial tcp: lookup mcp.example.com: ENOTFOUND",
+            "no route to host",
+        ] {
+            assert_eq!(cause(message), FailureCause::Unreachable, "{message}");
+            assert!(failure_advice(message).unwrap().contains("address"), "{message}");
+        }
+        assert_eq!(cause("Connector did not return its tools"), FailureCause::Tool);
+        assert!(failure_advice("Connector did not return its tools").is_none());
+        assert!(failure_advice("Sign in before checking this connection.").unwrap().contains("Sign in again"));
+    }
+
+    #[test]
+    fn a_failed_github_connection_says_what_to_do() {
+        // OpenBot 0.75.0 (#13057): the built-in GitHub tools can be missing while the row says connected.
+        assert!(is_github_connection("github"));
+        assert!(is_github_connection("openbot_github"));
+        assert!(!is_github_connection("my-github-server"), "a user's own server is not this connection");
+        assert!(github_start_failure_advice().contains("Marketplace"));
+
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        record_failure(&store, "github", "Could not start the connector.");
+        let saved = last_failure(&store, "github").expect("the failure");
+        assert!(saved["message"].as_str().unwrap().contains("GitHub did not answer"));
+        assert_eq!(saved["kind"], "unreachable");
     }
 }

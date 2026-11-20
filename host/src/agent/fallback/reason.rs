@@ -55,6 +55,23 @@ const USAGE_LIMIT_TEXT: [&str; 12] = [
     "usage limit",
 ];
 
+/// HTTP 410 Gone: a model the provider retired, so the turn moves to the next step's model. OpenBot 0.75.0
+/// (#12998); the same cause as `model_not_found`, which — like every reason — moves on before work.
+const GONE: i64 = 410;
+
+/// Words an adapter uses for a model that no longer exists, besides `model_not_found`: Gemini's
+/// "models/<id> is not found", "model … was retired", "model … is no longer available/supported".
+const GONE_WORDS: [&str; 5] =
+    ["retired", "no longer available", "no longer supported", "is not found", "does not exist"];
+
+/// Whether the answer says the model is gone. A bare `410` (as a whole number) is HTTP 410 Gone; the words only
+/// count when the message is about a model, so an unrelated "410" in an internal error isn't a fallback cause.
+fn gone_text(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    let has_410 = lower.split(|c: char| !c.is_ascii_digit()).any(|part| part == "410");
+    has_410 || (lower.contains("model") && GONE_WORDS.iter().any(|word| lower.contains(word)))
+}
+
 /// Why `error` moves the bot on, or `None` when it shouldn't (a stop, a refusal, a bug in the request).
 pub fn of(error: &anyhow::Error) -> Option<Reason> {
     for cause in error.chain() {
@@ -75,6 +92,11 @@ pub fn of(error: &anyhow::Error) -> Option<Reason> {
 pub fn of_rpc(r: &RpcError) -> Option<Reason> {
     if r.code == AUTH_REQUIRED {
         return Some(Reason::SignedOut);
+    }
+    // A retired model answers 410 Gone (OpenBot 0.75.0, #12998). An adapter may report that as the
+    // JSON-RPC code or only in its message, so check both before any other cause.
+    if r.code == GONE || gone_text(&r.message) {
+        return Some(Reason::ModelMissing);
     }
     let usage_text = USAGE_LIMIT_TEXT.iter().any(|t| r.message.contains(t));
     // Claude's adapter sends the Agent SDK's assistant error (`rate_limit`…); codex-acp its `codexErrorInfo`
@@ -133,6 +155,20 @@ mod tests {
         assert_eq!(of(&gone.context("prompting")), Some(Reason::NotStarting));
         let no_model = Failure::error(FailureKind::NoModel, "Couldn't select model gpt-5.5: not supported");
         assert_eq!(of(&no_model), Some(Reason::ModelMissing));
+    }
+
+    #[test]
+    fn a_retired_model_or_http_410_moves_on_to_the_next_model() {
+        // OpenBot 0.75.0 (#12998): 410 Gone is a fallback cause; so are the words adapters use for a
+        // model that was retired instead of returning a status code.
+        assert_eq!(of(&rpc(GONE, "Gone", None)), Some(Reason::ModelMissing));
+        assert_eq!(of(&rpc(-32603, "HTTP 410: model gpt-5.5 is gone", None)), Some(Reason::ModelMissing));
+        assert_eq!(of(&rpc(-32603, "models/gemini-3-pro is not found", None)), Some(Reason::ModelMissing));
+        assert_eq!(of(&rpc(-32603, "The model has been retired", None)), Some(Reason::ModelMissing));
+        assert_eq!(of(&rpc(-32603, "model o3 is no longer supported", None)), Some(Reason::ModelMissing));
+        // An unrelated number that merely contains 410, and a non-model error, still stay put.
+        assert_eq!(of(&rpc(-32603, "request 1410 rejected", None)), None);
+        assert_eq!(of(&rpc(-32603, "The file has been retired from the index", None)), None);
     }
 
     #[test]

@@ -4,12 +4,49 @@ use super::{Arc, Context, Hub, Result, Value, bail, json, required};
 /// One case's text is prompt data for the first steps, not a new routine: keep it bounded.
 const MAX_CASE_TEXT_CHARS: usize = 4_000;
 
+/// The event names the agent-facing tool may use, from the same catalog the editor offers. OpenBot 0.75.0
+/// (#12833): an agent could save a name such as `pr.opened` for a trigger the host couldn't match, the routine
+/// saved without error, and no delivery ever started it. The refusal names the real events so the agent corrects
+/// the trigger in the same chat.
+fn event_names(source: &str) -> Option<Vec<&'static str>> {
+    crate::routines::events::source(source).map(|s| s.events.iter().map(|e| e.id).collect())
+}
+
+/// Checks every event trigger of a save against the catalog. Sources outside the catalog keep their event as
+/// they are (bot-set and older triggers); a known source must name one of the events it can actually send.
+pub fn check_event_triggers(args: &Value) -> Result<()> {
+    let triggers = args["triggers"].as_array().into_iter().flatten();
+    let from_draft = args["schedule"]["kind"] == "event";
+    let drafted = if from_draft {
+        vec![json!({"type":"event", "source": args["schedule"]["eventSource"], "event": args["schedule"]["eventName"]})]
+    } else {
+        vec![]
+    };
+    for (index, trigger) in triggers.chain(drafted.iter()).enumerate() {
+        if trigger["type"] != "event" {
+            continue;
+        }
+        let Some(source) = trigger["source"].as_str().filter(|s| !s.is_empty()) else { continue };
+        let Some(events) = event_names(source) else { continue };
+        let event = trigger["event"].as_str().unwrap_or_default();
+        if event == "*" || events.iter().any(|known| *known == event) {
+            continue;
+        }
+        let given = if event.is_empty() { "has no event".to_owned() } else { format!("has event \"{event}\"") };
+        bail!("Event trigger {}: the {source} trigger {given}. Set event to one of: {}.", index + 1, events.join(", "));
+    }
+    Ok(())
+}
+
 pub fn call(hub: &Arc<Hub>, bot: &str, name: &str, args: &Value) -> Result<Value> {
     match name {
         "list_routine_templates" => Ok(super::blueprints::list()),
         "routine_template_draft" => super::blueprints::draft(args),
         "list_routines" => Ok(hub.routines.list(bot, |_| false)),
-        "save_routine" => hub.routines.save(hub, bot, args),
+        "save_routine" => {
+            check_event_triggers(args)?;
+            hub.routines.save(hub, bot, args)
+        }
         "set_routine_enabled" => hub.routines.set_enabled(
             &hub.store,
             bot,
@@ -53,6 +90,20 @@ pub fn tools() -> Value {
     ];
     tools.push(json!({"name":"save_routine","description":"Create or replace a routine. Omit id to create; include id to update. triggers is an OR list. Use cron for recurring clock schedules; interval is for explicitly requested elapsed-duration semantics or existing schedules: interval {type:interval,seconds}; once {type:once,at:Unix milliseconds}; cron {type:cron,expression:five cron fields,timeZone:IANA zone}; webhook {type:webhook}; event {type:event,source:slack/telegram/whatsapp/discord/github/origin/microsoftTeams/linear/sentry/pagerduty/email,event:event name or *,filters:field-to-value map}; watch {type:watch,kind:files or url,target:a file or folder path (relative to your working folder) or an https URL,everyMinutes:1-10080}: checked without you, it runs only when the target changed since the last check (the first check only records it; folders up to 2000 entries, .git and node_modules skipped). Events require a configured webhook sender. Minimum interval is one second.","inputSchema":{"type":"object","properties":{"id":id,"name":{"type":"string"},"instruction":{"type":"string"},"enabled":{"type":"boolean"},"timeoutSeconds":{"type":"integer","minimum":1,"maximum":86400},"triggers":{"type":"array","items":{"type":"object"}}},"required":["name","instruction","triggers"]}}));
     if let Some(save) = tools.iter_mut().find(|tool| tool["name"] == "save_routine") {
+        // OpenBot 0.75.0 (#12833): name the events of each trigger source, so the agent saves a trigger that
+        // can actually fire instead of an invented name the host silently ignores.
+        let events = crate::routines::events::SOURCES
+            .iter()
+            .map(|source| {
+                format!("{}: {}", source.id, source.events.iter().map(|event| event.id).collect::<Vec<_>>().join(", "))
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        save["description"] = json!(format!(
+            "{} An event trigger must use one of the events its source can send: {}.",
+            save["description"].as_str().unwrap_or_default(),
+            events
+        ));
         save["inputSchema"]["properties"]["outputs"] = json!({"type":"array","maxItems":10,
             "description":"Optional report destinations after the last workflow step. WhatsApp reuses this computer's existing linked number: target is the recipient JID, account is the linked sender JID (not the bot id). Link it before creating the run. Pending reports are revoked when that link is replaced or logged out. Do not retry an unknown send outcome.",
             "items":{"type":"object","additionalProperties":false,"required":["kind","target"],"properties":{
@@ -92,4 +143,42 @@ pub fn tools() -> Value {
     tools.push(json!({"name":"list_routine_templates", "description":"List the bundled Hermes routine templates and their fields. Draft one with routine_template_draft, then save its result with save_routine.", "inputSchema":{"type":"object","properties":{}}, "annotations":{"readOnlyHint":true}}));
     tools.push(json!({"name":"routine_template_draft", "description":"Validate and fill a Hermes routine template. Returns a disabled Codync routine draft; save it with save_routine after resolving its destination and timezone with the user.", "inputSchema":{"type":"object","properties":{"template":{"type":"string"},"values":{"type":"object","additionalProperties":{"type":"string"}},"timeZone":{"type":"string"},"destination":{"type":"string"},"account":{"type":"string"}},"required":["template","timeZone"]}, "annotations":{"readOnlyHint":true}}));
     json!(tools)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_event_trigger_must_name_an_event_its_source_can_send() {
+        let valid = json!({"triggers": [
+            {"type":"event", "source":"github", "event":"pull_request.opened"},
+            {"type":"event", "source":"slack", "event":"*"}
+        ]});
+        assert!(check_event_triggers(&valid).is_ok());
+
+        let wrong = json!({"triggers": [{"type":"event", "source":"github", "event":"pr.opened"}]});
+        let error = check_event_triggers(&wrong).expect_err("an event the host can't match is refused");
+        assert!(error.to_string().contains("pr.opened"));
+        assert!(error.to_string().contains("pull_request.opened"), "the refusal lists the real events");
+
+        let missing = json!({"triggers": [{"type":"event", "source":"discord"}]});
+        assert!(check_event_triggers(&missing).is_err(), "a missing event is refused too");
+
+        // Bot-set sources and older triggers keep their event as-is (the editor has the same rule).
+        let external = json!({"triggers": [{"type":"event", "source":"origin", "event":"pull_request.opened"}]});
+        assert!(check_event_triggers(&external).is_ok());
+        let non_event = json!({"triggers": [{"type":"cron", "expression":"* * * * *"}]});
+        assert!(check_event_triggers(&non_event).is_ok());
+    }
+
+    #[test]
+    fn the_save_tool_names_the_events_of_each_source() {
+        let save =
+            tools().as_array().expect("tools").iter().find(|t| t["name"] == "save_routine").expect("save").clone();
+        let description = save["description"].as_str().expect("description");
+        assert!(description.contains("github: *,"), "the catalog names the real GitHub events");
+        assert!(description.contains("pull_request.opened"));
+        assert!(description.contains("slack: *,"));
+    }
 }
