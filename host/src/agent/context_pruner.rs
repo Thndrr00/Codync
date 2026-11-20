@@ -12,8 +12,18 @@ use super::loop_guard::{KEEP_IMAGES, KEEP_PAGE_RESULTS, MAX_TOOL_RESULT_CHARS, c
 use serde_json::{Value, json};
 use std::sync::Mutex;
 
-/// Kept from the original batch pruner so the same tools are recognised.
-const PAGE_TOOLS: &[&str] = &["browser_page", "browse_page", "get_window_state"];
+/// Page tools from bdots' current `guards.ts` plus Codync's own screen tools, so results that go
+/// stale as the bot moves on are the ones that get shortened.
+const PAGE_TOOLS: &[&str] = &[
+    "browser_execute",
+    "browser_markdown",
+    "browser_extract",
+    "browser_scrape",
+    "browser_links",
+    "browser_page",
+    "browse_page",
+    "get_window_state",
+];
 /// Length a trimmed page snapshot keeps, from Idea 32.
 const PAGE_KEEP_CHARS: usize = 1_000;
 const PAGE_NOTE: &str = "[earlier page snapshot trimmed — call the screen tool again for the full page]";

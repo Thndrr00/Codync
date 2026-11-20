@@ -88,7 +88,10 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
                 })
                 .context("token must be 16-128 letters, digits, '-' or '_'")?;
             hub.store.kv_set(&crate::email::token_key(bot_id), token)?;
-            json!({"configured": true})
+            let name = b["name"].as_str().unwrap_or("bot");
+            let slug = crate::email::claim_slug(name, |s| hub.store.kv_get(&format!("email.slug.{s}")).is_some());
+            hub.store.kv_set(&format!("email.slug.{slug}"), bot_id)?;
+            json!({"configured": true, "address": format!("{slug}@codync.local")})
         }
         "emailDeliver" => {
             let bot_id = str_arg(&b, "botId")?;

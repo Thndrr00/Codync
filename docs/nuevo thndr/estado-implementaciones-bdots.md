@@ -83,7 +83,10 @@ guarda junto al app (o al crear el enlace), y `apps_runtime.rs` aplica la autori
 `AppLinkMode` incluye `submit` en Rust, Desktop e iOS. Del mismo `guards.ts` se portó también
 `TurnBudget` (`agent/bot/turn_budget.rs`): aviso al minuto, cierre de exploración a los 3 y parada
 a los 5, en la línea de tiempo del bot; cada aviso se da una vez y un mensaje visible compra otro
-minuto.
+minuto. También se actualizó la poda de contexto con los nombres de herramientas de página que
+el `guards.ts` actual usa (`browser_execute`, `browser_markdown`, `browser_extract`,
+`browser_scrape`, `browser_links`) y el correo con `claim_slug` de `email-directory.ts`, que
+propone `nombre@codync.local` con sufijos `-2`, `-3` si el nombre está tomado.
 
 ## Verificación
 

@@ -14,6 +14,29 @@ pub fn token_key(bot: &str) -> String {
     format!("email.token.{bot}")
 }
 
+/// Claims a short mail name, adding `-2`, `-3`, ... when the base is taken (bdots'
+/// `EmailDirectory.claim`). Pure: the caller decides what "taken" means.
+pub fn claim_slug(base: &str, taken: impl Fn(&str) -> bool) -> String {
+    let clean: String = base
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .collect();
+    let base = clean.trim_matches('-');
+    let base = if base.is_empty() { "bot" } else { base };
+    if !taken(base) {
+        return base.to_owned();
+    }
+    for n in 2..=999 {
+        let candidate = format!("{base}-{n}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+    }
+    format!("{base}-{}", uuid::Uuid::new_v4().simple())
+}
+
 /// A message from a mailer daemon or postmaster is not mail to answer.
 pub fn is_auto_reply(from: &str) -> bool {
     let from = from.trim().to_ascii_lowercase();
@@ -90,6 +113,15 @@ mod tests {
         assert!(name.ends_with(".eml"));
         assert_eq!(is_auto_reply("MAILER-DAEMON@example.com"), true);
         assert_eq!(is_auto_reply("alice@example.com"), false);
+    }
+
+    #[test]
+    fn a_taken_mail_name_gets_a_numbered_suffix() {
+        let used = ["research", "research-2"];
+        let taken = |name: &str| used.contains(&name);
+        assert_eq!(claim_slug("Research Assistant", taken), "research-assistant");
+        assert_eq!(claim_slug("Research", taken), "research-3");
+        assert_eq!(claim_slug("  ", taken), "bot");
     }
 
     #[test]
