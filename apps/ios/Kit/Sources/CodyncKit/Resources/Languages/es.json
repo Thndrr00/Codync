@@ -2558,5 +2558,22 @@
   "The bot's browser tab": "La pestaña del navegador del bot",
   "Waiting for the first frame…": "Esperando la primera imagen…",
   "The page is captured at most twice a second. Closing this sheet stops the stream and releases control.": "La página se captura como máximo dos veces por segundo. Al cerrar esta hoja se detiene la transmisión y se libera el control.",
-  "Watch this bot's browser tab": "Ver la pestaña del navegador de este bot"
+  "Watch this bot's browser tab": "Ver la pestaña del navegador de este bot",
+  "Step menu": "Menú del paso",
+  "This run was saved before steps kept their settings.": "Esta ejecución se guardó antes de que los pasos conservaran sus ajustes.",
+  "Settings used": "Ajustes usados",
+  "Inputs read": "Entradas leídas",
+  "No earlier step handed anything to this one.": "Ningún paso anterior entregó nada a este.",
+  "Step settings": "Ajustes del paso",
+  "Use these settings": "Usar estos ajustes",
+  "That step is not part of a routine on this canvas.": "Ese paso no pertenece a una rutina de este lienzo.",
+  "Could not run from this step.": "No se pudo ejecutar desde este paso.",
+  "That picture step is gone.": "Ese paso de imagen ya no existe.",
+  "The link to this step is gone; add it again first.": "El enlace a este paso ya no existe; vuelve a añadirlo primero.",
+  "No workflows yet": "Aún no hay flujos de trabajo",
+  "A workflow starts with a routine and hands its answer on to other bots.": "Un flujo de trabajo empieza con una rutina y entrega su respuesta a otros bots.",
+  "New workflow": "Nuevo flujo de trabajo",
+  "This step uses its agent’s model. Set a model on the link that reaches it to use a different one for a single step.": "Este paso usa el modelo de su agente. Define un modelo en el enlace que llega a él para usar otro solo en este paso.",
+  "Run from this step": "Ejecutar desde este paso",
+  "Run from the first step": "Ejecutar desde el primer paso"
 }
