@@ -80,7 +80,10 @@ El checkout actual de bdots está en `Documents/ref-repos/bdots` y va por delant
 **submit** de `agents/app-access.ts`: un formulario público puede añadir items a colecciones
 elegidas y leer solo las suyas por un recibo de 128 bits. Vive en `host/src/apps_access.rs`, se
 guarda junto al app (o al crear el enlace), y `apps_runtime.rs` aplica la autorización. El tipo
-`AppLinkMode` incluye `submit` en Rust, Desktop e iOS.
+`AppLinkMode` incluye `submit` en Rust, Desktop e iOS. Del mismo `guards.ts` se portó también
+`TurnBudget` (`agent/bot/turn_budget.rs`): aviso al minuto, cierre de exploración a los 3 y parada
+a los 5, en la línea de tiempo del bot; cada aviso se da una vez y un mensaje visible compra otro
+minuto.
 
 ## Verificación
 

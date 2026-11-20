@@ -132,6 +132,7 @@ impl Actor {
         }
         self.lane = lane.clone();
         self.turn = Some(turn);
+        self.turn_budget.start(std::time::Instant::now());
         // Only the user's own words feed memory: not another bot's, a room's or a routine's.
         let from_user = !hidden && self.source() == TurnSource::User;
         self.turn_text = from_user.then(|| text.to_owned());
@@ -231,6 +232,7 @@ impl Actor {
                 None,
             );
             self.turn = None;
+            self.turn_budget.clear();
             if self.routine_completion.is_none() {
                 self.set_inflight(false);
             }
@@ -455,6 +457,7 @@ impl Actor {
             self.offer_skill();
         }
         self.turn = None;
+        self.turn_budget.clear();
         self.reply_hops = None;
         // A call's opening is heard on the call: no alert.
         let opening = std::mem::take(&mut self.active_prompt);
