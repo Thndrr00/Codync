@@ -133,6 +133,7 @@ pub fn list() -> Vec<Value> {
                 "curated": true,
                 "accounts": profile_home(h.id).is_some(),
                 "signOut": sign_out_available(h.id),
+                "updateAvailable": reg.is_some_and(registry::update_pending),
             })
         })
         .collect();
@@ -158,6 +159,7 @@ pub fn list() -> Vec<Value> {
             "curated": false,
             "accounts": false,
             "signOut": false,
+            "updateAvailable": registry::update_pending(a),
         }));
     }
     out.sort_by_key(|v| (!v["installed"].as_bool().unwrap_or(false), !v["curated"].as_bool().unwrap_or(false)));
@@ -211,6 +213,40 @@ pub fn update_pending(id: &str) -> bool {
     launch_candidates(id).is_ok_and(|candidates| {
         matches!(candidates.first(), Some(registry::Candidate::Build(agent)) if registry::update_pending(agent))
     })
+}
+
+/// The registry build `id` would download next, when nothing the person installed takes precedence.
+pub fn pending_build(id: &str) -> Option<Value> {
+    match launch_candidates(id).ok()?.into_iter().next() {
+        Some(registry::Candidate::Build(agent)) if registry::update_pending(&agent) => Some(agent),
+        _ => None,
+    }
+}
+
+/// A bot runs `id` as its own backend or as a fallback.
+fn uses_backend(cfg: &crate::store::BotConfig, id: &str) -> bool {
+    let same = |backend: &str| backend == id || harness_of(backend).is_some_and(|h| h.answers_to(id));
+    same(&cfg.backend) || cfg.fallbacks.iter().any(|fallback| same(&fallback.backend))
+}
+
+/// Whether Codync may update `id` on its own: it downloaded this CLI (no CLI on PATH takes
+/// precedence), no bot pins it to a custom command path, and a bot actually runs the provider.
+pub fn auto_updatable(store: &crate::store::Store, id: &str) -> bool {
+    if pending_build(id).is_none() {
+        return false;
+    }
+    let Ok(bots) = store.bots() else { return false };
+    let mut in_use = false;
+    for bot in bots.iter().filter(|bot| !bot.deleted) {
+        if !uses_backend(&bot.config, id) {
+            continue;
+        }
+        in_use = true;
+        if bot.config.command.as_deref().is_some_and(|command| !command.trim().is_empty()) {
+            return false;
+        }
+    }
+    in_use
 }
 
 /// The registry build that *is* the harness's CLI (same npm package), so it can

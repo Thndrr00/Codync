@@ -52,6 +52,45 @@ fn an_installed_cli_comes_before_the_registry_build() {
     }
 }
 
+/// Only a build Codync itself downloads, for a provider a bot runs and without a custom path,
+/// is eligible for an automatic update.
+#[test]
+fn only_a_downloaded_cli_for_a_running_provider_auto_updates() {
+    let dir = TempDir::new();
+    let _path = TestSearchPath::set(dir.0.clone());
+    let target = json!({"archive": "https://example.com/a.zip", "cmd": "./a"});
+    let binaries: serde_json::Map<String, Value> =
+        ["darwin-aarch64", "darwin-x86_64", "linux-aarch64", "linux-x86_64", "windows-aarch64", "windows-x86_64"]
+            .into_iter()
+            .map(|platform| (platform.to_owned(), target.clone()))
+            .collect();
+    let agent = json!({"id": "antigravity-acp", "version": uuid::Uuid::new_v4().to_string(), "distribution": {"binary": binaries}});
+    registry::set_cache(Some(json!({"agents": [agent]})));
+    let bot = |id: &str, command: Option<&str>| -> crate::store::BotConfig {
+        let mut v = json!({"id": id, "name": "Bot", "backend": "antigravity"});
+        if let Some(command) = command {
+            v["command"] = json!(command);
+        }
+        serde_json::from_value(v).expect("a bot")
+    };
+    let store_with = |bots: Vec<crate::store::BotConfig>| {
+        let store = crate::store::Store::open(std::path::Path::new(":memory:")).expect("store");
+        for config in bots {
+            store.save_bot(&config).expect("save bot");
+        }
+        store
+    };
+    let off = store_with(vec![]);
+    let on = store_with(vec![bot("b1", None)]);
+    let custom = store_with(vec![bot("b2", Some("/opt/my/agy"))]);
+    assert!(!auto_updatable(&off, "antigravity"), "a provider no bot runs is off");
+    assert!(auto_updatable(&on, "antigravity"), "a downloaded CLI for a running provider is eligible");
+    assert!(!auto_updatable(&custom, "antigravity"), "a bot pinned to its own CLI path is not");
+    write_cli(&dir.0, "agy");
+    assert!(!auto_updatable(&on, "antigravity"), "a CLI the person installed is never auto-updated");
+    registry::set_cache(None);
+}
+
 /// A usage reading holds off for a new build only when starting the agent would really install it.
 #[test]
 fn an_update_is_pending_only_for_a_download_nothing_installed_yet() {

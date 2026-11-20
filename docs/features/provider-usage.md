@@ -85,3 +85,16 @@ groups, distinct account identities, Codex app-server parsing, Grok's proto3
 billing periods, the saved reading and Android decoding of unavailable
 accounts. Real account/provider and installed-app checks must be recorded
 separately; compilation does not establish live quota availability.
+
+## Updating the agent CLIs (OpenBot 0.75.0)
+
+Once an hour the host checks whether a provider CLI it downloaded itself (an ACP
+registry binary build) has a newer version, and installs it through the same
+registry downloader used to launch an agent — there is only one updater. The
+check waits for idle agents, using the same readiness gate as a host update's
+restart, for at most ten minutes; an always-busy computer is never held. A CLI
+the person installed, a bot pinned to a custom command path and a provider no
+bot runs still show **Update available** in Settings › Providers but are never
+auto-updated. A version the person cancels is not retried until the host
+restarts. **Update all** applies every eligible provider at once on this
+computer; there is no joined-server part because providers belong to a computer.

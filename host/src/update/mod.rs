@@ -2,6 +2,7 @@
 //! of their binaries; a host the desktop app bundles hands an update request to
 //! the app. A signed manifest is required before executing new code.
 mod install;
+pub(crate) mod provider_cli;
 pub(crate) mod release;
 #[cfg(test)]
 mod tests;
@@ -490,6 +491,9 @@ pub async fn automatic_loop(hub: Arc<Hub>) {
     if crate::environment::Environment::current() != crate::environment::Environment::Main {
         return;
     }
+    // Provider CLI updates use the same idle gate as this updater but their own hourly cadence;
+    // running them here keeps background.rs free of a second loop.
+    tokio::spawn(provider_cli::watch(hub.clone()));
     let mut last_check = None;
     loop {
         tokio::time::sleep(Duration::from_mins(1)).await;

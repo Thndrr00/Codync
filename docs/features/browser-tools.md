@@ -50,6 +50,12 @@ browser-permission gate as every other tool, re-checked on each frame and input;
 a turned-off permission stops the view, and the methods are local to this computer. Frames, titles,
 addresses and input values are never logged or sent to analytics.
 
+A thread uses its bot's tabs, not a second store (OpenBot 0.75.0): the CDP
+sessions in `browser_tools/cdp.rs` are keyed by bot id, and the live-tab view in
+`browser_tools/live.rs` attaches to the same slot. A chat and a thread of the
+same bot therefore share one browser context, profile and tab; no separate
+per-thread tab map was needed.
+
 ## Refs and snapshots
 
 `snapshot` numbers the elements of the page and prints one line each:

@@ -27,6 +27,7 @@ import { ThemePaletteSection } from './ThemePaletteSection'
 import { EnterpriseSection } from './EnterpriseSection'
 import { DiagnosticsButton } from './DiagnosticsButton'
 import { GettingStartedSection } from './GettingStartedSection'
+import { ProvidersSection } from './ProvidersSection'
 import { WeekSummaryView } from './WeekSummaryView'
 import { VoiceChatSettingsView } from './VoiceChatSettingsView'
 import { ComputerAccessView } from '../computer-access/ComputerAccessView'
@@ -173,6 +174,7 @@ function GeneralSettings({ onExtensions, onAccess }: { onExtensions?: () => void
   return (
     <CardForm>
       <GettingStartedSection onExtensions={onExtensions} onAccess={onAccess ?? (() => {})} />
+      <ProvidersSection />
       <CardSection title="Account" footer={account.errorMessage}>
         <div className="settings-row">
           <Icon name="person.crop.circle" size={26} color="var(--secondary)" />

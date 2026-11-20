@@ -151,6 +151,45 @@ pub(super) async fn call(hub: &Arc<Hub>, caller: &Caller, method: &str, b: Value
             tokio::task::spawn_blocking(move || crate::update::request_install(port, force)).await??;
             json!({"scheduled": true})
         }
+        // Provider CLIs Codync downloaded itself use the same registry downloader as launching an
+        // agent; these methods only ask it to run now. A CLI the user installed, a custom path and
+        // a provider no bot runs are left alone by `auto_updatable`.
+        "updateProviderCli" => {
+            let id = str_arg(&b, "id")?.to_owned();
+            let hub = hub.clone();
+            tokio::spawn(async move {
+                match crate::update::provider_cli::update_one(&hub, &id).await {
+                    Ok(result) => tracing::info!(?result, provider = %id, "provider CLI updated"),
+                    Err(error) => {
+                        tracing::warn!(provider = %id, error = format!("{error:#}"), "provider CLI update failed")
+                    }
+                }
+            });
+            json!({"scheduled": true})
+        }
+        "updateAllProviders" => {
+            let hub = hub.clone();
+            tokio::spawn(async move {
+                match crate::update::provider_cli::update_all(&hub).await {
+                    Ok(result) => tracing::info!(?result, "provider CLIs updated"),
+                    Err(error) => tracing::warn!(error = format!("{error:#}"), "provider CLI update failed"),
+                }
+            });
+            json!({"scheduled": true})
+        }
+        // A cancelled version is not retried until this host restarts.
+        "cancelProviderCliUpdate" => {
+            let id = str_arg(&b, "id")?;
+            let version = b["version"]
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| {
+                    crate::agent::backends::pending_build(id)
+                        .and_then(|agent| agent["version"].as_str().map(str::to_owned))
+                })
+                .unwrap_or_default();
+            crate::update::provider_cli::cancel(id, &version)
+        }
         "voiceStatus" => crate::voice::status(&hub.store)?,
         "setVoiceKey" => {
             let provider = crate::voice::Provider::parse(str_arg(&b, "provider")?)?;

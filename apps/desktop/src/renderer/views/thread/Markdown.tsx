@@ -6,6 +6,7 @@ import { HStack, VStack } from '../../components/Stack'
 import { Text } from '../../components/Text'
 import { highlightSpans } from './code-highlight.ts'
 import { looksLikeDiff, parseDiff, type DiffRow } from './diff-rows.ts'
+import { withChatLinkSource } from './link-source.ts'
 import './markdown.css'
 
 // The Mac's Markdown for messages: the blocks from `markdown-blocks.ts`, with inline styling like
@@ -43,7 +44,7 @@ function emphasis(text: string, key: string): ReactNode[] {
     if (m[1] !== undefined) {
       const url = m[2]!
       out.push(
-        <a key={k} href={url} title={url} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(url) }}>
+        <a key={k} href={url} title={url} className="md-link" onClick={(e) => { e.preventDefault(); window.codync.app.openExternal(withChatLinkSource(url)) }}>
           {emphasis(m[1], `${k}-`)}
         </a>,
       )
