@@ -55,6 +55,7 @@ impl Fixture {
             owner_bot_id: owner.into(),
             from_bot_id: from.into(),
             to_bot_id: to.into(),
+            name: String::new(),
             instruction: instruction.into(),
             model: None,
             model_options: BTreeMap::default(),
@@ -387,6 +388,32 @@ async fn the_api_validates_every_input_and_connects_valid_links() {
     f.shutdown().await;
 }
 
+#[tokio::test]
+async fn a_person_can_name_a_bot_step_and_a_media_step() {
+    let f = Fixture::new();
+    let r = f.routine("a");
+    f.link(&r, "a", "b", "Translate");
+    let rename = |key: &str, name: &str| json!({"botId": "a", "routineId": r, "nodeKey": key, "name": name});
+    f.call("renameRoutineFlowStep", rename("bot:b", "Translation")).await.unwrap();
+    let canvas = f.call("routineFlowCanvas", json!({"botId": "a"})).await.unwrap();
+    assert_eq!(canvas["links"][0]["name"], "Translation", "the name reaches the canvas");
+
+    let mut media = crate::store::flow_media::new_media("m1".into(), r.clone(), "a".into());
+    media.model = "gpt-image".into();
+    f.hub.store.flow_add_media(&media).unwrap();
+    f.call("renameRoutineFlowStep", rename("media:m1", "Hero shot")).await.unwrap();
+    let canvas = f.call("routineFlowCanvas", json!({"botId": "a"})).await.unwrap();
+    assert!(canvas["mediaNodes"].as_array().unwrap().iter().any(|m| m["name"] == "Hero shot"));
+    // An empty name falls back to the step type in clients; on the wire it reads as unnamed.
+    f.call("renameRoutineFlowStep", rename("bot:b", "")).await.unwrap();
+    assert_eq!(f.hub.store.flow_links(&r).unwrap()[0].name, "");
+
+    let listed = tool_call(&f.hub, "a", "list_routine_flow", &json!({})).unwrap();
+    assert!(listed.to_string().contains("Hero shot"), "agents reading the flow see the step name");
+    assert!(f.call("renameRoutineFlowStep", rename("bot:b", &"x".repeat(201))).await.is_err(), "a name is bounded");
+    f.shutdown().await;
+}
+
 #[test]
 fn a_links_model_and_effort_ride_its_step_alone() {
     let mut link = FlowLink {
@@ -395,6 +422,7 @@ fn a_links_model_and_effort_ride_its_step_alone() {
         owner_bot_id: "a".into(),
         from_bot_id: "a".into(),
         to_bot_id: "b".into(),
+        name: String::new(),
         instruction: String::new(),
         model: None,
         model_options: BTreeMap::default(),

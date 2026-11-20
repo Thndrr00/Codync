@@ -109,7 +109,7 @@ fn list(hub: &Hub, bot: &str, only: Option<&str>) -> Result<Value> {
             .flow_links(&routine.id)?
             .into_iter()
             .map(|l| {
-                json!({"id": l.id, "fromBotId": l.from_bot_id, "from": label(hub, &l.from_bot_id),
+                json!({"id": l.id, "name": l.name, "fromBotId": l.from_bot_id, "from": label(hub, &l.from_bot_id),
                     "toBotId": l.to_bot_id, "to": label(hub, &l.to_bot_id), "instruction": l.instruction})
             })
             .collect();
@@ -118,8 +118,8 @@ fn list(hub: &Hub, bot: &str, only: Option<&str>) -> Result<Value> {
             .flow_media(&routine.id)?
             .into_iter()
             .map(|node| {
-                json!({"id": node.id, "nodeKey": crate::store::flow_media::key(&node.id), "kind": node.kind,
-                    "prompt": node.prompt, "model": node.model})
+                json!({"id": node.id, "nodeKey": crate::store::flow_media::key(&node.id), "name": node.name,
+                    "kind": node.kind, "prompt": node.prompt, "model": node.model})
             })
             .collect();
         flows.push(json!({"routineId": routine.id, "name": routine.name, "links": links, "mediaSteps": media,
@@ -131,8 +131,9 @@ fn list(hub: &Hub, bot: &str, only: Option<&str>) -> Result<Value> {
 /// What a link's end is called: a bot's name, or the kind of a media step.
 fn label(hub: &Hub, id: &str) -> String {
     match id.strip_prefix(crate::store::flow_media::PREFIX) {
-        Some(media) => match hub.store.flow_media_node(media).ok().flatten().map(|node| node.kind) {
-            Some(kind) if kind == "video" => "video step".to_owned(),
+        Some(media) => match hub.store.flow_media_node(media).ok().flatten() {
+            Some(node) if !node.name.trim().is_empty() => node.name,
+            Some(node) if node.kind == "video" => "video step".to_owned(),
             _ => "image step".to_owned(),
         },
         None => hub.bot_name(id),

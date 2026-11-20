@@ -117,6 +117,11 @@ export class RoutineFlowStore extends Observable {
     await this.change('disconnectRoutineFlow', { linkId })
   }
 
+  /** Gives a bot or media step a name; an empty one falls back to the step type. */
+  async renameStep(routineId: string, nodeKey: string, name: string) {
+    await this.change('renameRoutineFlowStep', { botId: this.botId, routineId, nodeKey, name })
+  }
+
   /** Adds a picture or clip step to a routine, at its model's first settings. */
   async addMedia(routineId: string, kind: MediaKind): Promise<FlowMedia | null> {
     const answer = await this.change<{ media: FlowMedia }>('addRoutineFlowMedia', { routineId, kind })

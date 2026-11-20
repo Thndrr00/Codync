@@ -3,7 +3,7 @@ import type { Bot } from '@shared/models'
 import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
-import { flowKey, flowRows, isUnconnected, mediaTitle, routineKey, statusLabel, type FlowCanvas, type FlowMedia } from '../../../lib/routine-flow.ts'
+import { flowKey, flowRows, isUnconnected, mediaTitle, routineKey, statusLabel, stepNameOf, type FlowCanvas, type FlowMedia } from '../../../lib/routine-flow.ts'
 import type { FlowSelection } from './FlowCanvas'
 import { StatusChip } from './FlowNodeCard'
 
@@ -12,15 +12,21 @@ import { StatusChip } from './FlowNodeCard'
  * walk (arrows move between rows, Enter selects). It shows the same things as the canvas and the
  * selection is shared, so the inspector works from either.
  */
-export function FlowList({ canvas, bots, selection, onSelect }: {
+export function FlowList({ canvas, bots, selection, onSelect, query }: {
   canvas: FlowCanvas
   bots: ReadonlyMap<string, Bot>
   selection: FlowSelection
   onSelect: (selection: FlowSelection) => void
+  query: string
 }) {
   const tr = useTr()
   const rows = flowRows(canvas)
-  const name = (id: string, media: FlowMedia | null) => (media ? tr(mediaTitle(media)) : (bots.get(id)?.name ?? tr('Unknown bot')))
+  const name = (id: string, media: FlowMedia | null) => {
+    const key = media ? `media:${media.id}` : `bot:${id}`
+    return stepNameOf(canvas, key) || (media ? tr(mediaTitle(media)) : (bots.get(id)?.name ?? tr('Unknown bot')))
+  }
+  const search = query.trim().toLowerCase()
+  const visible = (id: string, media: FlowMedia | null) => !search || name(id, media).toLowerCase().includes(search) || id.toLowerCase().includes(search)
   const walk = (event: KeyboardEvent) => {
     const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
     if (!step) return
@@ -43,7 +49,7 @@ export function FlowList({ canvas, bots, selection, onSelect }: {
             <Spacer />
             {isUnconnected(canvas, routine.id) ? <Text size="caption" tone="secondary">{tr('Not connected')}</Text> : null}
           </button>
-          {rows.filter((row) => row.routineId === routine.id).map((row) => (
+          {rows.filter((row) => row.routineId === routine.id && visible(row.nodeId, row.media)).map((row) => (
             <button
               key={row.key}
               data-row

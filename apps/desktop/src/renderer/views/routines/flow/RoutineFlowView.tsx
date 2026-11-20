@@ -9,7 +9,7 @@ import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useModel } from '../../../lib/observable'
 import {
-  NODE_WIDTH, botKey, canvasBotIds, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle,
+  NODE_WIDTH, botKey, canvasBotIds, connectProblem, layoutNodes, mediaEnd, mediaKey, mediaTitle, stepNameOf,
   type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
 import { useTr } from '../../../lib/use-language'
@@ -128,6 +128,8 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
   const [shownSettings, setShownSettings] = useState<{ card: FlowRoutineCard; step: FlowStep } | null>(null)
   const [creating, setCreating] = useState(false)
   const [choose, setChoose] = useState<{ from: string; to: string; at: { x: number; y: number }; routines: { id: string; name: string }[] } | null>(null)
+  /** The canvas search: nodes that don't match are dimmed and list rows are filtered. */
+  const [query, setQuery] = useState('')
   /** Keys being grouped, waiting for a name (Ctrl/Cmd+G). */
   const [groupDraft, setGroupDraft] = useState<string[] | null>(null)
   const [groupName, setGroupName] = useState('')
@@ -349,6 +351,27 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     return null
   }
 
+  /** The routine a canvas node belongs to, from its saved step or the links that name it. */
+  const cardForNode = (key: string) => {
+    const [kind, id] = key.split(':')
+    if (!id) return undefined
+    const target = kind === 'media' ? `media:${id}` : id
+    return stepOfNode(key)?.card ?? canvas.routines.find((candidate) =>
+      canvas.links.some((link) => link.routineId === candidate.routine.id
+        && (link.fromBotId === target || link.toBotId === target)))
+  }
+
+  /** A step's name lives on the link or media node the host owns; an empty name clears it. */
+  const renameStep = (key: string, name: string) => {
+    const card = cardForNode(key)
+    if (!card) {
+      setNote(tr('That step is not part of a routine on this canvas.'))
+      return
+    }
+    setNote(null)
+    void flow.renameStep(card.routine.id, key, name)
+  }
+
   /** Starts a new run at this step; the steps before it hand on their stored answers. */
   const runFromStep = async (key: string) => {
     if (offline) return
@@ -457,6 +480,13 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
     <VStack gap={8} className="routine-flow">
       <HStack gap={8} wrap>
         <SegmentedChoice selection={mode} options={[{ id: 'canvas', label: 'Canvas' }, { id: 'list', label: 'List' }]} onChange={setMode} />
+        <input
+          className="routine-input flow-search"
+          aria-label={tr('Search the canvas')}
+          placeholder={tr('Search the canvas')}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
         <Button kind="secondary" disabled={offline} onClick={() => setCreating(true)}>{tr('New routine')}</Button>
         <DropdownMenu
           title={tr('Add a bot to the canvas')}
@@ -505,6 +535,15 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 onToggleGroup={(id) => void toggleGroup(id)}
                 onFiles={(files) => void addFiles(files)}
                 menuItems={menuItems}
+                onRenameStep={renameStep}
+                query={query}
+                composer={{
+                  busy: model.busy,
+                  offline,
+                  targets,
+                  onSaveMedia: saveMedia,
+                  onRunFromStep: (key) => void runFromStep(key),
+                }}
                 onRun={(id) => {
                   setSelection({ kind: 'node', key: `routine:${id}` })
                   void flow.test(id)
@@ -512,7 +551,7 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
                 onStop={() => void store.stop(botId)}
               />
             ) : (
-              <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} />
+              <FlowList canvas={canvas} bots={bots} selection={selection} onSelect={setSelection} query={query} />
             )}
           </div>
           <FlowInspector
@@ -629,7 +668,10 @@ export function RoutineFlowView({ botId, onExpand }: { botId: string; onExpand?:
           <VStack gap={14} className="routine-flow-sheet flow-settings-sheet">
             <ModalHeader icon="gearshape" title={tr('Step settings')} onClose={() => setShownSettings(null)} />
             <VStack gap={8}>
-              <Text weight="semibold">{shownSettings.step.botId}</Text>
+              <Text weight="semibold">
+                {stepNameOf(canvas, shownSettings.step.botId.startsWith('media:') ? shownSettings.step.botId : `bot:${shownSettings.step.botId}`)
+                  || shownSettings.step.botId}
+              </Text>
               <SavedSettings settings={settingsOf(canvas.stepSettings, shownSettings.step.id)} />
             </VStack>
             <HStack gap={8}>

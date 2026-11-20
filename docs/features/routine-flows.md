@@ -14,10 +14,10 @@ from the graphical canvas of the desktop and phone apps, or in the terminal UI (
 
 | Thing | Fields |
 |---|---|
-| **Link** | `id`, `routineId`, `fromBotId`, `toBotId`, `instruction` (≤ 8000 bytes, may be empty), `model` (`null` = the target bot's own), `modelOptions` (that model's settings, e.g. `effort`), `createdAt` (ms) |
-| **Step** | `id`, `runId`, `botId`, `deliveryId` (the bot request that carried the input; `null` for the routine's own bot), `input`, `output` (`null` until it replies), `status`, `error`, `createdAt`, `updatedAt` |
+| **Link** | `id`, `routineId`, `fromBotId`, `toBotId`, `name` (≤ 200 chars, empty = no name), `instruction` (≤ 8000 bytes, may be empty), `model` (`null` = the target bot's own), `modelOptions` (that model's settings, e.g. `effort`), `createdAt` (ms) |
+| **Step** | `id`, `runId`, `botId`, `deliveryId` (the bot request that carried the input; `null` for the routine's own bot), `input`, `output` (`null` until it replies), `status`, `error`, `files` (the pictures or clips a media step made), `createdAt`, `updatedAt` |
 | **Step status** | `running`, `succeeded`, `failed`, `skipped`, `cancelled` |
-| **Media step** | `id`, `routineId`, `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
+| **Media step** | `id`, `routineId`, `name` (≤ 200 chars, empty = no name), `kind` (`image`/`video`), `model`, `prompt`, `aspect`, `duration`, `resolution`, `voice`, `transparent`, `createdAt`, `updatedAt`; node key `media:<id>` (see [media](media.md#routine-flow-steps)) |
 | **Position** | `nodeKey` (`routine:<id>`, `bot:<id>` or `media:<id>`), `x`, `y` (numbers, at most ±1 000 000) |
 | **Group** | `id`, `name` (≤ 120 chars), `members` (node keys, each in at most one group), `collapsed` (folded into a stack card), `x`, `y` (card position) — drawing only, never changes what runs |
 
@@ -107,6 +107,26 @@ message if the model cannot read pictures. A schedule trigger adds its run time 
 that follow so a model can compute a time window. Duplicating a picture step keeps its settings and the links
 that fed it, and selects and raises the copy; an empty canvas shows a sample workflow and **New workflow**.
 
+## Reading and naming steps
+
+Select a step and click its title to give it a **name** (Enter or blur saves, Escape cancels). The name is
+stored on the link that reaches a bot step, or on the media node itself, with `#[serde(default)]`: an older
+flow has no name and reads as unnamed. It shows on the card, in the run status list, in canvas search and in
+`list_routine_flow`, and it is used when a step is named in the text handed to the next bot. An empty name falls
+back to the step type. On the desktop this is a small inline editor on the card; the host method
+`renameRoutineFlowStep` is the only writer.
+
+While a bot step runs, its card shows the bot's live **activity**, the step before it and how many steps are
+done. These come from the bot's status/activity and the run's step statuses already sent to clients — no new
+polling — and the card reserves a fixed height so changing text never resizes it. Selecting a picture or clip
+step opens a **composer** under its card with the description, the pictures connected to it, the model, its
+settings and **Run** in one place; it reuses the inspector's shared controls and the saved step settings.
+
+A card's output **port** keeps a soft tint of what its visible line carries — text, a picture or a file — using
+the theme's own semantic colour tokens; a port with no line stays grey. A step's result shows the **newest file**
+as soon as a run ends; arrows still walk the older files of that step. A new run starts on its newest file again,
+so a file clicked earlier is never left showing as the current result.
+
 ## Host API
 
 All methods use the usual authenticated API (`POST /api/<method>`) and the E2E channel with a device that has the
@@ -131,6 +151,7 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
 | `resolveRoutineFlowConflict` | `botId`, `field`, `key`, `choice` (`local`/`incoming`) | `{"saved": document}` or the remaining `{"conflicts": [...], "document": merged}` |
 | `testRoutineFlow` | `botId` (the routine's owner), `routineId`, optional `input` | `{"runId": "flow-test-…"}` |
 | `runRoutineFlowFromStep` | `botId`, `routineId`, `nodeKey` (`bot:` or `media:`) | `{"runId": "flow-step-…"}` |
+| `renameRoutineFlowStep` | `botId`, `routineId`, `nodeKey` (`bot:` or `media:`), `name` (≤ 200 chars, empty clears) | `{"ok": true}` |
 
 `testRoutineFlow` doesn't run the routine: it starts the flow as if the routine's bot had just replied with `input`
 (a sample sentence by default), so a link can be tried without spending a run. Its steps carry the returned
@@ -147,11 +168,11 @@ Request bodies are JSON objects; ids are 1 to 200 characters; unknown or invalid
                  "createdAt": 0, "updatedAt": 0 },
     "recentRuns": [ /* the newest 10 routine runs, newest first, as in `routines` */ ],
     "upcomingRuns": [1730000000000],
-    "steps": [ /* the steps of the routine's newest run that has any, oldest first */ ],
+    "steps": [ { /* … */, "files": [ { "id": "…", "name": "…", "size": 0, "sha256": "…" } ] } ],
     "stepSettings": { /* step id → the settings and inputs it ran with; absent for older runs */ }
   }],
-  "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
-  "mediaNodes": [ { "id": "…", "routineId": "…", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
+  "links": [ { "id": "…", "routineId": "…", "fromBotId": "…", "toBotId": "…", "name": "", "instruction": "", "model": null, "modelOptions": {}, "createdAt": 0 } ],
+  "mediaNodes": [ { "id": "…", "routineId": "…", "name": "", "kind": "image", "model": "gpt-image", "prompt": "…", "aspect": "1:1", "duration": 6, "resolution": "480p", "voice": null, "transparent": false, "createdAt": 0, "updatedAt": 0 } ],
   "positions": [ { "nodeKey": "routine:…", "x": 0.0, "y": 0.0 } ],
   "placedBotIds": ["…"],
   "groups": [ { "id": "g1", "name": "Pictures", "members": ["media:…", "media:…"], "collapsed": false, "x": 0.0, "y": 0.0 } ]
@@ -170,8 +191,9 @@ holds one such event for every bot whose canvas changed after `since`, in rev or
 
 The built-in `routines` MCP server has three more tools, scoped to the bot's own routines:
 `link_routine_bots` (`routineId`, `toBotId`, optional `fromBotId` and `instruction`), `unlink_routine_bots` (`linkId`,
-or `routineId` + `toBotId`) and `list_routine_flow` (optional `routineId`). The server's instructions tell the bot
-when to use them (see [Routines](routines.md#conversational-setup-and-tools)).
+or `routineId` + `toBotId`) and `list_routine_flow` (optional `routineId`), whose links and media steps carry each
+step's `name` so an agent reading the flow sees the names. The server's instructions tell the bot when to use them
+(see [Routines](routines.md#conversational-setup-and-tools)).
 
 ## Storage
 

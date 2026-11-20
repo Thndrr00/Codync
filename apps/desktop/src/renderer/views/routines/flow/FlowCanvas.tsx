@@ -6,8 +6,8 @@ import { MenuPanel, type MenuItem } from '../../../components/Menu'
 import { useEscape, usePresence } from '../../../components/Overlay'
 import { useTr } from '../../../lib/use-language'
 import {
-  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, isUnconnected, latestStep, mediaOf, mediaTitle, nodeAt, stepOf, zoomAt,
-  type FlowNode, type View,
+  NODE_HEIGHT, NODE_WIDTH, edgePath, fitView, isUnconnected, latestStep, linkEndOf, mediaOf, mediaTitle, nodeAt,
+  portCarry, stepNameOf, stepOf, stepProgress, zoomAt, type FlowNode, type View,
 } from '../../../lib/routine-flow.ts'
 import {
   CanvasWithGroups, groupKey, groupOf, groupedEdges, groupedNodes, groupsOf, parsePort, portPrefix,
@@ -16,6 +16,8 @@ import {
 import { FlowGroupCard, type GroupPreview } from './FlowGroupCard'
 import { FlowNodeCard } from './FlowNodeCard'
 import { flowMenuPoint } from './flow-settings'
+import { MediaComposer } from './MediaComposer'
+import type { FlowTarget } from './FlowInspector'
 
 export type FlowSelection = { kind: 'node'; key: string } | { kind: 'edge'; id: string } | { kind: 'group'; id: string } | null
 
@@ -43,6 +45,18 @@ interface Props {
   onFiles: (files: { name: string }[]) => void
   /** The step menu's rows: Run from this step, Settings and (for a picture step) Duplicate. */
   menuItems: (nodeKey: string) => MenuItem[]
+  /** Clicking a card's title edits its name; empty clears it back to the step type. */
+  onRenameStep: (nodeKey: string, name: string) => void
+  /** The canvas search; a node that doesn't match is dimmed. */
+  query: string
+  /** The composer under the selected media card, wired by the view that owns the host calls. */
+  composer: {
+    busy: boolean
+    offline: boolean
+    targets: (from: string) => FlowTarget[]
+    onSaveMedia: (media: import('../../../lib/routine-flow.ts').FlowMedia, settings: import('./FlowInspector').MediaSettings) => void
+    onRunFromStep: (nodeKey: string) => void
+  }
 }
 
 const NUDGE = 20
@@ -99,7 +113,7 @@ function MiniMap({ nodes, view, box, onCenter }: {
 }
 
 /** The canvas: routine and bot nodes, their edges, groups, pan, zoom (wheel and buttons) and gestures. */
-export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onRun, onStop, menuItems }: Props) {
+export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, onMove, onMoveGroup, onConnect, onGroup, onUngroup, onToggleGroup, onFiles, onRun, onStop, menuItems, onRenameStep, query, composer }: Props) {
   const tr = useTr()
   const groups = groupsOf(canvas)
   const nodes = useMemo(() => groupedNodes(canvas), [canvas])
@@ -299,6 +313,18 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
 
   const placed = (node: FlowNode) => (live && live.key === node.key ? { ...node, x: live.x, y: live.y } : node)
   const byKey = new Map(nodes.map((n) => [n.key, placed(n)]))
+  /** A node's title: its own name first, then the media description or the bot's name. */
+  const titleOf = (key: string) => {
+    const custom = stepNameOf(canvas, key)
+    if (custom) return custom
+    const media = mediaOf(canvas, key)
+    if (media) return tr(mediaTitle(media))
+    return bots.get(linkEndOf(key))?.name ?? tr('Unknown bot')
+  }
+  // An edge leaves exactly the ports and cards whose line is visible on the canvas.
+  const connectedPorts = new Set(edges.map((edge) => edge.from))
+  const search = query.trim().toLowerCase()
+  const matches = (key: string, title: string) => !search || title.toLowerCase().includes(search) || key.toLowerCase().includes(search)
   const wireFrom = wire ? [...byKey.values()].find((n) => n.kind !== 'routine' && n.id === wire.from) : null
   const hovered = wire ? nodeAt([...byKey.values()], wire.x, wire.y) : null
   const zoom = (factor: number) => {
@@ -381,6 +407,9 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
                 key={node.key}
                 type="button"
                 className="flow-port-node"
+                data-carry={port.type === 'video' ? 'file' : port.type}
+                data-connected={connectedPorts.has(node.key) ? 'true' : undefined}
+                data-matched={matches(node.key, tr(PORT_LABEL[port.type] ?? port.type)) ? undefined : 'false'}
                 style={{ transform: `translate(${node.x}px, ${node.y}px)` }}
                 title={tr('Connect this output of the group')}
                 aria-label={`${tr('Connect from this group')}: ${tr(PORT_LABEL[port.type] ?? port.type)}`}
@@ -414,6 +443,16 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
           const card = raw.kind === 'routine' ? canvas.routines.find((c) => c.routine.id === raw.id) : undefined
           const media = raw.kind === 'media' ? mediaOf(canvas, raw.id) : null
           const step = raw.kind === 'routine' ? null : latestStep(canvas, raw.id)
+          const stepCard = step ? canvas.routines.find((c) => c.steps.some((s) => s.id === step.id)) : undefined
+          const working = bots.get(raw.id)
+          const progress = stepCard && step && step.status === 'running' && working
+            && (working.status === 'working' || working.status === 'needsInput')
+            ? (() => {
+              const p = stepProgress(stepCard, step)
+              return { activity: working.activity, previous: p.previous ? titleOf(p.previous.botId) : '', done: p.done, total: p.total }
+            })()
+            : null
+          const name = stepNameOf(canvas, raw.key) || (raw.kind === 'routine' ? card?.routine.name ?? '' : raw.kind === 'media' ? tr(mediaTitle(media)) : bots.get(raw.id)?.name ?? '')
           return (
             <FlowNodeCard
               key={raw.key}
@@ -435,9 +474,38 @@ export function FlowCanvasView({ canvas, bots, selection, disabled, onSelect, on
               onRun={raw.kind === 'routine' ? () => onRun(raw.id) : undefined}
               onStop={raw.kind === 'routine' ? () => onStop(raw.id) : undefined}
               onMenu={raw.kind === 'routine' ? undefined : (anchor) => setMenu({ key: raw.key, ...anchor })}
+              stepName={stepNameOf(canvas, raw.key)}
+              onRename={raw.kind === 'routine' || disabled ? undefined : (next) => onRenameStep(raw.key, next)}
+              progress={progress}
+              carry={portCarry(raw, media)}
+              connected={connectedPorts.has(raw.key)}
+              matched={matches(raw.key, name)}
             />
           )
         })}
+        {selection?.kind === 'node' && (() => {
+          const node = byKey.get(selection.key)
+          const media = node?.key.startsWith('media:') ? mediaOf(canvas, node.id) : null
+          if (!node || !media || disabled) return null
+          return (
+            <div
+              className="flow-composer-anchor"
+              style={{ transform: `translate(${node.x}px, ${node.y + NODE_HEIGHT + 12}px)` }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <MediaComposer
+                media={media}
+                canvas={canvas}
+                busy={composer.busy}
+                offline={composer.offline}
+                targets={composer.targets}
+                onSaveMedia={composer.onSaveMedia}
+                onRunFromStep={composer.onRunFromStep}
+                onClose={() => onSelect(null)}
+              />
+            </div>
+          )
+        })()}
       </div>
       {menu && menuPresence.mounted ? (() => {
         const rows = menuItems(menu.key)

@@ -432,7 +432,7 @@ fn begin(
     let names: Vec<StepInput> = inputs
         .iter()
         .map(|(link, text)| StepInput {
-            from: node_name(hub, &link.from_bot_id),
+            from: node_name(hub, &start.routine_id, &link.from_bot_id),
             text: (*text).to_owned(),
             instruction: link.instruction.clone(),
             picture: is_picture_node(&link.from_bot_id),
@@ -477,13 +477,26 @@ fn from_id<'a>(node: &'a str, owner: &'a str) -> &'a str {
     if node.starts_with(crate::store::flow_media::PREFIX) { owner } else { node }
 }
 
-/// What a step is called in the text handed to the next bot.
-fn node_name(hub: &Hub, id: &str) -> String {
-    if id.starts_with(crate::store::flow_media::PREFIX) {
-        return match hub.store.flow_media_node(id).ok().flatten().map(|node| node.kind) {
-            Some(kind) if kind == "video" => "the video step".to_owned(),
+/// What a step is called in the text handed to the next bot: its name when the person gave one,
+/// else its kind (a media step) or the bot's name. Agents reading the flow therefore see the names.
+fn node_name(hub: &Hub, routine_id: &str, id: &str) -> String {
+    if let Some(media) = id.strip_prefix(crate::store::flow_media::PREFIX) {
+        return match hub.store.flow_media_node(media).ok().flatten() {
+            Some(node) if !node.name.trim().is_empty() => node.name,
+            Some(node) if node.kind == "video" => "the video step".to_owned(),
             _ => "the picture step".to_owned(),
         };
+    }
+    // A bot step's name lives on the link that reaches it in this routine.
+    if let Some(name) = hub
+        .store
+        .flow_links(routine_id)
+        .ok()
+        .and_then(|links| links.into_iter().find(|link| link.to_bot_id == id))
+        .map(|link| link.name)
+        .filter(|name| !name.trim().is_empty())
+    {
+        return name;
     }
     hub.bot_name(id)
 }
@@ -513,7 +526,7 @@ fn begin_media(hub: &Hub, start: &Start, id: &str, inputs: &[(&FlowLink, &str)])
     let read: Vec<StepInput> = inputs
         .iter()
         .map(|(link, text)| StepInput {
-            from: node_name(hub, &link.from_bot_id),
+            from: node_name(hub, &start.routine_id, &link.from_bot_id),
             text: (*text).to_owned(),
             instruction: link.instruction.clone(),
             picture: is_picture_node(&link.from_bot_id),

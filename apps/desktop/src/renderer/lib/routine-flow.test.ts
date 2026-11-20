@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   NODE_WIDTH, botKey, connectProblem, depths, edgePath, fitView, flowEdges, flowRows, layoutNodes, mediaKey, mediaTitle, nodeAt,
-  routineKey, zoomAt, type FlowCanvas, type FlowLink, type FlowMedia, type FlowStep,
+  portCarry, routineKey, stepNameOf, stepProgress, zoomAt, type FlowCanvas, type FlowLink, type FlowMedia, type FlowNode, type FlowStep,
 } from './routine-flow.ts'
 
 const link = (from: string, to: string, extra: Partial<FlowLink> = {}): FlowLink =>
@@ -65,6 +65,30 @@ test('the list mirrors the canvas depth first with the latest step of each bot',
 test('a loop in the links can\'t run the list away', () => {
   const rows = flowRows(canvas([link('a', 'b'), link('b', 'a')]))
   assert.deepEqual(rows.map((r) => r.nodeId), ['a', 'b'])
+})
+
+test('a step name comes from its link or media node, and empty falls back to the type', () => {
+  const media: FlowMedia = {
+    id: 'm1', name: 'Hero shot', kind: 'image', model: 'gpt-image', prompt: '', aspect: '1:1',
+    duration: 6, resolution: '480p', transparent: false, voice: null, createdAt: 1, routineId: 'r',
+  }
+  const c = canvas([link('a', 'b', { name: 'Translate' })], { mediaNodes: [media] })
+  assert.equal(stepNameOf(c, botKey('b')), 'Translate', 'a bot step is named by the link that reaches it')
+  assert.equal(stepNameOf(c, mediaKey('m1')), 'Hero shot')
+  assert.equal(stepNameOf(c, botKey('c')), '', 'an unnamed step falls back to its type in the client')
+})
+
+test('a running step shows its predecessor and how many steps are done', () => {
+  const steps = [step('a', 'succeeded'), step('b', 'running')]
+  const c = canvas([link('a', 'b')], {}, steps)
+  const progress = stepProgress(c.routines[0], steps[1])
+  assert.equal(progress.previous?.botId, 'a')
+  assert.equal(progress.done, 1)
+  assert.equal(progress.total, 2)
+  const node = (kind: FlowNode['kind']): FlowNode => ({ key: `${kind}:x`, kind, id: 'x', x: 0, y: 0, saved: false })
+  assert.equal(portCarry(node('bot'), null), 'text')
+  assert.equal(portCarry(node('media'), { kind: 'image' } as FlowMedia), 'image')
+  assert.equal(portCarry(node('media'), { kind: 'video' } as FlowMedia), 'file')
 })
 
 test('zoom keeps the point under the pointer still and stays within its bounds', () => {

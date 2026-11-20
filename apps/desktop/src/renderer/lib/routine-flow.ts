@@ -6,6 +6,7 @@
 // (a step that makes a file is a node like any other, linked to the steps around it).
 
 import type { MediaKind } from '@shared/media'
+import type { SharedFile } from '@shared/models'
 import type { Routine, RoutineRun } from '../views/routines/routine'
 
 export type StepStatus = 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'
@@ -15,6 +16,8 @@ export interface FlowLink {
   routineId: string
   fromBotId: string
   toBotId: string
+  /** A name the person gave this step; empty or absent falls back to the step type. */
+  name?: string
   instruction: string
   /** The model this step runs on instead of the next bot's own, and its options (effort…). */
   model?: string | null
@@ -31,12 +34,16 @@ export interface FlowStep {
   output: string | null
   status: StepStatus
   error: string | null
+  /** The pictures or clips a media step made, as shared files of the routine's bot. */
+  files?: SharedFile[]
   createdAt: number
   updatedAt: number
 }
 
 export interface FlowMedia {
   id: string
+  /** A name the person gave this step; empty or absent falls back to the step kind. */
+  name?: string
   kind: MediaKind
   model: string
   prompt: string
@@ -269,6 +276,37 @@ export function latestStep(canvas: FlowCanvas, botId: string): FlowStep | null {
 
 export function stepOf(card: FlowRoutineCard, botId: string): FlowStep | null {
   return card.steps.find((step) => step.botId === botId) ?? null
+}
+
+/** The id a link uses for a canvas node: `bot:id` drops its prefix, `media:id` keeps it. */
+export function linkEndOf(nodeKey: string): string {
+  return nodeKey.startsWith('bot:') ? nodeKey.slice(4) : nodeKey
+}
+
+/** A step's own name, or '' when it has none: callers then fall back to the step type. */
+export function stepNameOf(canvas: FlowCanvas, nodeKey: string): string {
+  if (nodeKey.startsWith('media:')) {
+    const media = canvas.mediaNodes.find((node) => mediaKey(node.id) === nodeKey)
+    return media?.name?.trim() ?? ''
+  }
+  const link = canvas.links.find((candidate) => candidate.toBotId === linkEndOf(nodeKey))
+  return link?.name?.trim() ?? ''
+}
+
+/** What a node's output port carries, which decides the soft tint of its connected line. */
+export function portCarry(node: FlowNode, media: FlowMedia | null): 'text' | 'image' | 'file' {
+  if (node.kind === 'media') return media?.kind === 'video' ? 'file' : 'image'
+  return 'text'
+}
+
+/** What a running step shows while its agent works: its predecessor, the count done and the total. */
+export function stepProgress(card: FlowRoutineCard, step: FlowStep): { previous: FlowStep | null; done: number; total: number } {
+  const index = card.steps.findIndex((candidate) => candidate.id === step.id)
+  return {
+    previous: index > 0 ? card.steps[index - 1] : null,
+    done: card.steps.filter((candidate) => candidate.status !== 'running').length,
+    total: card.steps.length,
+  }
 }
 
 /** One line of the list that mirrors the canvas: a routine, or a bot or media step under the step that hands to it. */

@@ -52,6 +52,17 @@ fn short(value: &str, where_: &str) -> Result<()> {
     Ok(())
 }
 
+/// A step's name on the wire: absent or empty on an older canvas reads as unnamed.
+fn optional_name(entry: &serde_json::Map<String, Value>, where_: &str) -> Result<String> {
+    let name = match entry.get("name") {
+        None | Some(Value::Null) => String::new(),
+        Some(Value::String(name)) => name.trim().to_owned(),
+        _ => bail!("{where_}'s `name` must be text or null"),
+    };
+    crate::store::flows::check_name(&name).with_context(|| format!("{where_}'s name"))?;
+    Ok(name)
+}
+
 fn node(position: &Value, key: &str, state: &mut RunnableFlow) -> Result<()> {
     check_node_key(key)?;
     let where_ = format!("node {key}");
@@ -122,6 +133,7 @@ fn link(id: &str, value: &Value, bot: &str) -> Result<FlowLink> {
         owner_bot_id,
         from_bot_id: from.to_owned(),
         to_bot_id: to.to_owned(),
+        name: optional_name(entry, &where_)?,
         instruction,
         model,
         model_options,
@@ -178,6 +190,7 @@ fn media(id: &str, value: &Value, bot: &str) -> Result<FlowMedia> {
     let owner_bot_id = entry.get("ownerBotId").and_then(Value::as_str).unwrap_or(bot).to_owned();
     Ok(FlowMedia {
         id: id.to_owned(),
+        name: optional_name(entry, &where_)?,
         kind: kind.to_owned(),
         model: model.to_owned(),
         prompt,
@@ -326,6 +339,30 @@ mod tests {
         let mut document = sample();
         document.settings.insert("bad".into(), json!({"id": "bad", "kind": "sound"}));
         assert!(runnable("owner", &document).is_err(), "a media step of an unknown kind is refused");
+    }
+
+    #[test]
+    fn a_step_name_survives_a_merged_round_trip() {
+        let mut document = sample();
+        document.links.insert(
+            "l1".into(),
+            json!({"id": "l1", "routineId": "r1", "fromBotId": "owner", "toBotId": "ada",
+                   "instruction": "Translate", "model": null, "modelOptions": {}, "createdAt": 7,
+                   "name": "Translation"}),
+        );
+        let media = document.settings.get_mut("pic").unwrap().as_object_mut().unwrap();
+        media.insert("name".into(), json!("Hero shot"));
+        let state = runnable("owner", &document).expect("a document with names");
+        assert_eq!(state.links.iter().find(|link| link.id == "l1").unwrap().name, "Translation");
+        assert_eq!(state.media[0].name, "Hero shot");
+        assert_eq!(serde_json::to_value(&state.links[0]).unwrap()["name"], "Translation");
+    }
+
+    #[test]
+    fn an_old_document_without_names_reads_as_unnamed() {
+        let state = runnable("owner", &sample()).expect("an old document");
+        assert!(state.links.iter().all(|link| link.name.is_empty()));
+        assert!(state.media.iter().all(|media| media.name.is_empty()));
     }
 
     #[test]

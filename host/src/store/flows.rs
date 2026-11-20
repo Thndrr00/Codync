@@ -8,7 +8,7 @@
 //! what a client's catch-up compares against.
 
 use super::{Store, next_rev};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, Transaction, params};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,8 +25,7 @@ const MERGE_NODES_CAP: usize = 1000;
 const MERGE_MEDIA_CAP: usize = 500;
 const MERGE_INSTRUCTION_CAP: usize = 8_000;
 /// The media columns, in the order `row_media` of `flow_media` reads them.
-const MEDIA_COLUMNS: &str =
-    "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id";
+const MEDIA_COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +34,10 @@ pub struct FlowLink {
     pub routine_id: String,
     pub from_bot_id: String,
     pub to_bot_id: String,
+    /// A name the person gave this step, shown on the card and to agents reading the flow. Empty
+    /// means "no name": a client falls back to the step's type. Old flows have no column value.
+    #[serde(default)]
+    pub name: String,
     pub instruction: String,
     /// The model this step runs on, when the link says one instead of the target bot's own.
     pub model: Option<String>,
@@ -67,6 +70,7 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             id TEXT PRIMARY KEY, routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL,
             from_bot_id TEXT NOT NULL, to_bot_id TEXT NOT NULL, instruction TEXT NOT NULL DEFAULT '',
             model TEXT, model_options TEXT NOT NULL DEFAULT '{}',
+            name TEXT NOT NULL DEFAULT '',
             created_at INTEGER NOT NULL, UNIQUE(routine_id, from_bot_id, to_bot_id));
          CREATE INDEX IF NOT EXISTS routine_flow_links_routine ON routine_flow_links(routine_id);
          CREATE INDEX IF NOT EXISTS routine_flow_links_owner ON routine_flow_links(owner_bot_id);
@@ -92,7 +96,7 @@ pub(super) fn open(c: &Connection) -> Result<()> {
             model TEXT NOT NULL, prompt TEXT NOT NULL DEFAULT '', aspect TEXT NOT NULL DEFAULT '1:1',
             duration INTEGER NOT NULL DEFAULT 6, resolution TEXT NOT NULL DEFAULT '480p',
             transparent INTEGER NOT NULL DEFAULT 0, voice TEXT, created_at INTEGER NOT NULL,
-            routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL);
+            routine_id TEXT NOT NULL, owner_bot_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '');
          CREATE INDEX IF NOT EXISTS routine_flow_media_routine ON routine_flow_media(routine_id);",
     )?;
     // A database built before a step kept its settings has the table but not the column. `open` runs
@@ -104,6 +108,17 @@ pub(super) fn open(c: &Connection) -> Result<()> {
     )?;
     if !has_settings {
         c.execute_batch("ALTER TABLE routine_flow_steps ADD COLUMN settings TEXT;")?;
+    }
+    // Likewise, a step's name was added after links and media steps already had tables.
+    for table in ["routine_flow_links", "routine_flow_media"] {
+        let has_name: bool = c.query_row(
+            &format!("SELECT count(*) > 0 FROM pragma_table_info('{table}') WHERE name = 'name'"),
+            [],
+            |row| row.get(0),
+        )?;
+        if !has_name {
+            c.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN name TEXT NOT NULL DEFAULT '';"))?;
+        }
     }
     Ok(())
 }
@@ -119,11 +134,12 @@ fn row_link(r: &rusqlite::Row) -> rusqlite::Result<FlowLink> {
         model: r.get(6)?,
         model_options: serde_json::from_str(r.get::<_, String>(7)?.as_str()).unwrap_or_default(),
         created_at: r.get(8)?,
+        name: r.get(9)?,
     })
 }
 
 const LINK_COLUMNS: &str =
-    "id, routine_id, owner_bot_id, from_bot_id, to_bot_id, instruction, model, model_options, created_at";
+    "id, routine_id, owner_bot_id, from_bot_id, to_bot_id, instruction, model, model_options, created_at, name";
 
 fn options_json(options: &BTreeMap<String, String>) -> String {
     serde_json::to_string(options).unwrap_or_else(|_| "{}".into())
@@ -169,6 +185,16 @@ pub(super) fn audience(c: &Connection, routine_id: &str, owner: &str) -> Result<
         }
     }
     Ok(bots)
+}
+
+/// The most of a step's name that is kept. A name is a label, not a description.
+pub const MAX_NAME_CHARS: usize = 200;
+
+pub(crate) fn check_name(name: &str) -> Result<()> {
+    if name.chars().count() > MAX_NAME_CHARS || name.chars().any(char::is_control) {
+        bail!("a step name must be at most {MAX_NAME_CHARS} characters");
+    }
+    Ok(())
 }
 
 pub(crate) fn check_node_key(key: &str) -> Result<()> {
@@ -249,7 +275,9 @@ impl Store {
             let tx = c.unchecked_transaction()?;
             validate(&links_of(&tx, &link.routine_id)?)?;
             tx.execute(
-                &format!("INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"),
+                &format!(
+                    "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"
+                ),
                 params![
                     link.id,
                     link.routine_id,
@@ -259,7 +287,8 @@ impl Store {
                     link.instruction,
                     link.model,
                     options_json(&link.model_options),
-                    link.created_at
+                    link.created_at,
+                    link.name
                 ],
             )?;
             let bots = audience(&tx, &link.routine_id, &link.owner_bot_id)?;
@@ -293,6 +322,26 @@ impl Store {
             let change = touch(&tx, bots)?.expect("the owner is always in the audience");
             tx.commit()?;
             Ok(Some((link, change)))
+        })
+    }
+
+    /// Gives the step this link reaches a name; an empty one clears it. The instruction and model
+    /// the step runs with are left alone, and old links read as unnamed.
+    pub fn flow_rename_link(&self, id: &str, name: &str) -> Result<Option<FlowChange>> {
+        check_name(name)?;
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let gone = tx.execute("UPDATE routine_flow_links SET name = ?2 WHERE id = ?1", params![id, name])?;
+            if gone == 0 {
+                return Ok(None);
+            }
+            let mut st = tx.prepare(&format!("SELECT {LINK_COLUMNS} FROM routine_flow_links WHERE id = ?1"))?;
+            let link = st.query_row([id], row_link)?;
+            drop(st);
+            let bots = audience(&tx, &link.routine_id, &link.owner_bot_id)?;
+            let change = touch(&tx, bots)?;
+            tx.commit()?;
+            Ok(change)
         })
     }
 
@@ -450,6 +499,7 @@ impl Store {
                 if link.instruction.len() > MERGE_INSTRUCTION_CAP {
                     bail!("merged link {} has too long an instruction", link.id);
                 }
+                check_name(&link.name).with_context(|| format!("merged link {}", link.id))?;
                 if !routine_ids.contains(&link.routine_id) {
                     bail!("merged link {} names a routine that is not on this canvas", link.id);
                 }
@@ -470,9 +520,9 @@ impl Store {
                 }
                 tx.execute(
                     &format!(
-                        "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                        "INSERT INTO routine_flow_links({LINK_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                          ON CONFLICT(id) DO UPDATE SET routine_id = ?2, from_bot_id = ?4, to_bot_id = ?5,
-                         instruction = ?6, model = ?7, model_options = ?8, created_at = ?9"
+                         instruction = ?6, model = ?7, model_options = ?8, created_at = ?9, name = ?10"
                     ),
                     params![
                         link.id,
@@ -483,7 +533,8 @@ impl Store {
                         link.instruction,
                         link.model,
                         options_json(&link.model_options),
-                        at
+                        at,
+                        link.name
                     ],
                 )?;
                 bots.insert(owner.to_owned());
@@ -545,6 +596,7 @@ impl Store {
                 if step.prompt.len() > super::flow_media::MAX_PROMPT_BYTES {
                     bail!("merged media step {} has too long a description", step.id);
                 }
+                check_name(&step.name).with_context(|| format!("merged media step {}", step.id))?;
                 if !routine_ids.contains(&step.routine_id) {
                     bail!("merged media step {} names a routine that is not on this canvas", step.id);
                 }
@@ -564,10 +616,10 @@ impl Store {
                     current.get(&step.id).map(|(o, at)| (o.as_str(), *at)).unwrap_or((step.owner_bot_id.as_str(), step.created_at));
                 tx.execute(
                     &format!(
-                        "INSERT INTO routine_flow_media({MEDIA_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                        "INSERT INTO routine_flow_media({MEDIA_COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                          ON CONFLICT(id) DO UPDATE SET kind = ?2, model = ?3, prompt = ?4, aspect = ?5,
                          duration = ?6, resolution = ?7, transparent = ?8, voice = ?9, created_at = ?10,
-                         routine_id = ?11"
+                         routine_id = ?11, name = ?13"
                     ),
                     params![
                         step.id,
@@ -581,7 +633,8 @@ impl Store {
                         step.voice,
                         at,
                         step.routine_id,
-                        owner
+                        owner,
+                        step.name
                     ],
                 )?;
                 bots.insert(owner.to_owned());
@@ -655,5 +708,45 @@ impl Store {
                 (rev > since).then_some((bot, rev))
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::Store;
+
+    fn named_link(name: &str) -> FlowLink {
+        FlowLink {
+            id: "l1".into(),
+            routine_id: "r".into(),
+            owner_bot_id: "a".into(),
+            from_bot_id: "a".into(),
+            to_bot_id: "b".into(),
+            name: name.into(),
+            instruction: "Translate".into(),
+            model: None,
+            model_options: BTreeMap::new(),
+            created_at: 1,
+        }
+    }
+
+    #[test]
+    fn a_step_name_is_saved_and_can_be_cleared() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        store.flow_add_link(&named_link(""), |_| Ok(())).expect("the link is added");
+        assert_eq!(store.flow_link("l1").unwrap().unwrap().name, "", "an old link is unnamed");
+        store.flow_rename_link("l1", "Translate").unwrap();
+        assert_eq!(store.flow_link("l1").unwrap().unwrap().name, "Translate");
+        assert_eq!(store.flow_link("l1").unwrap().unwrap().instruction, "Translate", "the task is untouched");
+        store.flow_rename_link("l1", "").unwrap();
+        assert_eq!(store.flow_link("l1").unwrap().unwrap().name, "", "an empty name clears it");
+    }
+
+    #[test]
+    fn a_step_name_is_bounded() {
+        assert!(check_name("Ada's step").is_ok());
+        assert!(check_name(&"x".repeat(MAX_NAME_CHARS + 1)).is_err());
+        assert!(check_name("one\ntwo").is_err(), "control characters are refused");
     }
 }

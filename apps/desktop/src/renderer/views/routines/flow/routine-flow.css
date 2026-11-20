@@ -365,8 +365,8 @@
   padding: 0;
   border: 1px solid var(--chrome-stroke);
   border-radius: 50%;
-  background: var(--accent-fill);
-  color: var(--accent);
+  background: var(--field);
+  color: var(--secondary);
   cursor: crosshair;
 }
 .flow-port-node:disabled {
@@ -400,12 +400,42 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--accent-fill);
+  background: var(--secondary);
   cursor: crosshair;
 }
 .flow-port:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* A connected port keeps a soft tint of what its line carries: text, a picture or a file. The
+   three colours are this theme's own semantic tokens; a port with no line stays grey. */
+.flow-port[data-connected='true'][data-carry='text'] {
+  background: color-mix(in srgb, var(--added) 55%, var(--sheet));
+}
+.flow-port[data-connected='true'][data-carry='image'] {
+  background: color-mix(in srgb, var(--danger) 55%, var(--sheet));
+}
+.flow-port[data-connected='true'][data-carry='file'] {
+  background: color-mix(in srgb, var(--attention) 55%, var(--sheet));
+}
+.flow-port-node[data-connected='true'][data-carry='text'] {
+  background: color-mix(in srgb, var(--added) 40%, var(--sheet));
+}
+.flow-port-node[data-connected='true'][data-carry='image'] {
+  background: color-mix(in srgb, var(--danger) 40%, var(--sheet));
+}
+.flow-port-node[data-connected='true'][data-carry='file'] {
+  background: color-mix(in srgb, var(--attention) 40%, var(--sheet));
+}
+.flow-port-node[data-connected='true'][data-carry='text'] {
+  color: var(--added);
+}
+.flow-port-node[data-connected='true'][data-carry='image'] {
+  color: var(--danger);
+}
+.flow-port-node[data-connected='true'][data-carry='file'] {
+  color: var(--attention);
 }
 
 /* Status chips: icon and words */
@@ -590,4 +620,78 @@
   .flow-merge-note {
     transition: none;
   }
+}
+
+/* A step's name: click the card's title to rename it, Enter saves and Escape cancels. */
+.flow-node-title {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.flow-node-title:hover {
+  color: var(--accent);
+}
+.flow-node-title:focus-visible,
+.flow-node-name:focus-visible,
+.flow-search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.flow-node-name {
+  width: 100%;
+  min-height: 22px;
+  padding: 2px 4px;
+  font-size: var(--text-callout);
+}
+.flow-search {
+  width: 170px;
+  min-height: 28px;
+}
+.flow-node[data-matched='false'] {
+  opacity: 0.35;
+}
+
+/* While a step runs, the card keeps its height as the activity text changes. */
+.flow-node-bottom {
+  min-width: 0;
+}
+.flow-node-progress {
+  height: 46px;
+  overflow: hidden;
+}
+
+/* The composer under a selected picture or clip card. */
+.flow-composer-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 300px;
+  z-index: 3;
+}
+.flow-composer {
+  padding: 10px;
+  border-radius: var(--radius-m);
+  background: var(--sheet);
+  box-shadow: var(--shadow-m);
+}
+.flow-composer-prompt {
+  min-height: 64px;
+}
+.flow-composer-picture {
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--group);
+}
+
+/* A step's newest result file, with arrows to the older ones. */
+.flow-step-result {
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  background: rgba(var(--text-rgb), 0.05);
 }

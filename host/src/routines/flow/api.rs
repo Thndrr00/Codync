@@ -35,6 +35,7 @@ pub const METHODS: &[&str] = &[
     "resolveRoutineFlowConflict",
     "testRoutineFlow",
     "runRoutineFlowFromStep",
+    "renameRoutineFlowStep",
 ];
 
 fn str_arg<'a>(b: &'a Value, key: &str) -> Result<&'a str> {
@@ -93,6 +94,17 @@ fn model_options_arg(b: &Value) -> Result<BTreeMap<String, String>> {
             Ok((id.clone(), value.to_owned()))
         })
         .collect()
+}
+
+/// A step's name: absent or null clears it, text is trimmed, empty clears it too.
+fn name_arg(b: &Value) -> Result<String> {
+    let name = match b.get("name") {
+        None | Some(Value::Null) => String::new(),
+        Some(Value::String(text)) => text.trim().to_owned(),
+        _ => bail!("`name` must be text"),
+    };
+    crate::store::flows::check_name(&name).context("`name` is invalid")?;
+    Ok(name)
 }
 
 fn instruction_arg(b: &Value, required: bool) -> Result<String> {
@@ -188,6 +200,7 @@ pub(super) fn connect(hub: &Hub, routine: &Routine, from: &str, to: &str, instru
         owner_bot_id: routine.bot_id.clone(),
         from_bot_id: from.to_owned(),
         to_bot_id: to.to_owned(),
+        name: String::new(),
         instruction,
         model: None,
         model_options: BTreeMap::new(),
@@ -600,6 +613,33 @@ pub fn call(hub: &Arc<Hub>, method: &str, b: &Value) -> Result<Option<Value>> {
                 _ => bail!("nodeKey must name a bot or a media step"),
             };
             json!({"runId": run_from_step(hub, &routine(hub, routine_id)?, &step)?})
+        }
+        "renameRoutineFlowStep" => {
+            let (routine_id, key) = (id_arg(b, "routineId")?, id_arg(b, "nodeKey")?);
+            routine(hub, routine_id)?;
+            let name = name_arg(b)?;
+            if let Some(media_id) = key.strip_prefix(crate::store::flow_media::PREFIX) {
+                hub.store
+                    .flow_media_in(media_id, routine_id)?
+                    .context("that media step is not part of this routine")?;
+                hub.emit_flow_change(|| {
+                    let change = hub.store.flow_rename_media(media_id, &name)?;
+                    Ok((change.is_some(), change))
+                })?;
+            } else {
+                let target = key.strip_prefix("bot:").context("nodeKey must name a bot or a media step")?;
+                let link = hub
+                    .store
+                    .flow_links(routine_id)?
+                    .into_iter()
+                    .find(|link| link.to_bot_id == target)
+                    .context("no link reaches that step in this routine")?;
+                hub.emit_flow_change(|| {
+                    let change = hub.store.flow_rename_link(&link.id, &name)?;
+                    Ok((change.is_some(), change))
+                })?;
+            }
+            json!({"ok": true})
         }
         _ => {
             let (bot, routine_id) = (id_arg(b, "botId")?, id_arg(b, "routineId")?);

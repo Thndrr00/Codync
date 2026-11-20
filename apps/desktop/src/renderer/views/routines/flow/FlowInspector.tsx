@@ -6,7 +6,7 @@ import { HStack, Spacer, VStack } from '../../../components/Stack'
 import { Text } from '../../../components/Text'
 import { useTr } from '../../../lib/use-language'
 import {
-  botKey, latestStep, mediaKey, statusLabel, stepOf,
+  botKey, latestStep, mediaKey, mediaTitle, statusLabel, stepNameOf, stepOf,
   type FlowCanvas, type FlowLink, type FlowMedia, type FlowRoutineCard, type FlowStep,
 } from '../../../lib/routine-flow.ts'
 import { useStore } from '../../../store/context'
@@ -16,6 +16,7 @@ import { runLabel } from '../routine'
 import type { FlowSelection } from './FlowCanvas'
 import { groupsOf, type FlowGroup } from './flow-groups'
 import { StatusChip } from './FlowNodeCard'
+import { StepResult } from './StepResult'
 
 /** A step, bot or media node the selected step may hand work to. */
 export interface FlowTarget {
@@ -200,28 +201,35 @@ function RoutinePanel({ card, canvas, busy, offline, onTest, onSetEnabled, onAdd
         <Button kind="secondary" disabled={busy || offline} onClick={() => onAddMedia(routine.id, 'image')}>{tr('Add a picture step')}</Button>
         <Button kind="secondary" disabled={busy || offline} onClick={() => onAddMedia(routine.id, 'video')}>{tr('Add a clip step')}</Button>
       </HStack>
-      <Steps card={card} onShowSettings={onShowSettings} />
+      <Steps canvas={canvas} card={card} onShowSettings={onShowSettings} />
       <History card={card} />
     </VStack>
   )
 }
 
 /** The steps of the latest run, one line each, with a bot's error or the start of its answer. */
-function Steps({ card, onShowSettings }: { card: FlowRoutineCard; onShowSettings: (card: FlowRoutineCard, step: FlowStep) => void }) {
+function Steps({ canvas, card, onShowSettings }: { canvas: FlowCanvas; card: FlowRoutineCard; onShowSettings: (card: FlowRoutineCard, step: FlowStep) => void }) {
   const tr = useTr()
   if (card.steps.length === 0) return null
+  const name = (id: string) => {
+    const custom = stepNameOf(canvas, id)
+    if (custom) return custom
+    const media = canvas.mediaNodes.find((node) => mediaKey(node.id) === id)
+    if (media) return tr(mediaTitle(media))
+    return canvas.routines.find((routine) => routine.routine.botId === id)?.routine.name ?? id
+  }
   return (
     <VStack gap={6}>
       <Text size="caption" tone="secondary" weight="semibold">{tr('Latest run')}</Text>
       {card.steps.map((step) => (
         <VStack key={step.id} gap={2} className="flow-step">
           <HStack gap={8}>
-            <Text size="callout" truncate>{step.botId}</Text>
+            <Text size="callout" truncate>{name(step.botId)}</Text>
             <Spacer />
             <StatusChip status={step.status} />
           </HStack>
           {step.error ? <Text size="caption" tone="danger" lines={3}>{step.error}</Text> : null}
-          {step.output ? <Text size="caption" tone="secondary" lines={3}>{step.output}</Text> : null}
+          <StepResult key={step.id} step={step} compact />
           <HStack gap={6}>
             <Spacer />
             <Button kind="secondary" onClick={() => onShowSettings(card, step)}>{tr('Settings')}</Button>
@@ -254,9 +262,10 @@ function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, o
   const step = latestStep(canvas, botId)
   const options = targets(botId)
   const removable = canvas.placedBotIds.includes(botId) && !canvas.links.some((l) => l.fromBotId === botId || l.toBotId === botId)
+  const title = stepNameOf(canvas, botKey(botId)) || bot?.name || tr('Unknown bot')
   return (
     <VStack gap={10} className="flow-inspector">
-      <Text weight="semibold">{bot?.name ?? tr('Unknown bot')}</Text>
+      <Text weight="semibold">{title}</Text>
       <Text size="callout" tone="secondary">{tr('Model')}: {bot?.model || bot?.backend || tr('Default')}</Text>
       <Text size="caption" tone="secondary">{tr('This step uses its agent’s model. Set a model on the link that reaches it to use a different one for a single step.')}</Text>
       <HStack gap={8}>
@@ -271,6 +280,7 @@ function BotPanel({ botId, bot, canvas, busy, offline, targets, onConnectFrom, o
         <Text>{options.length === 0 ? tr('No step to hand on to') : tr('Hand its reply on to…')}</Text>
       </DropdownMenu>
       {removable ? <Button kind="secondary" disabled={busy || offline} onClick={() => onRemoveNode(botKey(botId))}>{tr('Remove from the canvas')}</Button> : null}
+      {step ? <StepResult key={step.id} step={step} /> : null}
       {step?.error ? <Text size="caption" tone="danger" lines={4}>{step.error}</Text> : null}
     </VStack>
   )
@@ -332,7 +342,8 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
   const pick = (chosen: MediaModel) => setDraft({ ...onModel(draft, chosen), prompt: draft.prompt })
   return (
     <VStack gap={10} className="flow-inspector">
-      <Text weight="semibold">{tr(media.kind === 'video' ? 'Clip step' : 'Picture step')}</Text>      <HStack gap={8}>
+      <Text weight="semibold">{media.name?.trim() || tr(media.kind === 'video' ? 'Clip step' : 'Picture step')}</Text>
+      <HStack gap={8}>
         <StatusChip status={step?.status ?? null} />
         <Text size="caption" tone="secondary">{tr(statusLabel(step?.status ?? null))}</Text>
       </HStack>
@@ -442,8 +453,8 @@ function MediaPanel({ media, canvas, busy, offline, targets, onConnectFrom, onSa
       >
         <Text>{options.length === 0 ? tr('No step to hand on to') : tr('Hand its file on to…')}</Text>
       </DropdownMenu>
+      {step ? <StepResult key={step.id} step={step} /> : null}
       {step?.error ? <Text size="caption" tone="danger" lines={4}>{step.error}</Text> : null}
-      {step?.output ? <Text size="caption" tone="secondary" lines={4}>{step.output}</Text> : null}
     </VStack>
   )
 }

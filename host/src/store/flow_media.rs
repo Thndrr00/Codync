@@ -18,6 +18,10 @@ pub const MAX_PROMPT_BYTES: usize = 8_000;
 #[serde(rename_all = "camelCase")]
 pub struct FlowMedia {
     pub id: String,
+    /// A name the person gave this step, shown on the card and to agents reading the flow. Empty
+    /// means "no name": a client falls back to the step's kind. Old steps have no column value.
+    #[serde(default)]
+    pub name: String,
     /// What the clients show as the node's title: the picture step's own words.
     pub kind: String,
     /// The media model (`media::catalog`), which also names the agent backend that makes the file.
@@ -58,11 +62,11 @@ fn row_media(r: &rusqlite::Row) -> rusqlite::Result<FlowMedia> {
         created_at: r.get(9)?,
         routine_id: r.get(10)?,
         owner_bot_id: r.get(11)?,
+        name: r.get(12)?,
     })
 }
 
-const COLUMNS: &str =
-    "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id";
+const COLUMNS: &str = "id, kind, model, prompt, aspect, duration, resolution, transparent, voice, created_at, routine_id, owner_bot_id, name";
 
 fn media_of(c: &Connection, routine_id: &str) -> Result<Vec<FlowMedia>> {
     let mut st =
@@ -136,7 +140,7 @@ impl Store {
         self.with_connection(|c| {
             let tx = c.unchecked_transaction()?;
             tx.execute(
-                &format!("INSERT INTO routine_flow_media({COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"),
+                &format!("INSERT INTO routine_flow_media({COLUMNS}) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"),
                 params![
                     media.id,
                     media.kind,
@@ -149,7 +153,8 @@ impl Store {
                     media.voice,
                     media.created_at,
                     media.routine_id,
-                    media.owner_bot_id
+                    media.owner_bot_id,
+                    media.name
                 ],
             )?;
             let bots = audience(&tx, &media.routine_id, &media.owner_bot_id)?;
@@ -188,6 +193,23 @@ impl Store {
         })
     }
 
+    /// Gives a media step a name; an empty one clears it. Its settings are left alone.
+    pub fn flow_rename_media(&self, id: &str, name: &str) -> Result<Option<super::flows::FlowChange>> {
+        super::flows::check_name(name)?;
+        self.with_connection(|c| {
+            let tx = c.unchecked_transaction()?;
+            let gone = tx.execute("UPDATE routine_flow_media SET name = ?2 WHERE id = ?1", params![id, name])?;
+            if gone == 0 {
+                return Ok(None);
+            }
+            let Some(media) = media_of_id(&tx, id)? else { return Ok(None) };
+            let bots = audience(&tx, &media.routine_id, &media.owner_bot_id)?;
+            let change = touch(&tx, bots)?;
+            tx.commit()?;
+            Ok(change)
+        })
+    }
+
     /// Takes a node off the flow with its links, its place on every canvas and its stored runs.
     pub fn flow_remove_media(&self, id: &str) -> Result<Option<super::flows::FlowChange>> {
         self.with_connection(|c| {
@@ -218,6 +240,7 @@ fn media_of_id(c: &Connection, id: &str) -> Result<Option<FlowMedia>> {
 pub fn new_media(id: String, routine_id: String, owner_bot_id: String) -> FlowMedia {
     FlowMedia {
         id,
+        name: String::new(),
         kind: "image".into(),
         model: String::new(),
         prompt: String::new(),
@@ -229,5 +252,24 @@ pub fn new_media(id: String, routine_id: String, owner_bot_id: String) -> FlowMe
         created_at: now_ms(),
         routine_id,
         owner_bot_id,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_media_step_name_is_saved_and_can_be_cleared() {
+        let store = Store::open(std::path::Path::new(":memory:")).expect("a store");
+        let mut media = new_media("m1".into(), "r".into(), "a".into());
+        media.model = "gpt-image".into();
+        store.flow_add_media(&media).expect("the step is added");
+        assert_eq!(store.flow_media_node("m1").unwrap().unwrap().name, "", "a fresh step is unnamed");
+        store.flow_rename_media("m1", "Hero shot").unwrap();
+        assert_eq!(store.flow_media_node("m1").unwrap().unwrap().name, "Hero shot");
+        assert_eq!(store.flow_media_node("m1").unwrap().unwrap().model, "gpt-image", "settings are untouched");
+        store.flow_rename_media("m1", "").unwrap();
+        assert_eq!(store.flow_media_node("m1").unwrap().unwrap().name, "");
     }
 }

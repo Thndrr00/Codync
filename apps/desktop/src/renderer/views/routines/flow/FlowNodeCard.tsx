@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent, PointerEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import type { Bot } from '@shared/models'
 import { BotAvatar } from '../../../components/Avatar'
 import { Icon } from '../../../components/Icon'
@@ -98,19 +98,41 @@ interface Props {
   onStop?: () => void
   /** Opens this step's menu (Run from this step, Settings, Duplicate); not on routine cards. */
   onMenu?: (anchor: { x: number; top: number; bottom: number }) => void
+  /** The custom name of this step, or '' when it has none. */
+  stepName: string
+  /** Clicking the title edits the name; absent on a routine card. */
+  onRename?: (name: string) => void
+  /** What the running step is doing, the step before it and how many steps are done. */
+  progress?: { activity: string; previous: string; done: number; total: number } | null
+  /** What this node's output port carries, and whether a line leaves it. */
+  carry: 'text' | 'image' | 'file'
+  connected: boolean
+  /** Dimmed while the canvas search looks for another node. */
+  matched: boolean
 }
 
 /** One node of the canvas: a routine with its week and last runs, a bot with its latest step, or a step that makes a picture or a clip. */
-export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop, onMenu }: Props) {
+export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnected, selected, connectTarget, disabled, onSelect, onDragStart, onPortStart, onKey, onRun, onStop, onMenu, stepName, onRename, progress, carry, connected, matched }: Props) {
   const tr = useTr()
-  const title = node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : (bot?.name ?? tr('Unknown bot'))
+  const title = stepName || (node.kind === 'routine' ? (routine?.routine.name ?? '') : node.kind === 'media' ? tr(mediaTitle(media ?? null)) : (bot?.name ?? tr('Unknown bot')))
   const kindName = node.kind === 'routine' ? tr('Routine') : node.kind === 'media' ? tr(media?.kind === 'video' ? 'Clip step' : 'Picture step') : tr('Bot')
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(stepName)
+  useEffect(() => setDraft(stepName), [stepName])
+  useEffect(() => { if (!onRename) setEditing(false) }, [onRename])
+  const commit = () => {
+    if (!onRename) return
+    const next = draft.trim()
+    if (next !== stepName) onRename(next)
+    setEditing(false)
+  }
   return (
     <div
       className="flow-node"
       data-kind={node.kind}
       data-selected={selected}
       data-target={connectTarget}
+      data-matched={matched ? undefined : 'false'}
       role="button"
       tabIndex={0}
       aria-label={`${kindName}: ${title}`}
@@ -133,7 +155,36 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
           <Icon name="questionmark.circle" size={26} />
         )}
         <VStack gap={2} shrink>
-          <Text weight="semibold" truncate>{title}</Text>
+          {editing && onRename ? (
+            <input
+              className="routine-input flow-node-name"
+              aria-label={tr('Step name')}
+              placeholder={tr('Step name')}
+              value={draft}
+              maxLength={200}
+              autoFocus
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                event.stopPropagation()
+                if (event.key === 'Enter') commit()
+                else if (event.key === 'Escape') setEditing(false)
+              }}
+              onBlur={commit}
+            />
+          ) : onRename ? (
+            <button
+              type="button"
+              className="flow-node-title"
+              title={tr('Click to rename this step')}
+              aria-label={`${tr('Step name')}: ${title}. ${tr('Click to rename this step')}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); setDraft(stepName); setEditing(true) }}
+            >
+              <Text weight="semibold" truncate>{title}</Text>
+            </button>
+          ) : (
+            <Text weight="semibold" truncate>{title}</Text>
+          )}
           {node.kind === 'bot' ? (
             <Text size="caption" tone="secondary" truncate>{bot?.model || bot?.backend || ''}</Text>
           ) : node.kind === 'media' ? (
@@ -202,12 +253,29 @@ export function FlowNodeCard({ node, x, y, bot, routine, media, step, unconnecte
           </HStack>
         </>
       ) : (
-        <StatusChip status={step?.status ?? null} />
+        <VStack gap={4} className="flow-node-bottom">
+          <StatusChip status={step?.status ?? null} />
+          {progress ? (
+            <div className="flow-node-progress" aria-live="polite">
+              <Text size="caption" tone="secondary" truncate title={progress.activity}>
+                {progress.activity || tr('Working…')}
+              </Text>
+              <Text size="caption" tone="secondary" truncate>
+                {progress.previous ? `${tr('After')}: ${progress.previous}` : tr('First step')}
+              </Text>
+              <Text size="caption" tone="secondary">
+                {tr('{done} of {total} steps done').replace('{done}', String(progress.done)).replace('{total}', String(progress.total))}
+              </Text>
+            </div>
+          ) : null}
+        </VStack>
       )}
       {node.kind !== 'routine' ? (
         <button
           type="button"
           className="flow-port"
+          data-carry={carry}
+          data-connected={connected ? 'true' : undefined}
           title={tr(node.kind === 'media' ? 'Drag to another bot or step to hand its file on' : 'Drag to another bot to hand its reply on')}
           aria-label={tr('Connect from this step')}
           disabled={disabled}

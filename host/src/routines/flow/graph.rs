@@ -164,6 +164,7 @@ mod tests {
             owner_bot_id: "a".into(),
             from_bot_id: from.into(),
             to_bot_id: to.into(),
+            name: String::new(),
             instruction: String::new(),
             model: None,
             model_options: BTreeMap::new(),
