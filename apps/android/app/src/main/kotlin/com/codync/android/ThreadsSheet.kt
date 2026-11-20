@@ -34,12 +34,22 @@ import com.codync.android.design.*
  * side conversation: opening one puts it over the chat, and long-pressing a row renames, archives
  * or deletes it.
  */
-@Composable internal fun ThreadsSheet(bot: Bot, state: AppState, store: AppStore, close: () -> Unit) {
+@Composable internal fun ThreadsSheet(bot: Bot, state: AppState, store: AppStore, openThreadId: String?, close: () -> Unit) {
     var archived by remember(bot.id) { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
     var renaming by remember { mutableStateOf<ThreadInfo?>(null) }
     var draftTitle by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<ThreadInfo?>(null) }
-    val threads = (if (archived) state.archivedThreads else state.threads)[bot.id].orEmpty()
+    val allThreads = (if (archived) state.archivedThreads else state.threads)[bot.id].orEmpty()
+    // A free-text filter over titles and last lines, using the host search's case-insensitive
+    // all-words rule. The thread the chat is showing stays in the list so its place isn't lost.
+    val words = query.split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val threads = if (words.isEmpty()) allThreads else allThreads.filter { thread ->
+        thread.id == openThreadId || words.all { word ->
+            listOfNotNull(thread.name, thread.title, thread.lastText, thread.branchText)
+                .joinToString(" ").contains(word, ignoreCase = true)
+        }
+    }
     LaunchedEffect(bot.id, archived) { store.refreshThreads(bot.id, archived) }
     Column(Modifier.fillMaxSize().background(Palette.background)) {
         ModalHeader(tr("Threads"), trailing = {
@@ -50,6 +60,7 @@ import com.codync.android.design.*
         })
         SegmentedChoice(archived, listOf(false to tr("Open"), true to tr("Archived")), { archived = it },
             Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+        SearchField(query, { query = it }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), prompt = tr("Search threads"))
         Text(tr("A thread keeps one side conversation apart from the chat."), style = Type.caption, color = Palette.secondary,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         Hairline()
@@ -62,10 +73,10 @@ import com.codync.android.design.*
                     delete = { deleting = thread })
             }
             if (threads.isEmpty() && ("threads:" + bot.id + ":" + archived) !in state.busy) item("empty") {
-                Text(
-                    if (archived) tr("Nothing archived.") else tr("No threads yet. Open one from the menu, or branch from a message."),
-                    style = Type.body, color = Palette.secondary, modifier = Modifier.padding(vertical = 12.dp),
-                )
+                val message = if (words.isNotEmpty()) tr("No threads match your search.")
+                    else if (archived) tr("Nothing archived.")
+                    else tr("No threads yet. Open one from the menu, or branch from a message.")
+                Text(message, style = Type.body, color = Palette.secondary, modifier = Modifier.padding(vertical = 12.dp))
             }
         }
     }

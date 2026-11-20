@@ -210,9 +210,11 @@ struct UserBubble: View {
             Text(L10n.tr("Sending…")).font(.caption2).foregroundStyle(Palette.tertiary)
         case "failed":
             HStack(spacing: 10) {
-                Text(L10n.tr("Failed to send")).foregroundStyle(Palette.danger)
-                Button(L10n.tr("Resend"), systemImage: "arrow.clockwise") { model.retry(entry) }.labelStyle(.iconOnly).help("Resend")
-                Button(L10n.tr("Delete"), systemImage: "trash") { model.discard(entry) }.labelStyle(.iconOnly).help("Delete")
+                Label(L10n.tr("Failed to send"), systemImage: "exclamationmark.circle.fill").foregroundStyle(Palette.danger)
+                Button(L10n.tr("Resend"), systemImage: "arrow.clockwise") { model.retry(entry) }
+                    .labelStyle(.iconOnly).help("Resend").accessibilityLabel(L10n.tr("Resend"))
+                Button(L10n.tr("Delete"), systemImage: "trash") { model.discard(entry) }
+                    .labelStyle(.iconOnly).help("Delete").accessibilityLabel(L10n.tr("Delete"))
             }
             .buttonStyle(.plain)
             .font(.caption2.bold())
@@ -229,7 +231,15 @@ struct UserBubble: View {
             .buttonStyle(.plain)
             .font(.caption2)
         case "delivering":
-            Text(L10n.tr("Delivered to the computer")).font(.caption2).foregroundStyle(Palette.tertiary)
+            Label(L10n.tr("Delivered to the computer"), systemImage: "checkmark.circle")
+                .font(.caption2).foregroundStyle(Palette.tertiary)
+                .accessibilityLabel(L10n.tr("Delivered"))
+        // The state the host already sends for a message that got through; no extra polling.
+        case "sent", "delivered":
+            Image(systemName: "checkmark.circle.fill")
+                .font(.caption2)
+                .foregroundStyle(Palette.accent)
+                .accessibilityLabel(L10n.tr("Delivered"))
         default:
                 EmptyView()
         }

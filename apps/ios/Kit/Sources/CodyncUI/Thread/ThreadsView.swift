@@ -6,17 +6,33 @@ import SwiftUI
 /// renames, archives or deletes it.
 struct ThreadsView: View {
     let botId: String
+    /// The thread the chat is showing now: it stays in the list while a filter is applied.
+    var openThreadId: String?
     /// Tells the chat to open a thread.
     let open: (String) -> Void
     @Environment(BotStore.self) private var model
     @Environment(\.dismissModal) private var dismiss
     @State private var archived = false
+    @State private var query = ""
     @State private var renaming: ThreadInfo?
     @State private var draftTitle = ""
     @State private var deleting: ThreadInfo?
 
-    private var threads: [ThreadInfo] {
+    private var allThreads: [ThreadInfo] {
         (archived ? model.archivedThreads : model.threads)[botId] ?? []
+    }
+
+    /// Titles and last lines are searched with the host's own case-insensitive word rule; the
+    /// thread currently open is kept so the reader never loses their place while narrowing the list.
+    private var threads: [ThreadInfo] {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return allThreads }
+        return allThreads.filter { thread in
+            if thread.id == openThreadId { return true }
+            let haystack = [thread.name, thread.title, thread.lastText, thread.branchText]
+                .compactMap { $0 }.joined(separator: " ").lowercased()
+            return words.allSatisfy { haystack.contains($0.lowercased()) }
+        }
     }
 
     var body: some View {
@@ -31,6 +47,9 @@ struct ThreadsView: View {
             SegmentedChoice(selection: $archived, options: [(id: false, label: "Open"), (id: true, label: "Archived")])
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
+            SearchField("Search threads", text: $query)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
             Text(L10n.tr("A thread keeps one side conversation apart from the chat."))
                 .font(.caption)
                 .foregroundStyle(Palette.secondary)
@@ -49,8 +68,7 @@ struct ThreadsView: View {
                                   delete: { deleting = thread })
                     }
                     if threads.isEmpty {
-                        Text(archived ? L10n.tr("Nothing archived.")
-                             : L10n.tr("No threads yet. Open one from the menu, or branch from a message."))
+                        Text(emptyMessage)
                             .font(.body)
                             .foregroundStyle(Palette.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,6 +90,12 @@ struct ThreadsView: View {
             guard let thread = deleting else { return [] }
             return [DialogAction("Delete thread", destructive: true) { model.deleteThread(thread.id, botId: botId) }]
         }
+    }
+
+    private var emptyMessage: String {
+        if !query.isEmpty { return L10n.tr("No threads match your search.") }
+        return archived ? L10n.tr("Nothing archived.")
+            : L10n.tr("No threads yet. Open one from the menu, or branch from a message.")
     }
 
     private func authorName(_ author: String?) -> String? {

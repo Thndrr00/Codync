@@ -179,7 +179,7 @@ import com.kyant.shapes.RoundedRectangle
     CodyncSheet(state.thread, { store.openBot(bot.id) }) { root -> RepliesView(bot, root, state, store, connect) }
     CodyncSheet(state.trace, { store.showTrace(false) }) { TraceView(bot, state.thread, state) }
     CodyncSheet(searching, { searching = false }) { ConversationSearch(bot, store) { searching = false } }
-    CodyncSheet(threadsOpen, { threadsOpen = false }) { ThreadsSheet(bot, state, store) { threadsOpen = false } }
+    CodyncSheet(threadsOpen, { threadsOpen = false }) { ThreadsSheet(bot, state, store, state.thread) { threadsOpen = false } }
     CodyncSheet(pinsOpen, { pinsOpen = false }) { PinsSheet(bot, state, store) { pinsOpen = false } }
     CodyncSheet(routines, { routines = false }, detents = setOf(SheetDetent.Medium, SheetDetent.Expanded), initialDetent = SheetDetent.Expanded) {
         RoutinesScreen(bot, state, store, routineId)

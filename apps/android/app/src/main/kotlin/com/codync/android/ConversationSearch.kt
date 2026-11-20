@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +46,7 @@ import com.kyant.shapes.RoundedRectangle
 /** The screen renders the host-backed model; request and account lifetimes stay outside the view. */
 @Composable internal fun ConversationSearch(bot: Bot, store: AppStore, close: () -> Unit) {
     val appState by store.state.collectAsStateWithLifecycle()
+    val reduced = reduceMotion()
     val parentScope = rememberCoroutineScope()
     val model = remember(store, bot.id, appState.contextId, appState.generation, appState.computer?.id, appState.loading) {
         ConversationSearchModel(AppStoreConversationSearchHost(store), bot.id, parentScope)
@@ -60,7 +62,7 @@ import com.kyant.shapes.RoundedRectangle
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Column(Modifier.animateContentSize(Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.animateContentSize(if (reduced) snap() else Motion.layoutSize), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (state.shortcutPhase == ShortcutPhase.Ready) {
                         SegmentedChoice(state.location, MessageSearchScope.entries.map { it to it.title }, model::updateScope)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -69,8 +71,9 @@ import com.kyant.shapes.RoundedRectangle
                                 action = model::toggleShortcuts)
                             SecondaryButton("Save search", enabled = state.query.isNotBlank() && !state.shortcutBusy, action = model::save)
                         }
-                        AnimatedVisibility(state.showShortcuts, enter = fadeIn(Motion.fade()) + expandVertically(Motion.layoutSize),
-                            exit = fadeOut(Motion.fade()) + shrinkVertically(Motion.layoutSize)) {
+                        AnimatedVisibility(state.showShortcuts,
+                            enter = fadeIn(if (reduced) snap() else Motion.fade()) + expandVertically(if (reduced) snap() else Motion.layoutSize),
+                            exit = fadeOut(if (reduced) snap() else Motion.fade()) + shrinkVertically(if (reduced) snap() else Motion.layoutSize)) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 if (state.shortcuts.isEmpty()) Text("No saved searches yet.", style = Type.caption, color = Palette.secondary)
                                 for (shortcut in state.shortcuts) SavedSearchRow(shortcut, !state.shortcutBusy,
@@ -86,6 +89,23 @@ import com.kyant.shapes.RoundedRectangle
                             SecondaryButton("Retry saved searches", action = model::loadShortcuts)
                         }
                     }
+                }
+            }
+            // The date bound is the host channel-history `since`; author and "has file" read the
+            // message's context. All three reuse the shared search controls.
+            item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) {
+                            ChoicePicker(state.dateRange, SearchDateRange.entries.map { it to tr(it.title) },
+                                model::updateDateRange, label = tr("Date"))
+                        }
+                        CodyncSwitch(state.hasFile, model::updateHasFile, Modifier.weight(1f)) {
+                            Text(tr("Has file"), style = Type.caption)
+                        }
+                    }
+                    SearchField(state.author, model::updateAuthor, prompt = tr("Author"))
                 }
             }
             if (state.error != null) item {
@@ -128,6 +148,12 @@ import com.kyant.shapes.RoundedRectangle
     val accent = Palette.accent
     Row(Modifier.fillMaxWidth().clip(RoundedRectangle(14.dp)).background(Palette.surface)
         .clickable(role = Role.Button, onClick = open)
+        .semantics(mergeDescendants = true) {
+            contentDescription = listOfNotNull(
+                if (hit.threadId != null) tr("In a thread") else tr("Main chat"),
+                RelativeTime.day(hit.createdAt), hit.text.ifBlank { "Message" },
+            ).joinToString(", ")
+        }
         .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(highlightMatch(hit.text.ifBlank { "…" }, query, accent), style = Type.chatSubheadline, color = Palette.text, maxLines = 2, overflow = TextOverflow.Ellipsis)

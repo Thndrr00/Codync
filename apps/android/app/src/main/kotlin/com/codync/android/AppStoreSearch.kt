@@ -51,6 +51,12 @@ suspend fun AppStore.saveSearch(query: String, searchScope: String): List<Search
 suspend fun AppStore.deleteSavedSearch(id: String): List<SearchShortcut> =
     searchShortcuts(hostQuery("deleteSavedSearch", body("id" to id)))
 
+/** The span around a message, used by search filters and the hit preview without changing the mirror. */
+suspend fun AppStore.messageContext(botId: String, entryId: String): List<Entry> {
+    val response = hostQuery("messageContext", body("botId" to botId, "entryId" to entryId))
+    return response.jsonObject.getValue("entries").jsonArray.map { Entry.decode(it.jsonObject) }
+}
+
 /** Loads the span around a hit into the mirror, so the jump has its message and neighbours. */
 suspend fun AppStore.loadMessageContext(botId: String, entryId: String) {
     val response = hostQuery("messageContext", body("botId" to botId, "entryId" to entryId))

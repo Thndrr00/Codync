@@ -69,26 +69,42 @@ public extension View {
     func contextActions(reactions: ReactionPick? = nil, _ items: @escaping () -> [MenuItem]) -> some View {
         modifier(ContextActions(items: items, reactions: reactions))
     }
+
+    /// The same menu with a preview for the system context menu's long-press preview (the roster).
+    func contextActions<Preview: View>(@ViewBuilder preview: () -> Preview, _ items: @escaping () -> [MenuItem]) -> some View {
+        modifier(ContextActions(items: items, reactions: nil, preview: AnyView(preview())))
+    }
 }
 
 private struct ContextActions: ViewModifier {
     let items: () -> [MenuItem]
     let reactions: ReactionPick?
+    var preview: AnyView?
     @State private var latest = LatestMenuRows()
 
     func body(content: Content) -> some View {
-        content.contextMenu {
-            if let reactions {
-                ControlGroup {
-                    ForEach(reactions.emoji, id: \.self) { emoji in
-                        let chosen = reactions.chosen.contains(emoji)
-                        Toggle(isOn: Binding(get: { chosen }, set: { _ in reactions.toggle(emoji) })) { Text(emoji) }
-                    }
-                }
-                .controlGroupStyle(.palette)
+        if let preview {
+            content.contextMenu {
+                menu
+            } preview: {
+                preview
             }
-            MenuRows(rows: latest.holding(items()), latest: latest).equatable()
+        } else {
+            content.contextMenu { menu }
         }
+    }
+
+    @ViewBuilder private var menu: some View {
+        if let reactions {
+            ControlGroup {
+                ForEach(reactions.emoji, id: \.self) { emoji in
+                    let chosen = reactions.chosen.contains(emoji)
+                    Toggle(isOn: Binding(get: { chosen }, set: { _ in reactions.toggle(emoji) })) { Text(emoji) }
+                }
+            }
+            .controlGroupStyle(.palette)
+        }
+        MenuRows(rows: latest.holding(items()), latest: latest).equatable()
     }
 }
 

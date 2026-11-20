@@ -3,6 +3,7 @@ package com.codync.android
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.util.Calendar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,12 +15,33 @@ import kotlinx.coroutines.launch
 internal enum class MessageSearchScope(val wire: String, val title: String) {
     All("all", "All"), Main("main", "Main chat"), Threads("threads", "Threads")
 }
+
+/** The date filter; `since` is the host channel-history bound computed from the phone's clock. */
+internal enum class SearchDateRange(val title: String, val days: Int?) {
+    Any("Any time", null), Today("Today", 0), Week("Past week", 7), Month("Past month", 30);
+
+    fun since(): Long {
+        if (days == null) return 0L
+        val calendar = Calendar.getInstance()
+        if (days == 0) {
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+        } else calendar.add(Calendar.DAY_OF_YEAR, -days!!)
+        return calendar.timeInMillis
+    }
+}
+
 internal enum class SearchPhase { Idle, Searching, LoadingMore, Ready, Failed }
 internal enum class ShortcutPhase { Loading, Ready, Unavailable }
 
 internal data class ConversationSearchState(
     val query: String = "",
     val location: MessageSearchScope = MessageSearchScope.All,
+    val dateRange: SearchDateRange = SearchDateRange.Any,
+    val author: String = "",
+    val hasFile: Boolean = false,
     val hits: List<SearchHit> = emptyList(),
     val next: Long? = null,
     val phase: SearchPhase = SearchPhase.Idle,
@@ -67,6 +89,24 @@ internal class ConversationSearchModel(
     fun updateScope(location: MessageSearchScope) {
         if (!active() || state.shortcutPhase != ShortcutPhase.Ready || location == state.location) return
         state = state.copy(location = location)
+        search()
+    }
+
+    fun updateDateRange(range: SearchDateRange) {
+        if (!active() || range == state.dateRange) return
+        state = state.copy(dateRange = range)
+        search()
+    }
+
+    fun updateAuthor(author: String) {
+        if (!active() || author == state.author) return
+        state = state.copy(author = author)
+        search()
+    }
+
+    fun updateHasFile(hasFile: Boolean) {
+        if (!active() || hasFile == state.hasFile) return
+        state = state.copy(hasFile = hasFile)
         search()
     }
 
@@ -160,7 +200,16 @@ internal class ConversationSearchModel(
                 if (!more) delay(300)
                 if (!current(request)) return@launch
                 val page = host.searchMessages(botId, query, before, location.wire)
-                if (current(request)) state = state.copy(hits = previous + page.hits, next = page.next, phase = SearchPhase.Ready)
+                // Date is in the hit the host already returned; author and "has file" need the
+                // message itself, read from the same host context the jump uses.
+                val since = state.dateRange.since()
+                var matched = page.hits.filter { it.createdAt >= since }
+                if (state.author.isNotBlank() || state.hasFile) {
+                    val author = state.author.trim()
+                    val hasFile = state.hasFile
+                    matched = matched.filter { hit -> host.matchesFilters(botId, hit.id, author, hasFile) }
+                }
+                if (current(request)) state = state.copy(hits = previous + matched, next = page.next, phase = SearchPhase.Ready)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (current(request)) state = state.copy(phase = SearchPhase.Failed, error = error.message ?: "Search failed.")

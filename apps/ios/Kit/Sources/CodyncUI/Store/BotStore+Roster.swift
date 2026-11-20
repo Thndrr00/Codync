@@ -21,9 +21,14 @@ extension BotStore {
     }
 
     public func rosterContext(_ hit: RosterSearchHit) async throws -> [Entry] {
+        try await messageContext(botId: hit.botId, entryId: hit.id)
+    }
+
+    /// The span around one message, used to jump to a chat-search hit without new wire fields.
+    public func messageContext(botId: String, entryId: String) async throws -> [Entry] {
         struct Response: Decodable { let entries: [Entry] }
         let client = try await ready()
-        let response: Response = try await client.call("messageContext", ["botId": hit.botId, "entryId": hit.id])
+        let response: Response = try await client.call("messageContext", ["botId": botId, "entryId": entryId])
         try Task.checkCancellation()
         return response.entries.visibleEntries()
     }

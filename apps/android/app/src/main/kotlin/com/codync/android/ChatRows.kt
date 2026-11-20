@@ -359,6 +359,15 @@ internal val Entry.reactions: List<String> get() = (data["reactions"] as? JsonAr
 }
 
 @Composable private fun SendStatusLine(status: String?, working: Boolean = false) {
+    // sent/delivered/delivering are the states the host already sends; no new polling or wire field.
+    if (status == "sent" || status == "delivered") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.semantics { contentDescription = tr("Delivered") }) {
+            Symbol("checkmark.circle.fill", size = 12.dp, tint = Palette.accent)
+            Text(tr("Delivered"), style = Type.caption2, color = Palette.tertiary)
+        }
+        return
+    }
     val text = when (status) {
         "sending" -> if (working) "Waiting for the bot to finish" else "Sending\u2026"
         "cancelled" -> "Not sent \u2014 stopped"

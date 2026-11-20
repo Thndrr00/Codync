@@ -18,6 +18,8 @@ public struct ThreadView: View {
     @State var showingThreads = false
     /// Whether the chat's pin list is showing.
     @State var showingPins = false
+    /// Whether the chat's message search is showing.
+    @State var showingSearch = false
     @State var botChat: BotChatTarget?
     @State var openArtifact: ArtifactTarget?
     @State var openCall: Entry?
@@ -86,7 +88,18 @@ public struct ThreadView: View {
             }
             .codyncSheet(item: $openThread) { ThreadSheet(botId: botId, root: $0.root) }
             .codyncSheet(isPresented: $showingThreads) {
-                ThreadsView(botId: botId) { root in openThread = ThreadTarget(botId: botId, root: root) }
+                ThreadsView(botId: botId, openThreadId: openThread?.root) { root in
+                    openThread = ThreadTarget(botId: botId, root: root)
+                }
+            }
+            .codyncSheet(isPresented: $showingSearch) {
+                ChatSearchView(botId: botId) { hit in
+                    // A match in a thread opens that thread; a main-chat match is already on screen,
+                    // where the search sheet left the message highlighted in its context.
+                    if let threadId = hit.threadId {
+                        openThread = ThreadTarget(botId: botId, root: threadId)
+                    }
+                }
             }
             .codyncSheet(isPresented: $showingPins) {
                 PinsSheet(botId: botId) { root in openThread = ThreadTarget(botId: botId, root: root) }
@@ -476,8 +489,15 @@ extension ThreadView {
                 if model.screen != nil {
                     ToolbarItem(placement: .topBarTrailing) { computerButton }
                 }
+                ToolbarItem(placement: .topBarTrailing) { searchButton }
                 ToolbarItem(placement: .topBarTrailing) { pinButton }
             }
+    }
+
+    /// Opens the chat's message search, which reads the same host history the roster does.
+    private var searchButton: some View {
+        Button(L10n.tr("Search messages"), systemImage: "magnifyingglass") { showingSearch = true }
+            .accessibilityLabel(L10n.tr("Search messages"))
     }
 
     /// Like Grok Bot: the bot at the top opens its details (a group's editor for a group).
