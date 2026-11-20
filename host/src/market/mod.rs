@@ -34,6 +34,7 @@ pub mod oauth;
 pub mod openbot;
 pub mod passwords;
 pub mod requests;
+pub mod templates;
 pub mod vault;
 pub mod verify;
 
