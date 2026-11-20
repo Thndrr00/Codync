@@ -220,6 +220,7 @@ function BotLoginsSection() {
   const [totp, setTotp] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const bots = [...store.bots.values()].filter((bot) => !isGroup(bot))
 
   const load = async () => {
@@ -265,6 +266,19 @@ function BotLoginsSection() {
     }
   }
 
+  /** The host computes the six-digit code; only the code reaches the clipboard, never its seed. */
+  const copyCode = async (login: BotSecret) => {
+    const client = store.client
+    if (!client) return
+    try {
+      const result = await client.call<{ code: string }>('credentialBotLoginCode', { id: login.id })
+      window.codync.app.copy(result.code)
+      setCopiedCode(login.id)
+    } catch (e) {
+      setError(errorText(e))
+    }
+  }
+
   return (
     <CardSection title="Bot logins" footer="Bots use these for sign-in and two-factor codes. Passwords and 2FA seeds stay on this computer; the bot never sees them.">
       {logins.map((login) => (
@@ -274,6 +288,13 @@ function BotLoginsSection() {
             <Text size="caption" tone="secondary">{`${login.botName ?? 'A removed bot'} · ${login.username ?? ''} · ${login.origin ?? ''}`}</Text>
           </VStack>
           <Text size="caption" tone="secondary">{login.hasTotp ? tr('2FA set') : tr('No 2FA')}</Text>
+          {login.hasTotp ? (
+            <IconButton
+              title={copiedCode === login.id ? tr('Copied') : tr('Copy code')}
+              icon={copiedCode === login.id ? 'checkmark' : 'doc.on.doc'}
+              onClick={() => void copyCode(login)}
+            />
+          ) : null}
           <IconButton title="Remove" icon="trash" onClick={() => void remove(login)} />
         </HStack>
       ))}

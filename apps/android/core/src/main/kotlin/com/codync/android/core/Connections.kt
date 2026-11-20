@@ -62,12 +62,14 @@ fun externalHttps(value: String): URI {
 @Serializable data class ConnectionRequest(val kind: String, val status: String, val title: String, val botId: String,
     val toolkit: String? = null, val registryName: String? = null, val connectorId: String? = null,
     val field: String? = null, val location: String? = null, val site: String? = null,
-    val backend: String? = null, val logo: String? = null) {
+    val backend: String? = null, val logo: String? = null,
+    /** MCP header requests: header name to masked value; the real values stay encrypted in the host. */
+    val headers: Map<String, String> = emptyMap()) {
     val canConnect: Boolean get() = status == "pending" && when (kind) {
         "login", "secret" -> true
         "agent" -> !backend.isNullOrBlank()
         "app" -> !toolkit.isNullOrBlank()
-        "connection" -> !connectorId.isNullOrBlank() || !registryName.isNullOrBlank()
+        "connection", "headers" -> !connectorId.isNullOrBlank() || !registryName.isNullOrBlank()
         else -> false
     }
 }

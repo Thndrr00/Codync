@@ -451,6 +451,8 @@ public struct ConnectionRequest: Codable, Hashable, Sendable {
     public var backend: String?
     /// App requests: the app's logo, when Composio lists it.
     public var logo: String?
+    /// MCP header requests: header name to masked value. The real values stay encrypted in the host.
+    public var headers: [String: String]?
 }
 
 /// A saved website or app login; the password stays on the computer.

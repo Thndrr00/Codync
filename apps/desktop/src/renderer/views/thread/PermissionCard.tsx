@@ -35,6 +35,13 @@ export const permissionHeadline = (toolKind?: string) => {
   }
 }
 
+/** The host puts this note and one agent name per line in a deletion approval's details. */
+const deletionNote = 'Only the owner can approve this deletion.'
+const isDeletionApproval = (d: Entry['data']) =>
+  !!d.detail?.includes(deletionNote) && ['Delete agents', 'Delete an agent'].includes(d.title ?? '')
+const deletionAgents = (d: Entry['data']) =>
+  (d.detail ?? '').split('\n\n').slice(1).join('\n\n').split('\n').map((name) => name.trim()).filter(Boolean)
+
 const rank: Record<string, number> = { allow_once: 0, allow_always: 1, reject_once: 2, reject_always: 3 }
 
 /** Allow before deny, once before always. */
@@ -70,6 +77,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
   const [always, setAlways] = useState<{ option: PermissionOption; proposal: RuleProposal; pattern: string } | null>(null)
   const d = entry.data
   const pending = d.status === 'pending'
+  const deletion = isDeletionApproval(d)
   const hasDetail = !!d.command || !!d.detail || !!d.diffs?.length
   const options = sortedOptions(d.options ?? [])
   const once = options.find((o) => o.kind === 'allow_once')
@@ -90,7 +98,7 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
     <div className="agent-inset">
       <VStack gap={10} className={`permission-card t-input-shake ${rejectedShake ? "is-invalid" : ""}`}>
         <HStack gap={8}>
-          <Text size="headline" tone="text">{permissionHeadline(d.toolKind)}</Text>
+          <Text size="headline" tone="text">{deletion ? tr('Wants to delete agents') : permissionHeadline(d.toolKind)}</Text>
           {pending ? <span className="permission-card-dot" /> : null}
         </HStack>
         <Text as="div" size="subheadline" mono tone="secondary" lines={expanded ? undefined : 3} className="selectable permission-card-title">
@@ -100,7 +108,14 @@ export function PermissionCard({ entry, hostName, answering, respond, propose }:
           <Icon name="desktopcomputer" size={10} color="var(--tertiary)" />
           <Text size="caption" tone="tertiary">{fill(tr('Runs on {name}{path}'), { name: hostName, path: cwd })}</Text>
         </HStack>
-        {hasDetail ? (
+        {deletion ? (
+          <VStack gap={4}>
+            <Text size="caption" tone="secondary">{tr(deletionNote)}</Text>
+            {deletionAgents(d).map((name) => (
+              <Text key={name} size="caption" mono tone="text">{name}</Text>
+            ))}
+          </VStack>
+        ) : hasDetail ? (
           <Disclosure expanded={expanded} onToggle={() => setExpanded((e) => !e)} label={<Text size="caption" weight="medium" tone="secondary">{tr(`Details`)}</Text>}>
             <VStack gap={8} className={`permission-card-details t-resize ${expanded ? "is-open" : ""}`}>
               {d.command ? <CodeBox text={d.command} /> : null}

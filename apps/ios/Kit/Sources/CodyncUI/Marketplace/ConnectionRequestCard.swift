@@ -48,6 +48,13 @@ struct ConnectionRequestCard: View {
                     .pill(fill: Palette.bubbleAgent)
                 Text(L10n.tr("Saved securely on this computer. Never added to the conversation."))
                     .font(.caption).foregroundStyle(Palette.secondary)
+            } else if pending, request.kind == "headers" {
+                ForEach((request.headers ?? [:]).keys.sorted(), id: \.self) { name in
+                    Text("\(name): \(request.headers?[name] ?? "")")
+                        .font(.caption.monospaced()).foregroundStyle(Palette.secondary)
+                }
+                Text(L10n.tr("Only these header names and masked values are shown. Nothing here can be edited."))
+                    .font(.caption).foregroundStyle(Palette.secondary)
             }
             if let error { Text(L10n.tr(error)).font(.footnote).foregroundStyle(Palette.danger) }
         }
@@ -143,6 +150,9 @@ struct ConnectionRequestCard: View {
                 } else if request.kind == "secret" {
                     try await client.finishConnectionRequest(entry.id, value: value)
                     value = ""
+                } else if request.kind == "headers", let id = request.connectorId {
+                    // The host holds the real values encrypted; the card only ever showed their masks.
+                    try await client.finishConnectionRequest(entry.id, connectorId: id)
                 } else if let id = request.connectorId {
                     let connectors = try await client.connectors()
                     // Cancelled: the card stays pending.
@@ -311,6 +321,7 @@ private struct BotLoginsSection: View {
     @State private var totp = ""
     @State private var busy = false
     @State private var error: String?
+    @State private var copiedCode: String?
 
     private var bots: [(id: String, label: String)] {
         model.bots.values.filter { !$0.isGroup }.sorted { $0.name < $1.name }.map { ($0.id, $0.name) }
@@ -328,6 +339,10 @@ private struct BotLoginsSection: View {
                     Spacer()
                     Text(login.hasTotp == true ? L10n.tr("2FA set") : L10n.tr("No 2FA"))
                         .font(.caption).foregroundStyle(Palette.secondary)
+                    if login.hasTotp == true {
+                        IconButton(copiedCode == login.id ? "Copied" : "Copy code",
+                                   systemImage: copiedCode == login.id ? "checkmark" : "doc.on.doc") { copyCode(login) }
+                    }
                     IconButton("Remove", systemImage: "trash") { remove(login) }
                 }
             }
@@ -381,6 +396,19 @@ private struct BotLoginsSection: View {
             do {
                 try await client.removeBotLogin(login.id)
                 withAnimation(Motion.layout) { logins.removeAll { $0.id == login.id } }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    /// The host computes the six-digit code; only the code reaches the pasteboard, never its seed.
+    private func copyCode(_ login: BotSecret) {
+        guard let client = model.client else { return }
+        Task {
+            do {
+                struct Code: Decodable { var code: String }
+                let result: Code = try await client.call("credentialBotLoginCode", ["id": login.id])
+                Pasteboard.copy(result.code)
+                withAnimation(Motion.layout) { copiedCode = login.id }
             } catch { self.error = error.localizedDescription }
         }
     }

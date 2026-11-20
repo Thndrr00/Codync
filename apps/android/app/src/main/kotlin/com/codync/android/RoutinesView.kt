@@ -64,6 +64,8 @@ import java.util.TimeZone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * A bot's routines, on its details' Details page (iOS `RoutinesView`); a row opens its editor.
@@ -308,6 +310,10 @@ import kotlinx.coroutines.launch
     var rotating by remember(id) { mutableStateOf(false) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var copied by remember(id) { mutableStateOf<String?>(null) }
+    var confirmGive by remember(id) { mutableStateOf(false) }
+    var giving by remember(id) { mutableStateOf(false) }
+    var givenName by remember(id) { mutableStateOf<String?>(null) }
+    val agentName = state.bots.firstOrNull { it.id == botId }?.name ?: botId
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val unlock = rememberUnlock(contextId, scope) { error = it }
@@ -328,6 +334,21 @@ import kotlinx.coroutines.launch
         finally { rotating = false }
     }
     LaunchedEffect(id) { load(false) }
+    /** Rotates the key into the agent's own vault; the host returns only the saved key's name. */
+    fun give() = scope.launch {
+        giving = true; error = null
+        try {
+            val args = buildJsonObject { put("id", id) }
+            val response = store.hostQuery("routineCall", buildJsonObject {
+                put("botId", botId); put("name", "give_webhook_secret"); put("arguments", args)
+            })
+            givenName = response.jsonObject["name"]?.jsonPrimitive?.content
+            showKey = false
+            load(false)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { error = failure.message ?: "The secret wasn't given to the agent." }
+        finally { giving = false }
+    }
     fun copy(field: String, value: RoutineWebhook) = scope.launch {
         val clip = ClipData.newPlainText("Routine $field", if (field == "key") value.key else value.url ?: value.localUrl)
         // Keys stay out of the clipboard preview.
@@ -348,10 +369,12 @@ import kotlinx.coroutines.launch
                         IconButton(if (showKey) "Hide key" else "Show key", if (showKey) "eye.slash" else "eye") {
                             if (showKey) showKey = false else unlock("Show this routine's webhook key") { showKey = true }
                         }
-                        IconButton("Replace key", "arrow.triangle.2.circlepath", enabled = !rotating && online) { unlock("Replace this routine's webhook key") { confirm = true } }
+                        IconButton("Replace key", "arrow.triangle.2.circlepath", enabled = !rotating && !giving && online) { unlock("Replace this routine's webhook key") { confirm = true } }
+                        IconButton("Give the signing secret to $agentName", "key", enabled = !giving && !rotating && online) { unlock("Give the webhook secret to $agentName") { confirmGive = true } }
                         IconButton(if (copied == "key") "Copied" else "Copy", if (copied == "key") "checkmark" else "doc.on.doc") { unlock("Copy this routine's webhook key") { copy("key", value) } }
                     }
                 }
+                givenName?.let { Note("Saved as $it") }
                 Note(if (value.url == null && value.needsAccount) "This computer isn't in an account, so only it can send to this address. Add it to your account for a public one."
                     else if (value.url == null) "The Codync cloud is off, so only this computer can send to it."
                     else "POST with Authorization: Bearer <key>. For GitHub, use content type application/json and the key as the secret. " +
@@ -364,6 +387,10 @@ import kotlinx.coroutines.launch
     }
     CodyncDialog("Replace the key?", confirm, { confirm = false }, "Senders using the current key stop working until they get the new one.") {
         listOf(DialogAction("Replace key", destructive = true) { scope.launch { load(true) } })
+    }
+    CodyncDialog("Give the signing secret to $agentName?", confirmGive, { confirmGive = false },
+        "The old secret stops working. The agent gets the new one in its own vault; the value is never shown here.") {
+        listOf(DialogAction("Give secret", destructive = true) { give() })
     }
 }
 

@@ -239,4 +239,8 @@ An agent can set HTTP headers on an installed remote MCP server with `set_mcp_he
 person gives it the key in the local chat (OpenBot 0.74.0). The approval card names only the headers
 and a masked value; the real value is kept encrypted until the person approves. Keys received from
 Telegram, Slack, Discord, WhatsApp or a native channel are refused. Host and transport headers such
-as `Host` and `Cookie` cannot be overwritten.
+as `Host` and `Cookie` cannot be overwritten. The connection-request card on desktop, iPhone and
+Android renders this approval showing only header names and masked values (nothing editable); the
+same cards show a delete-agents approval with the agent names and an owner-only note. A saved login
+with 2FA offers **Copy code** in Credentials, which copies just the current code from
+`credentialBotLoginCode`, never the seed.

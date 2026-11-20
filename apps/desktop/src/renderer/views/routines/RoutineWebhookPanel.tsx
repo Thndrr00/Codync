@@ -20,6 +20,10 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
   const [copied, setCopied] = useState<'url' | 'key' | null>(null)
   const [confirmRotate, setConfirmRotate] = useState(false)
   const [rotating, setRotating] = useState(false)
+  const [confirmGive, setConfirmGive] = useState(false)
+  const [giving, setGiving] = useState(false)
+  const [givenName, setGivenName] = useState<string | null>(null)
+  const agentName = store.bots.get(botId)?.name ?? botId
 
   const load = async (rotate: boolean) => {
     setRotating(rotate)
@@ -41,6 +45,28 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
   useEffect(() => {
     void load(false)
   }, [routineId])
+
+  /** Rotates the key into the agent's own vault; the host returns only the saved key's name. */
+  const give = async () => {
+    const client = store.client
+    if (!client) return
+    setGiving(true)
+    setError(null)
+    try {
+      const result = await client.call<{ name: string }>('routineCall', {
+        botId,
+        name: 'give_webhook_secret',
+        arguments: { id: routineId },
+      })
+      setGivenName(result.name)
+      setShowKey(false)
+      await load(false)
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setGiving(false)
+    }
+  }
 
   const row = (label: string, text: string, copy: 'url' | 'key', extra?: ReactNode) => (
     <LabeledRow label={label} className="webhook-row">
@@ -81,8 +107,15 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
             <>
               <IconButton title={tr(showKey ? 'Hide key' : 'Show key')} icon={showKey ? 'eye.slash' : 'eye'} onClick={() => setShowKey((s) => !s)} />
               <IconButton title="Replace key" icon="arrow.triangle.2.circlepath" disabled={rotating || store.isOffline} onClick={() => setConfirmRotate(true)} />
+              <IconButton
+                title={`Give the signing secret to ${agentName}`}
+                icon="key"
+                disabled={giving || rotating || store.isOffline}
+                onClick={() => setConfirmGive(true)}
+              />
             </>,
           )}
+          {givenName ? <Text size="caption" tone="secondary">{`Saved as ${givenName}`}</Text> : null}
         </CardSection>
       ) : error ? (
         <Text size="caption" tone="danger" className="routine-caption">{error}</Text>
@@ -95,6 +128,13 @@ export function RoutineWebhookPanel({ botId, routineId }: { botId: string; routi
         message={tr('Senders using the current key stop working until they get the new one.')}
         actions={[{ title: 'Replace key', destructive: true, action: () => void load(true) }]}
         onClose={() => setConfirmRotate(false)}
+      />
+      <Dialog
+        open={confirmGive}
+        title={`Give the signing secret to ${agentName}?`}
+        message={tr('The old secret stops working. The agent gets the new one in its own vault; the value is never shown here.')}
+        actions={[{ title: 'Give secret', destructive: true, action: () => void give() }]}
+        onClose={() => setConfirmGive(false)}
       />
     </VStack>
   )

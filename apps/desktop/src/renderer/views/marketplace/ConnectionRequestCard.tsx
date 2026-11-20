@@ -32,6 +32,7 @@ export function ConnectionRequestCard({ entry }: { entry: Entry }) {
   const isLogin = request.kind === 'login'
   const isSecret = request.kind === 'secret'
   const isAgent = request.kind === 'agent'
+  const isHeaders = request.kind === 'headers'
 
   const connect = async () => {
     const client = store.client
@@ -52,6 +53,9 @@ export function ConnectionRequestCard({ entry }: { entry: Entry }) {
       } else if (isSecret) {
         await market.finishConnectionRequest(client, entry.id, { value })
         setValue('')
+      } else if (isHeaders && request.connectorId) {
+        // The host holds the real values encrypted; the card only ever showed their masks.
+        await market.finishConnectionRequest(client, entry.id, { connectorId: request.connectorId })
       } else if (request.connectorId) {
         const id = request.connectorId
         const connector = (await market.connectors(client)).find((c) => c.id === id)
@@ -101,6 +105,13 @@ export function ConnectionRequestCard({ entry }: { entry: Entry }) {
           <Text size="caption" tone="secondary">{`${request.field ?? tr(`Credential`)} · ${request.location ?? ''}`}</Text>
           <Field value={value} onChange={setValue} placeholder="Credential or op:// reference" secret />
           <Text size="caption" tone="secondary">{tr(`Saved securely on this computer. Never added to the conversation.`)}</Text>
+        </>
+      ) : pending && isHeaders ? (
+        <>
+          {Object.entries(request.headers ?? {}).map(([name, masked]) => (
+            <Text key={name} size="caption" mono tone="secondary">{`${name}: ${masked}`}</Text>
+          ))}
+          <Text size="caption" tone="secondary">{tr(`Only these header names and masked values are shown. Nothing here can be edited.`)}</Text>
         </>
       ) : null}
       {error ? <Text size="footnote" tone="danger">{tr(error)}</Text> : null}

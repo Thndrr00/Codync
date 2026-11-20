@@ -209,6 +209,8 @@ export interface ConnectionRequest {
   backend?: string | null
   /** App requests: the app's logo, when Composio lists it. */
   logo?: string | null
+  /** MCP header requests: header name to masked value. The real values stay encrypted in the host. */
+  headers?: Record<string, string> | null
 }
 
 /** A saved website or app login; the password stays on the computer. */

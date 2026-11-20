@@ -1,5 +1,6 @@
 package com.codync.android
 
+import android.content.ClipData
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +19,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import com.codync.android.core.AppVersion
 import com.codync.android.core.BotSecret
 import com.codync.android.core.CredentialStatus
@@ -188,6 +193,8 @@ private const val BOT_SECRETS_HOST = "2.20.0"
     var totp by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var copiedCode by remember { mutableStateOf<String?>(null) }
+    val clipboard = LocalClipboard.current
     val bots = state.bots.filter { it.kind != "group" }
     suspend fun load() {
         try { logins = store.botSecrets().filter { it.username != null } }
@@ -213,6 +220,16 @@ private const val BOT_SECRETS_HOST = "2.20.0"
                         style = Type.caption, color = Palette.secondary)
                 }
                 Text(tr(if (login.hasTotp == true) "2FA set" else "No 2FA"), style = Type.caption, color = Palette.secondary)
+                if (login.hasTotp == true) IconButton(if (copiedCode == login.id) "Copied" else "Copy code",
+                    if (copiedCode == login.id) "checkmark" else "doc.on.doc", enabled = !busy) {
+                    run {
+                        val code = store.hostQuery("credentialBotLoginCode", body("id" to login.id)).jsonObject["code"]?.jsonPrimitive?.content.orEmpty()
+                        if (code.isNotEmpty()) {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("2FA code", code)))
+                            copiedCode = login.id
+                        }
+                    }
+                }
                 IconButton("Remove", "trash", enabled = !busy) { run { store.removeBotLogin(login.id); logins = logins - login } }
             }
         }

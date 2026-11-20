@@ -13,6 +13,11 @@ struct RoutineWebhookPanel: View {
     @State private var copied: String?
     @State private var confirmRotate = false
     @State private var rotating = false
+    @State private var confirmGive = false
+    @State private var giving = false
+    @State private var givenName: String?
+
+    private var agentName: String { model.bots[botId]?.name ?? botId }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -26,8 +31,13 @@ struct RoutineWebhookPanel: View {
                             withAnimation(Motion.reduced(Motion.hover, reduceMotion)) { showKey.toggle() }
                         }
                         IconButton("Replace key", systemImage: "arrow.triangle.2.circlepath") { confirmRotate = true }
-                            .disabled(rotating || model.isOffline)
+                            .disabled(rotating || giving || model.isOffline)
+                        IconButton("Give the signing secret to \(agentName)", systemImage: "key") { confirmGive = true }
+                            .disabled(giving || rotating || model.isOffline)
                     }
+                }
+                if let givenName {
+                    Text("Saved as \(givenName)").font(.caption).foregroundStyle(Palette.secondary).padding(.leading, 4)
                 }
                 Text(note(webhook))
                     .font(.caption).foregroundStyle(Palette.secondary).padding(.leading, 4)
@@ -42,6 +52,10 @@ struct RoutineWebhookPanel: View {
         .codyncDialog("Replace the key?", isPresented: $confirmRotate,
                       message: "Senders using the current key stop working until they get the new one.") {
             [DialogAction("Replace key", destructive: true) { Task { await load(rotate: true) } }]
+        }
+        .codyncDialog("Give the signing secret to \(agentName)?", isPresented: $confirmGive,
+                      message: "The old secret stops working. The agent gets the new one in its own vault; the value is never shown here.") {
+            [DialogAction("Give secret", destructive: true) { Task { await give() } }]
         }
     }
 
@@ -75,6 +89,23 @@ struct RoutineWebhookPanel: View {
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .background(Palette.bubbleUser, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// Rotates the key into the agent's own vault; the host returns only the saved key's name.
+    private func give() async {
+        guard let client = model.client else { error = "Connect to this computer to give the secret."; return }
+        giving = true
+        defer { giving = false }
+        do {
+            struct Given: Decodable { var name: String }
+            struct Args: Encodable { var id: String }
+            struct Body: Encodable { var botId: String; var name: String; var arguments: Args }
+            let result: Given = try await client.call("routineCall",
+                                                      Body(botId: botId, name: "give_webhook_secret", arguments: Args(id: routineId)))
+            givenName = result.name
+            showKey = false
+            await load(rotate: false)
+        } catch { self.error = error.localizedDescription }
     }
 
     private func load(rotate: Bool) async {

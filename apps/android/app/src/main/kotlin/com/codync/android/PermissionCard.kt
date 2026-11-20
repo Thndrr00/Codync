@@ -40,6 +40,15 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+/** The host puts this note and one agent name per line in a deletion approval's details. */
+private const val deletionNote = "Only the owner can approve this deletion."
+
+private fun isDeletionApproval(d: JsonObject): Boolean =
+    (d.text("detail") ?: "").contains(deletionNote) && d.text("title") in listOf("Delete agents", "Delete an agent")
+
+private fun deletionAgents(d: JsonObject): List<String> =
+    (d.text("detail") ?: "").split("\n\n").drop(1).joinToString("\n\n").lines().map { it.trim() }.filter { it.isNotEmpty() }
+
 /** Approval card in Grok Bot's choice-card style: what the agent wants, where it runs, and the answers as rows. */
 @Composable internal fun PermissionCard(entry: Entry, hostName: String, answering: Boolean, respond: (String?) -> Unit) {
     val d = entry.data
@@ -56,11 +65,12 @@ import kotlinx.serialization.json.jsonPrimitive
         else -> "Wants to use a tool"
     }
     val diffs = (d["diffs"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+    val deletion = isDeletionApproval(d)
     val hasDetail = !d.text("command").isNullOrEmpty() || !d.text("detail").isNullOrEmpty() || diffs.isNotEmpty()
     Column(Modifier.padding(end = 40.dp).widthIn(max = 420.dp).clip(RoundedRectangle(22.dp)).background(Palette.bubbleAgent).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(headline, style = Type.headline, color = Palette.text)
+            Text(if (deletion) "Wants to delete agents" else headline, style = Type.headline, color = Palette.text)
             if (pending) Box(Modifier.size(7.dp).clip(Capsule()).background(Palette.warning))
         }
         Text(d.text("title").orEmpty(), style = Type.subheadline.monospaced, color = Palette.secondary, maxLines = if (expanded) Int.MAX_VALUE else 3)
@@ -69,7 +79,10 @@ import kotlinx.serialization.json.jsonPrimitive
             Text("Runs on $hostName" + (d.text("cwd")?.let { " · " + it.trimEnd('/').substringAfterLast('/') } ?: ""),
                 style = Type.caption, color = Palette.tertiary)
         }
-        if (hasDetail) Disclosure(expanded, { expanded = !expanded }, label = {
+        if (deletion) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(deletionNote, style = Type.caption, color = Palette.secondary)
+            for (name in deletionAgents(d)) Text(name, style = Type.caption.monospaced, color = Palette.text)
+        } else if (hasDetail) Disclosure(expanded, { expanded = !expanded }, label = {
             Text("Details", style = Type.caption.medium, color = Palette.secondary)
         }) {
             Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

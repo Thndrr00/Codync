@@ -66,6 +66,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
                     request.kind == "app" -> openApp(entry.id, ComposioApp(requireNotNull(request.toolkit), request.title))
                     request.kind == "login" -> { store.finishConnectionRequest(entry.id, value = value, username = username); value = "" }
                     request.kind == "secret" -> { store.finishConnectionRequest(entry.id, value = value); value = "" }
+                    // The host holds the real values encrypted; the card only ever showed their masks.
+                    request.kind == "headers" && request.connectorId != null -> store.finishConnectionRequest(entry.id, connectorId = request.connectorId)
                     request.connectorId != null -> {
                         val id = requireNotNull(request.connectorId)
                         // The store finishes the request itself once a sign-in comes back.
@@ -108,6 +110,11 @@ import kotlinx.serialization.json.decodeFromJsonElement
             Text("${request.field ?: "Credential"} · ${request.location.orEmpty()}", style = Type.caption, color = Palette.secondary)
             Box(Modifier.pill(Palette.bubbleAgent)) { PlainInput(value, { value = it }, "Credential or op:// reference", secret = true) }
             Text("Saved securely on this computer. Never added to the conversation.", style = Type.caption, color = Palette.secondary)
+        } else if (pending && request.kind == "headers") {
+            for ((name, masked) in request.headers.toSortedMap()) {
+                Text("$name: $masked", style = Type.caption.monospaced, color = Palette.secondary)
+            }
+            Text("Only these header names and masked values are shown. Nothing here can be edited.", style = Type.caption, color = Palette.secondary)
         }
         error?.let { Text(it, style = Type.footnote, color = Palette.danger) }
     }

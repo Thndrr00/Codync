@@ -1,6 +1,18 @@
 import CodyncKit
 import SwiftUI
 
+/// The host puts this note and one agent name per line in a deletion approval's details.
+private let deletionNote = "Only the owner can approve this deletion."
+
+private func isDeletionApproval(_ d: EntryData) -> Bool {
+    (d.detail ?? "").contains(deletionNote) && ["Delete agents", "Delete an agent"].contains(d.title ?? "")
+}
+
+private func deletionAgents(_ d: EntryData) -> [String] {
+    ((d.detail ?? "").split(separator: "\n\n", omittingEmptySubsequences: false).dropFirst().joined(separator: "\n\n"))
+        .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+}
+
 /// Approval card in Grok Bot's choice-card style: what the agent wants, where
 /// it runs, and the answers as a list of rows.
 struct PermissionCard: View {
@@ -13,6 +25,7 @@ struct PermissionCard: View {
 
     private var d: EntryData { entry.data }
     private var pending: Bool { d.status == "pending" }
+    private var deletion: Bool { isDeletionApproval(d) }
 
     private var headline: String {
         switch d.toolKind {
@@ -27,7 +40,7 @@ struct PermissionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Text(headline).font(.headline).foregroundStyle(Palette.text)
+                Text(deletion ? L10n.tr("Wants to delete agents") : headline).font(.headline).foregroundStyle(Palette.text)
                 if pending {
                     Circle().fill(Palette.warning).frame(width: 7, height: 7)
                 }
@@ -40,7 +53,14 @@ struct PermissionCard: View {
                 .font(.caption)
                 .foregroundStyle(Palette.tertiary)
 
-            if hasDetail {
+            if deletion {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.tr(deletionNote)).font(.caption).foregroundStyle(Palette.secondary)
+                    ForEach(deletionAgents(d), id: \.self) { name in
+                        Text(name).font(.caption.monospaced()).foregroundStyle(Palette.text)
+                    }
+                }
+            } else if hasDetail {
                 Disclosure(isExpanded: $expanded) {
                     VStack(alignment: .leading, spacing: 8) {
                         if let command = d.command, !command.isEmpty {
