@@ -16,12 +16,16 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitPointerEvent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -92,6 +96,8 @@ internal fun openAppSettings(context: android.content.Context) =
             }
             RoundButton("Call settings", "gearshape") { settings = true }
             RoundButton(if (voice.muted) "Unmute" else "Mute", if (voice.muted) "mic.slash" else "mic", on = voice.muted, action = store::muteVoice)
+            if (voice.settings.inputMode == VoiceInputMode.PushToTalk) TalkButton(store)
+            ModeSwitch(voice.settings.inputMode, store)
             Box(Modifier.size(46.dp).clip(Capsule()).background(Palette.danger).plainButton { store.endVoice() }
                 .semantics { contentDescription = "End call" }, contentAlignment = Alignment.Center) {
                 Symbol("xmark", size = 18.dp, tint = Color.White)
@@ -110,6 +116,42 @@ internal fun openAppSettings(context: android.content.Context) =
 @Composable private fun CallLine(text: String, color: Color, action: (() -> Unit)? = null) {
     Text(text, Modifier.glass(Capsule()).then(if (action != null) Modifier.plainButton(action = action) else Modifier)
         .padding(horizontal = 12.dp, vertical = 8.dp), style = Type.footnote, color = color, textAlign = TextAlign.Center)
+}
+
+/** Hold to capture, release to send (OpenBot 0.70.0). A lost pointer cancels the send. */
+@Composable private fun TalkButton(store: AppStore) {
+    var holding by remember { mutableStateOf(false) }
+    Box(Modifier.size(46.dp).clip(Capsule()).background(if (holding) Palette.accentFill else Palette.background)
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                holding = true
+                store.talkVoice(TalkAction.Press)
+                var cancelled = false
+                do {
+                    val event = awaitPointerEvent()
+                    // A second finger (or another input) while holding cancels the send.
+                    if (event.changes.count { it.pressed } > 1) cancelled = true
+                } while (event.changes.any { it.pressed })
+                holding = false
+                if (cancelled) store.talkVoice(TalkAction.Cancel) else store.talkVoice(TalkAction.Release)
+            }
+        }
+        .semantics { contentDescription = "Hold to talk" }, contentAlignment = Alignment.Center) {
+        Symbol(if (holding) "mic.fill" else "mic", size = 20.dp, tint = if (holding) Palette.onAccent else Palette.text)
+    }
+}
+
+/** The switch in the pill between push to talk and the always-open microphone. */
+@Composable private fun ModeSwitch(mode: VoiceInputMode, store: AppStore) {
+    val next = if (mode == VoiceInputMode.PushToTalk) VoiceInputMode.OpenMic else VoiceInputMode.PushToTalk
+    val label = if (mode == VoiceInputMode.PushToTalk) "Push to talk" else "Open mic"
+    Box(Modifier.clip(Capsule()).background(Palette.background).plainButton {
+        store.voiceSettings(store.state.value.voice?.state?.settings?.copy(inputMode = next) ?: VoiceSettings(inputMode = next))
+    }.padding(horizontal = 10.dp).height(46.dp).semantics { contentDescription = "Switch to ${if (next == VoiceInputMode.OpenMic) "open microphone" else "push to talk"}" },
+        contentAlignment = Alignment.Center) {
+        Text(label, style = Type.caption2.semibold, color = Palette.text, maxLines = 1)
+    }
 }
 
 @Composable private fun RoundButton(label: String, systemImage: String, on: Boolean = false, action: () -> Unit) {

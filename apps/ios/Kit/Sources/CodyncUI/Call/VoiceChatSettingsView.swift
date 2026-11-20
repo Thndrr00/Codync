@@ -10,6 +10,7 @@ public struct VoiceChatSettingsView: View {
     @AppStorage(VoiceSettings.engineKey) private var engine = "device"
     @AppStorage(VoiceSettings.dictationEngineKey) private var dictationEngine = "device"
     @AppStorage(VoiceSettings.wakePhraseKey) private var wakePhrase = false
+    @AppStorage(VoiceSettings.inputModeKey) private var inputMode = VoiceInputMode.pushToTalk.rawValue
     @AppStorage(OnDeviceEngine.rateKey) private var rate = Double(AVSpeechUtteranceDefaultSpeechRate)
     @AppStorage(OnDeviceEngine.languageKey) private var language = ""
     @State private var languages = OnDeviceEngine.languageOptions
@@ -30,6 +31,12 @@ public struct VoiceChatSettingsView: View {
                     ValueRow("Engine") {
                         ChoicePicker(selection: $engine.animation(Motion.reduced(Motion.layout, reduceMotion)),
                                      options: [("device", "On device")] + VoiceProvider.allCases.map { ($0.rawValue, $0.name) })
+                    }
+                    ValueRow("Voice input", detail: "Hold the talk button in the call bar while you speak; or use the open microphone, which sends when you pause.") {
+                        ChoicePicker(selection: $inputMode, options: [
+                            (VoiceInputMode.pushToTalk.rawValue, "Push to talk"),
+                            (VoiceInputMode.openMic.rawValue, "Open microphone"),
+                        ])
                     }
                     if let provider = VoiceProvider(rawValue: engine) {
                         ModeRows(provider: provider).id(provider)

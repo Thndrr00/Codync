@@ -34,6 +34,8 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
   /** Dictation on another provider than calls still needs that provider's key and speech-to-text model. */
   const dictationProvider = voice.isVoiceProvider(dictationEngine) && dictationEngine !== provider ? dictationEngine : null
   const [mode, setMode] = usePref(voice.mode(provider ?? 'openai'))
+  const [input, setInput] = usePref(voice.inputMode)
+  const [key] = usePref(voice.talkKey)
   const [speechOutput, setSpeechOutput] = usePref(voice.speechOutput)
   // Closing hands a running call to a different engine picked here.
   useEffect(() => () => voiceSettingsClosed.ring(), [])
@@ -56,6 +58,18 @@ export function VoiceChatSettingsView({ showsHeader = true }: { showsHeader?: bo
                   onChange={setEngine}
                 />
               </ValueRow>,
+              <ValueRow key="input" label="Voice input" detail="Hold the talk button or talk key to speak; or use the open microphone, which sends when you pause.">
+                <ChoicePicker
+                  selection={input}
+                  options={[{ id: 'pushToTalk', label: 'Push to talk' }, { id: 'openMic', label: 'Open microphone' }]}
+                  onChange={setInput}
+                />
+              </ValueRow>,
+              ...(input === 'pushToTalk' ? [
+                <ValueRow key="talkkey" label="Talk key" detail="Fixed on this device; press and hold both keys while you speak. Pressing another key cancels the send.">
+                  <Text size="caption" tone="secondary">{voice.talkKeyName(key)}</Text>
+                </ValueRow>,
+              ] : []),
               ...(provider
                 ? [
                     ...(voice.supportsRealtime(provider)

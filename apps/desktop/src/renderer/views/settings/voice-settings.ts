@@ -87,10 +87,32 @@ export const dictationEngine = enginePref(pref('dictationEngine', 'device'))
 /** On-device reading speed (AVSpeechUtterance's scale: 0.5 is normal). */
 export const DEFAULT_RATE = 0.5
 export const rate = pref('callRate', DEFAULT_RATE)
-/** Seconds of silence that end what you say. */
+/** Seconds of silence that end what you say (the open-microphone mode). */
 export const pause = pref('callPause', 1.5)
 /** On-device recognition language (a locale identifier); '' follows the system. */
 export const language = pref('callLanguage', '')
+
+/**
+ * How a call starts an utterance: hold the talk button/key and speak (default), or the original
+ * open microphone that sends at a pause. Kept on this device; the pill's switch changes it.
+ * Ported from OpenBot 0.70.0's voice push-to-talk.
+ */
+export type VoiceInputMode = 'pushToTalk' | 'openMic'
+export const inputMode = pref<VoiceInputMode>('callInputMode', 'pushToTalk')
+
+/** The modifier pair held to talk, when push-to-talk is on. Kept on this device; no picker yet. */
+export type TalkKey = 'ctrlOption' | 'ctrlWindows'
+export const talkKey = pref<TalkKey>('callTalkKey', window.codync?.platform === 'darwin' ? 'ctrlOption' : 'ctrlWindows')
+/** The talk key's label, for the settings row and the pill's tooltip. */
+export const talkKeyName = (key: TalkKey) => key === 'ctrlOption' ? 'Control + Option' : 'Ctrl + Windows'
+/** Whether a keyboard event's modifiers are exactly the talk key (and only it). */
+export function isTalkModifiers(e: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey' | 'shiftKey'>, key: TalkKey) {
+  return key === 'ctrlOption'
+    ? e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey
+    : e.ctrlKey && e.metaKey && !e.altKey && !e.shiftKey
+}
+/** True for the modifier keys themselves: pressing one while holding isn't "another key". */
+export const isModifierKey = (key: string) => ['Control', 'Alt', 'Meta', 'Shift', 'AltGraph', 'CapsLock'].includes(key)
 
 /** Picker options: the system's language, then every language the recognizer supports, by name. */
 export function languageOptions(supported: string[]) {

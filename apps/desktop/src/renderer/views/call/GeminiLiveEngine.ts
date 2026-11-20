@@ -1,6 +1,6 @@
 import type { CallLink, CallSession } from './call-link'
 import { browserPorts, type CallOutput, type GeminiPorts, type LiveSocket } from './gemini-ports'
-import { errorMessage, fromBase64, onDevicesChanged, PROGRESS_TAG, reconnect, toBase64, VoiceEngine } from './voice'
+import { errorMessage, fromBase64, onDevicesChanged, PROGRESS_TAG, reconnect, toBase64, VoiceEngine, type TalkAction } from './voice'
 import { trNow } from '../../lib/l10n.ts'
 
 const URL_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained'
@@ -56,6 +56,10 @@ export class GeminiLiveEngine extends VoiceEngine {
   private session: CallSession | null = null
   /** Tool calls still running on the computer: replies wait, so the model gets each answer first. */
   private toolsRunning = 0
+  /** Push-to-talk: a reply playing when the talk key went down is paused until the hold ends. */
+  private replyPaused = false
+  /** Speech was sent while holding, so releasing ends the audio stream (the turn is sent). */
+  private hadAudio = false
 
   private model: string
   private voice: string
@@ -148,6 +152,42 @@ export class GeminiLiveEngine extends VoiceEngine {
     this.stopPlayback()
     this.dropping = !this.turnDone
     this.setPhase('listening')
+  }
+
+  /**
+   * Push-to-talk (OpenBot 0.70.0): holding opens the microphone and pauses a reply; releasing ends
+   * the audio stream so Gemini answers what was said, or stops the reply if nothing was said. Another
+   * key just stops sending (no `audioStreamEnd`, so no turn is committed) and resumes the reply.
+   * With push-to-talk off every frame is streamed and Gemini's own voice detection decides turns.
+   */
+  talk(action: TalkAction) {
+    if (!this.pushToTalk || this.ended) return
+    if (action === 'press') {
+      this.holding = true
+      this.hadAudio = false
+      if (this.phase === 'speaking') {
+        this.replyPaused = true
+        this.output?.pause?.()
+      }
+      return
+    }
+    if (action === 'cancel') {
+      this.holding = false
+      this.hadAudio = false
+      if (this.replyPaused) {
+        this.replyPaused = false
+        this.output?.resume?.()
+      }
+      return
+    }
+    this.holding = false
+    const wasPaused = this.replyPaused
+    this.replyPaused = false
+    if (this.hadAudio) {
+      if (wasPaused) this.interrupt()
+      this.send({ realtimeInput: { audioStreamEnd: true } })
+    } else if (wasPaused) this.interrupt()
+    else this.output?.resume?.()
   }
 
   speak(reply: string) {
@@ -319,7 +359,12 @@ export class GeminiLiveEngine extends VoiceEngine {
       this.flush()
     }
     if (this.ended || this.muted || !this.isActive) return
+    if (this.pushToTalk && !this.holding) {
+      this.level = 0
+      return
+    }
     this.level = this.phase === 'speaking' ? 0 : level
+    if (this.holding && level > 0.3) this.hadAudio = true
     this.send({ realtimeInput: { audio: { data: toBase64(new Uint8Array(pcm.buffer)), mimeType: 'audio/pcm;rate=16000' } } })
   }
 

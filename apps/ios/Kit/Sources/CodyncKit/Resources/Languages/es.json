@@ -2575,5 +2575,17 @@
   "New workflow": "Nuevo flujo de trabajo",
   "This step uses its agent’s model. Set a model on the link that reaches it to use a different one for a single step.": "Este paso usa el modelo de su agente. Define un modelo en el enlace que llega a él para usar otro solo en este paso.",
   "Run from this step": "Ejecutar desde este paso",
-  "Run from the first step": "Ejecutar desde el primer paso"
+  "Run from the first step": "Ejecutar desde el primer paso",
+  "Hold to talk": "Mantén para hablar",
+  "Push to talk": "Hablar al pulsar",
+  "Open mic": "Micrófono abierto",
+  "Switch to open microphone": "Cambiar a micrófono abierto",
+  "Switch to push to talk": "Cambiar a hablar al pulsar",
+  "Voice input": "Entrada de voz",
+  "Talk key": "Tecla de habla",
+  "Control + Option": "Control + Opción",
+  "Ctrl + Windows": "Ctrl + Windows",
+  "Hold the talk button or talk key to speak; or use the open microphone, which sends when you pause.": "Mantén pulsado el botón o la tecla de habla para hablar; o usa el micrófono abierto, que envía al hacer una pausa.",
+  "Fixed on this device; press and hold both keys while you speak. Pressing another key cancels the send.": "Fija en este dispositivo; mantén pulsadas ambas teclas mientras hablas. Pulsar otra tecla cancela el envío.",
+  "Hold the talk button in the call bar while you speak; or use the open microphone, which sends when you pause.": "Mantén pulsado el botón de habla en la barra de llamada mientras hablas; o usa el micrófono abierto, que envía al hacer una pausa."
 }

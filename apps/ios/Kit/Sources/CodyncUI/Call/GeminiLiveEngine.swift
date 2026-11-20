@@ -58,6 +58,12 @@ final class GeminiLiveEngine: VoiceEngine {
     private var dropping = false
     private var pending: [String] = []
     private var ended = false
+    /// Push-to-talk: audio is sent only while the talk button is held.
+    private var pushToTalk = false
+    private var holding = false
+    private var hadAudio = false
+    /// The phone's PCM player has no pause: a short press stops a reply instead.
+    private var replyPaused = false
 
     /// Without playback progress this long after the voice's turn, the call stops waiting for the speaker (#214:
     /// buffers that never finish would keep it on "speaking" and the bot's replies unsaid).
@@ -341,6 +347,37 @@ final class GeminiLiveEngine: VoiceEngine {
         send(["clientContent": ["turns": [["role": "user", "parts": [["text": text]]]], "turnComplete": true] as [String: Any]])
     }
 
+    // MARK: push to talk
+
+    func configure(pushToTalk: Bool) { self.pushToTalk = pushToTalk }
+
+    /// Holding opens the microphone, releasing ends the audio stream so Gemini answers what was
+    /// said, and another action just stops sending (no turn is committed). Push-to-talk off keeps
+    /// the continuous stream and Gemini's own voice detection (OpenBot 0.70.0).
+    func talk(_ action: TalkAction) {
+        guard pushToTalk, !ended else { return }
+        switch action {
+        case .press:
+            holding = true
+            hadAudio = false
+            replyPaused = phase == .speaking
+        case .cancel:
+            holding = false
+            hadAudio = false
+            replyPaused = false
+        case .release:
+            holding = false
+            let wasPaused = replyPaused
+            replyPaused = false
+            if hadAudio {
+                if wasPaused { interrupt() }
+                send(["realtimeInput": ["audioStreamEnd": true]])
+            } else if wasPaused {
+                interrupt()
+            }
+        }
+    }
+
     // MARK: audio
 
     private func captured(_ audio: String, level: Float) {
@@ -350,7 +387,12 @@ final class GeminiLiveEngine: VoiceEngine {
             flush()
         }
         guard !ended, !muted, phase.isActive else { return }
+        if pushToTalk && !holding {
+            level = 0
+            return
+        }
         self.level = phase == .speaking ? 0 : level
+        if holding && level > 0.3 { hadAudio = true }
         send(["realtimeInput": ["audio": ["data": audio, "mimeType": "audio/pcm;rate=16000"]]])
     }
 

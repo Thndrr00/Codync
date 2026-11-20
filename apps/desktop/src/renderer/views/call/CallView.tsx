@@ -8,10 +8,11 @@ import { LevelDots } from '../../components/LevelDots'
 import { Sheet } from '../../components/Overlay'
 import { Text } from '../../components/Text'
 import { useModel } from '../../lib/observable'
+import { usePref } from '../../lib/prefs'
 import { analytics } from '../../store/analytics'
 import { useStore } from '../../store/context'
 import { VoiceChatSettingsView } from '../settings/VoiceChatSettingsView'
-import { engine as preferredEngine, voiceStatus, voiceSpeak, voiceSpeechStream } from '../settings/voice-settings'
+import { engine as preferredEngine, inputMode, isModifierKey, isTalkModifiers, talkKey, talkKeyName, voiceStatus, voiceSpeak, voiceSpeechStream } from '../settings/voice-settings'
 import { stopDictation } from '../thread/dictation'
 import { CallLink } from './call-link'
 import { activeCall } from './active-call'
@@ -20,7 +21,7 @@ import { CloudSpeechEngine } from './CloudSpeechEngine'
 import { GeminiLiveEngine } from './GeminiLiveEngine'
 import { OnDeviceEngine } from './OnDeviceEngine'
 import { OpenAIRealtimeEngine } from './OpenAIRealtimeEngine'
-import { countVoiceUsage, fromBase64, onDeviceAvailable, onDeviceUnavailableReason, providerName, transcribeOnHost, VoiceEngine, VoiceSettings, voiceSettingsClosed, type VoicePhase, type VoiceProvider } from './voice'
+import { countVoiceUsage, fromBase64, onDeviceAvailable, onDeviceUnavailableReason, providerName, transcribeOnHost, VoiceEngine, VoiceSettings, voiceSettingsClosed, type TalkAction, type VoicePhase, type VoiceProvider } from './voice'
 import { CallTranscript } from '../../lib/voice-transcript'
 import { useTr } from '../../lib/use-language'
 import { trNow } from '../../lib/l10n.ts'
@@ -64,6 +65,11 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
 }) {
   const tr = useTr()
   const store = useStore()
+  /** Device-local voice input mode and talk key (OpenBot 0.70.0 push-to-talk). */
+  const [mode, setMode] = usePref(inputMode)
+  const [key] = usePref(talkKey)
+  const pushToTalk = mode === 'pushToTalk'
+  const [holding, setHolding] = useState(false)
   const [session, setSession] = useState<VoiceEngine | null>(null)
   useModel(session)
   /** One line under the bar, e.g. why the call fell back to another voice. */
@@ -89,6 +95,12 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
   /** Each engine's `voice_call_quality`. */
   const quality = useRef<CallQuality | null>(null)
   quality.current ??= new CallQuality((event) => analytics.track(event))
+  /** Kept in a ref so the key listeners always reach the current engine. */
+  const talkRef = useRef<(action: TalkAction) => void>(() => {})
+  talkRef.current = (action) => {
+    engine.current?.talk(action)
+    setHolding(action === 'press')
+  }
 
   const countCloudMinutes = () => {
     const provider = engine.current?.provider
@@ -152,6 +164,7 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
     next.transcript = transcript.current
     // A muted call stays muted on the engine that takes over.
     next.muted = engine.current?.muted === true
+    next.pushToTalk = pushToTalk
     engine.current = next
     setSession(next)
     void next.start()
@@ -216,6 +229,61 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
     }
   }, [])
   useEffect(() => voiceSettingsClosed.subscribe(switchEngine), [])
+
+  // The pill's switch changes the mode of the engine already running the call.
+  useEffect(() => {
+    const e = engine.current
+    if (!e) return
+    if (!pushToTalk && e.holding) talkRef.current('cancel')
+    e.pushToTalk = pushToTalk
+  }, [pushToTalk])
+
+  /**
+   * The talk key is a pair of modifiers (Control + Option on macOS, Ctrl + Windows elsewhere), so
+   * it can be held without typing. Any other key pressed while it's held cancels the capture. The
+   * same key released on its own after a short press stops a reply through the engine's `release`.
+   */
+  useEffect(() => {
+    if (!pushToTalk) return
+    let down = false
+    let cancelled = false
+    const matches = (e: KeyboardEvent) => isTalkModifiers(e, key)
+    const onDown = (e: KeyboardEvent) => {
+      if (down && !isModifierKey(e.key)) {
+        cancelled = true
+        down = false
+        talkRef.current('cancel')
+        return
+      }
+      if (!down && !e.repeat && matches(e)) {
+        down = true
+        cancelled = false
+        talkRef.current('press')
+      }
+    }
+    const onUp = (e: KeyboardEvent) => {
+      if (!down || !isModifierKey(e.key)) return
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return
+      down = false
+      if (!cancelled) talkRef.current('release')
+      cancelled = false
+    }
+    const onBlur = () => {
+      if (!down) return
+      down = false
+      cancelled = false
+      talkRef.current('cancel')
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', onBlur)
+      if (down) talkRef.current('cancel')
+    }
+  }, [pushToTalk, key])
 
   const phase = session?.phase ?? null
   useEffect(() => {
@@ -291,6 +359,31 @@ export function CallView({ botId, onSpeaking, interrupt, onEnd }: {
           onClick={() => session && (session.muted = !session.muted)}
         >
           <Icon name={muted ? 'mic.slash' : 'mic'} size={16} weight="medium" scaled={false} />
+        </button>
+        {pushToTalk ? (
+          <button
+            className={`call-round talk ${holding ? 'on' : ''}`}
+            title={`${tr('Hold to talk')} · ${talkKeyName(key)}`}
+            aria-label={tr('Hold to talk')}
+            aria-pressed={holding}
+            onPointerDown={(e) => { e.preventDefault(); talkRef.current('press') }}
+            onPointerUp={() => talkRef.current('release')}
+            onPointerCancel={() => talkRef.current('cancel')}
+            onPointerLeave={() => { if (holding) talkRef.current('cancel') }}
+            onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) talkRef.current('press') }}
+            onKeyUp={(e) => { if (e.key === ' ' || e.key === 'Enter') talkRef.current('release') }}
+            onBlur={() => { if (holding) talkRef.current('cancel') }}
+          >
+            <Icon name={holding ? 'mic.fill' : 'mic'} size={16} weight="medium" scaled={false} />
+          </button>
+        ) : null}
+        <button
+          className="call-round mode"
+          title={pushToTalk ? tr('Switch to open microphone') : tr('Switch to push to talk')}
+          aria-label={pushToTalk ? tr('Switch to open microphone') : tr('Switch to push to talk')}
+          onClick={() => setMode(pushToTalk ? 'openMic' : 'pushToTalk')}
+        >
+          <Text size="caption2" weight="semibold">{pushToTalk ? tr('Push to talk') : tr('Open mic')}</Text>
         </button>
         <button className="call-round end" title="End call" aria-label="End call" onClick={onEnd}>
           <Icon name="xmark" size={16} weight="semibold" scaled={false} />

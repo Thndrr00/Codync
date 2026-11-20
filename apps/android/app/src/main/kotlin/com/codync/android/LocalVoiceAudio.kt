@@ -192,11 +192,15 @@ internal object VoicePreferences {
     fun load(context: Context): VoiceSettings {
         val stored = stored(context)
         return runCatching {
-            VoiceSettings(VoicePause.nearest(stored.getLong("pause", 1_500)), VoiceRates.nearest(stored.getFloat("rate", 1f)))
+            VoiceSettings(VoicePause.nearest(stored.getLong("pause", 1_500)), VoiceRates.nearest(stored.getFloat("rate", 1f)),
+                VoiceInputMode.of(stored.getString("inputMode", null)))
         }.getOrDefault(VoiceSettings())
     }
     fun save(context: Context, settings: VoiceSettings) {
-        stored(context).edit { putLong("pause", settings.pauseMillis); putFloat("rate", settings.rate) }
+        stored(context).edit {
+            putLong("pause", settings.pauseMillis); putFloat("rate", settings.rate)
+            putString("inputMode", settings.inputMode.id)
+        }
     }
     /** The language on-device calls hear (a BCP 47 tag); empty follows the phone. */
     fun language(context: Context): String = runCatching { stored(context).getString("language", null) }.getOrNull().orEmpty()

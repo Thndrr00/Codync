@@ -21,6 +21,20 @@ enum VoicePhase: Equatable {
     var holdsCall: Bool { isActive || self == .reconnecting || self == .interrupted }
 }
 
+/// How a call starts an utterance: hold to talk (default) or the open microphone that sends at a
+/// pause. Kept on this device; the pill's switch changes it (OpenBot 0.70.0 push-to-talk).
+enum VoiceInputMode: String, Sendable {
+    case pushToTalk
+    case openMic
+}
+
+/// What the pill sends an engine when the talk button changes.
+enum TalkAction: Sendable {
+    case press
+    case release
+    case cancel
+}
+
 /// Why a call's engine gave up, for analytics (`voice_call_quality`).
 enum VoiceFailureKind: String, Sendable {
     case microphone, connection, provider
@@ -57,6 +71,10 @@ protocol VoiceEngine: AnyObject, Observable {
     func progress(_ text: String)
     /// Picks the audio up again after an interruption that didn't end on its own (the user taps the call's line).
     func resume()
+    /// Whether this call opens the microphone only while the talk button is held.
+    func configure(pushToTalk: Bool)
+    /// The talk button went down, up, or the capture was cancelled by another action.
+    func talk(_ action: TalkAction)
 }
 
 extension VoiceEngine {
@@ -73,6 +91,10 @@ extension VoiceEngine {
     func progress(_ text: String) {}
 
     func resume() {}
+
+    /// Engines that don't gate their microphone keep the hands-free loop.
+    func configure(pushToTalk: Bool) {}
+    func talk(_ action: TalkAction) {}
 
     /// The engine's name in analytics.
     var analyticsName: AnalyticsEvent.VoiceEngine {
@@ -97,8 +119,12 @@ enum VoiceSettings {
     static let engineKey = "callEngine"
     static let speechOutputKey = "callSpeechOutput"
     static let wakePhraseKey = "callWakePhrase"
+    static let inputModeKey = "callInputMode"
     static var localSpeech: Bool { UserDefaults.standard.string(forKey: speechOutputKey) == "neutts" }
     static var wakePhrase: Bool { UserDefaults.standard.bool(forKey: wakePhraseKey) }
+    static var inputMode: VoiceInputMode {
+        UserDefaults.standard.string(forKey: inputModeKey).flatMap(VoiceInputMode.init(rawValue:)) ?? .pushToTalk
+    }
 
     static var provider: VoiceProvider? {
         UserDefaults.standard.string(forKey: engineKey).flatMap(VoiceProvider.init(rawValue:))

@@ -63,6 +63,10 @@ final class CloudSpeechEngine: VoiceEngine {
     private var streamingTask: Task<Void,Never>?
     private var streamingSource: VoiceSpeechStream?
     private var frameDone: CheckedContinuation<Void,Never>?
+    /// Push-to-talk: the talk button is held; a reply playing then is paused until it ends.
+    private var pushToTalk = false
+    private var holding = false
+    private var replyPaused = false
 
     private static let threshold: Float = 0.3
     private static let prerollBytes = MicTap.bytesPerSecond * 3 / 10
@@ -167,6 +171,37 @@ final class CloudSpeechEngine: VoiceEngine {
 
     func announce(_ notice: String) { say(notice) }
 
+    // MARK: push to talk
+
+    func configure(pushToTalk: Bool) { self.pushToTalk = pushToTalk }
+
+    /// Hold to capture and release to transcribe and send (OpenBot 0.70.0); a short press stops a
+    /// reply, and another action drops the capture. Push-to-talk off leaves the pause loop untouched.
+    func talk(_ action: TalkAction) {
+        guard pushToTalk, !ended else { return }
+        switch action {
+        case .press:
+            holding = true
+            if phase == .speaking, let player {
+                replyPaused = true
+                player.pause()
+            }
+        case .cancel:
+            holding = false
+            dropUtterance()
+            if replyPaused { player?.play(); replyPaused = false }
+        case .release:
+            holding = false
+            let wasPaused = replyPaused
+            replyPaused = false
+            if voiced >= Self.minVoicedBytes {
+                submit()
+            } else if wasPaused {
+                interrupt()
+            }
+        }
+    }
+
     // MARK: listening
 
     private func heard(_ pcm: Data, level: Float) {
@@ -176,6 +211,10 @@ final class CloudSpeechEngine: VoiceEngine {
             if !queue.isEmpty, player == nil, next == nil { playNext() }
         }
         guard !ended, !muted else { return }
+        if pushToTalk && !holding {
+            if phase == .listening { level = 0 }
+            return
+        }
         if phase == .speaking {
             self.level = level
             if level > Self.threshold + 0.1 { barge.append(pcm) } else { barge.removeAll() }

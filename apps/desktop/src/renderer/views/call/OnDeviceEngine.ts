@@ -1,5 +1,5 @@
 import type { SpeechEvent } from '@shared/ipc'
-import { onDeviceUnavailableReason, spokenText, VoiceEngine, VoiceSettings, type VoiceFailureKind } from './voice'
+import { onDeviceUnavailableReason, spokenText, VoiceEngine, VoiceSettings, type TalkAction, type VoiceFailureKind } from './voice'
 import { trNow } from '../../lib/l10n.ts'
 
 /**
@@ -48,6 +48,8 @@ export class OnDeviceEngine extends VoiceEngine {
   private silence: ReturnType<typeof setTimeout> | null = null
   private offEvents: (() => void) | null = null
   private speakGeneration = 0
+  /** Push-to-talk: the reply playing when the talk key went down is paused, not finished. */
+  private replyPaused = false
 
   constructor(private send: (text: string) => void) {
     super()
@@ -110,12 +112,60 @@ export class OnDeviceEngine extends VoiceEngine {
     this.listen()
   }
 
+  /**
+   * Push-to-talk (OpenBot 0.70.0). A press starts capture and pauses a reply being read; a release
+   * sends what was heard, or stops the reply if nothing was said; another key cancels the capture
+   * and resumes the paused reply. With `pushToTalk` off the pill never calls this and the pause-based
+   * loop below is unchanged.
+   */
+  talk(action: TalkAction) {
+    if (!this.pushToTalk || this.ended) return
+    if (action === 'press') {
+      this.holding = true
+      if (this.phase === 'speaking') {
+        this.replyPaused = true
+        speechSynthesis.pause()
+      }
+      this.listen()
+      return
+    }
+    if (action === 'cancel') {
+      this.holding = false
+      this.stopListening()
+      this.heard = ''
+      if (this.replyPaused) {
+        this.replyPaused = false
+        speechSynthesis.resume()
+      }
+      return
+    }
+    // release
+    this.holding = false
+    const said = this.heard.trim()
+    if (this.replyPaused) {
+      this.replyPaused = false
+      // What you say stops the reply; a short press (nothing said) stops it too.
+      speechSynthesis.cancel()
+    }
+    if (said) {
+      this.submit()
+    } else {
+      this.stopListening()
+      this.heard = ''
+    }
+  }
+
   // MARK: listening
 
   private listen() {
     this.heard = ''
-    if (this.phase !== 'listening' && this.everStarted) this.setPhase('listening')
+    if (this.pushToTalk) {
+      // Ready for the next press, even before any recognition has started.
+      if (this.phase !== 'listening') this.setPhase('listening')
+    } else if (this.phase !== 'listening' && this.everStarted) this.setPhase('listening')
     if (this.muted || this.ended) return
+    // In push-to-talk the microphone opens only while the talk button/key is held.
+    if (this.pushToTalk && !this.holding) return
     this.recognizing = true
     this.started = false
     window.codync.speech.start(VoiceSettings.language() || null)
@@ -169,6 +219,16 @@ export class OnDeviceEngine extends VoiceEngine {
   private recognized(text: string, final: boolean) {
     if (this.phase !== 'listening') return
     this.heard = text
+    if (this.pushToTalk) {
+      // Words stay buffered until the talk button/key is released; no pause timer.
+      if (text.trim()) {
+        if (this.replyPaused) {
+          this.replyPaused = false
+          speechSynthesis.cancel()
+        }
+      }
+      return
+    }
     if (this.silence) clearTimeout(this.silence)
     if (final) return this.submit()
     this.silence = setTimeout(() => this.submit(), VoiceSettings.pause() * 1000)
@@ -183,7 +243,7 @@ export class OnDeviceEngine extends VoiceEngine {
   }
 
   private finishedSpeaking() {
-    if (this.phase !== 'speaking') return
+    if (this.phase !== 'speaking' || this.replyPaused) return
     this.listen()
   }
 

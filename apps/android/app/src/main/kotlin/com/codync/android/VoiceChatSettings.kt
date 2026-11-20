@@ -50,6 +50,12 @@ import kotlinx.coroutines.launch
                             { engine = it; choices.provider = it }, label = "Engine")
                     }
                 }
+                row {
+                    ValueRow("Voice input", detail = "Hold the talk button in the call bar while you speak; or use the open microphone, which sends when you pause.") {
+                        ChoicePicker(settings.inputMode, listOf(VoiceInputMode.PushToTalk to "Push to talk", VoiceInputMode.OpenMic to "Open microphone"),
+                            { change(settings.copy(inputMode = it)) }, label = "Voice input")
+                    }
+                }
                 if (provider != null) {
                     if (provider.live) row {
                         ValueRow("Mode", detail = if (speech) "Sent when you pause, replies read aloud." else "A live conversation. Talk over replies.") {

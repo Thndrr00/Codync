@@ -18,6 +18,9 @@ export interface CallOutput {
   /** Drops what's queued. */
   stop(): void
   close(): void
+  /** Push-to-talk pauses a reply while the talk button/key is held. */
+  pause?(): void
+  resume?(): void
 }
 
 /** What the engine needs from the computer; tests script it. */
@@ -63,6 +66,9 @@ class WebAudioOutput implements CallOutput {
     }
     this.sources.clear()
   }
+
+  pause() { void this.ctx.suspend() }
+  resume() { void this.ctx.resume() }
 
   close() {
     this.stop()

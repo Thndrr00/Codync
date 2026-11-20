@@ -52,6 +52,9 @@ class GeminiLiveEngine(parent: CoroutineScope, settings: VoiceSettings, private 
     private var watchdog: Job? = null
     /** Playback stopped reporting progress after the voice's turn, and the call went back to listening. */
     @Volatile var onStall: (() -> Unit)? = null
+    /** Push-to-talk: audio frames are sent only while the talk button is held. */
+    private var holding = false
+    private var hadAudio = false
 
     init { hop { connect() } }
 
@@ -73,6 +76,24 @@ class GeminiLiveEngine(parent: CoroutineScope, settings: VoiceSettings, private 
         transcript?.interrupted()
         stopPlayback(); dropping = !turnDone; phase(VoicePhase.Listening)
     }
+
+    /** Hold to send audio, release to end the stream so Gemini answers, other key just stops sending. */
+    override fun talk(action: TalkAction) = hop {
+        if (!pushToTalk) return@hop
+        when (action) {
+            TalkAction.Press -> { holding = true; hadAudio = false }
+            TalkAction.Cancel -> { holding = false; hadAudio = false }
+            TalkAction.Release -> {
+                holding = false
+                val wasSpeaking = phase == VoicePhase.Speaking
+                if (hadAudio) {
+                    if (wasSpeaking) interrupt()
+                    send(buildJsonObject { putJsonObject("realtimeInput") { put("audioStreamEnd", true) } })
+                } else if (wasSpeaking) interrupt()
+            }
+        }
+    }
+
     override fun focus(active: Boolean) = hop {
         if (!active && this.active) {
             stopPlayback(); dropping = !turnDone; level(0f); phase(VoicePhase.Interrupted)
@@ -231,7 +252,9 @@ class GeminiLiveEngine(parent: CoroutineScope, settings: VoiceSettings, private 
         // Ready once the microphone delivers after setup (again, after a reconnect), not when the socket opens.
         if (ready && phase.connecting) { phase(VoicePhase.Listening); flush() }
         if (muted || !active) return
+        if (pushToTalk && !holding) { level(0f); return }
         level(if (phase == VoicePhase.Speaking) 0f else level)
+        if (holding && level > .3f) hadAudio = true
         send(buildJsonObject {
             putJsonObject("realtimeInput") {
                 putJsonObject("audio") { put("data", Base64.getEncoder().encodeToString(pcm)); put("mimeType", "audio/pcm;rate=16000") }

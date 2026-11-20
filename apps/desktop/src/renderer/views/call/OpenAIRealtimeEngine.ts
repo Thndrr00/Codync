@@ -1,5 +1,5 @@
 import type { CallLink, CallSession } from './call-link'
-import { errorMessage, microphone, onDevicesChanged, PROGRESS_TAG, reconnect, VoiceEngine, VoiceSettings } from './voice'
+import { errorMessage, microphone, onDevicesChanged, PROGRESS_TAG, reconnect, VoiceEngine, VoiceSettings, type TalkAction } from './voice'
 import { trNow } from '../../lib/l10n.ts'
 
 /**
@@ -25,6 +25,10 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
   private connected = false
   private reconnects = 0
   private stopDevices: (() => void) | null = null
+  /** Push-to-talk: a reply playing when the talk key went down is paused until the hold ends. */
+  private replyPaused = false
+  /** Speech was heard while holding, so releasing commits the audio buffer. */
+  private hadAudio = false
 
   private model: string
   private voice: string
@@ -87,7 +91,7 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
       if (this.ended) return void next.getTracks().forEach((t) => t.stop())
       const track = next.getAudioTracks()[0]
       if (!track) return
-      track.enabled = !this.muted
+      track.enabled = this.micOpen
       await this.pc?.getSenders().find((s) => s.track?.kind === 'audio')?.replaceTrack(track)
       this.release()
       this.stream = next
@@ -101,7 +105,7 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
     this.pc = pc
     const track = this.stream!.getAudioTracks()[0]
     if (!track) throw new Error(trNow("Couldn't start the call audio."))
-    track.enabled = !this.muted
+    track.enabled = this.micOpen
     pc.addTrack(track, this.stream!)
     const audio = new Audio()
     audio.autoplay = true
@@ -170,9 +174,52 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
     }
   }
 
+  /** The microphone track is open unless muted, or push-to-talk is waiting for a hold. */
+  private get micOpen() {
+    return !this.muted && (!this.pushToTalk || this.holding)
+  }
+
   protected mutedChanged(on: boolean) {
-    for (const t of this.stream?.getAudioTracks() ?? []) t.enabled = !on
+    for (const t of this.stream?.getAudioTracks() ?? []) t.enabled = this.micOpen
     if (on) this.level = 0
+  }
+
+  /**
+   * Push-to-talk (OpenBot 0.70.0): holding opens the track and pauses a reply; releasing commits
+   * what was said (the model responds as it does at the end of a spoken turn), or stops the reply
+   * if nothing was said. Another key clears the uncommitted buffer and resumes the reply. With
+   * push-to-talk off the track stays open and the model's own voice detection runs as before.
+   */
+  talk(action: TalkAction) {
+    if (!this.pushToTalk || this.ended) return
+    if (action === 'press') {
+      this.holding = true
+      this.hadAudio = false
+      for (const t of this.stream?.getAudioTracks() ?? []) t.enabled = this.micOpen
+      if (this.phase === 'speaking' && this.audio) {
+        this.replyPaused = true
+        this.audio.pause()
+      }
+      return
+    }
+    if (action === 'cancel') {
+      this.holding = false
+      for (const t of this.stream?.getAudioTracks() ?? []) t.enabled = false
+      this.send({ type: 'input_audio_buffer.clear' })
+      if (this.replyPaused && this.audio) void this.audio.play().catch(() => {})
+      this.replyPaused = false
+      return
+    }
+    this.holding = false
+    for (const t of this.stream?.getAudioTracks() ?? []) t.enabled = false
+    const wasPaused = this.replyPaused
+    this.replyPaused = false
+    if (this.hadAudio) {
+      // What you say stops the reply, then the committed turn gets its answer.
+      if (wasPaused) this.interrupt()
+      this.send({ type: 'input_audio_buffer.commit' })
+    } else if (wasPaused) this.interrupt()
+    if (wasPaused) void this.audio?.play().catch(() => {})
   }
 
   interrupt() {
@@ -238,6 +285,7 @@ export class OpenAIRealtimeEngine extends VoiceEngine {
         this.flush()
         break
       case 'input_audio_buffer.speech_started':
+        if (this.holding) this.hadAudio = true
         this.level = this.muted ? 0 : 0.7
         break
       case 'input_audio_buffer.speech_stopped':

@@ -249,6 +249,8 @@ internal suspend fun AppStore.retireVoice() {
 fun AppStore.muteVoice() { voiceBinding?.engine?.let { it.mute(!it.state.value.muted) } }
 fun AppStore.interruptVoice() { voiceBinding?.engine?.interrupt() }
 fun AppStore.resumeVoice() { voiceBinding?.engine?.focus(true) }
+/** The call bar's talk button (OpenBot 0.70.0 push-to-talk). */
+fun AppStore.talkVoice(action: TalkAction) { voiceBinding?.engine?.talk(action) }
 internal fun AppStore.focusVoice(active: Boolean) { voiceBinding?.engine?.focus(active) }
 internal fun AppStore.voiceRecordingSession(): Int? = voiceBinding?.recording?.invoke()
 /** The language on-device calls hear; empty follows the phone. */

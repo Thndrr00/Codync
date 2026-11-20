@@ -4,6 +4,18 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 
+/** How a call starts an utterance: hold to talk (default) or the open microphone that sends at a pause. */
+enum class VoiceInputMode(val id: String) {
+    PushToTalk("pushToTalk"), OpenMic("openMic");
+
+    companion object {
+        fun of(id: String?): VoiceInputMode = entries.firstOrNull { it.id == id } ?: PushToTalk
+    }
+}
+
+/** What the call bar sends an engine when the talk button changes (OpenBot 0.70.0). */
+enum class TalkAction { Press, Release, Cancel }
+
 /**
  * What carries a call's audio (iOS `VoiceEngine`): on-device speech (`VoiceSession`), or a provider
  * on the user's own key (`CloudSpeechEngine`, `GeminiLiveEngine`, `OpenAIRealtimeEngine`).
@@ -37,6 +49,8 @@ interface VoiceEngine {
     fun interrupt()
     fun end()
     suspend fun awaitEnd()
+    /** Push-to-talk: the talk button went down, up, or the capture was cancelled. */
+    fun talk(action: TalkAction) {}
 }
 
 /** How often a dropped provider connection is tried again before the call falls back to on-device voice: after these
@@ -77,6 +91,8 @@ abstract class ProviderEngine(parent: CoroutineScope, val provider: VoiceProvide
     protected val phase: VoicePhase get() = state.value.phase
     protected val muted: Boolean get() = state.value.muted
     protected val active: Boolean get() = phase == VoicePhase.Listening || phase == VoicePhase.Speaking
+    /** Push-to-talk gates the microphone; the open microphone keeps the pause-based loop. */
+    protected val pushToTalk: Boolean get() = state.value.settings.inputMode == VoiceInputMode.PushToTalk
 
     init {
         scope.launch {

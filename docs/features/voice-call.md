@@ -10,6 +10,15 @@ Every other bot waits for you to speak; the [lead bot](lead-bot.md) speaks first
 apps send `callStarted {botId, callId}` (once per call, only to a lead), and the host has a lead with no turn under
 way open with a sentence or two, read aloud like any reply and part of the call (its reply carries the call's id).
 
+By default a call uses **push to talk** (from OpenBot 0.70.0): hold the talk button in the call bar, or hold the desktop
+talk key (Control and Option on macOS, Ctrl and Windows on Windows and Linux), speak, and let go to send what was
+heard. Holding pauses a reply being read aloud; what you say stops it, and a short press on its own stops it too.
+Pressing another key (or a second finger) while holding cancels the send, and a cancelled hold resumes a paused
+reply. The call bar's mode switch changes to the original **open microphone**, which listens all the time and sends
+at a pause; both choices are kept on the device, and the same recognizers, realtime engines and transcript path are
+used either way. The desktop talk key is a fixed binding because no key-picker component exists; the phone apps use
+the talk button only, and Android's on-device text to speech stops instead of pausing a reply when the button is held.
+
 ## On-device voice
 
 - `apps/ios/Kit/Sources/CodyncUI/Call/` (iPhone) and `apps/desktop/src/renderer/views/call/` (desktop): `CallView` (the call bar) over a `VoiceEngine`; `OnDeviceEngine` is the default audio loop. On the Mac the desktop app runs speech recognition in `codync-speech` (`apps/desktop/native/speech-macos/`, driven by `apps/desktop/src/main/speech.ts`).

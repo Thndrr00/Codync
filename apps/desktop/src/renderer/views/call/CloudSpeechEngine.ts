@@ -1,4 +1,4 @@
-import { audioType, errorMessage, micPCM16k, onDevicesChanged, SPEECH_CHUNK, spokenText, VoiceEngine, VoiceSettings, wav, type VoiceProvider } from './voice'
+import { audioType, errorMessage, micPCM16k, onDevicesChanged, SPEECH_CHUNK, spokenText, VoiceEngine, VoiceSettings, wav, type TalkAction, type VoiceProvider } from './voice'
 
 export interface CloudSpeech {
   transcribe: (wav: Uint8Array) => Promise<string>
@@ -78,6 +78,8 @@ export class CloudSpeechEngine extends VoiceEngine {
   private inFlight = new Set<AbortController>()
   private barge: Int16Array[] = []
   private bargeSamples = 0
+  /** Push-to-talk paused a reply being played, to resume if the hold is cancelled. */
+  private replyPaused = false
 
   constructor(
     readonly provider: VoiceProvider,
@@ -133,6 +135,37 @@ export class CloudSpeechEngine extends VoiceEngine {
     this.setPhase('listening')
   }
 
+  /**
+   * Push-to-talk (OpenBot 0.70.0). Holding opens capture and pauses a reply; releasing transcribes
+   * and sends what was captured, or stops the reply if nothing was said. Another key drops the
+   * capture and resumes the reply. With `pushToTalk` off this is never called: the pause-based
+   * utterance loop below runs exactly as before.
+   */
+  talk(action: TalkAction) {
+    if (!this.pushToTalk || this.ended) return
+    if (action === 'press') {
+      this.holding = true
+      if (this.phase === 'speaking' && this.player) {
+        this.replyPaused = true
+        this.player.pause()
+      }
+      return
+    }
+    if (action === 'cancel') {
+      this.holding = false
+      this.dropUtterance()
+      if (this.replyPaused && this.player) void this.player.play().catch(() => {})
+      this.replyPaused = false
+      return
+    }
+    this.holding = false
+    const wasPaused = this.replyPaused
+    this.replyPaused = false
+    if (this.voiced >= MIN_VOICED_SAMPLES) this.submit()
+    else if (wasPaused) this.interrupt()
+    else this.dropUtterance()
+  }
+
   speak(reply: string) {
     this.say(spokenText(reply))
   }
@@ -147,6 +180,11 @@ export class CloudSpeechEngine extends VoiceEngine {
     // Listening once the microphone actually delivers.
     if (!this.ended && this.isConnecting) this.setPhase('listening')
     if (this.ended || this.muted) return
+    // Push-to-talk: the microphone is gated shut until the talk button/key is held.
+    if (this.pushToTalk && !this.holding) {
+      if (this.phase === 'listening') this.level = 0
+      return
+    }
     if (this.phase === 'speaking') {
       this.level = level
       if (level > THRESHOLD + 0.1) { this.barge.push(pcm); this.bargeSamples += pcm.length }

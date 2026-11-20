@@ -19,10 +19,17 @@ final class OpenAIRealtimeEngine: VoiceEngine {
     private(set) var level: Float = 0
     var muted = false {
         didSet {
-            mic?.isEnabled = !muted
+            mic?.isEnabled = micOpen
             if muted { level = 0 }
         }
     }
+    /// The microphone track is open unless muted or push-to-talk is waiting for a hold.
+    private var micOpen: Bool { !muted && (!pushToTalk || holding) }
+    private var pushToTalk = false
+    private var holding = false
+    private var hadAudio = false
+    /// WebRTC plays replies itself, so there is no local pause: a short press stops instead.
+    private var replyPaused = false
     var provider: VoiceProvider? { .openAI }
     @ObservationIgnored var onActivityChanged: ((Bool) -> Void)?
 
@@ -93,7 +100,7 @@ final class OpenAIRealtimeEngine: VoiceEngine {
         self.pc = pc
         let source = Self.factory.audioSource(with: Self.noConstraints)
         let mic = Self.factory.audioTrack(with: source, trackId: "mic")
-        mic.isEnabled = !muted
+        mic.isEnabled = micOpen
         pc.add(mic, streamIds: ["call"])
         self.mic = mic
         let events = pc.dataChannel(forLabel: "oai-events", configuration: RTCDataChannelConfiguration())
@@ -184,6 +191,41 @@ final class OpenAIRealtimeEngine: VoiceEngine {
         phase = .listening
     }
 
+    // MARK: push to talk
+
+    func configure(pushToTalk: Bool) { self.pushToTalk = pushToTalk }
+
+    /// Holding opens the microphone, releasing commits the buffer (the model answers as it does at
+    /// the end of a spoken turn), another key clears it without sending. With push-to-talk off the
+    /// track stays open and the model's voice detection runs as before (OpenBot 0.70.0).
+    func talk(_ action: TalkAction) {
+        guard pushToTalk, !ended else { return }
+        switch action {
+        case .press:
+            holding = true
+            hadAudio = false
+            replyPaused = phase == .speaking
+            mic?.isEnabled = micOpen
+        case .cancel:
+            holding = false
+            mic?.isEnabled = false
+            hadAudio = false
+            replyPaused = false
+            send(["type": "input_audio_buffer.clear"])
+        case .release:
+            holding = false
+            mic?.isEnabled = false
+            let wasPaused = replyPaused
+            replyPaused = false
+            if hadAudio {
+                if wasPaused { interrupt() }
+                send(["type": "input_audio_buffer.commit"])
+            } else if wasPaused {
+                interrupt()
+            }
+        }
+    }
+
     func speak(reply: String) {
         guard !ended, !phase.isFailed else { return }
         pending.append(link.reply(reply))
@@ -237,7 +279,9 @@ final class OpenAIRealtimeEngine: VoiceEngine {
             reconnects = 0
             phase = .listening
             flush()
-        case "input_audio_buffer.speech_started": level = muted ? 0 : 0.7
+        case "input_audio_buffer.speech_started":
+            if holding { hadAudio = true }
+            level = muted ? 0 : 0.7
         case "input_audio_buffer.speech_stopped": level = 0
         case "input_audio_buffer.committed": link.transcribing(true)
         case "conversation.item.input_audio_transcription.failed": link.transcribing(false)

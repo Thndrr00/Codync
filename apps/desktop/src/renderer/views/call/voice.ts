@@ -73,6 +73,9 @@ export const VoiceSettings = {
         : `${p} ${VoiceSettings.model(p)} ${VoiceSettings.voice(p)}`,
 }
 
+/** What the pill sends an engine when the talk button or talk key changes. */
+export type TalkAction = 'press' | 'release' | 'cancel'
+
 /** Rings when voice chat settings close, so a running call takes up a different engine picked there. */
 class SettingsClosed extends Observable {
   ring() {
@@ -122,6 +125,10 @@ export abstract class VoiceEngine extends Observable {
   onActivityChanged: ((active: boolean) => void) | null = null
   protected ended = false
   private mutedValue = false
+  /** Push-to-talk (held to capture) instead of the open microphone. Engines read this in `talk`. */
+  pushToTalk = false
+  /** The talk button or key is down. Set by the engine on `press`. */
+  holding = false
 
   get isActive() {
     return this.phase === 'listening' || this.phase === 'speaking'
@@ -173,6 +180,13 @@ export abstract class VoiceEngine extends Observable {
   /** What the bot is doing while it works, from the computer: for a realtime voice to mention (engines that read
    * replies aloud have nothing to say about it). */
   progress(_text: string) {}
+
+  /**
+   * Push-to-talk: the pill calls this when the talk button/key goes down (`press`), up (`release`)
+   * or another key cancels it (`cancel`). Engines that don't gate their microphone leave this alone;
+   * with push-to-talk off the pill never calls it, so the hands-free loop is unchanged.
+   */
+  talk(_action: TalkAction) {}
 
   /** What the computer tells the call's voice, handed to the method that says it. */
   hear(cue: CallCue) {

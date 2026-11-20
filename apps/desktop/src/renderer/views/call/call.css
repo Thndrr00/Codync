@@ -63,6 +63,16 @@
   background: var(--danger-fill);
   color: var(--on-danger);
 }
+/* Push to talk: held shows the accent fill; the switch names the mode it changes to. */
+.call-round.talk.on {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.call-round.mode {
+  width: auto;
+  padding: 0 10px;
+  white-space: nowrap;
+}
 .call-round:active {
   transform: scale(0.98);
 }

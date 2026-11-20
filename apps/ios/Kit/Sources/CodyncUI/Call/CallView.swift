@@ -25,6 +25,9 @@ struct CallView: View {
     /// One line under the bar, e.g. why the call fell back to on-device voice.
     @State private var notice: String?
     @State private var settings = false
+    /// Push-to-talk vs the open microphone (OpenBot 0.70.0), kept on this device.
+    @AppStorage(VoiceSettings.inputModeKey) private var inputMode = VoiceInputMode.pushToTalk.rawValue
+    @State private var holding = false
     /// `voice_call_started` went out for this call.
     @State private var reported = false
     /// Each engine's `voice_call_quality`.
@@ -34,6 +37,7 @@ struct CallView: View {
 
     private var bot: Bot? { model.bots[botId] }
     private var call: String { callID.uuidString }
+    private var pushToTalk: Bool { VoiceInputMode(rawValue: inputMode) == .pushToTalk }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -105,6 +109,14 @@ struct CallView: View {
             }
         }
         .onChange(of: session?.muted) { _, muted in activity?.muted(muted == true) }
+        .onChange(of: inputMode) { _, mode in
+            let talking = VoiceInputMode(rawValue: mode) == .pushToTalk
+            if !talking && holding {
+                holding = false
+                session?.talk(.cancel)
+            }
+            session?.configure(pushToTalk: talking)
+        }
         .onChange(of: settings) { _, open in if !open { switchEngine() } }
         .codyncSheet(isPresented: $settings) { VoiceChatSettingsView() }
     }
@@ -168,6 +180,7 @@ struct CallView: View {
         }
         // A muted call stays muted on the engine that takes over.
         engine.muted = session?.muted == true
+        engine.configure(pushToTalk: pushToTalk)
         session = engine
         Task { await engine.start() }
     }
@@ -219,6 +232,8 @@ struct CallView: View {
             round(muted ? "Unmute" : "Mute", muted ? "mic.slash" : "mic", on: muted) {
                 session?.muted.toggle()
             }
+            if pushToTalk { talkButton }
+            modeSwitch
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: Self.iconSize, weight: .semibold))
@@ -249,6 +264,53 @@ struct CallView: View {
         .buttonStyle(.plain)
         .disabled(session?.phase != .speaking)
         .accessibilityLabel(session?.phase == .speaking ? "Interrupt" : bot?.name ?? "")
+    }
+
+    /// Hold to capture, release to send (OpenBot 0.70.0). A drag gesture gives a real press/release,
+    /// unlike a tap; the engine turns a press with nothing said into "stop the reply".
+    private var talkButton: some View {
+        Circle()
+            .fill(holding ? Palette.accentFill : Self.buttonFill)
+            .frame(width: Self.buttonSize, height: Self.buttonSize)
+            .overlay {
+                Image(systemName: holding ? "mic.fill" : "mic")
+                    .font(.system(size: Self.iconSize, weight: .medium))
+                    .foregroundStyle(holding ? Palette.onAccent : Self.buttonInk)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .contentShape(Circle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !holding {
+                        holding = true
+                        session?.talk(.press)
+                    }
+                }
+                .onEnded { _ in
+                    holding = false
+                    session?.talk(.release)
+                })
+            .accessibilityLabel("Hold to talk")
+            .help("Hold to talk")
+    }
+
+    /// The switch in the pill between push to talk and the always-open microphone.
+    private var modeSwitch: some View {
+        Button {
+            withAnimation(Motion.reduced(Motion.layout, reduceMotion)) {
+                inputMode = pushToTalk ? VoiceInputMode.openMic.rawValue : VoiceInputMode.pushToTalk.rawValue
+            }
+        } label: {
+            Text(pushToTalk ? "Push to talk" : "Open mic")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Palette.text)
+                .padding(.horizontal, 8)
+                .frame(height: Self.buttonSize)
+                .background(Palette.background, in: Capsule())
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(pushToTalk ? "Switch to open microphone" : "Switch to push to talk")
+        .help(pushToTalk ? "Switch to open microphone" : "Switch to push to talk")
     }
 
     private func round(_ label: String, _ symbol: String, on: Bool = false, action: @escaping () -> Void) -> some View {

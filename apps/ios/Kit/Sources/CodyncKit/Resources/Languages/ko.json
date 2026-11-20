@@ -2575,5 +2575,17 @@
   "New workflow": "New workflow",
   "This step uses its agent’s model. Set a model on the link that reaches it to use a different one for a single step.": "This step uses its agent’s model. Set a model on the link that reaches it to use a different one for a single step.",
   "Run from this step": "Run from this step",
-  "Run from the first step": "Run from the first step"
+  "Run from the first step": "Run from the first step",
+  "Hold to talk": "Hold to talk",
+  "Push to talk": "Push to talk",
+  "Open mic": "Open mic",
+  "Switch to open microphone": "Switch to open microphone",
+  "Switch to push to talk": "Switch to push to talk",
+  "Voice input": "Voice input",
+  "Talk key": "Talk key",
+  "Control + Option": "Control + Option",
+  "Ctrl + Windows": "Ctrl + Windows",
+  "Hold the talk button or talk key to speak; or use the open microphone, which sends when you pause.": "Hold the talk button or talk key to speak; or use the open microphone, which sends when you pause.",
+  "Fixed on this device; press and hold both keys while you speak. Pressing another key cancels the send.": "Fixed on this device; press and hold both keys while you speak. Pressing another key cancels the send.",
+  "Hold the talk button in the call bar while you speak; or use the open microphone, which sends when you pause.": "Hold the talk button in the call bar while you speak; or use the open microphone, which sends when you pause."
 }

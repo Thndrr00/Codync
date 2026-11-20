@@ -52,6 +52,11 @@ final class OnDeviceEngine: VoiceEngine {
     /// Replies and notices that came while another app had the audio, said once it's back.
     private var unsaid: [String] = []
     private var wake = WakePhrase(enabled: VoiceSettings.wakePhrase)
+    /// Push-to-talk: the microphone opens only while the talk button is held.
+    private var pushToTalk = false
+    private var holding = false
+    /// A reply paused when the talk button went down, to stop if something is said.
+    private var replyPaused = false
 
     /// Call settings (the gear), kept across calls.
     static let pauseKey = "callPause"
@@ -169,12 +174,46 @@ final class OnDeviceEngine: VoiceEngine {
         listen()
     }
 
+    // MARK: push to talk
+
+    func configure(pushToTalk: Bool) { self.pushToTalk = pushToTalk }
+
+    /// Hold to capture and release to send (OpenBot 0.70.0); a short press stops a reply, and another
+    /// action cancels the capture. With push-to-talk off this is never called.
+    func talk(_ action: TalkAction) {
+        guard pushToTalk, !ended else { return }
+        switch action {
+        case .press:
+            holding = true
+            if phase == .speaking {
+                replyPaused = true
+                synthesizer.pauseSpeaking(at: .immediate)
+            }
+            listen()
+        case .cancel:
+            holding = false
+            stopListening()
+            heard = ""
+            if replyPaused { replyPaused = false; synthesizer.continueSpeaking() }
+        case .release:
+            holding = false
+            let said = heard.trimmingCharacters(in: .whitespacesAndNewlines)
+            if replyPaused {
+                replyPaused = false
+                // What you say stops the reply; a short press stops it too.
+                synthesizer.stopSpeaking(at: .immediate)
+            }
+            if !said.isEmpty { submit() } else { stopListening(); heard = "" }
+        }
+    }
+
     // MARK: listening
 
     private func listen() {
         phase = .listening
         heard = ""
         guard !muted, !ended, let recognizer else { return }
+        if pushToTalk && !holding { return }
         generation += 1
         let request = OnDeviceSpeech.request(for: recognizer)
         self.request = request
@@ -218,6 +257,13 @@ final class OnDeviceEngine: VoiceEngine {
         heard = text
         if !text.isEmpty { failures.reset() }
         silence?.cancel()
+        if pushToTalk {
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, replyPaused {
+                replyPaused = false
+                synthesizer.stopSpeaking(at: .immediate)
+            }
+            return
+        }
         if final { return submit() }
         silence = Task {
             try? await Task.sleep(for: endOfUtterance)
@@ -243,7 +289,7 @@ final class OnDeviceEngine: VoiceEngine {
     }
 
     private func finishedSpeaking() {
-        guard phase == .speaking else { return }
+        guard phase == .speaking, !replyPaused else { return }
         listen()
     }
 
